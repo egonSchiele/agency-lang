@@ -1,0 +1,96 @@
+categorize -> import_recipe | create_recipe | create_ingredient
+
+categorize msg = `Please categorize this message #{msg}`, { category: import_recipe | create_recipe | create_ingredient }
+  case result of
+    | import_recipe -> import_recipe
+    | create_recipe -> create_recipe
+    | create_ingredient -> create_ingredient
+
+
+import_recipe flag = do
+  case flag of
+    | null -> get_html -> parse -> match_ingredients -> confirm_ingredients
+    | confirm -> confirm_ingredients
+
+// function overload = different edges in graph
+// could also determine the graph by examining each function's return types
+confirm_ingredients -> confirm_recipe
+confirm_ingredients -> show_cancellation
+
+confirm_recipe -> done
+confirm_recipe -> show_cancellation
+
+get_html :: string -> string
+get_html msg = `get the html contents from this link: #{msg}`
+
+type Ingredient = {
+  name: string;
+  amount: string;
+}
+
+type ParsedRecipe = {
+  ingredients: Ingredient[];
+  recipe: string;
+}
+
+parse :: string -> ParsedRecipe
+parse html = `parse a recipe from this html: #{html}`
+
+match_ingredients :: ParsedRecipe
+match_ingredients = foo
+
+// handles HITL: confirm, edit, reject
+confirm_ingredients i = do
+  response = confirm("do these ingredients look correct?", i)
+  case response of
+    | confirm -> confirm_recipe i
+    | edit new_i -> confirm_recipe new_i
+    | reject -> show_cancellation
+
+// eg confirm and show_cancellation are external functions
+// but also confirm needs to implement HITL and therefore send a flag
+// so at the start, we jump to this step
+
+confirm str i = 
+
+// examples
+
+main = `print "hello world"`
+main arg1 = `print the #{arg1}th fibonacci number`
+
+/* handles:
+- some built-in tools (like print)
+- retry
+- structured output
+- different models
+- images? audio? user input?
+- how to tell about other available tools?
+- how to connect to externally defined functions?
+  - simplest way is everything external is a fetch call
+- also keeps track of the thread it itself?
+*/
+
+fib 1 = 1
+fib 2 = 1
+fib n = `fib(n - 1) + fib(n - 2)`
+
+baseInstructions = @CLAUDE.md
+docs = `fetch "http://www.phaser.io"`
+
+addTile = `Use BaseTile.ts as a template`
+
+main = do
+  instructions = user_input
+  ```
+  help the user with their phaser.io game. Follow this input:
+  #{instructions}
+
+  instructions: #{baseInstructions}
+  docs: #{docs}
+  ```
+
+// function = tool
+// type = structured output
+// code generates ui <-> ui generates code
+main uses [addTile]
+

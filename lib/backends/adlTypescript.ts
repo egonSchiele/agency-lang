@@ -48,6 +48,12 @@ function mapTypeToZodSchema(variableType: VariableType): string {
     // Recursively handle array element type
     const elementSchema = mapTypeToZodSchema(variableType.elementType);
     return `z.array(${elementSchema})`;
+  } else if (variableType.type === "stringLiteralType") {
+    return `z.literal("${variableType.value}")`;
+  } else if (variableType.type === "numberLiteralType") {
+    return `z.literal(${variableType.value})`;
+  } else if (variableType.type === "booleanLiteralType") {
+    return `z.literal(${variableType.value})`;
   }
 
   // Fallback (should never reach here)

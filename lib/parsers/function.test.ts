@@ -11,35 +11,75 @@ describe("functionBodyParser", () => {
       input: "foo = 1",
       expected: {
         success: true,
-        hasBody: true,
+        result: [
+          {
+            type: "assignment",
+            variableName: "foo",
+            value: { type: "number", value: "1" },
+          },
+        ],
       },
     },
     {
       input: 'bar = "hello"',
       expected: {
         success: true,
-        hasBody: true,
+        result: [
+          {
+            type: "assignment",
+            variableName: "bar",
+            value: { type: "string", value: "hello" },
+          },
+        ],
+      },
+    },
+    {
+      input: "bar = `hello`\nfoo",
+      expected: {
+        success: true,
+        result: [
+          {
+            type: "assignment",
+            variableName: "bar",
+            value: {
+              type: "prompt",
+              segments: [{ type: "text", value: "hello" }],
+            },
+          },
+          { type: "variableName", value: "foo" },
+        ],
       },
     },
     {
       input: "x = 5\ny = 10",
       expected: {
         success: true,
-        hasBody: true,
+        result: [
+          {
+            type: "assignment",
+            variableName: "x",
+            value: { type: "number", value: "5" },
+          },
+          {
+            type: "assignment",
+            variableName: "y",
+            value: { type: "number", value: "10" },
+          },
+        ],
       },
     },
     {
       input: "42",
       expected: {
         success: true,
-        hasBody: true,
+        result: [{ type: "number", value: "42" }],
       },
     },
     {
       input: "",
       expected: {
         success: true,
-        hasBody: false,
+        result: [],
       },
     },
   ];
@@ -49,8 +89,8 @@ describe("functionBodyParser", () => {
       it(`should parse "${input.replace(/\n/g, "\\n")}" successfully`, () => {
         const result = functionBodyParser(input);
         expect(result.success).toBe(true);
-        if (result.success && expected.hasBody) {
-          expect(result.result.length).toBeGreaterThan(0);
+        if (result.success) {
+          expect(result.result).toEqual(expected.result);
         }
       });
     } else {
@@ -71,6 +111,13 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "test",
+          body: [
+            {
+              type: "assignment",
+              variableName: "foo",
+              value: { type: "number", value: "1" },
+            },
+          ],
         },
       },
     },
@@ -81,6 +128,16 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "greet",
+          body: [
+            {
+              type: "assignment",
+              variableName: "bar",
+              value: {
+                type: "prompt",
+                segments: [{ type: "text", value: "say hello" }],
+              },
+            },
+          ],
         },
       },
     },
@@ -91,6 +148,18 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "calculate",
+          body: [
+            {
+              type: "assignment",
+              variableName: "x",
+              value: { type: "number", value: "5" },
+            },
+            {
+              type: "assignment",
+              variableName: "y",
+              value: { type: "number", value: "10" },
+            },
+          ],
         },
       },
     },
@@ -101,6 +170,7 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "empty",
+          body: [],
         },
       },
     },
@@ -111,6 +181,13 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "withSpaces",
+          body: [
+            {
+              type: "assignment",
+              variableName: "foo",
+              value: { type: "number", value: "1" },
+            },
+          ],
         },
       },
     },
@@ -121,6 +198,13 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "noSpaces",
+          body: [
+            {
+              type: "assignment",
+              variableName: "foo",
+              value: { type: "number", value: "1" },
+            },
+          ],
         },
       },
     },
@@ -131,6 +215,18 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "multiline",
+          body: [
+            {
+              type: "assignment",
+              variableName: "x",
+              value: { type: "number", value: "5" },
+            },
+            {
+              type: "assignment",
+              variableName: "y",
+              value: { type: "number", value: "10" },
+            },
+          ],
         },
       },
     },
@@ -166,9 +262,7 @@ describe("functionParser", () => {
         const result = functionParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result.type).toBe(expected.result.type);
-          expect(result.result.functionName).toBe(expected.result.functionName);
-          expect(result.result.body).toBeDefined();
+          expect(result.result).toEqual(expected.result);
         }
       });
     } else {
@@ -276,9 +370,7 @@ describe("functionCallParser", () => {
         const result = functionCallParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result.type).toBe(expected.result.type);
-          expect(result.result.functionName).toBe(expected.result.functionName);
-          expect(result.result.arguments).toEqual(expected.result.arguments);
+          expect(result.result).toEqual(expected.result);
         }
       });
     } else {

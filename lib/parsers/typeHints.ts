@@ -53,7 +53,7 @@ export const stringLiteralTypeParser: Parser<StringLiteralType> = seqC(
 
 export const numberLiteralTypeParser: Parser<NumberLiteralType> = seqC(
   set("type", "numberLiteralType"),
-  capture(many1WithJoin(digit), "value")
+  capture(many1WithJoin(or(char("-"), char("."), digit)), "value")
 );
 
 export const booleanLiteralTypeParser: Parser<BooleanLiteralType> = seqC(

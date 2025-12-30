@@ -1,0 +1,7 @@
+foo :: array<string>
+foo = `three names`
+
+greet :: string
+greet = `Say hi to the following: ${foo}`
+
+print(greet)

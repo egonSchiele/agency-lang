@@ -1,17 +1,21 @@
 import {
-  ADLProgram,
   ADLNode,
-  TypeHint,
+  ADLProgram,
   Assignment,
-  Literal,
-  FunctionDefinition,
   FunctionCall,
+  FunctionDefinition,
+  InterpolationSegment,
+  Literal,
+  PromptLiteral,
+  PromptSegment,
+  TypeHint,
   VariableType,
-  PrimitiveType,
-  ArrayType,
 } from "../types";
 
+import { escape } from "../utils";
+
 /**
+ *
  * Generates the standardized imports and OpenAI client setup
  */
 function generateImports(): string {
@@ -58,7 +62,7 @@ function variableTypeToString(variableType: VariableType): string {
     return variableType.value;
   } else if (variableType.type === "arrayType") {
     // Recursively build array type string
-    return `${variableTypeToString(variableType.elementType)}_array`;
+    return `${variableTypeToString(variableType.elementType)}[]`;
   }
   return "unknown";
 }
@@ -82,36 +86,92 @@ function generateLiteral(literal: Literal): string {
     case "variableName":
       return literal.value;
     case "prompt":
-      // Prompt literals should be handled in assignment context
-      return `/* prompt: ${literal.text} */`;
+      // Reconstruct text for comment from segments
+      const text = literal.segments
+        .map((s) => (s.type === "text" ? s.value : `#{${s.variableName}}`))
+        .join("");
+      return `/* prompt: ${text} */`;
   }
+}
+
+/**
+ * Builds a template literal string from prompt segments
+ */
+function buildPromptString(
+  segments: PromptSegment[],
+  typeHints: Map<string, VariableType>
+): string {
+  const promptParts: string[] = [];
+
+  for (const segment of segments) {
+    if (segment.type === "text") {
+      const escaped = escape(segment.value);
+      promptParts.push(escaped);
+    } else {
+      // Interpolation segment
+      const varName = segment.variableName;
+      const varType = typeHints.get(varName);
+
+      // Serialize complex types to JSON
+      if (varType && varType.type === "arrayType") {
+        promptParts.push(`\${JSON.stringify(${varName})}`);
+      } else {
+        promptParts.push(`\${${varName}}`);
+      }
+    }
+  }
+
+  return "`" + promptParts.join("") + "`";
 }
 
 /**
  * Generates an async function for prompt-based assignments
  */
-function generatePromptFunction(
-  variableName: string,
-  promptText: string,
-  variableType: VariableType
-): string {
+function generatePromptFunction({
+  variableName,
+  functionArgs = [],
+  prompt,
+  variableType,
+  typeHints,
+}: {
+  variableName: string;
+  functionArgs: string[];
+  prompt: PromptLiteral;
+  variableType: VariableType;
+  typeHints: Map<string, VariableType>;
+}): string {
   const zodSchema = mapTypeToZodSchema(variableType);
-  const escapedPrompt = escapeString(promptText);
   const typeString = variableTypeToString(variableType);
 
-  return `async function _${variableName}() {
+  // Build prompt construction code
+  const promptCode = buildPromptString(prompt.segments, typeHints);
+
+  const argsStr = functionArgs
+    .map(
+      (arg) =>
+        `${arg}: ${variableTypeToString(
+          typeHints.get(arg) || { type: "primitiveType", value: "string" }
+        )}`
+    )
+    .join(", ");
+
+  return `async function _${variableName}(${argsStr}): Promise<${typeString}> {
+  const prompt = ${promptCode};
+  const startTime = performance.now();
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-2024-08-06",
     messages: [
       {
         role: "user",
-        content: "${escapedPrompt}",
+        content: prompt,
       },
     ],
     response_format: zodResponseFormat(z.object({
       value: ${zodSchema},
-    }), "${typeString}_response"),
+    }), "${variableName}_response"),
   });
+  const endTime = performance.now();
+  console.log("Prompt for variable '${variableName}' took " + (endTime - startTime).toFixed(2) + " ms");
   try {
   const result = JSON.parse(completion.choices[0].message.content || "");
   return result.value;
@@ -145,6 +205,7 @@ export class TypeScriptGenerator {
   private typeHints: Map<string, VariableType> = new Map();
   private generatedFunctions: string[] = [];
   private generatedStatements: string[] = [];
+  private variablesInScope: Set<string> = new Set();
 
   /**
    * Generate TypeScript code from an ADL program
@@ -217,34 +278,59 @@ export class TypeScriptGenerator {
     }
   }
 
-  /**
-   * Process an assignment node
-   */
   private processAssignment(node: Assignment): void {
     const { variableName, value } = node;
 
     if (value.type === "prompt") {
-      // Generate async function for prompt-based assignment
-      const variableType = this.typeHints.get(variableName) || {
-        type: "primitiveType" as const,
-        value: "string",
-      };
-      const functionCode = generatePromptFunction(
-        variableName,
-        value.text,
-        variableType
-      );
-      this.generatedFunctions.push(functionCode);
-
-      // Generate the function call
-      this.generatedStatements.push(
-        `const ${variableName} = await _${variableName}();`
-      );
+      this.processPromptLiteral(variableName, value);
     } else {
       // Direct assignment for other literal types
       const literalCode = generateLiteral(value);
       this.generatedStatements.push(`const ${variableName} = ${literalCode};`);
     }
+
+    // Track this variable as in scope
+    this.variablesInScope.add(variableName);
+  }
+
+  private processPromptLiteral(
+    variableName: string,
+    node: PromptLiteral
+  ): void {
+    // Validate all interpolated variables are in scope
+    const interpolatedVars = node.segments
+      .filter((s) => s.type === "interpolation")
+      .map((s) => (s as InterpolationSegment).variableName);
+
+    for (const varName of interpolatedVars) {
+      if (!this.variablesInScope.has(varName)) {
+        throw new Error(
+          `Variable '${varName}' used in prompt interpolation but not defined. ` +
+            `Referenced in assignment to '${variableName}'.`
+        );
+      }
+    }
+
+    // Generate async function for prompt-based assignment
+    const variableType = this.typeHints.get(variableName) || {
+      type: "primitiveType" as const,
+      value: "string",
+    };
+    const functionCode = generatePromptFunction({
+      variableName,
+      functionArgs: interpolatedVars,
+      prompt: node,
+      variableType,
+      typeHints: this.typeHints,
+    });
+    this.generatedFunctions.push(functionCode);
+
+    // Generate the function call
+    this.generatedStatements.push(
+      `const ${variableName} = await _${variableName}(${interpolatedVars.join(
+        ", "
+      )});`
+    );
   }
 
   /**

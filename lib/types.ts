@@ -19,9 +19,22 @@ export type VariableNameLiteral = {
   value: string;
 };
 
+// New types for prompt segments
+export type PromptSegment = TextSegment | InterpolationSegment;
+
+export type TextSegment = {
+  type: "text";
+  value: string;
+};
+
+export type InterpolationSegment = {
+  type: "interpolation";
+  variableName: string;
+};
+
 export type PromptLiteral = {
   type: "prompt";
-  text: string;
+  segments: PromptSegment[];
 };
 
 export type Assignment = {

@@ -8,7 +8,10 @@ const exampleProgram: ADLProgram = {
     {
       type: "typeHint",
       variableName: "bar",
-      variableType: "number",
+      variableType: {
+        type: "primitiveType",
+        value: "number",
+      },
     },
     {
       type: "assignment",

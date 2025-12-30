@@ -6,6 +6,9 @@ import {
   Literal,
   FunctionDefinition,
   FunctionCall,
+  VariableType,
+  PrimitiveType,
+  ArrayType,
 } from "../types";
 
 /**
@@ -24,18 +27,40 @@ const openai = new OpenAI({
 /**
  * Maps ADL types to Zod schema strings
  */
-function mapTypeToZodSchema(type: string): string {
-  switch (type.toLowerCase()) {
-    case "number":
-      return "z.number()";
-    case "string":
-      return "z.string()";
-    case "boolean":
-      return "z.boolean()";
-    default:
-      // Default to string for unknown types
-      return "z.string()";
+function mapTypeToZodSchema(variableType: VariableType): string {
+  if (variableType.type === "primitiveType") {
+    switch (variableType.value.toLowerCase()) {
+      case "number":
+        return "z.number()";
+      case "string":
+        return "z.string()";
+      case "boolean":
+        return "z.boolean()";
+      default:
+        // Default to string for unknown types
+        return "z.string()";
+    }
+  } else if (variableType.type === "arrayType") {
+    // Recursively handle array element type
+    const elementSchema = mapTypeToZodSchema(variableType.elementType);
+    return `z.array(${elementSchema})`;
   }
+
+  // Fallback (should never reach here)
+  return "z.string()";
+}
+
+/**
+ * Converts a VariableType to a string representation for naming/logging
+ */
+function variableTypeToString(variableType: VariableType): string {
+  if (variableType.type === "primitiveType") {
+    return variableType.value;
+  } else if (variableType.type === "arrayType") {
+    // Recursively build array type string
+    return `${variableTypeToString(variableType.elementType)}_array`;
+  }
+  return "unknown";
 }
 
 /**
@@ -68,10 +93,11 @@ function generateLiteral(literal: Literal): string {
 function generatePromptFunction(
   variableName: string,
   promptText: string,
-  variableType: string
+  variableType: VariableType
 ): string {
   const zodSchema = mapTypeToZodSchema(variableType);
   const escapedPrompt = escapeString(promptText);
+  const typeString = variableTypeToString(variableType);
 
   return `async function _${variableName}() {
   const completion = await openai.chat.completions.create({
@@ -84,7 +110,7 @@ function generatePromptFunction(
     ],
     response_format: zodResponseFormat(z.object({
       value: ${zodSchema},
-    }), "${variableType}_response"),
+    }), "${typeString}_response"),
   });
   try {
   const result = JSON.parse(completion.choices[0].message.content || "");
@@ -116,7 +142,7 @@ function mapFunctionName(functionName: string): string {
  * Main TypeScript code generator class
  */
 export class TypeScriptGenerator {
-  private typeHints: Map<string, string> = new Map();
+  private typeHints: Map<string, VariableType> = new Map();
   private generatedFunctions: string[] = [];
   private generatedStatements: string[] = [];
 
@@ -199,7 +225,10 @@ export class TypeScriptGenerator {
 
     if (value.type === "prompt") {
       // Generate async function for prompt-based assignment
-      const variableType = this.typeHints.get(variableName) || "string";
+      const variableType = this.typeHints.get(variableName) || {
+        type: "primitiveType" as const,
+        value: "string",
+      };
       const functionCode = generatePromptFunction(
         variableName,
         value.text,

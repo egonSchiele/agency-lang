@@ -1,0 +1,7 @@
+numbers :: array<number>
+numbers = `the first 5 prime numbers`
+print(numbers)
+
+greetings :: array<string>
+greetings = `a list of 3 common greetings in different languages`
+print(greetings)

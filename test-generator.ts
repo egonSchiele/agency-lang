@@ -18,7 +18,12 @@ const exampleProgram: ADLProgram = {
       variableName: "bar",
       value: {
         type: "prompt",
-        text: "the number 1",
+        segments: [
+          {
+            type: "text",
+            value: "the number 1",
+          },
+        ],
       },
     },
   ],

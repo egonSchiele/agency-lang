@@ -1,0 +1,17 @@
+name = "Alice"
+greeting = `say hi to #{name}`
+
+first = "Alice"
+last = "Smith"
+full = `#{first} #{last}`
+
+combo = `#{first}#{last}`
+
+numbers :: array<number>
+numbers = `first 3 primes`
+summary = `numbers: #{numbers}`
+
+topic = "AI"
+length :: number
+length = `a good length for a talk`
+outline = `create a #{length}-minute talk about #{topic}`

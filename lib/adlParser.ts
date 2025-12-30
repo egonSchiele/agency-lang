@@ -8,6 +8,7 @@ import {
   many1Till,
   many1WithJoin,
   manyTill,
+  map,
   or,
   Parser,
   sepBy,
@@ -26,11 +27,14 @@ import {
   Assignment,
   FunctionCall,
   FunctionDefinition,
+  InterpolationSegment,
   Literal,
   NumberLiteral,
   PrimitiveType,
   PromptLiteral,
+  PromptSegment,
   StringLiteral,
+  TextSegment,
   TypeHint,
   VariableNameLiteral,
   VariableType,
@@ -39,12 +43,87 @@ import {
 const optionalSpaces = many(space);
 
 const backtick = char("`");
-export const promptParser: Parser<PromptLiteral> = seqC(
-  set("type", "prompt"),
-  backtick,
-  capture(manyTill(backtick), "text"),
-  backtick
-);
+
+// Helper to parse the content between backticks and build segments
+function parsePromptContent(input: string): {
+  success: boolean;
+  segments: PromptSegment[];
+  remaining: string;
+} {
+  const segments: PromptSegment[] = [];
+  let current = input;
+  let textBuffer = "";
+
+  while (current.length > 0 && !current.startsWith("`")) {
+    if (current.startsWith("#{")) {
+      // Save any accumulated text first
+      if (textBuffer.length > 0) {
+        segments.push({ type: "text", value: textBuffer });
+        textBuffer = "";
+      }
+
+      // Parse interpolation
+      current = current.slice(2); // Skip #{
+      let varName = "";
+      while (current.length > 0 && current[0] !== "}") {
+        if (/[a-zA-Z0-9]/.test(current[0])) {
+          varName += current[0];
+          current = current.slice(1);
+        } else {
+          return { success: false, segments: [], remaining: current };
+        }
+      }
+
+      if (current.length === 0 || current[0] !== "}") {
+        return { success: false, segments: [], remaining: current };
+      }
+
+      current = current.slice(1); // Skip }
+      segments.push({ type: "interpolation", variableName: varName });
+    } else {
+      // Regular character - add to text buffer
+      textBuffer += current[0];
+      current = current.slice(1);
+    }
+  }
+
+  // Save any remaining text
+  if (textBuffer.length > 0) {
+    segments.push({ type: "text", value: textBuffer });
+  }
+
+  return { success: true, segments, remaining: current };
+}
+
+// Main prompt parser using the custom content parser
+export const promptParser: Parser<PromptLiteral> = (input: string) => {
+  // Parse opening backtick
+  const backtickResult = backtick(input);
+  if (!backtickResult.success) {
+    return backtickResult as any;
+  }
+
+  // Parse content
+  const contentResult = parsePromptContent(backtickResult.remaining);
+  if (!contentResult.success) {
+    return { success: false, expected: "valid prompt content", remaining: contentResult.remaining };
+  }
+
+  // Parse closing backtick
+  const closingBacktickResult = backtick(contentResult.remaining);
+  if (!closingBacktickResult.success) {
+    return closingBacktickResult as any;
+  }
+
+  return {
+    success: true,
+    result: {
+      type: "prompt" as const,
+      segments: contentResult.segments,
+    },
+    remaining: closingBacktickResult.remaining,
+  };
+};
 export const numberParser: Parser<NumberLiteral> = seqC(
   set("type", "number"),
   capture(many1WithJoin(or(char("-"), char("."), digit)), "value")

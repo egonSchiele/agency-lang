@@ -9,6 +9,9 @@ import {
   VariableType,
   PrimitiveType,
   ArrayType,
+  PromptLiteral,
+  PromptSegment,
+  InterpolationSegment,
 } from "../types";
 
 /**
@@ -82,9 +85,48 @@ function generateLiteral(literal: Literal): string {
     case "variableName":
       return literal.value;
     case "prompt":
-      // Prompt literals should be handled in assignment context
-      return `/* prompt: ${literal.text} */`;
+      // Reconstruct text for comment from segments
+      const text = literal.segments
+        .map((s) =>
+          s.type === "text" ? s.value : `#{${s.variableName}}`
+        )
+        .join("");
+      return `/* prompt: ${text} */`;
   }
+}
+
+/**
+ * Builds a template literal string from prompt segments
+ */
+function buildPromptString(
+  segments: PromptSegment[],
+  typeHints: Map<string, VariableType>
+): string {
+  const promptParts: string[] = [];
+
+  for (const segment of segments) {
+    if (segment.type === "text") {
+      // Escape text for use in template literal
+      const escaped = segment.value
+        .replace(/\\/g, "\\\\")
+        .replace(/`/g, "\\`")
+        .replace(/\$/g, "\\$");
+      promptParts.push(escaped);
+    } else {
+      // Interpolation segment
+      const varName = segment.variableName;
+      const varType = typeHints.get(varName);
+
+      // Serialize complex types to JSON
+      if (varType && varType.type === "arrayType") {
+        promptParts.push(`\${JSON.stringify(${varName})}`);
+      } else {
+        promptParts.push(`\${${varName}}`);
+      }
+    }
+  }
+
+  return "`" + promptParts.join("") + "`";
 }
 
 /**
@@ -92,20 +134,24 @@ function generateLiteral(literal: Literal): string {
  */
 function generatePromptFunction(
   variableName: string,
-  promptText: string,
-  variableType: VariableType
+  prompt: PromptLiteral,
+  variableType: VariableType,
+  typeHints: Map<string, VariableType>
 ): string {
   const zodSchema = mapTypeToZodSchema(variableType);
-  const escapedPrompt = escapeString(promptText);
   const typeString = variableTypeToString(variableType);
 
+  // Build prompt construction code
+  const promptCode = buildPromptString(prompt.segments, typeHints);
+
   return `async function _${variableName}() {
+  const prompt = ${promptCode};
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-2024-08-06",
     messages: [
       {
         role: "user",
-        content: "${escapedPrompt}",
+        content: prompt,
       },
     ],
     response_format: zodResponseFormat(z.object({
@@ -145,6 +191,7 @@ export class TypeScriptGenerator {
   private typeHints: Map<string, VariableType> = new Map();
   private generatedFunctions: string[] = [];
   private generatedStatements: string[] = [];
+  private variablesInScope: Set<string> = new Set();
 
   /**
    * Generate TypeScript code from an ADL program
@@ -224,6 +271,20 @@ export class TypeScriptGenerator {
     const { variableName, value } = node;
 
     if (value.type === "prompt") {
+      // Validate all interpolated variables are in scope
+      const interpolatedVars = value.segments
+        .filter((s) => s.type === "interpolation")
+        .map((s) => (s as InterpolationSegment).variableName);
+
+      for (const varName of interpolatedVars) {
+        if (!this.variablesInScope.has(varName)) {
+          throw new Error(
+            `Variable '${varName}' used in prompt interpolation but not defined. ` +
+              `Referenced in assignment to '${variableName}'.`
+          );
+        }
+      }
+
       // Generate async function for prompt-based assignment
       const variableType = this.typeHints.get(variableName) || {
         type: "primitiveType" as const,
@@ -231,8 +292,9 @@ export class TypeScriptGenerator {
       };
       const functionCode = generatePromptFunction(
         variableName,
-        value.text,
-        variableType
+        value,
+        variableType,
+        this.typeHints
       );
       this.generatedFunctions.push(functionCode);
 
@@ -245,6 +307,9 @@ export class TypeScriptGenerator {
       const literalCode = generateLiteral(value);
       this.generatedStatements.push(`const ${variableName} = ${literalCode};`);
     }
+
+    // Track this variable as in scope
+    this.variablesInScope.add(variableName);
   }
 
   /**

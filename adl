@@ -24,7 +24,7 @@ BASE_NAME=$(basename "$ADL_FILE" .adl)
 DIR_NAME=$(dirname "$ADL_FILE")
 
 # Output TypeScript filename
-TS_FILE="${DIR_NAME}/${BASE_NAME}.ts"
+TS_FILE="${DIR_NAME}/${BASE_NAME}.mts"
 
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"

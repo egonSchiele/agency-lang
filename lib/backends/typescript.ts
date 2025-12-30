@@ -92,7 +92,8 @@ function generatePromptFunction(
     console.error("Error parsing response for variable '${variableName}':", e);
     console.error("Full completion response:", JSON.stringify(completion, null, 2));
     throw e;
-  }`;
+  }
+}`;
 }
 
 /**

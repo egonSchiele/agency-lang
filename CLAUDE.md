@@ -144,7 +144,7 @@ Tests: ADL → Parser → Generator → TypeScript output.
 
 ### `lib/adlParser.ts`
 Main parser implementation. Exports:
-- `adlParser(input: string)` - Parses ADL source code
+- `parseADL(input: string)` - Parses ADL source code
 - Individual parsers: `typeHintParser`, `assignmentParser`, etc.
 
 ### `lib/types.ts`

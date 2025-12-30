@@ -1,5 +1,5 @@
-import { adlParser } from "./lib/adlParser";
 import * as fs from "fs";
+import { parseADL } from "./lib/adlParser";
 
 // Get filename from command line arguments
 const filename = process.argv[2];
@@ -13,7 +13,7 @@ if (!filename) {
 const contents = fs.readFileSync(filename, "utf-8");
 
 // Parse with adlParser
-const result = adlParser(contents);
+const result = parseADL(contents);
 
 // Output the result
 console.log(JSON.stringify(result, null, 2));

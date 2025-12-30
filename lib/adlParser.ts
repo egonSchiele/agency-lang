@@ -3,6 +3,7 @@ import {
   capture,
   char,
   digit,
+  eof,
   many,
   many1,
   many1Till,
@@ -11,6 +12,7 @@ import {
   map,
   or,
   Parser,
+  ParserResult,
   sepBy,
   seqC,
   seqR,
@@ -126,7 +128,14 @@ export const primitiveTypeParser: Parser<PrimitiveType> = seqC(
   set("type", "primitiveType"),
   capture(or(str("number"), str("string"), str("boolean")), "value")
 );
+
 export const arrayTypeParser: Parser<ArrayType> = seqC(
+  set("type", "arrayType"),
+  capture(primitiveTypeParser, "elementType"),
+  str("[]")
+);
+
+export const angleBracketsArrayTypeParser: Parser<ArrayType> = seqC(
   set("type", "arrayType"),
   str("array"),
   char("<"),
@@ -135,8 +144,9 @@ export const arrayTypeParser: Parser<ArrayType> = seqC(
 );
 
 export const variableTypeParser: Parser<VariableType> = or(
-  primitiveTypeParser,
-  arrayTypeParser
+  angleBracketsArrayTypeParser,
+  arrayTypeParser,
+  primitiveTypeParser
 );
 
 export const typeHintParser: Parser<TypeHint> = seqC(
@@ -150,7 +160,7 @@ export const typeHintParser: Parser<TypeHint> = seqC(
 
 export const functionCallParser: Parser<FunctionCall> = seqC(
   set("type", "functionCall"),
-  capture(many1Till(char("(")), "functionName"),
+  capture(many1WithJoin(alphanum), "functionName"),
   char("("),
   optionalSpaces,
   capture(
@@ -174,5 +184,11 @@ export const adlNode: Parser<ADLNode[]> = sepBy(
 
 export const adlParser: Parser<ADLProgram> = seqC(
   set("type", "adlProgram"),
-  capture(adlNode, "nodes")
+  capture(adlNode, "nodes"),
+  eof
 );
+
+export function parseADL(input: string): ParserResult<ADLProgram> {
+  const result = adlParser(input);
+  return result;
+}

@@ -1,6 +1,6 @@
-import { adlParser } from "./lib/adlParser";
-import { generateTypeScript } from "./lib/backends/adlTypescript";
 import * as fs from "fs";
+import { parseADL } from "./lib/adlParser";
+import { generateTypeScript } from "./lib/backends/adlTypescript";
 
 // Get filename from command line arguments
 const filename = process.argv[2];
@@ -12,7 +12,7 @@ if (!filename) {
 
 // Read and parse the ADL file
 const contents = fs.readFileSync(filename, "utf-8");
-const parseResult = adlParser(contents);
+const parseResult = parseADL(contents);
 
 console.log("Input ADL file:");
 console.log("=".repeat(80));

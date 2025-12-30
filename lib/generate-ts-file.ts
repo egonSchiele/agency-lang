@@ -1,8 +1,7 @@
 #!/usr/bin/env node
-import { adlParser } from "./adlParser";
-import { generateTypeScript } from "./backends/adlTypescript";
 import * as fs from "fs";
-import * as path from "path";
+import { parseADL } from "./adlParser";
+import { generateTypeScript } from "./backends/adlTypescript";
 
 // Get filename from command line arguments
 const inputFile = process.argv[2];
@@ -15,7 +14,7 @@ if (!inputFile || !outputFile) {
 
 // Read and parse the ADL file
 const contents = fs.readFileSync(inputFile, "utf-8");
-const parseResult = adlParser(contents);
+const parseResult = parseADL(contents);
 
 // Check if parsing was successful
 if (!parseResult.success) {

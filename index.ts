@@ -1,5 +1,5 @@
 import * as fs from "fs";
-import { parseADL } from "./lib/adlParser";
+import { parseADL } from "./lib/parser";
 
 // Get filename from command line arguments
 const filename = process.argv[2];

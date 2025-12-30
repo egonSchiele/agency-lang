@@ -1,41 +1,7 @@
-export type Literal =
-  | NumberLiteral
-  | StringLiteral
-  | VariableNameLiteral
-  | PromptLiteral;
-
-export type NumberLiteral = {
-  type: "number";
-  value: string;
-};
-
-export type StringLiteral = {
-  type: "string";
-  value: string;
-};
-
-export type VariableNameLiteral = {
-  type: "variableName";
-  value: string;
-};
-
-// New types for prompt segments
-export type PromptSegment = TextSegment | InterpolationSegment;
-
-export type TextSegment = {
-  type: "text";
-  value: string;
-};
-
-export type InterpolationSegment = {
-  type: "interpolation";
-  variableName: string;
-};
-
-export type PromptLiteral = {
-  type: "prompt";
-  segments: PromptSegment[];
-};
+import { Literal } from "./types/literals";
+import { TypeHint } from "./types/typeHints";
+export * from "./types/typeHints";
+export * from "./types/literals";
 
 export type Assignment = {
   type: "assignment";
@@ -47,24 +13,6 @@ export type FunctionDefinition = {
   type: "function";
   functionName: string;
   body: Array<Assignment | Literal>;
-};
-
-export type TypeHint = {
-  type: "typeHint";
-  variableName: string;
-  variableType: VariableType;
-};
-
-export type VariableType = PrimitiveType | ArrayType;
-
-export type PrimitiveType = {
-  type: "primitiveType";
-  value: string;
-};
-
-export type ArrayType = {
-  type: "arrayType";
-  elementType: VariableType;
 };
 
 export type FunctionCall = {

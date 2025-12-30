@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import * as fs from "fs";
-import { parseADL } from "./adlParser";
+import { parseADL } from "./parser";
 import { generateTypeScript } from "./backends/adlTypescript";
 
 // Get filename from command line arguments

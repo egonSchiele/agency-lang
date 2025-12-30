@@ -1,5 +1,5 @@
 import * as fs from "fs";
-import { parseADL } from "./lib/adlParser";
+import { parseADL } from "./lib/parser";
 import { generateTypeScript } from "./lib/backends/adlTypescript";
 
 // Get filename from command line arguments

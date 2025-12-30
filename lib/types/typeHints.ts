@@ -33,5 +33,5 @@ export type NumberLiteralType = {
 
 export type BooleanLiteralType = {
   type: "booleanLiteralType";
-  value: boolean;
+  value: "true" | "false";
 };

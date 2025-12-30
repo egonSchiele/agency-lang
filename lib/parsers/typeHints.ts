@@ -8,8 +8,21 @@ import {
   char,
   many1Till,
   space,
+  digit,
+  many1,
+  spaces,
+  eof,
+  many1WithJoin,
 } from "tarsec";
-import { PrimitiveType, ArrayType, VariableType, TypeHint } from "../types";
+import {
+  PrimitiveType,
+  ArrayType,
+  VariableType,
+  TypeHint,
+  StringLiteralType,
+  NumberLiteralType,
+  BooleanLiteralType,
+} from "../types";
 import { optionalSpaces } from "./utils";
 
 export const primitiveTypeParser: Parser<PrimitiveType> = seqC(
@@ -31,9 +44,29 @@ export const angleBracketsArrayTypeParser: Parser<ArrayType> = seqC(
   char(">")
 );
 
+export const stringLiteralTypeParser: Parser<StringLiteralType> = seqC(
+  set("type", "stringLiteralType"),
+  char('"'),
+  capture(many1Till(char('"')), "value"),
+  char('"')
+);
+
+export const numberLiteralTypeParser: Parser<NumberLiteralType> = seqC(
+  set("type", "numberLiteralType"),
+  capture(many1WithJoin(digit), "value")
+);
+
+export const booleanLiteralTypeParser: Parser<BooleanLiteralType> = seqC(
+  set("type", "booleanLiteralType"),
+  capture(or(str("true"), str("false")), "value")
+);
+
 export const variableTypeParser: Parser<VariableType> = or(
   angleBracketsArrayTypeParser,
   arrayTypeParser,
+  stringLiteralTypeParser,
+  numberLiteralTypeParser,
+  booleanLiteralTypeParser,
   primitiveTypeParser
 );
 

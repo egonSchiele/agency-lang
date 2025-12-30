@@ -1,0 +1,8 @@
+foo :: "hi"
+foo = `the string hi`
+
+bar :: 42
+bar = `the number 42`
+
+baz :: true
+baz = `the boolean true`

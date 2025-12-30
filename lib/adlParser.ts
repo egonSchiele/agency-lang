@@ -11,6 +11,7 @@ import {
   many1WithJoin,
   manyTill,
   or,
+  Parser,
   sepBy,
   seqC,
   seqR,
@@ -20,27 +21,28 @@ import {
   str,
   trace,
 } from "tarsec";
+import { ADLNode, ADLProgram, Assignment, FunctionDefinition, Literal, NumberLiteral, PromptLiteral, StringLiteral, TypeHint, VariableNameLiteral } from "./types";
 
 
 const optionalSpaces = many(space);
 
 
 const backtick = char("`");
-export const promptParser = seqC(set("type", "prompt"), backtick, capture(manyTill(backtick), "text"), backtick);
-export const numberParser = seqC(set("type", "number"), capture(many1(or(char("-"), char("."), digit)), "value"));
-export const stringParser = seqC(
+export const promptParser: Parser<PromptLiteral> = seqC(set("type", "prompt"), backtick, capture(manyTill(backtick), "text"), backtick);
+export const numberParser: Parser<NumberLiteral> = seqC(set("type", "number"), capture(many1WithJoin(or(char("-"), char("."), digit)), "value"));
+export const stringParser: Parser<StringLiteral> = seqC(
   set("type", "string"),
   char('"'),
   capture(manyTill(char('"')), "value"),
   char('"')
 );
-export const variableNameParser = trace("variableNameParser",
+export const variableNameParser: Parser<VariableNameLiteral> = trace("variableNameParser",
   seqC(set("type", "variableName"),
     capture(many1WithJoin(alphanum), "value")
   ));
 
-export const literalParser = or(promptParser, numberParser, stringParser, variableNameParser);
-export const assignmentParser = trace("assignmentParser", seqC(
+export const literalParser: Parser<Literal> = or(promptParser, numberParser, stringParser, variableNameParser);
+export const assignmentParser: Parser<Assignment> = trace("assignmentParser", seqC(
   set("type", "assignment"),
   optionalSpaces,
   capture(many1Till(or(space, char("="))), "variableName"),
@@ -50,11 +52,12 @@ export const assignmentParser = trace("assignmentParser", seqC(
   capture(literalParser, "value")
 ));
 
-export const functionBodyParser = trace("functionBodyParser", seqR(
+export const functionBodyParser = trace("functionBodyParser",
   sepBy(spaces, or(assignmentParser, literalParser))
-));
+);
 
-export const functionParser = trace("functionParser", seqC(
+export const functionParser: Parser<FunctionDefinition> = trace("functionParser", seqC(
+  set("type", "function"),
   str("def"),
   many1(space),
   capture(many1Till(char("(")), "functionName"),
@@ -68,7 +71,7 @@ export const functionParser = trace("functionParser", seqC(
   char("}")
 ));
 
-export const typeHintParser = trace("typeHintParser", seqC(
+export const typeHintParser: Parser<TypeHint> = trace("typeHintParser", seqC(
   set("type", "typeHint"),
   capture(many1Till(space), "variableName"),
   optionalSpaces,
@@ -77,4 +80,9 @@ export const typeHintParser = trace("typeHintParser", seqC(
   capture(many1Till(space), "variableType")
 ));
 
-export const adlParser = sepBy(spaces, trace("adlParser", or(typeHintParser, functionParser, assignmentParser)));
+export const adlNode: Parser<ADLNode[]> = sepBy(spaces, trace("adlParser", or(typeHintParser, functionParser, assignmentParser)));
+
+export const adlParser: Parser<ADLProgram> = seqC(
+  set("type", "adlProgram"),
+  capture(adlNode, "nodes")
+);

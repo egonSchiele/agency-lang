@@ -1,1 +1,2 @@
-bar = 1
+bar :: number
+bar = `the number 1`

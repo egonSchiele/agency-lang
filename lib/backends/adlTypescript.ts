@@ -10,9 +10,9 @@ import {
   PromptSegment,
   TypeHint,
   VariableType,
-} from "../types";
+} from "@/types";
 
-import { escape } from "../utils";
+import { escape } from "@/utils";
 
 /**
  *

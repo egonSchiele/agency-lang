@@ -1,5 +1,5 @@
-import { generateTypeScript } from "./lib/backends/adlTypescript";
-import { ADLProgram } from "./lib/types";
+import { generateTypeScript } from "@/backends/adlTypescript";
+import { ADLProgram } from "@/types";
 
 // Example JSON from user's request
 const exampleProgram: ADLProgram = {

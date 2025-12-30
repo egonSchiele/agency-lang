@@ -19,15 +19,15 @@ import {
   str,
   trace,
 } from "tarsec";
-import { literalParser } from "./parsers/literals";
-import { typeHintParser } from "./parsers/typeHints";
+import { literalParser } from "@/parsers/literals";
+import { typeHintParser } from "@/parsers/typeHints";
 import {
   ADLNode,
   ADLProgram,
   Assignment,
   FunctionCall,
   FunctionDefinition,
-} from "./types";
+} from "@/types";
 
 const optionalSpaces = many(space);
 

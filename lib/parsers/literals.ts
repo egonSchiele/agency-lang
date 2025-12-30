@@ -22,8 +22,8 @@ import {
   StringLiteral,
   VariableNameLiteral,
   Literal,
-} from "../types";
-import { backtick } from "./utils";
+} from "@/types";
+import { backtick } from "@/parsers/utils";
 
 export const textSegmentParser: Parser<TextSegment> = map(
   many1Till(or(backtick, char("$"))),

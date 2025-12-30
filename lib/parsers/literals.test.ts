@@ -7,7 +7,7 @@ import {
   stringParser,
   variableNameParser,
   literalParser,
-} from "./literals";
+} from "@/parsers/literals";
 
 describe("literals parsers", () => {
   describe("textSegmentParser", () => {

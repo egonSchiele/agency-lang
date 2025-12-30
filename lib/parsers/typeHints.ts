@@ -22,8 +22,8 @@ import {
   StringLiteralType,
   NumberLiteralType,
   BooleanLiteralType,
-} from "../types";
-import { optionalSpaces } from "./utils";
+} from "@/types";
+import { optionalSpaces } from "@/parsers/utils";
 
 export const primitiveTypeParser: Parser<PrimitiveType> = seqC(
   set("type", "primitiveType"),

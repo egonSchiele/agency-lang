@@ -1,7 +1,7 @@
-import { Literal } from "./types/literals";
-import { TypeHint } from "./types/typeHints";
-export * from "./types/typeHints";
-export * from "./types/literals";
+import { Literal } from "@/types/literals";
+import { TypeHint } from "@/types/typeHints";
+export * from "@/types/typeHints";
+export * from "@/types/literals";
 
 export type Assignment = {
   type: "assignment";

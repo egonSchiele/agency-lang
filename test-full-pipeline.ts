@@ -1,6 +1,6 @@
 import * as fs from "fs";
-import { parseADL } from "./lib/parser";
-import { generateTypeScript } from "./lib/backends/adlTypescript";
+import { parseADL } from "@/parser";
+import { generateTypeScript } from "@/backends/adlTypescript";
 
 // Get filename from command line arguments
 const filename = process.argv[2];

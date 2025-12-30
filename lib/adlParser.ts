@@ -22,15 +22,18 @@ import {
 import {
   ADLNode,
   ADLProgram,
+  ArrayType,
   Assignment,
   FunctionCall,
   FunctionDefinition,
   Literal,
   NumberLiteral,
+  PrimitiveType,
   PromptLiteral,
   StringLiteral,
   TypeHint,
   VariableNameLiteral,
+  VariableType,
 } from "./types";
 
 const optionalSpaces = many(space);
@@ -99,16 +102,30 @@ export const functionParser: Parser<FunctionDefinition> = trace(
   )
 );
 
-export const typeHintParser: Parser<TypeHint> = trace(
-  "typeHintParser",
-  seqC(
-    set("type", "typeHint"),
-    capture(many1Till(space), "variableName"),
-    optionalSpaces,
-    str("::"),
-    optionalSpaces,
-    capture(many1Till(space), "variableType")
-  )
+export const primitiveTypeParser: Parser<PrimitiveType> = seqC(
+  set("type", "primitiveType"),
+  capture(or(str("number"), str("string"), str("boolean")), "value")
+);
+export const arrayTypeParser: Parser<ArrayType> = seqC(
+  set("type", "arrayType"),
+  str("array"),
+  char("<"),
+  capture(primitiveTypeParser, "elementType"),
+  char(">")
+);
+
+export const variableTypeParser: Parser<VariableType> = or(
+  primitiveTypeParser,
+  arrayTypeParser
+);
+
+export const typeHintParser: Parser<TypeHint> = seqC(
+  set("type", "typeHint"),
+  capture(many1Till(space), "variableName"),
+  optionalSpaces,
+  str("::"),
+  optionalSpaces,
+  capture(variableTypeParser, "variableType")
 );
 
 export const functionCallParser: Parser<FunctionCall> = seqC(

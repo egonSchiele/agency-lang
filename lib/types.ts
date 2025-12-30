@@ -39,7 +39,19 @@ export type FunctionDefinition = {
 export type TypeHint = {
   type: "typeHint";
   variableName: string;
-  variableType: string;
+  variableType: VariableType;
+};
+
+export type VariableType = PrimitiveType | ArrayType;
+
+export type PrimitiveType = {
+  type: "primitiveType";
+  value: string;
+};
+
+export type ArrayType = {
+  type: "arrayType";
+  elementType: VariableType;
 };
 
 export type FunctionCall = {

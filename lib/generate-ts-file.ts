@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { adlParser } from "./adlParser";
-import { generateTypeScript } from "./backends/typescript";
+import { generateTypeScript } from "./backends/adlTypescript";
 import * as fs from "fs";
 import * as path from "path";
 

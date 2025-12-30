@@ -5,6 +5,7 @@ import {
   Assignment,
   Literal,
   FunctionDefinition,
+  FunctionCall,
 } from "../types";
 
 /**
@@ -97,6 +98,21 @@ function generatePromptFunction(
 }
 
 /**
+ * Maps ADL built-in function names to TypeScript equivalents
+ */
+const BUILTIN_FUNCTIONS: Record<string, string> = {
+  print: "console.log",
+};
+
+/**
+ * Maps an ADL function name to its TypeScript equivalent
+ * Returns the original name if not a built-in
+ */
+function mapFunctionName(functionName: string): string {
+  return BUILTIN_FUNCTIONS[functionName] || functionName;
+}
+
+/**
  * Main TypeScript code generator class
  */
 export class TypeScriptGenerator {
@@ -161,6 +177,9 @@ export class TypeScriptGenerator {
         break;
       case "function":
         this.processFunctionDefinition(node);
+        break;
+      case "functionCall":
+        this.processFunctionCall(node);
         break;
       case "number":
       case "string":
@@ -233,6 +252,29 @@ export class TypeScriptGenerator {
 
     functionLines.push("}");
     this.generatedFunctions.push(functionLines.join("\n"));
+  }
+
+  /**
+   * Process a function call node
+   */
+  private processFunctionCall(node: FunctionCall): void {
+    const functionCallCode = this.generateFunctionCallCode(
+      mapFunctionName(node.functionName),
+      node.arguments
+    );
+
+    this.generatedStatements.push(functionCallCode);
+  }
+
+  /**
+   * Generates TypeScript code for a function call
+   */
+  private generateFunctionCallCode(
+    functionName: string,
+    args: string[]
+  ): string {
+    const argsString = args.join(", ");
+    return `${functionName}(${argsString});`;
   }
 }
 

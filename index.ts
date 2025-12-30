@@ -1,12 +1,19 @@
-import { str, seqR, space } from "tarsec";
+import { adlParser } from "./lib/adlParser";
+import * as fs from "fs";
 
-// define a parser
-const parser = seqR(
-  str("hello"),
-  space,
-  str("world")
-);
+// Get filename from command line arguments
+const filename = process.argv[2];
 
-// then use it
-console.log(parser("hello world")); // success
-console.log(parser("hello there")); // failure
+if (!filename) {
+  console.error("Usage: node index.ts <filename>");
+  process.exit(1);
+}
+
+// Read file contents
+const contents = fs.readFileSync(filename, "utf-8");
+
+// Parse with adlParser
+const result = adlParser(contents);
+
+// Output the result
+console.log(JSON.stringify(result, null, 2));

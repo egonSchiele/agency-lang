@@ -22,5 +22,9 @@
   "homepage": "https://github.com/egonSchiele/adl-lang#readme",
   "dependencies": {
     "tarsec": "^0.0.20"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.3",
+    "typescript": "^5.9.3"
   }
 }

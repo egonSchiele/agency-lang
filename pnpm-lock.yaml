@@ -1,0 +1,22 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      tarsec:
+        specifier: ^0.0.20
+        version: 0.0.20
+
+packages:
+
+  tarsec@0.0.20:
+    resolution: {integrity: sha512-pWJQAlx/eZxUbFt2ah5phdtzKs4YHNwoK3+QG7Xadbe4DNWP2ExCWqRnB62wP1s6UqQkJWqonnHSacvg/42Ttg==}
+
+snapshots:
+
+  tarsec@0.0.20: {}

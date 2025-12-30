@@ -10,12 +10,12 @@ categorize msg = `Please categorize this message #{msg}`, { category: import_rec
 import_recipe flag = do
   case flag of
     | null -> get_html -> parse -> match_ingredients -> confirm_ingredients
-    | confirm -> confirm_ingredients
+    | confirm_ingredient -> confirm_ingredients
 
 // function overload = different edges in graph
 // could also determine the graph by examining each function's return types
-confirm_ingredients -> confirm_recipe
-confirm_ingredients -> show_cancellation
+// confirm_ingredients -> confirm_recipe
+// confirm_ingredients -> show_cancellation
 
 confirm_recipe -> done
 confirm_recipe -> show_cancellation
@@ -51,7 +51,7 @@ confirm_ingredients i = do
 // but also confirm needs to implement HITL and therefore send a flag
 // so at the start, we jump to this step
 
-confirm str i = 
+confirm msg i = return { msg, ingredients: i, flag: confirm_ingredient }
 
 // examples
 
@@ -67,9 +67,26 @@ main arg1 = `print the #{arg1}th fibonacci number`
 - how to tell about other available tools?
 - how to connect to externally defined functions?
   - simplest way is everything external is a fetch call
+  - but what if an external func wants to call an agent func?
+  - alternatively, connect to an mcp server. Look up what info an mcp server exposes
 - also keeps track of the thread it itself?
+
+other nice-to-haves:
+- makes it easier to test an agent
+- built-in support for authn/z
+  - eg for fetch, what if I want a safelist of urls? or a blocklist?
+  - I think any authn/z function would have to be external, by necessity.
+    eg if we need to look up the user in the db. In that case, avoiding a
+    network call would be nice. So functions are natively local or endpoints?
+  - could an agent do oauth/is that needed?
+- per-func, could we control model used, number of responses, number of retries?
 */
 
+// eg endpoint func
+// interesting, a fetch call as a first-class citizen
+checkUser = POST /user
+
+// fibonacci
 fib 1 = 1
 fib 2 = 1
 fib n = `fib(n - 1) + fib(n - 2)`
@@ -90,7 +107,17 @@ main = do
   ```
 
 // function = tool
+// function call = fetch call
 // type = structured output
 // code generates ui <-> ui generates code
 main uses [addTile]
 
+/*
+for chatbot, what would be useful?
+- prompts
+- knowledge base articles
+- cases where we definitely return a specific response (eg "agent" or "talk to a human")
+- tools
+
+stats would be useful too
+*/

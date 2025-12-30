@@ -1,0 +1,26 @@
+{
+  "name": "adl-lang",
+  "version": "1.0.0",
+  "description": "Agent Definition Language",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/egonSchiele/adl-lang.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/egonSchiele/adl-lang/issues"
+  },
+  "homepage": "https://github.com/egonSchiele/adl-lang#readme",
+  "dependencies": {
+    "tarsec": "^0.0.20"
+  }
+}

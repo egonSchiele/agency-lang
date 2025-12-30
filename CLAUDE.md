@@ -2,7 +2,7 @@
 
 ## Overview
 
-ADL is a domain-specific language for defining AI agent workflows that generate structured outputs using LLMs. It compiles ADL code to executable TypeScript that calls OpenAI's structured output API.
+ADL is a domain-specific language for defining AI agent workflows. It compiles ADL code to executable TypeScript that calls OpenAI's structured output API.
 
 ## Project Structure
 
@@ -19,7 +19,7 @@ adl-lang/
 │   └── function.adl             # Function definitions
 ├── dist/                        # Compiled JavaScript output
 ├── adl                          # Shell script to run ADL programs
-├── index.ts                     # Parser CLI (outputs JSON)
+├── index.ts                     # File for testing parser
 ├── test-generator.ts            # Generator unit test
 └── test-full-pipeline.ts        # Full pipeline integration test
 ```
@@ -60,71 +60,17 @@ def test() {
 
 ## Parser Architecture
 
-The parser uses **tarsec** parser combinators:
-- `seqC()` - Sequential composition, keeps captured values
-- `seqR()` - Sequential composition, keeps right value
-- `capture()` - Captures parser result with field name
-- `set()` - Sets object properties
-- `or()` - Alternative parsers
-- `many()`, `many1()` - Repetition
-- `sepBy()` - Separated list parsing
+The parser uses **tarsec** parser combinators. See docs for tarsec here: https://egonschiele.github.io/tarsec/.
 
 ### AST Types
 
-All types defined in `lib/types.ts`:
-
-```typescript
-// Literals
-type Literal = NumberLiteral | StringLiteral | VariableNameLiteral | PromptLiteral
-
-// AST Nodes
-type ADLNode = TypeHint | FunctionDefinition | Assignment | Literal
-
-// Root program type
-type ADLProgram = {
-  type: "adlProgram"
-  nodes: ADLNode[]
-}
-```
+All types defined in `lib/types.ts`.
 
 ## Code Generation
 
 ### TypeScript Backend (`lib/backends/typescript.ts`)
 
 The TypeScript generator converts ADL to runnable TypeScript code:
-
-**Input (ADL):**
-```adl
-bar :: number
-bar = `the number 1`
-```
-
-**Output (TypeScript):**
-```typescript
-import OpenAI from "openai";
-import { zodResponseFormat } from "openai/helpers/zod";
-import { z } from "zod";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-async function _bar() {
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-2024-08-06",
-    messages: [{ role: "user", content: "the number 1" }],
-    response_format: zodResponseFormat(
-      z.object({ value: z.number() }),
-      "number_response"
-    ),
-  });
-  const result = completion.choices[0].message.parsed;
-  console.log(result);
-  console.log(result?.value);
-  return result;
-}
-const bar = await _bar();
-```
 
 ### Generator Implementation Details
 
@@ -194,21 +140,6 @@ node dist/test-full-pipeline.js tests/assignment.adl
 ```
 Tests: ADL → Parser → Generator → TypeScript output.
 
-## Dependencies
-
-### Runtime
-- **tarsec** (^0.0.20) - Parser combinator library
-
-### Development
-- **typescript** (^5.9.3) - TypeScript compiler
-- **@types/node** (^25.0.3) - Node.js type definitions
-
-### Generated Code Requirements
-The generated TypeScript requires:
-- **openai** - OpenAI API client
-- **zod** - Schema validation
-- Node.js with TypeScript support
-
 ## Key Files
 
 ### `lib/adlParser.ts`
@@ -229,19 +160,6 @@ CLI tool that reads an ADL file and writes generated TypeScript to a file.
 
 ### `adl` (shell script)
 Convenience script to run ADL programs end-to-end.
-
-## Configuration
-
-### `tsconfig.json`
-- Target: ES2016
-- Module: CommonJS
-- Strict mode enabled
-- Excludes: `references/` directory (contains examples needing external deps)
-
-### `package.json`
-- Scripts:
-  - `build`: Compile TypeScript
-  - `start`: Run index.js with arguments
 
 ## Extension Points
 
@@ -285,24 +203,3 @@ case "object":
 1. Use `test-generator.ts` with hardcoded JSON
 2. Check type hints are collected in first pass
 3. Verify node type switches match correctly
-
-## Known Limitations
-
-1. **Prompts in functions**: Currently marked as TODO - functions containing prompts need async/await handling
-2. **Complex types**: Only supports primitive types (number, string, boolean)
-3. **Error handling**: Limited error reporting in generated code
-4. **Single file output**: Generated code is monolithic
-
-## Architecture Decisions
-
-### Why tarsec?
-Parser combinator libraries provide composable, maintainable parsing logic without code generation.
-
-### Why two-pass generation?
-Type hints can appear before or after their usage, so we collect all type information first.
-
-### Why separate backends?
-Modular architecture allows supporting multiple target languages (Python, Go, etc.) in the future.
-
-### Why OpenAI structured outputs?
-Provides reliable, schema-validated responses from LLMs with built-in retry logic.

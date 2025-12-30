@@ -159,7 +159,7 @@ function generatePromptFunction({
   const prompt = ${promptCode};
   const startTime = performance.now();
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o-2024-08-06",
+    model: "gpt-5-nano-2025-08-07",
     messages: [
       {
         role: "user",

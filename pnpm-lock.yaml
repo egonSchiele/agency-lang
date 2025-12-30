@@ -8,12 +8,13 @@ importers:
 
   .:
     dependencies:
-      '@types/node':
-        specifier: ^25.0.3
-        version: 25.0.3
       tarsec:
         specifier: ^0.0.20
         version: 0.0.20
+    devDependencies:
+      '@types/node':
+        specifier: ^25.0.3
+        version: 25.0.3
       typescript:
         specifier: ^5.9.3
         version: 5.9.3

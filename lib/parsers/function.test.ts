@@ -9,9 +9,12 @@ describe("functionBodyParser", () => {
         success: true,
         result: [
           {
-            type: "assignment",
-            variableName: "foo",
-            value: { type: "number", value: "1" },
+            type: "returnStatement",
+            value: {
+              type: "assignment",
+              variableName: "foo",
+              value: { type: "number", value: "1" },
+            },
           },
         ],
       },
@@ -22,9 +25,12 @@ describe("functionBodyParser", () => {
         success: true,
         result: [
           {
-            type: "assignment",
-            variableName: "bar",
-            value: { type: "string", value: "hello" },
+            type: "returnStatement",
+            value: {
+              type: "assignment",
+              variableName: "bar",
+              value: { type: "string", value: "hello" },
+            },
           },
         ],
       },
@@ -42,7 +48,10 @@ describe("functionBodyParser", () => {
               segments: [{ type: "text", value: "hello" }],
             },
           },
-          { type: "variableName", value: "foo" },
+          {
+            type: "returnStatement",
+            value: { type: "variableName", value: "foo" },
+          },
         ],
       },
     },
@@ -57,9 +66,12 @@ describe("functionBodyParser", () => {
             value: { type: "number", value: "5" },
           },
           {
-            type: "assignment",
-            variableName: "y",
-            value: { type: "number", value: "10" },
+            type: "returnStatement",
+            value: {
+              type: "assignment",
+              variableName: "y",
+              value: { type: "number", value: "10" },
+            },
           },
         ],
       },
@@ -68,7 +80,12 @@ describe("functionBodyParser", () => {
       input: "42",
       expected: {
         success: true,
-        result: [{ type: "number", value: "42" }],
+        result: [
+          {
+            type: "returnStatement",
+            value: { type: "number", value: "42" },
+          },
+        ],
       },
     },
     {
@@ -109,9 +126,12 @@ describe("functionParser", () => {
           functionName: "test",
           body: [
             {
-              type: "assignment",
-              variableName: "foo",
-              value: { type: "number", value: "1" },
+              type: "returnStatement",
+              value: {
+                type: "assignment",
+                variableName: "foo",
+                value: { type: "number", value: "1" },
+              },
             },
           ],
         },
@@ -126,11 +146,14 @@ describe("functionParser", () => {
           functionName: "greet",
           body: [
             {
-              type: "assignment",
-              variableName: "bar",
+              type: "returnStatement",
               value: {
-                type: "prompt",
-                segments: [{ type: "text", value: "say hello" }],
+                type: "assignment",
+                variableName: "bar",
+                value: {
+                  type: "prompt",
+                  segments: [{ type: "text", value: "say hello" }],
+                },
               },
             },
           ],
@@ -151,9 +174,12 @@ describe("functionParser", () => {
               value: { type: "number", value: "5" },
             },
             {
-              type: "assignment",
-              variableName: "y",
-              value: { type: "number", value: "10" },
+              type: "returnStatement",
+              value: {
+                type: "assignment",
+                variableName: "y",
+                value: { type: "number", value: "10" },
+              },
             },
           ],
         },
@@ -179,9 +205,12 @@ describe("functionParser", () => {
           functionName: "withSpaces",
           body: [
             {
-              type: "assignment",
-              variableName: "foo",
-              value: { type: "number", value: "1" },
+              type: "returnStatement",
+              value: {
+                type: "assignment",
+                variableName: "foo",
+                value: { type: "number", value: "1" },
+              },
             },
           ],
         },
@@ -196,9 +225,12 @@ describe("functionParser", () => {
           functionName: "noSpaces",
           body: [
             {
-              type: "assignment",
-              variableName: "foo",
-              value: { type: "number", value: "1" },
+              type: "returnStatement",
+              value: {
+                type: "assignment",
+                variableName: "foo",
+                value: { type: "number", value: "1" },
+              },
             },
           ],
         },
@@ -218,9 +250,12 @@ describe("functionParser", () => {
               value: { type: "number", value: "5" },
             },
             {
-              type: "assignment",
-              variableName: "y",
-              value: { type: "number", value: "10" },
+              type: "returnStatement",
+              value: {
+                type: "assignment",
+                variableName: "y",
+                value: { type: "number", value: "10" },
+              },
             },
           ],
         },

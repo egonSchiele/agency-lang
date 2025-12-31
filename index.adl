@@ -1,2 +1,2 @@
-foo = fetch("https://hacker-news.firebaseio.com/v0/item/8863.json")
+foo = read("README.md")
 print(foo)

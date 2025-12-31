@@ -6,6 +6,8 @@ import {
   stringLiteralTypeParser,
   numberLiteralTypeParser,
   booleanLiteralTypeParser,
+  objectPropertyParser,
+  objectTypeParser,
   variableTypeParser,
   unionTypeParser,
   typeHintParser,
@@ -356,6 +358,353 @@ describe("booleanLiteralTypeParser", () => {
   });
 });
 
+describe("objectPropertyParser", () => {
+  const testCases = [
+    {
+      input: "x: number",
+      expected: {
+        success: true,
+        result: {
+          key: "x",
+          value: { type: "primitiveType", value: "number" },
+        },
+      },
+    },
+    {
+      input: "name: string",
+      expected: {
+        success: true,
+        result: {
+          key: "name",
+          value: { type: "primitiveType", value: "string" },
+        },
+      },
+    },
+    {
+      input: "active: boolean",
+      expected: {
+        success: true,
+        result: {
+          key: "active",
+          value: { type: "primitiveType", value: "boolean" },
+        },
+      },
+    },
+    {
+      input: "items: number[]",
+      expected: {
+        success: true,
+        result: {
+          key: "items",
+          value: {
+            type: "arrayType",
+            elementType: { type: "primitiveType", value: "number" },
+          },
+        },
+      },
+    },
+    {
+      input: 'status: "active"',
+      expected: {
+        success: true,
+        result: {
+          key: "status",
+          value: { type: "stringLiteralType", value: "active" },
+        },
+      },
+    },
+    {
+      input: "count: 42",
+      expected: {
+        success: true,
+        result: {
+          key: "count",
+          value: { type: "numberLiteralType", value: "42" },
+        },
+      },
+    },
+    {
+      input: "x:number",
+      expected: {
+        success: true,
+        result: {
+          key: "x",
+          value: { type: "primitiveType", value: "number" },
+        },
+      },
+    },
+    {
+      input: "x  :  number",
+      expected: {
+        success: true,
+        result: {
+          key: "x",
+          value: { type: "primitiveType", value: "number" },
+        },
+      },
+    },
+    {
+      input: "x number",
+      expected: { success: false },
+    },
+    {
+      input: "x:",
+      expected: { success: false },
+    },
+    {
+      input: ": number",
+      expected: { success: false },
+    },
+    {
+      input: "",
+      expected: { success: false },
+    },
+  ];
+
+  testCases.forEach(({ input, expected }) => {
+    if (expected.success) {
+      it(`should parse "${input}" successfully`, () => {
+        const result = objectPropertyParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result).toEqual(expected.result);
+        }
+      });
+    } else {
+      it(`should fail to parse "${input}"`, () => {
+        const result = objectPropertyParser(input);
+        expect(result.success).toBe(false);
+      });
+    }
+  });
+});
+
+describe("objectTypeParser", () => {
+  const testCases = [
+    // Single property
+    {
+      input: "{ x: number }",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "x",
+              value: { type: "primitiveType", value: "number" },
+            },
+          ],
+        },
+      },
+    },
+    // Multiple properties
+    {
+      input: "{ x: number; y: number }",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "x",
+              value: { type: "primitiveType", value: "number" },
+            },
+            {
+              key: "y",
+              value: { type: "primitiveType", value: "number" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "{ name: string; age: number; active: boolean }",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "name",
+              value: { type: "primitiveType", value: "string" },
+            },
+            {
+              key: "age",
+              value: { type: "primitiveType", value: "number" },
+            },
+            {
+              key: "active",
+              value: { type: "primitiveType", value: "boolean" },
+            },
+          ],
+        },
+      },
+    },
+    // With different value types
+    {
+      input: "{ items: number[]; tags: string[] }",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "items",
+              value: {
+                type: "arrayType",
+                elementType: { type: "primitiveType", value: "number" },
+              },
+            },
+            {
+              key: "tags",
+              value: {
+                type: "arrayType",
+                elementType: { type: "primitiveType", value: "string" },
+              },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: '{ status: "active"; count: 42 }',
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "status",
+              value: { type: "stringLiteralType", value: "active" },
+            },
+            {
+              key: "count",
+              value: { type: "numberLiteralType", value: "42" },
+            },
+          ],
+        },
+      },
+    },
+    // Whitespace variations
+    {
+      input: "{x:number}",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "x",
+              value: { type: "primitiveType", value: "number" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "{  x: number  }",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "x",
+              value: { type: "primitiveType", value: "number" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "{ x: number ; y: number }",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "x",
+              value: { type: "primitiveType", value: "number" },
+            },
+            {
+              key: "y",
+              value: { type: "primitiveType", value: "number" },
+            },
+          ],
+        },
+      },
+    },
+    // Empty object
+    {
+      input: "{}",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [],
+        },
+      },
+    },
+    {
+      input: "{  }",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [],
+        },
+      },
+    },
+    // Failure cases
+    {
+      input: "{ x: invalid }",
+      expected: { success: false },
+    },
+    {
+      input: "{ x number }",
+      expected: { success: false },
+    },
+    {
+      input: "{ x: }",
+      expected: { success: false },
+    },
+    {
+      input: "{ : number }",
+      expected: { success: false },
+    },
+    {
+      input: "{ x: number",
+      expected: { success: false },
+    },
+    {
+      input: "x: number }",
+      expected: { success: false },
+    },
+    {
+      input: "",
+      expected: { success: false },
+    },
+  ];
+
+  testCases.forEach(({ input, expected }) => {
+    if (expected.success) {
+      it(`should parse "${input}" successfully`, () => {
+        const result = objectTypeParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result).toEqual(expected.result);
+        }
+      });
+    } else {
+      it(`should fail to parse "${input}"`, () => {
+        const result = objectTypeParser(input);
+        expect(result.success).toBe(false);
+      });
+    }
+  });
+});
+
 describe("unionTypeParser", () => {
   const testCases = [
     // Basic union types
@@ -660,6 +1009,40 @@ describe("variableTypeParser", () => {
       },
     },
     {
+      input: "{ x: number }",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "x",
+              value: { type: "primitiveType", value: "number" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "{ x: number; y: string }",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "x",
+              value: { type: "primitiveType", value: "number" },
+            },
+            {
+              key: "y",
+              value: { type: "primitiveType", value: "string" },
+            },
+          ],
+        },
+      },
+    },
+    {
       input: "",
       expected: { success: false },
     },
@@ -872,6 +1255,87 @@ describe("typeHintParser", () => {
         },
       },
     },
+    // Object types
+    {
+      input: "point :: { x: number; y: number }",
+      expected: {
+        success: true,
+        result: {
+          type: "typeHint",
+          variableName: "point",
+          variableType: {
+            type: "objectType",
+            properties: [
+              {
+                key: "x",
+                value: { type: "primitiveType", value: "number" },
+              },
+              {
+                key: "y",
+                value: { type: "primitiveType", value: "number" },
+              },
+            ],
+          },
+        },
+      },
+    },
+    {
+      input: "user :: { name: string; age: number; active: boolean }",
+      expected: {
+        success: true,
+        result: {
+          type: "typeHint",
+          variableName: "user",
+          variableType: {
+            type: "objectType",
+            properties: [
+              {
+                key: "name",
+                value: { type: "primitiveType", value: "string" },
+              },
+              {
+                key: "age",
+                value: { type: "primitiveType", value: "number" },
+              },
+              {
+                key: "active",
+                value: { type: "primitiveType", value: "boolean" },
+              },
+            ],
+          },
+        },
+      },
+    },
+    {
+      input: "coords :: { items: number[]; tags: string[] }",
+      expected: {
+        success: true,
+        result: {
+          type: "typeHint",
+          variableName: "coords",
+          variableType: {
+            type: "objectType",
+            properties: [
+              {
+                key: "items",
+                value: {
+                  type: "arrayType",
+                  elementType: { type: "primitiveType", value: "number" },
+                },
+              },
+              {
+                key: "tags",
+                value: {
+                  type: "arrayType",
+                  elementType: { type: "primitiveType", value: "string" },
+                },
+              },
+            ],
+          },
+        },
+      },
+    },
+    // Failure cases
     {
       input: "x::number",
       expected: { success: false },

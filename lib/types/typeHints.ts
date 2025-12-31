@@ -46,6 +46,7 @@ export type UnionType = {
 export type ObjectProperty = {
   key: string;
   value: VariableType;
+  description?: string;
 };
 
 export type ObjectType = {

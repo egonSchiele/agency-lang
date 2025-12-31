@@ -1,4 +1,5 @@
 import { VariableType } from "@/types";
+import { escape } from "@/utils";
 
 /**
  * Maps ADL types to Zod schema strings
@@ -40,8 +41,13 @@ export function mapTypeToZodSchema(
   } else if (variableType.type === "objectType") {
     const props = variableType.properties
       .map(
-        (prop) =>
-          `"${prop.key}": ${mapTypeToZodSchema(prop.value, typeAliases)}`
+        (prop) => {
+          let str = `"${prop.key}": ${mapTypeToZodSchema(prop.value, typeAliases)}`;
+          if (prop.description) {
+            str += `.describe("${escape(prop.description)}")`;
+          }
+          return str;
+        }
       )
       .join(", ");
     return `z.object({ ${props} })`;

@@ -16,11 +16,13 @@ import {
 import {
   alphanum,
   capture,
+  captureCaptures,
   char,
   digit,
   many1,
   many1Till,
   many1WithJoin,
+  optional,
   or,
   Parser,
   ParserResult,
@@ -79,6 +81,7 @@ export const objectPropertyDelimiter = seqR(
   char(";"),
   optionalSpaces
 );
+
 export const objectPropertyParser: Parser<ObjectProperty> = (
   input: string
 ): ParserResult<ObjectProperty> => {
@@ -87,10 +90,23 @@ export const objectPropertyParser: Parser<ObjectProperty> = (
     optionalSpaces,
     char(":"),
     optionalSpaces,
-    capture(variableTypeParser, "value")
+    capture(variableTypeParser, "value"),
   );
   return parser(input);
 };
+
+export const objectPropertyDescriptionParser: Parser<{ description: string }> = seqC(
+  char("#"),
+  optionalSpaces,
+  capture(many1Till(char(";")), "description"),
+)
+
+export const objectPropertyWithDescriptionParser: Parser<ObjectProperty> = seqC(
+  captureCaptures(objectPropertyParser),
+  spaces,
+  captureCaptures(objectPropertyDescriptionParser)
+)
+
 export const objectTypeParser: Parser<ObjectType> = (
   input: string
 ): ParserResult<ObjectType> => {
@@ -98,7 +114,7 @@ export const objectTypeParser: Parser<ObjectType> = (
     set("type", "objectType"),
     char("{"),
     optionalSpaces,
-    capture(sepBy(objectPropertyDelimiter, objectPropertyParser), "properties"),
+    capture(sepBy(objectPropertyDelimiter, or(objectPropertyWithDescriptionParser, objectPropertyParser)), "properties"),
     optionalSpaces,
     char("}")
   );

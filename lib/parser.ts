@@ -13,7 +13,8 @@ import {
   trace,
 } from "tarsec";
 import { assignmentParser } from "./parsers/assignment";
-import { functionCallParser, functionParser } from "./parsers/function";
+import { functionParser } from "./parsers/function";
+import { functionCallParser } from "./parsers/functionCall";
 
 export const adlNode: Parser<ADLNode[]> = sepBy(
   spaces,

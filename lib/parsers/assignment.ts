@@ -12,7 +12,7 @@ import {
 } from "tarsec";
 import { literalParser } from "./literals";
 import { optionalSpaces } from "./utils";
-import { functionCallParser } from "./function";
+import { functionCallParser } from "./functionCall";
 
 export const assignmentParser: Parser<Assignment> = trace(
   "assignmentParser",

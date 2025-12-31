@@ -1,7 +1,5 @@
-name :: string
-name = input("What is your name? ")
-print(name)
+message = input("Please enter a message: ")
 
-age :: string
-age = input("How old are you? ")
-print(age)
+sentiment :: "happy" | "sad" | "neutral"
+sentiment = `Categorize the sentiment in this message: "${message}"`
+print(sentiment)

@@ -8,6 +8,8 @@ import {
   booleanLiteralTypeParser,
   objectPropertyParser,
   objectTypeParser,
+  typeAliasParser,
+  typeAliasVariableParser,
   variableTypeParser,
   unionTypeParser,
   typeHintParser,
@@ -352,6 +354,496 @@ describe("booleanLiteralTypeParser", () => {
     } else {
       it(`should fail to parse "${input}"`, () => {
         const result = booleanLiteralTypeParser(input);
+        expect(result.success).toBe(false);
+      });
+    }
+  });
+});
+
+describe("typeAliasParser", () => {
+  const testCases = [
+    // Basic type aliases with primitives
+    {
+      input: "type Name = string",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "Name",
+          aliasedType: { type: "primitiveType", value: "string" },
+        },
+      },
+    },
+    {
+      input: "type Count = number",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "Count",
+          aliasedType: { type: "primitiveType", value: "number" },
+        },
+      },
+    },
+    {
+      input: "type Flag = boolean",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "Flag",
+          aliasedType: { type: "primitiveType", value: "boolean" },
+        },
+      },
+    },
+    // Object type aliases
+    {
+      input: "type Point = { x: number; y: number }",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "Point",
+          aliasedType: {
+            type: "objectType",
+            properties: [
+              {
+                key: "x",
+                value: { type: "primitiveType", value: "number" },
+              },
+              {
+                key: "y",
+                value: { type: "primitiveType", value: "number" },
+              },
+            ],
+          },
+        },
+      },
+    },
+    {
+      input: "type User = { name: string; age: number; active: boolean }",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "User",
+          aliasedType: {
+            type: "objectType",
+            properties: [
+              {
+                key: "name",
+                value: { type: "primitiveType", value: "string" },
+              },
+              {
+                key: "age",
+                value: { type: "primitiveType", value: "number" },
+              },
+              {
+                key: "active",
+                value: { type: "primitiveType", value: "boolean" },
+              },
+            ],
+          },
+        },
+      },
+    },
+    // Array type aliases
+    {
+      input: "type Numbers = number[]",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "Numbers",
+          aliasedType: {
+            type: "arrayType",
+            elementType: { type: "primitiveType", value: "number" },
+          },
+        },
+      },
+    },
+    {
+      input: "type Items = array<string>",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "Items",
+          aliasedType: {
+            type: "arrayType",
+            elementType: { type: "primitiveType", value: "string" },
+          },
+        },
+      },
+    },
+    // Literal type aliases
+    {
+      input: 'type Status = "active"',
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "Status",
+          aliasedType: { type: "stringLiteralType", value: "active" },
+        },
+      },
+    },
+    {
+      input: "type Level = 42",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "Level",
+          aliasedType: { type: "numberLiteralType", value: "42" },
+        },
+      },
+    },
+    {
+      input: "type Enabled = true",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "Enabled",
+          aliasedType: { type: "booleanLiteralType", value: "true" },
+        },
+      },
+    },
+    // Union type aliases
+    {
+      input: "type StringOrNumber = string | number",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "StringOrNumber",
+          aliasedType: {
+            type: "unionType",
+            types: [
+              { type: "primitiveType", value: "string" },
+              { type: "primitiveType", value: "number" },
+            ],
+          },
+        },
+      },
+    },
+    {
+      input: 'type Result = "success" | "error"',
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "Result",
+          aliasedType: {
+            type: "unionType",
+            types: [
+              { type: "stringLiteralType", value: "success" },
+              { type: "stringLiteralType", value: "error" },
+            ],
+          },
+        },
+      },
+    },
+    {
+      input: "type Mixed = string | 42 | true",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "Mixed",
+          aliasedType: {
+            type: "unionType",
+            types: [
+              { type: "primitiveType", value: "string" },
+              { type: "numberLiteralType", value: "42" },
+              { type: "booleanLiteralType", value: "true" },
+            ],
+          },
+        },
+      },
+    },
+    // Nested/Complex type aliases
+    {
+      input: "type Nested = { coords: { x: number; y: number } }",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "Nested",
+          aliasedType: {
+            type: "objectType",
+            properties: [
+              {
+                key: "coords",
+                value: {
+                  type: "objectType",
+                  properties: [
+                    {
+                      key: "x",
+                      value: { type: "primitiveType", value: "number" },
+                    },
+                    {
+                      key: "y",
+                      value: { type: "primitiveType", value: "number" },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      },
+    },
+    {
+      input: "type Complex = { value: string | number }",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "Complex",
+          aliasedType: {
+            type: "objectType",
+            properties: [
+              {
+                key: "value",
+                value: {
+                  type: "unionType",
+                  types: [
+                    { type: "primitiveType", value: "string" },
+                    { type: "primitiveType", value: "number" },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      },
+    },
+    // Whitespace variations
+    {
+      input: "type A=number",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "A",
+          aliasedType: { type: "primitiveType", value: "number" },
+        },
+      },
+    },
+    {
+      input: "type B = number",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "B",
+          aliasedType: { type: "primitiveType", value: "number" },
+        },
+      },
+    },
+    {
+      input: "type C  =  number",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "C",
+          aliasedType: { type: "primitiveType", value: "number" },
+        },
+      },
+    },
+    {
+      input: "type D = number[]",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "D",
+          aliasedType: {
+            type: "arrayType",
+            elementType: { type: "primitiveType", value: "number" },
+          },
+        },
+      },
+    },
+    // Different naming styles
+    {
+      input: "type MyType = string",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "MyType",
+          aliasedType: { type: "primitiveType", value: "string" },
+        },
+      },
+    },
+    {
+      input: "type x = number",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "x",
+          aliasedType: { type: "primitiveType", value: "number" },
+        },
+      },
+    },
+    {
+      input: "type ABC = boolean",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAlias",
+          aliasName: "ABC",
+          aliasedType: { type: "primitiveType", value: "boolean" },
+        },
+      },
+    },
+    // Failure cases
+    {
+      input: "type",
+      expected: { success: false },
+    },
+    {
+      input: "type A",
+      expected: { success: false },
+    },
+    {
+      input: "type A =",
+      expected: { success: false },
+    },
+    {
+      input: "type = number",
+      expected: { success: false },
+    },
+    {
+      input: "A = number",
+      expected: { success: false },
+    },
+    {
+      input: "type A number",
+      expected: { success: false },
+    },
+    {
+      input: "",
+      expected: { success: false },
+    },
+  ];
+
+  testCases.forEach(({ input, expected }) => {
+    if (expected.success) {
+      it(`should parse "${input}" successfully`, () => {
+        const result = typeAliasParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result).toEqual(expected.result);
+        }
+      });
+    } else {
+      it(`should fail to parse "${input}"`, () => {
+        const result = typeAliasParser(input);
+        expect(result.success).toBe(false);
+      });
+    }
+  });
+});
+
+describe("typeAliasVariableParser", () => {
+  const testCases = [
+    // Simple references
+    {
+      input: "Point",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAliasVariable",
+          aliasName: "Point",
+        },
+      },
+    },
+    {
+      input: "MyType",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAliasVariable",
+          aliasName: "MyType",
+        },
+      },
+    },
+    {
+      input: "UserData",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAliasVariable",
+          aliasName: "UserData",
+        },
+      },
+    },
+    {
+      input: "x",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAliasVariable",
+          aliasName: "x",
+        },
+      },
+    },
+    // Edge cases
+    {
+      input: "a123",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAliasVariable",
+          aliasName: "a123",
+        },
+      },
+    },
+    {
+      input: "ABC",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAliasVariable",
+          aliasName: "ABC",
+        },
+      },
+    },
+    {
+      input: "longtypename",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAliasVariable",
+          aliasName: "longtypename",
+        },
+      },
+    },
+    // Failure cases
+    {
+      input: "",
+      expected: { success: false },
+    },
+  ];
+
+  testCases.forEach(({ input, expected }) => {
+    if (expected.success) {
+      it(`should parse "${input}" successfully`, () => {
+        const result = typeAliasVariableParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result).toEqual(expected.result);
+        }
+      });
+    } else {
+      it(`should fail to parse "${input}"`, () => {
+        const result = typeAliasVariableParser(input);
         expect(result.success).toBe(false);
       });
     }
@@ -815,11 +1307,78 @@ describe("objectTypeParser", () => {
         },
       },
     },
-    // Failure cases
+    // Object with type alias properties
     {
-      input: "{ x: invalid }",
-      expected: { success: false },
+      input: "{ coord: Point }",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "coord",
+              value: {
+                type: "typeAliasVariable",
+                aliasName: "Point",
+              },
+            },
+          ],
+        },
+      },
     },
+    {
+      input: "{ start: Point; end: Point }",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "start",
+              value: {
+                type: "typeAliasVariable",
+                aliasName: "Point",
+              },
+            },
+            {
+              key: "end",
+              value: {
+                type: "typeAliasVariable",
+                aliasName: "Point",
+              },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "{ data: Point | Line }",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "data",
+              value: {
+                type: "unionType",
+                types: [
+                  {
+                    type: "typeAliasVariable",
+                    aliasName: "Point",
+                  },
+                  {
+                    type: "typeAliasVariable",
+                    aliasName: "Line",
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+    },
+    // Failure cases
     {
       input: "{ x number }",
       expected: { success: false },
@@ -1287,6 +1846,89 @@ describe("unionTypeParser", () => {
         },
       },
     },
+    // Union with type aliases
+    {
+      input: "Point | Line",
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            {
+              type: "typeAliasVariable",
+              aliasName: "Point",
+            },
+            {
+              type: "typeAliasVariable",
+              aliasName: "Line",
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "string | Point",
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            { type: "primitiveType", value: "string" },
+            {
+              type: "typeAliasVariable",
+              aliasName: "Point",
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "Point | { x: number }",
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            {
+              type: "typeAliasVariable",
+              aliasName: "Point",
+            },
+            {
+              type: "objectType",
+              properties: [
+                {
+                  key: "x",
+                  value: { type: "primitiveType", value: "number" },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "Point | Line | Circle",
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            {
+              type: "typeAliasVariable",
+              aliasName: "Point",
+            },
+            {
+              type: "typeAliasVariable",
+              aliasName: "Line",
+            },
+            {
+              type: "typeAliasVariable",
+              aliasName: "Circle",
+            },
+          ],
+        },
+      },
+    },
     // Failure cases
     {
       input: "string",
@@ -1310,10 +1952,6 @@ describe("unionTypeParser", () => {
     },
     {
       input: "| string",
-      expected: { success: false },
-    },
-    {
-      input: "invalid | number",
       expected: { success: false },
     },
   ];
@@ -1417,6 +2055,17 @@ describe("variableTypeParser", () => {
               value: { type: "primitiveType", value: "string" },
             },
           ],
+        },
+      },
+    },
+    // Type alias references
+    {
+      input: "Point",
+      expected: {
+        success: true,
+        result: {
+          type: "typeAliasVariable",
+          aliasName: "Point",
         },
       },
     },
@@ -1706,6 +2355,66 @@ describe("typeHintParser", () => {
                 value: {
                   type: "arrayType",
                   elementType: { type: "primitiveType", value: "string" },
+                },
+              },
+            ],
+          },
+        },
+      },
+    },
+    // Type alias types
+    {
+      input: "coords :: Point",
+      expected: {
+        success: true,
+        result: {
+          type: "typeHint",
+          variableName: "coords",
+          variableType: {
+            type: "typeAliasVariable",
+            aliasName: "Point",
+          },
+        },
+      },
+    },
+    {
+      input: "data :: Point | Line",
+      expected: {
+        success: true,
+        result: {
+          type: "typeHint",
+          variableName: "data",
+          variableType: {
+            type: "unionType",
+            types: [
+              {
+                type: "typeAliasVariable",
+                aliasName: "Point",
+              },
+              {
+                type: "typeAliasVariable",
+                aliasName: "Line",
+              },
+            ],
+          },
+        },
+      },
+    },
+    {
+      input: "nested :: { coord: Point }",
+      expected: {
+        success: true,
+        result: {
+          type: "typeHint",
+          variableName: "nested",
+          variableType: {
+            type: "objectType",
+            properties: [
+              {
+                key: "coord",
+                value: {
+                  type: "typeAliasVariable",
+                  aliasName: "Point",
                 },
               },
             ],

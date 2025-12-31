@@ -272,3 +272,352 @@ describe("generateTypeScript - ObjectType support", () => {
     });
   });
 });
+
+describe("generateTypeScript - Type Alias support", () => {
+  describe("Type aliases generate correct TypeScript type definitions", () => {
+    it("should generate TypeScript type alias for primitive type", () => {
+      const program: ADLProgram = {
+        type: "adlProgram",
+        nodes: [
+          {
+            type: "typeAlias",
+            aliasName: "Name",
+            aliasedType: { type: "primitiveType", value: "string" },
+          },
+        ],
+      };
+
+      const result = generateTypeScript(program);
+
+      expect(result).toContain("type Name = string;");
+    });
+
+    it("should generate TypeScript type alias for object type", () => {
+      const program: ADLProgram = {
+        type: "adlProgram",
+        nodes: [
+          {
+            type: "typeAlias",
+            aliasName: "Point",
+            aliasedType: {
+              type: "objectType",
+              properties: [
+                {
+                  key: "x",
+                  value: { type: "primitiveType", value: "number" },
+                },
+                {
+                  key: "y",
+                  value: { type: "primitiveType", value: "number" },
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      const result = generateTypeScript(program);
+
+      expect(result).toContain("type Point = { x: number; y: number };");
+    });
+
+    it("should generate TypeScript type alias for union type", () => {
+      const program: ADLProgram = {
+        type: "adlProgram",
+        nodes: [
+          {
+            type: "typeAlias",
+            aliasName: "StringOrNumber",
+            aliasedType: {
+              type: "unionType",
+              types: [
+                { type: "primitiveType", value: "string" },
+                { type: "primitiveType", value: "number" },
+              ],
+            },
+          },
+        ],
+      };
+
+      const result = generateTypeScript(program);
+
+      expect(result).toContain("type StringOrNumber = string | number;");
+    });
+
+    it("should use type alias in variable type hint and generate correct zod schema", () => {
+      const program: ADLProgram = {
+        type: "adlProgram",
+        nodes: [
+          {
+            type: "typeAlias",
+            aliasName: "Point",
+            aliasedType: {
+              type: "objectType",
+              properties: [
+                {
+                  key: "x",
+                  value: { type: "primitiveType", value: "number" },
+                },
+                {
+                  key: "y",
+                  value: { type: "primitiveType", value: "number" },
+                },
+              ],
+            },
+          },
+          {
+            type: "typeHint",
+            variableName: "coords",
+            variableType: {
+              type: "typeAliasVariable",
+              aliasName: "Point",
+            },
+          },
+          {
+            type: "assignment",
+            variableName: "coords",
+            value: {
+              type: "prompt",
+              segments: [
+                {
+                  type: "text",
+                  value: "generate coordinates",
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      const result = generateTypeScript(program);
+
+      // Should generate type alias definition
+      expect(result).toContain("type Point = { x: number; y: number };");
+
+      // Should use Point as return type in function signature
+      expect(result).toContain("Promise<Point>");
+
+      // Should resolve Point to zod schema
+      expect(result).toContain('z.object({ "x": z.number(), "y": z.number() })');
+    });
+
+    it("should handle type alias used in union", () => {
+      const program: ADLProgram = {
+        type: "adlProgram",
+        nodes: [
+          {
+            type: "typeAlias",
+            aliasName: "Point",
+            aliasedType: {
+              type: "objectType",
+              properties: [
+                {
+                  key: "x",
+                  value: { type: "primitiveType", value: "number" },
+                },
+              ],
+            },
+          },
+          {
+            type: "typeHint",
+            variableName: "data",
+            variableType: {
+              type: "unionType",
+              types: [
+                { type: "primitiveType", value: "string" },
+                {
+                  type: "typeAliasVariable",
+                  aliasName: "Point",
+                },
+              ],
+            },
+          },
+          {
+            type: "assignment",
+            variableName: "data",
+            value: {
+              type: "prompt",
+              segments: [
+                {
+                  type: "text",
+                  value: "generate data",
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      const result = generateTypeScript(program);
+
+      // Should generate type alias
+      expect(result).toContain("type Point = { x: number };");
+
+      // Should use Point in union type as return type
+      expect(result).toContain("Promise<string | Point>");
+
+      // Should resolve union with Point to zod schema
+      expect(result).toContain("z.union([z.string(), z.object({ \"x\": z.number() })])");
+    });
+
+    it("should handle type alias used in object property", () => {
+      const program: ADLProgram = {
+        type: "adlProgram",
+        nodes: [
+          {
+            type: "typeAlias",
+            aliasName: "Point",
+            aliasedType: {
+              type: "objectType",
+              properties: [
+                {
+                  key: "x",
+                  value: { type: "primitiveType", value: "number" },
+                },
+                {
+                  key: "y",
+                  value: { type: "primitiveType", value: "number" },
+                },
+              ],
+            },
+          },
+          {
+            type: "typeHint",
+            variableName: "location",
+            variableType: {
+              type: "objectType",
+              properties: [
+                {
+                  key: "coord",
+                  value: {
+                    type: "typeAliasVariable",
+                    aliasName: "Point",
+                  },
+                },
+              ],
+            },
+          },
+          {
+            type: "assignment",
+            variableName: "location",
+            value: {
+              type: "prompt",
+              segments: [
+                {
+                  type: "text",
+                  value: "generate location",
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      const result = generateTypeScript(program);
+
+      // Should generate type alias
+      expect(result).toContain("type Point = { x: number; y: number };");
+
+      // Should use Point in object property type as return type
+      expect(result).toContain("Promise<{ coord: Point }>");
+
+      // Should resolve nested type alias
+      expect(result).toContain(
+        'z.object({ "coord": z.object({ "x": z.number(), "y": z.number() }) })'
+      );
+    });
+
+    it("should handle multiple type aliases", () => {
+      const program: ADLProgram = {
+        type: "adlProgram",
+        nodes: [
+          {
+            type: "typeAlias",
+            aliasName: "Point",
+            aliasedType: {
+              type: "objectType",
+              properties: [
+                {
+                  key: "x",
+                  value: { type: "primitiveType", value: "number" },
+                },
+              ],
+            },
+          },
+          {
+            type: "typeAlias",
+            aliasName: "Line",
+            aliasedType: {
+              type: "objectType",
+              properties: [
+                {
+                  key: "length",
+                  value: { type: "primitiveType", value: "number" },
+                },
+              ],
+            },
+          },
+          {
+            type: "typeHint",
+            variableName: "shape",
+            variableType: {
+              type: "unionType",
+              types: [
+                {
+                  type: "typeAliasVariable",
+                  aliasName: "Point",
+                },
+                {
+                  type: "typeAliasVariable",
+                  aliasName: "Line",
+                },
+              ],
+            },
+          },
+          {
+            type: "assignment",
+            variableName: "shape",
+            value: {
+              type: "prompt",
+              segments: [
+                {
+                  type: "text",
+                  value: "generate shape",
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      const result = generateTypeScript(program);
+
+      // Should generate both type aliases
+      expect(result).toContain("type Point = { x: number };");
+      expect(result).toContain("type Line = { length: number };");
+
+      // Should use both in union as return type
+      expect(result).toContain("Promise<Point | Line>");
+    });
+
+    it("should generate type alias for array type", () => {
+      const program: ADLProgram = {
+        type: "adlProgram",
+        nodes: [
+          {
+            type: "typeAlias",
+            aliasName: "Numbers",
+            aliasedType: {
+              type: "arrayType",
+              elementType: { type: "primitiveType", value: "number" },
+            },
+          },
+        ],
+      };
+
+      const result = generateTypeScript(program);
+
+      expect(result).toContain("type Numbers = number[];");
+    });
+  });
+});

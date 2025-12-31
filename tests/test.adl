@@ -1,4 +1,4 @@
-foo :: string[]
-foo = `three names`
+foo :: string | number
+foo = `a random number`
 
 print(foo)

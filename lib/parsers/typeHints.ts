@@ -1,29 +1,30 @@
-import {
-  Parser,
-  seqC,
-  set,
-  capture,
-  or,
-  str,
-  char,
-  many1Till,
-  space,
-  digit,
-  many1,
-  spaces,
-  eof,
-  many1WithJoin,
-} from "tarsec";
-import {
-  PrimitiveType,
-  ArrayType,
-  VariableType,
-  TypeHint,
-  StringLiteralType,
-  NumberLiteralType,
-  BooleanLiteralType,
-} from "@/types";
 import { optionalSpaces } from "@/parsers/utils";
+import {
+  ArrayType,
+  BooleanLiteralType,
+  NumberLiteralType,
+  PrimitiveType,
+  StringLiteralType,
+  TypeHint,
+  UnionType,
+  VariableType,
+} from "@/types";
+import {
+  capture,
+  char,
+  digit,
+  many1Till,
+  many1WithJoin,
+  or,
+  Parser,
+  ParserResult,
+  sepBy,
+  seqC,
+  seqR,
+  set,
+  space,
+  str
+} from "tarsec";
 
 export const primitiveTypeParser: Parser<PrimitiveType> = seqC(
   set("type", "primitiveType"),
@@ -61,6 +62,16 @@ export const booleanLiteralTypeParser: Parser<BooleanLiteralType> = seqC(
   capture(or(str("true"), str("false")), "value")
 );
 
+const pipe = seqR(optionalSpaces, str("|"), optionalSpaces);
+
+export const unionTypeParser: Parser<UnionType> = (input: string): ParserResult<UnionType> => {
+  const parser = seqC(
+    set("type", "unionType"),
+    capture(sepBy(pipe, variableTypeParser), "types")
+  );
+  return parser(input);
+}
+
 export const variableTypeParser: Parser<VariableType> = or(
   angleBracketsArrayTypeParser,
   arrayTypeParser,
@@ -76,5 +87,6 @@ export const typeHintParser: Parser<TypeHint> = seqC(
   optionalSpaces,
   str("::"),
   optionalSpaces,
-  capture(variableTypeParser, "variableType")
+  capture(or(unionTypeParser, variableTypeParser), "variableType")
 );
+

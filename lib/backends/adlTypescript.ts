@@ -9,10 +9,13 @@ import {
   PromptLiteral,
   PromptSegment,
   TypeHint,
+  UnionType,
   VariableType,
 } from "@/types";
 
 import { escape } from "@/utils";
+
+type TypeHintMap = Map<string, VariableType | UnionType>;
 
 /**
  *
@@ -31,7 +34,7 @@ const openai = new OpenAI({
 /**
  * Maps ADL types to Zod schema strings
  */
-function mapTypeToZodSchema(variableType: VariableType): string {
+function mapTypeToZodSchema(variableType: VariableType | UnionType): string {
   if (variableType.type === "primitiveType") {
     switch (variableType.value.toLowerCase()) {
       case "number":
@@ -54,6 +57,11 @@ function mapTypeToZodSchema(variableType: VariableType): string {
     return `z.literal(${variableType.value})`;
   } else if (variableType.type === "booleanLiteralType") {
     return `z.literal(${variableType.value})`;
+  } else if (variableType.type === "unionType") {
+    const unionSchemas = variableType.types.map((t) =>
+      mapTypeToZodSchema(t)
+    );
+    return `z.union([${unionSchemas.join(", ")}])`;
   }
 
   // Fallback (should never reach here)
@@ -63,12 +71,22 @@ function mapTypeToZodSchema(variableType: VariableType): string {
 /**
  * Converts a VariableType to a string representation for naming/logging
  */
-function variableTypeToString(variableType: VariableType): string {
+function variableTypeToString(variableType: VariableType | UnionType): string {
   if (variableType.type === "primitiveType") {
     return variableType.value;
   } else if (variableType.type === "arrayType") {
     // Recursively build array type string
     return `${variableTypeToString(variableType.elementType)}[]`;
+  } else if (variableType.type === "stringLiteralType") {
+    return `"${variableType.value}"`;
+  } else if (variableType.type === "numberLiteralType") {
+    return `${variableType.value}`;
+  } else if (variableType.type === "booleanLiteralType") {
+    return `${variableType.value}`;
+  } else if (variableType.type === "unionType") {
+    return variableType.types
+      .map((t) => variableTypeToString(t))
+      .join(" | ");
   }
   return "unknown";
 }
@@ -105,7 +123,7 @@ function generateLiteral(literal: Literal): string {
  */
 function buildPromptString(
   segments: PromptSegment[],
-  typeHints: Map<string, VariableType>
+  typeHints: TypeHintMap
 ): string {
   const promptParts: string[] = [];
 
@@ -143,8 +161,8 @@ function generatePromptFunction({
   variableName: string;
   functionArgs: string[];
   prompt: PromptLiteral;
-  variableType: VariableType;
-  typeHints: Map<string, VariableType>;
+  variableType: VariableType | UnionType;
+  typeHints: TypeHintMap;
 }): string {
   const zodSchema = mapTypeToZodSchema(variableType);
   const typeString = variableTypeToString(variableType);
@@ -208,7 +226,7 @@ function mapFunctionName(functionName: string): string {
  * Main TypeScript code generator class
  */
 export class TypeScriptGenerator {
-  private typeHints: Map<string, VariableType> = new Map();
+  private typeHints: TypeHintMap = new Map();
   private generatedFunctions: string[] = [];
   private generatedStatements: string[] = [];
   private variablesInScope: Set<string> = new Set();
@@ -312,7 +330,7 @@ export class TypeScriptGenerator {
       if (!this.variablesInScope.has(varName)) {
         throw new Error(
           `Variable '${varName}' used in prompt interpolation but not defined. ` +
-            `Referenced in assignment to '${variableName}'.`
+          `Referenced in assignment to '${variableName}'.`
         );
       }
     }

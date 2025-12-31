@@ -1,7 +1,7 @@
 export type TypeHint = {
   type: "typeHint";
   variableName: string;
-  variableType: VariableType;
+  variableType: VariableType | UnionType;
 };
 
 export type VariableType =
@@ -34,4 +34,9 @@ export type NumberLiteralType = {
 export type BooleanLiteralType = {
   type: "booleanLiteralType";
   value: "true" | "false";
+};
+
+export type UnionType = {
+  type: "unionType";
+  types: VariableType[];
 };

@@ -9,7 +9,6 @@ const openai = new OpenAI({
 
 
 
-
 async function _numbers(): Promise<number[]> {
   const prompt = `the first 5 prime numbers`;
   const startTime = performance.now();
@@ -62,8 +61,7 @@ async function _greetings(): Promise<string[]> {
     throw e;
   }
 }
-
 const numbers = await _numbers();
-console.log(numbers);
+console.log(numbers)
 const greetings = await _greetings();
-console.log(greetings);
+console.log(greetings)

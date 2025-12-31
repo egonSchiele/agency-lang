@@ -1,6 +1,6 @@
 test :: string
 def test() {
   foo = 1
-  bar = `say hello`
-  bar
+  foo
 }
+print(test())

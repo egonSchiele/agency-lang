@@ -1,4 +1,4 @@
-numbers :: array<number>
+numbers :: number[]
 numbers = `the first 5 prime numbers`
 print(numbers)
 

@@ -9,14 +9,26 @@ export type MatchBlock = {
 };
 */
 
-import { capture, char, newline, optional, or, Parser, sepBy, seqC, set, str, trace } from "tarsec";
+import {
+  capture,
+  char,
+  newline,
+  optional,
+  or,
+  Parser,
+  sepBy,
+  seqC,
+  set,
+  str,
+  trace,
+} from "tarsec";
 import { optionalSpaces } from "./utils";
 import { literalParser } from "./literals";
 import { assignmentParser } from "./assignment";
 import { functionCallParser } from "./functionCall";
 import { DefaultCase, MatchBlockCase } from "@/types/matchBlock";
 
-export const defaultCaseParser: Parser<DefaultCase> = char("_")
+export const defaultCaseParser: Parser<DefaultCase> = char("_");
 
 export const matchBlockParserCase: Parser<MatchBlockCase> = seqC(
   optionalSpaces,
@@ -24,12 +36,12 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = seqC(
   optionalSpaces,
   str("=>"),
   optionalSpaces,
-  capture(or(assignmentParser, functionCallParser, literalParser), "body"),
-)
+  capture(or(assignmentParser, functionCallParser, literalParser), "body")
+);
 
 const semicolon = seqC(optionalSpaces, char(";"), optionalSpaces);
 
-export const matchBlockParser = trace("matchBlockParser", seqC(
+export const matchBlockParser = seqC(
   set("type", "matchBlock"),
   str("match"),
   char("("),
@@ -40,6 +52,5 @@ export const matchBlockParser = trace("matchBlockParser", seqC(
   optionalSpaces,
   capture(sepBy(or(semicolon, newline), matchBlockParserCase), "cases"),
   optionalSpaces,
-  char("}"),
-
-))
+  char("}")
+);

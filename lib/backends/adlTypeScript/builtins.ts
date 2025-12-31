@@ -19,11 +19,11 @@ export function mapFunctionName(functionName: string): string {
 /**
  * Generates helper functions for built-in ADL functions
  */
-export function generateBuiltinHelpers(usedBuiltins: Set<string>): string {
+export function generateBuiltinHelpers(functionsUsed: Set<string>): string {
   const inputFunc = builtinFunctionsInput.default({});
 
   const helpers: string[] = [];
-  if (usedBuiltins.has("input")) {
+  if (functionsUsed.has("input")) {
     helpers.push(inputFunc);
   }
 

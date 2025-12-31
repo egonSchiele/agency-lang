@@ -13,13 +13,18 @@ export type Assignment = {
 export type FunctionDefinition = {
   type: "function";
   functionName: string;
-  body: Array<Assignment | Literal>;
+  body: ADLNode[];
 };
 
 export type FunctionCall = {
   type: "functionCall";
   functionName: string;
-  arguments: Literal[];
+  arguments: (Literal | FunctionCall)[];
+};
+
+export type ReturnStatement = {
+  type: "returnStatement";
+  value: ADLNode;
 };
 
 export type ADLNode =
@@ -29,7 +34,8 @@ export type ADLNode =
   | Assignment
   | Literal
   | FunctionCall
-  | MatchBlock;
+  | MatchBlock
+  | ReturnStatement;
 
 export type ADLProgram = {
   type: "adlProgram";

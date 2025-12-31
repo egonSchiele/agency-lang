@@ -22,19 +22,12 @@ import {
   generateBuiltinHelpers,
   mapFunctionName,
 } from "./adlTypeScript/builtins";
-type TypeHintMap = Map<string, VariableType>;
+type TypeHintMap = Record<string, VariableType>;
 
-/**
- *
- * Generates the standardized imports and OpenAI client setup
- */
 function generateImports(): string {
   return renderImports.default({});
 }
 
-/**
- * Generates TypeScript code for a literal value
- */
 function generateLiteral(literal: Literal): string {
   switch (literal.type) {
     case "number":
@@ -52,9 +45,6 @@ function generateLiteral(literal: Literal): string {
   }
 }
 
-/**
- * Builds a template literal string from prompt segments
- */
 function buildPromptString(
   segments: PromptSegment[],
   typeHints: TypeHintMap
@@ -68,7 +58,7 @@ function buildPromptString(
     } else {
       // Interpolation segment
       const varName = segment.variableName;
-      const varType = typeHints.get(varName);
+      const varType = typeHints[varName];
 
       // Serialize complex types to JSON
       if (varType && varType.type === "arrayType") {
@@ -110,7 +100,7 @@ function generatePromptFunction({
     .map(
       (arg) =>
         `${arg}: ${variableTypeToString(
-          typeHints.get(arg) || { type: "primitiveType", value: "string" },
+          typeHints[arg] || { type: "primitiveType", value: "string" },
           typeAliases
         )}`
     )
@@ -124,21 +114,70 @@ function generatePromptFunction({
   });
 }
 
-/**
- * Main TypeScript code generator class
- */
-export class TypeScriptGenerator {
-  private typeHints: TypeHintMap = new Map();
+export class TypeScriptFileGenerator {
+  private typeHints: TypeHintMap = {};
   private generatedFunctions: string[] = [];
   private generatedStatements: string[] = [];
   private generatedTypeAliases: string[] = [];
   private variablesInScope: Set<string> = new Set();
-  private usedBuiltins: Set<string> = new Set();
+  private functionsUsed: Set<string> = new Set();
   private typeAliases: Record<string, VariableType> = {};
   /**
    * Generate TypeScript code from an ADL program
    */
   generate(program: ADLProgram): string {
+    // Build final output
+    const output: string[] = [];
+
+    // Add imports and OpenAI client setup
+    output.push(generateImports());
+    output.push("");
+
+    const generator = new TypeScriptGenerator({
+      variablesInScope: this.variablesInScope,
+      typeAliases: this.typeAliases,
+      typeHints: this.typeHints,
+    });
+    const result = generator.generate(program);
+    this.functionsUsed = result.functionsUsed;
+
+    // Add built-in helper functions
+    output.push(generateBuiltinHelpers(this.functionsUsed));
+    output.push("");
+
+    output.push(result.output);
+
+    return output.join("\n");
+  }
+}
+export class TypeScriptGenerator {
+  private typeHints: TypeHintMap = {};
+  private generatedFunctions: string[] = [];
+  private generatedStatements: string[] = [];
+  private generatedTypeAliases: string[] = [];
+  private variablesInScope: Set<string> = new Set();
+  private functionsUsed: Set<string> = new Set();
+  private typeAliases: Record<string, VariableType> = {};
+  constructor({
+    variablesInScope = new Set<string>(),
+    typeAliases = {},
+    typeHints = {},
+  }: {
+    variablesInScope?: Set<string>;
+    typeAliases?: Record<string, VariableType>;
+    typeHints?: TypeHintMap;
+  } = {}) {
+    this.variablesInScope = variablesInScope;
+    this.typeAliases = typeAliases;
+    this.typeHints = typeHints;
+  }
+  /**
+   * Generate TypeScript code from an ADL program
+   */
+  generate(program: ADLProgram): {
+    output: string;
+    functionsUsed: Set<string>;
+  } {
     // Pass 1: Collect all type aliases
     for (const node of program.nodes) {
       if (node.type === "typeAlias") {
@@ -158,26 +197,18 @@ export class TypeScriptGenerator {
       this.processNode(node);
     }
 
-    // Build final output
     const output: string[] = [];
 
-    // Add imports and OpenAI client setup
-    output.push(generateImports());
-    output.push("");
-
-    // Add built-in helper functions
-    output.push(generateBuiltinHelpers(this.usedBuiltins));
-    output.push("");
-
     output.push(...this.generatedTypeAliases);
-    output.push("");
 
     output.push(...this.generatedFunctions);
-    output.push("");
 
     output.push(...this.generatedStatements);
 
-    return output.join("\n");
+    return {
+      output: output.filter(Boolean).join("\n"),
+      functionsUsed: this.functionsUsed,
+    };
   }
 
   private processTypeAlias(node: TypeAlias): void {
@@ -202,7 +233,7 @@ export class TypeScriptGenerator {
         );
       }
     }
-    this.typeHints.set(node.variableName, node.variableType);
+    this.typeHints[node.variableName] = node.variableType;
   }
 
   /**
@@ -230,6 +261,22 @@ export class TypeScriptGenerator {
         // Standalone literals at top level
         this.generatedStatements.push(generateLiteral(node) + ";");
         break;
+      case "returnStatement":
+        const generator = new TypeScriptGenerator({
+          variablesInScope: this.variablesInScope,
+          typeAliases: this.typeAliases,
+          typeHints: this.typeHints,
+        });
+        const result = generator.generate({
+          type: "adlProgram",
+          nodes: [node.value],
+        });
+        this.functionsUsed = new Set([
+          ...this.functionsUsed,
+          ...result.functionsUsed,
+        ]);
+        this.generatedStatements.push(`return ${result.output}`);
+        break;
     }
   }
 
@@ -240,7 +287,7 @@ export class TypeScriptGenerator {
       this.processPromptLiteral(variableName, value);
     } else if (value.type === "functionCall") {
       // Handle function call assignment
-      this.usedBuiltins.add(value.functionName);
+      this.functionsUsed.add(value.functionName);
       const functionCallCode = this.generateFunctionCallExpression(
         mapFunctionName(value.functionName),
         value.arguments
@@ -277,7 +324,7 @@ export class TypeScriptGenerator {
     }
 
     // Generate async function for prompt-based assignment
-    const variableType = this.typeHints.get(variableName) || {
+    const variableType = this.typeHints[variableName] || {
       type: "primitiveType" as const,
       value: "string",
     };
@@ -308,38 +355,21 @@ export class TypeScriptGenerator {
     const functionLines: string[] = [];
     functionLines.push(`function ${functionName}() {`);
 
-    // Process function body
-    for (const item of body) {
-      if (item.type === "assignment") {
-        const assignment = item as Assignment;
-        if (assignment.value.type === "prompt") {
-          // For prompts in functions, we need special handling
-          // This is a simplified version - may need refinement
-          functionLines.push(
-            `  // TODO: Handle prompt for ${assignment.variableName}`
-          );
-        } else if (assignment.value.type === "functionCall") {
-          // Handle function call assignment in function body
-          const functionCallCode = this.generateFunctionCallExpression(
-            mapFunctionName(assignment.value.functionName),
-            assignment.value.arguments
-          );
-          functionLines.push(
-            `  const ${assignment.variableName} = await ${functionCallCode};`
-          );
-        } else {
-          const literalCode = generateLiteral(assignment.value);
-          functionLines.push(
-            `  const ${assignment.variableName} = ${literalCode};`
-          );
-        }
-      } else {
-        // Standalone literal in function body
-        const literalCode = generateLiteral(item as Literal);
-        functionLines.push(`  ${literalCode};`);
-      }
-    }
+    const bodyGenerator = new TypeScriptGenerator({
+      variablesInScope: this.variablesInScope,
+      typeAliases: this.typeAliases,
+      typeHints: this.typeHints,
+    });
+    const result = bodyGenerator.generate({
+      type: "adlProgram",
+      nodes: body,
+    });
 
+    this.functionsUsed = new Set([
+      ...this.functionsUsed,
+      ...result.functionsUsed,
+    ]);
+    functionLines.push(result.output);
     functionLines.push("}");
     this.generatedFunctions.push(functionLines.join("\n"));
   }
@@ -348,8 +378,8 @@ export class TypeScriptGenerator {
    * Process a function call node
    */
   private processFunctionCall(node: FunctionCall): void {
-    this.usedBuiltins.add(node.functionName);
-    const functionCallCode = this.generateFunctionCallCode(
+    this.functionsUsed.add(node.functionName);
+    const functionCallCode = this.generateFunctionCallExpression(
       mapFunctionName(node.functionName),
       node.arguments
     );
@@ -362,20 +392,21 @@ export class TypeScriptGenerator {
    */
   private generateFunctionCallExpression(
     functionName: string,
-    args: Literal[]
+    args: (Literal | FunctionCall)[]
   ): string {
-    const argsString = args.map((arg) => generateLiteral(arg)).join(", ");
+    const parts = args.map((arg) => {
+      if (arg.type === "functionCall") {
+        this.functionsUsed.add(arg.functionName);
+        return this.generateFunctionCallExpression(
+          mapFunctionName(arg.functionName),
+          arg.arguments
+        );
+      } else {
+        return generateLiteral(arg);
+      }
+    });
+    const argsString = parts.join(", ");
     return `${functionName}(${argsString})`;
-  }
-
-  /**
-   * Generates TypeScript code for a function call statement (with semicolon)
-   */
-  private generateFunctionCallCode(
-    functionName: string,
-    args: Literal[]
-  ): string {
-    return this.generateFunctionCallExpression(functionName, args) + ";";
   }
 }
 
@@ -383,6 +414,6 @@ export class TypeScriptGenerator {
  * Convenience function to generate TypeScript code from an ADL program
  */
 export function generateTypeScript(program: ADLProgram): string {
-  const generator = new TypeScriptGenerator();
+  const generator = new TypeScriptFileGenerator();
   return generator.generate(program);
 }

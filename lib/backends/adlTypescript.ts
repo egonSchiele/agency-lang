@@ -15,7 +15,8 @@ import {
 
 import { escape } from "@/utils";
 import * as renderImports from "@/templates/imports";
-
+import * as promptFunction from "@/templates/promptFunction";
+import * as builtinFunctionsInput from "@/templates/builtinFunctions/input";
 type TypeHintMap = Map<string, VariableType | UnionType>;
 
 /**
@@ -169,33 +170,13 @@ function generatePromptFunction({
         )}`
     )
     .join(", ");
-
-  return `async function _${variableName}(${argsStr}): Promise<${typeString}> {
-  const prompt = ${promptCode};
-  const startTime = performance.now();
-  const completion = await openai.chat.completions.create({
-    model: "gpt-5-nano-2025-08-07",
-    messages: [
-      {
-        role: "user",
-        content: prompt,
-      },
-    ],
-    response_format: zodResponseFormat(z.object({
-      value: ${zodSchema},
-    }), "${variableName}_response"),
+  return promptFunction.default({
+    variableName,
+    argsStr,
+    typeString,
+    promptCode,
+    zodSchema,
   });
-  const endTime = performance.now();
-  console.log("Prompt for variable '${variableName}' took " + (endTime - startTime).toFixed(2) + " ms");
-  try {
-  const result = JSON.parse(completion.choices[0].message.content || "");
-  return result.value;
-  } catch (e) {
-    console.error("Error parsing response for variable '${variableName}':", e);
-    console.error("Full completion response:", JSON.stringify(completion, null, 2));
-    throw e;
-  }
-}`;
 }
 
 /**
@@ -218,20 +199,7 @@ function mapFunctionName(functionName: string): string {
  * Generates helper functions for built-in ADL functions
  */
 function generateBuiltinHelpers(usedBuiltins: Set<string>): string {
-  const inputFunc = `
-function _builtinInput(prompt: string): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-
-  return new Promise((resolve) => {
-    rl.question(prompt, (answer: string) => {
-      rl.close();
-      resolve(answer);
-    });
-  });
-}`;
+  const inputFunc = builtinFunctionsInput.default({});
 
   const helpers: string[] = [];
   if (usedBuiltins.has("input")) {

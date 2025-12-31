@@ -108,6 +108,7 @@ main = do
 
 // function = tool
 // function call = fetch call
+// tools can call agents, agents can call tools
 // type = structured output
 // code generates ui <-> ui generates code
 main uses [addTile]

@@ -1,0 +1,47 @@
+- get html
+- extract recipe
+- parse ingredient strings as ingredients
+- match ingredients to ones in user's pantry
+- confirm matches with user (hitl)
+- confirm other meal data such as recipe with the user (hitl)
+- create ingredients and meal
+
+message = input("> ")
+
+intent :: "import_recipe" | "create_ingredient" | "other"
+intent = `categorize this message: ${message}`
+
+type url = {
+  url: string; # url of the recipe to import
+}
+
+// tool
+getHtml :: url -> string
+getHtml url = `get html from this url: ${url}`
+
+extractRecipeWithAI :: string -> extractedRecipe
+extractRecipeWithAI htmlContent = `Extract the recipe information from the provided HTML content: ${htmlContent}`
+
+parseIngredients :: string[] -> ingredient[]
+parseIngredients ingredients = `parse these ingredients: ${ingredients}`
+
+// agent
+importRecipeAgent = `Use the "importRecipe" tool to extract the recipe data`
+importRecipeAgent uses importRecipe
+
+// tool
+def importRecipe(url) {
+  html = getHtml(url)
+  mealData = recipextractSchemaOrgRecipe(html) || extractRecipeWithAI(html)
+  parsed = parseIngredients(mealData.ingredients)
+  ingredientsToResolve = findIngredientMatches(parsed) // imported function
+  ingredientDecisions = confirm(ingredientsToResolve)
+  mealPreview = buildMealPreview(mealData, ingredientDecisions) // imported function
+  finalData = confirm(mealPreview)
+  createMealAndIngredients(finalData) // imported function
+}
+
+// agent
+router = match(intent) {
+  "import_recipe" => importRecipeAgent
+}

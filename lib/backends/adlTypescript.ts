@@ -55,6 +55,11 @@ function mapTypeToZodSchema(variableType: VariableType): string {
   } else if (variableType.type === "unionType") {
     const unionSchemas = variableType.types.map((t) => mapTypeToZodSchema(t));
     return `z.union([${unionSchemas.join(", ")}])`;
+  } else if (variableType.type === "objectType") {
+    const props = variableType.properties
+      .map((prop) => `"${prop.key}": ${mapTypeToZodSchema(prop.value)}`)
+      .join(", ");
+    return `z.object({ ${props} })`;
   }
 
   // Fallback (should never reach here)
@@ -78,6 +83,11 @@ function variableTypeToString(variableType: VariableType): string {
     return `${variableType.value}`;
   } else if (variableType.type === "unionType") {
     return variableType.types.map((t) => variableTypeToString(t)).join(" | ");
+  } else if (variableType.type === "objectType") {
+    const props = variableType.properties
+      .map((prop) => `${prop.key}: ${variableTypeToString(prop.value)}`)
+      .join("; ");
+    return `{ ${props} }`;
   }
   return "unknown";
 }

@@ -1,2 +1,3 @@
 foo :: { x: number; y: number }
-foo = 1
+foo = `a set of coordinates`
+print(foo)

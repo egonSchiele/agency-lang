@@ -12,6 +12,7 @@ import {
 } from "tarsec";
 import { literalParser } from "./literals";
 import { optionalSpaces } from "./utils";
+import { functionCallParser } from "./function";
 
 export const assignmentParser: Parser<Assignment> = trace(
   "assignmentParser",
@@ -22,6 +23,6 @@ export const assignmentParser: Parser<Assignment> = trace(
     optionalSpaces,
     char("="),
     optionalSpaces,
-    capture(literalParser, "value")
+    capture(or(functionCallParser, literalParser), "value")
   )
 );

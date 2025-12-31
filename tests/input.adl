@@ -1,0 +1,7 @@
+name :: string
+name = input("What is your name? ")
+print(name)
+
+age :: string
+age = input("How old are you? ")
+print(age)

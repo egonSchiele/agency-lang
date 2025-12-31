@@ -25,6 +25,7 @@ function generateImports(): string {
   return `import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
+import * as readline from "readline";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -212,6 +213,7 @@ function generatePromptFunction({
  */
 const BUILTIN_FUNCTIONS: Record<string, string> = {
   print: "console.log",
+  input: "_builtinInput",
 };
 
 /**
@@ -223,6 +225,33 @@ function mapFunctionName(functionName: string): string {
 }
 
 /**
+ * Generates helper functions for built-in ADL functions
+ */
+function generateBuiltinHelpers(usedBuiltins: Set<string>): string {
+  const inputFunc = `
+function _builtinInput(prompt: string): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  return new Promise((resolve) => {
+    rl.question(prompt, (answer: string) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}`;
+
+  const helpers: string[] = [];
+  if (usedBuiltins.has("input")) {
+    helpers.push(inputFunc);
+  }
+
+  return helpers.join("\n\n");
+}
+
+/**
  * Main TypeScript code generator class
  */
 export class TypeScriptGenerator {
@@ -230,6 +259,7 @@ export class TypeScriptGenerator {
   private generatedFunctions: string[] = [];
   private generatedStatements: string[] = [];
   private variablesInScope: Set<string> = new Set();
+  private usedBuiltins: Set<string> = new Set();
 
   /**
    * Generate TypeScript code from an ADL program
@@ -252,6 +282,10 @@ export class TypeScriptGenerator {
 
     // Add imports and OpenAI client setup
     output.push(generateImports());
+    output.push(""); // Empty line separator
+
+    // Add built-in helper functions
+    output.push(generateBuiltinHelpers(this.usedBuiltins));
     output.push(""); // Empty line separator
 
     // Add generated functions
@@ -307,6 +341,14 @@ export class TypeScriptGenerator {
 
     if (value.type === "prompt") {
       this.processPromptLiteral(variableName, value);
+    } else if (value.type === "functionCall") {
+      // Handle function call assignment
+      this.usedBuiltins.add(value.functionName);
+      const functionCallCode = this.generateFunctionCallExpression(
+        mapFunctionName(value.functionName),
+        value.arguments
+      );
+      this.generatedStatements.push(`const ${variableName} = await ${functionCallCode};`);
     } else {
       // Direct assignment for other literal types
       const literalCode = generateLiteral(value);
@@ -376,6 +418,15 @@ export class TypeScriptGenerator {
           functionLines.push(
             `  // TODO: Handle prompt for ${assignment.variableName}`
           );
+        } else if (assignment.value.type === "functionCall") {
+          // Handle function call assignment in function body
+          const functionCallCode = this.generateFunctionCallExpression(
+            mapFunctionName(assignment.value.functionName),
+            assignment.value.arguments
+          );
+          functionLines.push(
+            `  const ${assignment.variableName} = await ${functionCallCode};`
+          );
         } else {
           const literalCode = generateLiteral(assignment.value);
           functionLines.push(
@@ -397,6 +448,7 @@ export class TypeScriptGenerator {
    * Process a function call node
    */
   private processFunctionCall(node: FunctionCall): void {
+    this.usedBuiltins.add(node.functionName);
     const functionCallCode = this.generateFunctionCallCode(
       mapFunctionName(node.functionName),
       node.arguments
@@ -406,14 +458,24 @@ export class TypeScriptGenerator {
   }
 
   /**
-   * Generates TypeScript code for a function call
+   * Generates TypeScript expression for a function call (without semicolon)
+   */
+  private generateFunctionCallExpression(
+    functionName: string,
+    args: Literal[]
+  ): string {
+    const argsString = args.map(arg => generateLiteral(arg)).join(", ");
+    return `${functionName}(${argsString})`;
+  }
+
+  /**
+   * Generates TypeScript code for a function call statement (with semicolon)
    */
   private generateFunctionCallCode(
     functionName: string,
-    args: string[]
+    args: Literal[]
   ): string {
-    const argsString = args.join(", ");
-    return `${functionName}(${argsString});`;
+    return this.generateFunctionCallExpression(functionName, args) + ";";
   }
 }
 

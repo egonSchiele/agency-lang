@@ -6,7 +6,7 @@ export * from "@/types/literals";
 export type Assignment = {
   type: "assignment";
   variableName: string;
-  value: Literal;
+  value: Literal | FunctionCall;
 };
 
 export type FunctionDefinition = {
@@ -18,7 +18,7 @@ export type FunctionDefinition = {
 export type FunctionCall = {
   type: "functionCall";
   functionName: string;
-  arguments: string[];
+  arguments: Literal[];
 };
 
 export type ADLNode =

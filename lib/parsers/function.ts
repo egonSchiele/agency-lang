@@ -44,6 +44,7 @@ export const functionParser: Parser<FunctionDefinition> = trace(
   )
 );
 
+const comma = seqR(optionalSpaces, char(","), optionalSpaces);
 export const functionCallParser: Parser<FunctionCall> = seqC(
   set("type", "functionCall"),
   capture(many1WithJoin(alphanum), "functionName"),
@@ -51,8 +52,8 @@ export const functionCallParser: Parser<FunctionCall> = seqC(
   optionalSpaces,
   capture(
     sepBy(
-      seqR(optionalSpaces, char(","), optionalSpaces),
-      many1WithJoin(alphanum)
+      comma,
+      literalParser
     ),
     "arguments"
   ),

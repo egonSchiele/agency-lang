@@ -20,12 +20,20 @@ jobs:
         # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v3
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 9 # Specify a pnpm version or use "latest"
+        run_install: false # Do not run install yet, handled in next step
+
+    - name: Set up Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
-        cache: 'pnpm'
+        cache: 'pnpm' # Enables pnpm-specific caching
     - run: pnpm install
     - run: pnpm run build
     - run: pnpm test:run

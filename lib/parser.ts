@@ -15,12 +15,13 @@ import {
 import { assignmentParser } from "./parsers/assignment";
 import { functionParser } from "./parsers/function";
 import { functionCallParser } from "./parsers/functionCall";
+import { matchBlockParser } from "./parsers/matchBlock";
 
 export const adlNode: Parser<ADLNode[]> = sepBy(
   spaces,
   trace(
     "adlParser",
-    or(typeHintParser, functionParser, assignmentParser, functionCallParser)
+    or(typeHintParser, matchBlockParser, functionParser, assignmentParser, functionCallParser)
   )
 );
 

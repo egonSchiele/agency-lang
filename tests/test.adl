@@ -1,4 +1,4 @@
-foo :: number
-foo = `a random number`
-
-print(foo)
+match(foo) {
+  x => 1
+  _ => 2
+}

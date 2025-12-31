@@ -1,5 +1,6 @@
 import { Literal } from "@/types/literals";
 import { TypeHint } from "@/types/typeHints";
+import { MatchBlock } from "./types/matchBlock";
 export * from "@/types/typeHints";
 export * from "@/types/literals";
 
@@ -26,7 +27,8 @@ export type ADLNode =
   | FunctionDefinition
   | Assignment
   | Literal
-  | FunctionCall;
+  | FunctionCall
+  | MatchBlock;
 
 export type ADLProgram = {
   type: "adlProgram";

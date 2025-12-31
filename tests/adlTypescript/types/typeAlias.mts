@@ -1,0 +1,40 @@
+import OpenAI from "openai";
+import { zodResponseFormat } from "openai/helpers/zod";
+import { z } from "zod";
+import * as readline from "readline";
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+
+
+type Coords = { x: number; y: number };
+async function _foo(): Promise<Coords> {
+  const prompt = `a set of coordinates`;
+  const startTime = performance.now();
+  const completion = await openai.chat.completions.create({
+    model: "gpt-5-nano-2025-08-07",
+    messages: [
+      {
+        role: "user",
+        content: prompt,
+      },
+    ],
+    response_format: zodResponseFormat(z.object({
+      value: z.object({ "x": z.number(), "y": z.number() })
+    }), "foo_response"),
+  });
+  const endTime = performance.now();
+  console.log("Prompt for variable 'foo' took " + (endTime - startTime).toFixed(2) + " ms");
+  try {
+  const result = JSON.parse(completion.choices[0].message.content || "");
+  return result.value;
+  } catch (e) {
+    console.error("Error parsing response for variable 'foo':", e);
+    console.error("Full completion response:", JSON.stringify(completion, null, 2));
+    throw e;
+  }
+}
+const foo = await _foo();
+console.log(foo)

@@ -1,0 +1,92 @@
+import OpenAI from "openai";
+import { zodResponseFormat } from "openai/helpers/zod";
+import { z } from "zod";
+import * as readline from "readline";
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+
+
+async function _foo(): Promise<"hi"> {
+  const prompt = `the string hi`;
+  const startTime = performance.now();
+  const completion = await openai.chat.completions.create({
+    model: "gpt-5-nano-2025-08-07",
+    messages: [
+      {
+        role: "user",
+        content: prompt,
+      },
+    ],
+    response_format: zodResponseFormat(z.object({
+      value: z.literal("hi")
+    }), "foo_response"),
+  });
+  const endTime = performance.now();
+  console.log("Prompt for variable 'foo' took " + (endTime - startTime).toFixed(2) + " ms");
+  try {
+  const result = JSON.parse(completion.choices[0].message.content || "");
+  return result.value;
+  } catch (e) {
+    console.error("Error parsing response for variable 'foo':", e);
+    console.error("Full completion response:", JSON.stringify(completion, null, 2));
+    throw e;
+  }
+}
+async function _bar(): Promise<42> {
+  const prompt = `the number 42`;
+  const startTime = performance.now();
+  const completion = await openai.chat.completions.create({
+    model: "gpt-5-nano-2025-08-07",
+    messages: [
+      {
+        role: "user",
+        content: prompt,
+      },
+    ],
+    response_format: zodResponseFormat(z.object({
+      value: z.literal(42)
+    }), "bar_response"),
+  });
+  const endTime = performance.now();
+  console.log("Prompt for variable 'bar' took " + (endTime - startTime).toFixed(2) + " ms");
+  try {
+  const result = JSON.parse(completion.choices[0].message.content || "");
+  return result.value;
+  } catch (e) {
+    console.error("Error parsing response for variable 'bar':", e);
+    console.error("Full completion response:", JSON.stringify(completion, null, 2));
+    throw e;
+  }
+}
+async function _baz(): Promise<true> {
+  const prompt = `the boolean true`;
+  const startTime = performance.now();
+  const completion = await openai.chat.completions.create({
+    model: "gpt-5-nano-2025-08-07",
+    messages: [
+      {
+        role: "user",
+        content: prompt,
+      },
+    ],
+    response_format: zodResponseFormat(z.object({
+      value: z.literal(true)
+    }), "baz_response"),
+  });
+  const endTime = performance.now();
+  console.log("Prompt for variable 'baz' took " + (endTime - startTime).toFixed(2) + " ms");
+  try {
+  const result = JSON.parse(completion.choices[0].message.content || "");
+  return result.value;
+  } catch (e) {
+    console.error("Error parsing response for variable 'baz':", e);
+    console.error("Full completion response:", JSON.stringify(completion, null, 2));
+    throw e;
+  }
+}
+const foo = await _foo();
+const bar = await _bar();
+const baz = await _baz();

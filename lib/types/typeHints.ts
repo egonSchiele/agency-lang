@@ -10,7 +10,8 @@ export type VariableType =
   | NumberLiteralType
   | BooleanLiteralType
   | UnionType
-  | ObjectType;
+  | ObjectType
+  | TypeAliasVariable;
 
 export type PrimitiveType = {
   type: "primitiveType";
@@ -46,7 +47,19 @@ export type ObjectProperty = {
   key: string;
   value: VariableType;
 };
+
 export type ObjectType = {
   type: "objectType";
   properties: ObjectProperty[];
+};
+
+export type TypeAlias = {
+  type: "typeAlias";
+  aliasName: string;
+  aliasedType: VariableType;
+};
+
+export type TypeAliasVariable = {
+  type: "typeAliasVariable";
+  aliasName: string;
 };

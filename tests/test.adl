@@ -1,3 +1,5 @@
-foo :: { x: number; y: number }
+type Coords = { x: number; y: number }
+
+foo :: Coords
 foo = `a set of coordinates`
 print(foo)

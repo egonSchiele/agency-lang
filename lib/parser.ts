@@ -1,4 +1,4 @@
-import { typeHintParser } from "@/parsers/typeHints";
+import { typeAliasParser, typeHintParser } from "@/parsers/typeHints";
 import { ADLNode, ADLProgram } from "@/types";
 import {
   capture,
@@ -21,7 +21,14 @@ export const adlNode: Parser<ADLNode[]> = sepBy(
   spaces,
   trace(
     "adlParser",
-    or(typeHintParser, matchBlockParser, functionParser, assignmentParser, functionCallParser)
+    or(
+      typeAliasParser,
+      typeHintParser,
+      matchBlockParser,
+      functionParser,
+      assignmentParser,
+      functionCallParser
+    )
   )
 );
 

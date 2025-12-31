@@ -7,6 +7,8 @@ import {
   ObjectType,
   PrimitiveType,
   StringLiteralType,
+  TypeAlias,
+  TypeAliasVariable,
   TypeHint,
   UnionType,
   VariableType,
@@ -27,12 +29,18 @@ import {
   seqR,
   set,
   space,
+  spaces,
   str,
 } from "tarsec";
 
 export const primitiveTypeParser: Parser<PrimitiveType> = seqC(
   set("type", "primitiveType"),
   capture(or(str("number"), str("string"), str("boolean")), "value")
+);
+
+export const typeAliasVariableParser: Parser<TypeAliasVariable> = seqC(
+  set("type", "typeAliasVariable"),
+  capture(many1WithJoin(alphanum), "aliasName")
 );
 
 export const arrayTypeParser: Parser<ArrayType> = seqC(
@@ -104,7 +112,8 @@ export const unionItemParser: Parser<VariableType> = or(
   stringLiteralTypeParser,
   numberLiteralTypeParser,
   booleanLiteralTypeParser,
-  primitiveTypeParser
+  primitiveTypeParser,
+  typeAliasVariableParser
 );
 
 const pipe = seqR(optionalSpaces, str("|"), optionalSpaces);
@@ -138,7 +147,8 @@ export const variableTypeParser: Parser<VariableType> = or(
   stringLiteralTypeParser,
   numberLiteralTypeParser,
   booleanLiteralTypeParser,
-  primitiveTypeParser
+  primitiveTypeParser,
+  typeAliasVariableParser
 );
 
 export const typeHintParser: Parser<TypeHint> = seqC(
@@ -148,4 +158,15 @@ export const typeHintParser: Parser<TypeHint> = seqC(
   str("::"),
   optionalSpaces,
   capture(variableTypeParser, "variableType")
+);
+
+export const typeAliasParser: Parser<TypeAlias> = seqC(
+  set("type", "typeAlias"),
+  str("type"),
+  spaces,
+  capture(many1WithJoin(alphanum), "aliasName"),
+  optionalSpaces,
+  str("="),
+  optionalSpaces,
+  capture(variableTypeParser, "aliasedType")
 );

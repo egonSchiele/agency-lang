@@ -8,6 +8,7 @@ import {
   Literal,
   PromptLiteral,
   PromptSegment,
+  TypeAlias,
   TypeHint,
   VariableType,
 } from "@/types";
@@ -15,7 +16,12 @@ import {
 import { escape } from "@/utils";
 import * as renderImports from "@/templates/imports";
 import * as promptFunction from "@/templates/promptFunction";
-import * as builtinFunctionsInput from "@/templates/builtinFunctions/input";
+import { mapTypeToZodSchema } from "./adlTypeScript/typeToZodSchema";
+import { variableTypeToString } from "./adlTypeScript/typeToString";
+import {
+  generateBuiltinHelpers,
+  mapFunctionName,
+} from "./adlTypeScript/builtins";
 type TypeHintMap = Map<string, VariableType>;
 
 /**
@@ -27,79 +33,6 @@ function generateImports(): string {
 }
 
 /**
- * Maps ADL types to Zod schema strings
- */
-function mapTypeToZodSchema(variableType: VariableType): string {
-  if (variableType.type === "primitiveType") {
-    switch (variableType.value.toLowerCase()) {
-      case "number":
-        return "z.number()";
-      case "string":
-        return "z.string()";
-      case "boolean":
-        return "z.boolean()";
-      default:
-        // Default to string for unknown types
-        return "z.string()";
-    }
-  } else if (variableType.type === "arrayType") {
-    // Recursively handle array element type
-    const elementSchema = mapTypeToZodSchema(variableType.elementType);
-    return `z.array(${elementSchema})`;
-  } else if (variableType.type === "stringLiteralType") {
-    return `z.literal("${variableType.value}")`;
-  } else if (variableType.type === "numberLiteralType") {
-    return `z.literal(${variableType.value})`;
-  } else if (variableType.type === "booleanLiteralType") {
-    return `z.literal(${variableType.value})`;
-  } else if (variableType.type === "unionType") {
-    const unionSchemas = variableType.types.map((t) => mapTypeToZodSchema(t));
-    return `z.union([${unionSchemas.join(", ")}])`;
-  } else if (variableType.type === "objectType") {
-    const props = variableType.properties
-      .map((prop) => `"${prop.key}": ${mapTypeToZodSchema(prop.value)}`)
-      .join(", ");
-    return `z.object({ ${props} })`;
-  }
-
-  // Fallback (should never reach here)
-  return "z.string()";
-}
-
-/**
- * Converts a VariableType to a string representation for naming/logging
- */
-function variableTypeToString(variableType: VariableType): string {
-  if (variableType.type === "primitiveType") {
-    return variableType.value;
-  } else if (variableType.type === "arrayType") {
-    // Recursively build array type string
-    return `${variableTypeToString(variableType.elementType)}[]`;
-  } else if (variableType.type === "stringLiteralType") {
-    return `"${variableType.value}"`;
-  } else if (variableType.type === "numberLiteralType") {
-    return `${variableType.value}`;
-  } else if (variableType.type === "booleanLiteralType") {
-    return `${variableType.value}`;
-  } else if (variableType.type === "unionType") {
-    return variableType.types.map((t) => variableTypeToString(t)).join(" | ");
-  } else if (variableType.type === "objectType") {
-    const props = variableType.properties
-      .map((prop) => `${prop.key}: ${variableTypeToString(prop.value)}`)
-      .join("; ");
-    return `{ ${props} }`;
-  }
-  return "unknown";
-}
-
-/**
- * Escapes quotes in strings for TypeScript code generation
- */
-function escapeString(str: string): string {
-  return str.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-}
-
-/**
  * Generates TypeScript code for a literal value
  */
 function generateLiteral(literal: Literal): string {
@@ -107,7 +40,7 @@ function generateLiteral(literal: Literal): string {
     case "number":
       return literal.value;
     case "string":
-      return `"${escapeString(literal.value)}"`;
+      return `"${escape(literal.value)}"`;
     case "variableName":
       return literal.value;
     case "prompt":
@@ -158,15 +91,17 @@ function generatePromptFunction({
   prompt,
   variableType,
   typeHints,
+  typeAliases,
 }: {
   variableName: string;
   functionArgs: string[];
   prompt: PromptLiteral;
   variableType: VariableType;
   typeHints: TypeHintMap;
+  typeAliases: Record<string, VariableType>;
 }): string {
-  const zodSchema = mapTypeToZodSchema(variableType);
-  const typeString = variableTypeToString(variableType);
+  const zodSchema = mapTypeToZodSchema(variableType, typeAliases);
+  const typeString = variableTypeToString(variableType, typeAliases);
 
   // Build prompt construction code
   const promptCode = buildPromptString(prompt.segments, typeHints);
@@ -175,7 +110,8 @@ function generatePromptFunction({
     .map(
       (arg) =>
         `${arg}: ${variableTypeToString(
-          typeHints.get(arg) || { type: "primitiveType", value: "string" }
+          typeHints.get(arg) || { type: "primitiveType", value: "string" },
+          typeAliases
         )}`
     )
     .join(", ");
@@ -189,57 +125,35 @@ function generatePromptFunction({
 }
 
 /**
- * Maps ADL built-in function names to TypeScript equivalents
- */
-const BUILTIN_FUNCTIONS: Record<string, string> = {
-  print: "console.log",
-  input: "_builtinInput",
-};
-
-/**
- * Maps an ADL function name to its TypeScript equivalent
- * Returns the original name if not a built-in
- */
-function mapFunctionName(functionName: string): string {
-  return BUILTIN_FUNCTIONS[functionName] || functionName;
-}
-
-/**
- * Generates helper functions for built-in ADL functions
- */
-function generateBuiltinHelpers(usedBuiltins: Set<string>): string {
-  const inputFunc = builtinFunctionsInput.default({});
-
-  const helpers: string[] = [];
-  if (usedBuiltins.has("input")) {
-    helpers.push(inputFunc);
-  }
-
-  return helpers.join("\n\n");
-}
-
-/**
  * Main TypeScript code generator class
  */
 export class TypeScriptGenerator {
   private typeHints: TypeHintMap = new Map();
   private generatedFunctions: string[] = [];
   private generatedStatements: string[] = [];
+  private generatedTypeAliases: string[] = [];
   private variablesInScope: Set<string> = new Set();
   private usedBuiltins: Set<string> = new Set();
-
+  private typeAliases: Record<string, VariableType> = {};
   /**
    * Generate TypeScript code from an ADL program
    */
   generate(program: ADLProgram): string {
-    // Pass 1: Collect all type hints
+    // Pass 1: Collect all type aliases
+    for (const node of program.nodes) {
+      if (node.type === "typeAlias") {
+        this.processTypeAlias(node);
+      }
+    }
+
+    // Pass 2: Collect all type hints
     for (const node of program.nodes) {
       if (node.type === "typeHint") {
         this.processTypeHint(node);
       }
     }
 
-    // Pass 2: Process all nodes and generate code
+    // Pass 3: Process all nodes and generate code
     for (const node of program.nodes) {
       this.processNode(node);
     }
@@ -249,30 +163,45 @@ export class TypeScriptGenerator {
 
     // Add imports and OpenAI client setup
     output.push(generateImports());
-    output.push(""); // Empty line separator
+    output.push("");
 
     // Add built-in helper functions
     output.push(generateBuiltinHelpers(this.usedBuiltins));
-    output.push(""); // Empty line separator
+    output.push("");
 
-    // Add generated functions
-    if (this.generatedFunctions.length > 0) {
-      output.push(...this.generatedFunctions);
-      output.push(""); // Empty line separator
-    }
+    output.push(...this.generatedTypeAliases);
+    output.push("");
 
-    // Add generated statements
-    if (this.generatedStatements.length > 0) {
-      output.push(...this.generatedStatements);
-    }
+    output.push(...this.generatedFunctions);
+    output.push("");
+
+    output.push(...this.generatedStatements);
 
     return output.join("\n");
   }
 
-  /**
-   * Process a type hint node
-   */
+  private processTypeAlias(node: TypeAlias): void {
+    this.typeAliases[node.aliasName] = node.aliasedType;
+    const typeAliasStr = this.typeAliasToString(node);
+    this.generatedTypeAliases.push(typeAliasStr);
+  }
+
+  private typeAliasToString(node: TypeAlias): string {
+    const aliasedTypeStr = variableTypeToString(
+      node.aliasedType,
+      this.typeAliases
+    );
+    return `type ${node.aliasName} = ${aliasedTypeStr};`;
+  }
+
   private processTypeHint(node: TypeHint): void {
+    if (node.variableType.type === "typeAliasVariable") {
+      if (!(node.variableType.aliasName in this.typeAliases)) {
+        throw new Error(
+          `Type alias '${node.variableType.aliasName}' not defined for variable '${node.variableName}'.`
+        );
+      }
+    }
     this.typeHints.set(node.variableName, node.variableType);
   }
 
@@ -282,6 +211,7 @@ export class TypeScriptGenerator {
   private processNode(node: ADLNode): void {
     switch (node.type) {
       case "typeHint":
+      case "typeAlias":
         // Already processed in first pass
         break;
       case "assignment":
@@ -357,6 +287,7 @@ export class TypeScriptGenerator {
       prompt: node,
       variableType,
       typeHints: this.typeHints,
+      typeAliases: this.typeAliases,
     });
     this.generatedFunctions.push(functionCode);
 

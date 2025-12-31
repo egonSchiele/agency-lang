@@ -1,10 +1,2 @@
-msg = input("> ")
-
-type Url = {
-  hostname: string # hostname of a url;
-}
-
-getUrl :: Url
-getUrl = `extract the hostname from the url in this msg: ${msg}`
-
-print(getUrl)
+foo = fetch("https://hacker-news.firebaseio.com/v0/item/8863.json")
+print(foo)

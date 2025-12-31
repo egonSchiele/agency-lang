@@ -7,6 +7,8 @@ import {
   numberLiteralTypeParser,
   booleanLiteralTypeParser,
   objectPropertyParser,
+  objectPropertyDescriptionParser,
+  objectPropertyWithDescriptionParser,
   objectTypeParser,
   typeAliasParser,
   typeAliasVariableParser,
@@ -971,6 +973,207 @@ describe("objectPropertyParser", () => {
   });
 });
 
+describe("objectPropertyDescriptionParser", () => {
+  const testCases = [
+    {
+      input: "# this is a description;",
+      expected: {
+        success: true,
+        result: {
+          description: "this is a description",
+        },
+      },
+    },
+    {
+      input: "# hostname of a url;",
+      expected: {
+        success: true,
+        result: {
+          description: "hostname of a url",
+        },
+      },
+    },
+    {
+      input: "#simple;",
+      expected: {
+        success: true,
+        result: {
+          description: "simple",
+        },
+      },
+    },
+    {
+      input: "#  with extra spaces  ;",
+      expected: {
+        success: true,
+        result: {
+          description: "with extra spaces  ",
+        },
+      },
+    },
+    {
+      input: "# description with, punctuation!;",
+      expected: {
+        success: true,
+        result: {
+          description: "description with, punctuation!",
+        },
+      },
+    },
+    {
+      input: "# description with numbers 123;",
+      expected: {
+        success: true,
+        result: {
+          description: "description with numbers 123",
+        },
+      },
+    },
+    // Failure cases
+    {
+      input: "no hash;",
+      expected: { success: false },
+    },
+    {
+      input: "#;",
+      expected: { success: false },
+    },
+    {
+      input: "",
+      expected: { success: false },
+    },
+  ];
+
+  testCases.forEach(({ input, expected }) => {
+    if (expected.success) {
+      it(`should parse "${input}" successfully`, () => {
+        const result = objectPropertyDescriptionParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result).toEqual(expected.result);
+        }
+      });
+    } else {
+      it(`should fail to parse "${input}"`, () => {
+        const result = objectPropertyDescriptionParser(input);
+        expect(result.success).toBe(false);
+      });
+    }
+  });
+});
+
+describe("objectPropertyWithDescriptionParser", () => {
+  const testCases = [
+    {
+      input: "hostname: string # hostname of a url;",
+      expected: {
+        success: true,
+        result: {
+          key: "hostname",
+          value: { type: "primitiveType", value: "string" },
+          description: "hostname of a url",
+        },
+      },
+    },
+    {
+      input: "x: number # x coordinate;",
+      expected: {
+        success: true,
+        result: {
+          key: "x",
+          value: { type: "primitiveType", value: "number" },
+          description: "x coordinate",
+        },
+      },
+    },
+    {
+      input: "active: boolean # whether user is active;",
+      expected: {
+        success: true,
+        result: {
+          key: "active",
+          value: { type: "primitiveType", value: "boolean" },
+          description: "whether user is active",
+        },
+      },
+    },
+    {
+      input: "items: number[] # list of item ids;",
+      expected: {
+        success: true,
+        result: {
+          key: "items",
+          value: {
+            type: "arrayType",
+            elementType: { type: "primitiveType", value: "number" },
+          },
+          description: "list of item ids",
+        },
+      },
+    },
+    {
+      input: 'status: "active" # current status;',
+      expected: {
+        success: true,
+        result: {
+          key: "status",
+          value: { type: "stringLiteralType", value: "active" },
+          description: "current status",
+        },
+      },
+    },
+    {
+      input: "count: 42 # default count;",
+      expected: {
+        success: true,
+        result: {
+          key: "count",
+          value: { type: "numberLiteralType", value: "42" },
+          description: "default count",
+        },
+      },
+    },
+    // Without extra spaces
+    {
+      input: "name: string #user name;",
+      expected: {
+        success: true,
+        result: {
+          key: "name",
+          value: { type: "primitiveType", value: "string" },
+          description: "user name",
+        },
+      },
+    },
+    // Failure cases
+    {
+      input: "x: number",
+      expected: { success: false },
+    },
+    {
+      input: "",
+      expected: { success: false },
+    },
+  ];
+
+  testCases.forEach(({ input, expected }) => {
+    if (expected.success) {
+      it(`should parse "${input}" successfully`, () => {
+        const result = objectPropertyWithDescriptionParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result).toEqual(expected.result);
+        }
+      });
+    } else {
+      it(`should fail to parse "${input}"`, () => {
+        const result = objectPropertyWithDescriptionParser(input);
+        expect(result.success).toBe(false);
+      });
+    }
+  });
+});
+
 describe("objectTypeParser", () => {
   const testCases = [
     // Single property
@@ -1402,6 +1605,88 @@ describe("objectTypeParser", () => {
     {
       input: "",
       expected: { success: false },
+    },
+    // With descriptions
+    {
+      input: "{ hostname: string # hostname of a url; }",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "hostname",
+              value: { type: "primitiveType", value: "string" },
+              description: "hostname of a url",
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "{ x: number # x coordinate; y: number # y coordinate; }",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "x",
+              value: { type: "primitiveType", value: "number" },
+              description: "x coordinate",
+            },
+            {
+              key: "y",
+              value: { type: "primitiveType", value: "number" },
+              description: "y coordinate",
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "{ name: string # user name; age: number; active: boolean # is active; }",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "name",
+              value: { type: "primitiveType", value: "string" },
+              description: "user name",
+            },
+            {
+              key: "age",
+              value: { type: "primitiveType", value: "number" },
+            },
+            {
+              key: "active",
+              value: { type: "primitiveType", value: "boolean" },
+              description: "is active",
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "{ items: number[] # list of ids; }",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "items",
+              value: {
+                type: "arrayType",
+                elementType: { type: "primitiveType", value: "number" },
+              },
+              description: "list of ids",
+            },
+          ],
+        },
+      },
     },
   ];
 

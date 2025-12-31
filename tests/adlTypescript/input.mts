@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import * as readline from "readline";
+import fs from "fs";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -22,7 +23,7 @@ function _builtinInput(prompt: string): Promise<string> {
 }
 
 async function _sentiment(message: string): Promise<"happy" | "sad" | "neutral"> {
-  const prompt = `Categorize the sentiment in this message: "${message}"`;
+  const prompt = `Categorize the sentiment in this message: \"${message}\"`;
   const startTime = performance.now();
   const completion = await openai.chat.completions.create({
     model: "gpt-5-nano-2025-08-07",

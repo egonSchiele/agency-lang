@@ -1,0 +1,4 @@
+url :: { hostname: string # hostname of a url; port: number # port number; }
+url = `extract the hostname and port from "https://example.com:8080"`
+
+print(url)

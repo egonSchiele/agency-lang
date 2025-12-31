@@ -620,4 +620,229 @@ describe("generateTypeScript - Type Alias support", () => {
       expect(result).toContain("type Numbers = number[];");
     });
   });
+
+  describe("Object properties with descriptions", () => {
+    it("should generate Zod schema with .describe() for single property with description", () => {
+      const program: ADLProgram = {
+        type: "adlProgram",
+        nodes: [
+          {
+            type: "typeHint",
+            variableName: "url",
+            variableType: {
+              type: "objectType",
+              properties: [
+                {
+                  key: "hostname",
+                  value: { type: "primitiveType", value: "string" },
+                  description: "hostname of a url",
+                },
+              ],
+            },
+          },
+          {
+            type: "assignment",
+            variableName: "url",
+            value: {
+              type: "prompt",
+              segments: [
+                {
+                  type: "text",
+                  value: "extract url",
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      const result = generateTypeScript(program);
+
+      expect(result).toContain(
+        'z.object({ "hostname": z.string().describe("hostname of a url") })'
+      );
+    });
+
+    it("should generate Zod schema with .describe() for multiple properties with descriptions", () => {
+      const program: ADLProgram = {
+        type: "adlProgram",
+        nodes: [
+          {
+            type: "typeHint",
+            variableName: "point",
+            variableType: {
+              type: "objectType",
+              properties: [
+                {
+                  key: "x",
+                  value: { type: "primitiveType", value: "number" },
+                  description: "x coordinate",
+                },
+                {
+                  key: "y",
+                  value: { type: "primitiveType", value: "number" },
+                  description: "y coordinate",
+                },
+              ],
+            },
+          },
+          {
+            type: "assignment",
+            variableName: "point",
+            value: {
+              type: "prompt",
+              segments: [
+                {
+                  type: "text",
+                  value: "generate point",
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      const result = generateTypeScript(program);
+
+      expect(result).toContain(
+        'z.object({ "x": z.number().describe("x coordinate"), "y": z.number().describe("y coordinate") })'
+      );
+    });
+
+    it("should handle mix of properties with and without descriptions", () => {
+      const program: ADLProgram = {
+        type: "adlProgram",
+        nodes: [
+          {
+            type: "typeHint",
+            variableName: "user",
+            variableType: {
+              type: "objectType",
+              properties: [
+                {
+                  key: "name",
+                  value: { type: "primitiveType", value: "string" },
+                  description: "user name",
+                },
+                {
+                  key: "age",
+                  value: { type: "primitiveType", value: "number" },
+                  // No description
+                },
+                {
+                  key: "active",
+                  value: { type: "primitiveType", value: "boolean" },
+                  description: "is user active",
+                },
+              ],
+            },
+          },
+          {
+            type: "assignment",
+            variableName: "user",
+            value: {
+              type: "prompt",
+              segments: [
+                {
+                  type: "text",
+                  value: "generate user",
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      const result = generateTypeScript(program);
+
+      expect(result).toContain(
+        'z.object({ "name": z.string().describe("user name"), "age": z.number(), "active": z.boolean().describe("is user active") })'
+      );
+    });
+
+    it("should escape special characters in descriptions", () => {
+      const program: ADLProgram = {
+        type: "adlProgram",
+        nodes: [
+          {
+            type: "typeHint",
+            variableName: "data",
+            variableType: {
+              type: "objectType",
+              properties: [
+                {
+                  key: "value",
+                  value: { type: "primitiveType", value: "string" },
+                  description: 'test "quotes" and \\backslashes\\',
+                },
+              ],
+            },
+          },
+          {
+            type: "assignment",
+            variableName: "data",
+            value: {
+              type: "prompt",
+              segments: [
+                {
+                  type: "text",
+                  value: "generate data",
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      const result = generateTypeScript(program);
+
+      expect(result).toContain(
+        'z.object({ "value": z.string().describe("test \\"quotes\\" and \\\\backslashes\\\\") })'
+      );
+    });
+
+    it("should generate descriptions for array properties", () => {
+      const program: ADLProgram = {
+        type: "adlProgram",
+        nodes: [
+          {
+            type: "typeHint",
+            variableName: "items",
+            variableType: {
+              type: "objectType",
+              properties: [
+                {
+                  key: "ids",
+                  value: {
+                    type: "arrayType",
+                    elementType: { type: "primitiveType", value: "number" },
+                  },
+                  description: "list of item ids",
+                },
+              ],
+            },
+          },
+          {
+            type: "assignment",
+            variableName: "items",
+            value: {
+              type: "prompt",
+              segments: [
+                {
+                  type: "text",
+                  value: "generate items",
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      const result = generateTypeScript(program);
+
+      expect(result).toContain(
+        'z.object({ "ids": z.array(z.number()).describe("list of item ids") })'
+      );
+    });
+  });
 });

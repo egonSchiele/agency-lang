@@ -98,7 +98,7 @@ export const objectPropertyParser: Parser<ObjectProperty> = (
 export const objectPropertyDescriptionParser: Parser<{ description: string }> = seqC(
   char("#"),
   optionalSpaces,
-  capture(many1Till(char(";")), "description"),
+  capture(many1Till(char(";")), "description")
 )
 
 export const objectPropertyWithDescriptionParser: Parser<ObjectProperty> = seqC(

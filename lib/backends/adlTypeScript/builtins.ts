@@ -6,6 +6,8 @@ import * as builtinFunctionsInput from "@/templates/backends/adlTypescript/built
 export const BUILTIN_FUNCTIONS: Record<string, string> = {
   print: "console.log",
   input: "_builtinInput",
+  read: "fs.readFileSync",
+  write: "fs.writeFileSync",
 };
 
 /**

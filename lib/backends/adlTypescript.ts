@@ -9,7 +9,6 @@ import {
   PromptLiteral,
   PromptSegment,
   TypeHint,
-  UnionType,
   VariableType,
 } from "@/types";
 
@@ -17,7 +16,7 @@ import { escape } from "@/utils";
 import * as renderImports from "@/templates/imports";
 import * as promptFunction from "@/templates/promptFunction";
 import * as builtinFunctionsInput from "@/templates/builtinFunctions/input";
-type TypeHintMap = Map<string, VariableType | UnionType>;
+type TypeHintMap = Map<string, VariableType>;
 
 /**
  *
@@ -30,7 +29,7 @@ function generateImports(): string {
 /**
  * Maps ADL types to Zod schema strings
  */
-function mapTypeToZodSchema(variableType: VariableType | UnionType): string {
+function mapTypeToZodSchema(variableType: VariableType): string {
   if (variableType.type === "primitiveType") {
     switch (variableType.value.toLowerCase()) {
       case "number":
@@ -65,7 +64,7 @@ function mapTypeToZodSchema(variableType: VariableType | UnionType): string {
 /**
  * Converts a VariableType to a string representation for naming/logging
  */
-function variableTypeToString(variableType: VariableType | UnionType): string {
+function variableTypeToString(variableType: VariableType): string {
   if (variableType.type === "primitiveType") {
     return variableType.value;
   } else if (variableType.type === "arrayType") {
@@ -153,7 +152,7 @@ function generatePromptFunction({
   variableName: string;
   functionArgs: string[];
   prompt: PromptLiteral;
-  variableType: VariableType | UnionType;
+  variableType: VariableType;
   typeHints: TypeHintMap;
 }): string {
   const zodSchema = mapTypeToZodSchema(variableType);

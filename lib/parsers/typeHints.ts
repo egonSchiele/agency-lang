@@ -3,6 +3,8 @@ import {
   ArrayType,
   BooleanLiteralType,
   NumberLiteralType,
+  ObjectProperty,
+  ObjectType,
   PrimitiveType,
   StringLiteralType,
   TypeHint,
@@ -10,9 +12,11 @@ import {
   VariableType,
 } from "@/types";
 import {
+  alphanum,
   capture,
   char,
   digit,
+  many1,
   many1Till,
   many1WithJoin,
   or,
@@ -23,7 +27,7 @@ import {
   seqR,
   set,
   space,
-  str
+  str,
 } from "tarsec";
 
 export const primitiveTypeParser: Parser<PrimitiveType> = seqC(
@@ -62,12 +66,55 @@ export const booleanLiteralTypeParser: Parser<BooleanLiteralType> = seqC(
   capture(or(str("true"), str("false")), "value")
 );
 
+export const objectPropertyDelimiter = seqR(
+  optionalSpaces,
+  char(";"),
+  optionalSpaces
+);
+export const objectPropertyParser: Parser<ObjectProperty> = (
+  input: string
+): ParserResult<ObjectProperty> => {
+  const parser = seqC(
+    capture(many1WithJoin(alphanum), "key"),
+    optionalSpaces,
+    char(":"),
+    optionalSpaces,
+    capture(variableTypeParser, "value")
+  );
+  return parser(input);
+};
+export const objectTypeParser: Parser<ObjectType> = (
+  input: string
+): ParserResult<ObjectType> => {
+  const parser = seqC(
+    set("type", "objectType"),
+    char("{"),
+    optionalSpaces,
+    capture(sepBy(objectPropertyDelimiter, objectPropertyParser), "properties"),
+    optionalSpaces,
+    char("}")
+  );
+  return parser(input);
+};
+
+export const unionItemParser: Parser<VariableType> = or(
+  objectTypeParser,
+  angleBracketsArrayTypeParser,
+  arrayTypeParser,
+  stringLiteralTypeParser,
+  numberLiteralTypeParser,
+  booleanLiteralTypeParser,
+  primitiveTypeParser
+);
+
 const pipe = seqR(optionalSpaces, str("|"), optionalSpaces);
 
-export const unionTypeParser: Parser<UnionType> = (input: string): ParserResult<UnionType> => {
+export const unionTypeParser: Parser<UnionType> = (
+  input: string
+): ParserResult<UnionType> => {
   const parser = seqC(
     set("type", "unionType"),
-    capture(sepBy(pipe, variableTypeParser), "types")
+    capture(sepBy(pipe, unionItemParser), "types")
   );
   const result = parser(input);
 
@@ -76,14 +123,16 @@ export const unionTypeParser: Parser<UnionType> = (input: string): ParserResult<
     return {
       success: false,
       rest: input,
-      message: "Union type must have at least 2 types"
+      message: "Union type must have at least 2 types",
     };
   }
 
   return result;
-}
+};
 
 export const variableTypeParser: Parser<VariableType> = or(
+  objectTypeParser,
+  unionTypeParser,
   angleBracketsArrayTypeParser,
   arrayTypeParser,
   stringLiteralTypeParser,
@@ -98,6 +147,5 @@ export const typeHintParser: Parser<TypeHint> = seqC(
   optionalSpaces,
   str("::"),
   optionalSpaces,
-  capture(or(unionTypeParser, variableTypeParser), "variableType")
+  capture(variableTypeParser, "variableType")
 );
-

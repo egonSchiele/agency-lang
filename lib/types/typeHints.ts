@@ -1,15 +1,16 @@
 export type TypeHint = {
   type: "typeHint";
   variableName: string;
-  variableType: VariableType | UnionType;
+  variableType: VariableType;
 };
-
 export type VariableType =
   | PrimitiveType
   | ArrayType
   | StringLiteralType
   | NumberLiteralType
-  | BooleanLiteralType;
+  | BooleanLiteralType
+  | UnionType
+  | ObjectType;
 
 export type PrimitiveType = {
   type: "primitiveType";
@@ -39,4 +40,13 @@ export type BooleanLiteralType = {
 export type UnionType = {
   type: "unionType";
   types: VariableType[];
+};
+
+export type ObjectProperty = {
+  key: string;
+  value: VariableType;
+};
+export type ObjectType = {
+  type: "objectType";
+  properties: ObjectProperty[];
 };

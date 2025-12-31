@@ -69,7 +69,18 @@ export const unionTypeParser: Parser<UnionType> = (input: string): ParserResult<
     set("type", "unionType"),
     capture(sepBy(pipe, variableTypeParser), "types")
   );
-  return parser(input);
+  const result = parser(input);
+
+  // Union types must have at least 2 types (i.e., at least one "|")
+  if (result.success && result.result.types.length < 2) {
+    return {
+      success: false,
+      rest: input,
+      message: "Union type must have at least 2 types"
+    };
+  }
+
+  return result;
 }
 
 export const variableTypeParser: Parser<VariableType> = or(

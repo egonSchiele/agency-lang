@@ -7,6 +7,7 @@ import {
   numberLiteralTypeParser,
   booleanLiteralTypeParser,
   variableTypeParser,
+  unionTypeParser,
   typeHintParser,
 } from "./typeHints";
 
@@ -355,6 +356,259 @@ describe("booleanLiteralTypeParser", () => {
   });
 });
 
+describe("unionTypeParser", () => {
+  const testCases = [
+    // Basic union types
+    {
+      input: "string | number",
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            { type: "primitiveType", value: "string" },
+            { type: "primitiveType", value: "number" },
+          ],
+        },
+      },
+    },
+    {
+      input: "number | string",
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            { type: "primitiveType", value: "number" },
+            { type: "primitiveType", value: "string" },
+          ],
+        },
+      },
+    },
+    {
+      input: "string | boolean",
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            { type: "primitiveType", value: "string" },
+            { type: "primitiveType", value: "boolean" },
+          ],
+        },
+      },
+    },
+    // Union with literal types
+    {
+      input: '"hello" | "world"',
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            { type: "stringLiteralType", value: "hello" },
+            { type: "stringLiteralType", value: "world" },
+          ],
+        },
+      },
+    },
+    {
+      input: "42 | 100",
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            { type: "numberLiteralType", value: "42" },
+            { type: "numberLiteralType", value: "100" },
+          ],
+        },
+      },
+    },
+    {
+      input: "true | false",
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            { type: "booleanLiteralType", value: "true" },
+            { type: "booleanLiteralType", value: "false" },
+          ],
+        },
+      },
+    },
+    // Mixed literals and primitives
+    {
+      input: '"hello" | number',
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            { type: "stringLiteralType", value: "hello" },
+            { type: "primitiveType", value: "number" },
+          ],
+        },
+      },
+    },
+    {
+      input: '42 | string',
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            { type: "numberLiteralType", value: "42" },
+            { type: "primitiveType", value: "string" },
+          ],
+        },
+      },
+    },
+    // Multiple types (more than 2)
+    {
+      input: "string | number | boolean",
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            { type: "primitiveType", value: "string" },
+            { type: "primitiveType", value: "number" },
+            { type: "primitiveType", value: "boolean" },
+          ],
+        },
+      },
+    },
+    {
+      input: '"a" | "b" | "c"',
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            { type: "stringLiteralType", value: "a" },
+            { type: "stringLiteralType", value: "b" },
+            { type: "stringLiteralType", value: "c" },
+          ],
+        },
+      },
+    },
+    // Whitespace variations
+    {
+      input: "string|number",
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            { type: "primitiveType", value: "string" },
+            { type: "primitiveType", value: "number" },
+          ],
+        },
+      },
+    },
+    {
+      input: "string  |  number",
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            { type: "primitiveType", value: "string" },
+            { type: "primitiveType", value: "number" },
+          ],
+        },
+      },
+    },
+    // Union with array types
+    {
+      input: "string[] | number[]",
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            {
+              type: "arrayType",
+              elementType: { type: "primitiveType", value: "string" },
+            },
+            {
+              type: "arrayType",
+              elementType: { type: "primitiveType", value: "number" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "array<string> | array<number>",
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            {
+              type: "arrayType",
+              elementType: { type: "primitiveType", value: "string" },
+            },
+            {
+              type: "arrayType",
+              elementType: { type: "primitiveType", value: "number" },
+            },
+          ],
+        },
+      },
+    },
+    // Failure cases
+    {
+      input: "string",
+      expected: { success: false },
+    },
+    {
+      input: "string number",
+      expected: { success: false },
+    },
+    {
+      input: "",
+      expected: { success: false },
+    },
+    {
+      input: "|",
+      expected: { success: false },
+    },
+    {
+      input: "string |",
+      expected: { success: false },
+    },
+    {
+      input: "| string",
+      expected: { success: false },
+    },
+    {
+      input: "invalid | number",
+      expected: { success: false },
+    },
+  ];
+
+  testCases.forEach(({ input, expected }) => {
+    if (expected.success) {
+      it(`should parse "${input}" successfully`, () => {
+        const result = unionTypeParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result).toEqual(expected.result);
+        }
+      });
+    } else {
+      it(`should fail to parse "${input}"`, () => {
+        const result = unionTypeParser(input);
+        expect(result.success).toBe(false);
+      });
+    }
+  });
+});
+
 describe("variableTypeParser", () => {
   const testCases = [
     {
@@ -522,6 +776,99 @@ describe("typeHintParser", () => {
           type: "typeHint",
           variableName: "x",
           variableType: { type: "primitiveType", value: "number" },
+        },
+      },
+    },
+    // Union types
+    {
+      input: "foo :: string | number",
+      expected: {
+        success: true,
+        result: {
+          type: "typeHint",
+          variableName: "foo",
+          variableType: {
+            type: "unionType",
+            types: [
+              { type: "primitiveType", value: "string" },
+              { type: "primitiveType", value: "number" },
+            ],
+          },
+        },
+      },
+    },
+    {
+      input: "value :: number | string | boolean",
+      expected: {
+        success: true,
+        result: {
+          type: "typeHint",
+          variableName: "value",
+          variableType: {
+            type: "unionType",
+            types: [
+              { type: "primitiveType", value: "number" },
+              { type: "primitiveType", value: "string" },
+              { type: "primitiveType", value: "boolean" },
+            ],
+          },
+        },
+      },
+    },
+    {
+      input: 'status :: "success" | "error"',
+      expected: {
+        success: true,
+        result: {
+          type: "typeHint",
+          variableName: "status",
+          variableType: {
+            type: "unionType",
+            types: [
+              { type: "stringLiteralType", value: "success" },
+              { type: "stringLiteralType", value: "error" },
+            ],
+          },
+        },
+      },
+    },
+    {
+      input: "mixed :: 42 | string",
+      expected: {
+        success: true,
+        result: {
+          type: "typeHint",
+          variableName: "mixed",
+          variableType: {
+            type: "unionType",
+            types: [
+              { type: "numberLiteralType", value: "42" },
+              { type: "primitiveType", value: "string" },
+            ],
+          },
+        },
+      },
+    },
+    {
+      input: "arrays :: string[] | number[]",
+      expected: {
+        success: true,
+        result: {
+          type: "typeHint",
+          variableName: "arrays",
+          variableType: {
+            type: "unionType",
+            types: [
+              {
+                type: "arrayType",
+                elementType: { type: "primitiveType", value: "string" },
+              },
+              {
+                type: "arrayType",
+                elementType: { type: "primitiveType", value: "number" },
+              },
+            ],
+          },
         },
       },
     },

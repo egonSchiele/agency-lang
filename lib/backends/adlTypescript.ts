@@ -14,6 +14,7 @@ import {
 } from "@/types";
 
 import { escape } from "@/utils";
+import * as renderImports from "@/templates/imports";
 
 type TypeHintMap = Map<string, VariableType | UnionType>;
 
@@ -22,14 +23,7 @@ type TypeHintMap = Map<string, VariableType | UnionType>;
  * Generates the standardized imports and OpenAI client setup
  */
 function generateImports(): string {
-  return `import OpenAI from "openai";
-import { zodResponseFormat } from "openai/helpers/zod";
-import { z } from "zod";
-import * as readline from "readline";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});`;
+  return renderImports.default({});
 }
 
 /**
@@ -59,9 +53,7 @@ function mapTypeToZodSchema(variableType: VariableType | UnionType): string {
   } else if (variableType.type === "booleanLiteralType") {
     return `z.literal(${variableType.value})`;
   } else if (variableType.type === "unionType") {
-    const unionSchemas = variableType.types.map((t) =>
-      mapTypeToZodSchema(t)
-    );
+    const unionSchemas = variableType.types.map((t) => mapTypeToZodSchema(t));
     return `z.union([${unionSchemas.join(", ")}])`;
   }
 
@@ -85,9 +77,7 @@ function variableTypeToString(variableType: VariableType | UnionType): string {
   } else if (variableType.type === "booleanLiteralType") {
     return `${variableType.value}`;
   } else if (variableType.type === "unionType") {
-    return variableType.types
-      .map((t) => variableTypeToString(t))
-      .join(" | ");
+    return variableType.types.map((t) => variableTypeToString(t)).join(" | ");
   }
   return "unknown";
 }
@@ -348,7 +338,9 @@ export class TypeScriptGenerator {
         mapFunctionName(value.functionName),
         value.arguments
       );
-      this.generatedStatements.push(`const ${variableName} = await ${functionCallCode};`);
+      this.generatedStatements.push(
+        `const ${variableName} = await ${functionCallCode};`
+      );
     } else {
       // Direct assignment for other literal types
       const literalCode = generateLiteral(value);
@@ -372,7 +364,7 @@ export class TypeScriptGenerator {
       if (!this.variablesInScope.has(varName)) {
         throw new Error(
           `Variable '${varName}' used in prompt interpolation but not defined. ` +
-          `Referenced in assignment to '${variableName}'.`
+            `Referenced in assignment to '${variableName}'.`
         );
       }
     }
@@ -464,7 +456,7 @@ export class TypeScriptGenerator {
     functionName: string,
     args: Literal[]
   ): string {
-    const argsString = args.map(arg => generateLiteral(arg)).join(", ");
+    const argsString = args.map((arg) => generateLiteral(arg)).join(", ");
     return `${functionName}(${argsString})`;
   }
 

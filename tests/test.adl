@@ -1,4 +1,4 @@
-foo :: string | number
+foo :: number
 foo = `a random number`
 
 print(foo)

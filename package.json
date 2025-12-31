@@ -7,7 +7,8 @@
     "test": "vitest",
     "test:run": "vitest run",
     "build": "tsc && tsc-alias",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "templates": "typestache ./lib/templates"
   },
   "repository": {
     "type": "git",
@@ -24,6 +25,7 @@
   "dependencies": {
     "openai": "^6.15.0",
     "tarsec": "^0.0.20",
+    "typestache": "^0.4.4",
     "zod": "^4.2.1"
   },
   "devDependencies": {

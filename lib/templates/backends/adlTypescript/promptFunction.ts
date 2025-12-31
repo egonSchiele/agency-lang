@@ -1,5 +1,5 @@
 // THIS FILE WAS AUTO-GENERATED
-// Source: lib/templates/promptFunction.mustache
+// Source: lib/templates/backends/adlTypescript/promptFunction.mustache
 // Any manual changes will be lost.
 import { apply } from "typestache";
 

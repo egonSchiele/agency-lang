@@ -1,5 +1,5 @@
 // THIS FILE WAS AUTO-GENERATED
-// Source: lib/templates/imports.mustache
+// Source: lib/templates/backends/adlTypescript/imports.mustache
 // Any manual changes will be lost.
 import { apply } from "typestache";
 

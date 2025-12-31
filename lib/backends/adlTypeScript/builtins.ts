@@ -1,4 +1,4 @@
-import * as builtinFunctionsInput from "@/templates/builtinFunctions/input";
+import * as builtinFunctionsInput from "@/templates/backends/adlTypescript/builtinFunctions/input";
 
 /**
  * Maps ADL built-in function names to TypeScript equivalents

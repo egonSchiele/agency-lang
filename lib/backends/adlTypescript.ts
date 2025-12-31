@@ -14,8 +14,8 @@ import {
 } from "@/types";
 
 import { escape } from "@/utils";
-import * as renderImports from "@/templates/imports";
-import * as promptFunction from "@/templates/promptFunction";
+import * as renderImports from "@/templates/backends/adlTypescript/imports";
+import * as promptFunction from "@/templates/backends/adlTypescript/promptFunction";
 import { mapTypeToZodSchema } from "./adlTypeScript/typeToZodSchema";
 import { variableTypeToString } from "./adlTypeScript/typeToString";
 import {

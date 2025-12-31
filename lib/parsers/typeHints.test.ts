@@ -656,6 +656,165 @@ describe("objectTypeParser", () => {
         },
       },
     },
+    // Object with union type values
+    {
+      input: "{ value: string | number }",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "value",
+              value: {
+                type: "unionType",
+                types: [
+                  { type: "primitiveType", value: "string" },
+                  { type: "primitiveType", value: "number" },
+                ],
+              },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: '{ status: "active" | "inactive"; count: number }',
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "status",
+              value: {
+                type: "unionType",
+                types: [
+                  { type: "stringLiteralType", value: "active" },
+                  { type: "stringLiteralType", value: "inactive" },
+                ],
+              },
+            },
+            {
+              key: "count",
+              value: { type: "primitiveType", value: "number" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "{ data: string | number | boolean }",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "data",
+              value: {
+                type: "unionType",
+                types: [
+                  { type: "primitiveType", value: "string" },
+                  { type: "primitiveType", value: "number" },
+                  { type: "primitiveType", value: "boolean" },
+                ],
+              },
+            },
+          ],
+        },
+      },
+    },
+    // Nested object types
+    {
+      input: "{ coords: { x: number; y: number } }",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "coords",
+              value: {
+                type: "objectType",
+                properties: [
+                  {
+                    key: "x",
+                    value: { type: "primitiveType", value: "number" },
+                  },
+                  {
+                    key: "y",
+                    value: { type: "primitiveType", value: "number" },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "{ user: { name: string; age: number }; active: boolean }",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "user",
+              value: {
+                type: "objectType",
+                properties: [
+                  {
+                    key: "name",
+                    value: { type: "primitiveType", value: "string" },
+                  },
+                  {
+                    key: "age",
+                    value: { type: "primitiveType", value: "number" },
+                  },
+                ],
+              },
+            },
+            {
+              key: "active",
+              value: { type: "primitiveType", value: "boolean" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "{ outer: { inner: { value: string } } }",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "outer",
+              value: {
+                type: "objectType",
+                properties: [
+                  {
+                    key: "inner",
+                    value: {
+                      type: "objectType",
+                      properties: [
+                        {
+                          key: "value",
+                          value: { type: "primitiveType", value: "string" },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+    },
     // Failure cases
     {
       input: "{ x: invalid }",
@@ -904,6 +1063,225 @@ describe("unionTypeParser", () => {
             {
               type: "arrayType",
               elementType: { type: "primitiveType", value: "number" },
+            },
+          ],
+        },
+      },
+    },
+    // Union of object types
+    {
+      input: "{ x: number } | { y: string }",
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            {
+              type: "objectType",
+              properties: [
+                {
+                  key: "x",
+                  value: { type: "primitiveType", value: "number" },
+                },
+              ],
+            },
+            {
+              type: "objectType",
+              properties: [
+                {
+                  key: "y",
+                  value: { type: "primitiveType", value: "string" },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "{ name: string; age: number } | { id: number; active: boolean }",
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            {
+              type: "objectType",
+              properties: [
+                {
+                  key: "name",
+                  value: { type: "primitiveType", value: "string" },
+                },
+                {
+                  key: "age",
+                  value: { type: "primitiveType", value: "number" },
+                },
+              ],
+            },
+            {
+              type: "objectType",
+              properties: [
+                {
+                  key: "id",
+                  value: { type: "primitiveType", value: "number" },
+                },
+                {
+                  key: "active",
+                  value: { type: "primitiveType", value: "boolean" },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "{ x: number } | { y: number } | { z: number }",
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            {
+              type: "objectType",
+              properties: [
+                {
+                  key: "x",
+                  value: { type: "primitiveType", value: "number" },
+                },
+              ],
+            },
+            {
+              type: "objectType",
+              properties: [
+                {
+                  key: "y",
+                  value: { type: "primitiveType", value: "number" },
+                },
+              ],
+            },
+            {
+              type: "objectType",
+              properties: [
+                {
+                  key: "z",
+                  value: { type: "primitiveType", value: "number" },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    },
+    // Union of objects with union properties
+    {
+      input: '{ status: "active" | "inactive" } | { code: number }',
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            {
+              type: "objectType",
+              properties: [
+                {
+                  key: "status",
+                  value: {
+                    type: "unionType",
+                    types: [
+                      { type: "stringLiteralType", value: "active" },
+                      { type: "stringLiteralType", value: "inactive" },
+                    ],
+                  },
+                },
+              ],
+            },
+            {
+              type: "objectType",
+              properties: [
+                {
+                  key: "code",
+                  value: { type: "primitiveType", value: "number" },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "{ value: string | number } | { data: boolean | number }",
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            {
+              type: "objectType",
+              properties: [
+                {
+                  key: "value",
+                  value: {
+                    type: "unionType",
+                    types: [
+                      { type: "primitiveType", value: "string" },
+                      { type: "primitiveType", value: "number" },
+                    ],
+                  },
+                },
+              ],
+            },
+            {
+              type: "objectType",
+              properties: [
+                {
+                  key: "data",
+                  value: {
+                    type: "unionType",
+                    types: [
+                      { type: "primitiveType", value: "boolean" },
+                      { type: "primitiveType", value: "number" },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: '{ type: "user"; name: string } | { type: "admin"; level: number }',
+      expected: {
+        success: true,
+        result: {
+          type: "unionType",
+          types: [
+            {
+              type: "objectType",
+              properties: [
+                {
+                  key: "type",
+                  value: { type: "stringLiteralType", value: "user" },
+                },
+                {
+                  key: "name",
+                  value: { type: "primitiveType", value: "string" },
+                },
+              ],
+            },
+            {
+              type: "objectType",
+              properties: [
+                {
+                  key: "type",
+                  value: { type: "stringLiteralType", value: "admin" },
+                },
+                {
+                  key: "level",
+                  value: { type: "primitiveType", value: "number" },
+                },
+              ],
             },
           ],
         },

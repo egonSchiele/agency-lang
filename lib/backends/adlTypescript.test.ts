@@ -6,7 +6,7 @@ describe("generateTypeScript - ObjectType support", () => {
   describe("Object type hints generate correct Zod schemas", () => {
     it("should generate zod schema for simple object type", () => {
       const program: ADLProgram = {
-        type: "program",
+        type: "adlProgram",
         nodes: [
           {
             type: "typeHint",
@@ -49,7 +49,7 @@ describe("generateTypeScript - ObjectType support", () => {
 
     it("should generate zod schema for object with different property types", () => {
       const program: ADLProgram = {
-        type: "program",
+        type: "adlProgram",
         nodes: [
           {
             type: "typeHint",
@@ -98,7 +98,7 @@ describe("generateTypeScript - ObjectType support", () => {
 
     it("should generate zod schema for object with array properties", () => {
       const program: ADLProgram = {
-        type: "program",
+        type: "adlProgram",
         nodes: [
           {
             type: "typeHint",
@@ -149,7 +149,7 @@ describe("generateTypeScript - ObjectType support", () => {
 
     it("should generate zod schema for object with literal properties", () => {
       const program: ADLProgram = {
-        type: "program",
+        type: "adlProgram",
         nodes: [
           {
             type: "typeHint",
@@ -200,7 +200,7 @@ describe("generateTypeScript - ObjectType support", () => {
 
     it("should generate zod schema for empty object", () => {
       const program: ADLProgram = {
-        type: "program",
+        type: "adlProgram",
         nodes: [
           {
             type: "typeHint",
@@ -234,7 +234,7 @@ describe("generateTypeScript - ObjectType support", () => {
 
     it("should generate zod schema for single property object", () => {
       const program: ADLProgram = {
-        type: "program",
+        type: "adlProgram",
         nodes: [
           {
             type: "typeHint",

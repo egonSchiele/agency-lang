@@ -28,6 +28,7 @@ import {
 } from "./adlTypeScript/builtins";
 import { variableTypeToString } from "./adlTypeScript/typeToString";
 import { mapTypeToZodSchema } from "./adlTypeScript/typeToZodSchema";
+import { MatchBlock } from "@/types/matchBlock";
 type TypeHintMap = Record<string, VariableType>;
 
 function generateImports(): string {
@@ -247,6 +248,10 @@ export class TypeScriptGenerator {
         const code = this.processAccessExpression(node);
         this.generatedStatements.push(code + "\n");
         break;
+      case "matchBlock":
+        const matchBlockCode = this.processMatchBlock(node);
+        this.generatedStatements.push(matchBlockCode + "\n");
+        break;
       case "number":
       case "string":
       case "variableName":
@@ -282,6 +287,43 @@ export class TypeScriptGenerator {
       case "dotFunctionCall":
         return this.processDotFunctionCall(node.expression);
     }
+  }
+
+  private processMatchBlock(node: MatchBlock): string {
+    let lines = [`switch (${this.generateLiteral(node.expression)}) {`];
+
+    for (const caseItem of node.cases) {
+      let caseValueCode: string;
+      if (caseItem.caseValue === "_") {
+        caseValueCode = "default";
+      } else if (caseItem.caseValue.type === "accessExpression") {
+        caseValueCode = this.processAccessExpression(caseItem.caseValue);
+      } else {
+        caseValueCode = this.generateLiteral(caseItem.caseValue);
+      }
+      lines.push(`  case ${caseValueCode}:`);
+      const caseBodyGenerator = new TypeScriptGenerator({
+        variablesInScope: this.variablesInScope,
+        typeAliases: this.typeAliases,
+        typeHints: this.typeHints,
+      });
+      const caseBodyResult = caseBodyGenerator.generate({
+        type: "adlProgram",
+        nodes: [caseItem.body],
+      });
+      this.functionsUsed = new Set([
+        ...this.functionsUsed,
+        ...caseBodyResult.functionsUsed,
+      ]);
+      const caseBodyLines = caseBodyResult.output
+        .split("\n")
+        .map((line) => "    " + line);
+      lines.push(...caseBodyLines);
+      lines.push("    break;");
+    }
+
+    lines.push("}");
+    return lines.join("\n");
   }
 
   private processDotProperty(node: DotProperty): string {
@@ -399,7 +441,7 @@ export class TypeScriptGenerator {
       if (!this.variablesInScope.has(varName)) {
         throw new Error(
           `Variable '${varName}' used in prompt interpolation but not defined. ` +
-            `Referenced in assignment to '${variableName}'.`
+          `Referenced in assignment to '${variableName}'.`
         );
       }
     }
@@ -434,7 +476,7 @@ export class TypeScriptGenerator {
     const { functionName, body } = node;
 
     const functionLines: string[] = [];
-    functionLines.push(`function ${functionName}() {`);
+    functionLines.push(`async function ${functionName}() {`);
 
     const bodyGenerator = new TypeScriptGenerator({
       variablesInScope: this.variablesInScope,

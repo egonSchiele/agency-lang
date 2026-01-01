@@ -21,6 +21,9 @@ def importRecipe() {
 }
 
 def createIngredient() {
+  """
+  Create a new ingredient based on the user's message.
+  """
   print("tbd")
 }
 

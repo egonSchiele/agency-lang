@@ -13,5 +13,6 @@ const openai = new OpenAI({
 function test() {
 const foo = 1;
 return foo
+
 }
 console.log(test())

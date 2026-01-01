@@ -1,31 +1,3 @@
-/*
-import { FunctionCall } from "@/types";
-import { Literal } from "./literals";
-
-export type DotProperty = {
-  type: "dotProperty";
-  object: Literal | FunctionCall;
-  propertyName: string;
-};
-
-export type IndexAccess = {
-  type: "indexAccess";
-  array: Literal | FunctionCall;
-  index: Literal | FunctionCall;
-};
-
-export type DotFunctionCall = {
-  type: "dotFunctionCall";
-  object: Literal | FunctionCall;
-  functionCall: FunctionCall;
-};
-
-export type AccessExpression = {
-  type: "accessExpression";
-  expression: DotProperty | IndexAccess | DotFunctionCall;
-}
-  */
-
 import {
   AccessExpression,
   DotFunctionCall,
@@ -60,9 +32,9 @@ export const dotPropertyParser = (input: string): ParserResult<DotProperty> => {
 export const indexAccessParser = (input: string): ParserResult<IndexAccess> => {
   const parser = seqC(
     set("type", "indexAccess"),
-    capture(or(literalParser, functionCallParser), "array"),
+    capture(or(functionCallParser, literalParser), "array"),
     char("["),
-    capture(or(literalParser, functionCallParser), "index"),
+    capture(or(functionCallParser, literalParser), "index"),
     char("]")
   );
 
@@ -74,7 +46,7 @@ export const dotFunctionCallParser = (
 ): ParserResult<DotFunctionCall> => {
   const parser = seqC(
     set("type", "dotFunctionCall"),
-    capture(or(literalParser, functionCallParser), "object"),
+    capture(or(functionCallParser, literalParser), "object"),
     char("."),
     capture(functionCallParser, "functionCall")
   );

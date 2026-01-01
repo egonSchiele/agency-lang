@@ -1,5 +1,6 @@
 import * as builtinFunctionsInput from "@/templates/backends/adlTypescript/builtinFunctions/input";
 import * as builtinFunctionsRead from "@/templates/backends/adlTypescript/builtinFunctions/read";
+import * as builtinFunctionsFetchJSON from "@/templates/backends/adlTypescript/builtinFunctions/fetchJSON";
 
 /**
  * Maps ADL built-in function names to TypeScript equivalents
@@ -9,6 +10,8 @@ export const BUILTIN_FUNCTIONS: Record<string, string> = {
   input: "_builtinInput",
   read: "_builtinRead",
   write: "fs.writeFileSync",
+  fetchJSON: "_builtinFetchJSON",
+  fetchJson: "_builtinFetchJSON",
 };
 
 /**
@@ -25,6 +28,7 @@ export function mapFunctionName(functionName: string): string {
 export function generateBuiltinHelpers(functionsUsed: Set<string>): string {
   const inputFunc = builtinFunctionsInput.default({});
   const readFunc = builtinFunctionsRead.default({});
+  const fetchJSONFunc = builtinFunctionsFetchJSON.default({});
 
   const helpers: string[] = [];
   if (functionsUsed.has("input")) {
@@ -32,6 +36,9 @@ export function generateBuiltinHelpers(functionsUsed: Set<string>): string {
   }
   if (functionsUsed.has("read")) {
     helpers.push(readFunc);
+  }
+  if (functionsUsed.has("fetchJSON") || functionsUsed.has("fetchJson")) {
+    helpers.push(fetchJSONFunc);
   }
 
   return helpers.join("\n\n");

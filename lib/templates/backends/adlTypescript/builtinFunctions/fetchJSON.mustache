@@ -1,0 +1,9 @@
+async function _builtinFetchJSON(url: string, args: any): any {
+  const result = await fetch(url, args);
+  try {
+    const json = await result.json();
+    return json;
+  } catch (e) {
+    throw new Error(`Failed to parse JSON from $\{url\}: $\{e\}`);
+  }
+}

@@ -17,6 +17,7 @@ import {
 } from "tarsec";
 import { functionCallParser } from "./functionCall";
 import { literalParser } from "./literals";
+import { optionalSemicolon } from "./parserUtils";
 
 export const dotPropertyParser = (input: string): ParserResult<DotProperty> => {
   const parser = seqC(
@@ -59,5 +60,6 @@ export const accessExpressionParser: Parser<AccessExpression> = seqC(
   capture(
     or(dotFunctionCallParser, dotPropertyParser, indexAccessParser),
     "expression"
-  )
+  ),
+  optionalSemicolon
 );

@@ -13,6 +13,7 @@ const openai = new OpenAI({
 async function _numbers(): Promise<number[]> {
   const prompt = `the first 5 prime numbers`;
   const startTime = performance.now();
+  console.log("Running prompt for numbers")
   const completion = await openai.chat.completions.create({
     model: "gpt-5-nano-2025-08-07",
     messages: [
@@ -29,6 +30,7 @@ async function _numbers(): Promise<number[]> {
   console.log("Prompt for variable 'numbers' took " + (endTime - startTime).toFixed(2) + " ms");
   try {
   const result = JSON.parse(completion.choices[0].message.content || "");
+  console.log("numbers:", result.value);
   return result.value;
   } catch (e) {
     console.error("Error parsing response for variable 'numbers':", e);
@@ -39,6 +41,7 @@ async function _numbers(): Promise<number[]> {
 async function _greetings(): Promise<string[]> {
   const prompt = `a list of 3 common greetings in different languages`;
   const startTime = performance.now();
+  console.log("Running prompt for greetings")
   const completion = await openai.chat.completions.create({
     model: "gpt-5-nano-2025-08-07",
     messages: [
@@ -55,6 +58,7 @@ async function _greetings(): Promise<string[]> {
   console.log("Prompt for variable 'greetings' took " + (endTime - startTime).toFixed(2) + " ms");
   try {
   const result = JSON.parse(completion.choices[0].message.content || "");
+  console.log("greetings:", result.value);
   return result.value;
   } catch (e) {
     console.error("Error parsing response for variable 'greetings':", e);

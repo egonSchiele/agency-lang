@@ -13,6 +13,7 @@ const openai = new OpenAI({
 async function _foo(): Promise<"hi"> {
   const prompt = `the string hi`;
   const startTime = performance.now();
+  console.log("Running prompt for foo")
   const completion = await openai.chat.completions.create({
     model: "gpt-5-nano-2025-08-07",
     messages: [
@@ -29,6 +30,7 @@ async function _foo(): Promise<"hi"> {
   console.log("Prompt for variable 'foo' took " + (endTime - startTime).toFixed(2) + " ms");
   try {
   const result = JSON.parse(completion.choices[0].message.content || "");
+  console.log("foo:", result.value);
   return result.value;
   } catch (e) {
     console.error("Error parsing response for variable 'foo':", e);
@@ -39,6 +41,7 @@ async function _foo(): Promise<"hi"> {
 async function _bar(): Promise<42> {
   const prompt = `the number 42`;
   const startTime = performance.now();
+  console.log("Running prompt for bar")
   const completion = await openai.chat.completions.create({
     model: "gpt-5-nano-2025-08-07",
     messages: [
@@ -55,6 +58,7 @@ async function _bar(): Promise<42> {
   console.log("Prompt for variable 'bar' took " + (endTime - startTime).toFixed(2) + " ms");
   try {
   const result = JSON.parse(completion.choices[0].message.content || "");
+  console.log("bar:", result.value);
   return result.value;
   } catch (e) {
     console.error("Error parsing response for variable 'bar':", e);
@@ -65,6 +69,7 @@ async function _bar(): Promise<42> {
 async function _baz(): Promise<true> {
   const prompt = `the boolean true`;
   const startTime = performance.now();
+  console.log("Running prompt for baz")
   const completion = await openai.chat.completions.create({
     model: "gpt-5-nano-2025-08-07",
     messages: [
@@ -81,6 +86,7 @@ async function _baz(): Promise<true> {
   console.log("Prompt for variable 'baz' took " + (endTime - startTime).toFixed(2) + " ms");
   try {
   const result = JSON.parse(completion.choices[0].message.content || "");
+  console.log("baz:", result.value);
   return result.value;
   } catch (e) {
     console.error("Error parsing response for variable 'baz':", e);

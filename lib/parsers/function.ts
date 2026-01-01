@@ -2,7 +2,6 @@ import { ADLNode, FunctionDefinition } from "@/types";
 import {
   capture,
   char,
-  debug,
   many1,
   many1Till,
   or,
@@ -15,6 +14,7 @@ import {
   spaces,
   str,
   trace,
+  debug,
 } from "tarsec";
 import { assignmentParser } from "./assignment";
 import { functionCallParser } from "./functionCall";
@@ -24,40 +24,44 @@ import { typeAliasParser, typeHintParser } from "./typeHints";
 import { optionalSpaces } from "./utils";
 import { deepCopy } from "@/utils";
 import { accessExpressionParser } from "./access";
+import { optionalSemicolon } from "./parserUtils";
 
-export const functionBodyParser = trace("functionBodyParser", (input: string): ParserResult<ADLNode[]> => {
-  const parser: Parser<ADLNode[]> = sepBy(
-    spaces,
-    or(
-      debug(typeAliasParser, "error in typeAliasParser"),
-      debug(typeHintParser, "error in typeHintParser"),
-      matchBlockParser,
-      functionParser,
-      accessExpressionParser,
-      assignmentParser,
-      functionCallParser,
-      literalParser
-    )
-  );
+export const functionBodyParser = trace(
+  "functionBodyParser",
+  (input: string): ParserResult<ADLNode[]> => {
+    const parser: Parser<ADLNode[]> = sepBy(
+      spaces,
+      or(
+        debug(typeAliasParser, "error in typeAliasParser"),
+        debug(typeHintParser, "error in typeHintParser"),
+        matchBlockParser,
+        functionParser,
+        accessExpressionParser,
+        assignmentParser,
+        functionCallParser,
+        literalParser
+      )
+    );
 
-  const result = parser(input);
-  if (result.success) {
-    const newResult = deepCopy(result.result);
-    const lastNode = newResult.at(-1);
-    if (lastNode && lastNode.type !== "returnStatement") {
-      newResult[newResult.length - 1] = {
-        type: "returnStatement",
-        value: lastNode,
+    const result = parser(input);
+    if (result.success) {
+      const newResult = deepCopy(result.result);
+      const lastNode = newResult.at(-1);
+      if (lastNode && lastNode.type !== "returnStatement") {
+        newResult[newResult.length - 1] = {
+          type: "returnStatement",
+          value: lastNode,
+        };
+      }
+      return {
+        ...result,
+        result: newResult,
       };
+    } else {
+      return result;
     }
-    return {
-      ...result,
-      result: newResult,
-    };
-  } else {
-    return result;
   }
-});
+);
 
 export const functionParser: Parser<FunctionDefinition> = trace(
   "functionParser",
@@ -74,6 +78,7 @@ export const functionParser: Parser<FunctionDefinition> = trace(
     optionalSpaces,
     capture(functionBodyParser, "body"),
     optionalSpaces,
-    char("}")
+    char("}"),
+    optionalSemicolon
   )
 );

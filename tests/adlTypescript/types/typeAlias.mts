@@ -14,6 +14,7 @@ type Coords = { x: number; y: number };
 async function _foo(): Promise<Coords> {
   const prompt = `a set of coordinates`;
   const startTime = performance.now();
+  console.log("Running prompt for foo")
   const completion = await openai.chat.completions.create({
     model: "gpt-5-nano-2025-08-07",
     messages: [
@@ -30,6 +31,7 @@ async function _foo(): Promise<Coords> {
   console.log("Prompt for variable 'foo' took " + (endTime - startTime).toFixed(2) + " ms");
   try {
   const result = JSON.parse(completion.choices[0].message.content || "");
+  console.log("foo:", result.value);
   return result.value;
   } catch (e) {
     console.error("Error parsing response for variable 'foo':", e);

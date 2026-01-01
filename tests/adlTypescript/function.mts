@@ -10,7 +10,7 @@ const openai = new OpenAI({
 
 
 
-function test() {
+async function test() {
 const foo = 1;
 return foo
 

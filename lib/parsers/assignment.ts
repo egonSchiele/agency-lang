@@ -16,6 +16,7 @@ import { literalParser } from "./literals";
 import { optionalSpaces } from "./utils";
 import { functionCallParser } from "./functionCall";
 import { accessExpressionParser } from "./access";
+import { optionalSemicolon } from "./parserUtils";
 
 export const assignmentParser: Parser<Assignment> = trace(
   "assignmentParser",
@@ -29,6 +30,7 @@ export const assignmentParser: Parser<Assignment> = trace(
     capture(
       or(functionCallParser, accessExpressionParser, literalParser),
       "value"
-    )
+    ),
+    optionalSemicolon
   )
 );

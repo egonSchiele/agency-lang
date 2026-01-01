@@ -13,6 +13,7 @@ const openai = new OpenAI({
 async function _greeting(name: string): Promise<string> {
   const prompt = `say hi to ${name}`;
   const startTime = performance.now();
+  console.log("Running prompt for greeting")
   const completion = await openai.chat.completions.create({
     model: "gpt-5-nano-2025-08-07",
     messages: [
@@ -29,6 +30,7 @@ async function _greeting(name: string): Promise<string> {
   console.log("Prompt for variable 'greeting' took " + (endTime - startTime).toFixed(2) + " ms");
   try {
   const result = JSON.parse(completion.choices[0].message.content || "");
+  console.log("greeting:", result.value);
   return result.value;
   } catch (e) {
     console.error("Error parsing response for variable 'greeting':", e);

@@ -14,6 +14,7 @@ import {
 import { literalParser } from "./literals";
 import { optionalSpaces } from "./utils";
 import { accessExpressionParser } from "./access";
+import { optionalSemicolon } from "./parserUtils";
 
 const comma = seqR(optionalSpaces, char(","), optionalSpaces);
 export const functionCallParser: Parser<FunctionCall> = (input: string) => {
@@ -30,7 +31,8 @@ export const functionCallParser: Parser<FunctionCall> = (input: string) => {
       "arguments"
     ),
     optionalSpaces,
-    char(")")
+    char(")"),
+    optionalSemicolon
   );
   return parser(input);
 };

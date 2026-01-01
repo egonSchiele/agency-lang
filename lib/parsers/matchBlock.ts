@@ -28,6 +28,7 @@ import { assignmentParser } from "./assignment";
 import { functionCallParser } from "./functionCall";
 import { DefaultCase, MatchBlockCase } from "@/types/matchBlock";
 import { accessExpressionParser } from "./access";
+import { optionalSemicolon } from "./parserUtils";
 
 export const defaultCaseParser: Parser<DefaultCase> = char("_");
 
@@ -56,5 +57,6 @@ export const matchBlockParser = seqC(
   optionalSpaces,
   capture(sepBy(or(semicolon, newline), matchBlockParserCase), "cases"),
   optionalSpaces,
-  char("}")
+  char("}"),
+  optionalSemicolon
 );

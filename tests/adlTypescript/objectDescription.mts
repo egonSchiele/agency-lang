@@ -13,6 +13,7 @@ const openai = new OpenAI({
 async function _url(): Promise<{ hostname: string; port: number }> {
   const prompt = `extract the hostname and port from \"https://example.com:8080\"`;
   const startTime = performance.now();
+  console.log("Running prompt for url")
   const completion = await openai.chat.completions.create({
     model: "gpt-5-nano-2025-08-07",
     messages: [
@@ -29,6 +30,7 @@ async function _url(): Promise<{ hostname: string; port: number }> {
   console.log("Prompt for variable 'url' took " + (endTime - startTime).toFixed(2) + " ms");
   try {
   const result = JSON.parse(completion.choices[0].message.content || "");
+  console.log("url:", result.value);
   return result.value;
   } catch (e) {
     console.error("Error parsing response for variable 'url':", e);

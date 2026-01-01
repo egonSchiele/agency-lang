@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import { parseADL } from "@/parser";
+import { getDebugMessage } from "tarsec";
 
 // Get filename from command line arguments
 const filename = process.argv[2];
@@ -17,3 +18,12 @@ const result = parseADL(contents);
 
 // Output the result
 console.log(JSON.stringify(result, null, 2));
+if (!result.success) {
+  const message = getDebugMessage();
+  if (message) {
+    console.error("Debug Info:\n" + message);
+  }
+}
+
+// Exit with appropriate code
+process.exit(result.success ? 0 : 1);

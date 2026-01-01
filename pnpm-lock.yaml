@@ -12,8 +12,8 @@ importers:
         specifier: ^6.15.0
         version: 6.15.0(zod@4.2.1)
       tarsec:
-        specifier: ^0.0.20
-        version: 0.0.20
+        specifier: ^0.0.22
+        version: 0.0.22
       typestache:
         specifier: ^0.4.4
         version: 0.4.4
@@ -586,8 +586,8 @@ packages:
   tarsec@0.0.18:
     resolution: {integrity: sha512-g1OZ7VyyaIjHT1KXI6o8tdebJT1WrC3801+RGw2mEEWc6S2gVC5aBDUZZRbxeUPkekMR5R/+ba6s8UfsJv8n8w==}
 
-  tarsec@0.0.20:
-    resolution: {integrity: sha512-pWJQAlx/eZxUbFt2ah5phdtzKs4YHNwoK3+QG7Xadbe4DNWP2ExCWqRnB62wP1s6UqQkJWqonnHSacvg/42Ttg==}
+  tarsec@0.0.22:
+    resolution: {integrity: sha512-eqC3feveW/yB0UZw4yDHbbqP9KweqpX3wya+7EJYX1AwdzZitsMoAP2JyiI+eYXqj0cVwktJWdJau9qAcSLFSw==}
 
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
@@ -1155,7 +1155,7 @@ snapshots:
 
   tarsec@0.0.18: {}
 
-  tarsec@0.0.20: {}
+  tarsec@0.0.22: {}
 
   tinybench@2.9.0: {}
 

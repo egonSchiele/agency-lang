@@ -2,6 +2,7 @@ import { ADLNode, FunctionDefinition } from "@/types";
 import {
   capture,
   char,
+  debug,
   many1,
   many1Till,
   or,
@@ -24,12 +25,12 @@ import { optionalSpaces } from "./utils";
 import { deepCopy } from "@/utils";
 import { accessExpressionParser } from "./access";
 
-export const functionBodyParser = (input: string): ParserResult<ADLNode[]> => {
+export const functionBodyParser = trace("functionBodyParser", (input: string): ParserResult<ADLNode[]> => {
   const parser: Parser<ADLNode[]> = sepBy(
     spaces,
     or(
-      typeAliasParser,
-      typeHintParser,
+      debug(typeAliasParser, "error in typeAliasParser"),
+      debug(typeHintParser, "error in typeHintParser"),
       matchBlockParser,
       functionParser,
       accessExpressionParser,
@@ -56,7 +57,7 @@ export const functionBodyParser = (input: string): ParserResult<ADLNode[]> => {
   } else {
     return result;
   }
-};
+});
 
 export const functionParser: Parser<FunctionDefinition> = trace(
   "functionParser",
@@ -70,6 +71,7 @@ export const functionParser: Parser<FunctionDefinition> = trace(
     char(")"),
     optionalSpaces,
     char("{"),
+    optionalSpaces,
     capture(functionBodyParser, "body"),
     optionalSpaces,
     char("}")

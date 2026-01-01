@@ -33,48 +33,48 @@ import {
   space,
   spaces,
   str,
+  trace,
 } from "tarsec";
 
-export const primitiveTypeParser: Parser<PrimitiveType> = seqC(
+export const primitiveTypeParser: Parser<PrimitiveType> = trace("primitiveTypeParser", seqC(
   set("type", "primitiveType"),
   capture(or(str("number"), str("string"), str("boolean")), "value")
-);
+));
 
-export const typeAliasVariableParser: Parser<TypeAliasVariable> = seqC(
+export const typeAliasVariableParser: Parser<TypeAliasVariable> = trace("typeAliasVariableParser", seqC(
   set("type", "typeAliasVariable"),
   capture(many1WithJoin(alphanum), "aliasName")
-);
+));
 
-export const arrayTypeParser: Parser<ArrayType> = seqC(
+export const arrayTypeParser: Parser<ArrayType> = trace("arrayTypeParser", seqC(
   set("type", "arrayType"),
   capture(primitiveTypeParser, "elementType"),
   str("[]")
-);
-
-export const angleBracketsArrayTypeParser: Parser<ArrayType> = seqC(
+));
+export const angleBracketsArrayTypeParser: Parser<ArrayType> = trace("angleBracketsArrayTypeParser", seqC(
   set("type", "arrayType"),
   str("array"),
   char("<"),
   capture(primitiveTypeParser, "elementType"),
   char(">")
-);
+));
 
-export const stringLiteralTypeParser: Parser<StringLiteralType> = seqC(
+export const stringLiteralTypeParser: Parser<StringLiteralType> = trace("stringLiteralTypeParser", seqC(
   set("type", "stringLiteralType"),
   char('"'),
   capture(many1Till(char('"')), "value"),
   char('"')
-);
+));
 
-export const numberLiteralTypeParser: Parser<NumberLiteralType> = seqC(
+export const numberLiteralTypeParser: Parser<NumberLiteralType> = trace("numberLiteralTypeParser", seqC(
   set("type", "numberLiteralType"),
   capture(many1WithJoin(or(char("-"), char("."), digit)), "value")
-);
+));
 
-export const booleanLiteralTypeParser: Parser<BooleanLiteralType> = seqC(
+export const booleanLiteralTypeParser: Parser<BooleanLiteralType> = trace("booleanLiteralTypeParser", seqC(
   set("type", "booleanLiteralType"),
   capture(or(str("true"), str("false")), "value")
-);
+));
 
 export const objectPropertyDelimiter = seqR(
   optionalSpaces,
@@ -82,7 +82,7 @@ export const objectPropertyDelimiter = seqR(
   optionalSpaces
 );
 
-export const objectPropertyParser: Parser<ObjectProperty> = (
+export const objectPropertyParser: Parser<ObjectProperty> = trace("objectPropertyParser", (
   input: string
 ): ParserResult<ObjectProperty> => {
   const parser = seqC(
@@ -93,18 +93,18 @@ export const objectPropertyParser: Parser<ObjectProperty> = (
     capture(variableTypeParser, "value")
   );
   return parser(input);
-};
+});
 
 export const objectPropertyDescriptionParser: Parser<{ description: string }> =
   seqC(char("#"), optionalSpaces, capture(many1Till(char(",")), "description"));
 
-export const objectPropertyWithDescriptionParser: Parser<ObjectProperty> = seqC(
+export const objectPropertyWithDescriptionParser: Parser<ObjectProperty> = trace("objectPropertyWithDescriptionParser", seqC(
   captureCaptures(objectPropertyParser),
   spaces,
   captureCaptures(objectPropertyDescriptionParser)
-);
+));
 
-export const objectTypeParser: Parser<ObjectType> = (
+export const objectTypeParser: Parser<ObjectType> = trace("objectTypeParser", (
   input: string
 ): ParserResult<ObjectType> => {
   const parser = seqC(
@@ -122,9 +122,9 @@ export const objectTypeParser: Parser<ObjectType> = (
     char("}")
   );
   return parser(input);
-};
+});
 
-export const unionItemParser: Parser<VariableType> = or(
+export const unionItemParser: Parser<VariableType> = trace("unionItemParser", or(
   objectTypeParser,
   angleBracketsArrayTypeParser,
   arrayTypeParser,
@@ -133,11 +133,11 @@ export const unionItemParser: Parser<VariableType> = or(
   booleanLiteralTypeParser,
   primitiveTypeParser,
   typeAliasVariableParser
-);
+));
 
 const pipe = seqR(optionalSpaces, str("|"), optionalSpaces);
 
-export const unionTypeParser: Parser<UnionType> = (
+export const _unionTypeParser: Parser<UnionType> = (
   input: string
 ): ParserResult<UnionType> => {
   const parser = seqC(
@@ -158,7 +158,9 @@ export const unionTypeParser: Parser<UnionType> = (
   return result;
 };
 
-export const variableTypeParser: Parser<VariableType> = or(
+export const unionTypeParser: Parser<UnionType> = trace("unionTypeParser", _unionTypeParser);
+
+export const variableTypeParser: Parser<VariableType> = trace("variableTypeParser", or(
   objectTypeParser,
   unionTypeParser,
   angleBracketsArrayTypeParser,
@@ -168,18 +170,18 @@ export const variableTypeParser: Parser<VariableType> = or(
   booleanLiteralTypeParser,
   primitiveTypeParser,
   typeAliasVariableParser
-);
+));
 
-export const typeHintParser: Parser<TypeHint> = seqC(
+export const typeHintParser: Parser<TypeHint> = trace("typeHintParser", seqC(
   set("type", "typeHint"),
   capture(many1Till(space), "variableName"),
   optionalSpaces,
   str("::"),
   optionalSpaces,
   capture(variableTypeParser, "variableType")
-);
+));
 
-export const typeAliasParser: Parser<TypeAlias> = seqC(
+export const typeAliasParser: Parser<TypeAlias> = trace("typeAliasParser", seqC(
   set("type", "typeAlias"),
   str("type"),
   spaces,
@@ -188,4 +190,4 @@ export const typeAliasParser: Parser<TypeAlias> = seqC(
   str("="),
   optionalSpaces,
   capture(variableTypeParser, "aliasedType")
-);
+));

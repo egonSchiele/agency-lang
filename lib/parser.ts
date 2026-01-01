@@ -1,5 +1,5 @@
 import { typeAliasParser, typeHintParser } from "@/parsers/typeHints";
-import { ADLNode, ADLProgram, AwaitStatement } from "@/types";
+import { ADLNode, ADLProgram } from "@/types";
 import {
   capture,
   eof,
@@ -10,23 +10,13 @@ import {
   seqC,
   set,
   spaces,
-  str,
   trace,
 } from "tarsec";
+import { accessExpressionParser } from "./parsers/access";
 import { assignmentParser } from "./parsers/assignment";
 import { functionParser } from "./parsers/function";
 import { functionCallParser } from "./parsers/functionCall";
 import { matchBlockParser } from "./parsers/matchBlock";
-import { accessExpressionParser } from "./parsers/access";
-import { literalParser } from "./parsers/literals";
-
-export const awaitStatementParser: Parser<AwaitStatement> = seqC(
-  set("type", "awaitStatement"),
-  capture(
-    or(accessExpressionParser, functionCallParser, literalParser),
-    "value"
-  )
-);
 
 export const adlNode: Parser<ADLNode[]> = sepBy(
   spaces,

@@ -2,7 +2,6 @@ import {
   ADLNode,
   ADLProgram,
   Assignment,
-  AwaitStatement,
   FunctionCall,
   FunctionDefinition,
   InterpolationSegment,
@@ -14,21 +13,21 @@ import {
   VariableType,
 } from "@/types";
 
-import { escape } from "@/utils";
 import * as renderImports from "@/templates/backends/adlTypescript/imports";
 import * as promptFunction from "@/templates/backends/adlTypescript/promptFunction";
-import { mapTypeToZodSchema } from "./adlTypeScript/typeToZodSchema";
-import { variableTypeToString } from "./adlTypeScript/typeToString";
-import {
-  generateBuiltinHelpers,
-  mapFunctionName,
-} from "./adlTypeScript/builtins";
 import {
   AccessExpression,
   DotFunctionCall,
   DotProperty,
   IndexAccess,
 } from "@/types/access";
+import { escape } from "@/utils";
+import {
+  generateBuiltinHelpers,
+  mapFunctionName,
+} from "./adlTypeScript/builtins";
+import { variableTypeToString } from "./adlTypeScript/typeToString";
+import { mapTypeToZodSchema } from "./adlTypeScript/typeToZodSchema";
 type TypeHintMap = Record<string, VariableType>;
 
 function generateImports(): string {
@@ -248,9 +247,6 @@ export class TypeScriptGenerator {
         const code = this.processAccessExpression(node);
         this.generatedStatements.push(code + "\n");
         break;
-      case "awaitStatement":
-        this.processAwaitStatement(node);
-        break;
       case "number":
       case "string":
       case "variableName":
@@ -286,25 +282,6 @@ export class TypeScriptGenerator {
       case "dotFunctionCall":
         return this.processDotFunctionCall(node.expression);
     }
-  }
-
-  private processAwaitStatement(node: AwaitStatement): void {
-    const generator = new TypeScriptGenerator({
-      variablesInScope: this.variablesInScope,
-      typeAliases: this.typeAliases,
-      typeHints: this.typeHints,
-    });
-    const result = generator.generate({
-      type: "adlProgram",
-      nodes: [node.value],
-    });
-    this.functionsUsed = new Set([
-      ...this.functionsUsed,
-      ...result.functionsUsed,
-    ]);
-    const valueCode = result.output;
-
-    this.generatedStatements.push(`await ${valueCode}` + "\n");
   }
 
   private processDotProperty(node: DotProperty): string {
@@ -510,17 +487,6 @@ export class TypeScriptGenerator {
 
   private generateLiteral(literal: Literal): string {
     switch (literal.type) {
-      case "awaitStatement":
-        let awaitValue;
-        if (literal.value.type === "accessExpression") {
-          awaitValue = this.processAccessExpression(literal.value);
-        } else if (literal.value.type === "functionCall") {
-          this.functionsUsed.add(literal.value.functionName);
-          awaitValue = this.generateFunctionCallExpression(literal.value);
-        } else {
-          awaitValue = this.generateLiteral(literal.value);
-        }
-        return `await ${awaitValue}`;
       case "number":
         return literal.value;
       case "string":

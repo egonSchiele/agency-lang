@@ -1,7 +1,4 @@
-import { AwaitStatement } from "@/types";
-
 export type Literal =
-  | AwaitStatement
   | NumberLiteral
   | StringLiteral
   | VariableNameLiteral

@@ -28,11 +28,6 @@ export type ReturnStatement = {
   value: ADLNode;
 };
 
-export type AwaitStatement = {
-  type: "awaitStatement";
-  value: Literal | AccessExpression | FunctionCall;
-};
-
 export type ADLNode =
   | TypeHint
   | TypeAlias
@@ -42,8 +37,7 @@ export type ADLNode =
   | FunctionCall
   | MatchBlock
   | ReturnStatement
-  | AccessExpression
-  | AwaitStatement;
+  | AccessExpression;
 
 export type ADLProgram = {
   type: "adlProgram";

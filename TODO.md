@@ -1,0 +1,1 @@
+- comments at the end of lines don't work right now. example: `foo = 1 // this is a comment`

@@ -24,6 +24,7 @@ import {
   Literal,
 } from "@/types";
 import { backtick } from "@/parsers/utils";
+import { awaitStatementParser } from "@/parser";
 
 export const textSegmentParser: Parser<TextSegment> = map(
   many1Till(or(backtick, char("$"))),
@@ -63,6 +64,7 @@ export const variableNameParser: Parser<VariableNameLiteral> = seqC(
 );
 
 export const literalParser: Parser<Literal> = or(
+  awaitStatementParser,
   promptParser,
   numberParser,
   stringParser,

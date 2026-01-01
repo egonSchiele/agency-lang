@@ -8,7 +8,8 @@
     "test:run": "vitest run",
     "build": "tsc && tsc-alias",
     "start": "node dist/index.js",
-    "templates": "typestache ./lib/templates"
+    "templates": "typestache ./lib/templates",
+    "typecheck": "tsc --noEmit"
   },
   "repository": {
     "type": "git",

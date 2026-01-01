@@ -1,4 +1,4 @@
-import { ADLNode, FunctionDefinition } from "@/types";
+import { ADLNode, DocString, FunctionDefinition } from "@/types";
 import {
   capture,
   char,
@@ -15,6 +15,7 @@ import {
   str,
   trace,
   debug,
+  succeed,
 } from "tarsec";
 import { assignmentParser } from "./assignment";
 import { functionCallParser } from "./functionCall";
@@ -25,6 +26,16 @@ import { optionalSpaces } from "./utils";
 import { deepCopy } from "@/utils";
 import { accessExpressionParser } from "./access";
 import { optionalSemicolon } from "./parserUtils";
+
+export const docStringParser: Parser<DocString> = trace(
+  "docStringParser",
+  seqC(
+    set("type", "docString"),
+    str('"""'),
+    capture(many1Till(str('"""')), "value"),
+    str('"""')
+  )
+);
 
 export const functionBodyParser = trace(
   "functionBodyParser",
@@ -75,6 +86,8 @@ export const functionParser: Parser<FunctionDefinition> = trace(
     char(")"),
     optionalSpaces,
     char("{"),
+    optionalSpaces,
+    capture(or(docStringParser, succeed(undefined)), "docString"),
     optionalSpaces,
     capture(functionBodyParser, "body"),
     optionalSpaces,

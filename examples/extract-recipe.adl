@@ -4,10 +4,10 @@ category :: "import_recipe" | "create_ingredient"
 category = `determine if the user wants to import a recipe from a website or create a new ingredient based on this message: ${msg}`
 
 type Url = {
-  url:string# website url,
+  url:string # website url;
 }
 
-def importRecipe(){
+def importRecipe() {
   url :: Url
   url = `extract the url from this message: ${msg}`
 
@@ -20,11 +20,11 @@ def importRecipe(){
   print(recipe);
 }
 
-def createIngredient(){
+def createIngredient() {
   print("tbd")
 }
 
-match (category){
-  "import_recipe" => importRecipe()
-  "create_ingredient" => createIngredient()
+match (category) {
+  "import_recipe" => importRecipe();
+  "create_ingredient" => createIngredient();
 }

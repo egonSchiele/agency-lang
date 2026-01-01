@@ -49,6 +49,7 @@ const semicolon = seqC(optionalSpaces, char(";"), optionalSpaces);
 export const matchBlockParser = seqC(
   set("type", "matchBlock"),
   str("match"),
+  optionalSpaces,
   char("("),
   capture(literalParser, "expression"),
   char(")"),

@@ -1,6 +1,7 @@
-import { Assignment, FunctionCall } from "@/types";
+import { Assignment } from "@/types";
 import { AccessExpression } from "./access";
 import { Literal } from "./literals";
+import { FunctionCall } from "./function";
 
 export type DefaultCase = "_";
 

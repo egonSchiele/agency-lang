@@ -2,8 +2,6 @@ import {
   ADLNode,
   ADLProgram,
   Assignment,
-  FunctionCall,
-  FunctionDefinition,
   InterpolationSegment,
   Literal,
   PromptLiteral,
@@ -29,6 +27,7 @@ import {
 import { variableTypeToString } from "./adlTypeScript/typeToString";
 import { mapTypeToZodSchema } from "./adlTypeScript/typeToZodSchema";
 import { MatchBlock } from "@/types/matchBlock";
+import { FunctionCall, FunctionDefinition } from "@/types/function";
 type TypeHintMap = Record<string, VariableType>;
 
 function generateImports(): string {
@@ -441,7 +440,7 @@ export class TypeScriptGenerator {
       if (!this.variablesInScope.has(varName)) {
         throw new Error(
           `Variable '${varName}' used in prompt interpolation but not defined. ` +
-          `Referenced in assignment to '${variableName}'.`
+            `Referenced in assignment to '${variableName}'.`
         );
       }
     }

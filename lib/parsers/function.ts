@@ -16,6 +16,7 @@ import {
   trace,
   debug,
   succeed,
+  map,
 } from "tarsec";
 import { assignmentParser } from "./assignment";
 import { functionCallParser } from "./functionCall";
@@ -27,12 +28,13 @@ import { deepCopy } from "@/utils";
 import { accessExpressionParser } from "./access";
 import { optionalSemicolon } from "./parserUtils";
 
+const trim = (s: string) => s.trim();
 export const docStringParser: Parser<DocString> = trace(
   "docStringParser",
   seqC(
     set("type", "docString"),
     str('"""'),
-    capture(many1Till(str('"""')), "value"),
+    capture(map(many1Till(str('"""')), trim), "value"),
     str('"""')
   )
 );

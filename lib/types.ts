@@ -18,6 +18,11 @@ export type Assignment = {
   value: AccessExpression | Literal | FunctionCall;
 };
 
+export type Comment = {
+  type: "comment";
+  content: string;
+};
+
 export type ADLNode =
   | TypeHint
   | TypeAlias
@@ -27,7 +32,8 @@ export type ADLNode =
   | FunctionCall
   | MatchBlock
   | ReturnStatement
-  | AccessExpression;
+  | AccessExpression
+  | Comment;
 
 export type ADLProgram = {
   type: "adlProgram";

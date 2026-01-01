@@ -247,6 +247,9 @@ export class TypeScriptGenerator {
         const code = this.processAccessExpression(node);
         this.generatedStatements.push(code + "\n");
         break;
+      case "comment":
+        this.generatedStatements.push(`// ${node.content}\n`);
+        break;
       case "matchBlock":
         const matchBlockCode = this.processMatchBlock(node);
         this.generatedStatements.push(matchBlockCode + "\n");

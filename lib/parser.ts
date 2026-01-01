@@ -1,8 +1,10 @@
 import { typeAliasParser, typeHintParser } from "@/parsers/typeHints";
-import { ADLNode, ADLProgram } from "@/types";
+import { ADLNode, ADLProgram, Comment } from "@/types";
 import {
   capture,
   eof,
+  many1Till,
+  newline,
   or,
   Parser,
   ParserResult,
@@ -10,6 +12,7 @@ import {
   seqC,
   set,
   spaces,
+  str,
   trace,
 } from "tarsec";
 import { accessExpressionParser } from "./parsers/access";
@@ -17,6 +20,12 @@ import { assignmentParser } from "./parsers/assignment";
 import { functionParser } from "./parsers/function";
 import { functionCallParser } from "./parsers/functionCall";
 import { matchBlockParser } from "./parsers/matchBlock";
+
+export const commentParser: Parser<Comment> = seqC(
+  set("type", "comment"),
+  str("//"),
+  capture(many1Till(newline), "content")
+);
 
 export const adlNode: Parser<ADLNode[]> = sepBy(
   spaces,
@@ -29,7 +38,8 @@ export const adlNode: Parser<ADLNode[]> = sepBy(
       functionParser,
       accessExpressionParser,
       assignmentParser,
-      functionCallParser
+      functionCallParser,
+      commentParser
     )
   )
 );

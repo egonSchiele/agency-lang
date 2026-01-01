@@ -1,0 +1,9 @@
+async function _builtinFetch(url: string, args: any): any {
+  const result = await fetch(url, args);
+  try {
+    const text = await result.text();
+    return text;
+  } catch (e) {
+    throw new Error(`Failed to get text from $\{url\}: $\{e\}`);
+  }
+}

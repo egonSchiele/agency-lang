@@ -78,7 +78,7 @@ export const booleanLiteralTypeParser: Parser<BooleanLiteralType> = seqC(
 
 export const objectPropertyDelimiter = seqR(
   optionalSpaces,
-  char(";"),
+  char(","),
   optionalSpaces
 );
 
@@ -90,22 +90,19 @@ export const objectPropertyParser: Parser<ObjectProperty> = (
     optionalSpaces,
     char(":"),
     optionalSpaces,
-    capture(variableTypeParser, "value"),
+    capture(variableTypeParser, "value")
   );
   return parser(input);
 };
 
-export const objectPropertyDescriptionParser: Parser<{ description: string }> = seqC(
-  char("#"),
-  optionalSpaces,
-  capture(many1Till(char(";")), "description")
-)
+export const objectPropertyDescriptionParser: Parser<{ description: string }> =
+  seqC(char("#"), optionalSpaces, capture(many1Till(char(",")), "description"));
 
 export const objectPropertyWithDescriptionParser: Parser<ObjectProperty> = seqC(
   captureCaptures(objectPropertyParser),
   spaces,
   captureCaptures(objectPropertyDescriptionParser)
-)
+);
 
 export const objectTypeParser: Parser<ObjectType> = (
   input: string
@@ -114,7 +111,13 @@ export const objectTypeParser: Parser<ObjectType> = (
     set("type", "objectType"),
     char("{"),
     optionalSpaces,
-    capture(sepBy(objectPropertyDelimiter, or(objectPropertyWithDescriptionParser, objectPropertyParser)), "properties"),
+    capture(
+      sepBy(
+        objectPropertyDelimiter,
+        or(objectPropertyWithDescriptionParser, objectPropertyParser)
+      ),
+      "properties"
+    ),
     optionalSpaces,
     char("}")
   );

@@ -1,0 +1,16 @@
+msg = input("> ");
+
+type Url = {
+    url: string # website url,
+}
+
+url :: Url
+url = `extract the url from this message: ${msg}`
+
+html :: string
+html = fetch(url.url)
+
+recipe :: string
+recipe = `extract the recipe from this html: ${html}`
+
+print(recipe);

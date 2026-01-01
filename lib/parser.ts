@@ -41,6 +41,14 @@ export const adlParser: Parser<ADLProgram> = seqC(
 );
 
 export function parseADL(input: string): ParserResult<ADLProgram> {
-  const result = adlParser(input);
+  const normalized = input
+    .split("\n")
+    .map((line, index) => {
+      // remove trailing semicolons
+      return line.replace(/;+\s*$/, "").trim();
+    })
+    .join("\n");
+  console.log("Normalized Input:\n" + normalized);
+  const result = adlParser(normalized);
   return result;
 }

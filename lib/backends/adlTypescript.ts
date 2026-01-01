@@ -441,7 +441,7 @@ export class TypeScriptGenerator {
       if (!this.variablesInScope.has(varName)) {
         throw new Error(
           `Variable '${varName}' used in prompt interpolation but not defined. ` +
-            `Referenced in assignment to '${variableName}'.`
+          `Referenced in assignment to '${variableName}'.`
         );
       }
     }
@@ -476,7 +476,7 @@ export class TypeScriptGenerator {
     const { functionName, body } = node;
 
     const functionLines: string[] = [];
-    functionLines.push(`function ${functionName}() {`);
+    functionLines.push(`async function ${functionName}() {`);
 
     const bodyGenerator = new TypeScriptGenerator({
       variablesInScope: this.variablesInScope,

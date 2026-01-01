@@ -48,7 +48,6 @@ export function parseADL(input: string): ParserResult<ADLProgram> {
       return line.replace(/;+\s*$/, "").trim();
     })
     .join("\n");
-  console.log("Normalized Input:\n" + normalized);
   const result = adlParser(normalized);
   return result;
 }

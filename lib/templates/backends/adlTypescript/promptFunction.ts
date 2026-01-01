@@ -6,6 +6,7 @@ import { apply } from "typestache";
 export const template = `async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{typeString:string}}}> {
   const prompt = {{{promptCode:string}}};
   const startTime = performance.now();
+  console.log("Running prompt for {{{variableName:string}}}")
   const completion = await openai.chat.completions.create({
     model: "gpt-5-nano-2025-08-07",
     messages: [
@@ -22,6 +23,7 @@ export const template = `async function _{{{variableName:string}}}({{{argsStr:st
   console.log("Prompt for variable '{{{variableName:string}}}' took " + (endTime - startTime).toFixed(2) + " ms");
   try {
   const result = JSON.parse(completion.choices[0].message.content || "");
+  console.log("{{{variableName:string}}}:", result.value);
   return result.value;
   } catch (e) {
     console.error("Error parsing response for variable '{{{variableName:string}}}':", e);

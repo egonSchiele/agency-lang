@@ -19,3 +19,12 @@ recipe = `extract the recipe from this html: ${html}`
 
 print(recipe);
 }
+
+def createIngredient() {
+    print("tbd")
+}
+
+match(category) {
+  "import_recipe" => importRecipe()
+  "create_ingredient" => createIngredient()
+}

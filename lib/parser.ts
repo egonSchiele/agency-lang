@@ -12,6 +12,7 @@ import {
   spaces,
   trace,
 } from "tarsec";
+import { accessExpressionParser } from "./parsers/access";
 import { assignmentParser } from "./parsers/assignment";
 import { functionParser } from "./parsers/function";
 import { functionCallParser } from "./parsers/functionCall";
@@ -26,6 +27,7 @@ export const adlNode: Parser<ADLNode[]> = sepBy(
       typeHintParser,
       matchBlockParser,
       functionParser,
+      accessExpressionParser,
       assignmentParser,
       functionCallParser
     )

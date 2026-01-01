@@ -1,13 +1,14 @@
 import { Literal } from "@/types/literals";
 import { TypeAlias, TypeHint } from "@/types/typeHints";
 import { MatchBlock } from "./types/matchBlock";
+import { AccessExpression } from "./types/access";
 export * from "@/types/typeHints";
 export * from "@/types/literals";
 
 export type Assignment = {
   type: "assignment";
   variableName: string;
-  value: Literal | FunctionCall;
+  value: AccessExpression | Literal | FunctionCall;
 };
 
 export type FunctionDefinition = {
@@ -19,7 +20,7 @@ export type FunctionDefinition = {
 export type FunctionCall = {
   type: "functionCall";
   functionName: string;
-  arguments: (Literal | FunctionCall)[];
+  arguments: (Literal | AccessExpression | FunctionCall)[];
 };
 
 export type ReturnStatement = {
@@ -35,7 +36,8 @@ export type ADLNode =
   | Literal
   | FunctionCall
   | MatchBlock
-  | ReturnStatement;
+  | ReturnStatement
+  | AccessExpression;
 
 export type ADLProgram = {
   type: "adlProgram";

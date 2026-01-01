@@ -1,10 +1,11 @@
 import { Assignment, FunctionCall } from "@/types";
+import { AccessExpression } from "./access";
 import { Literal } from "./literals";
 
 export type DefaultCase = "_";
 
 export type MatchBlockCase = {
-  caseValue: Literal | DefaultCase;
+  caseValue: AccessExpression | Literal | DefaultCase;
   body: Assignment | Literal | FunctionCall;
 };
 

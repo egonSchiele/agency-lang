@@ -1,8 +1,10 @@
 import { Assignment } from "@/types";
 import {
+  alphanum,
   capture,
   char,
   many1Till,
+  many1WithJoin,
   or,
   Parser,
   seqC,
@@ -13,16 +15,20 @@ import {
 import { literalParser } from "./literals";
 import { optionalSpaces } from "./utils";
 import { functionCallParser } from "./functionCall";
+import { accessExpressionParser } from "./access";
 
 export const assignmentParser: Parser<Assignment> = trace(
   "assignmentParser",
   seqC(
     set("type", "assignment"),
     optionalSpaces,
-    capture(many1Till(or(space, char("="))), "variableName"),
+    capture(many1WithJoin(alphanum), "variableName"),
     optionalSpaces,
     char("="),
     optionalSpaces,
-    capture(or(functionCallParser, literalParser), "value")
+    capture(
+      or(functionCallParser, accessExpressionParser, literalParser),
+      "value"
+    )
   )
 );

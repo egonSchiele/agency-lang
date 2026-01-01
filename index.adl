@@ -1,2 +1,3 @@
-foo = read("README.md")
-print(foo)
+story = fetch("https://hacker-news.firebaseio.com/v0/item/8863.json")
+json = story.json()
+print(json)

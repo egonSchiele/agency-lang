@@ -1,29 +1,28 @@
-import { trace } from "console";
+import { backtick } from "@/parsers/utils";
+import {
+  InterpolationSegment,
+  Literal,
+  NumberLiteral,
+  PromptLiteral,
+  StringLiteral,
+  TextSegment,
+  VariableNameLiteral,
+} from "@/types";
 import {
   Parser,
-  map,
-  many1Till,
-  or,
+  alphanum,
+  capture,
   char,
+  digit,
+  many,
+  many1Till,
+  many1WithJoin,
+  manyTill,
+  map,
+  or,
   seqC,
   set,
-  capture,
-  many,
-  many1WithJoin,
-  digit,
-  manyTill,
-  alphanum,
 } from "tarsec";
-import {
-  TextSegment,
-  InterpolationSegment,
-  PromptLiteral,
-  NumberLiteral,
-  StringLiteral,
-  VariableNameLiteral,
-  Literal,
-} from "@/types";
-import { backtick } from "@/parsers/utils";
 
 export const textSegmentParser: Parser<TextSegment> = map(
   many1Till(or(backtick, char("$"))),

@@ -13,6 +13,7 @@ import {
 } from "tarsec";
 import { literalParser } from "./literals";
 import { optionalSpaces } from "./utils";
+import { accessExpressionParser } from "./access";
 
 const comma = seqR(optionalSpaces, char(","), optionalSpaces);
 export const functionCallParser: Parser<FunctionCall> = (input: string) => {
@@ -21,7 +22,13 @@ export const functionCallParser: Parser<FunctionCall> = (input: string) => {
     capture(many1WithJoin(alphanum), "functionName"),
     char("("),
     optionalSpaces,
-    capture(sepBy(comma, or(functionCallParser, literalParser)), "arguments"),
+    capture(
+      sepBy(
+        comma,
+        or(functionCallParser, accessExpressionParser, literalParser)
+      ),
+      "arguments"
+    ),
     optionalSpaces,
     char(")")
   );

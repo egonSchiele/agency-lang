@@ -13,36 +13,25 @@ import {
   VariableType,
 } from "@/types";
 
-import { escape } from "@/utils";
 import * as renderImports from "@/templates/backends/adlTypescript/imports";
 import * as promptFunction from "@/templates/backends/adlTypescript/promptFunction";
-import { mapTypeToZodSchema } from "./adlTypeScript/typeToZodSchema";
-import { variableTypeToString } from "./adlTypeScript/typeToString";
+import {
+  AccessExpression,
+  DotFunctionCall,
+  DotProperty,
+  IndexAccess,
+} from "@/types/access";
+import { escape } from "@/utils";
 import {
   generateBuiltinHelpers,
   mapFunctionName,
 } from "./adlTypeScript/builtins";
+import { variableTypeToString } from "./adlTypeScript/typeToString";
+import { mapTypeToZodSchema } from "./adlTypeScript/typeToZodSchema";
 type TypeHintMap = Record<string, VariableType>;
 
 function generateImports(): string {
   return renderImports.default({});
-}
-
-function generateLiteral(literal: Literal): string {
-  switch (literal.type) {
-    case "number":
-      return literal.value;
-    case "string":
-      return `"${escape(literal.value)}"`;
-    case "variableName":
-      return literal.value;
-    case "prompt":
-      // Reconstruct text for comment from segments
-      const text = literal.segments
-        .map((s) => (s.type === "text" ? s.value : `#{${s.variableName}}`))
-        .join("");
-      return `/* prompt: ${text} */`;
-  }
 }
 
 function buildPromptString(
@@ -203,7 +192,7 @@ export class TypeScriptGenerator {
 
     output.push(...this.generatedFunctions);
 
-    output.push(...this.generatedStatements);
+    output.push(this.generatedStatements.join(""));
 
     return {
       output: output.filter(Boolean).join("\n"),
@@ -254,12 +243,16 @@ export class TypeScriptGenerator {
       case "functionCall":
         this.processFunctionCall(node);
         break;
+      case "accessExpression":
+        const code = this.processAccessExpression(node);
+        this.generatedStatements.push(code + "\n");
+        break;
       case "number":
       case "string":
       case "variableName":
       case "prompt":
         // Standalone literals at top level
-        this.generatedStatements.push(generateLiteral(node) + ";");
+        this.generatedStatements.push(this.generateLiteral(node) + "\n");
         break;
       case "returnStatement":
         const generator = new TypeScriptGenerator({
@@ -275,9 +268,92 @@ export class TypeScriptGenerator {
           ...this.functionsUsed,
           ...result.functionsUsed,
         ]);
-        this.generatedStatements.push(`return ${result.output}`);
+        this.generatedStatements.push(`return ${result.output}` + "\n");
         break;
     }
+  }
+
+  private processAccessExpression(node: AccessExpression): string {
+    switch (node.expression.type) {
+      case "dotProperty":
+        return this.processDotProperty(node.expression);
+      case "indexAccess":
+        return this.processIndexAccess(node.expression);
+      case "dotFunctionCall":
+        return this.processDotFunctionCall(node.expression);
+    }
+  }
+
+  private processDotProperty(node: DotProperty): string {
+    const generator = new TypeScriptGenerator({
+      variablesInScope: this.variablesInScope,
+      typeAliases: this.typeAliases,
+      typeHints: this.typeHints,
+    });
+    const result = generator.generate({
+      type: "adlProgram",
+      nodes: [node.object],
+    });
+    this.functionsUsed = new Set([
+      ...this.functionsUsed,
+      ...result.functionsUsed,
+    ]);
+    const objectCode = result.output;
+
+    const propertyAccess = `${objectCode}.${node.propertyName}`;
+    return propertyAccess;
+  }
+
+  private processDotFunctionCall(node: DotFunctionCall): string {
+    const generator = new TypeScriptGenerator({
+      variablesInScope: this.variablesInScope,
+      typeAliases: this.typeAliases,
+      typeHints: this.typeHints,
+    });
+    const result = generator.generate({
+      type: "adlProgram",
+      nodes: [node.object],
+    });
+    this.functionsUsed = new Set([
+      ...this.functionsUsed,
+      ...result.functionsUsed,
+    ]);
+    const objectCode = result.output;
+    const functionCallCode = this.generateFunctionCallExpression(
+      node.functionCall
+    );
+    const fullCall = `${objectCode}.${functionCallCode}`;
+    return fullCall;
+  }
+
+  private processIndexAccess(node: IndexAccess): string {
+    const generator = new TypeScriptGenerator({
+      variablesInScope: this.variablesInScope,
+      typeAliases: this.typeAliases,
+      typeHints: this.typeHints,
+    });
+    const arrayResult = generator.generate({
+      type: "adlProgram",
+      nodes: [node.array],
+    });
+    this.functionsUsed = new Set([
+      ...this.functionsUsed,
+      ...arrayResult.functionsUsed,
+    ]);
+    const arrayCode = arrayResult.output;
+
+    const indexResult = generator.generate({
+      type: "adlProgram",
+      nodes: [node.index],
+    });
+    this.functionsUsed = new Set([
+      ...this.functionsUsed,
+      ...indexResult.functionsUsed,
+    ]);
+    const indexCode = indexResult.output;
+
+    const accessCode = `${arrayCode}[${indexCode}]`;
+    return accessCode;
   }
 
   private processAssignment(node: Assignment): void {
@@ -288,17 +364,22 @@ export class TypeScriptGenerator {
     } else if (value.type === "functionCall") {
       // Handle function call assignment
       this.functionsUsed.add(value.functionName);
-      const functionCallCode = this.generateFunctionCallExpression(
-        mapFunctionName(value.functionName),
-        value.arguments
-      );
+      const functionCallCode = this.generateFunctionCallExpression(value);
       this.generatedStatements.push(
-        `const ${variableName} = await ${functionCallCode};`
+        `const ${variableName} = await ${functionCallCode};` + "\n"
+      );
+    } else if (value.type === "accessExpression") {
+      // Handle access expression assignment
+      const accessCode = this.processAccessExpression(value);
+      this.generatedStatements.push(
+        `const ${variableName} = ${accessCode};` + "\n"
       );
     } else {
       // Direct assignment for other literal types
-      const literalCode = generateLiteral(value);
-      this.generatedStatements.push(`const ${variableName} = ${literalCode};`);
+      const literalCode = this.generateLiteral(value);
+      this.generatedStatements.push(
+        `const ${variableName} = ${literalCode};` + "\n"
+      );
     }
 
     // Track this variable as in scope
@@ -342,7 +423,7 @@ export class TypeScriptGenerator {
     this.generatedStatements.push(
       `const ${variableName} = await _${variableName}(${interpolatedVars.join(
         ", "
-      )});`
+      )});` + "\n"
     );
   }
 
@@ -379,34 +460,46 @@ export class TypeScriptGenerator {
    */
   private processFunctionCall(node: FunctionCall): void {
     this.functionsUsed.add(node.functionName);
-    const functionCallCode = this.generateFunctionCallExpression(
-      mapFunctionName(node.functionName),
-      node.arguments
-    );
+    const functionCallCode = this.generateFunctionCallExpression(node);
 
-    this.generatedStatements.push(functionCallCode);
+    this.generatedStatements.push(functionCallCode + "\n");
   }
 
   /**
    * Generates TypeScript expression for a function call (without semicolon)
    */
-  private generateFunctionCallExpression(
-    functionName: string,
-    args: (Literal | FunctionCall)[]
-  ): string {
+  private generateFunctionCallExpression(node: FunctionCall): string {
+    const functionName = mapFunctionName(node.functionName);
+    const args = node.arguments;
     const parts = args.map((arg) => {
       if (arg.type === "functionCall") {
         this.functionsUsed.add(arg.functionName);
-        return this.generateFunctionCallExpression(
-          mapFunctionName(arg.functionName),
-          arg.arguments
-        );
+        return this.generateFunctionCallExpression(arg);
+      } else if (arg.type === "accessExpression") {
+        return this.processAccessExpression(arg);
       } else {
-        return generateLiteral(arg);
+        return this.generateLiteral(arg);
       }
     });
     const argsString = parts.join(", ");
     return `${functionName}(${argsString})`;
+  }
+
+  private generateLiteral(literal: Literal): string {
+    switch (literal.type) {
+      case "number":
+        return literal.value;
+      case "string":
+        return `"${escape(literal.value)}"`;
+      case "variableName":
+        return literal.value;
+      case "prompt":
+        // Reconstruct text for comment from segments
+        const text = literal.segments
+          .map((s) => (s.type === "text" ? s.value : `#{${s.variableName}}`))
+          .join("");
+        return `/* prompt: ${text} */`;
+    }
   }
 }
 

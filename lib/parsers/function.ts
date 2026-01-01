@@ -22,6 +22,7 @@ import { matchBlockParser } from "./matchBlock";
 import { typeAliasParser, typeHintParser } from "./typeHints";
 import { optionalSpaces } from "./utils";
 import { deepCopy } from "@/utils";
+import { accessExpressionParser } from "./access";
 
 export const functionBodyParser = (input: string): ParserResult<ADLNode[]> => {
   const parser: Parser<ADLNode[]> = sepBy(
@@ -31,6 +32,7 @@ export const functionBodyParser = (input: string): ParserResult<ADLNode[]> => {
       typeHintParser,
       matchBlockParser,
       functionParser,
+      accessExpressionParser,
       assignmentParser,
       functionCallParser,
       literalParser

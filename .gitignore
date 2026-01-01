@@ -1,6 +1,5 @@
 dist/*
 node_modules/*
 .*
-*.ts
 index.mts
 index.adl

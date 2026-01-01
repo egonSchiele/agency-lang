@@ -1,5 +1,125 @@
 import { describe, it, expect } from "vitest";
-import { functionBodyParser, functionParser } from "./function";
+import { functionBodyParser, functionParser, docStringParser } from "./function";
+
+describe("docStringParser", () => {
+  const testCases = [
+    // Happy path - basic docstrings
+    {
+      input: '"""This is a docstring"""',
+      expected: {
+        success: true,
+        result: { type: "docString", value: "This is a docstring" },
+      },
+    },
+    {
+      input: '"""Simple description"""',
+      expected: {
+        success: true,
+        result: { type: "docString", value: "Simple description" },
+      },
+    },
+
+    // Docstrings with whitespace
+    {
+      input: '"""  Leading and trailing spaces  """',
+      expected: {
+        success: true,
+        result: { type: "docString", value: "Leading and trailing spaces" },
+      },
+    },
+    {
+      input: '"""\nMultiline\ndocstring\n"""',
+      expected: {
+        success: true,
+        result: { type: "docString", value: "Multiline\ndocstring" },
+      },
+    },
+
+    // Empty docstring (fails because many1Till requires at least one char)
+    {
+      input: '""""""',
+      expected: { success: false },
+    },
+    // Docstring with only whitespace
+    {
+      input: '"""   """',
+      expected: {
+        success: true,
+        result: { type: "docString", value: "" },
+      },
+    },
+
+    // Docstrings with special characters
+    {
+      input: '"""Docstring with numbers: 123, 456"""',
+      expected: {
+        success: true,
+        result: {
+          type: "docString",
+          value: "Docstring with numbers: 123, 456",
+        },
+      },
+    },
+    {
+      input: '"""Special chars: !@#$%^&*()"""',
+      expected: {
+        success: true,
+        result: { type: "docString", value: "Special chars: !@#$%^&*()" },
+      },
+    },
+    {
+      input: '"""Code example: x = 5"""',
+      expected: {
+        success: true,
+        result: { type: "docString", value: "Code example: x = 5" },
+      },
+    },
+
+    // Docstrings with punctuation
+    {
+      input: '"""This function does something. It takes params."""',
+      expected: {
+        success: true,
+        result: {
+          type: "docString",
+          value: "This function does something. It takes params.",
+        },
+      },
+    },
+    {
+      input: '"""Returns: the result"""',
+      expected: {
+        success: true,
+        result: { type: "docString", value: "Returns: the result" },
+      },
+    },
+
+    // Failure cases
+    { input: '"This is not a docstring"', expected: { success: false } },
+    { input: '""incomplete', expected: { success: false } },
+    { input: 'incomplete"""', expected: { success: false } },
+    { input: '"""no closing', expected: { success: false } },
+    { input: "", expected: { success: false } },
+    { input: "text", expected: { success: false } },
+  ];
+
+  testCases.forEach(({ input, expected }) => {
+    if (expected.success) {
+      it(`should parse "${input}" successfully`, () => {
+        const result = docStringParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result).toEqual(expected.result);
+        }
+      });
+    } else {
+      it(`should fail to parse "${input}"`, () => {
+        const result = docStringParser(input);
+        expect(result.success).toBe(false);
+      });
+    }
+  });
+});
 
 describe("functionBodyParser", () => {
   const testCases = [
@@ -284,6 +404,127 @@ describe("functionParser", () => {
     {
       input: "",
       expected: { success: false },
+    },
+    // Functions with docstrings
+    {
+      input: 'def test() { """This is a test function"""\nfoo = 1 }',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "test",
+          docString: {
+            type: "docString",
+            value: "This is a test function",
+          },
+          body: [
+            {
+              type: "returnStatement",
+              value: {
+                type: "assignment",
+                variableName: "foo",
+                value: { type: "number", value: "1" },
+              },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: 'def greet() {\n  """Greets the user"""\n  bar = `say hello`\n}',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "greet",
+          docString: {
+            type: "docString",
+            value: "Greets the user",
+          },
+          body: [
+            {
+              type: "returnStatement",
+              value: {
+                type: "assignment",
+                variableName: "bar",
+                value: {
+                  type: "prompt",
+                  segments: [{ type: "text", value: "say hello" }],
+                },
+              },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: 'def calculate() { """Calculate something"""\nx = 5\ny = 10 }',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "calculate",
+          docString: {
+            type: "docString",
+            value: "Calculate something",
+          },
+          body: [
+            {
+              type: "assignment",
+              variableName: "x",
+              value: { type: "number", value: "5" },
+            },
+            {
+              type: "returnStatement",
+              value: {
+                type: "assignment",
+                variableName: "y",
+                value: { type: "number", value: "10" },
+              },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: 'def empty() { """Empty function with docstring""" }',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "empty",
+          docString: {
+            type: "docString",
+            value: "Empty function with docstring",
+          },
+          body: [],
+        },
+      },
+    },
+    {
+      input:
+        'def multilineDoc() {\n  """\n  This is a multi-line\n  docstring\n  """\n  x = 5\n}',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "multilineDoc",
+          docString: {
+            type: "docString",
+            value: "This is a multi-line\n  docstring",
+          },
+          body: [
+            {
+              type: "returnStatement",
+              value: {
+                type: "assignment",
+                variableName: "x",
+                value: { type: "number", value: "5" },
+              },
+            },
+          ],
+        },
+      },
     },
   ];
 

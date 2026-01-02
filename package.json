@@ -24,6 +24,7 @@
   },
   "homepage": "https://github.com/egonSchiele/adl-lang#readme",
   "dependencies": {
+    "graph": "github:egonSchiele/simplemachine",
     "openai": "^6.15.0",
     "tarsec": "^0.0.22",
     "typestache": "^0.4.4",

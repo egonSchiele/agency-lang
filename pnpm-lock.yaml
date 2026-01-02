@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      graph:
+        specifier: github:egonSchiele/simplemachine
+        version: https://codeload.github.com/egonSchiele/simplemachine/tar.gz/ffcd0588ff964963b5b57a755b44c3311bfa71ef
       openai:
         specifier: ^6.15.0
         version: 6.15.0(zod@4.2.1)
@@ -455,6 +458,10 @@ packages:
     resolution: {integrity: sha512-jhIXaOzy1sb8IyocaruWSn1TjmnBVs8Ayhcy83rmxNJ8q2uWKCAj3CnJY+KpGSXCueAPc0i05kVvVKtP1t9S3g==}
     engines: {node: '>=10'}
 
+  graph@https://codeload.github.com/egonSchiele/simplemachine/tar.gz/ffcd0588ff964963b5b57a755b44c3311bfa71ef:
+    resolution: {tarball: https://codeload.github.com/egonSchiele/simplemachine/tar.gz/ffcd0588ff964963b5b57a755b44c3311bfa71ef}
+    version: 0.0.21
+
   ignore@5.3.2:
     resolution: {integrity: sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g==}
     engines: {node: '>= 4'}
@@ -588,6 +595,10 @@ packages:
 
   tarsec@0.0.22:
     resolution: {integrity: sha512-eqC3feveW/yB0UZw4yDHbbqP9KweqpX3wya+7EJYX1AwdzZitsMoAP2JyiI+eYXqj0cVwktJWdJau9qAcSLFSw==}
+
+  termcolors@https://codeload.github.com/egonSchiele/termcolors/tar.gz/d5c1f497618398ce1440d2383d2aad2642e4051f:
+    resolution: {tarball: https://codeload.github.com/egonSchiele/termcolors/tar.gz/d5c1f497618398ce1440d2383d2aad2642e4051f}
+    version: 0.0.20
 
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
@@ -1042,6 +1053,10 @@ snapshots:
       merge2: 1.4.1
       slash: 3.0.0
 
+  graph@https://codeload.github.com/egonSchiele/simplemachine/tar.gz/ffcd0588ff964963b5b57a755b44c3311bfa71ef:
+    dependencies:
+      termcolors: https://codeload.github.com/egonSchiele/termcolors/tar.gz/d5c1f497618398ce1440d2383d2aad2642e4051f
+
   ignore@5.3.2: {}
 
   is-binary-path@2.1.0:
@@ -1156,6 +1171,8 @@ snapshots:
   tarsec@0.0.18: {}
 
   tarsec@0.0.22: {}
+
+  termcolors@https://codeload.github.com/egonSchiele/termcolors/tar.gz/d5c1f497618398ce1440d2383d2aad2642e4051f: {}
 
   tinybench@2.9.0: {}
 

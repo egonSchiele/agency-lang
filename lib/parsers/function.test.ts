@@ -244,6 +244,8 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "test",
+          parameters: [],
+          docString: undefined,
           body: [
             {
               type: "returnStatement",
@@ -264,6 +266,8 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "greet",
+          parameters: [],
+          docString: undefined,
           body: [
             {
               type: "returnStatement",
@@ -287,6 +291,8 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "calculate",
+          parameters: [],
+          docString: undefined,
           body: [
             {
               type: "assignment",
@@ -312,6 +318,8 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "empty",
+          parameters: [],
+          docString: undefined,
           body: [],
         },
       },
@@ -323,6 +331,8 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "withSpaces",
+          parameters: [],
+          docString: undefined,
           body: [
             {
               type: "returnStatement",
@@ -343,6 +353,8 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "noSpaces",
+          parameters: [],
+          docString: undefined,
           body: [
             {
               type: "returnStatement",
@@ -363,6 +375,8 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "multiline",
+          parameters: [],
+          docString: undefined,
           body: [
             {
               type: "assignment",
@@ -413,6 +427,7 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "test",
+          parameters: [],
           docString: {
             type: "docString",
             value: "This is a test function",
@@ -437,6 +452,7 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "greet",
+          parameters: [],
           docString: {
             type: "docString",
             value: "Greets the user",
@@ -464,6 +480,7 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "calculate",
+          parameters: [],
           docString: {
             type: "docString",
             value: "Calculate something",
@@ -493,6 +510,7 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "empty",
+          parameters: [],
           docString: {
             type: "docString",
             value: "Empty function with docstring",
@@ -509,6 +527,7 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "multilineDoc",
+          parameters: [],
           docString: {
             type: "docString",
             value: "This is a multi-line\n  docstring",
@@ -521,6 +540,187 @@ describe("functionParser", () => {
                 variableName: "x",
                 value: { type: "number", value: "5" },
               },
+            },
+          ],
+        },
+      },
+    },
+    // Functions with one parameter
+    {
+      input: "def add(x) { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "add",
+          parameters: ["x"],
+          docString: undefined,
+          body: [
+            {
+              type: "returnStatement",
+              value: { type: "variableName", value: "x" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "def greet(name) { bar = `say hello to ${name}` }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "greet",
+          parameters: ["name"],
+          docString: undefined,
+          body: [
+            {
+              type: "returnStatement",
+              value: {
+                type: "assignment",
+                variableName: "bar",
+                value: {
+                  type: "prompt",
+                  segments: [
+                    { type: "text", value: "say hello to " },
+                    { type: "interpolation", variableName: "name" },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      },
+    },
+    // Functions with multiple parameters
+    {
+      input: "def add(x, y) { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "add",
+          parameters: ["x", "y"],
+          docString: undefined,
+          body: [
+            {
+              type: "returnStatement",
+              value: { type: "variableName", value: "x" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "def calculate(a, b, c) { result = 42\nresult }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "calculate",
+          parameters: ["a", "b", "c"],
+          docString: undefined,
+          body: [
+            {
+              type: "assignment",
+              variableName: "result",
+              value: { type: "number", value: "42" },
+            },
+            {
+              type: "returnStatement",
+              value: { type: "variableName", value: "result" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "def multiply(x,y) { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "multiply",
+          parameters: ["x", "y"],
+          docString: undefined,
+          body: [
+            {
+              type: "returnStatement",
+              value: { type: "variableName", value: "x" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "def process(  a  ,  b  ) { a }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "process",
+          parameters: ["a", "b"],
+          docString: undefined,
+          body: [
+            {
+              type: "returnStatement",
+              value: { type: "variableName", value: "a" },
+            },
+          ],
+        },
+      },
+    },
+    // Functions with parameters and docstring
+    {
+      input: 'def add(x, y) { """Adds two numbers"""\nx }',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "add",
+          parameters: ["x", "y"],
+          docString: {
+            type: "docString",
+            value: "Adds two numbers",
+          },
+          body: [
+            {
+              type: "returnStatement",
+              value: { type: "variableName", value: "x" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input:
+        'def greet(name, greeting) {\n  """Greets someone with a custom greeting"""\n  result = `${greeting} ${name}`\n  result\n}',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "greet",
+          parameters: ["name", "greeting"],
+          docString: {
+            type: "docString",
+            value: "Greets someone with a custom greeting",
+          },
+          body: [
+            {
+              type: "assignment",
+              variableName: "result",
+              value: {
+                type: "prompt",
+                segments: [
+                  { type: "interpolation", variableName: "greeting" },
+                  { type: "text", value: " " },
+                  { type: "interpolation", variableName: "name" },
+                ],
+              },
+            },
+            {
+              type: "returnStatement",
+              value: { type: "variableName", value: "result" },
             },
           ],
         },

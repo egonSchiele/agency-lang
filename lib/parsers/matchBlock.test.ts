@@ -45,6 +45,7 @@ describe('matchBlockParserCase', () => {
       expected: {
         success: true,
         result: {
+          type: "matchBlockCase",
           caseValue: { type: "number", value: "1" },
           body: { type: "number", value: "2" }
         }
@@ -55,6 +56,7 @@ describe('matchBlockParserCase', () => {
       expected: {
         success: true,
         result: {
+          type: "matchBlockCase",
           caseValue: { type: "variableName", value: "x" },
           body: { type: "variableName", value: "y" }
         }
@@ -65,6 +67,7 @@ describe('matchBlockParserCase', () => {
       expected: {
         success: true,
         result: {
+          type: "matchBlockCase",
           caseValue: { type: "string", value: "hello" },
           body: { type: "string", value: "world" }
         }
@@ -75,6 +78,7 @@ describe('matchBlockParserCase', () => {
       expected: {
         success: true,
         result: {
+          type: "matchBlockCase",
           caseValue: "_",
           body: { type: "number", value: "42" }
         }
@@ -85,6 +89,7 @@ describe('matchBlockParserCase', () => {
       expected: {
         success: true,
         result: {
+          type: "matchBlockCase",
           caseValue: { type: "variableName", value: "x" },
           body: { type: "variableName", value: "y" }
         }
@@ -95,6 +100,7 @@ describe('matchBlockParserCase', () => {
       expected: {
         success: true,
         result: {
+          type: "matchBlockCase",
           caseValue: { type: "variableName", value: "x" },
           body: {
             type: "assignment",
@@ -109,6 +115,7 @@ describe('matchBlockParserCase', () => {
       expected: {
         success: true,
         result: {
+          type: "matchBlockCase",
           caseValue: { type: "variableName", value: "x" },
           body: {
             type: "functionCall",
@@ -164,6 +171,7 @@ describe('matchBlockParser', () => {
           expression: { type: "variableName", value: "foo" },
           cases: [
             {
+              type: "matchBlockCase",
               caseValue: { type: "variableName", value: "x" },
               body: { type: "number", value: "1" }
             }
@@ -184,10 +192,12 @@ describe('matchBlockParser', () => {
           expression: { type: "variableName", value: "foo" },
           cases: [
             {
+              type: "matchBlockCase",
               caseValue: { type: "variableName", value: "x" },
               body: { type: "number", value: "1" }
             },
             {
+              type: "matchBlockCase",
               caseValue: { type: "variableName", value: "y" },
               body: { type: "number", value: "2" }
             }
@@ -208,10 +218,12 @@ describe('matchBlockParser', () => {
           expression: { type: "variableName", value: "foo" },
           cases: [
             {
+              type: "matchBlockCase",
               caseValue: { type: "variableName", value: "x" },
               body: { type: "number", value: "1" }
             },
             {
+              type: "matchBlockCase",
               caseValue: "_",
               body: { type: "number", value: "2" }
             }
@@ -231,14 +243,17 @@ describe('matchBlockParser', () => {
           expression: { type: "variableName", value: "foo" },
           cases: [
             {
+              type: "matchBlockCase",
               caseValue: { type: "variableName", value: "x" },
               body: { type: "number", value: "1" }
             },
             {
+              type: "matchBlockCase",
               caseValue: { type: "variableName", value: "y" },
               body: { type: "number", value: "2" }
             },
             {
+              type: "matchBlockCase",
               caseValue: "_",
               body: { type: "number", value: "3" }
             }
@@ -259,10 +274,12 @@ describe('matchBlockParser', () => {
           expression: { type: "variableName", value: "status" },
           cases: [
             {
+              type: "matchBlockCase",
               caseValue: { type: "string", value: "active" },
               body: { type: "string", value: "running" }
             },
             {
+              type: "matchBlockCase",
               caseValue: { type: "string", value: "inactive" },
               body: { type: "string", value: "stopped" }
             }
@@ -284,14 +301,17 @@ describe('matchBlockParser', () => {
           expression: { type: "variableName", value: "code" },
           cases: [
             {
+              type: "matchBlockCase",
               caseValue: { type: "number", value: "200" },
               body: { type: "string", value: "OK" }
             },
             {
+              type: "matchBlockCase",
               caseValue: { type: "number", value: "404" },
               body: { type: "string", value: "Not Found" }
             },
             {
+              type: "matchBlockCase",
               caseValue: { type: "number", value: "500" },
               body: { type: "string", value: "Error" }
             }
@@ -312,6 +332,7 @@ describe('matchBlockParser', () => {
           expression: { type: "variableName", value: "x" },
           cases: [
             {
+              type: "matchBlockCase",
               caseValue: { type: "number", value: "1" },
               body: {
                 type: "assignment",
@@ -320,6 +341,7 @@ describe('matchBlockParser', () => {
               }
             },
             {
+              type: "matchBlockCase",
               caseValue: { type: "number", value: "2" },
               body: {
                 type: "assignment",
@@ -344,6 +366,7 @@ describe('matchBlockParser', () => {
           expression: { type: "variableName", value: "action" },
           cases: [
             {
+              type: "matchBlockCase",
               caseValue: { type: "string", value: "start" },
               body: {
                 type: "functionCall",
@@ -352,6 +375,7 @@ describe('matchBlockParser', () => {
               }
             },
             {
+              type: "matchBlockCase",
               caseValue: { type: "string", value: "stop" },
               body: {
                 type: "functionCall",
@@ -373,6 +397,7 @@ describe('matchBlockParser', () => {
           expression: { type: "variableName", value: "x" },
           cases: [
             {
+              type: "matchBlockCase",
               caseValue: { type: "variableName", value: "y" },
               body: { type: "number", value: "1" }
             }
@@ -392,6 +417,7 @@ describe('matchBlockParser', () => {
           expression: { type: "number", value: "42" },
           cases: [
             {
+              type: "matchBlockCase",
               caseValue: { type: "number", value: "42" },
               body: { type: "string", value: "found" }
             }
@@ -411,6 +437,7 @@ describe('matchBlockParser', () => {
           expression: { type: "string", value: "test" },
           cases: [
             {
+              type: "matchBlockCase",
               caseValue: { type: "string", value: "test" },
               body: { type: "number", value: "1" }
             }

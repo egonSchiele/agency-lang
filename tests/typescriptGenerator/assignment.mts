@@ -10,6 +10,8 @@ const openai = new OpenAI({
 
 
 
+
+
 async function _bar(): Promise<number> {
   const prompt = `the number 1`;
   const startTime = performance.now();

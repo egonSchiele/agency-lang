@@ -10,6 +10,8 @@ const openai = new OpenAI({
 
 
 
+
+
 async function _bar(): Promise<number> {
   const prompt = `the 10th fibonacci number`;
   const startTime = performance.now();

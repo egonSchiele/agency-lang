@@ -10,6 +10,8 @@ const openai = new OpenAI({
 
 
 
+
+
 //  This is a single line comment at the top of the file
 //  Variable assignment with comment above
 const x = 42;
@@ -26,9 +28,7 @@ const message = "Hello, World!";
 //  Another comment
 
 return
-
 return message
-
 
 }
 //  Comment before function call

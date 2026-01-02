@@ -10,6 +10,8 @@ const openai = new OpenAI({
 
 
 
+
+
 type Coords = { x: number; y: number };
 async function _foo(): Promise<Coords> {
   const prompt = `a set of coordinates`;

@@ -10,6 +10,8 @@ const openai = new OpenAI({
 
 
 
+
+
 //  Test arrays and objects
 //  Simple array
 const nums = [1, 2, 3, 4, 5];
@@ -28,10 +30,7 @@ const users = [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}];
 console.log(users)//  Nested object
 const config = {"server": {"host": "localhost", "port": 8080}, "debug": true};
 console.log(config)//  Array access
-const firstNum = nums
-[0
-];
+const firstNum = nums[0];
 console.log(firstNum)//  Object property access
-const personName = person
-.name;
+const personName = person.name;
 console.log(personName)

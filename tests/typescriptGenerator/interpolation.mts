@@ -10,6 +10,8 @@ const openai = new OpenAI({
 
 
 
+
+
 const name = "Alice";
 async function _greeting(name: string): Promise<string> {
   const prompt = `say hi to ${name}`;

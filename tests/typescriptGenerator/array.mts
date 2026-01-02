@@ -10,6 +10,8 @@ const openai = new OpenAI({
 
 
 
+
+
 async function _numbers(): Promise<number[]> {
   const prompt = `the first 5 prime numbers`;
   const startTime = performance.now();

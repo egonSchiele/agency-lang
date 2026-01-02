@@ -1,6 +1,5 @@
 import {
   ADLComment,
-  ADLNode,
   ADLProgram,
   Assignment,
   InterpolationSegment,
@@ -10,7 +9,6 @@ import {
   TypeAlias,
   TypeHint,
   TypeHintMap,
-  VariableType,
 } from "@/types";
 
 import * as renderImports from "@/templates/backends/typescriptGenerator/imports";
@@ -21,6 +19,7 @@ import {
   DotProperty,
   IndexAccess,
 } from "@/types/access";
+import { ADLArray, ADLObject } from "@/types/dataStructures";
 import {
   FunctionCall,
   FunctionDefinition,
@@ -28,14 +27,13 @@ import {
 } from "@/types/function";
 import { MatchBlock } from "@/types/matchBlock";
 import { escape } from "@/utils";
+import { BaseGenerator } from "./baseGenerator";
 import {
   generateBuiltinHelpers,
   mapFunctionName,
 } from "./typescriptGenerator/builtins";
 import { variableTypeToString } from "./typescriptGenerator/typeToString";
 import { mapTypeToZodSchema } from "./typescriptGenerator/typeToZodSchema";
-import { ADLObject, ADLArray } from "@/types/dataStructures";
-import { BaseGenerator } from "./baseGenerator";
 
 export class TypeScriptGenerator extends BaseGenerator {
   constructor() {

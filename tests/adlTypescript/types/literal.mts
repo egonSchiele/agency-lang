@@ -38,6 +38,7 @@ async function _foo(): Promise<"hi"> {
     throw e;
   }
 }
+const foo = await _foo();
 async function _bar(): Promise<42> {
   const prompt = `the number 42`;
   const startTime = performance.now();
@@ -66,6 +67,7 @@ async function _bar(): Promise<42> {
     throw e;
   }
 }
+const bar = await _bar();
 async function _baz(): Promise<true> {
   const prompt = `the boolean true`;
   const startTime = performance.now();
@@ -94,6 +96,4 @@ async function _baz(): Promise<true> {
     throw e;
   }
 }
-const foo = await _foo();
-const bar = await _bar();
 const baz = await _baz();

@@ -12,7 +12,9 @@ const openai = new OpenAI({
 
 async function test() {
 const foo = 1;
+
 return foo
+
 
 }
 console.log(test())

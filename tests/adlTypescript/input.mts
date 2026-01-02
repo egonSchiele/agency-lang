@@ -22,6 +22,7 @@ function _builtinInput(prompt: string): Promise<string> {
   });
 }
 
+const message = await _builtinInput("Please enter a message: ");
 async function _sentiment(message: string): Promise<"happy" | "sad" | "neutral"> {
   const prompt = `Categorize the sentiment in this message: \"${message}\"`;
   const startTime = performance.now();
@@ -50,6 +51,5 @@ async function _sentiment(message: string): Promise<"happy" | "sad" | "neutral">
     throw e;
   }
 }
-const message = await _builtinInput("Please enter a message: ");
 const sentiment = await _sentiment(message);
 console.log(sentiment)

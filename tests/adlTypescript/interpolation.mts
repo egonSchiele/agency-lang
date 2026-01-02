@@ -10,6 +10,7 @@ const openai = new OpenAI({
 
 
 
+const name = "Alice";
 async function _greeting(name: string): Promise<string> {
   const prompt = `say hi to ${name}`;
   const startTime = performance.now();
@@ -38,6 +39,5 @@ async function _greeting(name: string): Promise<string> {
     throw e;
   }
 }
-const name = "Alice";
 const greeting = await _greeting(name);
 console.log(greeting)

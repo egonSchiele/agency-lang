@@ -38,7 +38,8 @@ async function _numbers(): Promise<number[]> {
     throw e;
   }
 }
-async function _greetings(): Promise<string[]> {
+const numbers = await _numbers();
+console.log(numbers)async function _greetings(): Promise<string[]> {
   const prompt = `a list of 3 common greetings in different languages`;
   const startTime = performance.now();
   console.log("Running prompt for greetings")
@@ -66,7 +67,5 @@ async function _greetings(): Promise<string[]> {
     throw e;
   }
 }
-const numbers = await _numbers();
-console.log(numbers)
 const greetings = await _greetings();
 console.log(greetings)

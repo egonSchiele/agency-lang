@@ -1,0 +1,49 @@
+// Test arrays and objects
+
+// Simple array
+nums :: number[]
+nums = [1, 2, 3, 4, 5]
+print(nums)
+
+// Array with strings
+names :: string[]
+names = ["Alice", "Bob", "Charlie"]
+print(names)
+
+// Nested arrays
+matrix :: number[][]
+matrix = [[1, 2], [3, 4], [5, 6]]
+print(matrix)
+
+// Simple object
+person :: { name: string; age: number }
+person = {name: "Alice", age: 30}
+print(person)
+
+// Object with nested structure
+address :: { street: string; city: string; zip: string }
+address = {street: "123 Main St", city: "NYC", zip: "10001"}
+print(address)
+
+// Object with array property
+user :: { name: string; tags: string[] }
+user = {name: "Bob", tags: ["admin", "developer"]}
+print(user)
+
+// Array of objects
+users :: { name: string; age: number }[]
+users = [{name: "Alice", age: 30}, {name: "Bob", age: 25}]
+print(users)
+
+// Nested object
+config :: { server: { host: string; port: number }; debug: boolean }
+config = {server: {host: "localhost", port: 8080}, debug: true}
+print(config)
+
+// Array access
+firstNum = nums[0]
+print(firstNum)
+
+// Object property access
+personName = person.name
+print(personName)

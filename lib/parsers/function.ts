@@ -17,16 +17,20 @@ import {
   debug,
   succeed,
   map,
+  many1WithJoin,
+  alphanum,
 } from "tarsec";
 import { assignmentParser } from "./assignment";
 import { functionCallParser } from "./functionCall";
 import { literalParser } from "./literals";
 import { matchBlockParser } from "./matchBlock";
 import { typeAliasParser, typeHintParser } from "./typeHints";
-import { optionalSpaces } from "./utils";
+import { comma, optionalSpaces } from "./utils";
 import { deepCopy } from "@/utils";
 import { accessExpressionParser } from "./access";
 import { optionalSemicolon } from "./parserUtils";
+import { commentParser } from "./comment";
+import { sep } from "node:path";
 
 const trim = (s: string) => s.trim();
 export const docStringParser: Parser<DocString> = trace(
@@ -52,7 +56,8 @@ export const functionBodyParser = trace(
         accessExpressionParser,
         assignmentParser,
         functionCallParser,
-        literalParser
+        literalParser,
+        commentParser
       )
     );
 
@@ -84,6 +89,8 @@ export const functionParser: Parser<FunctionDefinition> = trace(
     many1(space),
     capture(many1Till(char("(")), "functionName"),
     char("("),
+    optionalSpaces,
+    capture(sepBy(comma, many1WithJoin(alphanum)), "parameters"),
     optionalSpaces,
     char(")"),
     optionalSpaces,

@@ -30,10 +30,13 @@ import { DefaultCase, MatchBlockCase } from "@/types/matchBlock";
 import { accessExpressionParser } from "./access";
 import { optionalSemicolon } from "./parserUtils";
 import { adlArrayParser, adlObjectParser } from "./dataStructures";
+import * as parsers from "../parser";
+import { commentParser } from "./comment";
 
 export const defaultCaseParser: Parser<DefaultCase> = char("_");
 
 export const matchBlockParserCase: Parser<MatchBlockCase> = seqC(
+  set("type", "matchBlockCase"),
   optionalSpaces,
   capture(
     or(accessExpressionParser, literalParser, defaultCaseParser),
@@ -67,7 +70,10 @@ export const matchBlockParser = seqC(
   optionalSpaces,
   char("{"),
   optionalSpaces,
-  capture(sepBy(or(semicolon, newline), matchBlockParserCase), "cases"),
+  capture(
+    sepBy(or(semicolon, newline), or(commentParser, matchBlockParserCase)),
+    "cases"
+  ),
   optionalSpaces,
   char("}"),
   optionalSemicolon

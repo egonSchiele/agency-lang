@@ -1,0 +1,31 @@
+// Test docstrings in functions
+
+def add(a, b) {
+  """
+  Add two numbers together.
+  This is a simple addition function.
+  """
+}
+
+def greet(name) {
+  """
+  Generate a greeting message for the given name.
+  """
+}
+
+def calculateArea(width, height) {
+  """
+  Calculate the area of a rectangle.
+
+  Parameters:
+  - width: the width of the rectangle
+  - height: the height of the rectangle
+
+  Returns: the area as a number
+  """
+}
+
+def processData() {
+  """Single line docstring"""
+}
+

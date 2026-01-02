@@ -19,7 +19,7 @@ export type Assignment = {
   value: AccessExpression | Literal | FunctionCall | ADLObject | ADLArray;
 };
 
-export type Comment = {
+export type ADLComment = {
   type: "comment";
   content: string;
 };
@@ -34,7 +34,7 @@ export type ADLNode =
   | MatchBlock
   | ReturnStatement
   | AccessExpression
-  | Comment
+  | ADLComment
   | ADLObject
   | ADLArray;
 

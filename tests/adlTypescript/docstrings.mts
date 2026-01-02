@@ -10,15 +10,16 @@ const openai = new OpenAI({
 
 
 
-async function test() {
-const foo = 1;
-
-return foo
-
+//  Test docstrings in functions
+async function add() {
 
 }
-console.log(test())async function add() {
-return //  multi-param function
+async function greet() {
 
+}
+async function calculateArea() {
+
+}
+async function processData() {
 
 }

@@ -101,6 +101,43 @@ describe("arrayTypeParser", () => {
       },
     },
     {
+      // nested array
+      input: "boolean[][]",
+      expected: {
+        success: true,
+        result: {
+          type: "arrayType",
+          elementType: {
+            type: "arrayType",
+            elementType: { type: "primitiveType", value: "boolean" },
+          },
+        },
+      },
+    },
+    {
+      // array of objects
+      input: "{ name: string; age: number }[]",
+      expected: {
+        success: true,
+        result: {
+          type: "arrayType",
+          elementType: {
+            type: "objectType",
+            properties: [
+              {
+                key: "name",
+                value: { type: "primitiveType", value: "string" },
+              },
+              {
+                key: "age",
+                value: { type: "primitiveType", value: "number" },
+              },
+            ],
+          },
+        },
+      },
+    },
+    {
       input: "number",
       expected: { success: false },
     },
@@ -1645,7 +1682,8 @@ describe("objectTypeParser", () => {
       },
     },
     {
-      input: "{ name: string # user name; age: number; active: boolean # is active; }",
+      input:
+        "{ name: string # user name; age: number; active: boolean # is active; }",
       expected: {
         success: true,
         result: {
@@ -1805,7 +1843,7 @@ describe("unionTypeParser", () => {
       },
     },
     {
-      input: '42 | string',
+      input: "42 | string",
       expected: {
         success: true,
         result: {
@@ -2095,7 +2133,8 @@ describe("unionTypeParser", () => {
       },
     },
     {
-      input: '{ type: "user"; name: string } | { type: "admin"; level: number }',
+      input:
+        '{ type: "user"; name: string } | { type: "admin"; level: number }',
       expected: {
         success: true,
         result: {

@@ -1,5 +1,5 @@
 import { typeAliasParser, typeHintParser } from "@/parsers/typeHints";
-import { ADLNode, ADLProgram, Comment } from "@/types";
+import { ADLNode, ADLProgram, ADLComment } from "@/types";
 import {
   capture,
   eof,
@@ -20,12 +20,7 @@ import { assignmentParser } from "./parsers/assignment";
 import { functionParser } from "./parsers/function";
 import { functionCallParser } from "./parsers/functionCall";
 import { matchBlockParser } from "./parsers/matchBlock";
-
-export const commentParser: Parser<Comment> = seqC(
-  set("type", "comment"),
-  str("//"),
-  capture(many1Till(newline), "content")
-);
+import { commentParser } from "./parsers/comment";
 
 export const adlNode: Parser<ADLNode[]> = sepBy(
   spaces,

@@ -1,0 +1,38 @@
+// This is a single line comment at the top of the file
+
+// Variable assignment with comment above
+x = 42
+
+// Multiple comments
+// can be placed
+// on consecutive lines
+y = "hello"
+
+// Comment before function definition
+def greet() {
+  // Comment inside function
+  message = "Hello, World!"
+  // Another comment
+  return message
+}
+
+// Comment before function call
+result = greet()
+print(result)
+
+// Testing comments in different contexts
+// 1. Before type hints
+age :: number
+age = 25
+
+// 2. Before conditionals
+status = "active"
+match(status) {
+  // Comment in match block
+  "active" => print("Running")
+  "inactive" => print("Stopped")
+  // Default case comment
+  _ => print("Unknown")
+}
+
+// Final comment at end of file

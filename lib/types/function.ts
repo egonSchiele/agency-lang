@@ -5,6 +5,7 @@ import { Literal } from "./literals";
 export type FunctionDefinition = {
   type: "function";
   functionName: string;
+  parameters: string[];
   body: ADLNode[];
   docString?: DocString;
 };

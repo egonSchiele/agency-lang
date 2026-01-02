@@ -9,6 +9,7 @@ import {
   TypeAlias,
   TypeHint,
   VariableType,
+  ADLComment,
 } from "@/types";
 
 import * as renderImports from "@/templates/backends/adlTypescript/imports";
@@ -286,13 +287,16 @@ export class TypeScriptGenerator {
     let lines = [`switch (${this.generateLiteral(node.expression)}) {`];
 
     for (const caseItem of node.cases) {
-      let caseValueCode: string;
-      if (caseItem.caseValue === "_") {
-        caseValueCode = "default";
-      } else {
-        caseValueCode = this.processNode(caseItem.caseValue);
+      if (caseItem.type === "comment") {
+        lines.push(`  // ${caseItem.content}`);
+        continue;
       }
-      lines.push(`  case ${caseValueCode}:`);
+      if (caseItem.caseValue === "_") {
+        lines.push(`  default:`);
+      } else {
+        const caseValueCode = this.processNode(caseItem.caseValue);
+        lines.push(`  case ${caseValueCode.trim()}:`);
+      }
       const caseBodyCode = this.processNode(caseItem.body);
       lines.push(caseBodyCode);
       lines.push("    break;");

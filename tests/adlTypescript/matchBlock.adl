@@ -1,0 +1,56 @@
+// Test match blocks (pattern matching)
+
+// Simple match with string literals
+action = "start"
+match(action) {
+  "start" => print("Starting...")
+  "stop" => print("Stopping...")
+  "restart" => print("Restarting...")
+  _ => print("Unknown action")
+}
+
+// Match with number literals
+statusCode = 200
+match(statusCode) {
+  200 => print("OK")
+  404 => print("Not Found")
+  500 => print("Internal Server Error")
+  _ => print("Unknown status")
+}
+
+// Match with variable assignment in body
+grade = "A"
+points = 0
+match(grade) {
+  "A" => a = 100
+  "B" => b = 85
+  "C" => c = 70
+  "D" => d = 55
+  _ => e = 0
+}
+
+// Match with function calls in body
+level = "debug"
+match(level) {
+  "debug" => print("Debug mode enabled")
+  "info" => print("Info level logging")
+  "warn" => print("Warning level")
+  "error" => print("Error level")
+}
+
+// Match with array results
+resultType = "array"
+match(resultType) {
+  "array" => data1 = [1, 2, 3]
+  "object" => data2 = {x: 1, y: 2}
+  _ => data3 = []
+}
+
+// Match with object results
+format = "json"
+match(format) {
+  "xml" => output1 = {type: "xml", ext: ".xml"}
+  "json" => output2 = {type: "json", ext: ".json"}
+  "csv" => output3 = {type: "csv", ext: ".csv"}
+  _ => output4 = {type: "unknown", ext: ""}
+}

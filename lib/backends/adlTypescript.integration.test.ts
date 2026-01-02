@@ -53,9 +53,13 @@ function discoverFixtures(fixtureDir: string): FixturePair[] {
             });
           } catch (error) {
             console.error(
-              `Cannot read fixture ${fullPath}: ${error instanceof Error ? error.message : String(error)}`
+              `Cannot read fixture ${fullPath}: ${
+                error instanceof Error ? error.message : String(error)
+              }`
             );
           }
+        } else {
+          console.warn(`Warning: No corresponding .mts file for ${fullPath}`);
         }
       }
     }

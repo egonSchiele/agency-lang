@@ -18,6 +18,7 @@ import {
   capture,
   captureCaptures,
   char,
+  count,
   digit,
   many1,
   many1Till,
@@ -53,14 +54,33 @@ export const typeAliasVariableParser: Parser<TypeAliasVariable> = trace(
   )
 );
 
-export const arrayTypeParser: Parser<ArrayType> = trace(
-  "arrayTypeParser",
-  seqC(
-    set("type", "arrayType"),
-    capture(primitiveTypeParser, "elementType"),
-    str("[]")
-  )
-);
+export const arrayTypeParser: Parser<ArrayType> = (input: string) => {
+  const parser = trace(
+    "arrayTypeParser",
+    seqC(
+      set("type", "arrayType"),
+      capture(or(objectTypeParser, primitiveTypeParser), "elementType"),
+      capture(count(str("[]")), "arrayDepth")
+    )
+  );
+  const result = parser(input);
+  if (result.success) {
+    // Wrap the elementType in ArrayType according to arrayDepth
+    let wrappedType: VariableType = result.result.elementType;
+    for (let i = 0; i < result.result.arrayDepth; i++) {
+      wrappedType = {
+        type: "arrayType",
+        elementType: wrappedType,
+      };
+    }
+    return {
+      success: true,
+      rest: result.rest,
+      result: wrappedType as ArrayType,
+    };
+  }
+  return result;
+};
 export const angleBracketsArrayTypeParser: Parser<ArrayType> = trace(
   "angleBracketsArrayTypeParser",
   seqC(
@@ -197,10 +217,10 @@ export const unionTypeParser: Parser<UnionType> = trace(
 export const variableTypeParser: Parser<VariableType> = trace(
   "variableTypeParser",
   or(
-    objectTypeParser,
     unionTypeParser,
-    angleBracketsArrayTypeParser,
     arrayTypeParser,
+    objectTypeParser,
+    angleBracketsArrayTypeParser,
     stringLiteralTypeParser,
     numberLiteralTypeParser,
     booleanLiteralTypeParser,

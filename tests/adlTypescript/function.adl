@@ -4,3 +4,7 @@ def test() {
   foo
 }
 print(test())
+
+def add(a, b) {
+  // multi-param function
+}

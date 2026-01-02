@@ -29,6 +29,7 @@ import { functionCallParser } from "./functionCall";
 import { DefaultCase, MatchBlockCase } from "@/types/matchBlock";
 import { accessExpressionParser } from "./access";
 import { optionalSemicolon } from "./parserUtils";
+import { adlArrayParser, adlObjectParser } from "./dataStructures";
 
 export const defaultCaseParser: Parser<DefaultCase> = char("_");
 
@@ -41,7 +42,17 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = seqC(
   optionalSpaces,
   str("=>"),
   optionalSpaces,
-  capture(or(assignmentParser, functionCallParser, literalParser), "body")
+  capture(
+    or(
+      adlArrayParser,
+      adlObjectParser,
+      accessExpressionParser,
+      assignmentParser,
+      functionCallParser,
+      literalParser
+    ),
+    "body"
+  )
 );
 
 const semicolon = seqC(optionalSpaces, char(";"), optionalSpaces);

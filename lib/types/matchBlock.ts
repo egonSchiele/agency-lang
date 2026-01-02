@@ -2,12 +2,19 @@ import { Assignment } from "@/types";
 import { AccessExpression } from "./access";
 import { Literal } from "./literals";
 import { FunctionCall } from "./function";
+import { ADLArray, ADLObject } from "./dataStructures";
 
 export type DefaultCase = "_";
 
 export type MatchBlockCase = {
   caseValue: AccessExpression | Literal | DefaultCase;
-  body: Assignment | Literal | FunctionCall;
+  body:
+    | Assignment
+    | Literal
+    | FunctionCall
+    | AccessExpression
+    | ADLArray
+    | ADLObject;
 };
 
 export type MatchBlock = {

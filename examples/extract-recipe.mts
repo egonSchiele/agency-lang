@@ -33,6 +33,7 @@ async function _builtinFetch(url: string, args: any): any {
 }
 
 type Url = { url: string };
+const msg = await _builtinInput("> ");
 async function _category(msg: string): Promise<"import_recipe" | "create_ingredient"> {
   const prompt = `determine if the user wants to import a recipe from a website or create a new ingredient based on this message: ${msg}`;
   const startTime = performance.now();
@@ -61,8 +62,8 @@ async function _category(msg: string): Promise<"import_recipe" | "create_ingredi
     throw e;
   }
 }
-async function importRecipe() {
-async function _url(msg: string): Promise<Url> {
+const category = await _category(msg);
+async function _url(msg: string): Promise<string> {
   const prompt = `extract the url from this message: ${msg}`;
   const startTime = performance.now();
   console.log("Running prompt for url")
@@ -75,7 +76,7 @@ async function _url(msg: string): Promise<Url> {
       },
     ],
     response_format: zodResponseFormat(z.object({
-      value: z.object({ "url": z.string().describe("website url") })
+      value: z.string()
     }), "url_response"),
   });
   const endTime = performance.now();
@@ -118,29 +119,30 @@ async function _recipe(html: string): Promise<string> {
     throw e;
   }
 }
+async function importRecipe() {
+
 const url = await _url(msg);
+
+
 const html = await _builtinFetch(url
 .url);
+
+
 const recipe = await _recipe(html);
+
 return console.log(recipe)
 
-
 }
+//  this is a comment
 async function createIngredient() {
 return console.log("tbd")
 
-
 }
-const msg = await _builtinInput("> ");
-const category = await _category(msg);
-//  this is a comment
 switch (category) {
   case "import_recipe":
     importRecipe()
-    
     break;
   case "create_ingredient":
     createIngredient()
-    
     break;
 }

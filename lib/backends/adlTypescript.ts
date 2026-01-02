@@ -28,6 +28,7 @@ import { variableTypeToString } from "./adlTypeScript/typeToString";
 import { mapTypeToZodSchema } from "./adlTypeScript/typeToZodSchema";
 import { MatchBlock } from "@/types/matchBlock";
 import { FunctionCall, FunctionDefinition } from "@/types/function";
+import { ADLArray } from "@/types/dataStructures";
 type TypeHintMap = Record<string, VariableType>;
 
 function generateImports(): string {
@@ -105,7 +106,7 @@ function generatePromptFunction({
 
 export class TypeScriptFileGenerator {
   private typeHints: TypeHintMap = {};
-  private generatedFunctions: string[] = [];
+  /* private generatedFunctions: string[] = []; */
   private generatedStatements: string[] = [];
   private generatedTypeAliases: string[] = [];
   private variablesInScope: Set<string> = new Set();
@@ -141,7 +142,7 @@ export class TypeScriptFileGenerator {
 }
 export class TypeScriptGenerator {
   private typeHints: TypeHintMap = {};
-  private generatedFunctions: string[] = [];
+  /* private generatedFunctions: string[] = []; */
   private generatedStatements: string[] = [];
   private generatedTypeAliases: string[] = [];
   private variablesInScope: Set<string> = new Set();
@@ -183,14 +184,15 @@ export class TypeScriptGenerator {
 
     // Pass 3: Process all nodes and generate code
     for (const node of program.nodes) {
-      this.processNode(node);
+      const result = this.processNode(node);
+      this.generatedStatements.push(result);
     }
 
     const output: string[] = [];
 
     output.push(...this.generatedTypeAliases);
 
-    output.push(...this.generatedFunctions);
+    /* output.push(...this.generatedFunctions); */
 
     output.push(this.generatedStatements.join(""));
 
@@ -228,55 +230,44 @@ export class TypeScriptGenerator {
   /**
    * Process any ADL node
    */
-  private processNode(node: ADLNode): void {
+  private processNode(node: ADLNode): string {
     switch (node.type) {
       case "typeHint":
       case "typeAlias":
-        // Already processed in first pass
-        break;
+        return "";
       case "assignment":
-        this.processAssignment(node);
-        break;
+        return this.processAssignment(node);
       case "function":
-        this.processFunctionDefinition(node);
-        break;
+        return this.processFunctionDefinition(node);
       case "functionCall":
-        this.processFunctionCall(node);
-        break;
+        return this.processFunctionCall(node);
       case "accessExpression":
-        const code = this.processAccessExpression(node);
-        this.generatedStatements.push(code + "\n");
-        break;
+        return this.processAccessExpression(node);
       case "comment":
-        this.generatedStatements.push(`// ${node.content}\n`);
-        break;
+        return `// ${node.content}\n`;
       case "matchBlock":
-        const matchBlockCode = this.processMatchBlock(node);
-        this.generatedStatements.push(matchBlockCode + "\n");
-        break;
+        return this.processMatchBlock(node);
       case "number":
       case "string":
       case "variableName":
       case "prompt":
         // Standalone literals at top level
-        this.generatedStatements.push(this.generateLiteral(node) + "\n");
-        break;
+        return this.generateLiteral(node) + "\n";
       case "returnStatement":
-        const generator = new TypeScriptGenerator({
-          variablesInScope: this.variablesInScope,
-          typeAliases: this.typeAliases,
-          typeHints: this.typeHints,
+        const returnCode = this.processNode(node.value);
+        return `return ${returnCode}` + "\n";
+      case "adlArray":
+        const itemCodes = node.items.map((item) => {
+          return this.processNode(item).trim();
         });
-        const result = generator.generate({
-          type: "adlProgram",
-          nodes: [node.value],
+        return `[${itemCodes.join(", ")}]`;
+      case "adlObject":
+        const kvCodes = node.entries.map((entry) => {
+          const keyCode = entry.key;
+          const valueCode = this.processNode(entry.value).trim();
+          return `"${keyCode}": ${valueCode}`;
         });
-        this.functionsUsed = new Set([
-          ...this.functionsUsed,
-          ...result.functionsUsed,
-        ]);
-        this.generatedStatements.push(`return ${result.output}` + "\n");
-        break;
+        return `{${kvCodes.join(", ")}}`;
     }
   }
 
@@ -298,29 +289,12 @@ export class TypeScriptGenerator {
       let caseValueCode: string;
       if (caseItem.caseValue === "_") {
         caseValueCode = "default";
-      } else if (caseItem.caseValue.type === "accessExpression") {
-        caseValueCode = this.processAccessExpression(caseItem.caseValue);
       } else {
-        caseValueCode = this.generateLiteral(caseItem.caseValue);
+        caseValueCode = this.processNode(caseItem.caseValue);
       }
       lines.push(`  case ${caseValueCode}:`);
-      const caseBodyGenerator = new TypeScriptGenerator({
-        variablesInScope: this.variablesInScope,
-        typeAliases: this.typeAliases,
-        typeHints: this.typeHints,
-      });
-      const caseBodyResult = caseBodyGenerator.generate({
-        type: "adlProgram",
-        nodes: [caseItem.body],
-      });
-      this.functionsUsed = new Set([
-        ...this.functionsUsed,
-        ...caseBodyResult.functionsUsed,
-      ]);
-      const caseBodyLines = caseBodyResult.output
-        .split("\n")
-        .map((line) => "    " + line);
-      lines.push(...caseBodyLines);
+      const caseBodyCode = this.processNode(caseItem.body);
+      lines.push(caseBodyCode);
       lines.push("    break;");
     }
 
@@ -329,40 +303,15 @@ export class TypeScriptGenerator {
   }
 
   private processDotProperty(node: DotProperty): string {
-    const generator = new TypeScriptGenerator({
-      variablesInScope: this.variablesInScope,
-      typeAliases: this.typeAliases,
-      typeHints: this.typeHints,
-    });
-    const result = generator.generate({
-      type: "adlProgram",
-      nodes: [node.object],
-    });
-    this.functionsUsed = new Set([
-      ...this.functionsUsed,
-      ...result.functionsUsed,
-    ]);
-    const objectCode = result.output;
+    const objectCode = this.processNode(node.object);
 
     const propertyAccess = `${objectCode}.${node.propertyName}`;
     return propertyAccess;
   }
 
   private processDotFunctionCall(node: DotFunctionCall): string {
-    const generator = new TypeScriptGenerator({
-      variablesInScope: this.variablesInScope,
-      typeAliases: this.typeAliases,
-      typeHints: this.typeHints,
-    });
-    const result = generator.generate({
-      type: "adlProgram",
-      nodes: [node.object],
-    });
-    this.functionsUsed = new Set([
-      ...this.functionsUsed,
-      ...result.functionsUsed,
-    ]);
-    const objectCode = result.output;
+    const objectCode = this.processNode(node.object);
+
     const functionCallCode = this.generateFunctionCallExpression(
       node.functionCall
     );
@@ -371,69 +320,39 @@ export class TypeScriptGenerator {
   }
 
   private processIndexAccess(node: IndexAccess): string {
-    const generator = new TypeScriptGenerator({
-      variablesInScope: this.variablesInScope,
-      typeAliases: this.typeAliases,
-      typeHints: this.typeHints,
-    });
-    const arrayResult = generator.generate({
-      type: "adlProgram",
-      nodes: [node.array],
-    });
-    this.functionsUsed = new Set([
-      ...this.functionsUsed,
-      ...arrayResult.functionsUsed,
-    ]);
-    const arrayCode = arrayResult.output;
+    const arrayCode = this.processNode(node.array);
 
-    const indexResult = generator.generate({
-      type: "adlProgram",
-      nodes: [node.index],
-    });
-    this.functionsUsed = new Set([
-      ...this.functionsUsed,
-      ...indexResult.functionsUsed,
-    ]);
-    const indexCode = indexResult.output;
-
+    const indexCode = this.processNode(node.index);
     const accessCode = `${arrayCode}[${indexCode}]`;
     return accessCode;
   }
 
-  private processAssignment(node: Assignment): void {
+  private processAssignment(node: Assignment): string {
     const { variableName, value } = node;
-
-    if (value.type === "prompt") {
-      this.processPromptLiteral(variableName, value);
-    } else if (value.type === "functionCall") {
-      // Handle function call assignment
-      this.functionsUsed.add(value.functionName);
-      const functionCallCode = this.generateFunctionCallExpression(value);
-      this.generatedStatements.push(
-        `const ${variableName} = await ${functionCallCode};` + "\n"
-      );
-    } else if (value.type === "accessExpression") {
-      // Handle access expression assignment
-      const accessCode = this.processAccessExpression(value);
-      this.generatedStatements.push(
-        `const ${variableName} = ${accessCode};` + "\n"
-      );
-    } else {
-      // Direct assignment for other literal types
-      const literalCode = this.generateLiteral(value);
-      this.generatedStatements.push(
-        `const ${variableName} = ${literalCode};` + "\n"
-      );
-    }
-
     // Track this variable as in scope
     this.variablesInScope.add(variableName);
+
+    if (value.type === "prompt") {
+      return this.processPromptLiteral(variableName, value);
+    } else if (value.type === "functionCall") {
+      // Direct assignment for other literal types
+      const code = this.processNode(value);
+      return `const ${variableName} = await ${code.trim()};` + "\n";
+    } else {
+      // Direct assignment for other literal types
+      const code = this.processNode(value);
+      return `const ${variableName} = ${code.trim()};` + "\n";
+    }
   }
+  /* 
+  private processADLArray(node: ADLArray): string {
+    const itemCodes = node.items.map((item) => {
+      if (item.type === "functionCall") { */
 
   private processPromptLiteral(
     variableName: string,
     node: PromptLiteral
-  ): void {
+  ): string {
     // Validate all interpolated variables are in scope
     const interpolatedVars = node.segments
       .filter((s) => s.type === "interpolation")
@@ -461,52 +380,39 @@ export class TypeScriptGenerator {
       typeHints: this.typeHints,
       typeAliases: this.typeAliases,
     });
-    this.generatedFunctions.push(functionCode);
+    this.generatedStatements.push(functionCode);
 
+    const argsStr = interpolatedVars.join(", ");
     // Generate the function call
-    this.generatedStatements.push(
-      `const ${variableName} = await _${variableName}(${interpolatedVars.join(
-        ", "
-      )});` + "\n"
-    );
+    return `const ${variableName} = await _${variableName}(${argsStr});` + "\n";
   }
 
   /**
    * Process a function definition node
    */
-  private processFunctionDefinition(node: FunctionDefinition): void {
+  private processFunctionDefinition(node: FunctionDefinition): string {
     const { functionName, body } = node;
 
     const functionLines: string[] = [];
     functionLines.push(`async function ${functionName}() {`);
 
-    const bodyGenerator = new TypeScriptGenerator({
-      variablesInScope: this.variablesInScope,
-      typeAliases: this.typeAliases,
-      typeHints: this.typeHints,
-    });
-    const result = bodyGenerator.generate({
-      type: "adlProgram",
-      nodes: body,
-    });
-
-    this.functionsUsed = new Set([
-      ...this.functionsUsed,
-      ...result.functionsUsed,
-    ]);
-    functionLines.push(result.output);
-    functionLines.push("}");
-    this.generatedFunctions.push(functionLines.join("\n"));
+    const bodyCode: string[] = [];
+    for (const stmt of body) {
+      bodyCode.push(this.processNode(stmt));
+    }
+    functionLines.push(bodyCode.join("\n"));
+    functionLines.push("}\n");
+    return functionLines.join("\n");
   }
 
   /**
    * Process a function call node
    */
-  private processFunctionCall(node: FunctionCall): void {
+  private processFunctionCall(node: FunctionCall): string {
     this.functionsUsed.add(node.functionName);
     const functionCallCode = this.generateFunctionCallExpression(node);
 
-    this.generatedStatements.push(functionCallCode + "\n");
+    return functionCallCode;
   }
 
   /**

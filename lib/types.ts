@@ -7,6 +7,7 @@ import {
   FunctionDefinition,
   ReturnStatement,
 } from "./types/function";
+import { ADLArray, ADLObject } from "./types/dataStructures";
 export * from "@/types/typeHints";
 export * from "@/types/literals";
 export * from "@/types/matchBlock";
@@ -15,7 +16,7 @@ export * from "@/types/function";
 export type Assignment = {
   type: "assignment";
   variableName: string;
-  value: AccessExpression | Literal | FunctionCall;
+  value: AccessExpression | Literal | FunctionCall | ADLObject | ADLArray;
 };
 
 export type Comment = {
@@ -33,7 +34,9 @@ export type ADLNode =
   | MatchBlock
   | ReturnStatement
   | AccessExpression
-  | Comment;
+  | Comment
+  | ADLObject
+  | ADLArray;
 
 export type ADLProgram = {
   type: "adlProgram";

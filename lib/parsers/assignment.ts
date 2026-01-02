@@ -17,6 +17,7 @@ import { optionalSpaces } from "./utils";
 import { functionCallParser } from "./functionCall";
 import { accessExpressionParser } from "./access";
 import { optionalSemicolon } from "./parserUtils";
+import { adlArrayParser, adlObjectParser } from "./dataStructures";
 
 export const assignmentParser: Parser<Assignment> = trace(
   "assignmentParser",
@@ -28,7 +29,13 @@ export const assignmentParser: Parser<Assignment> = trace(
     char("="),
     optionalSpaces,
     capture(
-      or(functionCallParser, accessExpressionParser, literalParser),
+      or(
+        functionCallParser,
+        accessExpressionParser,
+        adlArrayParser,
+        adlObjectParser,
+        literalParser
+      ),
       "value"
     ),
     optionalSemicolon

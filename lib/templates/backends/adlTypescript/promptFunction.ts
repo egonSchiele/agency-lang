@@ -30,7 +30,8 @@ export const template = `async function _{{{variableName:string}}}({{{argsStr:st
     console.error("Full completion response:", JSON.stringify(completion, null, 2));
     throw e;
   }
-}`;
+}
+`;
 
 export type TemplateType = {
   variableName: string;

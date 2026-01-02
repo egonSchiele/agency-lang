@@ -4,5 +4,5 @@ all:
 	pnpm run templates && pnpm run build
 
 graphtest:
-	node dist/scripts/generateGraph.js index.adl > foo.mts
+	node dist/scripts/generateGraph.js foo.adl > foo.mts
 	node foo.mts

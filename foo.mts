@@ -31,13 +31,27 @@ const graph = new Graph<State, Node>(nodes, graphConfig);
 
 
 
+let foo:any;
+
 graph.node("foo", async (state) => {
-  return [1, 2, 3]
+  const innerFunc = async () => {
+    return [1, 2, 3]
 
-});graph.node("bar", async (state) => {
-  return {"name": "adl", "version": 1.0}
-
+  };
+  foo = await innerFunc();
+  return foo;
 });
+let bar:any;
+
+graph.node("bar", async (state) => {
+  const innerFunc = async () => {
+    return {"name": "adl", "version": foo}
+
+  };
+  bar = await innerFunc();
+  return bar;
+});
+console.log(bar)
 graph.edge("foo", "bar");
 
 const initialState: State = {};

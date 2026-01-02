@@ -1,0 +1,6 @@
+foo = [1, 2, 3]
+bar = {
+  name:"adl",
+  version:foo
+}
+print(bar)

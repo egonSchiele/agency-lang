@@ -1,15 +1,15 @@
 // THIS FILE WAS AUTO-GENERATED
-// Source: lib/templates/backends/adlTypescript/builtinFunctions/fetch.mustache
+// Source: lib/templates/backends/typescriptGenerator/builtinFunctions/fetchJSON.mustache
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `async function _builtinFetch(url: string, args: any): any {
+export const template = `async function _builtinFetchJSON(url: string, args: any): any {
   const result = await fetch(url, args);
   try {
-    const text = await result.text();
-    return text;
+    const json = await result.json();
+    return json;
   } catch (e) {
-    throw new Error(\`Failed to get text from $\{url\}: $\{e\}\`);
+    throw new Error(\`Failed to parse JSON from $\{url\}: $\{e\}\`);
   }
 }`;
 

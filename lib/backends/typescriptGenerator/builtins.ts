@@ -1,7 +1,7 @@
-import * as builtinFunctionsInput from "@/templates/backends/adlTypescript/builtinFunctions/input";
-import * as builtinFunctionsRead from "@/templates/backends/adlTypescript/builtinFunctions/read";
-import * as builtinFunctionsFetchJSON from "@/templates/backends/adlTypescript/builtinFunctions/fetchJSON";
-import * as builtinFunctionsFetch from "@/templates/backends/adlTypescript/builtinFunctions/fetch";
+import * as builtinFunctionsInput from "@/templates/backends/typescriptGenerator/builtinFunctions/input";
+import * as builtinFunctionsRead from "@/templates/backends/typescriptGenerator/builtinFunctions/read";
+import * as builtinFunctionsFetchJSON from "@/templates/backends/typescriptGenerator/builtinFunctions/fetchJSON";
+import * as builtinFunctionsFetch from "@/templates/backends/typescriptGenerator/builtinFunctions/fetch";
 
 /**
  * Maps ADL built-in function names to TypeScript equivalents

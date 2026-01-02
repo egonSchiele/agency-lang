@@ -1,5 +1,5 @@
 import { Literal } from "@/types/literals";
-import { TypeAlias, TypeHint } from "@/types/typeHints";
+import { TypeAlias, TypeHint, VariableType } from "@/types/typeHints";
 import { MatchBlock } from "./types/matchBlock";
 import { AccessExpression } from "./types/access";
 import {
@@ -42,3 +42,5 @@ export type ADLProgram = {
   type: "adlProgram";
   nodes: ADLNode[];
 };
+
+export type TypeHintMap = Record<string, VariableType>;

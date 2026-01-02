@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseADL } from "@/parser";
-import { generateTypeScript } from "./adlTypescript";
+import { generateTypeScript } from "./typescriptGenerator";
 import fs from "fs";
 import path from "path";
 
@@ -91,7 +91,7 @@ function normalizeWhitespace(code: string): string {
   );
 }
 
-const FIXTURES_DIR = path.resolve(__dirname, "../../tests/adlTypescript");
+const FIXTURES_DIR = path.resolve(__dirname, "../../tests/typescriptGenerator");
 
 describe("TypeScript Backend Integration Tests", () => {
   const fixtures = discoverFixtures(FIXTURES_DIR);

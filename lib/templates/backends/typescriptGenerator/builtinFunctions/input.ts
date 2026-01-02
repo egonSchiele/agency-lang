@@ -1,5 +1,5 @@
 // THIS FILE WAS AUTO-GENERATED
-// Source: lib/templates/backends/adlTypescript/builtinFunctions/input.mustache
+// Source: lib/templates/backends/typescriptGenerator/builtinFunctions/input.mustache
 // Any manual changes will be lost.
 import { apply } from "typestache";
 

@@ -8,147 +8,35 @@ import {
   PromptSegment,
   TypeAlias,
   TypeHint,
+  TypeHintMap,
   VariableType,
-  ADLComment,
 } from "@/types";
 
-import * as renderImports from "@/templates/backends/adlTypescript/imports";
-import * as promptFunction from "@/templates/backends/adlTypescript/promptFunction";
+import * as renderImports from "@/templates/backends/typescriptGenerator/imports";
+import * as promptFunction from "@/templates/backends/typescriptGenerator/promptFunction";
 import {
   AccessExpression,
   DotFunctionCall,
   DotProperty,
   IndexAccess,
 } from "@/types/access";
+import { FunctionCall, FunctionDefinition } from "@/types/function";
+import { MatchBlock } from "@/types/matchBlock";
 import { escape } from "@/utils";
 import {
   generateBuiltinHelpers,
   mapFunctionName,
-} from "./adlTypeScript/builtins";
-import { variableTypeToString } from "./adlTypeScript/typeToString";
-import { mapTypeToZodSchema } from "./adlTypeScript/typeToZodSchema";
-import { MatchBlock } from "@/types/matchBlock";
-import { FunctionCall, FunctionDefinition } from "@/types/function";
-import { ADLArray } from "@/types/dataStructures";
-type TypeHintMap = Record<string, VariableType>;
+} from "./typescriptGenerator/builtins";
+import { variableTypeToString } from "./typescriptGenerator/typeToString";
+import { mapTypeToZodSchema } from "./typescriptGenerator/typeToZodSchema";
 
-function generateImports(): string {
-  return renderImports.default({});
-}
-
-function buildPromptString(
-  segments: PromptSegment[],
-  typeHints: TypeHintMap
-): string {
-  const promptParts: string[] = [];
-
-  for (const segment of segments) {
-    if (segment.type === "text") {
-      const escaped = escape(segment.value);
-      promptParts.push(escaped);
-    } else {
-      // Interpolation segment
-      const varName = segment.variableName;
-      const varType = typeHints[varName];
-
-      // Serialize complex types to JSON
-      if (varType && varType.type === "arrayType") {
-        promptParts.push(`\${JSON.stringify(${varName})}`);
-      } else {
-        promptParts.push(`\${${varName}}`);
-      }
-    }
-  }
-
-  return "`" + promptParts.join("") + "`";
-}
-
-/**
- * Generates an async function for prompt-based assignments
- */
-function generatePromptFunction({
-  variableName,
-  functionArgs = [],
-  prompt,
-  variableType,
-  typeHints,
-  typeAliases,
-}: {
-  variableName: string;
-  functionArgs: string[];
-  prompt: PromptLiteral;
-  variableType: VariableType;
-  typeHints: TypeHintMap;
-  typeAliases: Record<string, VariableType>;
-}): string {
-  const zodSchema = mapTypeToZodSchema(variableType, typeAliases);
-  const typeString = variableTypeToString(variableType, typeAliases);
-
-  // Build prompt construction code
-  const promptCode = buildPromptString(prompt.segments, typeHints);
-
-  const argsStr = functionArgs
-    .map(
-      (arg) =>
-        `${arg}: ${variableTypeToString(
-          typeHints[arg] || { type: "primitiveType", value: "string" },
-          typeAliases
-        )}`
-    )
-    .join(", ");
-  return promptFunction.default({
-    variableName,
-    argsStr,
-    typeString,
-    promptCode,
-    zodSchema,
-  });
-}
-
-export class TypeScriptFileGenerator {
-  private typeHints: TypeHintMap = {};
-  /* private generatedFunctions: string[] = []; */
-  private generatedStatements: string[] = [];
-  private generatedTypeAliases: string[] = [];
-  private variablesInScope: Set<string> = new Set();
-  private functionsUsed: Set<string> = new Set();
-  private typeAliases: Record<string, VariableType> = {};
-  /**
-   * Generate TypeScript code from an ADL program
-   */
-  generate(program: ADLProgram): string {
-    // Build final output
-    const output: string[] = [];
-
-    // Add imports and OpenAI client setup
-    output.push(generateImports());
-    output.push("");
-
-    const generator = new TypeScriptGenerator({
-      variablesInScope: this.variablesInScope,
-      typeAliases: this.typeAliases,
-      typeHints: this.typeHints,
-    });
-    const result = generator.generate(program);
-    this.functionsUsed = result.functionsUsed;
-
-    // Add built-in helper functions
-    output.push(generateBuiltinHelpers(this.functionsUsed));
-    output.push("");
-
-    output.push(result.output);
-
-    return output.join("\n");
-  }
-}
 export class TypeScriptGenerator {
   private typeHints: TypeHintMap = {};
-  /* private generatedFunctions: string[] = []; */
   private generatedStatements: string[] = [];
   private generatedTypeAliases: string[] = [];
   private variablesInScope: Set<string> = new Set();
-  private functionsUsed: Set<string> = new Set();
   private typeAliases: Record<string, VariableType> = {};
+  private functionsUsed: Set<string> = new Set();
   constructor({
     variablesInScope = new Set<string>(),
     typeAliases = {},
@@ -167,7 +55,6 @@ export class TypeScriptGenerator {
    */
   generate(program: ADLProgram): {
     output: string;
-    functionsUsed: Set<string>;
   } {
     // Pass 1: Collect all type aliases
     for (const node of program.nodes) {
@@ -191,6 +78,10 @@ export class TypeScriptGenerator {
 
     const output: string[] = [];
 
+    output.push(this.generateImports() + "\n");
+    output.push(this.generateBuiltins() + "\n");
+    output.push("\n");
+
     output.push(...this.generatedTypeAliases);
 
     /* output.push(...this.generatedFunctions); */
@@ -199,8 +90,11 @@ export class TypeScriptGenerator {
 
     return {
       output: output.filter(Boolean).join("\n"),
-      functionsUsed: this.functionsUsed,
     };
+  }
+
+  private generateBuiltins(): string {
+    return generateBuiltinHelpers(this.functionsUsed);
   }
 
   private processTypeAlias(node: TypeAlias): void {
@@ -371,18 +265,10 @@ export class TypeScriptGenerator {
       }
     }
 
-    // Generate async function for prompt-based assignment
-    const variableType = this.typeHints[variableName] || {
-      type: "primitiveType" as const,
-      value: "string",
-    };
-    const functionCode = generatePromptFunction({
+    const functionCode = this.generatePromptFunction({
       variableName,
       functionArgs: interpolatedVars,
       prompt: node,
-      variableType,
-      typeHints: this.typeHints,
-      typeAliases: this.typeAliases,
     });
     this.generatedStatements.push(functionCode);
 
@@ -455,12 +341,81 @@ export class TypeScriptGenerator {
         return `/* prompt: ${text} */`;
     }
   }
+
+  generateImports(): string {
+    return renderImports.default({});
+  }
+
+  buildPromptString(segments: PromptSegment[], typeHints: TypeHintMap): string {
+    const promptParts: string[] = [];
+
+    for (const segment of segments) {
+      if (segment.type === "text") {
+        const escaped = escape(segment.value);
+        promptParts.push(escaped);
+      } else {
+        // Interpolation segment
+        const varName = segment.variableName;
+        const varType = typeHints[varName];
+
+        // Serialize complex types to JSON
+        if (varType && varType.type === "arrayType") {
+          promptParts.push(`\${JSON.stringify(${varName})}`);
+        } else {
+          promptParts.push(`\${${varName}}`);
+        }
+      }
+    }
+
+    return "`" + promptParts.join("") + "`";
+  }
+
+  /**
+   * Generates an async for prompt-based assignments
+   */
+  generatePromptFunction({
+    variableName,
+    functionArgs = [],
+    prompt,
+  }: {
+    variableName: string;
+    functionArgs: string[];
+    prompt: PromptLiteral;
+  }): string {
+    // Generate async function for prompt-based assignment
+    const variableType = this.typeHints[variableName] || {
+      type: "primitiveType" as const,
+      value: "string",
+    };
+
+    const zodSchema = mapTypeToZodSchema(variableType, this.typeAliases);
+    const typeString = variableTypeToString(variableType, this.typeAliases);
+
+    // Build prompt construction code
+    const promptCode = this.buildPromptString(prompt.segments, this.typeHints);
+    const argsStr = functionArgs
+      .map(
+        (arg) =>
+          `${arg}: ${variableTypeToString(
+            this.typeHints[arg] || { type: "primitiveType", value: "string" },
+            this.typeAliases
+          )}`
+      )
+      .join(", ");
+    return promptFunction.default({
+      variableName,
+      argsStr,
+      typeString,
+      promptCode,
+      zodSchema,
+    });
+  }
 }
 
 /**
  * Convenience function to generate TypeScript code from an ADL program
  */
 export function generateTypeScript(program: ADLProgram): string {
-  const generator = new TypeScriptFileGenerator();
-  return generator.generate(program);
+  const generator = new TypeScriptGenerator();
+  return generator.generate(program).output;
 }

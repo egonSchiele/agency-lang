@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateTypeScript } from "./adlTypescript";
+import { generateTypeScript } from "./typescriptGenerator";
 import { ADLProgram } from "@/types";
 
 describe("generateTypeScript - ObjectType support", () => {
@@ -43,7 +43,9 @@ describe("generateTypeScript - ObjectType support", () => {
 
       const result = generateTypeScript(program);
 
-      expect(result).toContain('z.object({ "x": z.number(), "y": z.number() })');
+      expect(result).toContain(
+        'z.object({ "x": z.number(), "y": z.number() })'
+      );
       expect(result).toContain("{ x: number; y: number }");
     });
 
@@ -93,7 +95,9 @@ describe("generateTypeScript - ObjectType support", () => {
       expect(result).toContain(
         'z.object({ "name": z.string(), "age": z.number(), "active": z.boolean() })'
       );
-      expect(result).toContain("{ name: string; age: number; active: boolean }");
+      expect(result).toContain(
+        "{ name: string; age: number; active: boolean }"
+      );
     });
 
     it("should generate zod schema for object with array properties", () => {
@@ -398,7 +402,9 @@ describe("generateTypeScript - Type Alias support", () => {
       expect(result).toContain("Promise<Point>");
 
       // Should resolve Point to zod schema
-      expect(result).toContain('z.object({ "x": z.number(), "y": z.number() })');
+      expect(result).toContain(
+        'z.object({ "x": z.number(), "y": z.number() })'
+      );
     });
 
     it("should handle type alias used in union", () => {
@@ -457,7 +463,9 @@ describe("generateTypeScript - Type Alias support", () => {
       expect(result).toContain("Promise<string | Point>");
 
       // Should resolve union with Point to zod schema
-      expect(result).toContain("z.union([z.string(), z.object({ \"x\": z.number() })])");
+      expect(result).toContain(
+        'z.union([z.string(), z.object({ "x": z.number() })])'
+      );
     });
 
     it("should handle type alias used in object property", () => {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import * as fs from "fs";
 import { parseADL } from "@/parser";
-import { generateTypeScript } from "@/backends/adlTypescript";
+import { generateTypeScript } from "@/backends/typescriptGenerator";
 
 // Get filename from command line arguments
 const inputFile = process.argv[2];

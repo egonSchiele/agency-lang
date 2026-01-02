@@ -1,4 +1,4 @@
-import { generateTypeScript } from "@/backends/adlTypescript";
+import { generateTypeScript } from "@/backends/typescriptGenerator";
 import { ADLProgram } from "@/types";
 
 // Example JSON from user's request

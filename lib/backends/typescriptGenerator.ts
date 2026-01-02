@@ -270,7 +270,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     }
   }
 
-  generateImports(): string {
+  protected generateImports(): string {
     return renderImports.default({});
   }
 
@@ -340,9 +340,6 @@ export class TypeScriptGenerator extends BaseGenerator {
   }
 }
 
-/**
- * Convenience function to generate TypeScript code from an ADL program
- */
 export function generateTypeScript(program: ADLProgram): string {
   const generator = new TypeScriptGenerator();
   return generator.generate(program).output;

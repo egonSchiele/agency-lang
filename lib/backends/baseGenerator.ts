@@ -29,9 +29,7 @@ export class BaseGenerator {
   protected typeAliases: Record<string, VariableType> = {};
   protected functionsUsed: Set<string> = new Set();
   constructor() {}
-  /**
-   * Generate TypeScript code from an ADL program
-   */
+
   generate(program: ADLProgram): {
     output: string;
   } {
@@ -57,15 +55,15 @@ export class BaseGenerator {
 
     const output: string[] = [];
 
+    output.push(this.preprocess() + "\n");
     output.push(this.generateImports() + "\n");
     output.push(this.generateBuiltins() + "\n");
     output.push("\n");
 
     output.push(...this.generatedTypeAliases);
 
-    /* output.push(...this.generatedFunctions); */
-
     output.push(this.generatedStatements.join(""));
+    output.push(this.postprocess() + "\n");
 
     return {
       output: output.filter(Boolean).join("\n"),
@@ -84,9 +82,6 @@ export class BaseGenerator {
     // subclasses implement this
   }
 
-  /**
-   * Process any ADL node
-   */
   protected processNode(node: ADLNode): string {
     switch (node.type) {
       case "typeHint":
@@ -173,23 +168,14 @@ export class BaseGenerator {
     return "processPromptLiteral not implemented";
   }
 
-  /**
-   * Process a function definition node
-   */
   protected processFunctionDefinition(node: FunctionDefinition): string {
     return "processFunctionDefinition not implemented";
   }
 
-  /**
-   * Process a function call node
-   */
   protected processFunctionCall(node: FunctionCall): string {
     return "processFunctionCall not implemented";
   }
 
-  /**
-   * Generates TypeScript expression for a function call (without semicolon)
-   */
   protected generateFunctionCallExpression(node: FunctionCall): string {
     return "generateFunctionCallExpression not implemented";
   }
@@ -198,7 +184,15 @@ export class BaseGenerator {
     return "generateLiteral not implemented";
   }
 
-  generateImports(): string {
+  protected generateImports(): string {
     return "generateImports not implemented";
+  }
+
+  protected preprocess(): string {
+    return "";
+  }
+
+  protected postprocess(): string {
+    return "";
   }
 }

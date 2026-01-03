@@ -8,12 +8,12 @@ importers:
 
   .:
     dependencies:
-      graph:
-        specifier: github:egonSchiele/simplemachine
-        version: https://codeload.github.com/egonSchiele/simplemachine/tar.gz/4ccfb3911cec137d0fbf9ffdbabc6a4310ca0776
       openai:
         specifier: ^6.15.0
         version: 6.15.0(zod@4.2.1)
+      simplemachine:
+        specifier: github:egonSchiele/simplemachine
+        version: https://codeload.github.com/egonSchiele/simplemachine/tar.gz/0d501fe03a47d868e1bcc77b649c3caf624f4fe7
       tarsec:
         specifier: ^0.0.22
         version: 0.0.22
@@ -458,10 +458,6 @@ packages:
     resolution: {integrity: sha512-jhIXaOzy1sb8IyocaruWSn1TjmnBVs8Ayhcy83rmxNJ8q2uWKCAj3CnJY+KpGSXCueAPc0i05kVvVKtP1t9S3g==}
     engines: {node: '>=10'}
 
-  graph@https://codeload.github.com/egonSchiele/simplemachine/tar.gz/4ccfb3911cec137d0fbf9ffdbabc6a4310ca0776:
-    resolution: {tarball: https://codeload.github.com/egonSchiele/simplemachine/tar.gz/4ccfb3911cec137d0fbf9ffdbabc6a4310ca0776}
-    version: 0.0.21
-
   ignore@5.3.2:
     resolution: {integrity: sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g==}
     engines: {node: '>= 4'}
@@ -580,6 +576,10 @@ packages:
 
   siginfo@2.0.0:
     resolution: {integrity: sha512-ybx0WO1/8bSBLEWXZvEd7gMW3Sn3JFlW3TvX1nREbDLRNQNaeNN8WK0meBwPdAaOI7TtRRRJn/Es1zhrrCHu7g==}
+
+  simplemachine@https://codeload.github.com/egonSchiele/simplemachine/tar.gz/0d501fe03a47d868e1bcc77b649c3caf624f4fe7:
+    resolution: {tarball: https://codeload.github.com/egonSchiele/simplemachine/tar.gz/0d501fe03a47d868e1bcc77b649c3caf624f4fe7}
+    version: 0.0.23
 
   slash@3.0.0:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}
@@ -1058,11 +1058,6 @@ snapshots:
       merge2: 1.4.1
       slash: 3.0.0
 
-  graph@https://codeload.github.com/egonSchiele/simplemachine/tar.gz/4ccfb3911cec137d0fbf9ffdbabc6a4310ca0776:
-    dependencies:
-      nanoid: 5.1.6
-      termcolors: https://codeload.github.com/egonSchiele/termcolors/tar.gz/d5c1f497618398ce1440d2383d2aad2642e4051f
-
   ignore@5.3.2: {}
 
   is-binary-path@2.1.0:
@@ -1167,6 +1162,11 @@ snapshots:
       queue-microtask: 1.2.3
 
   siginfo@2.0.0: {}
+
+  simplemachine@https://codeload.github.com/egonSchiele/simplemachine/tar.gz/0d501fe03a47d868e1bcc77b649c3caf624f4fe7:
+    dependencies:
+      nanoid: 5.1.6
+      termcolors: https://codeload.github.com/egonSchiele/termcolors/tar.gz/d5c1f497618398ce1440d2383d2aad2642e4051f
 
   slash@3.0.0: {}
 

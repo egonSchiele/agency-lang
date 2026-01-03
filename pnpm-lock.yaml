@@ -10,7 +10,7 @@ importers:
     dependencies:
       graph:
         specifier: github:egonSchiele/simplemachine
-        version: https://codeload.github.com/egonSchiele/simplemachine/tar.gz/ffcd0588ff964963b5b57a755b44c3311bfa71ef
+        version: https://codeload.github.com/egonSchiele/simplemachine/tar.gz/4ccfb3911cec137d0fbf9ffdbabc6a4310ca0776
       openai:
         specifier: ^6.15.0
         version: 6.15.0(zod@4.2.1)
@@ -458,8 +458,8 @@ packages:
     resolution: {integrity: sha512-jhIXaOzy1sb8IyocaruWSn1TjmnBVs8Ayhcy83rmxNJ8q2uWKCAj3CnJY+KpGSXCueAPc0i05kVvVKtP1t9S3g==}
     engines: {node: '>=10'}
 
-  graph@https://codeload.github.com/egonSchiele/simplemachine/tar.gz/ffcd0588ff964963b5b57a755b44c3311bfa71ef:
-    resolution: {tarball: https://codeload.github.com/egonSchiele/simplemachine/tar.gz/ffcd0588ff964963b5b57a755b44c3311bfa71ef}
+  graph@https://codeload.github.com/egonSchiele/simplemachine/tar.gz/4ccfb3911cec137d0fbf9ffdbabc6a4310ca0776:
+    resolution: {tarball: https://codeload.github.com/egonSchiele/simplemachine/tar.gz/4ccfb3911cec137d0fbf9ffdbabc6a4310ca0776}
     version: 0.0.21
 
   ignore@5.3.2:
@@ -500,6 +500,11 @@ packages:
   nanoid@3.3.11:
     resolution: {integrity: sha512-N8SpfPUnUp1bK+PMYW8qSWdl9U+wwNWI4QKxOYDy9JAro3WMX7p2OeVRF9v+347pnakNevPmiHhNmZ2HbFA76w==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
+    hasBin: true
+
+  nanoid@5.1.6:
+    resolution: {integrity: sha512-c7+7RQ+dMB5dPwwCp4ee1/iV/q2P6aK1mTZcfr1BTuVlyW9hJYiMPybJCcnBlQtuSmTIWNeazm/zqNoZSSElBg==}
+    engines: {node: ^18 || >=20}
     hasBin: true
 
   normalize-path@3.0.0:
@@ -1053,8 +1058,9 @@ snapshots:
       merge2: 1.4.1
       slash: 3.0.0
 
-  graph@https://codeload.github.com/egonSchiele/simplemachine/tar.gz/ffcd0588ff964963b5b57a755b44c3311bfa71ef:
+  graph@https://codeload.github.com/egonSchiele/simplemachine/tar.gz/4ccfb3911cec137d0fbf9ffdbabc6a4310ca0776:
     dependencies:
+      nanoid: 5.1.6
       termcolors: https://codeload.github.com/egonSchiele/termcolors/tar.gz/d5c1f497618398ce1440d2383d2aad2642e4051f
 
   ignore@5.3.2: {}
@@ -1085,6 +1091,8 @@ snapshots:
   mylas@2.1.14: {}
 
   nanoid@3.3.11: {}
+
+  nanoid@5.1.6: {}
 
   normalize-path@3.0.0: {}
 

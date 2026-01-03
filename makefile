@@ -5,4 +5,4 @@ all:
 
 graphtest:
 	node dist/scripts/generateGraph.js foo.adl > foo.mts
-	node foo.mts
+	STATELOG_HOST=http://localhost:1065 node foo.mts

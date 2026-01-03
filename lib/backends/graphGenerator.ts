@@ -1,30 +1,20 @@
 import {
-  ADLComment,
-  ADLNode,
   ADLProgram,
   Assignment,
-  Literal,
+  InterpolationSegment,
   PromptLiteral,
-  TypeAlias,
-  TypeHint,
   TypeHintMap,
-  VariableType,
+  VariableType
 } from "@/types";
 
-import {
-  AccessExpression,
-  DotFunctionCall,
-  DotProperty,
-  IndexAccess,
-} from "@/types/access";
-import { ADLArray, ADLObject } from "@/types/dataStructures";
-import { FunctionCall, FunctionDefinition } from "@/types/function";
-import { MatchBlock } from "@/types/matchBlock";
+import * as renderEdge from "@/templates/backends/graphGenerator/edge";
 import * as renderImports from "@/templates/backends/graphGenerator/imports";
 import * as renderNode from "@/templates/backends/graphGenerator/node";
-import * as renderEdge from "@/templates/backends/graphGenerator/edge";
 import * as renderStartNode from "@/templates/backends/graphGenerator/startNode";
+import * as promptFunction from "@/templates/backends/typescriptGenerator/promptFunction";
 import { TypeScriptGenerator } from "./typescriptGenerator";
+import { variableTypeToString } from "./typescriptGenerator/typeToString";
+import { mapTypeToZodSchema } from "./typescriptGenerator/typeToZodSchema";
 import { wrapInReturn } from "./utils";
 
 export class GraphGenerator extends TypeScriptGenerator {
@@ -135,13 +125,77 @@ export class GraphGenerator extends TypeScriptGenerator {
       body: valueCode,
     });
   }
-  /* 
   protected processPromptLiteral(
     variableName: string,
     node: PromptLiteral
   ): string {
-    return "processPromptLiteral not implemented";
+    // Validate all interpolated variables are in scope
+    const interpolatedVars = node.segments
+      .filter((s) => s.type === "interpolation")
+      .map((s) => (s as InterpolationSegment).variableName);
+
+    for (const varName of interpolatedVars) {
+      if (!this.variablesInScope.has(varName)) {
+        throw new Error(
+          `Variable '${varName}' used in prompt interpolation but not defined. ` +
+          `Referenced in assignment to '${variableName}'.`
+        );
+      }
+    }
+
+    const functionCode = this.generatePromptFunction({
+      variableName: "promptFunc",
+      functionArgs: interpolatedVars,
+      prompt: node,
+    });
+    const argsStr = interpolatedVars.join(", ");
+
+    const lines = [functionCode + `(${argsStr});`];
+
+    //lines.push(`const result = await _promptFunc();` + "\n");
+    // Generate the function call
+    return lines.join("\n");
   }
+
+  generatePromptFunction({
+    variableName,
+    functionArgs = [],
+    prompt,
+  }: {
+    variableName: string;
+    functionArgs: string[];
+    prompt: PromptLiteral;
+  }): string {
+    // Generate async function for prompt-based assignment
+    const variableType = this.typeHints[variableName] || {
+      type: "primitiveType" as const,
+      value: "string",
+    };
+
+    const zodSchema = mapTypeToZodSchema(variableType, this.typeAliases);
+    const typeString = variableTypeToString(variableType, this.typeAliases);
+
+    // Build prompt construction code
+    const promptCode = this.buildPromptString(prompt.segments, this.typeHints);
+    const argsStr = functionArgs
+      .map(
+        (arg) =>
+          `${arg}: ${variableTypeToString(
+            this.typeHints[arg] || { type: "primitiveType", value: "string" },
+            this.typeAliases
+          )}`
+      )
+      .join(", ");
+    return promptFunction.default({
+      variableName,
+      argsStr,
+      typeString,
+      promptCode,
+      zodSchema,
+    });
+  }
+
+  /* 
 
   protected processFunctionDefinition(node: FunctionDefinition): string {
     return "processFunctionDefinition not implemented";

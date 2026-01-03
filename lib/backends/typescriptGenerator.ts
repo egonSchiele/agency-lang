@@ -188,7 +188,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       if (!this.variablesInScope.has(varName)) {
         throw new Error(
           `Variable '${varName}' used in prompt interpolation but not defined. ` +
-            `Referenced in assignment to '${variableName}'.`
+          `Referenced in assignment to '${variableName}'.`
         );
       }
     }
@@ -262,11 +262,12 @@ export class TypeScriptGenerator extends BaseGenerator {
       case "variableName":
         return literal.value;
       case "prompt":
-        // Reconstruct text for comment from segments
-        const text = literal.segments
-          .map((s) => (s.type === "text" ? s.value : `#{${s.variableName}}`))
-          .join("");
-        return `/* prompt: ${text} */\n`;
+        return this.processPromptLiteral("asd", literal).trim();
+      // Reconstruct text for comment from segments
+      /*  const text = literal.segments
+         .map((s) => (s.type === "text" ? s.value : `#{${s.variableName}}`))
+         .join("");
+       return ""; */
     }
   }
 

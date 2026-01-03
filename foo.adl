@@ -3,4 +3,6 @@ bar = {
   name:"adl",
   version:foo
 }
-print(bar)
+
+baz :: string
+baz = `say hello to alice`

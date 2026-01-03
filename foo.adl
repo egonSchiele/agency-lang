@@ -1,8 +1,8 @@
-foo = [1, 2, 3]
-bar = {
-  name:"adl",
-  version:foo
-}
+msg = input("> ");
 
-baz :: string
-baz = `say hello to alice`
+category :: "import_recipe" | "create_ingredient"
+category = `determine if the user wants to import a recipe from a website or create a new ingredient based on this message: ${msg}`
+
+type Url = {
+  url:string # website url;
+}

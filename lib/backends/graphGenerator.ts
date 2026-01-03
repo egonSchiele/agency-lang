@@ -4,7 +4,7 @@ import {
   InterpolationSegment,
   PromptLiteral,
   TypeHintMap,
-  VariableType
+  VariableType,
 } from "@/types";
 
 import * as renderEdge from "@/templates/backends/graphGenerator/edge";
@@ -12,6 +12,7 @@ import * as renderImports from "@/templates/backends/graphGenerator/imports";
 import * as renderNode from "@/templates/backends/graphGenerator/node";
 import * as renderStartNode from "@/templates/backends/graphGenerator/startNode";
 import * as promptFunction from "@/templates/backends/typescriptGenerator/promptFunction";
+import * as promptNode from "@/templates/backends/graphGenerator/promptNode";
 import { TypeScriptGenerator } from "./typescriptGenerator";
 import { variableTypeToString } from "./typescriptGenerator/typeToString";
 import { mapTypeToZodSchema } from "./typescriptGenerator/typeToZodSchema";
@@ -118,43 +119,57 @@ export class GraphGenerator extends TypeScriptGenerator {
   } */
 
   protected processAssignment(node: Assignment): string {
-    const valueCode = this.processNode(wrapInReturn(node.value));
-    this.graphNodes.push(node.variableName);
+    switch (node.value.type) {
+      case "prompt":
+        return this.processPromptLiteral(node.variableName, node.value);
+      default:
+        return this.createNode(
+          node.variableName,
+          this.processNode(wrapInReturn(node.value))
+        );
+    }
+  }
+
+  protected createNode(name: string, body: string): string {
+    this.graphNodes.push(name);
     return renderNode.default({
-      name: node.variableName,
-      body: valueCode,
+      name,
+      body,
     });
   }
+
   protected processPromptLiteral(
     variableName: string,
     node: PromptLiteral
   ): string {
+    this.graphNodes.push(variableName);
+
     // Validate all interpolated variables are in scope
     const interpolatedVars = node.segments
       .filter((s) => s.type === "interpolation")
       .map((s) => (s as InterpolationSegment).variableName);
 
     for (const varName of interpolatedVars) {
-      if (!this.variablesInScope.has(varName)) {
+      if (!this.graphNodes.includes(varName)) {
         throw new Error(
           `Variable '${varName}' used in prompt interpolation but not defined. ` +
-          `Referenced in assignment to '${variableName}'.`
+            `Referenced in assignment to '${variableName}'.`
         );
       }
     }
 
-    const functionCode = this.generatePromptFunction({
-      variableName: "promptFunc",
+    const promptFunction = this.generatePromptFunction({
+      variableName,
       functionArgs: interpolatedVars,
       prompt: node,
     });
     const argsStr = interpolatedVars.join(", ");
 
-    const lines = [functionCode + `(${argsStr});`];
-
-    //lines.push(`const result = await _promptFunc();` + "\n");
-    // Generate the function call
-    return lines.join("\n");
+    return promptNode.default({
+      name: variableName,
+      promptFunction,
+      argsStr,
+    });
   }
 
   generatePromptFunction({

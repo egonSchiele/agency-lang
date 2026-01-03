@@ -21,6 +21,7 @@ const graphConfig = {
     log: true,
     logData: true,
   },
+  statelogHost: "http://localhost:1065",
 };
 
 // Define the names of the nodes in the graph

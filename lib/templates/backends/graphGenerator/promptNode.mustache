@@ -1,0 +1,7 @@
+let {{{name:string}}}:any;
+
+graph.node("{{{name}}}", async (state) => {
+  const innerFunc = {{{promptFunction:string}}};
+  {{{name}}} = await innerFunc({{{argsStr:string}}});
+  return {{{name}}};
+});

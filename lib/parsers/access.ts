@@ -5,27 +5,27 @@ import {
   IndexAccess,
 } from "@/types/access";
 import {
-  seqC,
-  set,
   capture,
-  or,
   char,
   many1WithJoin,
-  alphanum,
-  ParserResult,
+  or,
   Parser,
+  ParserResult,
+  seqC,
+  set,
 } from "tarsec";
+import { adlArrayParser } from "./dataStructures";
 import { functionCallParser } from "./functionCall";
 import { literalParser } from "./literals";
 import { optionalSemicolon } from "./parserUtils";
-import { adlArrayParser } from "./dataStructures";
+import { varNameChar } from "./utils";
 
 export const dotPropertyParser = (input: string): ParserResult<DotProperty> => {
   const parser = seqC(
     set("type", "dotProperty"),
     capture(or(literalParser, functionCallParser), "object"),
     char("."),
-    capture(many1WithJoin(alphanum), "propertyName")
+    capture(many1WithJoin(varNameChar), "propertyName")
   );
 
   return parser(input);

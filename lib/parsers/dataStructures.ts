@@ -1,10 +1,9 @@
 import { ADLArray, ADLObject, ADLObjectKV } from "@/types/dataStructures";
 import {
-  alphanum,
   capture,
   char,
-  many1,
   manyWithJoin,
+  noneOf,
   optional,
   or,
   Parser,
@@ -56,7 +55,7 @@ export const adlObjectKVParser: Parser<ADLObjectKV> = (
     seqC(
       optionalSpaces,
       optional(char('"')),
-      capture(manyWithJoin(alphanum), "key"),
+      capture(manyWithJoin(noneOf('"\n')), "key"),
       optional(char('"')),
       optionalSpaces,
       char(":"),

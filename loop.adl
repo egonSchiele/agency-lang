@@ -1,7 +1,10 @@
 def llm(input) {
   action :: "tool_call" | "exit"
   action = `Given this input, decide what action to take: ${input}`
-  return action
+  match (action) {
+    "tool_call" => tool_call()
+    "exit" => exit()
+  }
 }
 
 def tool_call {
@@ -10,13 +13,5 @@ def tool_call {
   llm(output)
 }
 
-def loop(input) {
-  action = llm(input)
-  match (action) {
-    "tool_call" => tool_call()
-    "exit" => exit()
-  }
-}
-
 msg = input("> ")
-loop(msg)
+llm(msg)

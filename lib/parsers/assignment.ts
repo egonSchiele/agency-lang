@@ -1,30 +1,27 @@
 import { Assignment } from "@/types";
 import {
-  alphanum,
   capture,
   char,
-  many1Till,
   many1WithJoin,
   or,
   Parser,
   seqC,
   set,
-  space,
   trace,
 } from "tarsec";
-import { literalParser } from "./literals";
-import { optionalSpaces } from "./utils";
-import { functionCallParser } from "./functionCall";
 import { accessExpressionParser } from "./access";
-import { optionalSemicolon } from "./parserUtils";
 import { adlArrayParser, adlObjectParser } from "./dataStructures";
+import { functionCallParser } from "./functionCall";
+import { literalParser } from "./literals";
+import { optionalSemicolon } from "./parserUtils";
+import { optionalSpaces, varNameChar } from "./utils";
 
 export const assignmentParser: Parser<Assignment> = trace(
   "assignmentParser",
   seqC(
     set("type", "assignment"),
     optionalSpaces,
-    capture(many1WithJoin(alphanum), "variableName"),
+    capture(many1WithJoin(varNameChar), "variableName"),
     optionalSpaces,
     char("="),
     optionalSpaces,

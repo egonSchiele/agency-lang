@@ -1,26 +1,25 @@
 import { FunctionCall } from "@/types";
 import {
-  seqR,
-  char,
-  Parser,
-  seqC,
-  set,
   capture,
+  char,
   many1WithJoin,
-  alphanum,
-  sepBy,
   or,
+  Parser,
+  sepBy,
+  seqC,
+  seqR,
+  set,
 } from "tarsec";
-import { literalParser } from "./literals";
-import { optionalSpaces } from "./utils";
 import { accessExpressionParser } from "./access";
+import { literalParser } from "./literals";
 import { optionalSemicolon } from "./parserUtils";
+import { optionalSpaces, varNameChar } from "./utils";
 
 const comma = seqR(optionalSpaces, char(","), optionalSpaces);
 export const functionCallParser: Parser<FunctionCall> = (input: string) => {
   const parser = seqC(
     set("type", "functionCall"),
-    capture(many1WithJoin(alphanum), "functionName"),
+    capture(many1WithJoin(varNameChar), "functionName"),
     char("("),
     optionalSpaces,
     capture(

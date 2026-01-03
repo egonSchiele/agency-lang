@@ -2,8 +2,11 @@ import { ADLNode, DocString, FunctionDefinition } from "@/types";
 import {
   capture,
   char,
+  debug,
   many1,
   many1Till,
+  many1WithJoin,
+  map,
   or,
   Parser,
   ParserResult,
@@ -13,24 +16,18 @@ import {
   space,
   spaces,
   str,
-  trace,
-  debug,
   succeed,
-  map,
-  many1WithJoin,
-  alphanum,
+  trace,
 } from "tarsec";
+import { accessExpressionParser } from "./access";
 import { assignmentParser } from "./assignment";
+import { commentParser } from "./comment";
 import { functionCallParser } from "./functionCall";
 import { literalParser } from "./literals";
 import { matchBlockParser } from "./matchBlock";
-import { typeAliasParser, typeHintParser } from "./typeHints";
-import { comma, optionalSpaces } from "./utils";
-import { deepCopy } from "@/utils";
-import { accessExpressionParser } from "./access";
 import { optionalSemicolon } from "./parserUtils";
-import { commentParser } from "./comment";
-import { sep } from "node:path";
+import { typeAliasParser, typeHintParser } from "./typeHints";
+import { comma, optionalSpaces, varNameChar } from "./utils";
 
 const trim = (s: string) => s.trim();
 export const docStringParser: Parser<DocString> = trace(
@@ -62,7 +59,8 @@ export const functionBodyParser = trace(
     );
 
     const result = parser(input);
-    if (result.success) {
+    return result;
+    /*     if (result.success) {
       const newResult = deepCopy(result.result);
       const lastNode = newResult.at(-1);
       if (lastNode && lastNode.type !== "returnStatement") {
@@ -78,9 +76,9 @@ export const functionBodyParser = trace(
     } else {
       return result;
     }
+    */
   }
 );
-
 export const functionParser: Parser<FunctionDefinition> = trace(
   "functionParser",
   seqC(
@@ -90,7 +88,7 @@ export const functionParser: Parser<FunctionDefinition> = trace(
     capture(many1Till(char("(")), "functionName"),
     char("("),
     optionalSpaces,
-    capture(sepBy(comma, many1WithJoin(alphanum)), "parameters"),
+    capture(sepBy(comma, many1WithJoin(varNameChar)), "parameters"),
     optionalSpaces,
     char(")"),
     optionalSpaces,

@@ -1,4 +1,4 @@
-import { backtick } from "@/parsers/utils";
+import { backtick, varNameChar } from "@/parsers/utils";
 import {
   InterpolationSegment,
   Literal,
@@ -10,7 +10,6 @@ import {
 } from "@/types";
 import {
   Parser,
-  alphanum,
   capture,
   char,
   digit,
@@ -58,7 +57,7 @@ export const stringParser: Parser<StringLiteral> = seqC(
 );
 export const variableNameParser: Parser<VariableNameLiteral> = seqC(
   set("type", "variableName"),
-  capture(many1WithJoin(alphanum), "value")
+  capture(many1WithJoin(varNameChar), "value")
 );
 
 export const literalParser: Parser<Literal> = or(

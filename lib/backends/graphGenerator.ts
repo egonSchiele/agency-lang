@@ -1,6 +1,7 @@
 import {
   ADLProgram,
   Assignment,
+  FunctionDefinition,
   InterpolationSegment,
   PromptLiteral,
   TypeHintMap,
@@ -13,6 +14,7 @@ import * as renderNode from "@/templates/backends/graphGenerator/node";
 import * as renderStartNode from "@/templates/backends/graphGenerator/startNode";
 import * as promptFunction from "@/templates/backends/typescriptGenerator/promptFunction";
 import * as promptNode from "@/templates/backends/graphGenerator/promptNode";
+import * as functionNode from "@/templates/backends/graphGenerator/functionNode";
 import { TypeScriptGenerator } from "./typescriptGenerator";
 import { variableTypeToString } from "./typescriptGenerator/typeToString";
 import { mapTypeToZodSchema } from "./typescriptGenerator/typeToZodSchema";
@@ -118,7 +120,7 @@ export class GraphGenerator extends TypeScriptGenerator {
     return "processIndexAccess not implemented";
   } */
 
-  protected processAssignment(node: Assignment): string {
+  /*   protected processAssignment(node: Assignment): string {
     switch (node.value.type) {
       case "prompt":
         return this.processPromptLiteral(node.variableName, node.value);
@@ -209,12 +211,21 @@ export class GraphGenerator extends TypeScriptGenerator {
       zodSchema,
     });
   }
-
-  /* 
-
+ */
   protected processFunctionDefinition(node: FunctionDefinition): string {
-    return "processFunctionDefinition not implemented";
+    const { functionName, body } = node;
+    this.graphNodes.push(functionName);
+
+    const bodyCode: string[] = [];
+    for (const stmt of body) {
+      bodyCode.push(this.processNode(stmt));
+    }
+    return functionNode.default({
+      name: functionName,
+      body: bodyCode.join("\n"),
+    });
   }
+  /* 
 
   protected processFunctionCall(node: FunctionCall): string {
     return "processFunctionCall not implemented";

@@ -1,4 +1,4 @@
-import { optionalSpaces } from "@/parsers/utils";
+import { optionalSpaces, varNameChar } from "@/parsers/utils";
 import {
   ArrayType,
   BooleanLiteralType,
@@ -14,16 +14,13 @@ import {
   VariableType,
 } from "@/types";
 import {
-  alphanum,
   capture,
   captureCaptures,
   char,
   count,
   digit,
-  many1,
   many1Till,
   many1WithJoin,
-  optional,
   or,
   Parser,
   ParserResult,
@@ -50,7 +47,7 @@ export const typeAliasVariableParser: Parser<TypeAliasVariable> = trace(
   "typeAliasVariableParser",
   seqC(
     set("type", "typeAliasVariable"),
-    capture(many1WithJoin(alphanum), "aliasName")
+    capture(many1WithJoin(varNameChar), "aliasName")
   )
 );
 
@@ -128,7 +125,7 @@ export const objectPropertyParser: Parser<ObjectProperty> = trace(
   "objectPropertyParser",
   (input: string): ParserResult<ObjectProperty> => {
     const parser = seqC(
-      capture(many1WithJoin(alphanum), "key"),
+      capture(many1WithJoin(varNameChar), "key"),
       optionalSpaces,
       char(":"),
       optionalSpaces,
@@ -248,7 +245,7 @@ export const typeAliasParser: Parser<TypeAlias> = trace(
     set("type", "typeAlias"),
     str("type"),
     spaces,
-    capture(many1WithJoin(alphanum), "aliasName"),
+    capture(many1WithJoin(varNameChar), "aliasName"),
     optionalSpaces,
     str("="),
     optionalSpaces,

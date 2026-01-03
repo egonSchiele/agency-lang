@@ -1,0 +1,22 @@
+def llm(input) {
+  action :: "tool_call" | "exit"
+  action = `Given this input, decide what action to take: ${input}`
+  return action
+}
+
+def tool_call {
+  // calls a tool
+  output = tool_output
+  llm(output)
+}
+
+def loop(input) {
+  action = llm(input)
+  match (action) {
+    "tool_call" => tool_call()
+    "exit" => exit()
+  }
+}
+
+msg = input("> ")
+loop(msg)

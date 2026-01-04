@@ -9,14 +9,13 @@ import fs from "fs";
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-function add(a:number, b:number):number {
+function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
 
 // Define the function tool for OpenAI
-const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
-  {
-    type: "function",
+const addTool = {
+    type: "function" as const,
     function: {
       name: "add",
       description:
@@ -37,14 +36,47 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         additionalProperties: false,
       },
     },
+  };
+
+
+
+
+
+const testTool: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+  {
+    type: "function",
+    function: {
+      name: "test",
+      description:
+        "No description provided.",
+      parameters: {
+        type: "object",
+        properties: {
+          
+        },
+        required: [],
+        additionalProperties: false,
+      },
+    },
   },
-];
-
-
-
-
-
-async function test() {
+];const addTool: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+  {
+    type: "function",
+    function: {
+      name: "add",
+      description:
+        "No description provided.",
+      parameters: {
+        type: "object",
+        properties: {
+          {"a":{"type":"string","description":""},"b":{"type":"string","description":""}}
+        },
+        required: ["a","b"],
+        additionalProperties: false,
+      },
+    },
+  },
+];async function test() {
 const foo = 1;
 
 foo

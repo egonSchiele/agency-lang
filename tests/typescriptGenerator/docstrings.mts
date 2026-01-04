@@ -9,14 +9,13 @@ import fs from "fs";
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-function add(a:number, b:number):number {
+function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
 
 // Define the function tool for OpenAI
-const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
-  {
-    type: "function",
+const addTool = {
+    type: "function" as const,
     function: {
       name: "add",
       description:
@@ -37,14 +36,88 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         additionalProperties: false,
       },
     },
+  };
+
+
+
+
+
+const addTool: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+  {
+    type: "function",
+    function: {
+      name: "add",
+      description:
+        "Add two numbers together.
+This is a simple addition function.",
+      parameters: {
+        type: "object",
+        properties: {
+          {"a":{"type":"string","description":""},"b":{"type":"string","description":""}}
+        },
+        required: ["a","b"],
+        additionalProperties: false,
+      },
+    },
   },
-];
+];const greetTool: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+  {
+    type: "function",
+    function: {
+      name: "greet",
+      description:
+        "Generate a greeting message for the given name.",
+      parameters: {
+        type: "object",
+        properties: {
+          {"name":{"type":"string","description":""}}
+        },
+        required: ["name"],
+        additionalProperties: false,
+      },
+    },
+  },
+];const calculateAreaTool: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+  {
+    type: "function",
+    function: {
+      name: "calculateArea",
+      description:
+        "Calculate the area of a rectangle.
 
+Parameters:
+- width: the width of the rectangle
+- height: the height of the rectangle
 
-
-
-
-//  Test docstrings in functions
+Returns: the area as a number",
+      parameters: {
+        type: "object",
+        properties: {
+          {"width":{"type":"string","description":""},"height":{"type":"string","description":""}}
+        },
+        required: ["width","height"],
+        additionalProperties: false,
+      },
+    },
+  },
+];const processDataTool: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+  {
+    type: "function",
+    function: {
+      name: "processData",
+      description:
+        "Single line docstring",
+      parameters: {
+        type: "object",
+        properties: {
+          
+        },
+        required: [],
+        additionalProperties: false,
+      },
+    },
+  },
+];//  Test docstrings in functions
 async function add() {
 
 }

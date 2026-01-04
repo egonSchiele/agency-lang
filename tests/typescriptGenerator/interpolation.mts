@@ -9,14 +9,13 @@ import fs from "fs";
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-function add(a:number, b:number):number {
+function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
 
 // Define the function tool for OpenAI
-const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
-  {
-    type: "function",
+const addTool = {
+    type: "function" as const,
     function: {
       name: "add",
       description:
@@ -37,8 +36,7 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         additionalProperties: false,
       },
     },
-  },
-];
+  };
 
 
 
@@ -49,16 +47,13 @@ const name = "Alice";
 async function _greeting(name: string): Promise<string> {
   const prompt = `say hi to ${name}`;
   const startTime = performance.now();
+  const messages:any[] = [{ role: "user", content: prompt }];
+  const tools = undefined;
   console.log("Running prompt for greeting")
-  const completion = await openai.chat.completions.create({
+  let completion = await openai.chat.completions.create({
     model: "gpt-5-nano-2025-08-07",
-    messages: [
-      {
-        role: "user",
-        content: prompt,
-      },
-    ],
-    tools: tools,
+    messages,
+    tools,
     response_format: zodResponseFormat(z.object({
       value: z.string()
     }), "greeting_response"),
@@ -66,6 +61,31 @@ async function _greeting(name: string): Promise<string> {
   const endTime = performance.now();
   console.log("Prompt for variable 'greeting' took " + (endTime - startTime).toFixed(2) + " ms");
   console.log("Completion response:", JSON.stringify(completion, null, 2));
+
+  let responseMessage = completion.choices[0].message;
+  // Handle function calls
+  while (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
+    // Add assistant's response with tool calls to message history
+    messages.push(responseMessage);
+
+    // Process each tool call
+    for (const toolCall of responseMessage.tool_calls) {
+      
+    }
+
+    // Get the next response from the model
+    completion = await openai.chat.completions.create({
+      model: "gpt-5-nano-2025-08-07",
+      messages: messages,
+      tools: tools,
+    });
+
+    responseMessage = completion.choices[0].message;
+  }
+
+  // Add final assistant response to history
+  messages.push(responseMessage);
+
   try {
   const result = JSON.parse(completion.choices[0].message.content || "");
   console.log("greeting:", result.value);

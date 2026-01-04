@@ -191,7 +191,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       if (!this.functionScopedVariables.includes(varName)) {
         throw new Error(
           `Variable '${varName}' used in prompt interpolation but not defined. ` +
-          `Referenced in assignment to '${variableName}'.`
+            `Referenced in assignment to '${variableName}'.`
         );
       }
     }
@@ -219,7 +219,10 @@ export class TypeScriptGenerator extends BaseGenerator {
     const properties: Record<string, { type: string; description: string }> =
       {};
     parameters.forEach((param) => {
-      const typeHint = this.typeHints[param];
+      const typeHint = this.typeHints[param] || {
+        type: "primitiveType" as const,
+        value: "string",
+      };
       const tsType = variableTypeToString(typeHint, this.typeAliases);
       properties[param] = { type: tsType, description: "" };
     });
@@ -227,7 +230,8 @@ export class TypeScriptGenerator extends BaseGenerator {
     return renderTool.default({
       name: functionName,
       description: node.docString?.value || "No description provided.",
-      properties: Object.keys(properties).length > 0 ? JSON.stringify(properties) : "",
+      properties:
+        Object.keys(properties).length > 0 ? JSON.stringify(properties) : "",
       requiredParameters: parameters.map((p) => `"${p}"`).join(","),
     });
   }
@@ -367,15 +371,19 @@ export class TypeScriptGenerator extends BaseGenerator {
       )
       .join(", ");
 
-    const _tools = this.toolsUsed.map(toolName => `${toolName}Tool`).join(", ");
+    const _tools = this.toolsUsed
+      .map((toolName) => `${toolName}Tool`)
+      .join(", ");
 
-    const tools = _tools.length > 0 ? `[${_tools}]` : 'undefined';
+    const tools = _tools.length > 0 ? `[${_tools}]` : "undefined";
 
-    const functionCalls = this.toolsUsed.map(toolName => {
-      return renderFunctionCall.default({
-        name: toolName,
-      });
-    }).join("\n");
+    const functionCalls = this.toolsUsed
+      .map((toolName) => {
+        return renderFunctionCall.default({
+          name: toolName,
+        });
+      })
+      .join("\n");
     this.toolsUsed = []; // reset after use
     return promptFunction.default({
       variableName,
@@ -384,7 +392,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       promptCode,
       zodSchema,
       tools,
-      functionCalls
+      functionCalls,
     });
   }
 }

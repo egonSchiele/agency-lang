@@ -207,7 +207,11 @@ export class TypeScriptGenerator extends BaseGenerator {
    */
   protected processFunctionDefinition(node: FunctionDefinition): string {
     const { functionName, body, parameters } = node;
-
+    if (this.graphNodes.includes(functionName)) {
+      throw new Error(
+        `There is already a node named '${functionName}'. Functions can't have the same name as an existing node.`
+      );
+    }
     const functionLines: string[] = [];
     functionLines.push(`async function ${functionName}() {`);
     this.functionScopedVariables = [...parameters];

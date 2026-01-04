@@ -113,8 +113,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       if (caseItem.type === "comment") {
         lines.push(`  // ${caseItem.content}`);
         continue;
-      }
-      if (caseItem.caseValue === "_") {
+      } else if (caseItem.caseValue === "_") {
         lines.push(`  default:`);
       } else {
         const caseValueCode = this.processNode(caseItem.caseValue);

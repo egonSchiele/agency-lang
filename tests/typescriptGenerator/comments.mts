@@ -78,7 +78,7 @@ console.log("Running")
 console.log("Stopped")
     break;
   //  Default case comment
-  case _:
+  default:
 console.log("Unknown")
     break;
 }//  Final comment at end of file

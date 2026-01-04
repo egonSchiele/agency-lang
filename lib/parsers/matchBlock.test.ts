@@ -1,23 +1,27 @@
-import { describe, it, expect } from 'vitest';
-import { matchBlockParser, matchBlockParserCase, defaultCaseParser } from './matchBlock';
+import { describe, it, expect } from "vitest";
+import {
+  matchBlockParser,
+  matchBlockParserCase,
+  defaultCaseParser,
+} from "./matchBlock";
 
-describe('defaultCaseParser', () => {
+describe("defaultCaseParser", () => {
   const testCases = [
     {
       input: "_",
       expected: {
         success: true,
-        result: "_"
-      }
+        result: "_",
+      },
     },
     {
       input: "x",
-      expected: { success: false }
+      expected: { success: false },
     },
     {
       input: "",
-      expected: { success: false }
-    }
+      expected: { success: false },
+    },
   ];
 
   testCases.forEach(({ input, expected }) => {
@@ -38,7 +42,7 @@ describe('defaultCaseParser', () => {
   });
 });
 
-describe('matchBlockParserCase', () => {
+describe("matchBlockParserCase", () => {
   const testCases = [
     {
       input: "1 => 2",
@@ -47,9 +51,9 @@ describe('matchBlockParserCase', () => {
         result: {
           type: "matchBlockCase",
           caseValue: { type: "number", value: "1" },
-          body: { type: "number", value: "2" }
-        }
-      }
+          body: { type: "number", value: "2" },
+        },
+      },
     },
     {
       input: "x => y",
@@ -58,9 +62,9 @@ describe('matchBlockParserCase', () => {
         result: {
           type: "matchBlockCase",
           caseValue: { type: "variableName", value: "x" },
-          body: { type: "variableName", value: "y" }
-        }
-      }
+          body: { type: "variableName", value: "y" },
+        },
+      },
     },
     {
       input: '"hello" => "world"',
@@ -69,9 +73,9 @@ describe('matchBlockParserCase', () => {
         result: {
           type: "matchBlockCase",
           caseValue: { type: "string", value: "hello" },
-          body: { type: "string", value: "world" }
-        }
-      }
+          body: { type: "string", value: "world" },
+        },
+      },
     },
     {
       input: "_ => 42",
@@ -79,10 +83,10 @@ describe('matchBlockParserCase', () => {
         success: true,
         result: {
           type: "matchBlockCase",
-          caseValue: { type: "variableName", value: "_" },
-          body: { type: "number", value: "42" }
-        }
-      }
+          caseValue: "_",
+          body: { type: "number", value: "42" },
+        },
+      },
     },
     {
       input: "  x  =>  y  ",
@@ -91,9 +95,9 @@ describe('matchBlockParserCase', () => {
         result: {
           type: "matchBlockCase",
           caseValue: { type: "variableName", value: "x" },
-          body: { type: "variableName", value: "y" }
-        }
-      }
+          body: { type: "variableName", value: "y" },
+        },
+      },
     },
     {
       input: "x => result = 5",
@@ -105,10 +109,10 @@ describe('matchBlockParserCase', () => {
           body: {
             type: "assignment",
             variableName: "result",
-            value: { type: "number", value: "5" }
-          }
-        }
-      }
+            value: { type: "number", value: "5" },
+          },
+        },
+      },
     },
     {
       input: "x => print(y)",
@@ -120,23 +124,23 @@ describe('matchBlockParserCase', () => {
           body: {
             type: "functionCall",
             functionName: "print",
-            arguments: [{ type: "variableName", value: "y" }]
-          }
-        }
-      }
+            arguments: [{ type: "variableName", value: "y" }],
+          },
+        },
+      },
     },
     {
       input: "x -> y",
-      expected: { success: false }
+      expected: { success: false },
     },
     {
       input: "=> y",
-      expected: { success: false }
+      expected: { success: false },
     },
     {
       input: "x =>",
-      expected: { success: false }
-    }
+      expected: { success: false },
+    },
   ];
 
   testCases.forEach(({ input, expected }) => {
@@ -157,7 +161,7 @@ describe('matchBlockParserCase', () => {
   });
 });
 
-describe('matchBlockParser', () => {
+describe("matchBlockParser", () => {
   const testCases = [
     {
       name: "basic match with variable expression and single case",
@@ -173,11 +177,11 @@ describe('matchBlockParser', () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "variableName", value: "x" },
-              body: { type: "number", value: "1" }
-            }
-          ]
-        }
-      }
+              body: { type: "number", value: "1" },
+            },
+          ],
+        },
+      },
     },
     {
       name: "match with multiple cases",
@@ -194,16 +198,16 @@ describe('matchBlockParser', () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "variableName", value: "x" },
-              body: { type: "number", value: "1" }
+              body: { type: "number", value: "1" },
             },
             {
               type: "matchBlockCase",
               caseValue: { type: "variableName", value: "y" },
-              body: { type: "number", value: "2" }
-            }
-          ]
-        }
-      }
+              body: { type: "number", value: "2" },
+            },
+          ],
+        },
+      },
     },
     {
       name: "match with default case",
@@ -220,16 +224,16 @@ describe('matchBlockParser', () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "variableName", value: "x" },
-              body: { type: "number", value: "1" }
+              body: { type: "number", value: "1" },
             },
             {
               type: "matchBlockCase",
-              caseValue: { type: "variableName", value: "_" },
-              body: { type: "number", value: "2" }
-            }
-          ]
-        }
-      }
+              caseValue: "_",
+              body: { type: "number", value: "2" },
+            },
+          ],
+        },
+      },
     },
     {
       name: "match with semicolon separators",
@@ -245,21 +249,21 @@ describe('matchBlockParser', () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "variableName", value: "x" },
-              body: { type: "number", value: "1" }
+              body: { type: "number", value: "1" },
             },
             {
               type: "matchBlockCase",
               caseValue: { type: "variableName", value: "y" },
-              body: { type: "number", value: "2" }
+              body: { type: "number", value: "2" },
             },
             {
               type: "matchBlockCase",
-              caseValue: { type: "variableName", value: "_" },
-              body: { type: "number", value: "3" }
-            }
-          ]
-        }
-      }
+              caseValue: "_",
+              body: { type: "number", value: "3" },
+            },
+          ],
+        },
+      },
     },
     {
       name: "match with string literals",
@@ -276,16 +280,16 @@ describe('matchBlockParser', () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "string", value: "active" },
-              body: { type: "string", value: "running" }
+              body: { type: "string", value: "running" },
             },
             {
               type: "matchBlockCase",
               caseValue: { type: "string", value: "inactive" },
-              body: { type: "string", value: "stopped" }
-            }
-          ]
-        }
-      }
+              body: { type: "string", value: "stopped" },
+            },
+          ],
+        },
+      },
     },
     {
       name: "match with number literals",
@@ -303,21 +307,21 @@ describe('matchBlockParser', () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "number", value: "200" },
-              body: { type: "string", value: "OK" }
+              body: { type: "string", value: "OK" },
             },
             {
               type: "matchBlockCase",
               caseValue: { type: "number", value: "404" },
-              body: { type: "string", value: "Not Found" }
+              body: { type: "string", value: "Not Found" },
             },
             {
               type: "matchBlockCase",
               caseValue: { type: "number", value: "500" },
-              body: { type: "string", value: "Error" }
-            }
-          ]
-        }
-      }
+              body: { type: "string", value: "Error" },
+            },
+          ],
+        },
+      },
     },
     {
       name: "match with assignment bodies",
@@ -337,8 +341,8 @@ describe('matchBlockParser', () => {
               body: {
                 type: "assignment",
                 variableName: "result",
-                value: { type: "number", value: "10" }
-              }
+                value: { type: "number", value: "10" },
+              },
             },
             {
               type: "matchBlockCase",
@@ -346,12 +350,12 @@ describe('matchBlockParser', () => {
               body: {
                 type: "assignment",
                 variableName: "result",
-                value: { type: "number", value: "20" }
-              }
-            }
-          ]
-        }
-      }
+                value: { type: "number", value: "20" },
+              },
+            },
+          ],
+        },
+      },
     },
     {
       name: "match with function call bodies",
@@ -371,8 +375,8 @@ describe('matchBlockParser', () => {
               body: {
                 type: "functionCall",
                 functionName: "print",
-                arguments: [{ type: "string", value: "Starting" }]
-              }
+                arguments: [{ type: "string", value: "Starting" }],
+              },
             },
             {
               type: "matchBlockCase",
@@ -380,12 +384,12 @@ describe('matchBlockParser', () => {
               body: {
                 type: "functionCall",
                 functionName: "print",
-                arguments: [{ type: "string", value: "Stopping" }]
-              }
-            }
-          ]
-        }
-      }
+                arguments: [{ type: "string", value: "Stopping" }],
+              },
+            },
+          ],
+        },
+      },
     },
     {
       name: "match with minimal whitespace",
@@ -399,11 +403,11 @@ describe('matchBlockParser', () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "variableName", value: "y" },
-              body: { type: "number", value: "1" }
-            }
-          ]
-        }
-      }
+              body: { type: "number", value: "1" },
+            },
+          ],
+        },
+      },
     },
     {
       name: "match with number expression",
@@ -419,11 +423,11 @@ describe('matchBlockParser', () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "number", value: "42" },
-              body: { type: "string", value: "found" }
-            }
-          ]
-        }
-      }
+              body: { type: "string", value: "found" },
+            },
+          ],
+        },
+      },
     },
     {
       name: "match with string expression",
@@ -439,11 +443,11 @@ describe('matchBlockParser', () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "string", value: "test" },
-              body: { type: "number", value: "1" }
-            }
-          ]
-        }
-      }
+              body: { type: "number", value: "1" },
+            },
+          ],
+        },
+      },
     },
     {
       name: "match with empty cases (no cases)",
@@ -454,40 +458,40 @@ describe('matchBlockParser', () => {
         result: {
           type: "matchBlock",
           expression: { type: "variableName", value: "x" },
-          cases: []
-        }
-      }
+          cases: [],
+        },
+      },
     },
     {
       name: "missing opening parenthesis",
       input: `match foo) { x => 1 }`,
-      expected: { success: false }
+      expected: { success: false },
     },
     {
       name: "missing closing parenthesis",
       input: `match(foo { x => 1 }`,
-      expected: { success: false }
+      expected: { success: false },
     },
     {
       name: "missing opening brace",
       input: `match(foo) x => 1 }`,
-      expected: { success: false }
+      expected: { success: false },
     },
     {
       name: "missing closing brace",
       input: `match(foo) { x => 1`,
-      expected: { success: false }
+      expected: { success: false },
     },
     {
       name: "missing expression",
       input: `match() { x => 1 }`,
-      expected: { success: false }
+      expected: { success: false },
     },
     {
       name: "invalid match keyword",
       input: `macth(foo) { x => 1 }`,
-      expected: { success: false }
-    }
+      expected: { success: false },
+    },
   ];
 
   testCases.forEach(({ name, input, expected }) => {

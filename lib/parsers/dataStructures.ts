@@ -55,7 +55,7 @@ export const adlObjectKVParser: Parser<ADLObjectKV> = (
     seqC(
       optionalSpaces,
       optional(char('"')),
-      capture(manyWithJoin(noneOf('"\n')), "key"),
+      capture(manyWithJoin(noneOf('":\n\t ')), "key"),
       optional(char('"')),
       optionalSpaces,
       char(":"),

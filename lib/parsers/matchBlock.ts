@@ -39,7 +39,7 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = seqC(
   set("type", "matchBlockCase"),
   optionalSpaces,
   capture(
-    or(accessExpressionParser, literalParser, defaultCaseParser),
+    or(defaultCaseParser, accessExpressionParser, literalParser),
     "caseValue"
   ),
   optionalSpaces,

@@ -366,7 +366,7 @@ export class TypeScriptGenerator extends BaseGenerator {
 
     const _tools = this.toolsUsed.map(toolName => `${toolName}Tool`).join(", ");
 
-    const tools = _tools.length > 0 ? _tools : 'undefined';
+    const tools = _tools.length > 0 ? `[${_tools}]` : 'undefined';
 
     const functionCalls = this.toolsUsed.map(toolName => {
       return renderFunctionCall.default({

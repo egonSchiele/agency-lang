@@ -8,7 +8,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
   const prompt = {{{promptCode:string}}};
   const startTime = performance.now();
   const messages:any[] = [{ role: "user", content: prompt }];
-  const tools = [{{{tools}}}];
+  const tools = {{{tools}}};
   console.log("Running prompt for {{{variableName:string}}}")
   let completion = await openai.chat.completions.create({
     model: "gpt-5-nano-2025-08-07",

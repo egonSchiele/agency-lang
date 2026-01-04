@@ -13,7 +13,7 @@ importers:
         version: 6.15.0(zod@4.2.1)
       simplemachine:
         specifier: github:egonSchiele/simplemachine
-        version: https://codeload.github.com/egonSchiele/simplemachine/tar.gz/d858c6a661f0d153f1edbb559ef3f2667493fc29
+        version: https://codeload.github.com/egonSchiele/simplemachine/tar.gz/f3b1483d3bf7f355d408e8ef0e6211782c131c59
       tarsec:
         specifier: ^0.0.22
         version: 0.0.22
@@ -577,9 +577,9 @@ packages:
   siginfo@2.0.0:
     resolution: {integrity: sha512-ybx0WO1/8bSBLEWXZvEd7gMW3Sn3JFlW3TvX1nREbDLRNQNaeNN8WK0meBwPdAaOI7TtRRRJn/Es1zhrrCHu7g==}
 
-  simplemachine@https://codeload.github.com/egonSchiele/simplemachine/tar.gz/d858c6a661f0d153f1edbb559ef3f2667493fc29:
-    resolution: {tarball: https://codeload.github.com/egonSchiele/simplemachine/tar.gz/d858c6a661f0d153f1edbb559ef3f2667493fc29}
-    version: 0.0.26
+  simplemachine@https://codeload.github.com/egonSchiele/simplemachine/tar.gz/f3b1483d3bf7f355d408e8ef0e6211782c131c59:
+    resolution: {tarball: https://codeload.github.com/egonSchiele/simplemachine/tar.gz/f3b1483d3bf7f355d408e8ef0e6211782c131c59}
+    version: 0.0.27
 
   slash@3.0.0:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}
@@ -1163,7 +1163,7 @@ snapshots:
 
   siginfo@2.0.0: {}
 
-  simplemachine@https://codeload.github.com/egonSchiele/simplemachine/tar.gz/d858c6a661f0d153f1edbb559ef3f2667493fc29:
+  simplemachine@https://codeload.github.com/egonSchiele/simplemachine/tar.gz/f3b1483d3bf7f355d408e8ef0e6211782c131c59:
     dependencies:
       nanoid: 5.1.6
       termcolors: https://codeload.github.com/egonSchiele/termcolors/tar.gz/d5c1f497618398ce1440d2383d2aad2642e4051f

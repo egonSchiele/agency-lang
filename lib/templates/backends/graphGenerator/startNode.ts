@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `const initialState: State = {};
+export const template = `const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("{{{startNode}}}", initialState);`;
 
 export type TemplateType = {

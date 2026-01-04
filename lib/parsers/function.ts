@@ -29,6 +29,7 @@ import { optionalSemicolon } from "./parserUtils";
 import { typeAliasParser, typeHintParser } from "./typeHints";
 import { comma, optionalSpaces, varNameChar } from "./utils";
 import { GraphNodeDefinition } from "@/types/graphNode";
+import { returnStatementParser } from "./returnStatement";
 
 const trim = (s: string) => s.trim();
 export const docStringParser: Parser<DocString> = trace(
@@ -49,6 +50,7 @@ export const functionBodyParser = trace(
       or(
         debug(typeAliasParser, "error in typeAliasParser"),
         debug(typeHintParser, "error in typeHintParser"),
+        returnStatementParser,
         matchBlockParser,
         functionParser,
         accessExpressionParser,

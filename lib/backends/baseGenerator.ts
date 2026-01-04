@@ -21,13 +21,14 @@ import { ADLArray, ADLObject } from "@/types/dataStructures";
 import { FunctionCall, FunctionDefinition } from "@/types/function";
 import { GraphNodeDefinition } from "@/types/graphNode";
 import { MatchBlock } from "@/types/matchBlock";
+import { ReturnStatement } from "@/types/returnStatement";
 
 export class BaseGenerator {
   protected typeHints: TypeHintMap = {};
   protected graphNodes: string[] = [];
   protected generatedStatements: string[] = [];
   protected generatedTypeAliases: string[] = [];
-  protected variablesInScope: Set<string> = new Set();
+  protected functionScopedVariables: string[] = [];
   protected typeAliases: Record<string, VariableType> = {};
   protected functionsUsed: Set<string> = new Set();
   constructor() {}
@@ -124,6 +125,10 @@ export class BaseGenerator {
         return this.processADLObject(node);
       case "graphNode":
         return this.processGraphNode(node);
+      case "returnStatement":
+        return this.processReturnStatement(node);
+      default:
+        throw new Error(`Unhandled ADL node type: ${(node as any).type}`);
     }
   }
 

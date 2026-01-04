@@ -20,11 +20,7 @@ import {
   IndexAccess,
 } from "@/types/access";
 import { ADLArray, ADLObject } from "@/types/dataStructures";
-import {
-  FunctionCall,
-  FunctionDefinition,
-  ReturnStatement,
-} from "@/types/function";
+import { FunctionCall, FunctionDefinition } from "@/types/function";
 import { MatchBlock } from "@/types/matchBlock";
 import { escape } from "@/utils";
 import { BaseGenerator } from "./baseGenerator";
@@ -35,6 +31,7 @@ import {
 import { variableTypeToString } from "./typescriptGenerator/typeToString";
 import { mapTypeToZodSchema } from "./typescriptGenerator/typeToZodSchema";
 import * as builtinTools from "@/templates/backends/typescriptGenerator/builtinTools";
+import { ReturnStatement } from "@/types/returnStatement";
 
 export class TypeScriptGenerator extends BaseGenerator {
   constructor() {
@@ -156,7 +153,7 @@ export class TypeScriptGenerator extends BaseGenerator {
   protected processAssignment(node: Assignment): string {
     const { variableName, value } = node;
     // Track this variable as in scope
-    this.variablesInScope.add(variableName);
+    this.functionScopedVariables.push(variableName);
 
     if (value.type === "prompt") {
       return this.processPromptLiteral(variableName, value);
@@ -185,7 +182,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       .map((s) => (s as InterpolationSegment).variableName);
 
     for (const varName of interpolatedVars) {
-      if (!this.variablesInScope.has(varName)) {
+      if (!this.functionScopedVariables.includes(varName)) {
         throw new Error(
           `Variable '${varName}' used in prompt interpolation but not defined. ` +
             `Referenced in assignment to '${variableName}'.`
@@ -209,15 +206,16 @@ export class TypeScriptGenerator extends BaseGenerator {
    * Process a function definition node
    */
   protected processFunctionDefinition(node: FunctionDefinition): string {
-    const { functionName, body } = node;
+    const { functionName, body, parameters } = node;
 
     const functionLines: string[] = [];
     functionLines.push(`async function ${functionName}() {`);
-
+    this.functionScopedVariables = [...parameters];
     const bodyCode: string[] = [];
     for (const stmt of body) {
       bodyCode.push(this.processNode(stmt));
     }
+    this.functionScopedVariables = [];
     functionLines.push(bodyCode.join("\n"));
     functionLines.push("}\n");
     return functionLines.join("\n");

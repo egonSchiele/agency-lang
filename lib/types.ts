@@ -2,13 +2,10 @@ import { Literal } from "@/types/literals";
 import { TypeAlias, TypeHint, VariableType } from "@/types/typeHints";
 import { MatchBlock } from "./types/matchBlock";
 import { AccessExpression } from "./types/access";
-import {
-  FunctionCall,
-  FunctionDefinition,
-  ReturnStatement,
-} from "./types/function";
+import { FunctionCall, FunctionDefinition } from "./types/function";
 import { ADLArray, ADLObject } from "./types/dataStructures";
 import { GraphNodeDefinition } from "./types/graphNode";
+import { ReturnStatement } from "./types/returnStatement";
 export * from "@/types/typeHints";
 export * from "@/types/literals";
 export * from "@/types/matchBlock";

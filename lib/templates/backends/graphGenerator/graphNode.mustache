@@ -1,3 +1,6 @@
 graph.node("{{{name}}}", async (state) => {
+    {{#hasParam}}
+    const {{{paramName}}} = state.data;
+    {{/hasParam}}
     {{{body}}}
 });

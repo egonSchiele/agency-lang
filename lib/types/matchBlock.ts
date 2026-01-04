@@ -3,6 +3,7 @@ import { AccessExpression } from "./access";
 import { Literal } from "./literals";
 import { FunctionCall } from "./function";
 import { ADLArray, ADLObject } from "./dataStructures";
+import { ReturnStatement } from "./returnStatement";
 
 export type DefaultCase = "_";
 
@@ -15,7 +16,8 @@ export type MatchBlockCase = {
     | FunctionCall
     | AccessExpression
     | ADLArray
-    | ADLObject;
+    | ADLObject
+    | ReturnStatement;
 };
 
 export type MatchBlock = {

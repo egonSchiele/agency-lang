@@ -9,7 +9,11 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-type State = Record<string, any>;
+type State = {
+  messages: string[];
+  data: any;
+}
+
 // enable debug logging
 const graphConfig = {
   debug: {

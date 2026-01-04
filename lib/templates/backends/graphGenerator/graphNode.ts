@@ -4,12 +4,17 @@
 import { apply } from "typestache";
 
 export const template = `graph.node("{{{name}}}", async (state) => {
+    {{#hasParam}}
+    const {{{paramName}}} = state.data;
+    {{/hasParam}}
     {{{body}}}
 });
 `;
 
 export type TemplateType = {
   name: string | boolean | number;
+  hasParam: boolean;
+  paramName: string | boolean | number;
   body: string | boolean | number;
 };
 

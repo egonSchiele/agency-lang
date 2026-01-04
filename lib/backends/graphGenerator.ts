@@ -10,6 +10,7 @@ import {
 } from "@/types";
 
 import * as renderEdge from "@/templates/backends/graphGenerator/edge";
+import * as renderConditionalEdge from "@/templates/backends/graphGenerator/conditionalEdge";
 import * as renderImports from "@/templates/backends/graphGenerator/imports";
 import * as renderNode from "@/templates/backends/graphGenerator/node";
 import * as renderStartNode from "@/templates/backends/graphGenerator/startNode";
@@ -17,6 +18,7 @@ import * as promptFunction from "@/templates/backends/typescriptGenerator/prompt
 import * as promptNode from "@/templates/backends/graphGenerator/promptNode";
 import * as graphNode from "@/templates/backends/graphGenerator/graphNode";
 import * as builtinTools from "@/templates/backends/graphGenerator/builtinTools";
+import * as goToNode from "@/templates/backends/graphGenerator/goToNode";
 import { TypeScriptGenerator } from "./typescriptGenerator";
 import { variableTypeToString } from "./typescriptGenerator/typeToString";
 import { mapTypeToZodSchema } from "./typescriptGenerator/typeToZodSchema";
@@ -28,7 +30,6 @@ export class GraphGenerator extends TypeScriptGenerator {
   protected typeHints: TypeHintMap = {};
   protected generatedStatements: string[] = [];
   protected generatedTypeAliases: string[] = [];
-  protected variablesInScope: Set<string> = new Set();
   protected typeAliases: Record<string, VariableType> = {};
   protected functionsUsed: Set<string> = new Set();
   protected adjacentNodes: Record<string, string[]> = {};
@@ -223,29 +224,46 @@ export class GraphGenerator extends TypeScriptGenerator {
   }
 
   protected processGraphNode(node: GraphNodeDefinition): string {
-    const { nodeName, body } = node;
+    const { nodeName, body, parameters } = node;
+    if (parameters.length > 1) {
+      throw new Error(
+        `Graph node '${nodeName}' has more than one parameter. Only one parameter is supported for now.`
+      );
+    }
     this.adjacentNodes[nodeName] = [];
     this.currentAdjacentNodes = [];
+    this.functionScopedVariables = [];
+    if (parameters.length > 0) {
+      this.functionScopedVariables.push(parameters[0]);
+    }
 
     const bodyCode: string[] = [];
     for (const stmt of body) {
       bodyCode.push(this.processNode(stmt));
     }
+    this.functionScopedVariables = [];
+    this.adjacentNodes[nodeName] = [...this.currentAdjacentNodes];
     return graphNode.default({
       name: nodeName,
       body: bodyCode.join("\n"),
+      hasParam: parameters.length > 0,
+      paramName: parameters[0] || "input",
     });
   }
 
   protected processFunctionCall(node: FunctionCall): string {
-    this.currentAdjacentNodes.push(node.functionName);
-    this.functionsUsed.add(node.functionName);
-    const functionCallCode = this.generateFunctionCallExpression(node);
+    if (this.graphNodes.includes(node.functionName)) {
+      this.currentAdjacentNodes.push(node.functionName);
+      this.functionsUsed.add(node.functionName);
+      const functionCallCode = this.generateNodeCallExpression(node);
 
-    return functionCallCode;
+      return functionCallCode;
+    } else {
+      return super.processFunctionCall(node);
+    }
   }
 
-  protected generateFunctionCallExpression(node: FunctionCall): string {
+  protected generateNodeCallExpression(node: FunctionCall): string {
     const functionName = mapFunctionName(node.functionName);
     const args = node.arguments;
     const parts = args.map((arg) => {
@@ -259,7 +277,10 @@ export class GraphGenerator extends TypeScriptGenerator {
       }
     });
     const argsString = parts.join(", ");
-    return `return goToNode("${functionName}", ${argsString});`;
+    return goToNode.default({
+      nodeName: functionName,
+      data: argsString,
+    });
   } /* 
 
   protected generateLiteral(literal: Literal): string {
@@ -275,14 +296,15 @@ export class GraphGenerator extends TypeScriptGenerator {
   }
   protected postprocess(): string {
     const lines: string[] = [];
-    this.graphNodes.forEach((node, index) => {
-      const nextNode = this.graphNodes[index + 1];
-      if (!nextNode) return;
-
+    Object.keys(this.adjacentNodes).forEach((node) => {
+      const adjacent = this.adjacentNodes[node];
+      if (adjacent.length === 0) {
+        return;
+      }
       lines.push(
-        renderEdge.default({
+        renderConditionalEdge.default({
           fromNode: node,
-          toNode: nextNode,
+          toNodes: JSON.stringify(adjacent),
         })
       );
     });
@@ -292,6 +314,8 @@ export class GraphGenerator extends TypeScriptGenerator {
         startNode: this.graphNodes[0],
       })
     );
+
+    console.log({ lines });
 
     return lines.join("\n");
   }

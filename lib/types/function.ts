@@ -16,11 +16,6 @@ export type FunctionCall = {
   arguments: (Literal | AccessExpression | FunctionCall)[];
 };
 
-export type ReturnStatement = {
-  type: "returnStatement";
-  value: ADLNode;
-};
-
 export type DocString = {
   type: "docString";
   value: string;

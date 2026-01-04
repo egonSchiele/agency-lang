@@ -79,7 +79,7 @@ describe('matchBlockParserCase', () => {
         success: true,
         result: {
           type: "matchBlockCase",
-          caseValue: "_",
+          caseValue: { type: "variableName", value: "_" },
           body: { type: "number", value: "42" }
         }
       }
@@ -224,7 +224,7 @@ describe('matchBlockParser', () => {
             },
             {
               type: "matchBlockCase",
-              caseValue: "_",
+              caseValue: { type: "variableName", value: "_" },
               body: { type: "number", value: "2" }
             }
           ]
@@ -254,7 +254,7 @@ describe('matchBlockParser', () => {
             },
             {
               type: "matchBlockCase",
-              caseValue: "_",
+              caseValue: { type: "variableName", value: "_" },
               body: { type: "number", value: "3" }
             }
           ]

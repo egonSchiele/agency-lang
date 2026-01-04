@@ -44,6 +44,7 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 
 
 
+
 async function _bar(): Promise<number> {
   const prompt = `the number 1`;
   const startTime = performance.now();

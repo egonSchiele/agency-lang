@@ -44,6 +44,7 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 
 
 
+
 async function _bar(): Promise<number> {
   const prompt = `the 10th fibonacci number`;
   const startTime = performance.now();

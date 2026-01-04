@@ -45,6 +45,7 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 
 
 type Coords = { x: number; y: number };
+
 async function _foo(): Promise<Coords> {
   const prompt = `a set of coordinates`;
   const startTime = performance.now();

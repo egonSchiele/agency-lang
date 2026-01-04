@@ -44,6 +44,7 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 
 
 
+
 async function _url(): Promise<{ hostname: string; port: number }> {
   const prompt = `extract the hostname and port from \"https://example.com:8080\"`;
   const startTime = performance.now();

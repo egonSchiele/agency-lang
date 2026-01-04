@@ -15,13 +15,14 @@ import * as renderNode from "@/templates/backends/graphGenerator/node";
 import * as renderStartNode from "@/templates/backends/graphGenerator/startNode";
 import * as promptFunction from "@/templates/backends/typescriptGenerator/promptFunction";
 import * as promptNode from "@/templates/backends/graphGenerator/promptNode";
-import * as functionNode from "@/templates/backends/graphGenerator/functionNode";
+import * as graphNode from "@/templates/backends/graphGenerator/graphNode";
 import * as builtinTools from "@/templates/backends/graphGenerator/builtinTools";
 import { TypeScriptGenerator } from "./typescriptGenerator";
 import { variableTypeToString } from "./typescriptGenerator/typeToString";
 import { mapTypeToZodSchema } from "./typescriptGenerator/typeToZodSchema";
 import { wrapInReturn } from "./utils";
 import { mapFunctionName } from "./typescriptGenerator/builtins";
+import { GraphNodeDefinition } from "@/types/graphNode";
 
 export class GraphGenerator extends TypeScriptGenerator {
   protected typeHints: TypeHintMap = {};
@@ -217,21 +218,21 @@ export class GraphGenerator extends TypeScriptGenerator {
   }
  */
 
-  protected processNodeName(node: FunctionDefinition): void {
-    this.graphNodes.push(node.functionName);
+  protected processGraphNodeName(node: GraphNodeDefinition): void {
+    this.graphNodes.push(node.nodeName);
   }
 
-  protected processFunctionDefinition(node: FunctionDefinition): string {
-    const { functionName, body } = node;
-    this.adjacentNodes[functionName] = [];
+  protected processGraphNode(node: GraphNodeDefinition): string {
+    const { nodeName, body } = node;
+    this.adjacentNodes[nodeName] = [];
     this.currentAdjacentNodes = [];
 
     const bodyCode: string[] = [];
     for (const stmt of body) {
       bodyCode.push(this.processNode(stmt));
     }
-    return functionNode.default({
-      name: functionName,
+    return graphNode.default({
+      name: nodeName,
       body: bodyCode.join("\n"),
     });
   }

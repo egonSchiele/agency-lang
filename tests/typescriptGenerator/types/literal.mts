@@ -44,6 +44,7 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 
 
 
+
 async function _foo(): Promise<"hi"> {
   const prompt = `the string hi`;
   const startTime = performance.now();
@@ -75,6 +76,7 @@ async function _foo(): Promise<"hi"> {
   }
 }
 const foo = await _foo();
+
 async function _bar(): Promise<42> {
   const prompt = `the number 42`;
   const startTime = performance.now();
@@ -106,6 +108,7 @@ async function _bar(): Promise<42> {
   }
 }
 const bar = await _bar();
+
 async function _baz(): Promise<true> {
   const prompt = `the boolean true`;
   const startTime = performance.now();

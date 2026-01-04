@@ -44,6 +44,7 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 
 
 
+
 async function _numbers(): Promise<number[]> {
   const prompt = `the first 5 prime numbers`;
   const startTime = performance.now();
@@ -75,7 +76,8 @@ async function _numbers(): Promise<number[]> {
   }
 }
 const numbers = await _numbers();
-console.log(numbers)async function _greetings(): Promise<string[]> {
+console.log(numbers)
+async function _greetings(): Promise<string[]> {
   const prompt = `a list of 3 common greetings in different languages`;
   const startTime = performance.now();
   console.log("Running prompt for greetings")

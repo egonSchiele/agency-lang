@@ -129,12 +129,9 @@ describe("functionBodyParser", () => {
         success: true,
         result: [
           {
-            type: "returnStatement",
-            value: {
-              type: "assignment",
-              variableName: "foo",
-              value: { type: "number", value: "1" },
-            },
+            type: "assignment",
+            variableName: "foo",
+            value: { type: "number", value: "1" },
           },
         ],
       },
@@ -145,12 +142,9 @@ describe("functionBodyParser", () => {
         success: true,
         result: [
           {
-            type: "returnStatement",
-            value: {
-              type: "assignment",
-              variableName: "bar",
-              value: { type: "string", value: "hello" },
-            },
+            type: "assignment",
+            variableName: "bar",
+            value: { type: "string", value: "hello" },
           },
         ],
       },
@@ -169,8 +163,8 @@ describe("functionBodyParser", () => {
             },
           },
           {
-            type: "returnStatement",
-            value: { type: "variableName", value: "foo" },
+            type: "variableName",
+            value: "foo",
           },
         ],
       },
@@ -186,12 +180,9 @@ describe("functionBodyParser", () => {
             value: { type: "number", value: "5" },
           },
           {
-            type: "returnStatement",
-            value: {
-              type: "assignment",
-              variableName: "y",
-              value: { type: "number", value: "10" },
-            },
+            type: "assignment",
+            variableName: "y",
+            value: { type: "number", value: "10" },
           },
         ],
       },
@@ -202,8 +193,8 @@ describe("functionBodyParser", () => {
         success: true,
         result: [
           {
-            type: "returnStatement",
-            value: { type: "number", value: "42" },
+            type: "number",
+            value: "42",
           },
         ],
       },
@@ -248,12 +239,9 @@ describe("functionParser", () => {
           docString: undefined,
           body: [
             {
-              type: "returnStatement",
-              value: {
-                type: "assignment",
-                variableName: "foo",
-                value: { type: "number", value: "1" },
-              },
+              type: "assignment",
+              variableName: "foo",
+              value: { type: "number", value: "1" },
             },
           ],
         },
@@ -270,14 +258,11 @@ describe("functionParser", () => {
           docString: undefined,
           body: [
             {
-              type: "returnStatement",
+              type: "assignment",
+              variableName: "bar",
               value: {
-                type: "assignment",
-                variableName: "bar",
-                value: {
-                  type: "prompt",
-                  segments: [{ type: "text", value: "say hello" }],
-                },
+                type: "prompt",
+                segments: [{ type: "text", value: "say hello" }],
               },
             },
           ],
@@ -300,12 +285,9 @@ describe("functionParser", () => {
               value: { type: "number", value: "5" },
             },
             {
-              type: "returnStatement",
-              value: {
-                type: "assignment",
-                variableName: "y",
-                value: { type: "number", value: "10" },
-              },
+              type: "assignment",
+              variableName: "y",
+              value: { type: "number", value: "10" },
             },
           ],
         },
@@ -335,12 +317,9 @@ describe("functionParser", () => {
           docString: undefined,
           body: [
             {
-              type: "returnStatement",
-              value: {
-                type: "assignment",
-                variableName: "foo",
-                value: { type: "number", value: "1" },
-              },
+              type: "assignment",
+              variableName: "foo",
+              value: { type: "number", value: "1" },
             },
           ],
         },
@@ -357,12 +336,9 @@ describe("functionParser", () => {
           docString: undefined,
           body: [
             {
-              type: "returnStatement",
-              value: {
-                type: "assignment",
-                variableName: "foo",
-                value: { type: "number", value: "1" },
-              },
+              type: "assignment",
+              variableName: "foo",
+              value: { type: "number", value: "1" },
             },
           ],
         },
@@ -384,12 +360,9 @@ describe("functionParser", () => {
               value: { type: "number", value: "5" },
             },
             {
-              type: "returnStatement",
-              value: {
-                type: "assignment",
-                variableName: "y",
-                value: { type: "number", value: "10" },
-              },
+              type: "assignment",
+              variableName: "y",
+              value: { type: "number", value: "10" },
             },
           ],
         },
@@ -434,12 +407,9 @@ describe("functionParser", () => {
           },
           body: [
             {
-              type: "returnStatement",
-              value: {
-                type: "assignment",
-                variableName: "foo",
-                value: { type: "number", value: "1" },
-              },
+              type: "assignment",
+              variableName: "foo",
+              value: { type: "number", value: "1" },
             },
           ],
         },
@@ -459,14 +429,11 @@ describe("functionParser", () => {
           },
           body: [
             {
-              type: "returnStatement",
+              type: "assignment",
+              variableName: "bar",
               value: {
-                type: "assignment",
-                variableName: "bar",
-                value: {
-                  type: "prompt",
-                  segments: [{ type: "text", value: "say hello" }],
-                },
+                type: "prompt",
+                segments: [{ type: "text", value: "say hello" }],
               },
             },
           ],
@@ -492,12 +459,9 @@ describe("functionParser", () => {
               value: { type: "number", value: "5" },
             },
             {
-              type: "returnStatement",
-              value: {
-                type: "assignment",
-                variableName: "y",
-                value: { type: "number", value: "10" },
-              },
+              type: "assignment",
+              variableName: "y",
+              value: { type: "number", value: "10" },
             },
           ],
         },
@@ -534,12 +498,9 @@ describe("functionParser", () => {
           },
           body: [
             {
-              type: "returnStatement",
-              value: {
-                type: "assignment",
-                variableName: "x",
-                value: { type: "number", value: "5" },
-              },
+              type: "assignment",
+              variableName: "x",
+              value: { type: "number", value: "5" },
             },
           ],
         },
@@ -557,8 +518,8 @@ describe("functionParser", () => {
           docString: undefined,
           body: [
             {
-              type: "returnStatement",
-              value: { type: "variableName", value: "x" },
+              type: "variableName",
+              value: "x",
             },
           ],
         },
@@ -575,17 +536,14 @@ describe("functionParser", () => {
           docString: undefined,
           body: [
             {
-              type: "returnStatement",
+              type: "assignment",
+              variableName: "bar",
               value: {
-                type: "assignment",
-                variableName: "bar",
-                value: {
-                  type: "prompt",
-                  segments: [
-                    { type: "text", value: "say hello to " },
-                    { type: "interpolation", variableName: "name" },
-                  ],
-                },
+                type: "prompt",
+                segments: [
+                  { type: "text", value: "say hello to " },
+                  { type: "interpolation", variableName: "name" },
+                ],
               },
             },
           ],
@@ -604,8 +562,8 @@ describe("functionParser", () => {
           docString: undefined,
           body: [
             {
-              type: "returnStatement",
-              value: { type: "variableName", value: "x" },
+              type: "variableName",
+              value: "x",
             },
           ],
         },
@@ -627,8 +585,8 @@ describe("functionParser", () => {
               value: { type: "number", value: "42" },
             },
             {
-              type: "returnStatement",
-              value: { type: "variableName", value: "result" },
+              type: "variableName",
+              value: "result",
             },
           ],
         },
@@ -645,8 +603,8 @@ describe("functionParser", () => {
           docString: undefined,
           body: [
             {
-              type: "returnStatement",
-              value: { type: "variableName", value: "x" },
+              type: "variableName",
+              value: "x",
             },
           ],
         },
@@ -663,8 +621,8 @@ describe("functionParser", () => {
           docString: undefined,
           body: [
             {
-              type: "returnStatement",
-              value: { type: "variableName", value: "a" },
+              type: "variableName",
+              value: "a",
             },
           ],
         },
@@ -685,8 +643,8 @@ describe("functionParser", () => {
           },
           body: [
             {
-              type: "returnStatement",
-              value: { type: "variableName", value: "x" },
+              type: "variableName",
+              value: "x",
             },
           ],
         },
@@ -719,8 +677,8 @@ describe("functionParser", () => {
               },
             },
             {
-              type: "returnStatement",
-              value: { type: "variableName", value: "result" },
+              type: "variableName",
+              value: "result",
             },
           ],
         },

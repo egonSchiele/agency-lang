@@ -51,8 +51,8 @@ export class BaseGenerator {
 
     // Pass 3: Collect all node names
     for (const node of program.nodes) {
-      if (node.type === "function") {
-        this.processNodeName(node);
+      if (node.type === "graphNode") {
+        this.processGraphNodeName(node);
       }
     }
 
@@ -91,7 +91,7 @@ export class BaseGenerator {
     // subclasses implement this
   }
 
-  protected processNodeName(node: FunctionDefinition): void {}
+  protected processGraphNodeName(node: GraphNodeDefinition): void {}
 
   protected processNode(node: ADLNode): string {
     switch (node.type) {

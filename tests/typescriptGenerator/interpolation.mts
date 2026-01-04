@@ -45,6 +45,7 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 
 
 const name = "Alice";
+
 async function _greeting(name: string): Promise<string> {
   const prompt = `say hi to ${name}`;
   const startTime = performance.now();

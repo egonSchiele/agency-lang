@@ -3,7 +3,8 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{typeString:string}}}> {
+export const template = `
+async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{typeString:string}}}> {
   const prompt = {{{promptCode:string}}};
   const startTime = performance.now();
   console.log("Running prompt for {{{variableName:string}}}")

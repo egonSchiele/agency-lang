@@ -125,8 +125,6 @@ export class BaseGenerator {
         return this.processADLObject(node);
       case "graphNode":
         return this.processGraphNode(node);
-      case "returnStatement":
-        return this.processReturnStatement(node);
       default:
         throw new Error(`Unhandled ADL node type: ${(node as any).type}`);
     }

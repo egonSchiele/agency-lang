@@ -15,6 +15,7 @@ import {
 import * as renderImports from "@/templates/backends/typescriptGenerator/imports";
 import * as promptFunction from "@/templates/backends/typescriptGenerator/promptFunction";
 import * as renderTool from "@/templates/backends/typescriptGenerator/tool";
+import * as renderFunctionCall from "@/templates/backends/typescriptGenerator/functionCall";
 import {
   AccessExpression,
   DotFunctionCall,
@@ -188,7 +189,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       if (!this.functionScopedVariables.includes(varName)) {
         throw new Error(
           `Variable '${varName}' used in prompt interpolation but not defined. ` +
-            `Referenced in assignment to '${variableName}'.`
+          `Referenced in assignment to '${variableName}'.`
         );
       }
     }
@@ -362,12 +363,25 @@ export class TypeScriptGenerator extends BaseGenerator {
           )}`
       )
       .join(", ");
+
+    const _tools = this.toolsUsed.map(toolName => `${toolName}Tool`).join(", ");
+
+    const tools = _tools.length > 0 ? _tools : 'undefined';
+
+    const functionCalls = this.toolsUsed.map(toolName => {
+      return renderFunctionCall.default({
+        name: toolName,
+      });
+    }).join("\n");
+    this.toolsUsed = []; // reset after use
     return promptFunction.default({
       variableName,
       argsStr,
       typeString,
       promptCode,
       zodSchema,
+      tools,
+      functionCalls
     });
   }
 }

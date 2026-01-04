@@ -15,12 +15,14 @@ export const template = `async function _{{{variableName:string}}}({{{argsStr:st
         content: prompt,
       },
     ],
+    tools: tools,
     response_format: zodResponseFormat(z.object({
       value: {{{zodSchema:string}}}
     }), "{{{variableName:string}}}_response"),
   });
   const endTime = performance.now();
   console.log("Prompt for variable '{{{variableName:string}}}' took " + (endTime - startTime).toFixed(2) + " ms");
+  console.log("Completion response:", JSON.stringify(completion, null, 2));
   try {
   const result = JSON.parse(completion.choices[0].message.content || "");
   console.log("{{{variableName:string}}}:", result.value);

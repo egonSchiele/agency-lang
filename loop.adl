@@ -15,3 +15,43 @@ def tool_call {
 
 msg = input("> ")
 llm(msg)
+
+type Weather = {
+  forecast: "sunny" | "cloudy" | "rainy" | "snowy" | "windy";
+  zip: string;
+}
+
+node llm {
+  zip = input("zip? ")
+  
+  weather :: Weather
+  weather = `Give the weather for this zipcode: ${zip}`
+  weather uses get_current_weather
+  
+  print(weather)
+
+  normalized = weather.forecast.downcase
+  match (normalized) {
+    "sunny" -> route openBlinds
+    "snowy" || "windy" -> turnupHeat
+    _ -> exit
+  }
+  return weather
+  route fooBar
+}
+
+node turnupHeat(weather) {
+  print(weather)
+}
+
+add :: number, number -> number
+def add(a, b) {
+  """
+  adds two numbers together
+  """
+  return a + b
+}
+
+// nodes have a different syntax since nodes can't be tools and vice versa. Tools can have many args, and won't end in being routed to another node
+// tools always return back to the prompt they were invoked from, to send the final response
+// each node can call multiple functions but eventually gets routed to a single node (either directly or conditionally)

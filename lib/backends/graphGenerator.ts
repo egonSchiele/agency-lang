@@ -15,6 +15,7 @@ import * as renderStartNode from "@/templates/backends/graphGenerator/startNode"
 import * as promptFunction from "@/templates/backends/typescriptGenerator/promptFunction";
 import * as promptNode from "@/templates/backends/graphGenerator/promptNode";
 import * as functionNode from "@/templates/backends/graphGenerator/functionNode";
+import * as builtinTools from "@/templates/backends/graphGenerator/builtinTools";
 import { TypeScriptGenerator } from "./typescriptGenerator";
 import { variableTypeToString } from "./typescriptGenerator/typeToString";
 import { mapTypeToZodSchema } from "./typescriptGenerator/typeToZodSchema";
@@ -240,7 +241,11 @@ export class GraphGenerator extends TypeScriptGenerator {
   } */
 
   protected generateImports(): string {
-    return renderImports.default({ nodes: JSON.stringify(this.graphNodes) });
+    let arr = [
+      renderImports.default({ nodes: JSON.stringify(this.graphNodes) }),
+    ];
+    arr.push(builtinTools.default({}));
+    return arr.join("\n");
   }
   protected postprocess(): string {
     const lines: string[] = [];

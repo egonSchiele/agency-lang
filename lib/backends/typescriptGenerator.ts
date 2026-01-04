@@ -34,6 +34,7 @@ import {
 } from "./typescriptGenerator/builtins";
 import { variableTypeToString } from "./typescriptGenerator/typeToString";
 import { mapTypeToZodSchema } from "./typescriptGenerator/typeToZodSchema";
+import * as builtinTools from "@/templates/backends/typescriptGenerator/builtinTools";
 
 export class TypeScriptGenerator extends BaseGenerator {
   constructor() {
@@ -272,7 +273,9 @@ export class TypeScriptGenerator extends BaseGenerator {
   }
 
   protected generateImports(): string {
-    return renderImports.default({});
+    let arr = [renderImports.default({})];
+    arr.push(builtinTools.default({}));
+    return arr.join("\n");
   }
 
   buildPromptString(segments: PromptSegment[], typeHints: TypeHintMap): string {

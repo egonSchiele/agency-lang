@@ -19,10 +19,12 @@ import {
 } from "@/types/access";
 import { ADLArray, ADLObject } from "@/types/dataStructures";
 import { FunctionCall, FunctionDefinition } from "@/types/function";
+import { GraphNodeDefinition } from "@/types/graphNode";
 import { MatchBlock } from "@/types/matchBlock";
 
 export class BaseGenerator {
   protected typeHints: TypeHintMap = {};
+  protected graphNodes: string[] = [];
   protected generatedStatements: string[] = [];
   protected generatedTypeAliases: string[] = [];
   protected variablesInScope: Set<string> = new Set();
@@ -47,7 +49,14 @@ export class BaseGenerator {
       }
     }
 
-    // Pass 3: Process all nodes and generate code
+    // Pass 3: Collect all node names
+    for (const node of program.nodes) {
+      if (node.type === "function") {
+        this.processNodeName(node);
+      }
+    }
+
+    // Pass 4: Process all nodes and generate code
     for (const node of program.nodes) {
       const result = this.processNode(node);
       this.generatedStatements.push(result);
@@ -82,6 +91,8 @@ export class BaseGenerator {
     // subclasses implement this
   }
 
+  protected processNodeName(node: FunctionDefinition): void {}
+
   protected processNode(node: ADLNode): string {
     switch (node.type) {
       case "typeHint":
@@ -111,7 +122,13 @@ export class BaseGenerator {
         return this.processADLArray(node);
       case "adlObject":
         return this.processADLObject(node);
+      case "graphNode":
+        return this.processGraphNode(node);
     }
+  }
+
+  protected processGraphNode(node: GraphNodeDefinition): string {
+    return "processGraphNode not implemented";
   }
 
   protected processADLObject(node: ADLObject): string {

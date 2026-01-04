@@ -1,6 +1,7 @@
 import {
   ADLProgram,
   Assignment,
+  FunctionCall,
   FunctionDefinition,
   InterpolationSegment,
   PromptLiteral,
@@ -20,6 +21,7 @@ import { TypeScriptGenerator } from "./typescriptGenerator";
 import { variableTypeToString } from "./typescriptGenerator/typeToString";
 import { mapTypeToZodSchema } from "./typescriptGenerator/typeToZodSchema";
 import { wrapInReturn } from "./utils";
+import { mapFunctionName } from "./typescriptGenerator/builtins";
 
 export class GraphGenerator extends TypeScriptGenerator {
   protected typeHints: TypeHintMap = {};
@@ -28,7 +30,8 @@ export class GraphGenerator extends TypeScriptGenerator {
   protected variablesInScope: Set<string> = new Set();
   protected typeAliases: Record<string, VariableType> = {};
   protected functionsUsed: Set<string> = new Set();
-  protected graphNodes: string[] = [];
+  protected adjacentNodes: Record<string, string[]> = {};
+  protected currentAdjacentNodes: string[] = [];
   constructor() {
     super();
   }
@@ -213,9 +216,15 @@ export class GraphGenerator extends TypeScriptGenerator {
     });
   }
  */
+
+  protected processNodeName(node: FunctionDefinition): void {
+    this.graphNodes.push(node.functionName);
+  }
+
   protected processFunctionDefinition(node: FunctionDefinition): string {
     const { functionName, body } = node;
-    this.graphNodes.push(functionName);
+    this.adjacentNodes[functionName] = [];
+    this.currentAdjacentNodes = [];
 
     const bodyCode: string[] = [];
     for (const stmt of body) {
@@ -226,15 +235,31 @@ export class GraphGenerator extends TypeScriptGenerator {
       body: bodyCode.join("\n"),
     });
   }
-  /* 
 
   protected processFunctionCall(node: FunctionCall): string {
-    return "processFunctionCall not implemented";
+    this.currentAdjacentNodes.push(node.functionName);
+    this.functionsUsed.add(node.functionName);
+    const functionCallCode = this.generateFunctionCallExpression(node);
+
+    return functionCallCode;
   }
 
   protected generateFunctionCallExpression(node: FunctionCall): string {
-    return "generateFunctionCallExpression not implemented";
-  }
+    const functionName = mapFunctionName(node.functionName);
+    const args = node.arguments;
+    const parts = args.map((arg) => {
+      if (arg.type === "functionCall") {
+        this.functionsUsed.add(arg.functionName);
+        return this.generateFunctionCallExpression(arg);
+      } else if (arg.type === "accessExpression") {
+        return this.processAccessExpression(arg);
+      } else {
+        return this.generateLiteral(arg);
+      }
+    });
+    const argsString = parts.join(", ");
+    return `return goToNode("${functionName}", ${argsString});`;
+  } /* 
 
   protected generateLiteral(literal: Literal): string {
     return "generateLiteral not implemented";

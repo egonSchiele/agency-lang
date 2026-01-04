@@ -28,6 +28,7 @@ import { matchBlockParser } from "./matchBlock";
 import { optionalSemicolon } from "./parserUtils";
 import { typeAliasParser, typeHintParser } from "./typeHints";
 import { comma, optionalSpaces, varNameChar } from "./utils";
+import { GraphNodeDefinition } from "@/types/graphNode";
 
 const trim = (s: string) => s.trim();
 export const docStringParser: Parser<DocString> = trace(
@@ -60,25 +61,9 @@ export const functionBodyParser = trace(
 
     const result = parser(input);
     return result;
-    /*     if (result.success) {
-      const newResult = deepCopy(result.result);
-      const lastNode = newResult.at(-1);
-      if (lastNode && lastNode.type !== "returnStatement") {
-        newResult[newResult.length - 1] = {
-          type: "returnStatement",
-          value: lastNode,
-        };
-      }
-      return {
-        ...result,
-        result: newResult,
-      };
-    } else {
-      return result;
-    }
-    */
   }
 );
+
 export const functionParser: Parser<FunctionDefinition> = trace(
   "functionParser",
   seqC(
@@ -95,6 +80,28 @@ export const functionParser: Parser<FunctionDefinition> = trace(
     char("{"),
     optionalSpaces,
     capture(or(docStringParser, succeed(undefined)), "docString"),
+    optionalSpaces,
+    capture(functionBodyParser, "body"),
+    optionalSpaces,
+    char("}"),
+    optionalSemicolon
+  )
+);
+
+export const graphNodeParser: Parser<GraphNodeDefinition> = trace(
+  "graphNodeParser",
+  seqC(
+    set("type", "graphNode"),
+    str("node"),
+    many1(space),
+    capture(many1Till(char("(")), "nodeName"),
+    char("("),
+    optionalSpaces,
+    capture(sepBy(comma, many1WithJoin(varNameChar)), "parameters"),
+    optionalSpaces,
+    char(")"),
+    optionalSpaces,
+    char("{"),
     optionalSpaces,
     capture(functionBodyParser, "body"),
     optionalSpaces,

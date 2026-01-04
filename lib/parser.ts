@@ -17,7 +17,7 @@ import {
 } from "tarsec";
 import { accessExpressionParser } from "./parsers/access";
 import { assignmentParser } from "./parsers/assignment";
-import { functionParser } from "./parsers/function";
+import { functionParser, graphNodeParser } from "./parsers/function";
 import { functionCallParser } from "./parsers/functionCall";
 import { matchBlockParser } from "./parsers/matchBlock";
 import { commentParser } from "./parsers/comment";
@@ -30,6 +30,7 @@ export const adlNode: Parser<ADLNode[]> = sepBy(
       typeAliasParser,
       typeHintParser,
       matchBlockParser,
+      graphNodeParser,
       functionParser,
       accessExpressionParser,
       assignmentParser,

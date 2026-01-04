@@ -8,7 +8,7 @@ import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
-import { Graph } from "simplemachine";
+import { Graph, goToNode } from "simplemachine";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,

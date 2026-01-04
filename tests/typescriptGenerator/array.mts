@@ -1,3 +1,5 @@
+
+
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
@@ -7,6 +9,36 @@ import fs from "fs";
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+function add(a:number, b:number):number {
+  return a + b;
+}
+
+// Define the function tool for OpenAI
+const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+  {
+    type: "function",
+    function: {
+      name: "add",
+      description:
+        "Adds two numbers together and returns the result.",
+      parameters: {
+        type: "object",
+        properties: {
+          a: {
+            type: "number",
+            description: "The first number to add",
+          },
+          b: {
+            type: "number",
+            description: "The second number to add",
+          },
+        },
+        required: ["a", "b"],
+        additionalProperties: false,
+      },
+    },
+  },
+];
 
 
 
@@ -24,12 +56,14 @@ async function _numbers(): Promise<number[]> {
         content: prompt,
       },
     ],
+    tools: tools,
     response_format: zodResponseFormat(z.object({
       value: z.array(z.number())
     }), "numbers_response"),
   });
   const endTime = performance.now();
   console.log("Prompt for variable 'numbers' took " + (endTime - startTime).toFixed(2) + " ms");
+  console.log("Completion response:", JSON.stringify(completion, null, 2));
   try {
   const result = JSON.parse(completion.choices[0].message.content || "");
   console.log("numbers:", result.value);
@@ -53,12 +87,14 @@ console.log(numbers)async function _greetings(): Promise<string[]> {
         content: prompt,
       },
     ],
+    tools: tools,
     response_format: zodResponseFormat(z.object({
       value: z.array(z.string())
     }), "greetings_response"),
   });
   const endTime = performance.now();
   console.log("Prompt for variable 'greetings' took " + (endTime - startTime).toFixed(2) + " ms");
+  console.log("Completion response:", JSON.stringify(completion, null, 2));
   try {
   const result = JSON.parse(completion.choices[0].message.content || "");
   console.log("greetings:", result.value);
@@ -71,3 +107,4 @@ console.log(numbers)async function _greetings(): Promise<string[]> {
 }
 const greetings = await _greetings();
 console.log(greetings)
+

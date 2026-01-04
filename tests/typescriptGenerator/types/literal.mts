@@ -1,3 +1,5 @@
+
+
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
@@ -7,6 +9,36 @@ import fs from "fs";
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+function add(a:number, b:number):number {
+  return a + b;
+}
+
+// Define the function tool for OpenAI
+const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+  {
+    type: "function",
+    function: {
+      name: "add",
+      description:
+        "Adds two numbers together and returns the result.",
+      parameters: {
+        type: "object",
+        properties: {
+          a: {
+            type: "number",
+            description: "The first number to add",
+          },
+          b: {
+            type: "number",
+            description: "The second number to add",
+          },
+        },
+        required: ["a", "b"],
+        additionalProperties: false,
+      },
+    },
+  },
+];
 
 
 
@@ -24,12 +56,14 @@ async function _foo(): Promise<"hi"> {
         content: prompt,
       },
     ],
+    tools: tools,
     response_format: zodResponseFormat(z.object({
       value: z.literal("hi")
     }), "foo_response"),
   });
   const endTime = performance.now();
   console.log("Prompt for variable 'foo' took " + (endTime - startTime).toFixed(2) + " ms");
+  console.log("Completion response:", JSON.stringify(completion, null, 2));
   try {
   const result = JSON.parse(completion.choices[0].message.content || "");
   console.log("foo:", result.value);
@@ -53,12 +87,14 @@ async function _bar(): Promise<42> {
         content: prompt,
       },
     ],
+    tools: tools,
     response_format: zodResponseFormat(z.object({
       value: z.literal(42)
     }), "bar_response"),
   });
   const endTime = performance.now();
   console.log("Prompt for variable 'bar' took " + (endTime - startTime).toFixed(2) + " ms");
+  console.log("Completion response:", JSON.stringify(completion, null, 2));
   try {
   const result = JSON.parse(completion.choices[0].message.content || "");
   console.log("bar:", result.value);
@@ -82,12 +118,14 @@ async function _baz(): Promise<true> {
         content: prompt,
       },
     ],
+    tools: tools,
     response_format: zodResponseFormat(z.object({
       value: z.literal(true)
     }), "baz_response"),
   });
   const endTime = performance.now();
   console.log("Prompt for variable 'baz' took " + (endTime - startTime).toFixed(2) + " ms");
+  console.log("Completion response:", JSON.stringify(completion, null, 2));
   try {
   const result = JSON.parse(completion.choices[0].message.content || "");
   console.log("baz:", result.value);
@@ -99,3 +137,5 @@ async function _baz(): Promise<true> {
   }
 }
 const baz = await _baz();
+
+

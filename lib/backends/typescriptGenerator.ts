@@ -46,10 +46,11 @@ export class TypeScriptGenerator extends BaseGenerator {
     return generateBuiltinHelpers(this.functionsUsed);
   }
 
-  protected processTypeAlias(node: TypeAlias): void {
+  protected processTypeAlias(node: TypeAlias): string {
     this.typeAliases[node.aliasName] = node.aliasedType;
     const typeAliasStr = this.typeAliasToString(node);
     this.generatedTypeAliases.push(typeAliasStr);
+    return "";
   }
 
   protected typeAliasToString(node: TypeAlias): string {
@@ -60,7 +61,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     return `type ${node.aliasName} = ${aliasedTypeStr};`;
   }
 
-  protected processTypeHint(node: TypeHint): void {
+  protected processTypeHint(node: TypeHint): string {
     if (node.variableType.type === "typeAliasVariable") {
       if (!(node.variableType.aliasName in this.typeAliases)) {
         throw new Error(
@@ -69,6 +70,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       }
     }
     this.typeHints[node.variableName] = node.variableType;
+    return "";
   }
 
   protected processADLObject(node: ADLObject): string {
@@ -225,7 +227,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     return renderTool.default({
       name: functionName,
       description: node.docString?.value || "No description provided.",
-      properties: JSON.stringify(properties),
+      properties: Object.keys(properties).length > 0 ? JSON.stringify(properties) : "",
       requiredParameters: parameters.map((p) => `"${p}"`).join(","),
     });
   }
@@ -350,6 +352,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     };
 
     const zodSchema = mapTypeToZodSchema(variableType, this.typeAliases);
+    //console.log("Generated Zod schema for variable", variableName, "Variable type:", variableType, ":", zodSchema, "aliases:", this.typeAliases, "hints:", this.typeHints);
     const typeString = variableTypeToString(variableType, this.typeAliases);
 
     // Build prompt construction code

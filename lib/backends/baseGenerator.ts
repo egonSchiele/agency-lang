@@ -33,7 +33,7 @@ export class BaseGenerator {
   protected toolsUsed: string[] = [];
   protected typeAliases: Record<string, VariableType> = {};
   protected functionsUsed: Set<string> = new Set();
-  constructor() {}
+  constructor() { }
 
   generate(program: ADLProgram): {
     output: string;
@@ -93,21 +93,24 @@ export class BaseGenerator {
     return "";
   }
 
-  protected processTypeAlias(node: TypeAlias): void {
+  protected processTypeAlias(node: TypeAlias): string {
     // subclasses implement this
+    return "";
   }
 
-  protected processTypeHint(node: TypeHint): void {
+  protected processTypeHint(node: TypeHint): string {
     // subclasses implement this
+    return "";
   }
 
-  protected processGraphNodeName(node: GraphNodeDefinition): void {}
+  protected processGraphNodeName(node: GraphNodeDefinition): void { }
 
   protected processNode(node: ADLNode): string {
     switch (node.type) {
       case "typeHint":
+        return this.processTypeHint(node);
       case "typeAlias":
-        return "";
+        return this.processTypeAlias(node);
       case "assignment":
         return this.processAssignment(node);
       case "function":

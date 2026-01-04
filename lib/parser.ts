@@ -25,6 +25,7 @@ import { ReturnStatement } from "@/types/returnStatement";
 import { optionalSpaces } from "./parsers/utils";
 import { optionalSemicolon } from "./parsers/parserUtils";
 import { returnStatementParser } from "./parsers/returnStatement";
+import { usesToolParser } from "./parsers/tools";
 
 export const adlNode: Parser<ADLNode[]> = (input: string) => {
   const parser = sepBy(
@@ -32,6 +33,7 @@ export const adlNode: Parser<ADLNode[]> = (input: string) => {
     trace(
       "adlParser",
       or(
+        usesToolParser,
         typeAliasParser,
         typeHintParser,
         matchBlockParser,

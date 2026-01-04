@@ -1,5 +1,6 @@
 import {
   ADLComment,
+  ADLNode,
   ADLProgram,
   Assignment,
   InterpolationSegment,
@@ -13,6 +14,7 @@ import {
 
 import * as renderImports from "@/templates/backends/typescriptGenerator/imports";
 import * as promptFunction from "@/templates/backends/typescriptGenerator/promptFunction";
+import * as renderTool from "@/templates/backends/typescriptGenerator/tool";
 import {
   AccessExpression,
   DotFunctionCall,
@@ -32,6 +34,7 @@ import { variableTypeToString } from "./typescriptGenerator/typeToString";
 import { mapTypeToZodSchema } from "./typescriptGenerator/typeToZodSchema";
 import * as builtinTools from "@/templates/backends/typescriptGenerator/builtinTools";
 import { ReturnStatement } from "@/types/returnStatement";
+import { UsesTool } from "@/types/tools";
 
 export class TypeScriptGenerator extends BaseGenerator {
   constructor() {
@@ -202,16 +205,40 @@ export class TypeScriptGenerator extends BaseGenerator {
     return `const ${variableName} = await _${variableName}(${argsStr});` + "\n";
   }
 
-  /**
-   * Process a function definition node
-   */
-  protected processFunctionDefinition(node: FunctionDefinition): string {
+  protected processTool(node: FunctionDefinition): string {
     const { functionName, body, parameters } = node;
     if (this.graphNodes.includes(functionName)) {
       throw new Error(
         `There is already a node named '${functionName}'. Functions can't have the same name as an existing node.`
       );
     }
+
+    const properties: Record<string, { type: string; description: string }> =
+      {};
+    parameters.forEach((param) => {
+      const typeHint = this.typeHints[param];
+      const tsType = variableTypeToString(typeHint, this.typeAliases);
+      properties[param] = { type: tsType, description: "" };
+    });
+
+    return renderTool.default({
+      name: functionName,
+      description: node.docString?.value || "No description provided.",
+      properties: JSON.stringify(properties),
+      requiredParameters: parameters.map((p) => `"${p}"`).join(","),
+    });
+  }
+
+  protected processUsesTool(node: UsesTool): string {
+    this.toolsUsed.push(node.toolName);
+    return "";
+  }
+
+  /**
+   * Process a function definition node
+   */
+  protected processFunctionDefinition(node: FunctionDefinition): string {
+    const { functionName, body, parameters } = node;
     const functionLines: string[] = [];
     functionLines.push(`async function ${functionName}() {`);
     this.functionScopedVariables = [...parameters];

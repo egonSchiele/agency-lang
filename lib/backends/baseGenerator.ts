@@ -22,6 +22,7 @@ import { FunctionCall, FunctionDefinition } from "@/types/function";
 import { GraphNodeDefinition } from "@/types/graphNode";
 import { MatchBlock } from "@/types/matchBlock";
 import { ReturnStatement } from "@/types/returnStatement";
+import { UsesTool } from "@/types/tools";
 
 export class BaseGenerator {
   protected typeHints: TypeHintMap = {};
@@ -29,6 +30,7 @@ export class BaseGenerator {
   protected generatedStatements: string[] = [];
   protected generatedTypeAliases: string[] = [];
   protected functionScopedVariables: string[] = [];
+  protected toolsUsed: string[] = [];
   protected typeAliases: Record<string, VariableType> = {};
   protected functionsUsed: Set<string> = new Set();
   constructor() {}
@@ -57,7 +59,14 @@ export class BaseGenerator {
       }
     }
 
-    // Pass 4: Process all nodes and generate code
+    // Pass 4: Generate code for tools
+    for (const node of program.nodes) {
+      if (node.type === "function") {
+        this.generatedStatements.push(this.processTool(node));
+      }
+    }
+
+    // Pass 5: Process all nodes and generate code
     for (const node of program.nodes) {
       const result = this.processNode(node);
       this.generatedStatements.push(result);
@@ -125,9 +134,19 @@ export class BaseGenerator {
         return this.processADLObject(node);
       case "graphNode":
         return this.processGraphNode(node);
+      case "usesTool":
+        return this.processUsesTool(node);
       default:
         throw new Error(`Unhandled ADL node type: ${(node as any).type}`);
     }
+  }
+
+  protected processTool(node: FunctionDefinition): string {
+    return "processTool not implemented";
+  }
+
+  protected processUsesTool(node: UsesTool): string {
+    return "processUsesTool not implemented";
   }
 
   protected processGraphNode(node: GraphNodeDefinition): string {

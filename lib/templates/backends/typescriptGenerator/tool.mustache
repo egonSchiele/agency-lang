@@ -1,0 +1,18 @@
+const {{{name:string}}}Tool: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+  {
+    type: "function",
+    function: {
+      name: "{{{name:string}}}",
+      description:
+        "{{{description:string}}}",
+      parameters: {
+        type: "object",
+        properties: {
+          {{{properties:string}}}
+        },
+        required: [{{{requiredParameters:string}}}],
+        additionalProperties: false,
+      },
+    },
+  },
+];

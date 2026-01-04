@@ -3,14 +3,13 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `function add(a:number, b:number):number {
+export const template = `function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
 
 // Define the function tool for OpenAI
-const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
-  {
-    type: "function",
+const addTool = {
+    type: "function" as const,
     function: {
       name: "add",
       description:
@@ -31,8 +30,7 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         additionalProperties: false,
       },
     },
-  },
-];`;
+  };`;
 
 export type TemplateType = {
 };

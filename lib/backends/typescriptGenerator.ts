@@ -1,5 +1,6 @@
 import {
   ADLComment,
+  ADLNode,
   ADLProgram,
   Assignment,
   InterpolationSegment,
@@ -13,6 +14,8 @@ import {
 
 import * as renderImports from "@/templates/backends/typescriptGenerator/imports";
 import * as promptFunction from "@/templates/backends/typescriptGenerator/promptFunction";
+import * as renderTool from "@/templates/backends/typescriptGenerator/tool";
+import * as renderFunctionCall from "@/templates/backends/typescriptGenerator/functionCall";
 import {
   AccessExpression,
   DotFunctionCall,
@@ -32,6 +35,7 @@ import { variableTypeToString } from "./typescriptGenerator/typeToString";
 import { mapTypeToZodSchema } from "./typescriptGenerator/typeToZodSchema";
 import * as builtinTools from "@/templates/backends/typescriptGenerator/builtinTools";
 import { ReturnStatement } from "@/types/returnStatement";
+import { UsesTool } from "@/types/tools";
 
 export class TypeScriptGenerator extends BaseGenerator {
   constructor() {
@@ -42,10 +46,11 @@ export class TypeScriptGenerator extends BaseGenerator {
     return generateBuiltinHelpers(this.functionsUsed);
   }
 
-  protected processTypeAlias(node: TypeAlias): void {
+  protected processTypeAlias(node: TypeAlias): string {
     this.typeAliases[node.aliasName] = node.aliasedType;
     const typeAliasStr = this.typeAliasToString(node);
     this.generatedTypeAliases.push(typeAliasStr);
+    return "";
   }
 
   protected typeAliasToString(node: TypeAlias): string {
@@ -56,7 +61,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     return `type ${node.aliasName} = ${aliasedTypeStr};`;
   }
 
-  protected processTypeHint(node: TypeHint): void {
+  protected processTypeHint(node: TypeHint): string {
     if (node.variableType.type === "typeAliasVariable") {
       if (!(node.variableType.aliasName in this.typeAliases)) {
         throw new Error(
@@ -65,6 +70,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       }
     }
     this.typeHints[node.variableName] = node.variableType;
+    return "";
   }
 
   protected processADLObject(node: ADLObject): string {
@@ -185,7 +191,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       if (!this.functionScopedVariables.includes(varName)) {
         throw new Error(
           `Variable '${varName}' used in prompt interpolation but not defined. ` +
-            `Referenced in assignment to '${variableName}'.`
+          `Referenced in assignment to '${variableName}'.`
         );
       }
     }
@@ -202,16 +208,40 @@ export class TypeScriptGenerator extends BaseGenerator {
     return `const ${variableName} = await _${variableName}(${argsStr});` + "\n";
   }
 
-  /**
-   * Process a function definition node
-   */
-  protected processFunctionDefinition(node: FunctionDefinition): string {
+  protected processTool(node: FunctionDefinition): string {
     const { functionName, body, parameters } = node;
     if (this.graphNodes.includes(functionName)) {
       throw new Error(
         `There is already a node named '${functionName}'. Functions can't have the same name as an existing node.`
       );
     }
+
+    const properties: Record<string, { type: string; description: string }> =
+      {};
+    parameters.forEach((param) => {
+      const typeHint = this.typeHints[param];
+      const tsType = variableTypeToString(typeHint, this.typeAliases);
+      properties[param] = { type: tsType, description: "" };
+    });
+
+    return renderTool.default({
+      name: functionName,
+      description: node.docString?.value || "No description provided.",
+      properties: Object.keys(properties).length > 0 ? JSON.stringify(properties) : "",
+      requiredParameters: parameters.map((p) => `"${p}"`).join(","),
+    });
+  }
+
+  protected processUsesTool(node: UsesTool): string {
+    this.toolsUsed.push(node.toolName);
+    return "";
+  }
+
+  /**
+   * Process a function definition node
+   */
+  protected processFunctionDefinition(node: FunctionDefinition): string {
+    const { functionName, body, parameters } = node;
     const functionLines: string[] = [];
     functionLines.push(`async function ${functionName}() {`);
     this.functionScopedVariables = [...parameters];
@@ -322,6 +352,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     };
 
     const zodSchema = mapTypeToZodSchema(variableType, this.typeAliases);
+    //console.log("Generated Zod schema for variable", variableName, "Variable type:", variableType, ":", zodSchema, "aliases:", this.typeAliases, "hints:", this.typeHints);
     const typeString = variableTypeToString(variableType, this.typeAliases);
 
     // Build prompt construction code
@@ -335,12 +366,25 @@ export class TypeScriptGenerator extends BaseGenerator {
           )}`
       )
       .join(", ");
+
+    const _tools = this.toolsUsed.map(toolName => `${toolName}Tool`).join(", ");
+
+    const tools = _tools.length > 0 ? `[${_tools}]` : 'undefined';
+
+    const functionCalls = this.toolsUsed.map(toolName => {
+      return renderFunctionCall.default({
+        name: toolName,
+      });
+    }).join("\n");
+    this.toolsUsed = []; // reset after use
     return promptFunction.default({
       variableName,
       argsStr,
       typeString,
       promptCode,
       zodSchema,
+      tools,
+      functionCalls
     });
   }
 }

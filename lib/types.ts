@@ -6,6 +6,8 @@ import { FunctionCall, FunctionDefinition } from "./types/function";
 import { ADLArray, ADLObject } from "./types/dataStructures";
 import { GraphNodeDefinition } from "./types/graphNode";
 import { ReturnStatement } from "./types/returnStatement";
+import { UsesTool } from "./types/tools";
+import { ImportStatement } from "./types/importStatement";
 export * from "@/types/typeHints";
 export * from "@/types/literals";
 export * from "@/types/matchBlock";
@@ -25,6 +27,7 @@ export type ADLComment = {
 export type ADLNode =
   | TypeHint
   | TypeAlias
+  | UsesTool
   | GraphNodeDefinition
   | FunctionDefinition
   | Assignment
@@ -35,7 +38,8 @@ export type ADLNode =
   | AccessExpression
   | ADLComment
   | ADLObject
-  | ADLArray;
+  | ADLArray
+  | ImportStatement
 
 export type ADLProgram = {
   type: "adlProgram";

@@ -315,8 +315,6 @@ export class GraphGenerator extends TypeScriptGenerator {
       })
     );
 
-    console.log({ lines });
-
     return lines.join("\n");
   }
 }

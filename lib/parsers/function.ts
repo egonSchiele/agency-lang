@@ -30,6 +30,7 @@ import { typeAliasParser, typeHintParser } from "./typeHints";
 import { comma, optionalSpaces, varNameChar } from "./utils";
 import { GraphNodeDefinition } from "@/types/graphNode";
 import { returnStatementParser } from "./returnStatement";
+import { usesToolParser } from "./tools";
 
 const trim = (s: string) => s.trim();
 export const docStringParser: Parser<DocString> = trace(
@@ -48,6 +49,7 @@ export const functionBodyParser = trace(
     const parser: Parser<ADLNode[]> = sepBy(
       spaces,
       or(
+        usesToolParser,
         debug(typeAliasParser, "error in typeAliasParser"),
         debug(typeHintParser, "error in typeHintParser"),
         returnStatementParser,

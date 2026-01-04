@@ -59,8 +59,8 @@ const message = "Hello, World!";
 
 //  Another comment
 
-return
-message
+return message
+
 }
 //  Comment before function call
 const result = await greet();

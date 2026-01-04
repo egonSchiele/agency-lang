@@ -2,14 +2,3 @@ msg = input("> ");
 
 category :: "import_recipe" | "create_ingredient"
 category = `determine if the user wants to import a recipe from a website or create a new ingredient based on this message: ${msg}`
-
-def llm(input) {
-  input = "foo"
-  action :: "tool_call" | "exit"
-  action = `Given this input, decide what action to take: ${input}`
-
-  match(action) {
-    "tool_call" => tool_call()
-    "exit" => exit()
-  }
-}

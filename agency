@@ -1,27 +1,27 @@
 #!/bin/bash
 
-# ADL - Agent Definition Language Runner
-# Usage: ./adl <file.adl>
+# agency - Agency Language Runner
+# Usage: ./agency <file.agency>
 
 set -e  # Exit on error
 
 # Check if file argument is provided
 if [ -z "$1" ]; then
-    echo "Usage: adl <file.adl>"
+    echo "Usage: agency <file.agency>"
     exit 1
 fi
 
-ADL_FILE="$1"
+AGENCY_FILE="$1"
 
 # Check if file exists
-if [ ! -f "$ADL_FILE" ]; then
-    echo "Error: File '$ADL_FILE' not found"
+if [ ! -f "$AGENCY_FILE" ]; then
+    echo "Error: File '$AGENCY_FILE' not found"
     exit 1
 fi
 
 # Get the base filename without extension
-BASE_NAME=$(basename "$ADL_FILE" .adl)
-DIR_NAME=$(dirname "$ADL_FILE")
+BASE_NAME=$(basename "$AGENCY_FILE" .agency)
+DIR_NAME=$(dirname "$AGENCY_FILE")
 
 # Output TypeScript filename
 TS_FILE="${DIR_NAME}/${BASE_NAME}.mts"
@@ -29,10 +29,10 @@ TS_FILE="${DIR_NAME}/${BASE_NAME}.mts"
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-echo "🔄 Compiling ADL to TypeScript graph..."
+echo "🔄 Compiling agency to TypeScript graph..."
 
-# Generate TypeScript from ADL
-node "$SCRIPT_DIR/dist/lib/generate-graph-file.js" "$ADL_FILE" "$TS_FILE"
+# Generate TypeScript from agency
+node "$SCRIPT_DIR/dist/lib/generate-graph-file.js" "$AGENCY_FILE" "$TS_FILE"
 
 if [ $? -ne 0 ]; then
     echo "❌ Failed to generate TypeScript"

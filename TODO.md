@@ -3,7 +3,7 @@
 
 can't have nested match blocks, eg:
 
-```adl
+```agency
 
 // Nested match blocks
 userRole = "admin"
@@ -28,7 +28,7 @@ match(userRole) {
 
 This should work, but doesn't because of scoping... all `points` end up in the same scope
 
-```adl
+```agency
 grade = "A"
 points = 0
 match(grade) {

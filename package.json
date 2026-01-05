@@ -1,7 +1,7 @@
 {
-  "name": "adl-lang",
+  "name": "agency-lang",
   "version": "1.0.0",
-  "description": "Agent Definition Language",
+  "description": "Agency Language",
   "main": "index.js",
   "scripts": {
     "test": "vitest",
@@ -13,16 +13,16 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/egonSchiele/adl-lang.git"
+    "url": "git+https://github.com/egonSchiele/agency-lang.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/egonSchiele/adl-lang/issues"
+    "url": "https://github.com/egonSchiele/agency-lang/issues"
   },
-  "homepage": "https://github.com/egonSchiele/adl-lang#readme",
+  "homepage": "https://github.com/egonSchiele/agency-lang#readme",
   "dependencies": {
     "nanoid": "^5.1.6",
     "openai": "^6.15.0",

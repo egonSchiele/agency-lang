@@ -1,6 +1,6 @@
 
 
-import { hello }  from "./hello.mjs";
+import * as ext  from "./hello.mjs";
 
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
@@ -81,7 +81,7 @@ const sayHelloTool: OpenAI.Chat.Completions.ChatCompletionTool = {
     },
   };
 async function sayHello({name}) {
-    return hello(name)
+    return ext.hello(name)
 
 }
 async function _greeting(): Promise<string> {

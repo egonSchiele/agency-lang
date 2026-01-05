@@ -1,7 +1,7 @@
-import { hello } from "./hello.mjs";
+import * as ext from "./hello.mjs";
 
 def sayHello(name) {
-  return hello(name);
+  return ext.hello(name);
 }
 
 node llm() {

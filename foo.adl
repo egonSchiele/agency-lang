@@ -4,7 +4,7 @@ def sayHello(name) {
   return ext.hello(name);
 }
 
-node llm() {
+node main() {
   action :: string
   +sayHello
   greeting = `Greet John`

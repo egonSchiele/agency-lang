@@ -29,10 +29,10 @@ TS_FILE="${DIR_NAME}/${BASE_NAME}.mts"
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-echo "🔄 Compiling ADL to TypeScript..."
+echo "🔄 Compiling ADL to TypeScript graph..."
 
 # Generate TypeScript from ADL
-node "$SCRIPT_DIR/dist/lib/generate-ts-file.js" "$ADL_FILE" "$TS_FILE"
+node "$SCRIPT_DIR/dist/lib/generate-graph-file.js" "$ADL_FILE" "$TS_FILE"
 
 if [ $? -ne 0 ]; then
     echo "❌ Failed to generate TypeScript"

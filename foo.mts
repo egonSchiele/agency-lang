@@ -29,7 +29,7 @@ const graphConfig = {
 
 // Define the names of the nodes in the graph
 // Useful for type safety
-const nodes = ["llm"] as const;
+const nodes = ["main"] as const;
 type Node = (typeof nodes)[number];
 
 const graph = new Graph<State, Node>(nodes, graphConfig);
@@ -152,7 +152,7 @@ async function _greeting(): Promise<string> {
     // throw e;
   }
 }
-graph.node("llm", async (state) => {
+graph.node("main", async (state) => {
     
     
 
@@ -162,5 +162,4 @@ console.log(greeting)
 });
 
 const initialState: State = {messages: [], data: {}};
-const finalState = graph.run("llm", initialState);
-
+const finalState = graph.run("main", initialState);

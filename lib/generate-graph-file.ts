@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 import * as fs from "fs";
 import { parseADL } from "@/parser";
-import { generateTypeScript } from "@/backends/typescriptGenerator";
+import { generateGraph } from "@/backends/graphGenerator";
 
 // Get filename from command line arguments
 const inputFile = process.argv[2];
 const outputFile = process.argv[3];
 
 if (!inputFile || !outputFile) {
-  console.error("Usage: node lib/generate-ts-file.js <input.adl> <output.mts>");
+  console.error(
+    "Usage: node lib/generate-graph-file.js <input.adl> <output.mts>"
+  );
   process.exit(1);
 }
 
@@ -25,8 +27,7 @@ if (!parseResult.success) {
 
 const parsedProgram = parseResult.result;
 
-// Generate TypeScript code
-const generatedCode = generateTypeScript(parsedProgram);
+const generatedCode = generateGraph(parsedProgram);
 
 // Write to output file
 fs.writeFileSync(outputFile, generatedCode, "utf-8");

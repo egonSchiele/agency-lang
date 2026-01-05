@@ -8,6 +8,11 @@ import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
+import { StatelogClient } from "statelog-client";
+
+const statelogHost = "http://localhost:1065";
+const statelogClient = new StatelogClient(statelogHost);
+const model = "gpt-5-nano-2025-08-07";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,

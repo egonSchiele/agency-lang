@@ -3,10 +3,21 @@ if (toolCall.type === "function" &&
 ) {
   const args = JSON.parse(toolCall.function.arguments);
 
-  // Call the actual function
+  toolCallStartTime = performance.now();
   const result = await {{{name}}}(args);
+  toolCallEndTime = performance.now();
+
   console.log("Tool '{{{name:string}}}' called with arguments:", args);
   console.log("Tool '{{{name:string}}}' returned result:", result);
+
+statelogClient.toolCall({
+    toolName: "{{{name:string}}}",
+    args,
+    output: result,
+    model,
+    timeTaken: toolCallEndTime - toolCallStartTime,
+  });
+
   // Add function result to messages
   messages.push({
     role: "tool",

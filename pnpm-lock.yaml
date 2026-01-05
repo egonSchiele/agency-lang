@@ -8,12 +8,18 @@ importers:
 
   .:
     dependencies:
+      nanoid:
+        specifier: ^5.1.6
+        version: 5.1.6
       openai:
         specifier: ^6.15.0
         version: 6.15.0(zod@4.2.1)
       simplemachine:
         specifier: github:egonSchiele/simplemachine
         version: https://codeload.github.com/egonSchiele/simplemachine/tar.gz/f3b1483d3bf7f355d408e8ef0e6211782c131c59
+      statelog-client:
+        specifier: github:egonSchiele/statelog-client
+        version: git+https://git@github.com:egonSchiele/statelog-client.git#128da933a0404ae53adaeef40f3ec4be1a85af80
       tarsec:
         specifier: ^0.0.22
         version: 0.0.22
@@ -591,6 +597,10 @@ packages:
 
   stackback@0.0.2:
     resolution: {integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==}
+
+  statelog-client@git+https://git@github.com:egonSchiele/statelog-client.git#128da933a0404ae53adaeef40f3ec4be1a85af80:
+    resolution: {commit: 128da933a0404ae53adaeef40f3ec4be1a85af80, repo: git@github.com:egonSchiele/statelog-client.git, type: git}
+    version: 0.0.27
 
   std-env@3.10.0:
     resolution: {integrity: sha512-5GS12FdOZNliM5mAOxFRg7Ir0pWz8MdpYm6AY6VPkGpbA7ZzmbzNcBJQ0GPvvyWgcY7QAhCgf9Uy89I03faLkg==}
@@ -1173,6 +1183,10 @@ snapshots:
   source-map-js@1.2.1: {}
 
   stackback@0.0.2: {}
+
+  statelog-client@git+https://git@github.com:egonSchiele/statelog-client.git#128da933a0404ae53adaeef40f3ec4be1a85af80:
+    dependencies:
+      nanoid: 5.1.6
 
   std-env@3.10.0: {}
 

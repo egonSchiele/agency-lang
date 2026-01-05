@@ -1,5 +1,5 @@
 // THIS FILE WAS AUTO-GENERATED
-// Source: lib/templates/backends/typescriptGenerator/functionCall.mustache
+// Source: lib/templates/backends/typescriptGenerator/toolCall.mustache
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
@@ -8,10 +8,21 @@ export const template = `if (toolCall.type === "function" &&
 ) {
   const args = JSON.parse(toolCall.function.arguments);
 
-  // Call the actual function
+  toolCallStartTime = performance.now();
   const result = await {{{name}}}(args);
+  toolCallEndTime = performance.now();
+
   console.log("Tool '{{{name:string}}}' called with arguments:", args);
   console.log("Tool '{{{name:string}}}' returned result:", result);
+
+statelogClient.toolCall({
+    toolName: "{{{name:string}}}",
+    args,
+    output: result,
+    model,
+    timeTaken: toolCallEndTime - toolCallStartTime,
+  });
+
   // Add function result to messages
   messages.push({
     role: "tool",

@@ -15,7 +15,7 @@ import {
 import * as renderImports from "@/templates/backends/typescriptGenerator/imports";
 import * as promptFunction from "@/templates/backends/typescriptGenerator/promptFunction";
 import * as renderTool from "@/templates/backends/typescriptGenerator/tool";
-import * as renderFunctionCall from "@/templates/backends/typescriptGenerator/functionCall";
+import * as renderToolCall from "@/templates/backends/typescriptGenerator/toolCall";
 import * as renderFunctionDefinition from "@/templates/backends/typescriptGenerator/functionDefinition";
 import {
   AccessExpression,
@@ -400,7 +400,7 @@ export class TypeScriptGenerator extends BaseGenerator {
 
     const functionCalls = this.toolsUsed
       .map((toolName) => {
-        return renderFunctionCall.default({
+        return renderToolCall.default({
           name: toolName,
         });
       })

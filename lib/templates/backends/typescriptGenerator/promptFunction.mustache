@@ -4,9 +4,9 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
   const startTime = performance.now();
   const messages:any[] = [{ role: "user", content: prompt }];
   const tools = {{{tools}}};
-  console.log("Running prompt for {{{variableName:string}}}:", prompt);
+
   let completion = await openai.chat.completions.create({
-    model: "gpt-5-nano-2025-08-07",
+    model,
     messages,
     tools,
     response_format: zodResponseFormat(z.object({
@@ -14,25 +14,39 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
     }), "{{{variableName:string}}}_response"),
   });
   const endTime = performance.now();
-  console.log("Prompt for variable '{{{variableName:string}}}' took " + (endTime - startTime).toFixed(2) + " ms");
-  console.log("Completion response:", JSON.stringify(completion, null, 2));
+  statelogClient.promptCompletion({
+    messages,
+    completion,
+    model,
+    timeTaken: endTime - startTime,
+  });
 
   let responseMessage = completion.choices[0].message;
   // Handle function calls
   while (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
     // Add assistant's response with tool calls to message history
     messages.push(responseMessage);
+    let toolCallStartTime, toolCallEndTime;
 
     // Process each tool call
     for (const toolCall of responseMessage.tool_calls) {
       {{{functionCalls:string}}}
     }
 
+    const nextStartTime = performance.now();
     // Get the next response from the model
     completion = await openai.chat.completions.create({
-      model: "gpt-5-nano-2025-08-07",
+      model,
       messages: messages,
       tools: tools,
+    });
+    const nextEndTime = performance.now();
+
+    statelogClient.promptCompletion({
+      messages,
+      completion,
+      model,
+      timeTaken: nextEndTime - nextStartTime,
     });
 
     responseMessage = completion.choices[0].message;
@@ -43,7 +57,6 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
 
   try {
   const result = JSON.parse(completion.choices[0].message.content || "");
-  console.log("{{{variableName:string}}}:", result.value);
   return result.value;
   } catch (e) {
     return completion.choices[0].message.content;

@@ -97,7 +97,7 @@ export class TypeScriptGenerator extends BaseGenerator {
 
   protected processReturnStatement(node: ReturnStatement): string {
     const returnCode = this.processNode(node.value);
-    return `return ${returnCode}` + "\n";
+    return `return ${returnCode}\n`;
   }
 
   protected processAccessExpression(node: AccessExpression): string {

@@ -1,4 +1,5 @@
 import {
+  ADLNode,
   ADLProgram,
   Assignment,
   FunctionCall,
@@ -25,6 +26,7 @@ import { mapTypeToZodSchema } from "./typescriptGenerator/typeToZodSchema";
 import { wrapInReturn } from "./utils";
 import { mapFunctionName } from "./typescriptGenerator/builtins";
 import { GraphNodeDefinition } from "@/types/graphNode";
+import { ReturnStatement } from "@/types/returnStatement";
 
 export class GraphGenerator extends TypeScriptGenerator {
   protected typeHints: TypeHintMap = {};
@@ -34,6 +36,7 @@ export class GraphGenerator extends TypeScriptGenerator {
   protected functionsUsed: Set<string> = new Set();
   protected adjacentNodes: Record<string, string[]> = {};
   protected currentAdjacentNodes: string[] = [];
+  protected isInsideGraphNode: boolean = false;
   constructor() {
     super();
   }
@@ -95,9 +98,7 @@ export class GraphGenerator extends TypeScriptGenerator {
     return "processComment not implemented";
   }
 
-  protected processReturnStatement(node: ADLNode): string {
-    return "processReturnStatement not implemented";
-  }
+  
 
   protected processAccessExpression(node: AccessExpression): string {
     switch (node.expression.type) {
@@ -219,6 +220,15 @@ export class GraphGenerator extends TypeScriptGenerator {
   }
  */
 
+  protected processReturnStatement(node: ReturnStatement): string {
+    if (!this.isInsideGraphNode) {
+      return super.processReturnStatement(node);
+    } else {
+      const returnCode = this.processNode(node.value);
+      return `return { ...state, data: ${returnCode}}\n`;
+    }
+  }
+
   protected processGraphNodeName(node: GraphNodeDefinition): void {
     this.graphNodes.push(node.nodeName);
   }
@@ -233,6 +243,7 @@ export class GraphGenerator extends TypeScriptGenerator {
     this.adjacentNodes[nodeName] = [];
     this.currentAdjacentNodes = [];
     this.functionScopedVariables = [];
+    this.isInsideGraphNode = true;
     if (parameters.length > 0) {
       this.functionScopedVariables.push(parameters[0]);
     }
@@ -243,6 +254,7 @@ export class GraphGenerator extends TypeScriptGenerator {
     }
     this.functionScopedVariables = [];
     this.adjacentNodes[nodeName] = [...this.currentAdjacentNodes];
+    this.isInsideGraphNode = false;
     return graphNode.default({
       name: nodeName,
       body: bodyCode.join("\n"),

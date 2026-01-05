@@ -1,34 +1,40 @@
-msg = input("> ");
-
-category :: "import_recipe" | "create_ingredient"
-category = `determine if the user wants to import a recipe from a website or create a new ingredient based on this message: ${msg}`
-
 type Url = {
   url:string # website url;
 }
 
-def importRecipe() {
+type Recipe = {
+  title:string;
+  ingredients: string[];
+  instructions: string;
+}
+
+node importRecipe(msg) {
   url :: Url
   url = `extract the url from this message: ${msg}`
 
   html :: string
   html = fetch(url.url)
 
-  recipe :: string
+  recipe :: Recipe
   recipe = `extract the recipe from this html: ${html}`
 
   print(recipe);
 }
 
 // this is a comment
-def createIngredient() {
-  """
-  Create a new ingredient based on the user's message.
-  """
+node createIngredient(msg) {
   print("tbd")
 }
 
-match (category) {
-  "import_recipe" => importRecipe();
-  "create_ingredient" => createIngredient();
+
+node main() {
+  msg = input("> ");
+
+  category :: "import_recipe" | "create_ingredient"
+  category = `determine if the user wants to import a recipe from a website or create a new ingredient based on this message: ${msg}`
+  
+  match (category) {
+    "import_recipe" => return importRecipe(msg);
+    "create_ingredient" => return createIngredient(msg);
+  }
 }

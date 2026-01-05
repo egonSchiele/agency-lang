@@ -1,10 +1,17 @@
 
 
+
+
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
+import { StatelogClient } from "statelog-client";
+
+const statelogHost = "http://localhost:1065";
+const statelogClient = new StatelogClient(statelogHost);
+const model = "gpt-5-nano-2025-08-07";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -61,9 +68,9 @@ async function _sentiment(message: string): Promise<"happy" | "sad" | "neutral">
   const startTime = performance.now();
   const messages:any[] = [{ role: "user", content: prompt }];
   const tools = undefined;
-  console.log("Running prompt for sentiment")
+
   let completion = await openai.chat.completions.create({
-    model: "gpt-5-nano-2025-08-07",
+    model,
     messages,
     tools,
     response_format: zodResponseFormat(z.object({
@@ -71,25 +78,39 @@ async function _sentiment(message: string): Promise<"happy" | "sad" | "neutral">
     }), "sentiment_response"),
   });
   const endTime = performance.now();
-  console.log("Prompt for variable 'sentiment' took " + (endTime - startTime).toFixed(2) + " ms");
-  console.log("Completion response:", JSON.stringify(completion, null, 2));
+  statelogClient.promptCompletion({
+    messages,
+    completion,
+    model,
+    timeTaken: endTime - startTime,
+  });
 
   let responseMessage = completion.choices[0].message;
   // Handle function calls
   while (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
     // Add assistant's response with tool calls to message history
     messages.push(responseMessage);
+    let toolCallStartTime, toolCallEndTime;
 
     // Process each tool call
     for (const toolCall of responseMessage.tool_calls) {
       
     }
 
+    const nextStartTime = performance.now();
     // Get the next response from the model
     completion = await openai.chat.completions.create({
-      model: "gpt-5-nano-2025-08-07",
+      model,
       messages: messages,
       tools: tools,
+    });
+    const nextEndTime = performance.now();
+
+    statelogClient.promptCompletion({
+      messages,
+      completion,
+      model,
+      timeTaken: nextEndTime - nextStartTime,
     });
 
     responseMessage = completion.choices[0].message;
@@ -100,12 +121,12 @@ async function _sentiment(message: string): Promise<"happy" | "sad" | "neutral">
 
   try {
   const result = JSON.parse(completion.choices[0].message.content || "");
-  console.log("sentiment:", result.value);
   return result.value;
   } catch (e) {
-    console.error("Error parsing response for variable 'sentiment':", e);
-    console.error("Full completion response:", JSON.stringify(completion, null, 2));
-    throw e;
+    return completion.choices[0].message.content;
+    // console.error("Error parsing response for variable 'sentiment':", e);
+    // console.error("Full completion response:", JSON.stringify(completion, null, 2));
+    // throw e;
   }
 }
 const sentiment = await _sentiment(message);

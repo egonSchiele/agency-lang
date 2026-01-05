@@ -42,8 +42,7 @@ const addTool = {
 
 
 
-const addTool: OpenAI.Chat.Completions.ChatCompletionTool[] = [
-  {
+const addTool: OpenAI.Chat.Completions.ChatCompletionTool = {
     type: "function",
     function: {
       name: "add",
@@ -52,16 +51,13 @@ const addTool: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 This is a simple addition function.",
       parameters: {
         type: "object",
-        properties: {
-          {"a":{"type":"string","description":""},"b":{"type":"string","description":""}}
-        },
+        properties: {"a":{"type":"string","description":""},"b":{"type":"string","description":""}},
         required: ["a","b"],
         additionalProperties: false,
       },
     },
-  },
-];const greetTool: OpenAI.Chat.Completions.ChatCompletionTool[] = [
-  {
+  };
+const greetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
     type: "function",
     function: {
       name: "greet",
@@ -69,16 +65,13 @@ This is a simple addition function.",
         "Generate a greeting message for the given name.",
       parameters: {
         type: "object",
-        properties: {
-          {"name":{"type":"string","description":""}}
-        },
+        properties: {"name":{"type":"string","description":""}},
         required: ["name"],
         additionalProperties: false,
       },
     },
-  },
-];const calculateAreaTool: OpenAI.Chat.Completions.ChatCompletionTool[] = [
-  {
+  };
+const calculateAreaTool: OpenAI.Chat.Completions.ChatCompletionTool = {
     type: "function",
     function: {
       name: "calculateArea",
@@ -92,16 +85,13 @@ Parameters:
 Returns: the area as a number",
       parameters: {
         type: "object",
-        properties: {
-          {"width":{"type":"string","description":""},"height":{"type":"string","description":""}}
-        },
+        properties: {"width":{"type":"string","description":""},"height":{"type":"string","description":""}},
         required: ["width","height"],
         additionalProperties: false,
       },
     },
-  },
-];const processDataTool: OpenAI.Chat.Completions.ChatCompletionTool[] = [
-  {
+  };
+const processDataTool: OpenAI.Chat.Completions.ChatCompletionTool = {
     type: "function",
     function: {
       name: "processData",
@@ -109,26 +99,20 @@ Returns: the area as a number",
         "Single line docstring",
       parameters: {
         type: "object",
-        properties: {
-          
-        },
+        properties: ,
         required: [],
         additionalProperties: false,
       },
     },
-  },
-];//  Test docstrings in functions
-async function add() {
-
+  };
+//  Test docstrings in functions
+async function add({a, b}) {
+    
+}async function greet({name}) {
+    
+}async function calculateArea({width, height}) {
+    
+}async function processData({}) {
+    
 }
-async function greet() {
-
-}
-async function calculateArea() {
-
-}
-async function processData() {
-
-}
-
 

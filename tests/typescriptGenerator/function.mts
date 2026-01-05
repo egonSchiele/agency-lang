@@ -42,8 +42,7 @@ const addTool = {
 
 
 
-const testTool: OpenAI.Chat.Completions.ChatCompletionTool[] = [
-  {
+const testTool: OpenAI.Chat.Completions.ChatCompletionTool = {
     type: "function",
     function: {
       name: "test",
@@ -51,16 +50,13 @@ const testTool: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         "No description provided.",
       parameters: {
         type: "object",
-        properties: {
-          
-        },
+        properties: ,
         required: [],
         additionalProperties: false,
       },
     },
-  },
-];const addTool: OpenAI.Chat.Completions.ChatCompletionTool[] = [
-  {
+  };
+const addTool: OpenAI.Chat.Completions.ChatCompletionTool = {
     type: "function",
     function: {
       name: "add",
@@ -68,22 +64,18 @@ const testTool: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         "No description provided.",
       parameters: {
         type: "object",
-        properties: {
-          {"a":{"type":"string","description":""},"b":{"type":"string","description":""}}
-        },
+        properties: {"a":{"type":"string","description":""},"b":{"type":"string","description":""}},
         required: ["a","b"],
         additionalProperties: false,
       },
     },
-  },
-];async function test() {
-const foo = 1;
+  };
+async function test({}) {
+    const foo = 1;
 
 foo
-}
-console.log(test())async function add() {
-//  multi-param function
+}console.log(test({}))async function add({a, b}) {
+    //  multi-param function
 
 }
-
 

@@ -42,8 +42,7 @@ const addTool = {
 
 
 
-const greetTool: OpenAI.Chat.Completions.ChatCompletionTool[] = [
-  {
+const greetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
     type: "function",
     function: {
       name: "greet",
@@ -51,15 +50,13 @@ const greetTool: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         "No description provided.",
       parameters: {
         type: "object",
-        properties: {
-          
-        },
+        properties: ,
         required: [],
         additionalProperties: false,
       },
     },
-  },
-];//  This is a single line comment at the top of the file
+  };
+//  This is a single line comment at the top of the file
 //  Variable assignment with comment above
 const x = 42;
 //  Multiple comments
@@ -67,8 +64,8 @@ const x = 42;
 //  on consecutive lines
 const y = "hello";
 //  Comment before function definition
-async function greet() {
-//  Comment inside function
+async function greet({}) {
+    //  Comment inside function
 
 const message = "Hello, World!";
 
@@ -76,9 +73,8 @@ const message = "Hello, World!";
 
 return message
 
-}
-//  Comment before function call
-const result = await greet();
+}//  Comment before function call
+const result = await greet({});
 console.log(result)//  Testing comments in different contexts
 //  1. Before type hints
 const age = 25;

@@ -3,8 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `const {{{name:string}}}Tool: OpenAI.Chat.Completions.ChatCompletionTool[] = [
-  {
+export const template = `const {{{name:string}}}Tool: OpenAI.Chat.Completions.ChatCompletionTool = {
     type: "function",
     function: {
       name: "{{{name:string}}}",
@@ -12,15 +11,13 @@ export const template = `const {{{name:string}}}Tool: OpenAI.Chat.Completions.Ch
         "{{{description:string}}}",
       parameters: {
         type: "object",
-        properties: {
-          {{{properties:string}}}
-        },
+        properties: {{{properties:string}}},
         required: [{{{requiredParameters:string}}}],
         additionalProperties: false,
       },
     },
-  },
-];`;
+  };
+`;
 
 export type TemplateType = {
   name: string;

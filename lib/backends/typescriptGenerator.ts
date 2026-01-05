@@ -16,6 +16,7 @@ import * as renderImports from "@/templates/backends/typescriptGenerator/imports
 import * as promptFunction from "@/templates/backends/typescriptGenerator/promptFunction";
 import * as renderTool from "@/templates/backends/typescriptGenerator/tool";
 import * as renderFunctionCall from "@/templates/backends/typescriptGenerator/functionCall";
+import * as renderFunctionDefinition from "@/templates/backends/typescriptGenerator/functionDefinition";
 import {
   AccessExpression,
   DotFunctionCall,
@@ -25,7 +26,7 @@ import {
 import { ADLArray, ADLObject } from "@/types/dataStructures";
 import { FunctionCall, FunctionDefinition } from "@/types/function";
 import { MatchBlock } from "@/types/matchBlock";
-import { escape } from "@/utils";
+import { escape, zip } from "@/utils";
 import { BaseGenerator } from "./baseGenerator";
 import {
   generateBuiltinHelpers,
@@ -246,24 +247,30 @@ export class TypeScriptGenerator extends BaseGenerator {
    */
   protected processFunctionDefinition(node: FunctionDefinition): string {
     const { functionName, body, parameters } = node;
-    const functionLines: string[] = [];
-    functionLines.push(`async function ${functionName}() {`);
     this.functionScopedVariables = [...parameters];
     const bodyCode: string[] = [];
     for (const stmt of body) {
       bodyCode.push(this.processNode(stmt));
     }
     this.functionScopedVariables = [];
-    functionLines.push(bodyCode.join("\n"));
-    functionLines.push("}\n");
-    return functionLines.join("\n");
+    const args = parameters.join(", ") || "";
+    return renderFunctionDefinition.default({
+      functionName,
+      args: "{" + args + "}",
+      functionBody: bodyCode.join("\n"),
+    });
   }
 
   /**
    * Process a function call node
    */
   protected processFunctionCall(node: FunctionCall): string {
-    this.functionsUsed.add(node.functionName);
+    /*     if (this.functionSignatures[node.functionName] === undefined) {
+      throw new Error(
+        `Function '${node.functionName}' is not defined or imported.`
+      );
+    }
+ */ this.functionsUsed.add(node.functionName);
     const functionCallCode = this.generateFunctionCallExpression(node);
 
     return functionCallCode;
@@ -285,8 +292,21 @@ export class TypeScriptGenerator extends BaseGenerator {
         return this.generateLiteral(arg);
       }
     });
-    const argsString = parts.join(", ");
-    return `${functionName}(${argsString})`;
+    let argsString = "";
+    const paramNames = this.functionSignatures[node.functionName];
+    if (paramNames) {
+      const partsWithNames = zip(paramNames, parts).map(([paramName, part]) => {
+        return `${paramName}: ${part}`;
+      });
+      argsString = partsWithNames.join(", ");
+      return `${functionName}({${argsString}})`;
+    } else {
+      // must be a builtin function or imported function,
+      // as we don't have the signature info
+      // in that case don't do named parameters
+      argsString = parts.join(", ");
+      return `${functionName}(${argsString})`;
+    }
   }
 
   protected generateLiteral(literal: Literal): string {

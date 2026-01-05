@@ -30,10 +30,17 @@ export class BaseGenerator {
   protected generatedStatements: string[] = [];
   protected generatedTypeAliases: string[] = [];
   protected functionScopedVariables: string[] = [];
+
+  // collect tools for a prompt
   protected toolsUsed: string[] = [];
   protected typeAliases: Record<string, VariableType> = {};
+
+  // collect functions used to see what builtin helpers to include
   protected functionsUsed: Set<string> = new Set();
-  constructor() { }
+
+  // collect function signatures so we can implement named args
+  protected functionSignatures: Record<string, string[]> = {};
+  constructor() {}
 
   generate(program: ADLProgram): {
     output: string;
@@ -63,6 +70,7 @@ export class BaseGenerator {
     for (const node of program.nodes) {
       if (node.type === "function") {
         this.generatedStatements.push(this.processTool(node));
+        this.collectFunctionSignature(node);
       }
     }
 
@@ -103,7 +111,11 @@ export class BaseGenerator {
     return "";
   }
 
-  protected processGraphNodeName(node: GraphNodeDefinition): void { }
+  protected collectFunctionSignature(node: FunctionDefinition): void {
+    this.functionSignatures[node.functionName] = node.parameters;
+  }
+
+  protected processGraphNodeName(node: GraphNodeDefinition): void {}
 
   protected processNode(node: ADLNode): string {
     switch (node.type) {

@@ -1,5 +1,4 @@
-const {{{name:string}}}Tool: OpenAI.Chat.Completions.ChatCompletionTool[] = [
-  {
+const {{{name:string}}}Tool: OpenAI.Chat.Completions.ChatCompletionTool = {
     type: "function",
     function: {
       name: "{{{name:string}}}",
@@ -7,12 +6,9 @@ const {{{name:string}}}Tool: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         "{{{description:string}}}",
       parameters: {
         type: "object",
-        properties: {
-          {{{properties:string}}}
-        },
+        properties: {{{properties:string}}},
         required: [{{{requiredParameters:string}}}],
         additionalProperties: false,
       },
     },
-  },
-];
+  };

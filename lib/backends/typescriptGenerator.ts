@@ -37,6 +37,7 @@ import { mapTypeToZodSchema } from "./typescriptGenerator/typeToZodSchema";
 import * as builtinTools from "@/templates/backends/typescriptGenerator/builtinTools";
 import { ReturnStatement } from "@/types/returnStatement";
 import { UsesTool } from "@/types/tools";
+import { ImportStatement } from "@/types/importStatement";
 
 export class TypeScriptGenerator extends BaseGenerator {
   constructor() {
@@ -414,6 +415,10 @@ export class TypeScriptGenerator extends BaseGenerator {
       tools,
       functionCalls,
     });
+  }
+
+  protected processImportStatement(node: ImportStatement): string {
+    return `import ${node.importedNames} from ${node.modulePath};`;
   }
 }
 

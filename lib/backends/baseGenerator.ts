@@ -20,6 +20,7 @@ import {
 import { ADLArray, ADLObject } from "@/types/dataStructures";
 import { FunctionCall, FunctionDefinition } from "@/types/function";
 import { GraphNodeDefinition } from "@/types/graphNode";
+import { ImportStatement } from "@/types/importStatement";
 import { MatchBlock } from "@/types/matchBlock";
 import { ReturnStatement } from "@/types/returnStatement";
 import { UsesTool } from "@/types/tools";
@@ -37,6 +38,8 @@ export class BaseGenerator {
 
   // collect functions used to see what builtin helpers to include
   protected functionsUsed: Set<string> = new Set();
+
+  protected importStatements: string[] = [];
 
   // collect function signatures so we can implement named args
   protected functionSignatures: Record<string, string[]> = {};
@@ -83,6 +86,7 @@ export class BaseGenerator {
     const output: string[] = [];
 
     output.push(this.preprocess() + "\n");
+    output.push(this.importStatements.join("\n") + "\n");
     output.push(this.generateImports() + "\n");
     output.push(this.generateBuiltins() + "\n");
     output.push("\n");
@@ -151,9 +155,16 @@ export class BaseGenerator {
         return this.processGraphNode(node);
       case "usesTool":
         return this.processUsesTool(node);
+      case "importStatement":
+        this.importStatements.push(this.processImportStatement(node));
+        return "";
       default:
         throw new Error(`Unhandled ADL node type: ${(node as any).type}`);
     }
+  }
+
+  protected processImportStatement(node: ImportStatement): string {
+    return "processImportStatement not implemented";
   }
 
   protected processTool(node: FunctionDefinition): string {

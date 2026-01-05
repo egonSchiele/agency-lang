@@ -9,8 +9,9 @@ export const template = `if (toolCall.type === "function" &&
   const args = JSON.parse(toolCall.function.arguments);
 
   // Call the actual function
-  const result = {{{name}}}(args);
-
+  const result = await {{{name}}}(args);
+  console.log("Tool '{{{name:string}}}' called with arguments:", args);
+  console.log("Tool '{{{name:string}}}' returned result:", result);
   // Add function result to messages
   messages.push({
     role: "tool",

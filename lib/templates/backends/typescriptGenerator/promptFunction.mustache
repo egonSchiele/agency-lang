@@ -4,7 +4,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
   const startTime = performance.now();
   const messages:any[] = [{ role: "user", content: prompt }];
   const tools = {{{tools}}};
-  console.log("Running prompt for {{{variableName:string}}}")
+  console.log("Running prompt for {{{variableName:string}}}:", prompt);
   let completion = await openai.chat.completions.create({
     model: "gpt-5-nano-2025-08-07",
     messages,
@@ -46,8 +46,9 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
   console.log("{{{variableName:string}}}:", result.value);
   return result.value;
   } catch (e) {
-    console.error("Error parsing response for variable '{{{variableName:string}}}':", e);
-    console.error("Full completion response:", JSON.stringify(completion, null, 2));
-    throw e;
+    return completion.choices[0].message.content;
+    // console.error("Error parsing response for variable '{{{variableName:string}}}':", e);
+    // console.error("Full completion response:", JSON.stringify(completion, null, 2));
+    // throw e;
   }
 }

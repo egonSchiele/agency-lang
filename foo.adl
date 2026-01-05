@@ -1,21 +1,12 @@
+import { hello } from "./hello.mjs";
+
+def sayHello(name) {
+  return hello(name);
+}
+
 node llm() {
-  msg = input("> ");
-  action :: "goto_a" | "goto_b"
-  action = `Given this input, decide what action to take: ${msg}`
-
-  match(action) {
-    "goto_a" => return a(msg)
-    "goto_b" => return b(msg)
-  }
+  action :: string
+  +sayHello
+  greeting = `Greet John`
+  print(greeting)
 }
-
-node a(x) {
-  print("in node a")
-  print(x)
-}
-
-node b(x) {
-  print("in node b")
-  print(x)
-}
-

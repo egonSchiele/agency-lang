@@ -1,17 +1,23 @@
 
 
+import { hello }  from "./hello.mjs";
+
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
-import { Graph } from "simplemachine";
+import { Graph, goToNode } from "simplemachine";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-type State = Record<string, any>;
+type State = {
+  messages: string[];
+  data: any;
+}
+
 // enable debug logging
 const graphConfig = {
   debug: {
@@ -27,97 +33,134 @@ const nodes = ["llm"] as const;
 type Node = (typeof nodes)[number];
 
 const graph = new Graph<State, Node>(nodes, graphConfig);
-
-function _builtinInput(prompt: string): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-
-  return new Promise((resolve) => {
-    rl.question(prompt, (answer: string) => {
-      rl.close();
-      resolve(answer);
-    });
-  });
+function add({a, b}: {a:number, b:number}):number {
+  return a + b;
 }
 
-
-
-const msg = await _builtinInput("> ");
-async function _category(msg: string): Promise<"import_recipe" | "create_ingredient"> {
-  const prompt = `determine if the user wants to import a recipe from a website or create a new ingredient based on this message: ${msg}`;
-  const startTime = performance.now();
-  console.log("Running prompt for category")
-  const completion = await openai.chat.completions.create({
-    model: "gpt-5-nano-2025-08-07",
-    messages: [
-      {
-        role: "user",
-        content: prompt,
+// Define the function tool for OpenAI
+const addTool = {
+    type: "function" as const,
+    function: {
+      name: "add",
+      description:
+        "Adds two numbers together and returns the result.",
+      parameters: {
+        type: "object",
+        properties: {
+          a: {
+            type: "number",
+            description: "The first number to add",
+          },
+          b: {
+            type: "number",
+            description: "The second number to add",
+          },
+        },
+        required: ["a", "b"],
+        additionalProperties: false,
       },
-    ],
-    response_format: zodResponseFormat(z.object({
-      value: z.union([z.literal("import_recipe"), z.literal("create_ingredient")])
-    }), "category_response"),
-  });
-  const endTime = performance.now();
-  console.log("Prompt for variable 'category' took " + (endTime - startTime).toFixed(2) + " ms");
-  try {
-  const result = JSON.parse(completion.choices[0].message.content || "");
-  console.log("category:", result.value);
-  return result.value;
-  } catch (e) {
-    console.error("Error parsing response for variable 'category':", e);
-    console.error("Full completion response:", JSON.stringify(completion, null, 2));
-    throw e;
-  }
+    },
+  };
+
+
+
+
+
+const sayHelloTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+    type: "function",
+    function: {
+      name: "sayHello",
+      description:
+        "No description provided.",
+      parameters: {
+        type: "object",
+        properties: {"name":{"type":"string","description":""}},
+        required: ["name"],
+        additionalProperties: false,
+      },
+    },
+  };
+async function sayHello({name}) {
+    return hello(name)
+
 }
-const category = await _category(msg);
-async function _action(input: string): Promise<string> {
-  const prompt = `Given this input, decide what action to take: ${input}`;
+async function _greeting(): Promise<string> {
+  const prompt = `Greet John`;
   const startTime = performance.now();
-  console.log("Running prompt for action")
-  const completion = await openai.chat.completions.create({
+  const messages:any[] = [{ role: "user", content: prompt }];
+  const tools = [sayHelloTool];
+  console.log("Running prompt for greeting:", prompt);
+  let completion = await openai.chat.completions.create({
     model: "gpt-5-nano-2025-08-07",
-    messages: [
-      {
-        role: "user",
-        content: prompt,
-      },
-    ],
+    messages,
+    tools,
     response_format: zodResponseFormat(z.object({
       value: z.string()
-    }), "action_response"),
+    }), "greeting_response"),
   });
   const endTime = performance.now();
-  console.log("Prompt for variable 'action' took " + (endTime - startTime).toFixed(2) + " ms");
+  console.log("Prompt for variable 'greeting' took " + (endTime - startTime).toFixed(2) + " ms");
+  console.log("Completion response:", JSON.stringify(completion, null, 2));
+
+  let responseMessage = completion.choices[0].message;
+  // Handle function calls
+  while (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
+    // Add assistant's response with tool calls to message history
+    messages.push(responseMessage);
+
+    // Process each tool call
+    for (const toolCall of responseMessage.tool_calls) {
+      if (toolCall.type === "function" &&
+  toolCall.function.name === "sayHello"
+) {
+  const args = JSON.parse(toolCall.function.arguments);
+
+  // Call the actual function
+  const result = await sayHello(args);
+  console.log("Tool 'sayHello' called with arguments:", args);
+  console.log("Tool 'sayHello' returned result:", result);
+  // Add function result to messages
+  messages.push({
+    role: "tool",
+    tool_call_id: toolCall.id,
+    content: JSON.stringify(result),
+  });
+}
+    }
+
+    // Get the next response from the model
+    completion = await openai.chat.completions.create({
+      model: "gpt-5-nano-2025-08-07",
+      messages: messages,
+      tools: tools,
+    });
+
+    responseMessage = completion.choices[0].message;
+  }
+
+  // Add final assistant response to history
+  messages.push(responseMessage);
+
   try {
   const result = JSON.parse(completion.choices[0].message.content || "");
-  console.log("action:", result.value);
+  console.log("greeting:", result.value);
   return result.value;
   } catch (e) {
-    console.error("Error parsing response for variable 'action':", e);
-    console.error("Full completion response:", JSON.stringify(completion, null, 2));
-    throw e;
+    return completion.choices[0].message.content;
+    // console.error("Error parsing response for variable 'greeting':", e);
+    // console.error("Full completion response:", JSON.stringify(completion, null, 2));
+    // throw e;
   }
 }
 graph.node("llm", async (state) => {
-    const input = "foo";
+    
+    
 
+const greeting = await _greeting();
 
-const action = await _action(input);
-
-switch (action) {
-  case "tool_call":
-tool_call()
-    break;
-  case "exit":
-exit()
-    break;
-}
+console.log(greeting)
 });
 
-const initialState: State = {};
+const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("llm", initialState);
 

@@ -10,7 +10,7 @@ import { nanoid } from "nanoid";
 const statelogHost = "http://localhost:1065";
 const traceId = nanoid();
 const statelogClient = new StatelogClient({host: statelogHost, tid: traceId});
-const model = "gpt-5-nano-2025-08-07";
+const model = "gpt-4.1-nano-2025-04-14";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,

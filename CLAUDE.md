@@ -9,14 +9,14 @@ ADL is a domain-specific language for defining AI agent workflows. It compiles A
 ```
 adl-lang/
 ├── lib/                           # Core implementation
-│   ├── adlParser.ts              # Parser using tarsec combinators
+│   ├── agencyParser.ts              # Parser using tarsec combinators
 │   ├── types.ts                  # AST type definitions
 │   ├── generate-ts-file.ts       # CLI tool to generate TS from ADL
 │   └── backends/                 # Code generation backends
 │       └── typescript.ts         # TypeScript code generator
 ├── tests/                        # Example ADL programs
-│   ├── assignment.adl           # Type hints and prompt assignments
-│   └── function.adl             # Function definitions
+│   ├── assignment.agency           # Type hints and prompt assignments
+│   └── function.agency             # Function definitions
 ├── dist/                        # Compiled JavaScript output
 ├── adl                          # Shell script to run ADL programs
 ├── index.ts                     # File for testing parser
@@ -217,22 +217,22 @@ pnpm run build  # Compiles TypeScript to dist/
 
 ### Running ADL Programs
 
-**Using the adl script:**
+**Using the agency script:**
 ```bash
-./adl tests/assignment.adl
+./adl tests/assignment.agency
 ```
 This will:
-1. Parse `assignment.adl` to AST
+1. Parse `assignment.agency` to AST
 2. Generate `assignment.ts`
 3. Execute `assignment.ts` with Node.js
 
 **Manual pipeline:**
 ```bash
 # 1. Parse to JSON
-pnpm run start tests/assignment.adl
+pnpm run start tests/assignment.agency
 
 # 2. Generate TypeScript (programmatically)
-node dist/lib/generate-ts-file.js input.adl output.ts
+node dist/lib/generate-ts-file.js input.agency output.ts
 
 # 3. Run TypeScript
 node output.ts
@@ -314,9 +314,9 @@ describe('numberParser', () => {
 
 ## Key Files
 
-### `lib/adlParser.ts`
+### `lib/agencyParser.ts`
 Main parser implementation. Exports:
-- `parseADL(input: string)` - Parses ADL source code
+- `parseAgency(input: string)` - Parses ADL source code
 - Individual parsers: `typeHintParser`, `assignmentParser`, etc.
 
 ### `lib/types.ts`
@@ -324,7 +324,7 @@ TypeScript type definitions for the AST. All node types implement a discriminate
 
 ### `lib/backends/typescript.ts`
 TypeScript code generator. Exports:
-- `generateTypeScript(program: ADLProgram): string`
+- `generateTypeScript(program: AgencyProgram): string`
 - `TypeScriptGenerator` class
 
 ### `lib/generate-ts-file.ts`
@@ -338,7 +338,7 @@ Convenience script to run ADL programs end-to-end.
 ### Adding New Backends
 Create `lib/backends/<language>.ts` with:
 ```typescript
-export function generate<Language>(program: ADLProgram): string {
+export function generate<Language>(program: AgencyProgram): string {
   // Implementation
 }
 ```
@@ -354,15 +354,15 @@ case "object":
 
 ### Adding New Language Features
 1. Add AST node type to `lib/types.ts`
-2. Add parser in `lib/adlParser.ts`
+2. Add parser in `lib/agencyParser.ts`
 3. Add code generation in backend generator
 
 ## Common Tasks
 
 ### Adding a new ADL language feature
 1. Define the AST node type in `lib/types.ts`
-2. Create parser combinator in `lib/adlParser.ts`
-3. Add to main `adlParser` parser
+2. Create parser combinator in `lib/agencyParser.ts`
+3. Add to main `agencyParser` parser
 4. Add code generation case in `lib/backends/typescript.ts`
 5. Test with a new test file in `tests/`
 

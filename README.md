@@ -1,4 +1,4 @@
-# ADL
+# Agency
 Agent Definition Language
 
 ## troubleshooting

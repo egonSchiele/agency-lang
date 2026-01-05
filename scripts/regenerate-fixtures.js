@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { parseADL } = require("../dist/lib/parser.js");
+const { parseAgency } = require("../dist/lib/parser.js");
 const {
   generateTypeScript,
 } = require("../dist/lib/backends/typescriptGenerator.js");
@@ -17,12 +17,12 @@ function regenerateFixtures(dir, relativePath = "") {
 
     if (entry.isDirectory()) {
       regenerateFixtures(fullPath, path.join(relativePath, entry.name));
-    } else if (entry.isFile() && entry.name.endsWith(".adl")) {
-      const baseName = entry.name.replace(".adl", "");
+    } else if (entry.isFile() && entry.name.endsWith(".agency")) {
+      const baseName = entry.name.replace(".agency", "");
       const mtsPath = path.join(dir, `${baseName}.mts`);
 
-      const adlContent = fs.readFileSync(fullPath, "utf-8");
-      const parseResult = parseADL(adlContent);
+      const agencyContent = fs.readFileSync(fullPath, "utf-8");
+      const parseResult = parseAgency(agencyContent);
 
       if (parseResult.success) {
         const tsCode = generateTypeScript(parseResult.result);

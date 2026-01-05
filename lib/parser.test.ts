@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { adlNode, adlParser, parseADL } from "./parser";
+import { agencyNode, agencyParser, parseAgency } from "./parser";
 
-describe("adlNode", () => {
+describe("agencyNode", () => {
   const testCases = [
     {
       input: "bar :: number",
@@ -79,7 +79,7 @@ describe("adlNode", () => {
   testCases.forEach(({ input, expected }) => {
     if (expected.success) {
       it(`should parse "${input.replace(/\n/g, "\\n")}" successfully`, () => {
-        const result = adlNode(input);
+        const result = agencyNode(input);
         expect(result.success).toBe(true);
         if (result.success) {
           expect(result.result.length).toBe(expected.nodeCount);
@@ -90,14 +90,14 @@ describe("adlNode", () => {
       });
     } else {
       it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
-        const result = adlNode(input);
+        const result = agencyNode(input);
         expect(result.success).toBe(false);
       });
     }
   });
 });
 
-describe("adlParser", () => {
+describe("agencyParser", () => {
   const testCases = [
     {
       input: "bar :: number",
@@ -161,29 +161,29 @@ describe("adlParser", () => {
   testCases.forEach(({ input, expected }) => {
     if (expected.success) {
       it(`should parse "${input.replace(/\n/g, "\\n")}" successfully`, () => {
-        const result = adlParser(input);
+        const result = agencyParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result.type).toBe("adlProgram");
+          expect(result.result.type).toBe("agencyProgram");
           expect(result.result.nodes.length).toBe(expected.nodeCount);
         }
       });
     } else {
       it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
-        const result = adlParser(input);
+        const result = agencyParser(input);
         expect(result.success).toBe(false);
       });
     }
   });
 });
 
-describe("parseADL", () => {
+describe("parseAgency", () => {
   const testCases = [
     {
       input: "bar :: number\nbar = `the number 1`",
       expected: {
         success: true,
-        programType: "adlProgram",
+        programType: "agencyProgram",
         nodeCount: 2,
       },
     },
@@ -191,7 +191,7 @@ describe("parseADL", () => {
       input: "def test() {\n  foo = 1\n  bar = `say hello`\n  bar\n}",
       expected: {
         success: true,
-        programType: "adlProgram",
+        programType: "agencyProgram",
         nodeCount: 1,
       },
     },
@@ -199,7 +199,7 @@ describe("parseADL", () => {
       input: "x = 5",
       expected: {
         success: true,
-        programType: "adlProgram",
+        programType: "agencyProgram",
         nodeCount: 1,
       },
     },
@@ -207,7 +207,7 @@ describe("parseADL", () => {
       input: "name :: string\nname = `generate a name`\ngreet(name)",
       expected: {
         success: true,
-        programType: "adlProgram",
+        programType: "agencyProgram",
         nodeCount: 3,
       },
     },
@@ -215,7 +215,7 @@ describe("parseADL", () => {
       input: "",
       expected: {
         success: true,
-        programType: "adlProgram",
+        programType: "agencyProgram",
         nodeCount: 0,
       },
     },
@@ -232,7 +232,7 @@ describe("parseADL", () => {
   testCases.forEach(({ input, expected }) => {
     if (expected.success) {
       it(`should parse "${input.replace(/\n/g, "\\n")}" successfully`, () => {
-        const result = parseADL(input);
+        const result = parseAgency(input);
         expect(result.success).toBe(true);
         if (result.success) {
           expect(result.result.type).toBe(expected.programType);
@@ -241,7 +241,7 @@ describe("parseADL", () => {
       });
     } else {
       it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
-        const result = parseADL(input);
+        const result = parseAgency(input);
         expect(result.success).toBe(false);
       });
     }
@@ -258,10 +258,10 @@ def process() {
 }
 process()`;
 
-    const result = parseADL(input);
+    const result = parseAgency(input);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result.type).toBe("adlProgram");
+      expect(result.result.type).toBe("agencyProgram");
       expect(result.result.nodes.length).toBe(6);
       expect(result.result.nodes[0].type).toBe("typeHint");
       expect(result.result.nodes[1].type).toBe("assignment");
@@ -272,12 +272,12 @@ process()`;
     }
   });
 
-  it("should parse real-world example from tests/assignment.adl pattern", () => {
+  it("should parse real-world example from tests/assignment.agency pattern", () => {
     const input = `bar :: number
 test :: string
 bar = \`the number 1\``;
 
-    const result = parseADL(input);
+    const result = parseAgency(input);
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result.nodes.length).toBe(3);
@@ -294,14 +294,14 @@ bar = \`the number 1\``;
     }
   });
 
-  it("should parse real-world example from tests/function.adl pattern", () => {
+  it("should parse real-world example from tests/function.agency pattern", () => {
     const input = `def test() {
   foo = 1
   bar = \`say hello\`
   bar
 }`;
 
-    const result = parseADL(input);
+    const result = parseAgency(input);
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result.nodes.length).toBe(1);

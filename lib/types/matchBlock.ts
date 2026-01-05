@@ -1,8 +1,8 @@
-import { Assignment, ADLComment } from "@/types";
+import { Assignment, AgencyComment } from "@/types";
 import { AccessExpression } from "./access";
 import { Literal } from "./literals";
 import { FunctionCall } from "./function";
-import { ADLArray, ADLObject } from "./dataStructures";
+import { AgencyArray, AgencyObject } from "./dataStructures";
 import { ReturnStatement } from "./returnStatement";
 
 export type DefaultCase = "_";
@@ -15,13 +15,13 @@ export type MatchBlockCase = {
     | Literal
     | FunctionCall
     | AccessExpression
-    | ADLArray
-    | ADLObject
+    | AgencyArray
+    | AgencyObject
     | ReturnStatement;
 };
 
 export type MatchBlock = {
   type: "matchBlock";
   expression: Literal;
-  cases: (MatchBlockCase | ADLComment)[];
+  cases: (MatchBlockCase | AgencyComment)[];
 };

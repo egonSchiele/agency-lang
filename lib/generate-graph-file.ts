@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import * as fs from "fs";
-import { parseADL } from "@/parser";
+import { parseAgency } from "@/parser";
 import { generateGraph } from "@/backends/graphGenerator";
 
 // Get filename from command line arguments
@@ -9,14 +9,14 @@ const outputFile = process.argv[3];
 
 if (!inputFile || !outputFile) {
   console.error(
-    "Usage: node lib/generate-graph-file.js <input.adl> <output.mts>"
+    "Usage: node lib/generate-graph-file.js <input.agency> <output.mts>"
   );
   process.exit(1);
 }
 
-// Read and parse the ADL file
+// Read and parse the Agency file
 const contents = fs.readFileSync(inputFile, "utf-8");
-const parseResult = parseADL(contents);
+const parseResult = parseAgency(contents);
 
 // Check if parsing was successful
 if (!parseResult.success) {

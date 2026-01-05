@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { generateTypeScript } from "./typescriptGenerator";
-import { ADLProgram } from "@/types";
+import { AgencyProgram } from "@/types";
 
 describe("generateTypeScript - ObjectType support", () => {
   describe("Object type hints generate correct Zod schemas", () => {
     it("should generate zod schema for simple object type", () => {
-      const program: ADLProgram = {
-        type: "adlProgram",
+      const program: AgencyProgram = {
+        type: "agencyProgram",
         nodes: [
           {
             type: "typeHint",
@@ -50,8 +50,8 @@ describe("generateTypeScript - ObjectType support", () => {
     });
 
     it("should generate zod schema for object with different property types", () => {
-      const program: ADLProgram = {
-        type: "adlProgram",
+      const program: AgencyProgram = {
+        type: "agencyProgram",
         nodes: [
           {
             type: "typeHint",
@@ -101,8 +101,8 @@ describe("generateTypeScript - ObjectType support", () => {
     });
 
     it("should generate zod schema for object with array properties", () => {
-      const program: ADLProgram = {
-        type: "adlProgram",
+      const program: AgencyProgram = {
+        type: "agencyProgram",
         nodes: [
           {
             type: "typeHint",
@@ -152,8 +152,8 @@ describe("generateTypeScript - ObjectType support", () => {
     });
 
     it("should generate zod schema for object with literal properties", () => {
-      const program: ADLProgram = {
-        type: "adlProgram",
+      const program: AgencyProgram = {
+        type: "agencyProgram",
         nodes: [
           {
             type: "typeHint",
@@ -203,8 +203,8 @@ describe("generateTypeScript - ObjectType support", () => {
     });
 
     it("should generate zod schema for empty object", () => {
-      const program: ADLProgram = {
-        type: "adlProgram",
+      const program: AgencyProgram = {
+        type: "agencyProgram",
         nodes: [
           {
             type: "typeHint",
@@ -237,8 +237,8 @@ describe("generateTypeScript - ObjectType support", () => {
     });
 
     it("should generate zod schema for single property object", () => {
-      const program: ADLProgram = {
-        type: "adlProgram",
+      const program: AgencyProgram = {
+        type: "agencyProgram",
         nodes: [
           {
             type: "typeHint",
@@ -280,8 +280,8 @@ describe("generateTypeScript - ObjectType support", () => {
 describe("generateTypeScript - Type Alias support", () => {
   describe("Type aliases generate correct TypeScript type definitions", () => {
     it("should generate TypeScript type alias for primitive type", () => {
-      const program: ADLProgram = {
-        type: "adlProgram",
+      const program: AgencyProgram = {
+        type: "agencyProgram",
         nodes: [
           {
             type: "typeAlias",
@@ -297,8 +297,8 @@ describe("generateTypeScript - Type Alias support", () => {
     });
 
     it("should generate TypeScript type alias for object type", () => {
-      const program: ADLProgram = {
-        type: "adlProgram",
+      const program: AgencyProgram = {
+        type: "agencyProgram",
         nodes: [
           {
             type: "typeAlias",
@@ -326,8 +326,8 @@ describe("generateTypeScript - Type Alias support", () => {
     });
 
     it("should generate TypeScript type alias for union type", () => {
-      const program: ADLProgram = {
-        type: "adlProgram",
+      const program: AgencyProgram = {
+        type: "agencyProgram",
         nodes: [
           {
             type: "typeAlias",
@@ -349,8 +349,8 @@ describe("generateTypeScript - Type Alias support", () => {
     });
 
     it("should use type alias in variable type hint and generate correct zod schema", () => {
-      const program: ADLProgram = {
-        type: "adlProgram",
+      const program: AgencyProgram = {
+        type: "agencyProgram",
         nodes: [
           {
             type: "typeAlias",
@@ -408,8 +408,8 @@ describe("generateTypeScript - Type Alias support", () => {
     });
 
     it("should handle type alias used in union", () => {
-      const program: ADLProgram = {
-        type: "adlProgram",
+      const program: AgencyProgram = {
+        type: "agencyProgram",
         nodes: [
           {
             type: "typeAlias",
@@ -469,8 +469,8 @@ describe("generateTypeScript - Type Alias support", () => {
     });
 
     it("should handle type alias used in object property", () => {
-      const program: ADLProgram = {
-        type: "adlProgram",
+      const program: AgencyProgram = {
+        type: "agencyProgram",
         nodes: [
           {
             type: "typeAlias",
@@ -536,8 +536,8 @@ describe("generateTypeScript - Type Alias support", () => {
     });
 
     it("should handle multiple type aliases", () => {
-      const program: ADLProgram = {
-        type: "adlProgram",
+      const program: AgencyProgram = {
+        type: "agencyProgram",
         nodes: [
           {
             type: "typeAlias",
@@ -609,8 +609,8 @@ describe("generateTypeScript - Type Alias support", () => {
     });
 
     it("should generate type alias for array type", () => {
-      const program: ADLProgram = {
-        type: "adlProgram",
+      const program: AgencyProgram = {
+        type: "agencyProgram",
         nodes: [
           {
             type: "typeAlias",
@@ -631,8 +631,8 @@ describe("generateTypeScript - Type Alias support", () => {
 
   describe("Object properties with descriptions", () => {
     it("should generate Zod schema with .describe() for single property with description", () => {
-      const program: ADLProgram = {
-        type: "adlProgram",
+      const program: AgencyProgram = {
+        type: "agencyProgram",
         nodes: [
           {
             type: "typeHint",
@@ -672,8 +672,8 @@ describe("generateTypeScript - Type Alias support", () => {
     });
 
     it("should generate Zod schema with .describe() for multiple properties with descriptions", () => {
-      const program: ADLProgram = {
-        type: "adlProgram",
+      const program: AgencyProgram = {
+        type: "agencyProgram",
         nodes: [
           {
             type: "typeHint",
@@ -718,8 +718,8 @@ describe("generateTypeScript - Type Alias support", () => {
     });
 
     it("should handle mix of properties with and without descriptions", () => {
-      const program: ADLProgram = {
-        type: "adlProgram",
+      const program: AgencyProgram = {
+        type: "agencyProgram",
         nodes: [
           {
             type: "typeHint",
@@ -769,8 +769,8 @@ describe("generateTypeScript - Type Alias support", () => {
     });
 
     it("should escape special characters in descriptions", () => {
-      const program: ADLProgram = {
-        type: "adlProgram",
+      const program: AgencyProgram = {
+        type: "agencyProgram",
         nodes: [
           {
             type: "typeHint",
@@ -810,8 +810,8 @@ describe("generateTypeScript - Type Alias support", () => {
     });
 
     it("should generate descriptions for array properties", () => {
-      const program: ADLProgram = {
-        type: "adlProgram",
+      const program: AgencyProgram = {
+        type: "agencyProgram",
         nodes: [
           {
             type: "typeHint",

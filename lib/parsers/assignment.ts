@@ -10,7 +10,7 @@ import {
   trace,
 } from "tarsec";
 import { accessExpressionParser } from "./access";
-import { adlArrayParser, adlObjectParser } from "./dataStructures";
+import { agencyArrayParser, agencyObjectParser } from "./dataStructures";
 import { functionCallParser } from "./functionCall";
 import { literalParser } from "./literals";
 import { optionalSemicolon } from "./parserUtils";
@@ -29,8 +29,8 @@ export const assignmentParser: Parser<Assignment> = trace(
       or(
         functionCallParser,
         accessExpressionParser,
-        adlArrayParser,
-        adlObjectParser,
+        agencyArrayParser,
+        agencyObjectParser,
         literalParser
       ),
       "value"

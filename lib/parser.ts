@@ -1,5 +1,5 @@
 import { typeAliasParser, typeHintParser } from "@/parsers/typeHints";
-import { ADLNode, ADLProgram, ADLComment } from "@/types";
+import { AgencyNode, AgencyProgram, AgencyComment } from "@/types";
 import {
   capture,
   eof,
@@ -28,11 +28,11 @@ import { returnStatementParser } from "./parsers/returnStatement";
 import { usesToolParser } from "./parsers/tools";
 import { importStatmentParser } from "./parsers/importStatement";
 
-export const adlNode: Parser<ADLNode[]> = (input: string) => {
+export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
   const parser = sepBy(
     spaces,
     trace(
-      "adlParser",
+      "agencyParser",
       or(
         usesToolParser,
         importStatmentParser,
@@ -53,19 +53,19 @@ export const adlNode: Parser<ADLNode[]> = (input: string) => {
   return parser(input);
 };
 
-export const adlParser: Parser<ADLProgram> = seqC(
-  set("type", "adlProgram"),
-  capture(adlNode, "nodes"),
+export const agencyParser: Parser<AgencyProgram> = seqC(
+  set("type", "agencyProgram"),
+  capture(agencyNode, "nodes"),
   eof
 );
 
-export function parseADL(input: string): ParserResult<ADLProgram> {
+export function parseAgency(input: string): ParserResult<AgencyProgram> {
   const normalized = input
     .split("\n")
     .map((line: string) => {
       return line.trim();
     })
     .join("\n");
-  const result = adlParser(normalized);
+  const result = agencyParser(normalized);
   return result;
 }

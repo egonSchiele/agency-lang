@@ -1,5 +1,5 @@
 import * as fs from "fs";
-import { parseADL } from "@/parser";
+import { parseAgency } from "@/parser";
 import { generateTypeScript } from "@/backends/typescriptGenerator";
 
 // Get filename from command line arguments
@@ -10,11 +10,11 @@ if (!filename) {
   process.exit(1);
 }
 
-// Read and parse the ADL file
+// Read and parse the Agency file
 const contents = fs.readFileSync(filename, "utf-8");
-const parseResult = parseADL(contents);
+const parseResult = parseAgency(contents);
 
-console.log("Input ADL file:");
+console.log("Input Agency file:");
 console.log("=".repeat(80));
 console.log(contents);
 console.log("=".repeat(80));

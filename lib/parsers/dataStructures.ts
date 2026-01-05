@@ -1,4 +1,4 @@
-import { ADLArray, ADLObject, ADLObjectKV } from "@/types/dataStructures";
+import { AgencyArray, AgencyObject, AgencyObjectKV } from "@/types/dataStructures";
 import {
   capture,
   char,
@@ -18,13 +18,13 @@ import { functionCallParser } from "./functionCall";
 import { literalParser } from "./literals";
 import { comma, optionalSpaces } from "./utils";
 
-export const adlArrayParser: Parser<ADLArray> = (
+export const agencyArrayParser: Parser<AgencyArray> = (
   input: string
-): ParserResult<ADLArray> => {
+): ParserResult<AgencyArray> => {
   const parser = trace(
-    "adlArrayParser",
+    "agencyArrayParser",
     seqC(
-      set("type", "adlArray"),
+      set("type", "agencyArray"),
       char("["),
       capture(
         sepBy(
@@ -33,8 +33,8 @@ export const adlArrayParser: Parser<ADLArray> = (
             accessExpressionParser,
             functionCallParser,
             literalParser,
-            adlObjectParser,
-            adlArrayParser
+            agencyObjectParser,
+            agencyArrayParser
           )
         ),
         "items"
@@ -47,11 +47,11 @@ export const adlArrayParser: Parser<ADLArray> = (
   return parser(input);
 };
 
-export const adlObjectKVParser: Parser<ADLObjectKV> = (
+export const agencyObjectKVParser: Parser<AgencyObjectKV> = (
   input: string
-): ParserResult<ADLObjectKV> => {
+): ParserResult<AgencyObjectKV> => {
   const parser = trace(
-    "adlObjectKVParser",
+    "agencyObjectKVParser",
     seqC(
       optionalSpaces,
       optional(char('"')),
@@ -65,8 +65,8 @@ export const adlObjectKVParser: Parser<ADLObjectKV> = (
           accessExpressionParser,
           functionCallParser,
           literalParser,
-          adlObjectParser,
-          adlArrayParser
+          agencyObjectParser,
+          agencyArrayParser
         ),
         "value"
       )
@@ -76,11 +76,11 @@ export const adlObjectKVParser: Parser<ADLObjectKV> = (
   return parser(input);
 };
 
-export const adlObjectParser: Parser<ADLObject> = seqC(
-  set("type", "adlObject"),
+export const agencyObjectParser: Parser<AgencyObject> = seqC(
+  set("type", "agencyObject"),
   char("{"),
   optionalSpaces,
-  capture(sepBy(comma, adlObjectKVParser), "entries"),
+  capture(sepBy(comma, agencyObjectKVParser), "entries"),
   optional(char(",")),
   optionalSpaces,
   char("}")

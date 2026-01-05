@@ -1,7 +1,7 @@
-import { AccessExpression, ADLNode, FunctionCall, Literal } from "@/types";
-import { ADLArray, ADLObject } from "./dataStructures";
+import { AccessExpression, AgencyNode, FunctionCall, Literal } from "@/types";
+import { AgencyArray, AgencyObject } from "./dataStructures";
 
 export type ReturnStatement = {
   type: "returnStatement";
-  value: AccessExpression | FunctionCall | Literal | ADLObject | ADLArray;
+  value: AccessExpression | FunctionCall | Literal | AgencyObject | AgencyArray;
 };

@@ -1,22 +1,22 @@
 import { describe, it, expect } from "vitest";
-import { parseADL } from "@/parser";
+import { parseAgency } from "@/parser";
 import { generateTypeScript } from "./typescriptGenerator";
 import fs from "fs";
 import path from "path";
 
 /**
- * Interface representing a test fixture pair (.adl and .mts files)
+ * Interface representing a test fixture pair (.agency and .mts files)
  */
 interface FixturePair {
   name: string; // e.g., "array", "types/literal"
-  adlPath: string; // absolute path to .adl file
+  agencyPath: string; // absolute path to .agency file
   mtsPath: string; // absolute path to .mts file
-  adlContent: string; // pre-read ADL source
+  agencyContent: string; // pre-read Agency source
   expectedTS: string; // pre-read expected TypeScript
 }
 
 /**
- * Recursively discovers all .adl/.mts fixture pairs in a directory
+ * Recursively discovers all .agency/.mts fixture pairs in a directory
  */
 function discoverFixtures(fixtureDir: string): FixturePair[] {
   const fixtures: FixturePair[] = [];
@@ -33,9 +33,9 @@ function discoverFixtures(fixtureDir: string): FixturePair[] {
       if (entry.isDirectory()) {
         // Recursively scan subdirectories
         scanDirectory(fullPath, relPath);
-      } else if (entry.isFile() && entry.name.endsWith(".adl")) {
-        // Found an ADL file - look for corresponding .mts
-        const baseName = entry.name.replace(".adl", "");
+      } else if (entry.isFile() && entry.name.endsWith(".agency")) {
+        // Found an Agency file - look for corresponding .mts
+        const baseName = entry.name.replace(".agency", "");
         const mtsPath = path.join(dir, `${baseName}.mts`);
 
         if (fs.existsSync(mtsPath)) {
@@ -46,9 +46,9 @@ function discoverFixtures(fixtureDir: string): FixturePair[] {
           try {
             fixtures.push({
               name: nameWithoutExt,
-              adlPath: fullPath,
+              agencyPath: fullPath,
               mtsPath: mtsPath,
-              adlContent: fs.readFileSync(fullPath, "utf-8"),
+              agencyContent: fs.readFileSync(fullPath, "utf-8"),
               expectedTS: fs.readFileSync(mtsPath, "utf-8"),
             });
           } catch (error) {
@@ -105,20 +105,20 @@ describe("TypeScript Backend Integration Tests", () => {
 
   describe.each(fixtures)(
     "Fixture: $name",
-    ({ name, adlPath, mtsPath, adlContent, expectedTS }) => {
+    ({ name, agencyPath, mtsPath, agencyContent, expectedTS }) => {
       it("should generate correct TypeScript output", () => {
-        // 1. Parse ADL
-        const parseResult = parseADL(adlContent);
+        // 1. Parse Agency
+        const parseResult = parseAgency(agencyContent);
 
         // 2. Assert parsing succeeded
         if (!parseResult.success) {
           const errorMessage = [
-            `Failed to parse ADL fixture: ${name}`,
-            `File: ${adlPath}`,
+            `Failed to parse Agency fixture: ${name}`,
+            `File: ${agencyPath}`,
             `Error: ${parseResult.message}`,
             ``,
-            `ADL Content:`,
-            adlContent,
+            `Agency Content:`,
+            agencyContent,
           ].join("\n");
           throw new Error(errorMessage);
         }
@@ -130,7 +130,7 @@ describe("TypeScript Backend Integration Tests", () => {
         } catch (error) {
           const errorMessage = [
             `Failed to generate TypeScript for fixture: ${name}`,
-            `File: ${adlPath}`,
+            `File: ${agencyPath}`,
             `Error: ${error instanceof Error ? error.message : String(error)}`,
             ``,
             `Parsed AST:`,

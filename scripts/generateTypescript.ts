@@ -1,5 +1,5 @@
 import * as fs from "fs";
-import { parseADL } from "@/parser";
+import { parseAgency } from "@/parser";
 import { getDebugMessage } from "tarsec";
 import { generateTypeScript } from "@/backends/typescriptGenerator";
 import { exit } from "process";
@@ -15,8 +15,8 @@ if (!filename) {
 // Read file contents
 const contents = fs.readFileSync(filename, "utf-8");
 
-// Parse with adlParser
-const result = parseADL(contents);
+// Parse with agencyParser
+const result = parseAgency(contents);
 
 if (!result.success) {
   const message = getDebugMessage();

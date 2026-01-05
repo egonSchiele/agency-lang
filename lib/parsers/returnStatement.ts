@@ -5,7 +5,7 @@ import { functionCallParser } from "./functionCall";
 import { optionalSemicolon } from "./parserUtils";
 import { optionalSpaces } from "./utils";
 import { literalParser } from "./literals";
-import { adlArrayParser, adlObjectParser } from "./dataStructures";
+import { agencyArrayParser, agencyObjectParser } from "./dataStructures";
 
 export const returnStatementParser: Parser<ReturnStatement> = seqC(
   set("type", "returnStatement"),
@@ -16,8 +16,8 @@ export const returnStatementParser: Parser<ReturnStatement> = seqC(
       accessExpressionParser,
       functionCallParser,
       literalParser,
-      adlObjectParser,
-      adlArrayParser
+      agencyObjectParser,
+      agencyArrayParser
     ),
     "value"
   ),

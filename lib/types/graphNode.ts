@@ -1,4 +1,4 @@
-import { ADLNode, FunctionCall } from "@/types";
+import { AgencyNode, FunctionCall } from "@/types";
 import { AccessExpression } from "./access";
 import { Literal } from "./literals";
 
@@ -6,7 +6,7 @@ export type GraphNodeDefinition = {
   type: "graphNode";
   nodeName: string;
   parameters: string[];
-  body: ADLNode[];
+  body: AgencyNode[];
 };
 
 export type NodeCall = {

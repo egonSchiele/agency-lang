@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
-  adlArrayParser,
-  adlObjectParser,
-  adlObjectKVParser,
+  agencyArrayParser,
+  agencyObjectParser,
+  agencyObjectKVParser,
 } from "./dataStructures";
 
 describe("dataStructures parsers", () => {
-  describe("adlArrayParser", () => {
+  describe("agencyArrayParser", () => {
     const testCases = [
       // Empty arrays
       {
@@ -14,7 +14,7 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlArray",
+            type: "agencyArray",
             items: [],
           },
         },
@@ -26,7 +26,7 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlArray",
+            type: "agencyArray",
             items: [{ type: "number", value: "1" }],
           },
         },
@@ -36,7 +36,7 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlArray",
+            type: "agencyArray",
             items: [
               { type: "number", value: "1" },
               { type: "number", value: "2" },
@@ -50,7 +50,7 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlArray",
+            type: "agencyArray",
             items: [
               { type: "string", value: "hello" },
               { type: "string", value: "world" },
@@ -65,7 +65,7 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlArray",
+            type: "agencyArray",
             items: [
               { type: "variableName", value: "x" },
               { type: "variableName", value: "y" },
@@ -81,7 +81,7 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlArray",
+            type: "agencyArray",
             items: [
               { type: "number", value: "1" },
               { type: "string", value: "hello" },
@@ -97,17 +97,17 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlArray",
+            type: "agencyArray",
             items: [
               {
-                type: "adlArray",
+                type: "agencyArray",
                 items: [
                   { type: "number", value: "1" },
                   { type: "number", value: "2" },
                 ],
               },
               {
-                type: "adlArray",
+                type: "agencyArray",
                 items: [
                   { type: "number", value: "3" },
                   { type: "number", value: "4" },
@@ -122,13 +122,13 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlArray",
+            type: "agencyArray",
             items: [
               {
-                type: "adlArray",
+                type: "agencyArray",
                 items: [
                   {
-                    type: "adlArray",
+                    type: "agencyArray",
                     items: [],
                   },
                 ],
@@ -144,7 +144,7 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlArray",
+            type: "agencyArray",
             items: [
               { type: "number", value: "1" },
               { type: "number", value: "2" },
@@ -160,7 +160,7 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlArray",
+            type: "agencyArray",
             items: [
               { type: "number", value: "-1" },
               { type: "number", value: "-2.5" },
@@ -181,7 +181,7 @@ describe("dataStructures parsers", () => {
     testCases.forEach(({ input, expected }) => {
       if (expected.success) {
         it(`should parse "${input}" successfully`, () => {
-          const result = adlArrayParser(input);
+          const result = agencyArrayParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
             expect(result.result).toEqual(expected.result);
@@ -189,14 +189,14 @@ describe("dataStructures parsers", () => {
         });
       } else {
         it(`should fail to parse "${input}"`, () => {
-          const result = adlArrayParser(input);
+          const result = agencyArrayParser(input);
           expect(result.success).toBe(false);
         });
       }
     });
   });
 
-  describe("adlObjectKVParser", () => {
+  describe("agencyObjectKVParser", () => {
     const testCases = [
       // Simple key-value pairs
       {
@@ -294,7 +294,7 @@ describe("dataStructures parsers", () => {
           result: {
             key: "foo",
             value: {
-              type: "adlObject",
+              type: "agencyObject",
               entries: [
                 {
                   key: "bar",
@@ -314,7 +314,7 @@ describe("dataStructures parsers", () => {
           result: {
             key: "foo",
             value: {
-              type: "adlArray",
+              type: "agencyArray",
               items: [
                 { type: "number", value: "1" },
                 { type: "number", value: "2" },
@@ -334,7 +334,7 @@ describe("dataStructures parsers", () => {
     testCases.forEach(({ input, expected }) => {
       if (expected.success) {
         it(`should parse "${input}" successfully`, () => {
-          const result = adlObjectKVParser(input);
+          const result = agencyObjectKVParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
             expect(result.result).toEqual(expected.result);
@@ -342,14 +342,14 @@ describe("dataStructures parsers", () => {
         });
       } else {
         it(`should fail to parse "${input}"`, () => {
-          const result = adlObjectKVParser(input);
+          const result = agencyObjectKVParser(input);
           expect(result.success).toBe(false);
         });
       }
     });
   });
 
-  describe("adlObjectParser", () => {
+  describe("agencyObjectParser", () => {
     const testCases = [
       // Empty objects
       {
@@ -357,7 +357,7 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlObject",
+            type: "agencyObject",
             entries: [],
           },
         },
@@ -367,7 +367,7 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlObject",
+            type: "agencyObject",
             entries: [],
           },
         },
@@ -379,7 +379,7 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlObject",
+            type: "agencyObject",
             entries: [
               {
                 key: "foo",
@@ -394,7 +394,7 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlObject",
+            type: "agencyObject",
             entries: [
               {
                 key: "name",
@@ -411,7 +411,7 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlObject",
+            type: "agencyObject",
             entries: [
               {
                 key: "foo",
@@ -430,7 +430,7 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlObject",
+            type: "agencyObject",
             entries: [
               {
                 key: "name",
@@ -455,7 +455,7 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlObject",
+            type: "agencyObject",
             entries: [
               {
                 key: "foo",
@@ -470,7 +470,7 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlObject",
+            type: "agencyObject",
             entries: [
               {
                 key: "foo",
@@ -491,7 +491,7 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlObject",
+            type: "agencyObject",
             entries: [
               {
                 key: "foo",
@@ -510,7 +510,7 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlObject",
+            type: "agencyObject",
             entries: [
               {
                 key: "foo",
@@ -531,12 +531,12 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlObject",
+            type: "agencyObject",
             entries: [
               {
                 key: "outer",
                 value: {
-                  type: "adlObject",
+                  type: "agencyObject",
                   entries: [
                     {
                       key: "inner",
@@ -554,17 +554,17 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlObject",
+            type: "agencyObject",
             entries: [
               {
                 key: "a",
                 value: {
-                  type: "adlObject",
+                  type: "agencyObject",
                   entries: [
                     {
                       key: "b",
                       value: {
-                        type: "adlObject",
+                        type: "agencyObject",
                         entries: [
                           {
                             key: "c",
@@ -587,12 +587,12 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlObject",
+            type: "agencyObject",
             entries: [
               {
                 key: "nums",
                 value: {
-                  type: "adlArray",
+                  type: "agencyArray",
                   items: [
                     { type: "number", value: "1" },
                     { type: "number", value: "2" },
@@ -611,7 +611,7 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlObject",
+            type: "agencyObject",
             entries: [
               {
                 key: "foo",
@@ -632,7 +632,7 @@ describe("dataStructures parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "adlObject",
+            type: "agencyObject",
             entries: [
               {
                 key: "name",
@@ -649,7 +649,7 @@ describe("dataStructures parsers", () => {
               {
                 key: "tags",
                 value: {
-                  type: "adlArray",
+                  type: "agencyArray",
                   items: [
                     { type: "string", value: "a" },
                     { type: "string", value: "b" },
@@ -672,7 +672,7 @@ describe("dataStructures parsers", () => {
     testCases.forEach(({ input, expected }) => {
       if (expected.success) {
         it(`should parse "${input}" successfully`, () => {
-          const result = adlObjectParser(input);
+          const result = agencyObjectParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
             expect(result.result).toEqual(expected.result);
@@ -680,7 +680,7 @@ describe("dataStructures parsers", () => {
         });
       } else {
         it(`should fail to parse "${input}"`, () => {
-          const result = adlObjectParser(input);
+          const result = agencyObjectParser(input);
           expect(result.success).toBe(false);
         });
       }

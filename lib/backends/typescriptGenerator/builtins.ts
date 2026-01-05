@@ -4,7 +4,7 @@ import * as builtinFunctionsFetchJSON from "@/templates/backends/typescriptGener
 import * as builtinFunctionsFetch from "@/templates/backends/typescriptGenerator/builtinFunctions/fetch";
 
 /**
- * Maps ADL built-in function names to TypeScript equivalents
+ * Maps Agency built-in function names to TypeScript equivalents
  */
 export const BUILTIN_FUNCTIONS: Record<string, string> = {
   print: "console.log",
@@ -17,7 +17,7 @@ export const BUILTIN_FUNCTIONS: Record<string, string> = {
 };
 
 /**
- * Maps an ADL function name to its TypeScript equivalent
+ * Maps an Agency function name to its TypeScript equivalent
  * Returns the original name if not a built-in
  */
 export function mapFunctionName(functionName: string): string {
@@ -25,7 +25,7 @@ export function mapFunctionName(functionName: string): string {
 }
 
 /**
- * Generates helper functions for built-in ADL functions
+ * Generates helper functions for built-in Agency functions
  */
 export function generateBuiltinHelpers(functionsUsed: Set<string>): string {
   const inputFunc = builtinFunctionsInput.default({});

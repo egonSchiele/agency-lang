@@ -1,6 +1,6 @@
 import { FunctionCall } from "@/types";
 import { Literal } from "./literals";
-import { ADLArray } from "./dataStructures";
+import { AgencyArray } from "./dataStructures";
 
 export type DotProperty = {
   type: "dotProperty";
@@ -10,7 +10,7 @@ export type DotProperty = {
 
 export type IndexAccess = {
   type: "indexAccess";
-  array: Literal | FunctionCall | AccessExpression | ADLArray;
+  array: Literal | FunctionCall | AccessExpression | AgencyArray;
   index: Literal | FunctionCall | AccessExpression;
 };
 

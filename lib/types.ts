@@ -3,7 +3,7 @@ import { TypeAlias, TypeHint, VariableType } from "@/types/typeHints";
 import { MatchBlock } from "./types/matchBlock";
 import { AccessExpression } from "./types/access";
 import { FunctionCall, FunctionDefinition } from "./types/function";
-import { ADLArray, ADLObject } from "./types/dataStructures";
+import { AgencyArray, AgencyObject } from "./types/dataStructures";
 import { GraphNodeDefinition } from "./types/graphNode";
 import { ReturnStatement } from "./types/returnStatement";
 import { UsesTool } from "./types/tools";
@@ -16,15 +16,15 @@ export * from "@/types/function";
 export type Assignment = {
   type: "assignment";
   variableName: string;
-  value: AccessExpression | Literal | FunctionCall | ADLObject | ADLArray;
+  value: AccessExpression | Literal | FunctionCall | AgencyObject | AgencyArray;
 };
 
-export type ADLComment = {
+export type AgencyComment = {
   type: "comment";
   content: string;
 };
 
-export type ADLNode =
+export type AgencyNode =
   | TypeHint
   | TypeAlias
   | UsesTool
@@ -36,14 +36,14 @@ export type ADLNode =
   | MatchBlock
   | ReturnStatement
   | AccessExpression
-  | ADLComment
-  | ADLObject
-  | ADLArray
+  | AgencyComment
+  | AgencyObject
+  | AgencyArray
   | ImportStatement
 
-export type ADLProgram = {
-  type: "adlProgram";
-  nodes: ADLNode[];
+export type AgencyProgram = {
+  type: "agencyProgram";
+  nodes: AgencyNode[];
 };
 
 export type TypeHintMap = Record<string, VariableType>;

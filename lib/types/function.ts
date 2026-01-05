@@ -1,4 +1,4 @@
-import { ADLNode } from "@/types";
+import { AgencyNode } from "@/types";
 import { AccessExpression } from "./access";
 import { Literal } from "./literals";
 
@@ -6,7 +6,7 @@ export type FunctionDefinition = {
   type: "function";
   functionName: string;
   parameters: string[];
-  body: ADLNode[];
+  body: AgencyNode[];
   docString?: DocString;
 };
 

@@ -29,7 +29,7 @@ import { functionCallParser } from "./functionCall";
 import { DefaultCase, MatchBlockCase } from "@/types/matchBlock";
 import { accessExpressionParser } from "./access";
 import { optionalSemicolon } from "./parserUtils";
-import { adlArrayParser, adlObjectParser } from "./dataStructures";
+import { agencyArrayParser, agencyObjectParser } from "./dataStructures";
 import * as parsers from "../parser";
 import { commentParser } from "./comment";
 import { returnStatementParser } from "./returnStatement";
@@ -49,8 +49,8 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = seqC(
   capture(
     or(
       returnStatementParser,
-      adlArrayParser,
-      adlObjectParser,
+      agencyArrayParser,
+      agencyObjectParser,
       accessExpressionParser,
       assignmentParser,
       functionCallParser,

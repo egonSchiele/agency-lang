@@ -1,6 +1,6 @@
 import {
-  ADLNode,
-  ADLProgram,
+  AgencyNode,
+  AgencyProgram,
   Assignment,
   FunctionCall,
   FunctionDefinition,
@@ -54,7 +54,7 @@ export class GraphGenerator extends TypeScriptGenerator {
     // subclasses implement this
   }
 
-  protected processNode(node: ADLNode): string {
+  protected processNode(node: AgencyNode): string {
     switch (node.type) {
       case "typeHint":
       case "typeAlias":
@@ -79,22 +79,22 @@ export class GraphGenerator extends TypeScriptGenerator {
         return this.generateLiteral(node);
       case "returnStatement":
         return this.processReturnStatement(node);
-      case "adlArray":
-        return this.processADLArray(node);
-      case "adlObject":
-        return this.processADLObject(node);
+      case "agencyArray":
+        return this.processAgencyArray(node);
+      case "agencyObject":
+        return this.processAgencyObject(node);
     }
   }
 
-  protected processADLObject(node: ADLObject): string {
-    return "<processADLObject not implemented>";
+  protected processAgencyObject(node: AgencyObject): string {
+    return "<processAgencyObject not implemented>";
   }
 
-  protected processADLArray(node: ADLArray): string {
-    return "<processADLArray not implemented>";
+  protected processAgencyArray(node: AgencyArray): string {
+    return "<processAgencyArray not implemented>";
   }
 
-  protected processComment(node: ADLComment): string {
+  protected processComment(node: AgencyComment): string {
     return "processComment not implemented";
   }
 
@@ -344,7 +344,7 @@ export class GraphGenerator extends TypeScriptGenerator {
   }
 }
 
-export function generateGraph(program: ADLProgram): string {
+export function generateGraph(program: AgencyProgram): string {
   const generator = new GraphGenerator();
   return generator.generate(program).output;
 }

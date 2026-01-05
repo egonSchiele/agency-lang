@@ -1,4 +1,4 @@
-import { ADLNode, DocString, FunctionDefinition } from "@/types";
+import { AgencyNode, DocString, FunctionDefinition } from "@/types";
 import {
   capture,
   char,
@@ -45,8 +45,8 @@ export const docStringParser: Parser<DocString> = trace(
 
 export const functionBodyParser = trace(
   "functionBodyParser",
-  (input: string): ParserResult<ADLNode[]> => {
-    const parser: Parser<ADLNode[]> = sepBy(
+  (input: string): ParserResult<AgencyNode[]> => {
+    const parser: Parser<AgencyNode[]> = sepBy(
       spaces,
       or(
         usesToolParser,

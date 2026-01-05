@@ -1,7 +1,7 @@
 import {
-  ADLComment,
-  ADLNode,
-  ADLProgram,
+  AgencyComment,
+  AgencyNode,
+  AgencyProgram,
   Assignment,
   InterpolationSegment,
   Literal,
@@ -23,7 +23,7 @@ import {
   DotProperty,
   IndexAccess,
 } from "@/types/access";
-import { ADLArray, ADLObject } from "@/types/dataStructures";
+import { AgencyArray, AgencyObject } from "@/types/dataStructures";
 import { FunctionCall, FunctionDefinition } from "@/types/function";
 import { MatchBlock } from "@/types/matchBlock";
 import { escape, zip } from "@/utils";
@@ -75,7 +75,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     return "";
   }
 
-  protected processADLObject(node: ADLObject): string {
+  protected processAgencyObject(node: AgencyObject): string {
     const kvCodes = node.entries.map((entry) => {
       const keyCode = entry.key;
       const valueCode = this.processNode(entry.value).trim();
@@ -84,14 +84,14 @@ export class TypeScriptGenerator extends BaseGenerator {
     return `{${kvCodes.join(", ")}}`;
   }
 
-  protected processADLArray(node: ADLArray): string {
+  protected processAgencyArray(node: AgencyArray): string {
     const itemCodes = node.items.map((item) => {
       return this.processNode(item).trim();
     });
     return `[${itemCodes.join(", ")}]`;
   }
 
-  protected processComment(node: ADLComment): string {
+  protected processComment(node: AgencyComment): string {
     return `// ${node.content}\n`;
   }
 
@@ -175,8 +175,8 @@ export class TypeScriptGenerator extends BaseGenerator {
       return `const ${variableName} = ${code.trim()};` + "\n";
     }
   }
-  /* 
-  protected processADLArray(node: ADLArray): string {
+  /*
+  protected processAgencyArray(node: AgencyArray): string {
     const itemCodes = node.items.map((item) => {
       if (item.type === "functionCall") { */
 
@@ -422,7 +422,7 @@ export class TypeScriptGenerator extends BaseGenerator {
   }
 }
 
-export function generateTypeScript(program: ADLProgram): string {
+export function generateTypeScript(program: AgencyProgram): string {
   const generator = new TypeScriptGenerator();
   return generator.generate(program).output;
 }

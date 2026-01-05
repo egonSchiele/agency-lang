@@ -2,7 +2,7 @@ import { VariableType } from "@/types";
 import { escape } from "@/utils";
 
 /**
- * Maps ADL types to Zod schema strings
+ * Maps Agency types to Zod schema strings
  */
 export function mapTypeToZodSchema(
   variableType: VariableType,

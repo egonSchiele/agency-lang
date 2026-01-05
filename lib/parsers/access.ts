@@ -14,7 +14,7 @@ import {
   seqC,
   set,
 } from "tarsec";
-import { adlArrayParser } from "./dataStructures";
+import { agencyArrayParser } from "./dataStructures";
 import { functionCallParser } from "./functionCall";
 import { literalParser } from "./literals";
 import { optionalSemicolon } from "./parserUtils";
@@ -34,7 +34,7 @@ export const dotPropertyParser = (input: string): ParserResult<DotProperty> => {
 export const indexAccessParser = (input: string): ParserResult<IndexAccess> => {
   const parser = seqC(
     set("type", "indexAccess"),
-    capture(or(adlArrayParser, functionCallParser, literalParser), "array"),
+    capture(or(agencyArrayParser, functionCallParser, literalParser), "array"),
     char("["),
     capture(or(functionCallParser, literalParser), "index"),
     char("]")

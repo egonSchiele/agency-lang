@@ -1,29 +1,29 @@
 import { AccessExpression, Literal } from "@/types";
 import { FunctionCall } from "./function";
 
-export type ADLArray = {
-  type: "adlArray";
+export type AgencyArray = {
+  type: "agencyArray";
   items: (
     | AccessExpression
     | Literal
     | FunctionCall
-    | ADLObject
-    | ADLArray
+    | AgencyObject
+    | AgencyArray
     | AccessExpression
   )[];
 };
 
-export type ADLObjectKV = {
+export type AgencyObjectKV = {
   key: string;
   value:
     | AccessExpression
     | Literal
     | FunctionCall
-    | ADLObject
-    | ADLArray
+    | AgencyObject
+    | AgencyArray
     | AccessExpression;
 };
-export type ADLObject = {
-  type: "adlObject";
-  entries: ADLObjectKV[];
+export type AgencyObject = {
+  type: "agencyObject";
+  entries: AgencyObjectKV[];
 };

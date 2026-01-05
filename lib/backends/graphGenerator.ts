@@ -225,6 +225,13 @@ export class GraphGenerator extends TypeScriptGenerator {
       return super.processReturnStatement(node);
     } else {
       const returnCode = this.processNode(node.value);
+      if (
+        node.value.type === "functionCall" &&
+        this.graphNodes.includes(node.value.functionName)
+      ) {
+        // we're going to return a goToNode call, so just return that directly
+        return `return ${returnCode}\n`;
+      }
       return `return { ...state, data: ${returnCode}}\n`;
     }
   }

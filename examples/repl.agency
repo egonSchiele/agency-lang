@@ -1,0 +1,11 @@
+node main() {
+  while (true) {
+    msg = input("> ")
+    save(msg)
+  
+    response :: string
+    +add
+    response = `Respond to this user's input: ${msg}`
+    save(response)
+  }
+}

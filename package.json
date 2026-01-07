@@ -1,12 +1,12 @@
 {
   "name": "agency-lang",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "The Agency language",
   "main": "index.js",
   "scripts": {
     "test": "vitest",
     "test:run": "vitest run",
-    "build": "tsc && tsc-alias",
+    "build": "rm -rf dist/ && tsc && tsc-alias",
     "start": "node dist/index.js",
     "templates": "typestache ./lib/templates",
     "typecheck": "tsc --noEmit"
@@ -15,10 +15,21 @@
     "type": "git",
     "url": "git+https://github.com/egonSchiele/agency-lang.git"
   },
+  "files": [
+    "./dist"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "type": "module",
+  "types": "./dist/index.d.ts",
   "keywords": [],
   "author": "Aditya Bhargava",
   "license": "ISC",
-  "type": "commonjs",
   "bugs": {
     "url": "https://github.com/egonSchiele/agency-lang/issues"
   },

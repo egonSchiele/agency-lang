@@ -1,4 +1,4 @@
-import { AgencyNode, DocString, FunctionDefinition } from "@/types";
+import { AgencyNode, DocString, FunctionDefinition } from "../types.js";
 import {
   capture,
   char,
@@ -20,19 +20,19 @@ import {
   succeed,
   trace,
 } from "tarsec";
-import { accessExpressionParser } from "./access";
-import { assignmentParser } from "./assignment";
-import { commentParser } from "./comment";
-import { functionCallParser } from "./functionCall";
-import { literalParser } from "./literals";
-import { matchBlockParser } from "./matchBlock";
-import { optionalSemicolon } from "./parserUtils";
-import { typeAliasParser, typeHintParser } from "./typeHints";
-import { comma, optionalSpaces, varNameChar } from "./utils";
-import { GraphNodeDefinition } from "@/types/graphNode";
-import { returnStatementParser } from "./returnStatement";
-import { usesToolParser } from "./tools";
-import { WhileLoop } from "@/types/whileLoop";
+import { accessExpressionParser } from "./access.js";
+import { assignmentParser } from "./assignment.js";
+import { commentParser } from "./comment.js";
+import { functionCallParser } from "./functionCall.js";
+import { literalParser } from "./literals.js";
+import { matchBlockParser } from "./matchBlock.js";
+import { optionalSemicolon } from "./parserUtils.js";
+import { typeAliasParser, typeHintParser } from "./typeHints.js";
+import { comma, optionalSpaces, varNameChar } from "./utils.js";
+import { GraphNodeDefinition } from "../types/graphNode.js";
+import { returnStatementParser } from "./returnStatement.js";
+import { usesToolParser } from "./tools.js";
+import { WhileLoop } from "../types/whileLoop.js";
 
 const trim = (s: string) => s.trim();
 export const docStringParser: Parser<DocString> = trace(

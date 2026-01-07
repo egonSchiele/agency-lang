@@ -3,7 +3,7 @@ import {
   agencyArrayParser,
   agencyObjectParser,
   agencyObjectKVParser,
-} from "./dataStructures";
+} from "./dataStructures.js";
 
 describe("dataStructures parsers", () => {
   describe("agencyArrayParser", () => {

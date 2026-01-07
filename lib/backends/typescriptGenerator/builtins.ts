@@ -1,7 +1,7 @@
-import * as builtinFunctionsInput from "@/templates/backends/typescriptGenerator/builtinFunctions/input";
-import * as builtinFunctionsRead from "@/templates/backends/typescriptGenerator/builtinFunctions/read";
-import * as builtinFunctionsFetchJSON from "@/templates/backends/typescriptGenerator/builtinFunctions/fetchJSON";
-import * as builtinFunctionsFetch from "@/templates/backends/typescriptGenerator/builtinFunctions/fetch";
+import * as builtinFunctionsInput from "../../templates/backends/typescriptGenerator/builtinFunctions/input.js";
+import * as builtinFunctionsRead from "../../templates/backends/typescriptGenerator/builtinFunctions/read.js";
+import * as builtinFunctionsFetchJSON from "../../templates/backends/typescriptGenerator/builtinFunctions/fetchJSON.js";
+import * as builtinFunctionsFetch from "../../templates/backends/typescriptGenerator/builtinFunctions/fetch.js";
 
 /**
  * Maps Agency built-in function names to TypeScript equivalents

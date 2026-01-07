@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { functionParser, docStringParser } from "./function";
+import { functionParser, docStringParser } from "./function.js";
 
 describe("docStringParser", () => {
   const testCases = [

@@ -3,7 +3,7 @@ import {
   DotFunctionCall,
   DotProperty,
   IndexAccess,
-} from "@/types/access";
+} from "../types/access.js";
 import {
   capture,
   char,
@@ -14,11 +14,11 @@ import {
   seqC,
   set,
 } from "tarsec";
-import { agencyArrayParser } from "./dataStructures";
-import { functionCallParser } from "./functionCall";
-import { literalParser } from "./literals";
-import { optionalSemicolon } from "./parserUtils";
-import { varNameChar } from "./utils";
+import { agencyArrayParser } from "./dataStructures.js";
+import { functionCallParser } from "./functionCall.js";
+import { literalParser } from "./literals.js";
+import { optionalSemicolon } from "./parserUtils.js";
+import { varNameChar } from "./utils.js";
 
 export const dotPropertyParser = (input: string): ParserResult<DotProperty> => {
   const parser = seqC(

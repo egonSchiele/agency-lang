@@ -4,7 +4,7 @@ import {
   indexAccessParser,
   dotFunctionCallParser,
   accessExpressionParser,
-} from "@/parsers/access";
+} from "./access.js";
 
 describe("access expression parsers", () => {
   describe("dotPropertyParser", () => {

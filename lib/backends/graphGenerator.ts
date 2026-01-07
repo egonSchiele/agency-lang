@@ -8,25 +8,25 @@ import {
   PromptLiteral,
   TypeHintMap,
   VariableType,
-} from "@/types";
+} from "../types.js";
 
-import * as renderEdge from "@/templates/backends/graphGenerator/edge";
-import * as renderConditionalEdge from "@/templates/backends/graphGenerator/conditionalEdge";
-import * as renderImports from "@/templates/backends/graphGenerator/imports";
-import * as renderNode from "@/templates/backends/graphGenerator/node";
-import * as renderStartNode from "@/templates/backends/graphGenerator/startNode";
-import * as promptFunction from "@/templates/backends/typescriptGenerator/promptFunction";
-import * as promptNode from "@/templates/backends/graphGenerator/promptNode";
-import * as graphNode from "@/templates/backends/graphGenerator/graphNode";
-import * as builtinTools from "@/templates/backends/graphGenerator/builtinTools";
-import * as goToNode from "@/templates/backends/graphGenerator/goToNode";
-import { TypeScriptGenerator } from "./typescriptGenerator";
-import { variableTypeToString } from "./typescriptGenerator/typeToString";
-import { mapTypeToZodSchema } from "./typescriptGenerator/typeToZodSchema";
-import { wrapInReturn } from "./utils";
-import { mapFunctionName } from "./typescriptGenerator/builtins";
-import { GraphNodeDefinition } from "@/types/graphNode";
-import { ReturnStatement } from "@/types/returnStatement";
+import * as renderEdge from "../templates/backends/graphGenerator/edge.js";
+import * as renderConditionalEdge from "../templates/backends/graphGenerator/conditionalEdge.js";
+import * as renderImports from "../templates/backends/graphGenerator/imports.js";
+import * as renderNode from "../templates/backends/graphGenerator/node.js";
+import * as renderStartNode from "../templates/backends/graphGenerator/startNode.js";
+import * as promptFunction from "../templates/backends/typescriptGenerator/promptFunction.js";
+import * as promptNode from "../templates/backends/graphGenerator/promptNode.js";
+import * as graphNode from "../templates/backends/graphGenerator/graphNode.js";
+import * as builtinTools from "../templates/backends/graphGenerator/builtinTools.js";
+import * as goToNode from "../templates/backends/graphGenerator/goToNode.js";
+import { TypeScriptGenerator } from "./typescriptGenerator.js";
+import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
+import { mapTypeToZodSchema } from "./typescriptGenerator/typeToZodSchema.js";
+import { wrapInReturn } from "./utils.js";
+import { mapFunctionName } from "./typescriptGenerator/builtins.js";
+import { GraphNodeDefinition } from "../types/graphNode.js";
+import { ReturnStatement } from "../types/returnStatement.js";
 
 export class GraphGenerator extends TypeScriptGenerator {
   protected typeHints: TypeHintMap = {};

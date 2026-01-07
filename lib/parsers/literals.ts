@@ -1,4 +1,4 @@
-import { backtick, varNameChar } from "@/parsers/utils";
+import { backtick, varNameChar } from "./utils.js";
 import {
   InterpolationSegment,
   Literal,
@@ -7,7 +7,7 @@ import {
   StringLiteral,
   TextSegment,
   VariableNameLiteral,
-} from "@/types";
+} from "../types.js";
 import {
   Parser,
   capture,

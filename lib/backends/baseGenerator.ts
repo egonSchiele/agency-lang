@@ -9,22 +9,22 @@ import {
   TypeHint,
   TypeHintMap,
   VariableType,
-} from "@/types";
+} from "../types.js";
 
 import {
   AccessExpression,
   DotFunctionCall,
   DotProperty,
   IndexAccess,
-} from "@/types/access";
-import { AgencyArray, AgencyObject } from "@/types/dataStructures";
-import { FunctionCall, FunctionDefinition } from "@/types/function";
-import { GraphNodeDefinition } from "@/types/graphNode";
-import { ImportStatement } from "@/types/importStatement";
-import { MatchBlock } from "@/types/matchBlock";
-import { ReturnStatement } from "@/types/returnStatement";
-import { UsesTool } from "@/types/tools";
-import { WhileLoop } from "@/types/whileLoop";
+} from "../types/access.js";
+import { AgencyArray, AgencyObject } from "../types/dataStructures.js";
+import { FunctionCall, FunctionDefinition } from "../types/function.js";
+import { GraphNodeDefinition } from "../types/graphNode.js";
+import { ImportStatement } from "../types/importStatement.js";
+import { MatchBlock } from "../types/matchBlock.js";
+import { ReturnStatement } from "../types/returnStatement.js";
+import { UsesTool } from "../types/tools.js";
+import { WhileLoop } from "../types/whileLoop.js";
 
 export class BaseGenerator {
   protected typeHints: TypeHintMap = {};

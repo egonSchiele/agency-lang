@@ -3,7 +3,7 @@ import {
   matchBlockParser,
   matchBlockParserCase,
   defaultCaseParser,
-} from "./matchBlock";
+} from "./matchBlock.js";
 
 describe("defaultCaseParser", () => {
   const testCases = [

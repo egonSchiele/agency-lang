@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { agencyNode, agencyParser, parseAgency } from "./parser";
+import { agencyNode, agencyParser, parseAgency } from "./parser.js";
 
 describe("agencyNode", () => {
   const testCases = [

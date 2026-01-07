@@ -1,5 +1,5 @@
-import { AccessExpression, AgencyNode, FunctionCall, Literal } from "@/types";
-import { AgencyArray, AgencyObject } from "./dataStructures";
+import { AccessExpression, AgencyNode, FunctionCall, Literal } from "../types.js";
+import { AgencyArray, AgencyObject } from "./dataStructures.js";
 
 export type ReturnStatement = {
   type: "returnStatement";

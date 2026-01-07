@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import * as fs from "fs";
-import { parseAgency } from "@/parser";
-import { generateGraph } from "@/backends/graphGenerator";
+import { parseAgency } from "./parser.js";
+import { generateGraph } from "./backends/graphGenerator.js";
 
 // Get filename from command line arguments
 const inputFile = process.argv[2];

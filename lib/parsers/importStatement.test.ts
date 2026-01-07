@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { importStatmentParser } from "@/parsers/importStatement";
+import { importStatmentParser } from "./importStatement.js";
 
 describe("importStatmentParser", () => {
   const testCases = [
@@ -40,7 +40,7 @@ describe("importStatmentParser", () => {
       },
     },
     {
-      input: 'import foo from "./local/path";',
+      input: 'import foo from "./local/path.js";',
       expected: {
         success: true,
         result: {
@@ -51,7 +51,7 @@ describe("importStatmentParser", () => {
       },
     },
     {
-      input: 'import bar from "@/utils/helper";',
+      input: 'import bar from "../utils/helper.js";',
       expected: {
         success: true,
         result: {
@@ -86,7 +86,7 @@ describe("importStatmentParser", () => {
       },
     },
     {
-      input: "import test from './module';",
+      input: "import test from './module.js';",
       expected: {
         success: true,
         result: {
@@ -245,7 +245,7 @@ describe("importStatmentParser", () => {
       },
     },
     {
-      input: 'import foo from "../../../utils/helpers";',
+      input: 'import foo from "../../../utils/helpers.js";',
       expected: {
         success: true,
         result: {

@@ -1,4 +1,4 @@
-import { optionalSpaces, varNameChar } from "@/parsers/utils";
+import { optionalSpaces, varNameChar } from "./utils.js";
 import {
   ArrayType,
   BooleanLiteralType,
@@ -12,7 +12,7 @@ import {
   TypeHint,
   UnionType,
   VariableType,
-} from "@/types";
+} from "../types.js";
 import {
   capture,
   captureCaptures,
@@ -33,7 +33,7 @@ import {
   str,
   trace,
 } from "tarsec";
-import { optionalSemicolon } from "./parserUtils";
+import { optionalSemicolon } from "./parserUtils.js";
 
 export const primitiveTypeParser: Parser<PrimitiveType> = trace(
   "primitiveTypeParser",

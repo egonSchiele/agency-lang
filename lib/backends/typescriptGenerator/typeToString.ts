@@ -1,4 +1,4 @@
-import { VariableType } from "@/types";
+import { VariableType } from "../../types.js";
 
 /**
  * Converts a VariableType to a string representation for naming/logging

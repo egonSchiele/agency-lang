@@ -27,6 +27,7 @@ import { importStatmentParser } from "./parsers/importStatement";
 import { matchBlockParser } from "./parsers/matchBlock";
 import { returnStatementParser } from "./parsers/returnStatement";
 import { usesToolParser } from "./parsers/tools";
+import { whileLoopParser } from "./parsers/whileLoop";
 
 export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
   const parser = sepBy(
@@ -38,6 +39,7 @@ export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
         importStatmentParser,
         graphNodeParser,
         typeAliasParser,
+        whileLoopParser,
         typeHintParser,
         matchBlockParser,
         functionParser,
@@ -76,7 +78,6 @@ export function parseAgency(input: string): ParserResult<AgencyProgram> {
     })
     .filter((l) => l.length > 0)
     .join("\n");
-  console.log(normalized);
   if (normalized.trim().length === 0) {
     return success(
       {

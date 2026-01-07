@@ -32,6 +32,7 @@ import { comma, optionalSpaces, varNameChar } from "./utils";
 import { GraphNodeDefinition } from "@/types/graphNode";
 import { returnStatementParser } from "./returnStatement";
 import { usesToolParser } from "./tools";
+import { bodyParser } from "./body";
 
 const trim = (s: string) => s.trim();
 export const docStringParser: Parser<DocString> = trace(
@@ -42,31 +43,6 @@ export const docStringParser: Parser<DocString> = trace(
     capture(map(many1Till(str('"""')), trim), "value"),
     str('"""')
   )
-);
-
-export const functionBodyParser = trace(
-  "functionBodyParser",
-  (input: string): ParserResult<AgencyNode[]> => {
-    const parser: Parser<AgencyNode[]> = sepBy(
-      spaces,
-      or(
-        usesToolParser,
-        debug(typeAliasParser, "error in typeAliasParser"),
-        debug(typeHintParser, "error in typeHintParser"),
-        returnStatementParser,
-        matchBlockParser,
-        functionParser,
-        accessExpressionParser,
-        assignmentParser,
-        functionCallParser,
-        literalParser,
-        commentParser
-      )
-    );
-
-    const result = parser(input);
-    return result;
-  }
 );
 
 export const functionParser: Parser<FunctionDefinition> = trace(
@@ -86,7 +62,7 @@ export const functionParser: Parser<FunctionDefinition> = trace(
     optionalSpaces,
     capture(or(docStringParser, succeed(undefined)), "docString"),
     optionalSpaces,
-    capture(functionBodyParser, "body"),
+    capture(bodyParser, "body"),
     optionalSpaces,
     char("}"),
     optionalSemicolon
@@ -111,7 +87,7 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = trace(
     optionalSpaces,
     char("{"),
     optionalSpaces,
-    capture(functionBodyParser, "body"),
+    capture(bodyParser, "body"),
     optionalSpaces,
     char("}"),
     optionalSemicolon

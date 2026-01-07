@@ -8,6 +8,7 @@ import { GraphNodeDefinition } from "./types/graphNode";
 import { ReturnStatement } from "./types/returnStatement";
 import { UsesTool } from "./types/tools";
 import { ImportStatement } from "./types/importStatement";
+import { WhileLoop } from "./types/whileLoop";
 export * from "@/types/typeHints";
 export * from "@/types/literals";
 export * from "@/types/matchBlock";
@@ -40,6 +41,7 @@ export type AgencyNode =
   | AgencyObject
   | AgencyArray
   | ImportStatement
+  | WhileLoop;
 
 export type AgencyProgram = {
   type: "agencyProgram";

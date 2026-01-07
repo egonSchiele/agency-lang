@@ -87,11 +87,9 @@ const calculateAreaTool: OpenAI.Chat.Completions.ChatCompletionTool = {
       name: "calculateArea",
       description:
         "Calculate the area of a rectangle.
-
 Parameters:
 - width: the width of the rectangle
 - height: the height of the rectangle
-
 Returns: the area as a number",
       parameters: {
         type: "object",

@@ -32,7 +32,7 @@ import { comma, optionalSpaces, varNameChar } from "./utils";
 import { GraphNodeDefinition } from "@/types/graphNode";
 import { returnStatementParser } from "./returnStatement";
 import { usesToolParser } from "./tools";
-import { bodyParser } from "./body";
+import { WhileLoop } from "@/types/whileLoop";
 
 const trim = (s: string) => s.trim();
 export const docStringParser: Parser<DocString> = trace(
@@ -42,6 +42,55 @@ export const docStringParser: Parser<DocString> = trace(
     str('"""'),
     capture(map(many1Till(str('"""')), trim), "value"),
     str('"""')
+  )
+);
+
+export const bodyParser = trace(
+  "functionBodyParser",
+  (input: string): ParserResult<AgencyNode[]> => {
+    const parser: Parser<AgencyNode[]> = sepBy(
+      spaces,
+      or(
+        usesToolParser,
+        debug(typeAliasParser, "error in typeAliasParser"),
+        debug(typeHintParser, "error in typeHintParser"),
+        returnStatementParser,
+        whileLoopParser,
+        matchBlockParser,
+        functionParser,
+        accessExpressionParser,
+        assignmentParser,
+        functionCallParser,
+        literalParser,
+        commentParser
+      )
+    );
+
+    const result = parser(input);
+    return result;
+  }
+);
+
+export const whileLoopParser: Parser<WhileLoop> = trace(
+  "whileLoopParser",
+  seqC(
+    set("type", "whileLoop"),
+    str("while"),
+    optionalSpaces,
+    char("("),
+    optionalSpaces,
+    capture(
+      or(functionCallParser, accessExpressionParser, literalParser),
+      "condition"
+    ),
+    optionalSpaces,
+    char(")"),
+    optionalSpaces,
+    char("{"),
+    spaces,
+    capture(bodyParser, "body"),
+    optionalSpaces,
+    char("}")
   )
 );
 

@@ -21,13 +21,16 @@ import {
 import { accessExpressionParser } from "./parsers/access";
 import { assignmentParser } from "./parsers/assignment";
 import { commentParser } from "./parsers/comment";
-import { functionParser, graphNodeParser } from "./parsers/function";
+import {
+  functionParser,
+  graphNodeParser,
+  whileLoopParser,
+} from "./parsers/function";
 import { functionCallParser } from "./parsers/functionCall";
 import { importStatmentParser } from "./parsers/importStatement";
 import { matchBlockParser } from "./parsers/matchBlock";
 import { returnStatementParser } from "./parsers/returnStatement";
 import { usesToolParser } from "./parsers/tools";
-import { whileLoopParser } from "./parsers/whileLoop";
 
 export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
   const parser = sepBy(

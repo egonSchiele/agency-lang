@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { whileLoopParser } from "@/parsers/whileLoop";
+import { whileLoopParser } from "@/parsers/function";
 
 describe("whileLoopParser", () => {
   const testCases = [

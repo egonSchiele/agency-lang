@@ -24,6 +24,7 @@ import { ImportStatement } from "@/types/importStatement";
 import { MatchBlock } from "@/types/matchBlock";
 import { ReturnStatement } from "@/types/returnStatement";
 import { UsesTool } from "@/types/tools";
+import { WhileLoop } from "@/types/whileLoop";
 
 export class BaseGenerator {
   protected typeHints: TypeHintMap = {};
@@ -158,9 +159,15 @@ export class BaseGenerator {
       case "importStatement":
         this.importStatements.push(this.processImportStatement(node));
         return "";
+      case "whileLoop":
+        return this.processWhileLoop(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
+  }
+
+  protected processWhileLoop(node: WhileLoop): string {
+    return "processWhileLoop not implemented";
   }
 
   protected processImportStatement(node: ImportStatement): string {

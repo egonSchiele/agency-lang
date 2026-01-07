@@ -1,3 +1,5 @@
+node main() {
 while (true) {
-  // loop forever
+  print("Hello, World!")
+}
 }

@@ -38,6 +38,7 @@ import * as builtinTools from "@/templates/backends/typescriptGenerator/builtinT
 import { ReturnStatement } from "@/types/returnStatement";
 import { UsesTool } from "@/types/tools";
 import { ImportStatement } from "@/types/importStatement";
+import { WhileLoop } from "@/types/whileLoop";
 
 export class TypeScriptGenerator extends BaseGenerator {
   constructor() {
@@ -419,6 +420,16 @@ export class TypeScriptGenerator extends BaseGenerator {
 
   protected processImportStatement(node: ImportStatement): string {
     return `import ${node.importedNames} from ${node.modulePath};`;
+  }
+
+  protected processWhileLoop(node: WhileLoop): string {
+    const conditionCode = this.processNode(node.condition);
+    const bodyCodes: string[] = [];
+    for (const stmt of node.body) {
+      bodyCodes.push(this.processNode(stmt));
+    }
+    const bodyCodeStr = bodyCodes.join("\n");
+    return `while (${conditionCode}) {\n${bodyCodeStr}\n}\n`;
   }
 }
 

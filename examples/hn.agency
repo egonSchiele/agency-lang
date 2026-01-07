@@ -1,0 +1,26 @@
+def getTopStories() {
+  """
+  Get today's top hacker news stories.
+  """
+  return fetch("https://hacker-news.firebaseio.com/v0/topstories.json")
+}
+
+getStory ::
+storyId: string ~ the id of a story
+-> object ~ json containing story stuff
+def getStory(storyId) {
+  """
+  Get details of a specific story
+  storyId: the id of a story
+  """
+  return fetch("https://hacker-news.firebaseio.com/v0/item/${storyId}.json")
+}
+
+node main() {
+  storyTitles :: string[]
+  +getTopStories
+  +getStory
+  storyTitles = `Give me the titles for 10 of the top stories on Hacker News today. You can use the getTopStories tool to get a list of the top story IDs, and then use the getStory tool to get the details of each story.` ~ { retries: 3 }
+  print(storyTitles)
+  return(storyTitles)
+}

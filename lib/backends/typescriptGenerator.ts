@@ -194,7 +194,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       if (!this.functionScopedVariables.includes(varName)) {
         throw new Error(
           `Variable '${varName}' used in prompt interpolation but not defined. ` +
-            `Referenced in assignment to '${variableName}'.`
+          `Referenced in assignment to '${variableName}'.`
         );
       }
     }
@@ -234,7 +234,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       name: functionName,
       description: node.docString?.value || "No description provided.",
       properties:
-        Object.keys(properties).length > 0 ? JSON.stringify(properties) : "",
+        Object.keys(properties).length > 0 ? JSON.stringify(properties) : "{}",
       requiredParameters: parameters.map((p) => `"${p}"`).join(","),
     });
   }

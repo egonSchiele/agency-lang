@@ -9,3 +9,31 @@ node main() {
     save(response)
   }
 }
+
+
+
+node main() {
+  @messages = []
+  while (true) {
+    msg = input("> ")
+    msg >> convo
+  
+    response :: string
+    +add
+    response, messages = `Respond to this user's input: ${msg}` < convo
+    messages >> convo
+  }
+}
+
+
+node main() {
+  @messages = []
+  while (true) {
+    msg = input("> ")
+  
+    response :: string
+    +add
+    response, messages = `Respond to this user's input: ${msg}`
+    @messages.push(messages)
+  }
+}

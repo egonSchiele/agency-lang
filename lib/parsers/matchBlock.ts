@@ -22,17 +22,17 @@ import {
   str,
   trace,
 } from "tarsec";
-import { optionalSpaces } from "./utils";
-import { literalParser } from "./literals";
-import { assignmentParser } from "./assignment";
-import { functionCallParser } from "./functionCall";
-import { DefaultCase, MatchBlockCase } from "@/types/matchBlock";
-import { accessExpressionParser } from "./access";
-import { optionalSemicolon } from "./parserUtils";
-import { agencyArrayParser, agencyObjectParser } from "./dataStructures";
-import * as parsers from "../parser";
-import { commentParser } from "./comment";
-import { returnStatementParser } from "./returnStatement";
+import { optionalSpaces } from "./utils.js";
+import { literalParser } from "./literals.js";
+import { assignmentParser } from "./assignment.js";
+import { functionCallParser } from "./functionCall.js";
+import { DefaultCase, MatchBlockCase } from "../types/matchBlock.js";
+import { accessExpressionParser } from "./access.js";
+import { optionalSemicolon } from "./parserUtils.js";
+import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
+import * as parsers from "../parser.js";
+import { commentParser } from "./comment.js";
+import { returnStatementParser } from "./returnStatement.js";
 
 export const defaultCaseParser: Parser<DefaultCase> = char("_");
 

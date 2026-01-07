@@ -2,7 +2,7 @@ import {
   AgencyArray,
   AgencyObject,
   AgencyObjectKV,
-} from "@/types/dataStructures";
+} from "../types/dataStructures.js";
 import {
   capture,
   char,
@@ -18,10 +18,10 @@ import {
   succeed,
   trace,
 } from "tarsec";
-import { accessExpressionParser } from "./access";
-import { functionCallParser } from "./functionCall";
-import { literalParser } from "./literals";
-import { comma, optionalSpaces } from "./utils";
+import { accessExpressionParser } from "./access.js";
+import { functionCallParser } from "./functionCall.js";
+import { literalParser } from "./literals.js";
+import { comma, optionalSpaces } from "./utils.js";
 
 export const agencyArrayParser: Parser<AgencyArray> = (
   input: string

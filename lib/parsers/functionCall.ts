@@ -1,4 +1,4 @@
-import { FunctionCall } from "@/types";
+import { FunctionCall } from "../types.js";
 import {
   capture,
   char,
@@ -10,10 +10,10 @@ import {
   seqR,
   set,
 } from "tarsec";
-import { accessExpressionParser } from "./access";
-import { literalParser } from "./literals";
-import { optionalSemicolon } from "./parserUtils";
-import { optionalSpaces, varNameChar } from "./utils";
+import { accessExpressionParser } from "./access.js";
+import { literalParser } from "./literals.js";
+import { optionalSemicolon } from "./parserUtils.js";
+import { optionalSpaces, varNameChar } from "./utils.js";
 
 const comma = seqR(optionalSpaces, char(","), optionalSpaces);
 export const functionCallParser: Parser<FunctionCall> = (input: string) => {

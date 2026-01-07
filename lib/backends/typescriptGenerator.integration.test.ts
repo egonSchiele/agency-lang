@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { parseAgency } from "@/parser";
-import { generateTypeScript } from "./typescriptGenerator";
+import { parseAgency } from "../parser.js";
+import { generateTypeScript } from "./typescriptGenerator.js";
 import fs from "fs";
 import path from "path";
 

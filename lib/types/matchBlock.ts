@@ -1,9 +1,9 @@
-import { Assignment, AgencyComment } from "@/types";
-import { AccessExpression } from "./access";
-import { Literal } from "./literals";
-import { FunctionCall } from "./function";
-import { AgencyArray, AgencyObject } from "./dataStructures";
-import { ReturnStatement } from "./returnStatement";
+import { Assignment, AgencyComment } from "../types.js";
+import { AccessExpression } from "./access.js";
+import { Literal } from "./literals.js";
+import { FunctionCall } from "./function.js";
+import { AgencyArray, AgencyObject } from "./dataStructures.js";
+import { ReturnStatement } from "./returnStatement.js";
 
 export type DefaultCase = "_";
 

@@ -1,4 +1,4 @@
-import { Assignment } from "@/types";
+import { Assignment } from "../types.js";
 import {
   capture,
   char,
@@ -9,12 +9,12 @@ import {
   set,
   trace,
 } from "tarsec";
-import { accessExpressionParser } from "./access";
-import { agencyArrayParser, agencyObjectParser } from "./dataStructures";
-import { functionCallParser } from "./functionCall";
-import { literalParser } from "./literals";
-import { optionalSemicolon } from "./parserUtils";
-import { optionalSpaces, varNameChar } from "./utils";
+import { accessExpressionParser } from "./access.js";
+import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
+import { functionCallParser } from "./functionCall.js";
+import { literalParser } from "./literals.js";
+import { optionalSemicolon } from "./parserUtils.js";
+import { optionalSpaces, varNameChar } from "./utils.js";
 
 export const assignmentParser: Parser<Assignment> = trace(
   "assignmentParser",

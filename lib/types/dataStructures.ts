@@ -1,5 +1,5 @@
-import { AccessExpression, Literal } from "@/types";
-import { FunctionCall } from "./function";
+import { AccessExpression, Literal } from "../types.js";
+import { FunctionCall } from "./function.js";
 
 export type AgencyArray = {
   type: "agencyArray";

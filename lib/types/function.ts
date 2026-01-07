@@ -1,6 +1,6 @@
-import { AgencyNode } from "@/types";
-import { AccessExpression } from "./access";
-import { Literal } from "./literals";
+import { AgencyNode } from "../types.js";
+import { AccessExpression } from "./access.js";
+import { Literal } from "./literals.js";
 
 export type FunctionDefinition = {
   type: "function";

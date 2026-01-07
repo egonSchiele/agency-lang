@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bodyParser } from "./function";
+import { bodyParser } from "./function.js";
 
 describe("functionBodyParser", () => {
   const testCases = [

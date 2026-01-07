@@ -1,6 +1,6 @@
-import { AgencyComment } from "@/types";
+import { AgencyComment } from "../types.js";
 import { Parser, seqC, set, str, capture, many1Till, newline } from "tarsec";
-import { optionalSpaces } from "./utils";
+import { optionalSpaces } from "./utils.js";
 export const commentParser: Parser<AgencyComment> = (input: string) => {
   const parser = seqC(
     set("type", "comment"),

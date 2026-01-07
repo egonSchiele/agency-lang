@@ -1,5 +1,5 @@
-import { typeAliasParser, typeHintParser } from "@/parsers/typeHints";
-import { AgencyNode, AgencyProgram } from "@/types";
+import { typeAliasParser, typeHintParser } from "./parsers/typeHints.js";
+import { AgencyNode, AgencyProgram } from "./types.js";
 import {
   anyChar,
   between,
@@ -17,19 +17,19 @@ import {
   success,
   trace,
 } from "tarsec";
-import { accessExpressionParser } from "./parsers/access";
-import { assignmentParser } from "./parsers/assignment";
-import { commentParser } from "./parsers/comment";
+import { accessExpressionParser } from "./parsers/access.js";
+import { assignmentParser } from "./parsers/assignment.js";
+import { commentParser } from "./parsers/comment.js";
 import {
   functionParser,
   graphNodeParser,
   whileLoopParser,
-} from "./parsers/function";
-import { functionCallParser } from "./parsers/functionCall";
-import { importStatmentParser } from "./parsers/importStatement";
-import { matchBlockParser } from "./parsers/matchBlock";
-import { returnStatementParser } from "./parsers/returnStatement";
-import { usesToolParser } from "./parsers/tools";
+} from "./parsers/function.js";
+import { functionCallParser } from "./parsers/functionCall.js";
+import { importStatmentParser } from "./parsers/importStatement.js";
+import { matchBlockParser } from "./parsers/matchBlock.js";
+import { returnStatementParser } from "./parsers/returnStatement.js";
+import { usesToolParser } from "./parsers/tools.js";
 
 export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
   const parser = sepBy(

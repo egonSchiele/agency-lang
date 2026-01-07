@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { parseAgency } from "@/parser";
-import { generateGraph } from "./graphGenerator";
+import { parseAgency } from "../parser.js";
+import { generateGraph } from "./graphGenerator.js";
 import fs from "fs";
 import path from "path";
 

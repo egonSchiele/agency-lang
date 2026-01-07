@@ -1,5 +1,5 @@
-import { VariableType } from "@/types";
-import { escape } from "@/utils";
+import { VariableType } from "../../types.js";
+import { escape } from "../../utils.js";
 
 /**
  * Maps Agency types to Zod schema strings

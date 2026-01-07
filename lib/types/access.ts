@@ -1,6 +1,6 @@
-import { FunctionCall } from "@/types";
-import { Literal } from "./literals";
-import { AgencyArray } from "./dataStructures";
+import { FunctionCall } from "../types.js";
+import { Literal } from "./literals.js";
+import { AgencyArray } from "./dataStructures.js";
 
 export type DotProperty = {
   type: "dotProperty";

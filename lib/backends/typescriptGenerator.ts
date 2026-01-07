@@ -10,35 +10,35 @@ import {
   TypeAlias,
   TypeHint,
   TypeHintMap,
-} from "@/types";
+} from "../types.js";
 
-import * as renderImports from "@/templates/backends/typescriptGenerator/imports";
-import * as promptFunction from "@/templates/backends/typescriptGenerator/promptFunction";
-import * as renderTool from "@/templates/backends/typescriptGenerator/tool";
-import * as renderToolCall from "@/templates/backends/typescriptGenerator/toolCall";
-import * as renderFunctionDefinition from "@/templates/backends/typescriptGenerator/functionDefinition";
+import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
+import * as promptFunction from "../templates/backends/typescriptGenerator/promptFunction.js";
+import * as renderTool from "../templates/backends/typescriptGenerator/tool.js";
+import * as renderToolCall from "../templates/backends/typescriptGenerator/toolCall.js";
+import * as renderFunctionDefinition from "../templates/backends/typescriptGenerator/functionDefinition.js";
 import {
   AccessExpression,
   DotFunctionCall,
   DotProperty,
   IndexAccess,
-} from "@/types/access";
-import { AgencyArray, AgencyObject } from "@/types/dataStructures";
-import { FunctionCall, FunctionDefinition } from "@/types/function";
-import { MatchBlock } from "@/types/matchBlock";
-import { escape, zip } from "@/utils";
-import { BaseGenerator } from "./baseGenerator";
+} from "../types/access.js";
+import { AgencyArray, AgencyObject } from "../types/dataStructures.js";
+import { FunctionCall, FunctionDefinition } from "../types/function.js";
+import { MatchBlock } from "../types/matchBlock.js";
+import { escape, zip } from "../utils.js";
+import { BaseGenerator } from "./baseGenerator.js";
 import {
   generateBuiltinHelpers,
   mapFunctionName,
-} from "./typescriptGenerator/builtins";
-import { variableTypeToString } from "./typescriptGenerator/typeToString";
-import { mapTypeToZodSchema } from "./typescriptGenerator/typeToZodSchema";
-import * as builtinTools from "@/templates/backends/typescriptGenerator/builtinTools";
-import { ReturnStatement } from "@/types/returnStatement";
-import { UsesTool } from "@/types/tools";
-import { ImportStatement } from "@/types/importStatement";
-import { WhileLoop } from "@/types/whileLoop";
+} from "./typescriptGenerator/builtins.js";
+import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
+import { mapTypeToZodSchema } from "./typescriptGenerator/typeToZodSchema.js";
+import * as builtinTools from "../templates/backends/typescriptGenerator/builtinTools.js";
+import { ReturnStatement } from "../types/returnStatement.js";
+import { UsesTool } from "../types/tools.js";
+import { ImportStatement } from "../types/importStatement.js";
+import { WhileLoop } from "../types/whileLoop.js";
 
 export class TypeScriptGenerator extends BaseGenerator {
   constructor() {

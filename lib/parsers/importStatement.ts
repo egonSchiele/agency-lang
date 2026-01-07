@@ -1,4 +1,4 @@
-import { ImportStatement } from "@/types/importStatement";
+import { ImportStatement } from "../types/importStatement.js";
 import {
   capture,
   many1Till,
@@ -10,7 +10,7 @@ import {
   str,
   trace,
 } from "tarsec";
-import { optionalSemicolon } from "./parserUtils";
+import { optionalSemicolon } from "./parserUtils.js";
 
 export const importStatmentParser: Parser<ImportStatement> = trace(
   "importStatement",

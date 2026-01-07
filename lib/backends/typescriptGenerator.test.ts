@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { generateTypeScript } from "./typescriptGenerator";
-import { AgencyProgram } from "@/types";
+import { generateTypeScript } from "./typescriptGenerator.js";
+import { AgencyProgram } from "../types.js";
 
 describe("generateTypeScript - ObjectType support", () => {
   describe("Object type hints generate correct Zod schemas", () => {

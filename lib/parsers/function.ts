@@ -7,6 +7,7 @@ import {
   many1Till,
   many1WithJoin,
   map,
+  optional,
   or,
   Parser,
   ParserResult,
@@ -101,7 +102,10 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = trace(
     capture(many1Till(char("(")), "nodeName"),
     char("("),
     optionalSpaces,
-    capture(sepBy(comma, many1WithJoin(varNameChar)), "parameters"),
+    capture(
+      or(sepBy(comma, many1WithJoin(varNameChar)), succeed([])),
+      "parameters"
+    ),
     optionalSpaces,
     char(")"),
     optionalSpaces,

@@ -21,8 +21,8 @@ importers:
         specifier: github:egonSchiele/statelog-client
         version: git+https://git@github.com:egonSchiele/statelog-client.git#78c3481378f987bb2e41d7dd8dff0990869447f1
       tarsec:
-        specifier: ^0.0.22
-        version: 0.0.22
+        specifier: ^0.1.1
+        version: 0.1.1
       typestache:
         specifier: ^0.4.4
         version: 0.4.4
@@ -608,8 +608,8 @@ packages:
   tarsec@0.0.18:
     resolution: {integrity: sha512-g1OZ7VyyaIjHT1KXI6o8tdebJT1WrC3801+RGw2mEEWc6S2gVC5aBDUZZRbxeUPkekMR5R/+ba6s8UfsJv8n8w==}
 
-  tarsec@0.0.22:
-    resolution: {integrity: sha512-eqC3feveW/yB0UZw4yDHbbqP9KweqpX3wya+7EJYX1AwdzZitsMoAP2JyiI+eYXqj0cVwktJWdJau9qAcSLFSw==}
+  tarsec@0.1.1:
+    resolution: {integrity: sha512-Mi29JH15nShnwNq7sA1alHB2Z8FO17uedfTCACFUW7qCNau6RkD7u1FXK+Z8XXcXB/aC/EqTll5ntPfAcYW5JQ==}
 
   termcolors@https://codeload.github.com/egonSchiele/termcolors/tar.gz/d5c1f497618398ce1440d2383d2aad2642e4051f:
     resolution: {tarball: https://codeload.github.com/egonSchiele/termcolors/tar.gz/d5c1f497618398ce1440d2383d2aad2642e4051f}
@@ -1193,7 +1193,7 @@ snapshots:
 
   tarsec@0.0.18: {}
 
-  tarsec@0.0.22: {}
+  tarsec@0.1.1: {}
 
   termcolors@https://codeload.github.com/egonSchiele/termcolors/tar.gz/d5c1f497618398ce1440d2383d2aad2642e4051f: {}
 

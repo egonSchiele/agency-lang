@@ -28,7 +28,7 @@
     "openai": "^6.15.0",
     "simplemachine": "github:egonSchiele/simplemachine",
     "statelog-client": "github:egonSchiele/statelog-client",
-    "tarsec": "^0.0.22",
+    "tarsec": "^0.1.1",
     "typestache": "^0.4.4",
     "zod": "^4.2.1"
   },

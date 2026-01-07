@@ -1,0 +1,12 @@
+import * as ext from "./hello.mjs";
+
+def sayHello(name) {
+  return ext.hello(name);
+}
+
+node main() {
+  action :: string
+  +sayHello
+  greeting = `Greet John`
+  print(greeting)
+}

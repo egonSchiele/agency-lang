@@ -1,4 +1,8 @@
-import { AgencyArray, AgencyObject, AgencyObjectKV } from "@/types/dataStructures";
+import {
+  AgencyArray,
+  AgencyObject,
+  AgencyObjectKV,
+} from "@/types/dataStructures";
 import {
   capture,
   char,
@@ -11,6 +15,7 @@ import {
   sepBy,
   seqC,
   set,
+  succeed,
   trace,
 } from "tarsec";
 import { accessExpressionParser } from "./access";
@@ -80,7 +85,7 @@ export const agencyObjectParser: Parser<AgencyObject> = seqC(
   set("type", "agencyObject"),
   char("{"),
   optionalSpaces,
-  capture(sepBy(comma, agencyObjectKVParser), "entries"),
+  capture(or(sepBy(comma, agencyObjectKVParser), succeed([])), "entries"),
   optional(char(",")),
   optionalSpaces,
   char("}")

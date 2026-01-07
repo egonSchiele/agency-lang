@@ -9,11 +9,18 @@ import { ReturnStatement } from "./types/returnStatement";
 import { UsesTool } from "./types/tools";
 import { ImportStatement } from "./types/importStatement";
 import { WhileLoop } from "./types/whileLoop";
-export * from "@/types/typeHints";
+export * from "@/types/access";
+export * from "@/types/dataStructures";
+export * from "@/types/function";
+export * from "@/types/graphNode";
+export * from "@/types/importStatement";
 export * from "@/types/literals";
 export * from "@/types/matchBlock";
-export * from "@/types/access";
-export * from "@/types/function";
+export * from "@/types/returnStatement";
+export * from "@/types/tools";
+export * from "@/types/typeHints";
+export * from "@/types/whileLoop";
+
 export type Assignment = {
   type: "assignment";
   variableName: string;

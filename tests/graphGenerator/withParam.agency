@@ -1,0 +1,5 @@
+node main(input) {
+  result :: string
+  result = `process this input: ${input}`
+  print(result)
+}

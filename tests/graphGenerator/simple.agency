@@ -1,0 +1,5 @@
+node main() {
+  greeting :: string
+  greeting = `say hello`
+  print(greeting)
+}

@@ -1,0 +1,15 @@
+node greet() {
+  greeting :: string
+  greeting = `say hello`
+  return processGreeting(greeting)
+}
+
+node processGreeting(msg) {
+  result :: string
+  result = `format this greeting: ${msg}`
+  print(result)
+}
+
+node main() {
+  return greet()
+}

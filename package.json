@@ -1,7 +1,7 @@
 {
   "name": "agency-lang",
   "version": "1.0.0",
-  "description": "Agency Language",
+  "description": "The Agency language",
   "main": "index.js",
   "scripts": {
     "test": "vitest",
@@ -16,7 +16,7 @@
     "url": "git+https://github.com/egonSchiele/agency-lang.git"
   },
   "keywords": [],
-  "author": "",
+  "author": "Aditya Bhargava",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {

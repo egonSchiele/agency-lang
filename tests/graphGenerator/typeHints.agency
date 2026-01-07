@@ -1,0 +1,10 @@
+node main() {
+  count :: number
+  count = `the number 42`
+
+  message :: string
+  message = `a greeting message`
+
+  print(count)
+  print(message)
+}

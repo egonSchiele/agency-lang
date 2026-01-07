@@ -11,3 +11,6 @@ test:
 graphtest:
 	node dist/scripts/generateGraph.js foo.agency > foo.mts
 	STATELOG_HOST=http://localhost:1065 node foo.mts
+
+publish:
+	npm publish

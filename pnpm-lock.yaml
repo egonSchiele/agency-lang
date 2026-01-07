@@ -18,8 +18,8 @@ importers:
         specifier: github:egonSchiele/simplemachine
         version: https://codeload.github.com/egonSchiele/simplemachine/tar.gz/eefa7c0c92c0bc22609b37b426435795eaf53cde
       statelog-client:
-        specifier: github:egonSchiele/statelog-client
-        version: git+https://git@github.com:egonSchiele/statelog-client.git#78c3481378f987bb2e41d7dd8dff0990869447f1
+        specifier: ^0.0.28
+        version: 0.0.28
       tarsec:
         specifier: ^0.1.1
         version: 0.1.1
@@ -598,8 +598,11 @@ packages:
   stackback@0.0.2:
     resolution: {integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==}
 
-  statelog-client@git+https://git@github.com:egonSchiele/statelog-client.git#78c3481378f987bb2e41d7dd8dff0990869447f1:
-    resolution: {commit: 78c3481378f987bb2e41d7dd8dff0990869447f1, repo: git@github.com:egonSchiele/statelog-client.git, type: git}
+  statelog-client@0.0.28:
+    resolution: {integrity: sha512-MtPzG2tKWC0bE2sWFJ70a29joY7ffJf4840M89Wj6nPopF/TiZS8aOXhNIUBzqcRSMghWauVi/YkjxTKPf0AEA==}
+
+  statelog-client@https://codeload.github.com/egonSchiele/statelog-client/tar.gz/b9b79118969d184cfc78e0bc1eecb97bfd86d17c:
+    resolution: {tarball: https://codeload.github.com/egonSchiele/statelog-client/tar.gz/b9b79118969d184cfc78e0bc1eecb97bfd86d17c}
     version: 0.0.28
 
   std-env@3.10.0:
@@ -1176,7 +1179,7 @@ snapshots:
   simplemachine@https://codeload.github.com/egonSchiele/simplemachine/tar.gz/eefa7c0c92c0bc22609b37b426435795eaf53cde:
     dependencies:
       nanoid: 5.1.6
-      statelog-client: git+https://git@github.com:egonSchiele/statelog-client.git#78c3481378f987bb2e41d7dd8dff0990869447f1
+      statelog-client: https://codeload.github.com/egonSchiele/statelog-client/tar.gz/b9b79118969d184cfc78e0bc1eecb97bfd86d17c
       termcolors: https://codeload.github.com/egonSchiele/termcolors/tar.gz/d5c1f497618398ce1440d2383d2aad2642e4051f
 
   slash@3.0.0: {}
@@ -1185,7 +1188,11 @@ snapshots:
 
   stackback@0.0.2: {}
 
-  statelog-client@git+https://git@github.com:egonSchiele/statelog-client.git#78c3481378f987bb2e41d7dd8dff0990869447f1:
+  statelog-client@0.0.28:
+    dependencies:
+      nanoid: 5.1.6
+
+  statelog-client@https://codeload.github.com/egonSchiele/statelog-client/tar.gz/b9b79118969d184cfc78e0bc1eecb97bfd86d17c:
     dependencies:
       nanoid: 5.1.6
 

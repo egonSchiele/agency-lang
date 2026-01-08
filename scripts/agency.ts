@@ -46,7 +46,6 @@ function parse(inputFile: string, verbose: boolean = false): AgencyProgram {
   // Read and parse the Agency file
   const contents = fs.readFileSync(inputFile, "utf-8");
   const parseResult = parseAgency(contents, verbose);
-  console.log(JSON.stringify(parseResult, null, 2));
 
   // Check if parsing was successful
   if (!parseResult.success) {
@@ -58,7 +57,11 @@ function parse(inputFile: string, verbose: boolean = false): AgencyProgram {
   return parseResult.result;
 }
 
-function compile(inputFile: string, outputFile?: string, verbose: boolean = false): string {
+function compile(
+  inputFile: string,
+  outputFile?: string,
+  verbose: boolean = false
+): string {
   // Determine output file name
   const output = outputFile || inputFile.replace(".agency", ".ts");
   const parsedProgram = parse(inputFile, verbose);
@@ -74,7 +77,11 @@ function compile(inputFile: string, outputFile?: string, verbose: boolean = fals
   return output;
 }
 
-function run(inputFile: string, outputFile?: string, verbose: boolean = false): void {
+function run(
+  inputFile: string,
+  outputFile?: string,
+  verbose: boolean = false
+): void {
   // Compile the file
   const output = compile(inputFile, outputFile, verbose);
 
@@ -125,11 +132,15 @@ function main(): void {
   }
 
   // Extract verbose flag
-  const verboseIndex = args.findIndex(arg => arg === '-v' || arg === '--verbose');
+  const verboseIndex = args.findIndex(
+    (arg) => arg === "-v" || arg === "--verbose"
+  );
   const verbose = verboseIndex !== -1;
 
   // Remove verbose flag from args
-  const filteredArgs = args.filter(arg => arg !== '-v' && arg !== '--verbose');
+  const filteredArgs = args.filter(
+    (arg) => arg !== "-v" && arg !== "--verbose"
+  );
 
   const command = filteredArgs[0];
 
@@ -174,7 +185,8 @@ function main(): void {
         console.error("Usage: agency parse <input>");
         process.exit(1);
       }
-      parse(filteredArgs[1], verbose);
+      const result = parse(filteredArgs[1], verbose);
+      console.log(JSON.stringify(result, null, 2));
       break;
 
     default:

@@ -1040,6 +1040,24 @@ describe("objectPropertyDescriptionParser", () => {
       },
     },
     {
+      input: "# comma,",
+      expected: {
+        success: true,
+        result: {
+          description: "comma",
+        },
+      },
+    },
+    {
+      input: "# newline",
+      expected: {
+        success: true,
+        result: {
+          description: "newline",
+        },
+      },
+    },
+    {
       input: "#  with extra spaces  ;",
       expected: {
         success: true,
@@ -1049,11 +1067,11 @@ describe("objectPropertyDescriptionParser", () => {
       },
     },
     {
-      input: "# description with, punctuation!;",
+      input: "# description with punctuation!;",
       expected: {
         success: true,
         result: {
-          description: "description with, punctuation!",
+          description: "description with punctuation!",
         },
       },
     },

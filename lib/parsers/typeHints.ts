@@ -21,6 +21,7 @@ import {
   digit,
   many1Till,
   many1WithJoin,
+  oneOf,
   or,
   Parser,
   ParserResult,
@@ -115,10 +116,9 @@ export const booleanLiteralTypeParser: Parser<BooleanLiteralType> = trace(
   )
 );
 
-export const objectPropertyDelimiter = seqR(
-  optionalSpaces,
-  char(";"),
-  optionalSpaces
+export const objectPropertyDelimiter = or(
+  char("\n"),
+  seqR(optionalSpaces, oneOf(",;"), optionalSpaces)
 );
 
 export const objectPropertyParser: Parser<ObjectProperty> = trace(
@@ -136,7 +136,11 @@ export const objectPropertyParser: Parser<ObjectProperty> = trace(
 );
 
 export const objectPropertyDescriptionParser: Parser<{ description: string }> =
-  seqC(char("#"), optionalSpaces, capture(many1Till(char(";")), "description"));
+  seqC(
+    char("#"),
+    optionalSpaces,
+    capture(many1Till(oneOf(",;\n")), "description")
+  );
 
 export const objectPropertyWithDescriptionParser: Parser<ObjectProperty> =
   trace(

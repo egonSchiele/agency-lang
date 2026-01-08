@@ -81,7 +81,7 @@ export class AgencyGenerator extends BaseGenerator {
   // Assignment and literals
   protected processAssignment(node: Assignment): string {
     const valueCode = this.processNode(node.value).trim();
-    return this.indentStr(`${node.variableName} = ${valueCode}\n`);
+    return this.indentStr(`${node.variableName} = ${valueCode}\n\n`);
   }
 
   protected generateLiteral(literal: Literal): string {
@@ -147,7 +147,7 @@ export class AgencyGenerator extends BaseGenerator {
     this.decreaseIndent();
 
     // Close function
-    result += this.indentStr(`}\n`);
+    result += this.indentStr(`}\n\n`);
 
     return result;
   }
@@ -272,7 +272,9 @@ export class AgencyGenerator extends BaseGenerator {
   }
 
   protected processImportStatement(node: ImportStatement): string {
-    return this.indentStr(`import {${node.importedNames}} from "${node.modulePath}"\n`);
+    return this.indentStr(
+      `import {${node.importedNames}} from "${node.modulePath}"\n`
+    );
   }
 
   protected processGraphNode(node: GraphNodeDefinition): string {

@@ -14,12 +14,12 @@ Usage:
   agency help                           Show this help message
   agency compile <input> [output]       Compile .agency file to TypeScript
   agency run <input> [output]           Compile and run .agency file
-  agency format <input>                 Format .agency file in place
-  agency parse <input>                  Parse .agency file and show AST
+  agency format [input]                 Format .agency file (reads from stdin if no input)
+  agency parse [input]                  Parse .agency file and show AST (reads from stdin if no input)
   agency <input>                        Compile and run .agency file (shorthand)
 
 Arguments:
-  input                                 Path to .agency input file
+  input                                 Path to .agency input file (or omit to read from stdin for format/parse)
   output                                Path to output .ts file (optional)
                                         Default: <input-name>.ts
 
@@ -32,19 +32,32 @@ Examples:
   agency compile script.agency out.ts   Compile to out.ts
   agency run script.agency              Compile and run script.agency
   agency -v parse script.agency         Parse with verbose logging
+  cat script.agency | agency format     Format from stdin
+  echo "x = 5" | agency parse           Parse from stdin
   agency script.agency                  Compile and run (shorthand)
 `);
 }
 
-function parse(inputFile: string, verbose: boolean = false): AgencyProgram {
-  // Validate input file
-  if (!fs.existsSync(inputFile)) {
-    console.error(`Error: Input file '${inputFile}' not found`);
-    process.exit(1);
-  }
+function readStdin(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let data = "";
+    process.stdin.setEncoding("utf-8");
 
-  // Read and parse the Agency file
-  const contents = fs.readFileSync(inputFile, "utf-8");
+    process.stdin.on("data", (chunk) => {
+      data += chunk;
+    });
+
+    process.stdin.on("end", () => {
+      resolve(data);
+    });
+
+    process.stdin.on("error", (err) => {
+      reject(err);
+    });
+  });
+}
+
+function parse(contents: string, verbose: boolean = false): AgencyProgram {
   const parseResult = parseAgency(contents, verbose);
 
   // Check if parsing was successful
@@ -57,6 +70,18 @@ function parse(inputFile: string, verbose: boolean = false): AgencyProgram {
   return parseResult.result;
 }
 
+function readFile(inputFile: string): string {
+  // Validate input file
+  if (!fs.existsSync(inputFile)) {
+    console.error(`Error: Input file '${inputFile}' not found`);
+    process.exit(1);
+  }
+
+  // Read and parse the Agency file
+  const contents = fs.readFileSync(inputFile, "utf-8");
+  return contents;
+}
+
 function compile(
   inputFile: string,
   outputFile?: string,
@@ -64,7 +89,8 @@ function compile(
 ): string {
   // Determine output file name
   const output = outputFile || inputFile.replace(".agency", ".ts");
-  const parsedProgram = parse(inputFile, verbose);
+  const contents = readFile(inputFile);
+  const parsedProgram = parse(contents, verbose);
 
   // Generate TypeScript code
   const generatedCode = generateGraph(parsedProgram);
@@ -106,23 +132,18 @@ function run(
   });
 }
 
-function format(inputFile: string, verbose: boolean = false): string {
-  const parsedProgram = parse(inputFile, verbose);
-
-  // Generate TypeScript code
+async function format(
+  contents: string,
+  verbose: boolean = false
+): Promise<string> {
+  const parsedProgram = parse(contents, verbose);
   const generatedCode = generateAgency(parsedProgram);
-
-  // Write to output file
-  //fs.writeFileSync(inputFile, generatedCode, "utf-8");
-
-  //  console.log(`Generated ${output} from ${inputFile}`);
   console.log(generatedCode);
-
   return generatedCode;
 }
 
 // Main CLI logic
-function main(): void {
+async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
   // No arguments - show help
@@ -171,21 +192,23 @@ function main(): void {
 
     case "fmt":
     case "format":
-      if (filteredArgs.length < 1) {
-        console.error("Error: 'format' command requires an input file");
-        console.error("Usage: agency format <input>");
-        process.exit(1);
+      let fmtContents;
+      if (filteredArgs.length < 2) {
+        fmtContents = await readStdin();
+      } else {
+        fmtContents = readFile(filteredArgs[1]);
       }
-      format(filteredArgs[1], verbose);
+      format(fmtContents, verbose);
       break;
 
     case "parse":
-      if (filteredArgs.length < 1) {
-        console.error("Error: 'parse' command requires an input file");
-        console.error("Usage: agency parse <input>");
-        process.exit(1);
+      let contents;
+      if (filteredArgs.length < 2) {
+        contents = await readStdin();
+      } else {
+        contents = readFile(filteredArgs[1]);
       }
-      const result = parse(filteredArgs[1], verbose);
+      const result = parse(contents, verbose);
       console.log(JSON.stringify(result, null, 2));
       break;
 

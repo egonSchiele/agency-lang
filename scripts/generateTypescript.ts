@@ -1,7 +1,7 @@
 import * as fs from "fs";
-import { parseAgency } from "@/parser";
+import { parseAgency } from "../lib/parser.js";
 import { getDebugMessage } from "tarsec";
-import { generateTypeScript } from "@/backends/typescriptGenerator";
+import { generateTypeScript } from "../lib/backends/typescriptGenerator.js";
 import { exit } from "process";
 
 // Get filename from command line arguments

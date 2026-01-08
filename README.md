@@ -1,6 +1,33 @@
 # Agency
 Agent Definition Language
 
+## Usage
+
+Add agency to a project:
+
+```bash
+pnpm add agency-lang
+```
+
+You can then start using the agency script on your files:
+
+```bash
+# to compile
+agency compile infile.agency outfile.ts
+
+# to compile and run
+agency run infile.agency
+
+# or simply
+agency infile.agency
+```
+
+Note that the generated files use several other libraries that you will need to install as well:
+
+```bash
+pnpm i nanoid openai egonSchiele/simplemachine statelog-client zod
+```
+
 ## troubleshooting
 ### Weird undefined error
 

@@ -1,8 +1,8 @@
 import * as fs from "fs";
-import { parseAgency } from "@/parser";
+import { parseAgency } from "../lib/parser.js";
 import { getDebugMessage } from "tarsec";
 import { exit } from "process";
-import { generateGraph } from "@/backends/graphGenerator";
+import { generateGraph } from "../lib/backends/graphGenerator.js";
 
 // Get filename from command line arguments
 const filename = process.argv[2];

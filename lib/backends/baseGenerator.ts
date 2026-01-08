@@ -22,7 +22,6 @@ import { FunctionCall, FunctionDefinition } from "../types/function.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { ImportStatement } from "../types/importStatement.js";
 import { MatchBlock } from "../types/matchBlock.js";
-import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
 

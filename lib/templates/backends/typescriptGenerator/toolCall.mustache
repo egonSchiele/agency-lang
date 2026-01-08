@@ -1,7 +1,6 @@
-if (toolCall.type === "function" &&
-  toolCall.function.name === "{{{name:string}}}"
+if (toolCall.name === "{{{name:string}}}"
 ) {
-  const args = JSON.parse(toolCall.function.arguments);
+  const args = toolCall.arguments as any;
 
   toolCallStartTime = performance.now();
   const result = await {{{name}}}(args);

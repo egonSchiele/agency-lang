@@ -3,10 +3,9 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `if (toolCall.type === "function" &&
-  toolCall.function.name === "{{{name:string}}}"
+export const template = `if (toolCall.name === "{{{name:string}}}"
 ) {
-  const args = JSON.parse(toolCall.function.arguments);
+  const args = toolCall.arguments as any;
 
   toolCallStartTime = performance.now();
   const result = await {{{name}}}(args);

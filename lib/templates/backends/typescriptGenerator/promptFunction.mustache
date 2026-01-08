@@ -5,11 +5,10 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
   const messages:any[] = [{ role: "user", content: prompt }];
   const tools = {{{tools}}};
 
-  let completion = await openai.chat.completions.create({
-    model,
+  let completion = await client.text(prompt,{
     messages,
     tools,
-    response_format: zodResponseFormat(z.object({
+    responseFormat: zodResponseFormat(z.object({
       value: {{{zodSchema:string}}}
     }), "{{{variableName:string}}}_response"),
   });
@@ -20,25 +19,28 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
     model,
     timeTaken: endTime - startTime,
   });
+  if (completion.success === false) {
+    throw new Error("Completion failed: " + JSON.stringify(completion.error, null, 2));
+  }
 
-  let responseMessage = completion.choices[0].message;
+  let responseMessage = completion.value;
   // Handle function calls
-  while (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
+  while (responseMessage.toolCalls.length > 0) {
     // Add assistant's response with tool calls to message history
-    messages.push(responseMessage);
+    // this needs to be converted to an obj
+    messages.push(responseMessage.output);
     let toolCallStartTime, toolCallEndTime;
 
     // Process each tool call
-    for (const toolCall of responseMessage.tool_calls) {
+    for (const toolCall of responseMessage.toolCalls) {
       {{{functionCalls:string}}}
     }
 
     const nextStartTime = performance.now();
     // Get the next response from the model
-    completion = await openai.chat.completions.create({
-      model,
-      messages: messages,
-      tools: tools,
+    completion = await client.text(responseMessage.output || "", {
+      tools,
+      messages
     });
     const nextEndTime = performance.now();
 
@@ -49,17 +51,21 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
       timeTaken: nextEndTime - nextStartTime,
     });
 
-    responseMessage = completion.choices[0].message;
+    if (completion.success === false) {
+      throw new Error("Completion failed: " + JSON.stringify(completion.error, null, 2));
+    }
+
+    responseMessage = completion.value;
   }
 
   // Add final assistant response to history
-  messages.push(responseMessage);
+  messages.push(responseMessage.output);
 
   try {
-  const result = JSON.parse(completion.choices[0].message.content || "");
+  const result = JSON.parse(responseMessage.output || "");
   return result.value;
   } catch (e) {
-    return completion.choices[0].message.content;
+    return responseMessage.output || "";
     // console.error("Error parsing response for variable '{{{variableName:string}}}':", e);
     // console.error("Full completion response:", JSON.stringify(completion, null, 2));
     // throw e;

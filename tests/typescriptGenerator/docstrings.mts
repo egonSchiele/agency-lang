@@ -107,7 +107,7 @@ const processDataTool: OpenAI.Chat.Completions.ChatCompletionTool = {
         "Single line docstring",
       parameters: {
         type: "object",
-        properties: ,
+        properties: {},
         required: [],
         additionalProperties: false,
       },

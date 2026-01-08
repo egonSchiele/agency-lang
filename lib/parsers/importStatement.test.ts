@@ -46,7 +46,7 @@ describe("importStatmentParser", () => {
         result: {
           type: "importStatement",
           importedNames: "foo ",
-          modulePath: '"./local/path"',
+          modulePath: '"./local/path.js"',
         },
       },
     },
@@ -57,7 +57,7 @@ describe("importStatmentParser", () => {
         result: {
           type: "importStatement",
           importedNames: "bar ",
-          modulePath: '"@/utils/helper"',
+          modulePath: '"../utils/helper.js"',
         },
       },
     },
@@ -92,7 +92,7 @@ describe("importStatmentParser", () => {
         result: {
           type: "importStatement",
           importedNames: "test ",
-          modulePath: "'./module'",
+          modulePath: "'./module.js'",
         },
       },
     },
@@ -251,7 +251,7 @@ describe("importStatmentParser", () => {
         result: {
           type: "importStatement",
           importedNames: "foo ",
-          modulePath: '"../../../utils/helpers"',
+          modulePath: '"../../../utils/helpers.js"',
         },
       },
     },

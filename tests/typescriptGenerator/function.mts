@@ -60,7 +60,7 @@ const testTool: OpenAI.Chat.Completions.ChatCompletionTool = {
         "No description provided.",
       parameters: {
         type: "object",
-        properties: ,
+        properties: {},
         required: [],
         additionalProperties: false,
       },

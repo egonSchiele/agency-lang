@@ -1,5 +1,33 @@
-node main() {
-while (true) {
-  print("Hello, World!")
+
+type Url = {
+url: string # website url,
 }
+
+def importRecipe() {
+url :: Url
+url = `extract the url from this message: ${msg}`
+
+html :: string
+html = fetch(url.url)
+
+recipe :: string
+recipe = `extract the recipe from this html: ${html}`
+
+print(recipe);
+}
+
+def createIngredient() {
+    print("tbd")
+}
+
+node main() {
+  msg = input("> ");
+
+category :: "import_recipe" | "create_ingredient"
+category = `determine if the user wants to import a recipe from a website or create a new ingredient based on this message: ${msg}`
+
+match(category) {
+    "import_recipe" => importRecipe()
+    "create_ingredient" => createIngredient()
+  }
 }

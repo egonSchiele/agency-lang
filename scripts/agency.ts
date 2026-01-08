@@ -23,16 +23,20 @@ Arguments:
   output                                Path to output .ts file (optional)
                                         Default: <input-name>.ts
 
+Flags:
+  -v, --verbose                         Enable verbose logging during parsing
+
 Examples:
   agency help                           Show help
   agency compile script.agency          Compile to script.ts
   agency compile script.agency out.ts   Compile to out.ts
   agency run script.agency              Compile and run script.agency
+  agency -v parse script.agency         Parse with verbose logging
   agency script.agency                  Compile and run (shorthand)
 `);
 }
 
-function parse(inputFile: string): AgencyProgram {
+function parse(inputFile: string, verbose: boolean = false): AgencyProgram {
   // Validate input file
   if (!fs.existsSync(inputFile)) {
     console.error(`Error: Input file '${inputFile}' not found`);
@@ -41,7 +45,7 @@ function parse(inputFile: string): AgencyProgram {
 
   // Read and parse the Agency file
   const contents = fs.readFileSync(inputFile, "utf-8");
-  const parseResult = parseAgency(contents);
+  const parseResult = parseAgency(contents, verbose);
   console.log(JSON.stringify(parseResult, null, 2));
 
   // Check if parsing was successful
@@ -54,10 +58,10 @@ function parse(inputFile: string): AgencyProgram {
   return parseResult.result;
 }
 
-function compile(inputFile: string, outputFile?: string): string {
+function compile(inputFile: string, outputFile?: string, verbose: boolean = false): string {
   // Determine output file name
   const output = outputFile || inputFile.replace(".agency", ".ts");
-  const parsedProgram = parse(inputFile);
+  const parsedProgram = parse(inputFile, verbose);
 
   // Generate TypeScript code
   const generatedCode = generateGraph(parsedProgram);
@@ -70,9 +74,9 @@ function compile(inputFile: string, outputFile?: string): string {
   return output;
 }
 
-function run(inputFile: string, outputFile?: string): void {
+function run(inputFile: string, outputFile?: string, verbose: boolean = false): void {
   // Compile the file
-  const output = compile(inputFile, outputFile);
+  const output = compile(inputFile, outputFile, verbose);
 
   // Run the generated TypeScript file with Node.js
   console.log(`Running ${output}...`);
@@ -95,8 +99,8 @@ function run(inputFile: string, outputFile?: string): void {
   });
 }
 
-function format(inputFile: string): string {
-  const parsedProgram = parse(inputFile);
+function format(inputFile: string, verbose: boolean = false): string {
+  const parsedProgram = parse(inputFile, verbose);
 
   // Generate TypeScript code
   const generatedCode = generateAgency(parsedProgram);
@@ -120,7 +124,14 @@ function main(): void {
     return;
   }
 
-  const command = args[0];
+  // Extract verbose flag
+  const verboseIndex = args.findIndex(arg => arg === '-v' || arg === '--verbose');
+  const verbose = verboseIndex !== -1;
+
+  // Remove verbose flag from args
+  const filteredArgs = args.filter(arg => arg !== '-v' && arg !== '--verbose');
+
+  const command = filteredArgs[0];
 
   switch (command) {
     case "help":
@@ -130,46 +141,46 @@ function main(): void {
       break;
 
     case "compile":
-      if (args.length < 2) {
+      if (filteredArgs.length < 2) {
         console.error("Error: 'compile' command requires an input file");
         console.error("Usage: agency compile <input> [output]");
         process.exit(1);
       }
-      compile(args[1], args[2]);
+      compile(filteredArgs[1], filteredArgs[2], verbose);
       break;
 
     case "run":
-      if (args.length < 2) {
+      if (filteredArgs.length < 2) {
         console.error("Error: 'run' command requires an input file");
         console.error("Usage: agency run <input> [output]");
         process.exit(1);
       }
-      run(args[1], args[2]);
+      run(filteredArgs[1], filteredArgs[2], verbose);
       break;
 
     case "fmt":
     case "format":
-      if (args.length < 1) {
+      if (filteredArgs.length < 1) {
         console.error("Error: 'format' command requires an input file");
         console.error("Usage: agency format <input>");
         process.exit(1);
       }
-      format(args[1]);
+      format(filteredArgs[1], verbose);
       break;
 
     case "parse":
-      if (args.length < 1) {
+      if (filteredArgs.length < 1) {
         console.error("Error: 'parse' command requires an input file");
         console.error("Usage: agency parse <input>");
         process.exit(1);
       }
-      parse(args[1]);
+      parse(filteredArgs[1], verbose);
       break;
 
     default:
       // If first arg is not a recognized command, treat it as a file to run
       if (command.endsWith(".agency") || fs.existsSync(command)) {
-        run(command, args[1]);
+        run(command, filteredArgs[1], verbose);
       } else {
         console.error(`Error: Unknown command '${command}'`);
         console.error("Run 'agency help' for usage information");

@@ -2,8 +2,9 @@
 import { spawn } from "child_process";
 import * as fs from "fs";
 import { parseAgency } from "../lib/parser.js";
-import { generateGraph } from "@/index.js";
+import { AgencyProgram, generateGraph } from "@/index.js";
 import { generateAgency } from "@/backends/agencyGenerator.js";
+import { ParserResult } from "tarsec";
 
 function help(): void {
   console.log(`
@@ -14,6 +15,7 @@ Usage:
   agency compile <input> [output]       Compile .agency file to TypeScript
   agency run <input> [output]           Compile and run .agency file
   agency format <input>                 Format .agency file in place
+  agency parse <input>                  Parse .agency file and show AST
   agency <input>                        Compile and run .agency file (shorthand)
 
 Arguments:
@@ -30,19 +32,17 @@ Examples:
 `);
 }
 
-function compile(inputFile: string, outputFile?: string): string {
+function parse(inputFile: string): AgencyProgram {
   // Validate input file
   if (!fs.existsSync(inputFile)) {
     console.error(`Error: Input file '${inputFile}' not found`);
     process.exit(1);
   }
 
-  // Determine output file name
-  const output = outputFile || inputFile.replace(".agency", ".ts");
-
   // Read and parse the Agency file
   const contents = fs.readFileSync(inputFile, "utf-8");
   const parseResult = parseAgency(contents);
+  console.log(JSON.stringify(parseResult, null, 2));
 
   // Check if parsing was successful
   if (!parseResult.success) {
@@ -51,7 +51,13 @@ function compile(inputFile: string, outputFile?: string): string {
     process.exit(1);
   }
 
-  const parsedProgram = parseResult.result;
+  return parseResult.result;
+}
+
+function compile(inputFile: string, outputFile?: string): string {
+  // Determine output file name
+  const output = outputFile || inputFile.replace(".agency", ".ts");
+  const parsedProgram = parse(inputFile);
 
   // Generate TypeScript code
   const generatedCode = generateGraph(parsedProgram);
@@ -90,24 +96,7 @@ function run(inputFile: string, outputFile?: string): void {
 }
 
 function format(inputFile: string): string {
-  // Validate input file
-  if (!fs.existsSync(inputFile)) {
-    console.error(`Error: Input file '${inputFile}' not found`);
-    process.exit(1);
-  }
-
-  // Read and parse the Agency file
-  const contents = fs.readFileSync(inputFile, "utf-8");
-  const parseResult = parseAgency(contents);
-
-  // Check if parsing was successful
-  if (!parseResult.success) {
-    console.error("Parse error:");
-    console.error(parseResult);
-    process.exit(1);
-  }
-
-  const parsedProgram = parseResult.result;
+  const parsedProgram = parse(inputFile);
 
   // Generate TypeScript code
   const generatedCode = generateAgency(parsedProgram);
@@ -166,6 +155,15 @@ function main(): void {
         process.exit(1);
       }
       format(args[1]);
+      break;
+
+    case "parse":
+      if (args.length < 1) {
+        console.error("Error: 'parse' command requires an input file");
+        console.error("Usage: agency parse <input>");
+        process.exit(1);
+      }
+      parse(args[1]);
       break;
 
     default:

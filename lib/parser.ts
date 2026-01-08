@@ -30,6 +30,7 @@ import { importStatmentParser } from "./parsers/importStatement.js";
 import { matchBlockParser } from "./parsers/matchBlock.js";
 import { returnStatementParser } from "./parsers/returnStatement.js";
 import { usesToolParser } from "./parsers/tools.js";
+import { EgonLog } from "egonlog";
 
 export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
   const parser = sepBy(
@@ -67,10 +68,19 @@ export const _multilineCommentParser = between(str("/*"), str("*/"), anyChar);
 
 export const multilineCommentParser = search(_multilineCommentParser);
 
-export function parseAgency(input: string): ParserResult<AgencyProgram> {
-  let normalized = input;
+export function parseAgency(
+  input: string,
+  verbose: boolean = false
+): ParserResult<AgencyProgram> {
+  const logger = new EgonLog({ level: verbose ? "debug" : "warn" });
 
+  let normalized = input;
+  logger.debug("Starting to parse agency program");
+  logger.debug(`Input: ${input}`);
+  logger.debug("================================");
   const comments = multilineCommentParser(normalized);
+  logger.debug(`Multiline comments: ${JSON.stringify(comments)}`);
+  logger.debug("================================");
 
   // get rid of all multiline comments
   normalized = comments.rest
@@ -89,6 +99,10 @@ export function parseAgency(input: string): ParserResult<AgencyProgram> {
       ""
     );
   }
+
+  logger.debug(`Normalized input: ${normalized}`);
+  logger.debug("================================");
+
   const result = agencyParser(normalized);
   return result;
 }

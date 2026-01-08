@@ -39,6 +39,7 @@
   },
   "homepage": "https://github.com/egonSchiele/agency-lang#readme",
   "dependencies": {
+    "egonlog": "^0.0.2",
     "nanoid": "^5.1.6",
     "openai": "^6.15.0",
     "simplemachine": "github:egonSchiele/simplemachine",

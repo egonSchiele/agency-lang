@@ -69,19 +69,19 @@ export class AgencyGenerator extends BaseGenerator {
       node.aliasedType,
       this.typeAliases
     );
-    return `${this.indent()}type ${node.aliasName} = ${aliasedTypeStr}\n`;
+    return this.indentStr(`type ${node.aliasName} = ${aliasedTypeStr}\n`);
   }
 
   protected processTypeHint(node: TypeHint): string {
     this.typeHints[node.variableName] = node.variableType;
     const typeStr = variableTypeToString(node.variableType, this.typeAliases);
-    return `${this.indent()}${node.variableName} :: ${typeStr}\n`;
+    return this.indentStr(`${node.variableName} :: ${typeStr}\n`);
   }
 
   // Assignment and literals
   protected processAssignment(node: Assignment): string {
     const valueCode = this.processNode(node.value).trim();
-    return `${this.indent()}${node.variableName} = ${valueCode}\n`;
+    return this.indentStr(`${node.variableName} = ${valueCode}\n`);
   }
 
   protected generateLiteral(literal: Literal): string {
@@ -133,7 +133,7 @@ export class AgencyGenerator extends BaseGenerator {
     const params = parameters.join(", ");
 
     // Start function definition
-    let result = `${this.indent()}def ${functionName}(${params}) {\n`;
+    let result = this.indentStr(`def ${functionName}(${params}) {\n`);
 
     // Process body with increased indentation
     this.increaseIndent();
@@ -147,14 +147,14 @@ export class AgencyGenerator extends BaseGenerator {
     this.decreaseIndent();
 
     // Close function
-    result += `${this.indent()}}\n`;
+    result += this.indentStr(`}\n`);
 
     return result;
   }
 
   protected processFunctionCall(node: FunctionCall): string {
     const expr = this.generateFunctionCallExpression(node);
-    return `${this.indent()}${expr}\n`;
+    return this.indentStr(`${expr}\n`);
   }
 
   protected generateFunctionCallExpression(node: FunctionCall): string {
@@ -214,7 +214,7 @@ export class AgencyGenerator extends BaseGenerator {
   // Control flow
   protected processMatchBlock(node: MatchBlock): string {
     const exprCode = this.processNode(node.expression).trim();
-    let result = `${this.indent()}match(${exprCode}) {\n`;
+    let result = this.indentStr(`match(${exprCode}) {\n`);
 
     this.increaseIndent();
 
@@ -234,19 +234,19 @@ export class AgencyGenerator extends BaseGenerator {
       // Format body (action)
       const bodyCode = this.processNode(caseNode.body).trim();
 
-      result += `${this.indent()}${pattern} => ${bodyCode}\n`;
+      result += this.indentStr(`${pattern} => ${bodyCode}\n`);
     }
 
     this.decreaseIndent();
 
-    result += `${this.indent()}}\n`;
+    result += this.indentStr(`}\n`);
 
     return result;
   }
 
   protected processWhileLoop(node: WhileLoop): string {
     const conditionCode = this.processNode(node.condition).trim();
-    let result = `${this.indent()}while (${conditionCode}) {\n`;
+    let result = this.indentStr(`while (${conditionCode}) {\n`);
 
     this.increaseIndent();
 
@@ -256,25 +256,23 @@ export class AgencyGenerator extends BaseGenerator {
 
     this.decreaseIndent();
 
-    result += `${this.indent()}}\n`;
+    result += this.indentStr(`}\n`);
 
     return result;
   }
 
   protected processReturnStatement(node: ReturnStatement): string {
     const valueCode = this.processNode(node.value).trim();
-    return `${this.indent()}return ${valueCode}\n`;
+    return this.indentStr(`return ${valueCode}\n`);
   }
 
   // Utility methods
   protected processComment(node: AgencyComment): string {
-    return `${this.indent()}// ${node.content}\n`;
+    return this.indentStr(`// ${node.content}\n`);
   }
 
   protected processImportStatement(node: ImportStatement): string {
-    return `${this.indent()}import {${node.importedNames}} from "${
-      node.modulePath
-    }"\n`;
+    return this.indentStr(`import {${node.importedNames}} from "${node.modulePath}"\n`);
   }
 
   protected processGraphNode(node: GraphNodeDefinition): string {
@@ -282,7 +280,7 @@ export class AgencyGenerator extends BaseGenerator {
     const { nodeName, body, parameters } = node;
 
     const params = parameters.join(", ");
-    let result = `${this.indent()}node ${nodeName}(${params}) {\n`;
+    let result = this.indentStr(`node ${nodeName}(${params}) {\n`);
 
     this.increaseIndent();
     this.functionScopedVariables = [...parameters];
@@ -294,7 +292,7 @@ export class AgencyGenerator extends BaseGenerator {
     this.functionScopedVariables = [];
     this.decreaseIndent();
 
-    result += `${this.indent()}}\n`;
+    result += this.indentStr(`}\n`);
 
     return result;
   }
@@ -308,7 +306,11 @@ export class AgencyGenerator extends BaseGenerator {
   protected processUsesTool(node: UsesTool): string {
     // Track tool usage but don't generate code
     this.toolsUsed.push(node.toolName);
-    return "";
+    return this.indentStr(`+${node.toolName}\n`);
+  }
+
+  private indentStr(str: string): string {
+    return `${this.indent()}${str}`;
   }
 }
 

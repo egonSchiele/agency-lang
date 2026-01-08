@@ -9,7 +9,8 @@
     "build": "rm -rf dist/ && tsc && tsc-alias",
     "start": "node dist/lib/index.js",
     "templates": "typestache ./lib/templates",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "agency": "node ./dist/scripts/agency.js"
   },
   "bin": {
     "agency": "./dist/scripts/agency.js"

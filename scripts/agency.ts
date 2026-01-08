@@ -3,6 +3,7 @@ import { spawn } from "child_process";
 import * as fs from "fs";
 import { parseAgency } from "../lib/parser.js";
 import { generateGraph } from "@/index.js";
+import { generateAgency } from "@/backends/agencyGenerator.js";
 
 function help(): void {
   console.log(`
@@ -12,6 +13,7 @@ Usage:
   agency help                           Show this help message
   agency compile <input> [output]       Compile .agency file to TypeScript
   agency run <input> [output]           Compile and run .agency file
+  agency format <input>                 Format .agency file in place
   agency <input>                        Compile and run .agency file (shorthand)
 
 Arguments:
@@ -87,6 +89,38 @@ function run(inputFile: string, outputFile?: string): void {
   });
 }
 
+function format(inputFile: string): string {
+  // Validate input file
+  if (!fs.existsSync(inputFile)) {
+    console.error(`Error: Input file '${inputFile}' not found`);
+    process.exit(1);
+  }
+
+  // Read and parse the Agency file
+  const contents = fs.readFileSync(inputFile, "utf-8");
+  const parseResult = parseAgency(contents);
+
+  // Check if parsing was successful
+  if (!parseResult.success) {
+    console.error("Parse error:");
+    console.error(parseResult);
+    process.exit(1);
+  }
+
+  const parsedProgram = parseResult.result;
+
+  // Generate TypeScript code
+  const generatedCode = generateAgency(parsedProgram);
+
+  // Write to output file
+  //fs.writeFileSync(inputFile, generatedCode, "utf-8");
+
+  //  console.log(`Generated ${output} from ${inputFile}`);
+  console.log(generatedCode);
+
+  return generatedCode;
+}
+
 // Main CLI logic
 function main(): void {
   const args = process.argv.slice(2);
@@ -122,6 +156,16 @@ function main(): void {
         process.exit(1);
       }
       run(args[1], args[2]);
+      break;
+
+    case "fmt":
+    case "format":
+      if (args.length < 1) {
+        console.error("Error: 'format' command requires an input file");
+        console.error("Usage: agency format <input>");
+        process.exit(1);
+      }
+      format(args[1]);
       break;
 
     default:

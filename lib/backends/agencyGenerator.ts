@@ -6,6 +6,7 @@ import {
   PromptLiteral,
   TypeAlias,
   TypeHint,
+  VariableType,
 } from "../types.js";
 
 import {
@@ -33,8 +34,8 @@ export class AgencyGenerator extends BaseGenerator {
     super();
   }
 
-  private indent(): string {
-    return " ".repeat(this.indentLevel * this.indentSize);
+  private indent(level = this.indentLevel): string {
+    return " ".repeat(level * this.indentSize);
   }
 
   private increaseIndent(): void {
@@ -62,13 +63,27 @@ export class AgencyGenerator extends BaseGenerator {
     return "";
   }
 
+  protected aliasedTypeToString(aliasedType: VariableType): string {
+    if (aliasedType.type === "objectType") {
+      const props = aliasedType.properties
+        .map((prop) => {
+          let str = `${this.indent(this.indentLevel + 1)}`;
+          str += `${prop.key}: ${this.aliasedTypeToString(prop.value)}`;
+          if (prop.description) {
+            str += ` # ${prop.description}`;
+          }
+          return str;
+        })
+        .join(";\n");
+      return `{\n${props}\n}`;
+    }
+    return variableTypeToString(aliasedType, this.typeAliases);
+  }
+
   // Type system methods
   protected processTypeAlias(node: TypeAlias): string {
     this.typeAliases[node.aliasName] = node.aliasedType;
-    const aliasedTypeStr = variableTypeToString(
-      node.aliasedType,
-      this.typeAliases
-    );
+    const aliasedTypeStr = this.aliasedTypeToString(node.aliasedType);
     return this.indentStr(`type ${node.aliasName} = ${aliasedTypeStr}\n`);
   }
 

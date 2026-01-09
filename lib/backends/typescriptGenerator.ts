@@ -52,7 +52,9 @@ export class TypeScriptGenerator extends BaseGenerator {
   protected processTypeAlias(node: TypeAlias): string {
     this.typeAliases[node.aliasName] = node.aliasedType;
     const typeAliasStr = this.typeAliasToString(node);
-    this.generatedTypeAliases.push(typeAliasStr);
+    if (!this.generatedTypeAliases.includes(typeAliasStr)) {
+      this.generatedTypeAliases.push(typeAliasStr);
+    }
     return "";
   }
 
@@ -194,7 +196,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       if (!this.functionScopedVariables.includes(varName)) {
         throw new Error(
           `Variable '${varName}' used in prompt interpolation but not defined. ` +
-          `Referenced in assignment to '${variableName}'.`
+            `Referenced in assignment to '${variableName}'.`
         );
       }
     }

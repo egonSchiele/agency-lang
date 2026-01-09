@@ -201,6 +201,7 @@ async function main(): Promise<void> {
       format(fmtContents, verbose);
       break;
 
+    case "ast":
     case "parse":
       let contents;
       if (filteredArgs.length < 2) {

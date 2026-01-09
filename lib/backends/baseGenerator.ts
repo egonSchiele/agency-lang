@@ -91,7 +91,6 @@ export class BaseGenerator {
     output.push(this.generateImports() + "\n");
     output.push(this.generateBuiltins() + "\n");
     output.push("\n");
-
     output.push(...this.generatedTypeAliases);
 
     output.push(this.generatedStatements.join(""));

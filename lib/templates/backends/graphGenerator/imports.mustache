@@ -6,15 +6,15 @@ import fs from "fs";
 import { Graph, goToNode } from "simplemachine";
 import { StatelogClient } from "statelog-client";
 import { nanoid } from "nanoid";
-import { assistantMessage, getClient, Message, userMessage } from "smoltalk";
+import { assistantMessage, getClient, userMessage } from "smoltalk";
 
 const statelogHost = "http://localhost:1065";
 const traceId = nanoid();
 const statelogClient = new StatelogClient({host: statelogHost, tid: traceId});
-const model = "gpt-4o-mini";
+const model = "gemini-2.0-flash-lite"
 
 const client = getClient({
-  apiKey: process.env.OPENAI_API_KEY || "",
+  apiKey: process.env.GEMINI_API_KEY || "",
   model,
 });
 

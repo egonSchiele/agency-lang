@@ -1,7 +1,7 @@
 type Url = {
   url: string
 }
-def importRecipe() {
+node importRecipe(msg) {
   url :: Url
   url = `extract the url from this message: ${msg}`
 
@@ -13,11 +13,9 @@ def importRecipe() {
 
   print(recipe)
 }
-
-def createIngredient() {
+node createIngredient() {
   print("tbd")
 }
-
 node main() {
   msg = input("> ")
 
@@ -25,7 +23,6 @@ node main() {
   category = `determine if the user wants to import a recipe from a website or create a new ingredient based on this message: ${msg}`
 
   match(category) {
-    "import_recipe" => importRecipe()
-    "create_ingredient" => createIngredient()
+    "import_recipe" => return importRecipe(msg)
   }
 }

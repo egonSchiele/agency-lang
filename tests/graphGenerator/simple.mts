@@ -10,14 +10,16 @@ import fs from "fs";
 import { Graph, goToNode } from "simplemachine";
 import { StatelogClient } from "statelog-client";
 import { nanoid } from "nanoid";
+import { assistantMessage, getClient, Message, userMessage } from "smoltalk";
 
 const statelogHost = "http://localhost:1065";
 const traceId = nanoid();
 const statelogClient = new StatelogClient({host: statelogHost, tid: traceId});
-const model = "gpt-4.1-nano-2025-04-14";
+const model = "gpt-4o-mini";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+const client = getClient({
+  apiKey: process.env.OPENAI_API_KEY || "",
+  model,
 });
 
 type State = {
@@ -78,17 +80,17 @@ const addTool = {
 async function _greeting(): Promise<string> {
   const prompt = `say hello`;
   const startTime = performance.now();
-  const messages:any[] = [{ role: "user", content: prompt }];
+  const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
 
-  let completion = await openai.chat.completions.create({
-    model,
+  const responseFormat = z.string();
+
+  let completion = await client.text({
     messages,
     tools,
-    response_format: zodResponseFormat(z.object({
-      value: z.string()
-    }), "greeting_response"),
+    responseFormat,
   });
+
   const endTime = performance.now();
   statelogClient.promptCompletion({
     messages,
@@ -97,25 +99,32 @@ async function _greeting(): Promise<string> {
     timeTaken: endTime - startTime,
   });
 
-  let responseMessage = completion.choices[0].message;
+  if (!completion.success) {
+    throw new Error(
+      `Error getting response from ${model}: ${completion.error}`
+    );
+  }
+
+  let responseMessage = completion.value;
+
   // Handle function calls
-  while (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
+  while (responseMessage.toolCalls.length > 0) {
     // Add assistant's response with tool calls to message history
-    messages.push(responseMessage);
+    messages.push(assistantMessage(responseMessage.output));
     let toolCallStartTime, toolCallEndTime;
 
     // Process each tool call
-    for (const toolCall of responseMessage.tool_calls) {
+    for (const toolCall of responseMessage.toolCalls) {
       
     }
 
     const nextStartTime = performance.now();
-    // Get the next response from the model
-    completion = await openai.chat.completions.create({
-      model,
-      messages: messages,
-      tools: tools,
+    let completion = await client.text({
+      messages,
+      tools,
+      responseFormat,
     });
+
     const nextEndTime = performance.now();
 
     statelogClient.promptCompletion({
@@ -125,17 +134,22 @@ async function _greeting(): Promise<string> {
       timeTaken: nextEndTime - nextStartTime,
     });
 
-    responseMessage = completion.choices[0].message;
+    if (!completion.success) {
+      throw new Error(
+        `Error getting response from ${model}: ${completion.error}`
+      );
+    }
+    responseMessage = completion.value;
   }
 
   // Add final assistant response to history
-  messages.push(responseMessage);
+  messages.push(assistantMessage(responseMessage.output));
 
   try {
-  const result = JSON.parse(completion.choices[0].message.content || "");
+  const result = JSON.parse(responseMessage.output || "");
   return result.value;
   } catch (e) {
-    return completion.choices[0].message.content;
+    return responseMessage.output;
     // console.error("Error parsing response for variable 'greeting':", e);
     // console.error("Full completion response:", JSON.stringify(completion, null, 2));
     // throw e;

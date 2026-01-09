@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 
-const { parseAgency } = require("../dist/lib/parser.js");
-const {
-  generateGraph,
-} = require("../dist/lib/backends/graphGenerator.js");
-const fs = require("fs");
-const path = require("path");
+import path, { dirname } from "path";
+import fs from "fs";
+import { generateGraph } from "../lib/backends/graphGenerator.js";
+import { parseAgency } from "../lib/parser.js";
+import { fileURLToPath } from "url";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
-const fixturesDir = path.join(__dirname, "../tests/graphGenerator");
+const fixturesDir = path.join(__dirname, "../../tests/graphGenerator");
 
-function regenerateFixtures(dir, relativePath = "") {
+function regenerateFixtures(dir: string, relativePath = "") {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
 
   for (const entry of entries) {

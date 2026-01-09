@@ -10,14 +10,16 @@ import fs from "fs";
 import { Graph, goToNode } from "simplemachine";
 import { StatelogClient } from "statelog-client";
 import { nanoid } from "nanoid";
+import { assistantMessage, getClient, Message, userMessage } from "smoltalk";
 
 const statelogHost = "http://localhost:1065";
 const traceId = nanoid();
 const statelogClient = new StatelogClient({host: statelogHost, tid: traceId});
-const model = "gpt-4.1-nano-2025-04-14";
+const model = "gpt-4o-mini";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+const client = getClient({
+  apiKey: process.env.OPENAI_API_KEY || "",
+  model,
 });
 
 type State = {

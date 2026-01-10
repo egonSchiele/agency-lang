@@ -19,7 +19,8 @@ const statelogClient = new StatelogClient({host: statelogHost, tid: traceId});
 const model = "gemini-2.0-flash-lite"
 
 const client = getClient({
-  apiKey: process.env.GEMINI_API_KEY || "",
+  openAiApiKey: process.env.OPENAI_API_KEY || "",
+  googleApiKey: process.env.GEMINI_API_KEY || "",
   model,
 });
 

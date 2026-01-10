@@ -72,7 +72,10 @@ async function _sentiment(message: string): Promise<"happy" | "sad" | "neutral">
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
 
-  const responseFormat = z.union([z.literal("happy"), z.literal("sad"), z.literal("neutral")]);
+  // Need to make sure this is always an object
+  const responseFormat = z.object({
+     response: z.union([z.literal("happy"), z.literal("sad"), z.literal("neutral")])
+  });
 
   let completion = await client.text({
     messages,
@@ -136,7 +139,7 @@ async function _sentiment(message: string): Promise<"happy" | "sad" | "neutral">
 
   try {
   const result = JSON.parse(responseMessage.output || "");
-  return result.value;
+  return result.response;
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable 'sentiment':", e);

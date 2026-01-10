@@ -59,7 +59,10 @@ async function _url(): Promise<{ hostname: string; port: number }> {
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
 
-  const responseFormat = z.object({ "hostname": z.string().describe("hostname of a url"), "port": z.number().describe("port number") });
+  // Need to make sure this is always an object
+  const responseFormat = z.object({
+     response: z.object({ "hostname": z.string().describe("hostname of a url"), "port": z.number().describe("port number") })
+  });
 
   let completion = await client.text({
     messages,
@@ -123,7 +126,7 @@ async function _url(): Promise<{ hostname: string; port: number }> {
 
   try {
   const result = JSON.parse(responseMessage.output || "");
-  return result.value;
+  return result.response;
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable 'url':", e);

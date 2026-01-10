@@ -60,7 +60,10 @@ async function _foo(): Promise<Coords> {
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
 
-  const responseFormat = z.object({ "x": z.number(), "y": z.number() });
+  // Need to make sure this is always an object
+  const responseFormat = z.object({
+     response: z.object({ "x": z.number(), "y": z.number() })
+  });
 
   let completion = await client.text({
     messages,
@@ -124,7 +127,7 @@ async function _foo(): Promise<Coords> {
 
   try {
   const result = JSON.parse(responseMessage.output || "");
-  return result.value;
+  return result.response;
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable 'foo':", e);

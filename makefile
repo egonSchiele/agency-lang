@@ -14,3 +14,7 @@ graphtest:
 
 publish:
 	npm publish
+
+fixtures:
+	node dist/scripts/regenerate-fixtures.js
+	node dist/scripts/regenerate-graph-fixtures.js

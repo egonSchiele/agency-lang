@@ -60,7 +60,10 @@ async function _greeting(name: string): Promise<string> {
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
 
-  const responseFormat = z.string();
+  // Need to make sure this is always an object
+  const responseFormat = z.object({
+     response: z.string()
+  });
 
   let completion = await client.text({
     messages,
@@ -124,7 +127,7 @@ async function _greeting(name: string): Promise<string> {
 
   try {
   const result = JSON.parse(responseMessage.output || "");
-  return result.value;
+  return result.response;
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable 'greeting':", e);

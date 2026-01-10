@@ -59,7 +59,10 @@ async function _foo(): Promise<"hi"> {
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
 
-  const responseFormat = z.literal("hi");
+  // Need to make sure this is always an object
+  const responseFormat = z.object({
+     response: z.literal("hi")
+  });
 
   let completion = await client.text({
     messages,
@@ -123,7 +126,7 @@ async function _foo(): Promise<"hi"> {
 
   try {
   const result = JSON.parse(responseMessage.output || "");
-  return result.value;
+  return result.response;
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable 'foo':", e);
@@ -139,7 +142,10 @@ async function _bar(): Promise<42> {
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
 
-  const responseFormat = z.literal(42);
+  // Need to make sure this is always an object
+  const responseFormat = z.object({
+     response: z.literal(42)
+  });
 
   let completion = await client.text({
     messages,
@@ -203,7 +209,7 @@ async function _bar(): Promise<42> {
 
   try {
   const result = JSON.parse(responseMessage.output || "");
-  return result.value;
+  return result.response;
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable 'bar':", e);
@@ -219,7 +225,10 @@ async function _baz(): Promise<true> {
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
 
-  const responseFormat = z.literal(true);
+  // Need to make sure this is always an object
+  const responseFormat = z.object({
+     response: z.literal(true)
+  });
 
   let completion = await client.text({
     messages,
@@ -283,7 +292,7 @@ async function _baz(): Promise<true> {
 
   try {
   const result = JSON.parse(responseMessage.output || "");
-  return result.value;
+  return result.response;
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable 'baz':", e);

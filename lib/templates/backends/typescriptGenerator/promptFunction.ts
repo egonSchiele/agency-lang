@@ -10,6 +10,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
   const messages: Message[] = [userMessage(prompt)];
   const tools = {{{tools}}};
 
+  // Need to make sure this is always an object
   const responseFormat = z.object({
      response: {{{zodSchema:string}}}
   });

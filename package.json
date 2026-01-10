@@ -10,7 +10,8 @@
     "start": "node dist/lib/index.js",
     "templates": "typestache ./lib/templates",
     "typecheck": "tsc --noEmit",
-    "agency": "node ./dist/scripts/agency.js"
+    "agency": "node ./dist/scripts/agency.js",
+    "compile": "node ./dist/scripts/agency.js compile"
   },
   "bin": {
     "agency": "./dist/scripts/agency.js"
@@ -43,7 +44,7 @@
     "nanoid": "^5.1.6",
     "openai": "^6.15.0",
     "simplemachine": "github:egonSchiele/simplemachine",
-    "smoltalk": "^0.0.6",
+    "smoltalk": "^0.0.7",
     "statelog-client": "^0.0.28",
     "tarsec": "^0.1.1",
     "typestache": "^0.4.4",

@@ -8,8 +8,10 @@ node importRecipe(msg) {
   html :: string
   html = fetch(url.url)
 
+  html2 = html.substring(0, 100000)
+
   recipe :: string
-  recipe = `extract the recipe from this html: ${html}`
+  recipe = `extract the recipe from this html: ${html2}`
 
   print(recipe)
 }

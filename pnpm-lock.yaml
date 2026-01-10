@@ -21,8 +21,8 @@ importers:
         specifier: github:egonSchiele/simplemachine
         version: https://codeload.github.com/egonSchiele/simplemachine/tar.gz/eefa7c0c92c0bc22609b37b426435795eaf53cde
       smoltalk:
-        specifier: ^0.0.6
-        version: 0.0.6(ws@8.19.0)(zod@4.2.1)
+        specifier: ^0.0.7
+        version: 0.0.7(ws@8.19.0)(zod@4.2.1)
       statelog-client:
         specifier: ^0.0.28
         version: 0.0.28
@@ -803,8 +803,8 @@ packages:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}
     engines: {node: '>=8'}
 
-  smoltalk@0.0.6:
-    resolution: {integrity: sha512-HnJ9iPeCeF1ssi1r9yx9VfdWNEzzr6nXBgOwBIn1E+e/9J/Jd8Y8FYhtuV/yL/bFYNZgkOyLvUqomfwqzSabpA==}
+  smoltalk@0.0.7:
+    resolution: {integrity: sha512-N+9xc6Hl+0f/YhfWyUvOjww0hixXvv0gHk8shMUn4Txyhfkv2nkhIaCm6nCqyt5bLxIEBa3uybKPc3nYD6PhMg==}
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -1658,7 +1658,7 @@ snapshots:
 
   slash@3.0.0: {}
 
-  smoltalk@0.0.6(ws@8.19.0)(zod@4.2.1):
+  smoltalk@0.0.7(ws@8.19.0)(zod@4.2.1):
     dependencies:
       '@google/genai': 1.35.0
       egonlog: 0.0.2

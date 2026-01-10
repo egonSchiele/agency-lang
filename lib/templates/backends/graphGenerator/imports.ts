@@ -16,12 +16,13 @@ import { assistantMessage, getClient, userMessage } from "smoltalk";
 const statelogHost = "http://localhost:1065";
 const traceId = nanoid();
 const statelogClient = new StatelogClient({host: statelogHost, tid: traceId});
-const model = "gemini-2.0-flash-lite"
+const model = "gpt-4o-mini";
 
 const client = getClient({
   openAiApiKey: process.env.OPENAI_API_KEY || "",
   googleApiKey: process.env.GEMINI_API_KEY || "",
   model,
+  logLevel: "debug",
 });
 
 type State = {

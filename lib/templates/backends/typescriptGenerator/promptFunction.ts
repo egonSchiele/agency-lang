@@ -10,7 +10,9 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
   const messages: Message[] = [userMessage(prompt)];
   const tools = {{{tools}}};
 
-  const responseFormat = {{{zodSchema:string}}};
+  const responseFormat = z.object({
+     response: {{{zodSchema:string}}}
+  });
 
   let completion = await client.text({
     messages,
@@ -74,7 +76,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
 
   try {
   const result = JSON.parse(responseMessage.output || "");
-  return result.value;
+  return result.response;
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable '{{{variableName:string}}}':", e);

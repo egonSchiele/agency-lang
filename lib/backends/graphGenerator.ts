@@ -328,17 +328,15 @@ export class GraphGenerator extends TypeScriptGenerator {
       );
     });
 
-    if (!this.graphNodes.includes("main")) {
-      throw new Error(
-        "No entrypoint found for agent: missing 'main' node. Please create a node named 'main'."
+    if (this.graphNodes.includes("main")) {
+      lines.push(
+        renderStartNode.default({
+          startNode: "main",
+        })
       );
     }
 
-    lines.push(
-      renderStartNode.default({
-        startNode: "main",
-      })
-    );
+    lines.push("export default graph;");
 
     return lines.join("\n");
   }

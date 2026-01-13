@@ -1,31 +1,5 @@
-type Url = {
-  url: string
-}
-node importRecipe(msg) {
-  url :: Url
-  url = `extract the url from this message: ${msg}`
-
-  html :: string
-  html = fetch(url.url)
-
-  html2 = html.substring(0, 100000)
-
-  recipe :: string
-  recipe = `extract the recipe from this html: ${html2}`
-
-  print(recipe)
-  return recipe
-}
-node createIngredient() {
-  print("tbd")
-}
-node main() {
-  msg = input("> ")
-
-  category :: "import_recipe" | "create_ingredient"
-  category = `determine if the user wants to import a recipe from a website or create a new ingredient based on this message: ${msg}`
-
-  match(category) {
-    "import_recipe" => return importRecipe(msg)
-  }
+node greet() {
+  name = input("Enter your name: ")
+  greeting = `Greet person with name ${name}`
+  return greeting
 }

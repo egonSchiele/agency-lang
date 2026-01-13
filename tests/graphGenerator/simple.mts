@@ -179,3 +179,4 @@ console.log(greeting)
 
 const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
+export default graph;

@@ -277,3 +277,4 @@ return { ...state, data: [response1, response2]}
 
 const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
+export default graph;

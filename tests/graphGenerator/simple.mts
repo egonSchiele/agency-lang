@@ -163,15 +163,11 @@ async function _greeting(): Promise<string> {
   // Add final assistant response to history
   messages.push(assistantMessage(responseMessage.output));
 
-  try {
-  const result = JSON.parse(responseMessage.output || "");
-  return result.response;
-  } catch (e) {
-    return responseMessage.output;
-    // console.error("Error parsing response for variable 'greeting':", e);
-    // console.error("Full completion response:", JSON.stringify(completion, null, 2));
-    // throw e;
-  }
+  
+
+  
+  return responseMessage.output;
+  
 }
 graph.node("main", async (state) => {
     

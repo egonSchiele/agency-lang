@@ -97,7 +97,7 @@ export class AgencyGenerator extends BaseGenerator {
   // Assignment and literals
   protected processAssignment(node: Assignment): string {
     const valueCode = this.processNode(node.value).trim();
-    return this.indentStr(`${node.variableName} = ${valueCode}\n\n`);
+    return this.indentStr(`${node.variableName} = ${valueCode}\n`);
   }
 
   protected generateLiteral(literal: Literal): string {
@@ -155,9 +155,12 @@ export class AgencyGenerator extends BaseGenerator {
     this.increaseIndent();
     this.functionScopedVariables = [...parameters];
 
+    const lines: string[] = [];
     for (const stmt of body) {
-      result += this.processNode(stmt);
+      lines.push(this.processNode(stmt));
     }
+    const bodyCode = lines.join("").trimEnd() + "\n";
+    result += bodyCode;
 
     this.functionScopedVariables = [];
     this.decreaseIndent();
@@ -303,9 +306,12 @@ export class AgencyGenerator extends BaseGenerator {
     this.increaseIndent();
     this.functionScopedVariables = [...parameters];
 
+    const lines: string[] = [];
     for (const stmt of body) {
-      result += this.processNode(stmt);
+      lines.push(this.processNode(stmt));
     }
+    const bodyCode = lines.join("").trimEnd() + "\n";
+    result += bodyCode;
 
     this.functionScopedVariables = [];
     this.decreaseIndent();

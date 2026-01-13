@@ -133,6 +133,7 @@ async function _url(): Promise<{ hostname: string; port: number }> {
   // Add final assistant response to history
   messages.push(assistantMessage(responseMessage.output));
 
+  
   try {
   const result = JSON.parse(responseMessage.output || "");
   return result.response;
@@ -142,6 +143,9 @@ async function _url(): Promise<{ hostname: string; port: number }> {
     // console.error("Full completion response:", JSON.stringify(completion, null, 2));
     // throw e;
   }
+  
+
+  
 }
 const url = await _url();
 console.log(url)

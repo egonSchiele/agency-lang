@@ -80,6 +80,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
   // Add final assistant response to history
   messages.push(assistantMessage(responseMessage.output));
 
+  {{#hasResponseFormat}}
   try {
   const result = JSON.parse(responseMessage.output || "");
   return result.response;
@@ -89,6 +90,11 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
     // console.error("Full completion response:", JSON.stringify(completion, null, 2));
     // throw e;
   }
+  {{/hasResponseFormat}}
+
+  {{^hasResponseFormat}}
+  return responseMessage.output;
+  {{/hasResponseFormat}}
 }
 `;
 

@@ -92,8 +92,8 @@ const addTool = {
 
 
 
-async function _result(input: string): Promise<string> {
-  const prompt = `process this input: ${input}`;
+async function _response1(): Promise<string> {
+  const prompt = `say hello`;
   const startTime = performance.now();
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
@@ -171,12 +171,8 @@ async function _result(input: string): Promise<string> {
 }
 graph.node("main", async (state) => {
     
-    const input = state.data;
-    
-    
-const result = await _result(input);
+    const response1 = await _response1();
 
-console.log(result)
 });
 
 const initialState: State = {messages: [], data: {}};

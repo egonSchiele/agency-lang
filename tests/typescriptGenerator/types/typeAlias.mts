@@ -134,6 +134,7 @@ async function _foo(): Promise<Coords> {
   // Add final assistant response to history
   messages.push(assistantMessage(responseMessage.output));
 
+  
   try {
   const result = JSON.parse(responseMessage.output || "");
   return result.response;
@@ -143,6 +144,9 @@ async function _foo(): Promise<Coords> {
     // console.error("Full completion response:", JSON.stringify(completion, null, 2));
     // throw e;
   }
+  
+
+  
 }
 const foo = await _foo();
 console.log(foo)

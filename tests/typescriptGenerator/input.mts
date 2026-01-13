@@ -146,6 +146,7 @@ async function _sentiment(message: string): Promise<"happy" | "sad" | "neutral">
   // Add final assistant response to history
   messages.push(assistantMessage(responseMessage.output));
 
+  
   try {
   const result = JSON.parse(responseMessage.output || "");
   return result.response;
@@ -155,6 +156,9 @@ async function _sentiment(message: string): Promise<"happy" | "sad" | "neutral">
     // console.error("Full completion response:", JSON.stringify(completion, null, 2));
     // throw e;
   }
+  
+
+  
 }
 const sentiment = await _sentiment(message);
 console.log(sentiment)

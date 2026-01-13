@@ -1,0 +1,3 @@
+node main() {
+  response1 = `say hello`
+}

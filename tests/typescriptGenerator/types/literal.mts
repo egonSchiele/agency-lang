@@ -133,6 +133,7 @@ async function _foo(): Promise<"hi"> {
   // Add final assistant response to history
   messages.push(assistantMessage(responseMessage.output));
 
+  
   try {
   const result = JSON.parse(responseMessage.output || "");
   return result.response;
@@ -142,6 +143,9 @@ async function _foo(): Promise<"hi"> {
     // console.error("Full completion response:", JSON.stringify(completion, null, 2));
     // throw e;
   }
+  
+
+  
 }
 const foo = await _foo();
 
@@ -219,6 +223,7 @@ async function _bar(): Promise<42> {
   // Add final assistant response to history
   messages.push(assistantMessage(responseMessage.output));
 
+  
   try {
   const result = JSON.parse(responseMessage.output || "");
   return result.response;
@@ -228,6 +233,9 @@ async function _bar(): Promise<42> {
     // console.error("Full completion response:", JSON.stringify(completion, null, 2));
     // throw e;
   }
+  
+
+  
 }
 const bar = await _bar();
 
@@ -305,6 +313,7 @@ async function _baz(): Promise<true> {
   // Add final assistant response to history
   messages.push(assistantMessage(responseMessage.output));
 
+  
   try {
   const result = JSON.parse(responseMessage.output || "");
   return result.response;
@@ -314,6 +323,9 @@ async function _baz(): Promise<true> {
     // console.error("Full completion response:", JSON.stringify(completion, null, 2));
     // throw e;
   }
+  
+
+  
 }
 const baz = await _baz();
 

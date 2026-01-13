@@ -133,6 +133,7 @@ async function _numbers(): Promise<number[]> {
   // Add final assistant response to history
   messages.push(assistantMessage(responseMessage.output));
 
+  
   try {
   const result = JSON.parse(responseMessage.output || "");
   return result.response;
@@ -142,6 +143,9 @@ async function _numbers(): Promise<number[]> {
     // console.error("Full completion response:", JSON.stringify(completion, null, 2));
     // throw e;
   }
+  
+
+  
 }
 const numbers = await _numbers();
 console.log(numbers)
@@ -219,6 +223,7 @@ async function _greetings(): Promise<string[]> {
   // Add final assistant response to history
   messages.push(assistantMessage(responseMessage.output));
 
+  
   try {
   const result = JSON.parse(responseMessage.output || "");
   return result.response;
@@ -228,6 +233,9 @@ async function _greetings(): Promise<string[]> {
     // console.error("Full completion response:", JSON.stringify(completion, null, 2));
     // throw e;
   }
+  
+
+  
 }
 const greetings = await _greetings();
 console.log(greetings)

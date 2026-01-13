@@ -29,7 +29,7 @@ const client = getClient({
   openAiApiKey: process.env.OPENAI_API_KEY || "",
   googleApiKey: process.env.GEMINI_API_KEY || "",
   model,
-  logLevel: "debug",
+  logLevel: "warn",
 });
 
 type State = {

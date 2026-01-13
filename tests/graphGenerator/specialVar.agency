@@ -1,0 +1,13 @@
+node main() {
+  print("lets race!")
+  msg = input("> ")
+
+  response1 = `${msg}`
+
+  print(response1)
+  @model = "gemini-2.5-flash-lite"
+  response2 = `${msg}`
+
+  print(response2)
+  return [response1, response2]
+}

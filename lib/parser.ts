@@ -31,6 +31,7 @@ import { matchBlockParser } from "./parsers/matchBlock.js";
 import { returnStatementParser } from "./parsers/returnStatement.js";
 import { usesToolParser } from "./parsers/tools.js";
 import { EgonLog } from "egonlog";
+import { specialVarParser } from "./parsers/specialVar.js";
 
 export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
   const parser = sepBy(
@@ -47,6 +48,7 @@ export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
         matchBlockParser,
         functionParser,
         returnStatementParser,
+        specialVarParser,
         accessExpressionParser,
         assignmentParser,
         functionCallParser,

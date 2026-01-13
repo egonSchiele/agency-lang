@@ -1,6 +1,8 @@
 import { VariableType } from "../../types.js";
 import { escape } from "../../utils.js";
 
+export const DEFAULT_SCHEMA = "z.string()";
+
 /**
  * Maps Agency types to Zod schema strings
  */
@@ -13,12 +15,12 @@ export function mapTypeToZodSchema(
       case "number":
         return "z.number()";
       case "string":
-        return "z.string()";
+        return DEFAULT_SCHEMA;
       case "boolean":
         return "z.boolean()";
       default:
         // Default to string for unknown types
-        return "z.string()";
+        return DEFAULT_SCHEMA;
     }
   } else if (variableType.type === "arrayType") {
     // Recursively handle array element type
@@ -40,15 +42,16 @@ export function mapTypeToZodSchema(
     return `z.union([${unionSchemas.join(", ")}])`;
   } else if (variableType.type === "objectType") {
     const props = variableType.properties
-      .map(
-        (prop) => {
-          let str = `"${prop.key}": ${mapTypeToZodSchema(prop.value, typeAliases)}`;
-          if (prop.description) {
-            str += `.describe("${escape(prop.description)}")`;
-          }
-          return str;
+      .map((prop) => {
+        let str = `"${prop.key}": ${mapTypeToZodSchema(
+          prop.value,
+          typeAliases
+        )}`;
+        if (prop.description) {
+          str += `.describe("${escape(prop.description)}")`;
         }
-      )
+        return str;
+      })
       .join(", ");
     return `z.object({ ${props} })`;
   } else if (variableType.type === "typeAliasVariable") {

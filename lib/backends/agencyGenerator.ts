@@ -1,3 +1,4 @@
+import { SpecialVar } from "@/types/specialVar.js";
 import {
   AgencyComment,
   AgencyProgram,
@@ -324,6 +325,12 @@ export class AgencyGenerator extends BaseGenerator {
     // Track tool usage but don't generate code
     this.toolsUsed.push(node.toolName);
     return this.indentStr(`+${node.toolName}\n`);
+  }
+
+  protected processSpecialVar(node: SpecialVar): string {
+    return this.indentStr(
+      `@${node.name} = ${this.processNode(node.value).trim()}\n`
+    );
   }
 
   private indentStr(str: string): string {

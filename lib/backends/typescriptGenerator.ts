@@ -17,6 +17,7 @@ import * as promptFunction from "../templates/backends/typescriptGenerator/promp
 import * as renderTool from "../templates/backends/typescriptGenerator/tool.js";
 import * as renderToolCall from "../templates/backends/typescriptGenerator/toolCall.js";
 import * as renderFunctionDefinition from "../templates/backends/typescriptGenerator/functionDefinition.js";
+import * as renderSpecialVar from "../templates/backends/graphGenerator/specialVar.js";
 import {
   AccessExpression,
   DotFunctionCall,
@@ -33,12 +34,16 @@ import {
   mapFunctionName,
 } from "./typescriptGenerator/builtins.js";
 import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
-import { mapTypeToZodSchema } from "./typescriptGenerator/typeToZodSchema.js";
+import {
+  DEFAULT_SCHEMA,
+  mapTypeToZodSchema,
+} from "./typescriptGenerator/typeToZodSchema.js";
 import * as builtinTools from "../templates/backends/typescriptGenerator/builtinTools.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { ImportStatement } from "../types/importStatement.js";
 import { WhileLoop } from "../types/whileLoop.js";
+import { SpecialVar } from "@/types/specialVar.js";
 
 export class TypeScriptGenerator extends BaseGenerator {
   constructor() {
@@ -414,6 +419,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       argsStr,
       typeString,
       promptCode,
+      hasResponseFormat: zodSchema !== DEFAULT_SCHEMA,
       zodSchema,
       tools,
       functionCalls,
@@ -432,6 +438,19 @@ export class TypeScriptGenerator extends BaseGenerator {
     }
     const bodyCodeStr = bodyCodes.join("\n");
     return `while (${conditionCode}) {\n${bodyCodeStr}\n}\n`;
+  }
+
+  protected processSpecialVar(node: SpecialVar): string {
+    const value = this.processNode(node.value);
+    switch (node.name) {
+      case "model":
+        return renderSpecialVar.default({
+          name: "model",
+          value,
+        });
+      default:
+        throw new Error(`Unhandled SpecialVar name: ${node.name}`);
+    }
   }
 }
 

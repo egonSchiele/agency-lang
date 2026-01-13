@@ -10,10 +10,15 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
   const messages: Message[] = [userMessage(prompt)];
   const tools = {{{tools}}};
 
+  {{#hasResponseFormat}}
   // Need to make sure this is always an object
   const responseFormat = z.object({
      response: {{{zodSchema:string}}}
   });
+  {{/hasResponseFormat}}
+  {{^hasResponseFormat}}
+  const responseFormat = undefined;
+  {{/hasResponseFormat}}
 
   let completion = await client.text({
     messages,
@@ -25,7 +30,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
   statelogClient.promptCompletion({
     messages,
     completion,
-    model,
+    model: client.getModel(),
     timeTaken: endTime - startTime,
   });
 
@@ -60,7 +65,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
     statelogClient.promptCompletion({
       messages,
       completion,
-      model,
+      model: client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
     });
 
@@ -93,6 +98,7 @@ export type TemplateType = {
   typeString: string;
   promptCode: string;
   tools: string | boolean | number;
+  hasResponseFormat: boolean;
   zodSchema: string;
   functionCalls: string;
 };

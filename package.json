@@ -44,7 +44,7 @@
     "nanoid": "^5.1.6",
     "openai": "^6.15.0",
     "piemachine": "^0.0.2",
-    "smoltalk": "^0.0.8",
+    "smoltalk": "^0.0.9",
     "statelog-client": "^0.0.31",
     "tarsec": "^0.1.1",
     "typestache": "^0.4.4",

@@ -1,3 +1,4 @@
+import { SpecialVar } from "@/types/specialVar.js";
 import {
   AgencyComment,
   AgencyNode,
@@ -160,9 +161,15 @@ export class BaseGenerator {
         return "";
       case "whileLoop":
         return this.processWhileLoop(node);
+      case "specialVar":
+        return this.processSpecialVar(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
+  }
+
+  protected processSpecialVar(node: SpecialVar): string {
+    return "processSpecialVar not implemented";
   }
 
   protected processWhileLoop(node: WhileLoop): string {
@@ -197,7 +204,7 @@ export class BaseGenerator {
     return "processComment not implemented";
   }
 
-  protected processReturnStatement(node: AgencyNode): string {
+  protected processReturnStatement(node: ReturnStatement): string {
     return "processReturnStatement not implemented";
   }
 

@@ -1,13 +1,11 @@
 type Url = {
-  url:string # website url;
+  url: string # website url
 }
-
 type Recipe = {
-  title:string;
+  title: string;
   ingredients: string[];
-  instructions: string;
+  instructions: string
 }
-
 node importRecipe(msg) {
   url :: Url
   url = `extract the url from this message: ${msg}`
@@ -15,26 +13,24 @@ node importRecipe(msg) {
   html :: string
   html = fetch(url.url)
 
+  html2 = html.substring(0, 100000)
+
   recipe :: Recipe
-  recipe = `extract the recipe from this html: ${html}`
+  recipe = `extract the recipe from this html: ${html2}`
 
-  print(recipe);
+  print(recipe)
+  return recipe
 }
-
-// this is a comment
-node createIngredient(msg) {
+node createIngredient() {
   print("tbd")
 }
-
-
 node main() {
-  msg = input("> ");
+  msg = input("> ")
 
   category :: "import_recipe" | "create_ingredient"
   category = `determine if the user wants to import a recipe from a website or create a new ingredient based on this message: ${msg}`
-  
-  match (category) {
-    "import_recipe" => return importRecipe(msg);
-    "create_ingredient" => return createIngredient(msg);
+
+  match(category) {
+    "import_recipe" => return importRecipe(msg)
   }
 }

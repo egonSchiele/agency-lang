@@ -33,6 +33,7 @@ import { GraphNodeDefinition } from "../types/graphNode.js";
 import { returnStatementParser } from "./returnStatement.js";
 import { usesToolParser } from "./tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
+import { specialVarParser } from "./specialVar.js";
 
 const trim = (s: string) => s.trim();
 export const docStringParser: Parser<DocString> = trace(
@@ -54,6 +55,7 @@ export const bodyParser = trace(
         usesToolParser,
         debug(typeAliasParser, "error in typeAliasParser"),
         debug(typeHintParser, "error in typeHintParser"),
+        specialVarParser,
         returnStatementParser,
         whileLoopParser,
         matchBlockParser,

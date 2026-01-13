@@ -9,6 +9,7 @@ import { ReturnStatement } from "./types/returnStatement.js";
 import { UsesTool } from "./types/tools.js";
 import { ImportStatement } from "./types/importStatement.js";
 import { WhileLoop } from "./types/whileLoop.js";
+import { SpecialVar } from "./types/specialVar.js";
 export * from "./types/access.js";
 export * from "./types/dataStructures.js";
 export * from "./types/function.js";
@@ -48,7 +49,8 @@ export type AgencyNode =
   | AgencyObject
   | AgencyArray
   | ImportStatement
-  | WhileLoop;
+  | WhileLoop
+  | SpecialVar;
 
 export type AgencyProgram = {
   type: "agencyProgram";

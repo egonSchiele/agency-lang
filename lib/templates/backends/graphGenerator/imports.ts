@@ -8,14 +8,21 @@ import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
-import { Graph, goToNode } from "simplemachine";
+import { PieMachine, goToNode } from "piemachine";
 import { StatelogClient } from "statelog-client";
 import { nanoid } from "nanoid";
 import { assistantMessage, getClient, userMessage } from "smoltalk";
 
-const statelogHost = "http://localhost:1065";
+const statelogHost = "https://statelog.adit.io";
 const traceId = nanoid();
-const statelogClient = new StatelogClient({host: statelogHost, tid: traceId});
+const statelogConfig = {
+    host: statelogHost,
+    traceId: traceId,
+    apiKey: process.env.STATELOG_API_KEY || "",
+    projectId: "agency-lang",
+    debugMode: false,
+  };
+const statelogClient = new StatelogClient(statelogConfig);
 const model = "gpt-4o-mini";
 
 const client = getClient({
@@ -36,8 +43,7 @@ const graphConfig = {
     log: true,
     logData: true,
   },
-  statelogHost,
-  traceId
+  statelog: statelogConfig,
 };
 
 // Define the names of the nodes in the graph
@@ -45,7 +51,7 @@ const graphConfig = {
 const nodes = {{{nodes:string}}} as const;
 type Node = (typeof nodes)[number];
 
-const graph = new Graph<State, Node>(nodes, graphConfig);`;
+const graph = new PieMachine<State, Node>(nodes, graphConfig);`;
 
 export type TemplateType = {
   nodes: string;

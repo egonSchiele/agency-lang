@@ -13,7 +13,13 @@ import { nanoid } from "nanoid";
 
 const statelogHost = "http://localhost:1065";
 const traceId = nanoid();
-const statelogClient = new StatelogClient({host: statelogHost, tid: traceId});
+const statelogClient = new StatelogClient({
+    host: statelogHost,
+    traceId: traceId,
+    apiKey: process.env.STATELOG_API_KEY || "",
+    projectId: "agency-lang",
+    debugMode: true,
+  });
 
 const model = "gpt-5-nano-2025-08-07";
 

@@ -43,9 +43,9 @@
     "egonlog": "^0.0.2",
     "nanoid": "^5.1.6",
     "openai": "^6.15.0",
-    "simplemachine": "github:egonSchiele/simplemachine",
+    "piemachine": "^0.0.2",
     "smoltalk": "^0.0.8",
-    "statelog-client": "^0.0.28",
+    "statelog-client": "^0.0.31",
     "tarsec": "^0.1.1",
     "typestache": "^0.4.4",
     "zod": "^4.2.1"

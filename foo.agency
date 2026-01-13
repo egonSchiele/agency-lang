@@ -1,5 +1,8 @@
-node greet() {
-  name = input("Enter your name: ")
-  greeting = `Greet person with name ${name}`
-  return greeting
+node main() {
+  @model = "o4-mini"
+  foo = readImage("hand.png")
+  print(foo)
+  response = `what is this a picture of? ${foo}`
+  print(response)
+  return response
 }

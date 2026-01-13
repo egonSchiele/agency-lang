@@ -1,5 +1,6 @@
 import * as builtinFunctionsInput from "../../templates/backends/typescriptGenerator/builtinFunctions/input.js";
 import * as builtinFunctionsRead from "../../templates/backends/typescriptGenerator/builtinFunctions/read.js";
+import * as builtinFunctionsReadImage from "../../templates/backends/typescriptGenerator/builtinFunctions/readImage.js";
 import * as builtinFunctionsFetchJSON from "../../templates/backends/typescriptGenerator/builtinFunctions/fetchJSON.js";
 import * as builtinFunctionsFetch from "../../templates/backends/typescriptGenerator/builtinFunctions/fetch.js";
 
@@ -10,6 +11,7 @@ export const BUILTIN_FUNCTIONS: Record<string, string> = {
   print: "console.log",
   input: "_builtinInput",
   read: "_builtinRead",
+  readImage: "_builtinReadImage",
   write: "fs.writeFileSync",
   fetch: "_builtinFetch",
   fetchJSON: "_builtinFetchJSON",
@@ -45,6 +47,10 @@ export function generateBuiltinHelpers(functionsUsed: Set<string>): string {
   if (functionsUsed.has("fetch")) {
     const fetchFunc = builtinFunctionsFetch.default({});
     helpers.push(fetchFunc);
+  }
+  if (functionsUsed.has("readImage")) {
+    const readImageFunc = builtinFunctionsReadImage.default({});
+    helpers.push(readImageFunc);
   }
 
   return helpers.join("\n\n");

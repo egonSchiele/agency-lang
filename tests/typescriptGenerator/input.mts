@@ -78,10 +78,13 @@ async function _sentiment(message: string): Promise<"happy" | "sad" | "neutral">
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
 
+  
   // Need to make sure this is always an object
   const responseFormat = z.object({
      response: z.union([z.literal("happy"), z.literal("sad"), z.literal("neutral")])
   });
+  
+  
 
   let completion = await client.text({
     messages,
@@ -93,7 +96,7 @@ async function _sentiment(message: string): Promise<"happy" | "sad" | "neutral">
   statelogClient.promptCompletion({
     messages,
     completion,
-    model,
+    model: client.getModel(),
     timeTaken: endTime - startTime,
   });
 
@@ -128,7 +131,7 @@ async function _sentiment(message: string): Promise<"happy" | "sad" | "neutral">
     statelogClient.promptCompletion({
       messages,
       completion,
-      model,
+      model: client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
     });
 

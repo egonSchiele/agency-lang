@@ -65,10 +65,13 @@ async function _numbers(): Promise<number[]> {
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
 
+  
   // Need to make sure this is always an object
   const responseFormat = z.object({
      response: z.array(z.number())
   });
+  
+  
 
   let completion = await client.text({
     messages,
@@ -80,7 +83,7 @@ async function _numbers(): Promise<number[]> {
   statelogClient.promptCompletion({
     messages,
     completion,
-    model,
+    model: client.getModel(),
     timeTaken: endTime - startTime,
   });
 
@@ -115,7 +118,7 @@ async function _numbers(): Promise<number[]> {
     statelogClient.promptCompletion({
       messages,
       completion,
-      model,
+      model: client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
     });
 
@@ -148,10 +151,13 @@ async function _greetings(): Promise<string[]> {
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
 
+  
   // Need to make sure this is always an object
   const responseFormat = z.object({
      response: z.array(z.string())
   });
+  
+  
 
   let completion = await client.text({
     messages,
@@ -163,7 +169,7 @@ async function _greetings(): Promise<string[]> {
   statelogClient.promptCompletion({
     messages,
     completion,
-    model,
+    model: client.getModel(),
     timeTaken: endTime - startTime,
   });
 
@@ -198,7 +204,7 @@ async function _greetings(): Promise<string[]> {
     statelogClient.promptCompletion({
       messages,
       completion,
-      model,
+      model: client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
     });
 

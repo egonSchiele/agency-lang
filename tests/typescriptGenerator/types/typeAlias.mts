@@ -66,10 +66,13 @@ async function _foo(): Promise<Coords> {
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
 
+  
   // Need to make sure this is always an object
   const responseFormat = z.object({
      response: z.object({ "x": z.number(), "y": z.number() })
   });
+  
+  
 
   let completion = await client.text({
     messages,
@@ -81,7 +84,7 @@ async function _foo(): Promise<Coords> {
   statelogClient.promptCompletion({
     messages,
     completion,
-    model,
+    model: client.getModel(),
     timeTaken: endTime - startTime,
   });
 
@@ -116,7 +119,7 @@ async function _foo(): Promise<Coords> {
     statelogClient.promptCompletion({
       messages,
       completion,
-      model,
+      model: client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
     });
 

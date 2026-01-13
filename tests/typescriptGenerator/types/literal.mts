@@ -65,10 +65,13 @@ async function _foo(): Promise<"hi"> {
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
 
+  
   // Need to make sure this is always an object
   const responseFormat = z.object({
      response: z.literal("hi")
   });
+  
+  
 
   let completion = await client.text({
     messages,
@@ -80,7 +83,7 @@ async function _foo(): Promise<"hi"> {
   statelogClient.promptCompletion({
     messages,
     completion,
-    model,
+    model: client.getModel(),
     timeTaken: endTime - startTime,
   });
 
@@ -115,7 +118,7 @@ async function _foo(): Promise<"hi"> {
     statelogClient.promptCompletion({
       messages,
       completion,
-      model,
+      model: client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
     });
 
@@ -148,10 +151,13 @@ async function _bar(): Promise<42> {
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
 
+  
   // Need to make sure this is always an object
   const responseFormat = z.object({
      response: z.literal(42)
   });
+  
+  
 
   let completion = await client.text({
     messages,
@@ -163,7 +169,7 @@ async function _bar(): Promise<42> {
   statelogClient.promptCompletion({
     messages,
     completion,
-    model,
+    model: client.getModel(),
     timeTaken: endTime - startTime,
   });
 
@@ -198,7 +204,7 @@ async function _bar(): Promise<42> {
     statelogClient.promptCompletion({
       messages,
       completion,
-      model,
+      model: client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
     });
 
@@ -231,10 +237,13 @@ async function _baz(): Promise<true> {
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
 
+  
   // Need to make sure this is always an object
   const responseFormat = z.object({
      response: z.literal(true)
   });
+  
+  
 
   let completion = await client.text({
     messages,
@@ -246,7 +255,7 @@ async function _baz(): Promise<true> {
   statelogClient.promptCompletion({
     messages,
     completion,
-    model,
+    model: client.getModel(),
     timeTaken: endTime - startTime,
   });
 
@@ -281,7 +290,7 @@ async function _baz(): Promise<true> {
     statelogClient.promptCompletion({
       messages,
       completion,
-      model,
+      model: client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
     });
 

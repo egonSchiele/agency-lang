@@ -66,10 +66,10 @@ async function _greeting(name: string): Promise<string> {
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
 
-  // Need to make sure this is always an object
-  const responseFormat = z.object({
-     response: z.string()
-  });
+  
+  
+  const responseFormat = undefined;
+  
 
   let completion = await client.text({
     messages,
@@ -81,7 +81,7 @@ async function _greeting(name: string): Promise<string> {
   statelogClient.promptCompletion({
     messages,
     completion,
-    model,
+    model: client.getModel(),
     timeTaken: endTime - startTime,
   });
 
@@ -116,7 +116,7 @@ async function _greeting(name: string): Promise<string> {
     statelogClient.promptCompletion({
       messages,
       completion,
-      model,
+      model: client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
     });
 

@@ -65,10 +65,13 @@ async function _bar(): Promise<number> {
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
 
+  
   // Need to make sure this is always an object
   const responseFormat = z.object({
      response: z.number()
   });
+  
+  
 
   let completion = await client.text({
     messages,
@@ -80,7 +83,7 @@ async function _bar(): Promise<number> {
   statelogClient.promptCompletion({
     messages,
     completion,
-    model,
+    model: client.getModel(),
     timeTaken: endTime - startTime,
   });
 
@@ -115,7 +118,7 @@ async function _bar(): Promise<number> {
     statelogClient.promptCompletion({
       messages,
       completion,
-      model,
+      model: client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
     });
 

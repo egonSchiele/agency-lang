@@ -65,10 +65,13 @@ async function _url(): Promise<{ hostname: string; port: number }> {
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
 
+  
   // Need to make sure this is always an object
   const responseFormat = z.object({
      response: z.object({ "hostname": z.string().describe("hostname of a url"), "port": z.number().describe("port number") })
   });
+  
+  
 
   let completion = await client.text({
     messages,
@@ -80,7 +83,7 @@ async function _url(): Promise<{ hostname: string; port: number }> {
   statelogClient.promptCompletion({
     messages,
     completion,
-    model,
+    model: client.getModel(),
     timeTaken: endTime - startTime,
   });
 
@@ -115,7 +118,7 @@ async function _url(): Promise<{ hostname: string; port: number }> {
     statelogClient.promptCompletion({
       messages,
       completion,
-      model,
+      model: client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
     });
 

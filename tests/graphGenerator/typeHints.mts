@@ -24,12 +24,19 @@ const statelogConfig = {
 const statelogClient = new StatelogClient(statelogConfig);
 const model = "gpt-4o-mini";
 
-const client = getClient({
-  openAiApiKey: process.env.OPENAI_API_KEY || "",
-  googleApiKey: process.env.GEMINI_API_KEY || "",
-  model,
-  logLevel: "warn",
-});
+
+const getClientWithConfig = (config = {}) => {
+  const defaultConfig = {
+    openAiApiKey: process.env.OPENAI_API_KEY || "",
+    googleApiKey: process.env.GEMINI_API_KEY || "",
+    model,
+    logLevel: "warn",
+  };
+
+  return getClient({ ...defaultConfig, ...config });
+};
+
+let client = getClientWithConfig();
 
 type State = {
   messages: string[];
@@ -91,10 +98,13 @@ async function _count(): Promise<number> {
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
 
+  
   // Need to make sure this is always an object
   const responseFormat = z.object({
      response: z.number()
   });
+  
+  
 
   let completion = await client.text({
     messages,
@@ -106,7 +116,7 @@ async function _count(): Promise<number> {
   statelogClient.promptCompletion({
     messages,
     completion,
-    model,
+    model: client.getModel(),
     timeTaken: endTime - startTime,
   });
 
@@ -141,7 +151,7 @@ async function _count(): Promise<number> {
     statelogClient.promptCompletion({
       messages,
       completion,
-      model,
+      model: client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
     });
 
@@ -173,10 +183,10 @@ async function _message(): Promise<string> {
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
 
-  // Need to make sure this is always an object
-  const responseFormat = z.object({
-     response: z.string()
-  });
+  
+  
+  const responseFormat = undefined;
+  
 
   let completion = await client.text({
     messages,
@@ -188,7 +198,7 @@ async function _message(): Promise<string> {
   statelogClient.promptCompletion({
     messages,
     completion,
-    model,
+    model: client.getModel(),
     timeTaken: endTime - startTime,
   });
 
@@ -223,7 +233,7 @@ async function _message(): Promise<string> {
     statelogClient.promptCompletion({
       messages,
       completion,
-      model,
+      model: client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
     });
 

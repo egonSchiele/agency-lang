@@ -54,7 +54,7 @@ const graphConfig = {
 
 // Define the names of the nodes in the graph
 // Useful for type safety
-const nodes = ["greet","processGreeting","main"] as const;
+const nodes = ["main"] as const;
 type Node = (typeof nodes)[number];
 
 const graph = new PieMachine<State, Node>(nodes, graphConfig);
@@ -87,13 +87,25 @@ const addTool = {
     },
   };
 
+function _builtinInput(prompt: string): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  return new Promise((resolve) => {
+    rl.question(prompt, (answer: string) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
 
 
 
 
-
-async function _greeting(): Promise<string> {
-  const prompt = `say hello`;
+async function _response1(msg: string): Promise<string> {
+  const prompt = `${msg}`;
   const startTime = performance.now();
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
@@ -168,22 +180,14 @@ async function _greeting(): Promise<string> {
   return result.response;
   } catch (e) {
     return responseMessage.output;
-    // console.error("Error parsing response for variable 'greeting':", e);
+    // console.error("Error parsing response for variable 'response1':", e);
     // console.error("Full completion response:", JSON.stringify(completion, null, 2));
     // throw e;
   }
 }
-graph.node("greet", async (state) => {
-    
-    
-const greeting = await _greeting();
 
-return goToNode("processGreeting", { messages: state.messages, data: greeting });
-
-});
-
-async function _result(msg: string): Promise<string> {
-  const prompt = `format this greeting: ${msg}`;
+async function _response2(msg: string): Promise<string> {
+  const prompt = `${msg}`;
   const startTime = performance.now();
   const messages: Message[] = [userMessage(prompt)];
   const tools = undefined;
@@ -258,29 +262,26 @@ async function _result(msg: string): Promise<string> {
   return result.response;
   } catch (e) {
     return responseMessage.output;
-    // console.error("Error parsing response for variable 'result':", e);
+    // console.error("Error parsing response for variable 'response2':", e);
     // console.error("Full completion response:", JSON.stringify(completion, null, 2));
     // throw e;
   }
 }
-graph.node("processGreeting", async (state) => {
-    
-    const msg = state.data;
-    
-    
-const result = await _result(msg);
-
-console.log(result)
-});
 graph.node("main", async (state) => {
     
-    return goToNode("greet", { messages: state.messages, data:  });
+    console.log("lets race!")
+const msg = await _builtinInput("> ");
+
+const response1 = await _response1(msg);
+
+console.log(response1)
+client = getClientWithConfig({ model: "gemini-2.5-flash-lite" });
+const response2 = await _response2(msg);
+
+console.log(response2)
+return { ...state, data: [response1, response2]}
 
 });
-
-graph.conditionalEdge("greet", ["processGreeting"]);
-
-graph.conditionalEdge("main", ["greet"]);
 
 const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);

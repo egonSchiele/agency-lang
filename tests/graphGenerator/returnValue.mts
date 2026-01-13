@@ -24,12 +24,19 @@ const statelogConfig = {
 const statelogClient = new StatelogClient(statelogConfig);
 const model = "gpt-4o-mini";
 
-const client = getClient({
-  openAiApiKey: process.env.OPENAI_API_KEY || "",
-  googleApiKey: process.env.GEMINI_API_KEY || "",
-  model,
-  logLevel: "warn",
-});
+
+const getClientWithConfig = (config = {}) => {
+  const defaultConfig = {
+    openAiApiKey: process.env.OPENAI_API_KEY || "",
+    googleApiKey: process.env.GEMINI_API_KEY || "",
+    model,
+    logLevel: "warn",
+  };
+
+  return getClient({ ...defaultConfig, ...config });
+};
+
+let client = getClientWithConfig();
 
 type State = {
   messages: string[];

@@ -21,8 +21,8 @@ importers:
         specifier: ^0.0.2
         version: 0.0.2
       smoltalk:
-        specifier: ^0.0.9
-        version: 0.0.9(ws@8.19.0)(zod@4.3.5)
+        specifier: ^0.0.11
+        version: 0.0.11(ws@8.19.0)(zod@4.3.5)
       statelog-client:
         specifier: ^0.0.31
         version: 0.0.31
@@ -713,6 +713,9 @@ packages:
   obug@2.1.1:
     resolution: {integrity: sha512-uTqF9MuPraAQ+IsnPf366RG4cP9RtUi7MLO1N3KEc+wb0a6yKpeL0lmk2IB1jY5KHPAlTc6T/JRdC/YqxHNwkQ==}
 
+  ollama@0.6.3:
+    resolution: {integrity: sha512-KEWEhIqE5wtfzEIZbDCLH51VFZ6Z3ZSa6sIOg/E/tBV8S51flyqBOXi+bRxlOYKDf8i327zG9eSTb8IJxvm3Zg==}
+
   openai@6.16.0:
     resolution: {integrity: sha512-fZ1uBqjFUjXzbGc35fFtYKEOxd20kd9fDpFeqWtsOZWiubY8CZ1NAlXHW3iathaFvqmNtCWMIsosCuyeI7Joxg==}
     hasBin: true
@@ -817,8 +820,8 @@ packages:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}
     engines: {node: '>=8'}
 
-  smoltalk@0.0.9:
-    resolution: {integrity: sha512-XVkfrzPJj8AT5TXLECxk9TbcB0PDCzEd6Ed0C4XfRXkwFQ09hrIYgF4f0BjNj4tXkUAzvG90kvjCqDdHvy24hw==}
+  smoltalk@0.0.11:
+    resolution: {integrity: sha512-wnE4BMJHu152ii3MEzYSgXHawp8rtx7dGtCSapI9flZM3gdj+WApaMsu3AN4pq3zchy+tEVfbrAnYVuP4ox9VA==}
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -975,6 +978,9 @@ packages:
   web-streams-polyfill@3.3.3:
     resolution: {integrity: sha512-d2JWLCivmZYTSIoge9MsgFCZrt571BikcWGYkjC1khllbTeDlGqZ2D8vD8E/lJa8WGWbb7Plm8/XJYV7IJHZZw==}
     engines: {node: '>= 8'}
+
+  whatwg-fetch@3.6.20:
+    resolution: {integrity: sha512-EqhiFU6daOA8kpjOWTL0olhVOF3i7OrFzSYiGsEMB8GcXS+RrzauAERX65xMeNWVqxA6HXH2m69Z9LaKKdisfg==}
 
   which@2.0.2:
     resolution: {integrity: sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==}
@@ -1575,6 +1581,10 @@ snapshots:
 
   obug@2.1.1: {}
 
+  ollama@0.6.3:
+    dependencies:
+      whatwg-fetch: 3.6.20
+
   openai@6.16.0(ws@8.19.0)(zod@4.3.5):
     optionalDependencies:
       ws: 8.19.0
@@ -1680,10 +1690,11 @@ snapshots:
 
   slash@3.0.0: {}
 
-  smoltalk@0.0.9(ws@8.19.0)(zod@4.3.5):
+  smoltalk@0.0.11(ws@8.19.0)(zod@4.3.5):
     dependencies:
       '@google/genai': 1.35.0
       egonlog: 0.0.2
+      ollama: 0.6.3
       openai: 6.16.0(ws@8.19.0)(zod@4.3.5)
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
@@ -1817,6 +1828,8 @@ snapshots:
       - yaml
 
   web-streams-polyfill@3.3.3: {}
+
+  whatwg-fetch@3.6.20: {}
 
   which@2.0.2:
     dependencies:

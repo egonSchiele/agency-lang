@@ -52,79 +52,78 @@ const addTool = {
 
 
 async function _foo(): Promise<"hi"> {
-  const prompt = `the string hi`;
+  const __prompt = `the string hi`;
   const startTime = performance.now();
-  const messages: Message[] = [userMessage(prompt)];
-  const tools = undefined;
+  const __messages: Message[] = [userMessage(__prompt)];
+  const __tools = undefined;
 
   
   // Need to make sure this is always an object
-  const responseFormat = z.object({
+  const __responseFormat = z.object({
      response: z.literal("hi")
   });
   
   
 
-  let completion = await client.text({
-    messages,
-    tools,
-    responseFormat,
+  let __completion = await __client.text({
+    messages: __messages,
+    tools: __tools,
+    responseFormat: __responseFormat,
   });
 
   const endTime = performance.now();
   statelogClient.promptCompletion({
-    messages,
-    completion,
-    model: client.getModel(),
+    messages: __messages,
+    completion: __completion,
+    model: __client.getModel(),
     timeTaken: endTime - startTime,
   });
 
-  if (!completion.success) {
+  if (!__completion.success) {
     throw new Error(
-      `Error getting response from ${model}: ${completion.error}`
+      `Error getting response from ${__model}: ${__completion.error}`
     );
   }
 
-  let responseMessage = completion.value;
+  let responseMessage = __completion.value;
 
   // Handle function calls
   while (responseMessage.toolCalls.length > 0) {
     // Add assistant's response with tool calls to message history
-    messages.push(assistantMessage(responseMessage.output));
+    __messages.push(assistantMessage(responseMessage.output));
     let toolCallStartTime, toolCallEndTime;
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
       
     }
-
+  
     const nextStartTime = performance.now();
-    let completion = await client.text({
-      messages,
-      tools,
-      responseFormat,
+    let __completion = await __client.text({
+      messages: __messages,
+      tools: __tools,
+      responseFormat: __responseFormat,
     });
 
     const nextEndTime = performance.now();
 
     statelogClient.promptCompletion({
-      messages,
-      completion,
-      model: client.getModel(),
+      messages: __messages,
+      completion: __completion,
+      model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
     });
 
-    if (!completion.success) {
+    if (!__completion.success) {
       throw new Error(
-        `Error getting response from ${model}: ${completion.error}`
+        `Error getting response from ${__model}: ${__completion.error}`
       );
     }
-    responseMessage = completion.value;
+    responseMessage = __completion.value;
   }
 
   // Add final assistant response to history
-  messages.push(assistantMessage(responseMessage.output));
-
+  __messages.push(assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -132,7 +131,7 @@ async function _foo(): Promise<"hi"> {
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable 'foo':", e);
-    // console.error("Full completion response:", JSON.stringify(completion, null, 2));
+    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
     // throw e;
   }
   
@@ -142,79 +141,78 @@ async function _foo(): Promise<"hi"> {
 const foo = await _foo();
 
 async function _bar(): Promise<42> {
-  const prompt = `the number 42`;
+  const __prompt = `the number 42`;
   const startTime = performance.now();
-  const messages: Message[] = [userMessage(prompt)];
-  const tools = undefined;
+  const __messages: Message[] = [userMessage(__prompt)];
+  const __tools = undefined;
 
   
   // Need to make sure this is always an object
-  const responseFormat = z.object({
+  const __responseFormat = z.object({
      response: z.literal(42)
   });
   
   
 
-  let completion = await client.text({
-    messages,
-    tools,
-    responseFormat,
+  let __completion = await __client.text({
+    messages: __messages,
+    tools: __tools,
+    responseFormat: __responseFormat,
   });
 
   const endTime = performance.now();
   statelogClient.promptCompletion({
-    messages,
-    completion,
-    model: client.getModel(),
+    messages: __messages,
+    completion: __completion,
+    model: __client.getModel(),
     timeTaken: endTime - startTime,
   });
 
-  if (!completion.success) {
+  if (!__completion.success) {
     throw new Error(
-      `Error getting response from ${model}: ${completion.error}`
+      `Error getting response from ${__model}: ${__completion.error}`
     );
   }
 
-  let responseMessage = completion.value;
+  let responseMessage = __completion.value;
 
   // Handle function calls
   while (responseMessage.toolCalls.length > 0) {
     // Add assistant's response with tool calls to message history
-    messages.push(assistantMessage(responseMessage.output));
+    __messages.push(assistantMessage(responseMessage.output));
     let toolCallStartTime, toolCallEndTime;
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
       
     }
-
+  
     const nextStartTime = performance.now();
-    let completion = await client.text({
-      messages,
-      tools,
-      responseFormat,
+    let __completion = await __client.text({
+      messages: __messages,
+      tools: __tools,
+      responseFormat: __responseFormat,
     });
 
     const nextEndTime = performance.now();
 
     statelogClient.promptCompletion({
-      messages,
-      completion,
-      model: client.getModel(),
+      messages: __messages,
+      completion: __completion,
+      model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
     });
 
-    if (!completion.success) {
+    if (!__completion.success) {
       throw new Error(
-        `Error getting response from ${model}: ${completion.error}`
+        `Error getting response from ${__model}: ${__completion.error}`
       );
     }
-    responseMessage = completion.value;
+    responseMessage = __completion.value;
   }
 
   // Add final assistant response to history
-  messages.push(assistantMessage(responseMessage.output));
-
+  __messages.push(assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -222,7 +220,7 @@ async function _bar(): Promise<42> {
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable 'bar':", e);
-    // console.error("Full completion response:", JSON.stringify(completion, null, 2));
+    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
     // throw e;
   }
   
@@ -232,79 +230,78 @@ async function _bar(): Promise<42> {
 const bar = await _bar();
 
 async function _baz(): Promise<true> {
-  const prompt = `the boolean true`;
+  const __prompt = `the boolean true`;
   const startTime = performance.now();
-  const messages: Message[] = [userMessage(prompt)];
-  const tools = undefined;
+  const __messages: Message[] = [userMessage(__prompt)];
+  const __tools = undefined;
 
   
   // Need to make sure this is always an object
-  const responseFormat = z.object({
+  const __responseFormat = z.object({
      response: z.literal(true)
   });
   
   
 
-  let completion = await client.text({
-    messages,
-    tools,
-    responseFormat,
+  let __completion = await __client.text({
+    messages: __messages,
+    tools: __tools,
+    responseFormat: __responseFormat,
   });
 
   const endTime = performance.now();
   statelogClient.promptCompletion({
-    messages,
-    completion,
-    model: client.getModel(),
+    messages: __messages,
+    completion: __completion,
+    model: __client.getModel(),
     timeTaken: endTime - startTime,
   });
 
-  if (!completion.success) {
+  if (!__completion.success) {
     throw new Error(
-      `Error getting response from ${model}: ${completion.error}`
+      `Error getting response from ${__model}: ${__completion.error}`
     );
   }
 
-  let responseMessage = completion.value;
+  let responseMessage = __completion.value;
 
   // Handle function calls
   while (responseMessage.toolCalls.length > 0) {
     // Add assistant's response with tool calls to message history
-    messages.push(assistantMessage(responseMessage.output));
+    __messages.push(assistantMessage(responseMessage.output));
     let toolCallStartTime, toolCallEndTime;
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
       
     }
-
+  
     const nextStartTime = performance.now();
-    let completion = await client.text({
-      messages,
-      tools,
-      responseFormat,
+    let __completion = await __client.text({
+      messages: __messages,
+      tools: __tools,
+      responseFormat: __responseFormat,
     });
 
     const nextEndTime = performance.now();
 
     statelogClient.promptCompletion({
-      messages,
-      completion,
-      model: client.getModel(),
+      messages: __messages,
+      completion: __completion,
+      model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
     });
 
-    if (!completion.success) {
+    if (!__completion.success) {
       throw new Error(
-        `Error getting response from ${model}: ${completion.error}`
+        `Error getting response from ${__model}: ${__completion.error}`
       );
     }
-    responseMessage = completion.value;
+    responseMessage = __completion.value;
   }
 
   // Add final assistant response to history
-  messages.push(assistantMessage(responseMessage.output));
-
+  __messages.push(assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -312,7 +309,7 @@ async function _baz(): Promise<true> {
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable 'baz':", e);
-    // console.error("Full completion response:", JSON.stringify(completion, null, 2));
+    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
     // throw e;
   }
   

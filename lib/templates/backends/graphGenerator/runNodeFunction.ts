@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `export async function {{{nodeName:string}}}(data) {
+export const template = `export async function {{{nodeName:string}}}(data:any): Promise<any> {
   const result = await graph.run("{{{nodeName:string}}}", { messages: [], data });
   return result.data;
 }

@@ -14,12 +14,12 @@ statelogClient.toolCall({
     toolName: "{{{name:string}}}",
     args,
     output: result,
-    model,
+    model: __client.getModel(),
     timeTaken: toolCallEndTime - toolCallStartTime,
   });
 
   // Add function result to messages
-  messages.push({
+  __messages.push({
     role: "tool",
     tool_call_id: toolCall.id,
     content: JSON.stringify(result),

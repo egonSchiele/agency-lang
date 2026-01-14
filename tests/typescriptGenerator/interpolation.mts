@@ -53,76 +53,75 @@ const addTool = {
 const name = "Alice";
 
 async function _greeting(name: string): Promise<string> {
-  const prompt = `say hi to ${name}`;
+  const __prompt = `say hi to ${name}`;
   const startTime = performance.now();
-  const messages: Message[] = [userMessage(prompt)];
-  const tools = undefined;
+  const __messages: Message[] = [userMessage(__prompt)];
+  const __tools = undefined;
 
   
   
-  const responseFormat = undefined;
+  const __responseFormat = undefined;
   
 
-  let completion = await client.text({
-    messages,
-    tools,
-    responseFormat,
+  let __completion = await __client.text({
+    messages: __messages,
+    tools: __tools,
+    responseFormat: __responseFormat,
   });
 
   const endTime = performance.now();
   statelogClient.promptCompletion({
-    messages,
-    completion,
-    model: client.getModel(),
+    messages: __messages,
+    completion: __completion,
+    model: __client.getModel(),
     timeTaken: endTime - startTime,
   });
 
-  if (!completion.success) {
+  if (!__completion.success) {
     throw new Error(
-      `Error getting response from ${model}: ${completion.error}`
+      `Error getting response from ${__model}: ${__completion.error}`
     );
   }
 
-  let responseMessage = completion.value;
+  let responseMessage = __completion.value;
 
   // Handle function calls
   while (responseMessage.toolCalls.length > 0) {
     // Add assistant's response with tool calls to message history
-    messages.push(assistantMessage(responseMessage.output));
+    __messages.push(assistantMessage(responseMessage.output));
     let toolCallStartTime, toolCallEndTime;
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
       
     }
-
+  
     const nextStartTime = performance.now();
-    let completion = await client.text({
-      messages,
-      tools,
-      responseFormat,
+    let __completion = await __client.text({
+      messages: __messages,
+      tools: __tools,
+      responseFormat: __responseFormat,
     });
 
     const nextEndTime = performance.now();
 
     statelogClient.promptCompletion({
-      messages,
-      completion,
-      model: client.getModel(),
+      messages: __messages,
+      completion: __completion,
+      model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
     });
 
-    if (!completion.success) {
+    if (!__completion.success) {
       throw new Error(
-        `Error getting response from ${model}: ${completion.error}`
+        `Error getting response from ${__model}: ${__completion.error}`
       );
     }
-    responseMessage = completion.value;
+    responseMessage = __completion.value;
   }
 
   // Add final assistant response to history
-  messages.push(assistantMessage(responseMessage.output));
-
+  __messages.push(assistantMessage(responseMessage.output));
   
 
   

@@ -3,8 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `import OpenAI from "openai";
-import { zodResponseFormat } from "openai/helpers/zod";
+export const template = `// @ts-nocheck
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
@@ -23,21 +22,21 @@ const statelogConfig = {
     debugMode: false,
   };
 const statelogClient = new StatelogClient(statelogConfig);
-const model = "gpt-4o-mini";
+const __model: ModelName = "gpt-4o-mini";
 
 
 const getClientWithConfig = (config = {}) => {
   const defaultConfig = {
     openAiApiKey: process.env.OPENAI_API_KEY || "",
     googleApiKey: process.env.GEMINI_API_KEY || "",
-    model,
+    model: __model,
     logLevel: "warn",
   };
 
   return getClient({ ...defaultConfig, ...config });
 };
 
-let client = getClientWithConfig();
+let __client = getClientWithConfig();
 
 type State = {
   messages: string[];
@@ -55,10 +54,10 @@ const graphConfig = {
 
 // Define the names of the nodes in the graph
 // Useful for type safety
-const nodes = {{{nodes:string}}} as const;
-type Node = (typeof nodes)[number];
+const __nodes = {{{nodes:string}}} as const;
+type Node = (typeof __nodes)[number];
 
-const graph = new PieMachine<State, Node>(nodes, graphConfig);`;
+const graph = new PieMachine<State, Node>(__nodes, graphConfig);`;
 
 export type TemplateType = {
   nodes: string;

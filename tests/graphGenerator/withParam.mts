@@ -1,5 +1,4 @@
-import OpenAI from "openai";
-import { zodResponseFormat } from "openai/helpers/zod";
+// @ts-nocheck
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
@@ -18,21 +17,21 @@ const statelogConfig = {
     debugMode: false,
   };
 const statelogClient = new StatelogClient(statelogConfig);
-const model = "gpt-4o-mini";
+const __model: ModelName = "gpt-4o-mini";
 
 
 const getClientWithConfig = (config = {}) => {
   const defaultConfig = {
     openAiApiKey: process.env.OPENAI_API_KEY || "",
     googleApiKey: process.env.GEMINI_API_KEY || "",
-    model,
+    model: __model,
     logLevel: "warn",
   };
 
   return getClient({ ...defaultConfig, ...config });
 };
 
-let client = getClientWithConfig();
+let __client = getClientWithConfig();
 
 type State = {
   messages: string[];
@@ -50,10 +49,10 @@ const graphConfig = {
 
 // Define the names of the nodes in the graph
 // Useful for type safety
-const nodes = ["main"] as const;
-type Node = (typeof nodes)[number];
+const __nodes = ["main"] as const;
+type Node = (typeof __nodes)[number];
 
-const graph = new PieMachine<State, Node>(nodes, graphConfig);
+const graph = new PieMachine<State, Node>(__nodes, graphConfig);
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -85,76 +84,75 @@ const addTool = {
 
 
 async function _result(input: string): Promise<string> {
-  const prompt = `process this input: ${input}`;
+  const __prompt = `process this input: ${input}`;
   const startTime = performance.now();
-  const messages: Message[] = [userMessage(prompt)];
-  const tools = undefined;
+  const __messages: Message[] = [userMessage(__prompt)];
+  const __tools = undefined;
 
   
   
-  const responseFormat = undefined;
+  const __responseFormat = undefined;
   
 
-  let completion = await client.text({
-    messages,
-    tools,
-    responseFormat,
+  let __completion = await __client.text({
+    messages: __messages,
+    tools: __tools,
+    responseFormat: __responseFormat,
   });
 
   const endTime = performance.now();
   statelogClient.promptCompletion({
-    messages,
-    completion,
-    model: client.getModel(),
+    messages: __messages,
+    completion: __completion,
+    model: __client.getModel(),
     timeTaken: endTime - startTime,
   });
 
-  if (!completion.success) {
+  if (!__completion.success) {
     throw new Error(
-      `Error getting response from ${model}: ${completion.error}`
+      `Error getting response from ${__model}: ${__completion.error}`
     );
   }
 
-  let responseMessage = completion.value;
+  let responseMessage = __completion.value;
 
   // Handle function calls
   while (responseMessage.toolCalls.length > 0) {
     // Add assistant's response with tool calls to message history
-    messages.push(assistantMessage(responseMessage.output));
+    __messages.push(assistantMessage(responseMessage.output));
     let toolCallStartTime, toolCallEndTime;
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
       
     }
-
+  
     const nextStartTime = performance.now();
-    let completion = await client.text({
-      messages,
-      tools,
-      responseFormat,
+    let __completion = await __client.text({
+      messages: __messages,
+      tools: __tools,
+      responseFormat: __responseFormat,
     });
 
     const nextEndTime = performance.now();
 
     statelogClient.promptCompletion({
-      messages,
-      completion,
-      model: client.getModel(),
+      messages: __messages,
+      completion: __completion,
+      model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
     });
 
-    if (!completion.success) {
+    if (!__completion.success) {
       throw new Error(
-        `Error getting response from ${model}: ${completion.error}`
+        `Error getting response from ${__model}: ${__completion.error}`
       );
     }
-    responseMessage = completion.value;
+    responseMessage = __completion.value;
   }
 
   // Add final assistant response to history
-  messages.push(assistantMessage(responseMessage.output));
-
+  __messages.push(assistantMessage(responseMessage.output));
   
 
   
@@ -173,7 +171,7 @@ console.log(result)
 
 const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
-export async function main(data) {
+export async function main(data:any): Promise<any> {
   const result = await graph.run("main", { messages: [], data });
   return result.data;
 }

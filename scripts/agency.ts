@@ -14,15 +14,15 @@ Agency Language CLI
 
 Usage:
   agency help                           Show this help message
-  agency compile <input> [output]       Compile .agency file to TypeScript
+  agency compile <input> [output]       Compile .agency file or directory to TypeScript
   agency run <input> [output]           Compile and run .agency file
   agency format [input]                 Format .agency file (reads from stdin if no input)
   agency parse [input]                  Parse .agency file and show AST (reads from stdin if no input)
   agency <input>                        Compile and run .agency file (shorthand)
 
 Arguments:
-  input                                 Path to .agency input file (or omit to read from stdin for format/parse)
-  output                                Path to output .ts file (optional)
+  input                                 Path to .agency input file or directory (or omit to read from stdin for format/parse)
+  output                                Path to output .ts file (optional, ignored for directories)
                                         Default: <input-name>.ts
 
 Flags:
@@ -32,6 +32,7 @@ Examples:
   agency help                           Show help
   agency compile script.agency          Compile to script.ts
   agency compile script.agency out.ts   Compile to out.ts
+  agency compile ./scripts              Compile all .agency files in directory
   agency run script.agency              Compile and run script.agency
   agency -v parse script.agency         Parse with verbose logging
   cat script.agency | agency format     Format from stdin
@@ -95,12 +96,42 @@ function getImports(program: AgencyProgram): string[] {
 }
 
 const compiledFiles: Set<string> = new Set();
-
+const dirSearched: Set<string> = new Set();
 function compile(
   inputFile: string,
   _outputFile?: string,
   verbose: boolean = false
-): string {
+): string | null {
+  // Check if the input is a directory
+  const stats = fs.statSync(inputFile);
+
+  if (stats.isDirectory()) {
+    dirSearched.add(path.resolve(inputFile));
+    // Find all .agency files in the directory
+    const files = fs.readdirSync(inputFile);
+    const agencyFiles = files.filter((file) => file.endsWith(".agency"));
+
+    for (const file of agencyFiles) {
+      const fullPath = path.join(inputFile, file);
+      compile(fullPath, undefined, verbose);
+    }
+
+    // Find all subdirectories and compile their .agency files
+    const subdirs = files.filter((file) => {
+      const fullPath = path.join(inputFile, file);
+      return fs.statSync(fullPath).isDirectory();
+    });
+
+    for (const subdir of subdirs) {
+      const fullSubdirPath = path.join(inputFile, subdir);
+      const resolvedSubdirPath = path.resolve(fullSubdirPath);
+      if (!dirSearched.has(resolvedSubdirPath)) {
+        compile(fullSubdirPath, undefined, verbose);
+      }
+    }
+    return null;
+  }
+
   // Resolve the absolute path of the input file to avoid duplicates
   const absoluteInputFile = path.resolve(inputFile);
   const outputFile = _outputFile || inputFile.replace(".agency", ".ts");
@@ -144,6 +175,10 @@ function run(
 ): void {
   // Compile the file
   const output = compile(inputFile, outputFile, verbose);
+  if (output === null) {
+    console.error("Error: No output file generated.");
+    process.exit(1);
+  }
 
   // Run the generated TypeScript file with Node.js
   console.log(`Running ${output}...`);
@@ -208,7 +243,9 @@ async function main(): Promise<void> {
 
     case "compile":
       if (filteredArgs.length < 2) {
-        console.error("Error: 'compile' command requires an input file");
+        console.error(
+          "Error: 'compile' command requires an input file or directory"
+        );
         console.error("Usage: agency compile <input> [output]");
         process.exit(1);
       }

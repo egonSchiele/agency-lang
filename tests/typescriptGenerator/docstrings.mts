@@ -1,7 +1,3 @@
-
-
-
-
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
@@ -53,10 +49,6 @@ const addTool = {
       },
     },
   };
-
-
-
-
 
 const addTool: OpenAI.Chat.Completions.ChatCompletionTool = {
     type: "function",
@@ -129,4 +121,3 @@ async function add({a, b}) {
 }async function processData({}) {
     
 }
-

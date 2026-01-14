@@ -1,7 +1,3 @@
-
-
-
-
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
@@ -86,10 +82,6 @@ const addTool = {
       },
     },
   };
-
-
-
-
 
 
 async function _greeting(): Promise<string> {
@@ -179,4 +171,9 @@ console.log(greeting)
 
 const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
+export async function main(data) {
+  const result = await graph.run("main", { messages: [], data });
+  return result.data;
+}
+
 export default graph;

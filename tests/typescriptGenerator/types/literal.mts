@@ -1,7 +1,3 @@
-
-
-
-
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
@@ -53,10 +49,6 @@ const addTool = {
       },
     },
   };
-
-
-
-
 
 
 async function _foo(): Promise<"hi"> {
@@ -328,5 +320,3 @@ async function _baz(): Promise<true> {
   
 }
 const baz = await _baz();
-
-

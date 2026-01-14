@@ -1,7 +1,3 @@
-
-
-
-
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
@@ -53,10 +49,6 @@ const addTool = {
       },
     },
   };
-
-
-
-
 
 
 async function _url(): Promise<{ hostname: string; port: number }> {
@@ -149,4 +141,3 @@ async function _url(): Promise<{ hostname: string; port: number }> {
 }
 const url = await _url();
 console.log(url)
-

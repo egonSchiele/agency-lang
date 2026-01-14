@@ -1,7 +1,3 @@
-
-
-
-
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
@@ -54,10 +50,6 @@ const addTool = {
     },
   };
 
-
-
-
-
 //  Test arrays and objects
 //  Simple array
 const nums = [1, 2, 3, 4, 5];
@@ -80,4 +72,3 @@ const firstNum = nums[0];
 console.log(firstNum)//  Object property access
 const personName = person.name;
 console.log(personName)
-

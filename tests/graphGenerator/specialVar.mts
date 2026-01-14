@@ -1,7 +1,3 @@
-
-
-
-
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
@@ -100,8 +96,6 @@ function _builtinInput(prompt: string): Promise<string> {
     });
   });
 }
-
-
 
 
 async function _response1(msg: string): Promise<string> {
@@ -277,4 +271,9 @@ return { ...state, data: [response1, response2]}
 
 const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
+export async function main(data) {
+  const result = await graph.run("main", { messages: [], data });
+  return result.data;
+}
+
 export default graph;

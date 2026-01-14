@@ -41,4 +41,7 @@ match(grade) {
 
 ```
 
-Fuck, params in functions don't work right now?!
+
+## chained property access doesn't work
+
+foo.bar.baz()

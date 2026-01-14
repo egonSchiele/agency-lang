@@ -1,32 +1,21 @@
 import {
-  AgencyNode,
   AgencyProgram,
-  Assignment,
   FunctionCall,
-  FunctionDefinition,
-  InterpolationSegment,
-  PromptLiteral,
   TypeHintMap,
   VariableType,
 } from "../types.js";
 
-import * as renderEdge from "../templates/backends/graphGenerator/edge.js";
-import * as renderConditionalEdge from "../templates/backends/graphGenerator/conditionalEdge.js";
-import * as renderImports from "../templates/backends/graphGenerator/imports.js";
-import * as renderNode from "../templates/backends/graphGenerator/node.js";
-import * as renderStartNode from "../templates/backends/graphGenerator/startNode.js";
-import * as promptFunction from "../templates/backends/typescriptGenerator/promptFunction.js";
-import * as promptNode from "../templates/backends/graphGenerator/promptNode.js";
-import * as graphNode from "../templates/backends/graphGenerator/graphNode.js";
 import * as builtinTools from "../templates/backends/graphGenerator/builtinTools.js";
+import * as renderConditionalEdge from "../templates/backends/graphGenerator/conditionalEdge.js";
 import * as goToNode from "../templates/backends/graphGenerator/goToNode.js";
-import { TypeScriptGenerator } from "./typescriptGenerator.js";
-import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
-import { mapTypeToZodSchema } from "./typescriptGenerator/typeToZodSchema.js";
-import { wrapInReturn } from "./utils.js";
-import { mapFunctionName } from "./typescriptGenerator/builtins.js";
+import * as graphNode from "../templates/backends/graphGenerator/graphNode.js";
+import * as renderImports from "../templates/backends/graphGenerator/imports.js";
+import * as renderStartNode from "../templates/backends/graphGenerator/startNode.js";
+import * as renderRunNodeFunction from "../templates/backends/graphGenerator/runNodeFunction.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { ReturnStatement } from "../types/returnStatement.js";
+import { TypeScriptGenerator } from "./typescriptGenerator.js";
+import { mapFunctionName } from "./typescriptGenerator/builtins.js";
 
 export class GraphGenerator extends TypeScriptGenerator {
   protected typeHints: TypeHintMap = {};
@@ -332,6 +321,14 @@ export class GraphGenerator extends TypeScriptGenerator {
       lines.push(
         renderStartNode.default({
           startNode: "main",
+        })
+      );
+    }
+
+    for (const node of this.graphNodes) {
+      lines.push(
+        renderRunNodeFunction.default({
+          nodeName: node,
         })
       );
     }

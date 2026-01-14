@@ -287,7 +287,7 @@ export class AgencyGenerator extends BaseGenerator {
 
   // Utility methods
   protected processComment(node: AgencyComment): string {
-    return this.indentStr(`// ${node.content}\n`);
+    return this.indentStr(`//${node.content}\n`);
   }
 
   protected processImportStatement(node: ImportStatement): string {

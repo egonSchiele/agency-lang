@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 import { spawn } from "child_process";
 import * as fs from "fs";
+import * as path from "path";
 import { parseAgency } from "../lib/parser.js";
 import { AgencyProgram, generateGraph } from "@/index.js";
 import { generateAgency } from "@/backends/agencyGenerator.js";
 import { ParserResult } from "tarsec";
+import { ImportStatement } from "@/types/importStatement.js";
 
 function help(): void {
   console.log(`
@@ -82,25 +84,57 @@ function readFile(inputFile: string): string {
   return contents;
 }
 
+function getImports(program: AgencyProgram): string[] {
+  return program.nodes
+    .filter((node): node is ImportStatement => node.type === "importStatement")
+    .filter((importNode) => {
+      const modulePath = importNode.modulePath.trim().replace(/['"]/g, "");
+      return modulePath.includes(".agency");
+    })
+    .map((node) => node.modulePath.trim().replace(/['"]/g, ""));
+}
+
+const compiledFiles: Set<string> = new Set();
+
 function compile(
   inputFile: string,
-  outputFile?: string,
+  _outputFile?: string,
   verbose: boolean = false
 ): string {
-  // Determine output file name
-  const output = outputFile || inputFile.replace(".agency", ".ts");
+  // Resolve the absolute path of the input file to avoid duplicates
+  const absoluteInputFile = path.resolve(inputFile);
+  const outputFile = _outputFile || inputFile.replace(".agency", ".ts");
+  // Skip if already compiled
+  if (compiledFiles.has(absoluteInputFile)) {
+    return outputFile;
+  }
+
+  compiledFiles.add(absoluteInputFile);
+
   const contents = readFile(inputFile);
   const parsedProgram = parse(contents, verbose);
 
-  // Generate TypeScript code
+  const imports = getImports(parsedProgram);
+
+  const inputDir = path.dirname(absoluteInputFile);
+  for (const importPath of imports) {
+    const absPath = path.resolve(inputDir, importPath);
+    compile(absPath, undefined, verbose);
+  }
+
+  // Update the import path in the AST to reference the new .ts file
+  parsedProgram.nodes.forEach((node) => {
+    if (node.type === "importStatement") {
+      node.modulePath = node.modulePath.replace(".agency", ".js");
+    }
+  });
+
   const generatedCode = generateGraph(parsedProgram);
+  fs.writeFileSync(outputFile, generatedCode, "utf-8");
 
-  // Write to output file
-  fs.writeFileSync(output, generatedCode, "utf-8");
+  console.log(`Generated ${outputFile} from ${inputFile}`);
 
-  console.log(`Generated ${output} from ${inputFile}`);
-
-  return output;
+  return outputFile;
 }
 
 function run(

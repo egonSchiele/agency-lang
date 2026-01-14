@@ -96,9 +96,8 @@ export class BaseGenerator {
 
     output.push(this.generatedStatements.join(""));
     output.push(this.postprocess() + "\n");
-
     return {
-      output: output.filter(Boolean).join("\n"),
+      output: output.filter((line) => line.trim() !== "").join("\n"),
     };
   }
 

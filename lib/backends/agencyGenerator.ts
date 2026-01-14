@@ -292,7 +292,7 @@ export class AgencyGenerator extends BaseGenerator {
 
   protected processImportStatement(node: ImportStatement): string {
     return this.indentStr(
-      `import {${node.importedNames}} from "${node.modulePath}"\n`
+      `import ${node.importedNames}from ${node.modulePath}`
     );
   }
 

@@ -1,0 +1,5 @@
+node categorize(msg) {
+  category :: "happy" | "sad"
+  category = `determine if the user is happy or sad based on this message: ${msg}`
+  return category
+}

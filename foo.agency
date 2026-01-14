@@ -1,8 +1,9 @@
+import { categorize } from "./bar.agency"
+
 node main() {
   @model = "o4-mini"
-  foo = readImage("hand.png")
-  print(foo)
-  response = `what is this a picture of? ${foo}`
+  msg = input("Enter a message: ")
+  response = categorize(msg)
   print(response)
   return response
 }

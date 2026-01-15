@@ -3,10 +3,10 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `if (toolCall.type === "function" &&
-  toolCall.function.name === "{{{name:string}}}"
+export const template = `if (
+  toolCall.name === "{{{name:string}}}"
 ) {
-  const args = JSON.parse(toolCall.function.arguments);
+  const args = toolCall.arguments;
 
   toolCallStartTime = performance.now();
   const result = await {{{name}}}(args);
@@ -24,11 +24,10 @@ statelogClient.toolCall({
   });
 
   // Add function result to messages
-  __messages.push({
-    role: "tool",
-    tool_call_id: toolCall.id,
-    content: JSON.stringify(result),
-  });
+  __messages.push(toolMessage(result, {
+            tool_call_id: toolCall.id,
+            name: toolCall.name,
+      }));
 }`;
 
 export type TemplateType = {

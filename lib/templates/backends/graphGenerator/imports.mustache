@@ -4,7 +4,7 @@ import fs from "fs";
 import { PieMachine, goToNode } from "piemachine";
 import { StatelogClient } from "statelog-client";
 import { nanoid } from "nanoid";
-import { assistantMessage, getClient, userMessage } from "smoltalk";
+import { assistantMessage, getClient, userMessage, toolMessage } from "smoltalk";
 
 const statelogHost = "https://statelog.adit.io";
 const traceId = nanoid();

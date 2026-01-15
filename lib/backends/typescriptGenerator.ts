@@ -226,23 +226,24 @@ export class TypeScriptGenerator extends BaseGenerator {
       );
     }
 
-    const properties: Record<string, { type: string; description: string }> =
-      {};
+    const properties: Record<string, string> = {};
     parameters.forEach((param) => {
       const typeHint = this.typeHints[param] || {
         type: "primitiveType" as const,
         value: "string",
       };
-      const tsType = variableTypeToString(typeHint, this.typeAliases);
-      properties[param] = { type: tsType, description: "" };
+      const tsType = mapTypeToZodSchema(typeHint, this.typeAliases);
+      properties[param] = tsType;
     });
+    let schema = "";
+    for (const [key, value] of Object.entries(properties)) {
+      schema += `"${key}": ${value}, `;
+    }
 
     return renderTool.default({
       name: functionName,
       description: node.docString?.value || "No description provided.",
-      properties:
-        Object.keys(properties).length > 0 ? JSON.stringify(properties) : "{}",
-      requiredParameters: parameters.map((p) => `"${p}"`).join(","),
+      schema: Object.keys(properties).length > 0 ? `{${schema}}` : "{}",
     });
   }
 

@@ -3,8 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `// @ts-nocheck
-import { z } from "zod";
+export const template = `import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
 import { PieMachine, goToNode } from "piemachine";

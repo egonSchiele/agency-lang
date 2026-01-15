@@ -3,27 +3,17 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `const {{{name:string}}}Tool: OpenAI.Chat.Completions.ChatCompletionTool = {
-    type: "function",
-    function: {
-      name: "{{{name:string}}}",
-      description:
-        "{{{description:string}}}",
-      parameters: {
-        type: "object",
-        properties: {{{properties:string}}},
-        required: [{{{requiredParameters:string}}}],
-        additionalProperties: false,
-      },
-    },
-  };
+export const template = `const {{{name:string}}}Tool = {
+  name: "{{{name:string}}}",
+  description: "{{{description:string}}}",
+  schema: z.object({{{schema:string}}})
+};
 `;
 
 export type TemplateType = {
   name: string;
   description: string;
-  properties: string;
-  requiredParameters: string;
+  schema: string;
 };
 
 const render = (args: TemplateType) => {

@@ -302,6 +302,11 @@ export class GraphGenerator extends TypeScriptGenerator {
     arr.push(builtinTools.default({}));
     return arr.join("\n");
   }
+
+  protected preprocess(): string {
+    return "// @ts-nocheck\n";
+  }
+
   protected postprocess(): string {
     const lines: string[] = [];
     Object.keys(this.adjacentNodes).forEach((node) => {

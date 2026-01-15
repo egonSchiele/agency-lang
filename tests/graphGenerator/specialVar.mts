@@ -1,11 +1,13 @@
 // @ts-nocheck
+
+
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
 import { PieMachine, goToNode } from "piemachine";
 import { StatelogClient } from "statelog-client";
 import { nanoid } from "nanoid";
-import { assistantMessage, getClient, userMessage } from "smoltalk";
+import { assistantMessage, getClient, userMessage, toolMessage } from "smoltalk";
 
 const statelogHost = "https://statelog.adit.io";
 const traceId = nanoid();
@@ -57,30 +59,15 @@ function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
 
-// Define the function tool for OpenAI
 const addTool = {
-    type: "function" as const,
-    function: {
-      name: "add",
-      description:
-        "Adds two numbers together and returns the result.",
-      parameters: {
-        type: "object",
-        properties: {
-          a: {
-            type: "number",
-            description: "The first number to add",
-          },
-          b: {
-            type: "number",
-            description: "The second number to add",
-          },
-        },
-        required: ["a", "b"],
-        additionalProperties: false,
-      },
-    },
-  };
+  name: "add",
+  description: "Adds two numbers together and returns the result.",
+  schema: z.object({
+    a: z.number().describe("The first number to add"),
+    b: z.number().describe("The second number to add"),
+  }),
+};
+
 
 function _builtinInput(prompt: string): Promise<string> {
   const rl = readline.createInterface({
@@ -133,7 +120,7 @@ async function _response1(msg: string): Promise<string> {
   // Handle function calls
   while (responseMessage.toolCalls.length > 0) {
     // Add assistant's response with tool calls to message history
-    __messages.push(assistantMessage(responseMessage.output));
+    __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
 
     // Process each tool call
@@ -166,7 +153,7 @@ async function _response1(msg: string): Promise<string> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output));
+  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
   
 
   
@@ -210,7 +197,7 @@ async function _response2(msg: string): Promise<string> {
   // Handle function calls
   while (responseMessage.toolCalls.length > 0) {
     // Add assistant's response with tool calls to message history
-    __messages.push(assistantMessage(responseMessage.output));
+    __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
 
     // Process each tool call
@@ -243,7 +230,7 @@ async function _response2(msg: string): Promise<string> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output));
+  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
   
 
   

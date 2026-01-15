@@ -50,20 +50,11 @@ const addTool = {
     },
   };
 
-const greetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
-    type: "function",
-    function: {
-      name: "greet",
-      description:
-        "No description provided.",
-      parameters: {
-        type: "object",
-        properties: {},
-        required: [],
-        additionalProperties: false,
-      },
-    },
-  };
+const greetTool = {
+  name: "greet",
+  description: "No description provided.",
+  schema: z.object({})
+};
 //  This is a single line comment at the top of the file
 //  Variable assignment with comment above
 const x = 42;

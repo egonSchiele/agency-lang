@@ -50,34 +50,16 @@ const addTool = {
     },
   };
 
-const testTool: OpenAI.Chat.Completions.ChatCompletionTool = {
-    type: "function",
-    function: {
-      name: "test",
-      description:
-        "No description provided.",
-      parameters: {
-        type: "object",
-        properties: {},
-        required: [],
-        additionalProperties: false,
-      },
-    },
-  };
-const addTool: OpenAI.Chat.Completions.ChatCompletionTool = {
-    type: "function",
-    function: {
-      name: "add",
-      description:
-        "No description provided.",
-      parameters: {
-        type: "object",
-        properties: {"a":{"type":"string","description":""},"b":{"type":"string","description":""}},
-        required: ["a","b"],
-        additionalProperties: false,
-      },
-    },
-  };
+const testTool = {
+  name: "test",
+  description: "No description provided.",
+  schema: z.object({})
+};
+const addTool = {
+  name: "add",
+  description: "No description provided.",
+  schema: z.object({"a": z.string(), "b": z.string(), })
+};
 async function test({}) {
     const foo = 1;
 

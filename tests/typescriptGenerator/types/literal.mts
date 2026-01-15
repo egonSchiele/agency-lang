@@ -90,7 +90,7 @@ async function _foo(): Promise<"hi"> {
   // Handle function calls
   while (responseMessage.toolCalls.length > 0) {
     // Add assistant's response with tool calls to message history
-    __messages.push(assistantMessage(responseMessage.output));
+    __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
 
     // Process each tool call
@@ -123,7 +123,7 @@ async function _foo(): Promise<"hi"> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output));
+  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -179,7 +179,7 @@ async function _bar(): Promise<42> {
   // Handle function calls
   while (responseMessage.toolCalls.length > 0) {
     // Add assistant's response with tool calls to message history
-    __messages.push(assistantMessage(responseMessage.output));
+    __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
 
     // Process each tool call
@@ -212,7 +212,7 @@ async function _bar(): Promise<42> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output));
+  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -268,7 +268,7 @@ async function _baz(): Promise<true> {
   // Handle function calls
   while (responseMessage.toolCalls.length > 0) {
     // Add assistant's response with tool calls to message history
-    __messages.push(assistantMessage(responseMessage.output));
+    __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
 
     // Process each tool call
@@ -301,7 +301,7 @@ async function _baz(): Promise<true> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output));
+  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
   
   try {
   const result = JSON.parse(responseMessage.output || "");

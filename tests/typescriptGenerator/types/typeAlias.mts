@@ -91,7 +91,7 @@ async function _foo(): Promise<Coords> {
   // Handle function calls
   while (responseMessage.toolCalls.length > 0) {
     // Add assistant's response with tool calls to message history
-    __messages.push(assistantMessage(responseMessage.output));
+    __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
 
     // Process each tool call
@@ -124,7 +124,7 @@ async function _foo(): Promise<Coords> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output));
+  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
   
   try {
   const result = JSON.parse(responseMessage.output || "");

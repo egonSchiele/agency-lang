@@ -50,67 +50,31 @@ const addTool = {
     },
   };
 
-const addTool: OpenAI.Chat.Completions.ChatCompletionTool = {
-    type: "function",
-    function: {
-      name: "add",
-      description:
-        "Add two numbers together.
+const addTool = {
+  name: "add",
+  description: "Add two numbers together.
 This is a simple addition function.",
-      parameters: {
-        type: "object",
-        properties: {"a":{"type":"string","description":""},"b":{"type":"string","description":""}},
-        required: ["a","b"],
-        additionalProperties: false,
-      },
-    },
-  };
-const greetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
-    type: "function",
-    function: {
-      name: "greet",
-      description:
-        "Generate a greeting message for the given name.",
-      parameters: {
-        type: "object",
-        properties: {"name":{"type":"string","description":""}},
-        required: ["name"],
-        additionalProperties: false,
-      },
-    },
-  };
-const calculateAreaTool: OpenAI.Chat.Completions.ChatCompletionTool = {
-    type: "function",
-    function: {
-      name: "calculateArea",
-      description:
-        "Calculate the area of a rectangle.
+  schema: z.object({"a": z.string(), "b": z.string(), })
+};
+const greetTool = {
+  name: "greet",
+  description: "Generate a greeting message for the given name.",
+  schema: z.object({"name": z.string(), })
+};
+const calculateAreaTool = {
+  name: "calculateArea",
+  description: "Calculate the area of a rectangle.
 Parameters:
 - width: the width of the rectangle
 - height: the height of the rectangle
 Returns: the area as a number",
-      parameters: {
-        type: "object",
-        properties: {"width":{"type":"string","description":""},"height":{"type":"string","description":""}},
-        required: ["width","height"],
-        additionalProperties: false,
-      },
-    },
-  };
-const processDataTool: OpenAI.Chat.Completions.ChatCompletionTool = {
-    type: "function",
-    function: {
-      name: "processData",
-      description:
-        "Single line docstring",
-      parameters: {
-        type: "object",
-        properties: {},
-        required: [],
-        additionalProperties: false,
-      },
-    },
-  };
+  schema: z.object({"width": z.string(), "height": z.string(), })
+};
+const processDataTool = {
+  name: "processData",
+  description: "Single line docstring",
+  schema: z.object({})
+};
 //  Test docstrings in functions
 async function add({a, b}) {
     

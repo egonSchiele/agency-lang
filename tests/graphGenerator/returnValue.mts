@@ -1,11 +1,13 @@
 // @ts-nocheck
+
+
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
 import { PieMachine, goToNode } from "piemachine";
 import { StatelogClient } from "statelog-client";
 import { nanoid } from "nanoid";
-import { assistantMessage, getClient, userMessage } from "smoltalk";
+import { assistantMessage, getClient, userMessage, toolMessage } from "smoltalk";
 
 const statelogHost = "https://statelog.adit.io";
 const traceId = nanoid();
@@ -57,30 +59,15 @@ function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
 
-// Define the function tool for OpenAI
 const addTool = {
-    type: "function" as const,
-    function: {
-      name: "add",
-      description:
-        "Adds two numbers together and returns the result.",
-      parameters: {
-        type: "object",
-        properties: {
-          a: {
-            type: "number",
-            description: "The first number to add",
-          },
-          b: {
-            type: "number",
-            description: "The second number to add",
-          },
-        },
-        required: ["a", "b"],
-        additionalProperties: false,
-      },
-    },
-  };
+  name: "add",
+  description: "Adds two numbers together and returns the result.",
+  schema: z.object({
+    a: z.number().describe("The first number to add"),
+    b: z.number().describe("The second number to add"),
+  }),
+};
+
 
 graph.node("main", async (state) => {
     

@@ -88,7 +88,7 @@ async function _greeting(name: string): Promise<string> {
   // Handle function calls
   while (responseMessage.toolCalls.length > 0) {
     // Add assistant's response with tool calls to message history
-    __messages.push(assistantMessage(responseMessage.output));
+    __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
 
     // Process each tool call
@@ -121,7 +121,7 @@ async function _greeting(name: string): Promise<string> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output));
+  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
   
 
   

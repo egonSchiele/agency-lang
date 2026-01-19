@@ -45,7 +45,7 @@ export class BaseGenerator {
 
   // collect function signatures so we can implement named args
   protected functionSignatures: Record<string, string[]> = {};
-  constructor() { }
+  constructor() {}
 
   generate(program: AgencyProgram): {
     output: string;
@@ -121,7 +121,7 @@ export class BaseGenerator {
     );
   }
 
-  protected processGraphNodeName(node: GraphNodeDefinition): void { }
+  protected processGraphNodeName(node: GraphNodeDefinition): void {}
 
   protected processNode(node: AgencyNode): string {
     switch (node.type) {

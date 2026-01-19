@@ -529,13 +529,6 @@ describe("literals parsers", () => {
           result: { type: "variableName", value: "var2test" },
         },
       },
-      {
-        input: "123",
-        expected: {
-          success: true,
-          result: { type: "variableName", value: "123" },
-        },
-      },
 
       // Mixed case
       {
@@ -562,6 +555,13 @@ describe("literals parsers", () => {
 
       // Failure cases
       { input: "", expected: { success: false } },
+      // cannot start with number
+      {
+        input: "1a",
+        expected: {
+          success: false,
+        },
+      },
     ];
 
     testCases.forEach(({ input, expected }) => {

@@ -1,4 +1,4 @@
-import { AgencyNode, DocString, FunctionDefinition } from "../types.js";
+import { AgencyNode, DocString, FunctionDefinition, FunctionParameter } from "../types.js";
 import {
   capture,
   char,
@@ -7,6 +7,7 @@ import {
   many1Till,
   many1WithJoin,
   map,
+  oneOf,
   optional,
   or,
   Parser,
@@ -27,7 +28,7 @@ import { functionCallParser } from "./functionCall.js";
 import { literalParser } from "./literals.js";
 import { matchBlockParser } from "./matchBlock.js";
 import { optionalSemicolon } from "./parserUtils.js";
-import { typeAliasParser, typeHintParser } from "./typeHints.js";
+import { typeAliasParser, typeHintParser, variableTypeParser } from "./typeHints.js";
 import { comma, optionalSpaces, varNameChar } from "./utils.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { returnStatementParser } from "./returnStatement.js";
@@ -96,6 +97,26 @@ export const whileLoopParser: Parser<WhileLoop> = trace(
   )
 );
 
+export const functionParameterParserWithTypeHint: Parser<FunctionParameter> = trace(
+  "functionParameterParserWithTypeHint",
+  seqC(
+    set("type", "functionParameter"),
+    capture(many1WithJoin(varNameChar), "name"),
+    optionalSpaces,
+    char(":"),
+    optionalSpaces,
+    capture(variableTypeParser, "typeHint")
+  )
+);
+
+export const functionParameterParser: Parser<FunctionParameter> = trace(
+  "functionParameterParser",
+  seqC(
+    set("type", "functionParameter"),
+    capture(many1WithJoin(varNameChar), "name"),
+  )
+);
+
 export const functionParser: Parser<FunctionDefinition> = trace(
   "functionParser",
   seqC(
@@ -105,7 +126,7 @@ export const functionParser: Parser<FunctionDefinition> = trace(
     capture(many1Till(char("(")), "functionName"),
     char("("),
     optionalSpaces,
-    capture(sepBy(comma, many1WithJoin(varNameChar)), "parameters"),
+    capture(sepBy(comma, or(functionParameterParserWithTypeHint, functionParameterParser)), "parameters"),
     optionalSpaces,
     char(")"),
     optionalSpaces,

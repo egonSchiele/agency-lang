@@ -409,7 +409,7 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "add",
-          parameters: ["x"],
+          parameters: [{ type: "functionParameter", name: "x" }],
           docString: undefined,
           body: [
             {
@@ -427,7 +427,7 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "greet",
-          parameters: ["name"],
+          parameters: [{ type: "functionParameter", name: "name" }],
           docString: undefined,
           body: [
             {
@@ -453,7 +453,10 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "add",
-          parameters: ["x", "y"],
+          parameters: [
+            { type: "functionParameter", name: "x" },
+            { type: "functionParameter", name: "y" },
+          ],
           docString: undefined,
           body: [
             {
@@ -471,7 +474,11 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "calculate",
-          parameters: ["a", "b", "c"],
+          parameters: [
+            { type: "functionParameter", name: "a" },
+            { type: "functionParameter", name: "b" },
+            { type: "functionParameter", name: "c" },
+          ],
           docString: undefined,
           body: [
             {
@@ -494,7 +501,10 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "multiply",
-          parameters: ["x", "y"],
+          parameters: [
+            { type: "functionParameter", name: "x" },
+            { type: "functionParameter", name: "y" },
+          ],
           docString: undefined,
           body: [
             {
@@ -512,7 +522,10 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "process",
-          parameters: ["a", "b"],
+          parameters: [
+            { type: "functionParameter", name: "a" },
+            { type: "functionParameter", name: "b" },
+          ],
           docString: undefined,
           body: [
             {
@@ -531,7 +544,10 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "add",
-          parameters: ["x", "y"],
+          parameters: [
+            { type: "functionParameter", name: "x" },
+            { type: "functionParameter", name: "y" },
+          ],
           docString: {
             type: "docString",
             value: "Adds two numbers",
@@ -553,7 +569,10 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "greet",
-          parameters: ["name", "greeting"],
+          parameters: [
+            { type: "functionParameter", name: "name" },
+            { type: "functionParameter", name: "greeting" },
+          ],
           docString: {
             type: "docString",
             value: "Greets someone with a custom greeting",

@@ -146,14 +146,30 @@ export class AgencyGenerator extends BaseGenerator {
     const { functionName, body, parameters } = node;
 
     // Build parameter list
-    const params = parameters.join(", ");
+    const params = parameters.map((p) => {
+      if (p.typeHint) {
+        const typeStr = variableTypeToString(
+          p.typeHint,
+          this.typeAliases
+        );
+        return `${p.name}: ${typeStr}`;
+      } else {
+        return p.name;
+      }
+    }).join(", ");
 
     // Start function definition
     let result = this.indentStr(`def ${functionName}(${params}) {\n`);
 
     // Process body with increased indentation
     this.increaseIndent();
-    this.functionScopedVariables = [...parameters];
+
+    if (node.docString) {
+      const docLines = [`"""`, node.docString.value, `"""`].map(line => this.indentStr(line)).join("\n");
+      result += `${docLines}\n`;
+    }
+
+    this.functionScopedVariables = [...parameters.map((p) => p.name)];
 
     const lines: string[] = [];
     for (const stmt of body) {

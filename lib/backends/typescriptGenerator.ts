@@ -5,6 +5,7 @@ import {
   Assignment,
   InterpolationSegment,
   Literal,
+  PrimitiveType,
   PromptLiteral,
   PromptSegment,
   TypeAlias,
@@ -25,7 +26,7 @@ import {
   IndexAccess,
 } from "../types/access.js";
 import { AgencyArray, AgencyObject } from "../types/dataStructures.js";
-import { FunctionCall, FunctionDefinition } from "../types/function.js";
+import { FunctionCall, FunctionDefinition, FunctionParameter } from "../types/function.js";
 import { MatchBlock } from "../types/matchBlock.js";
 import { escape, zip } from "../utils.js";
 import { BaseGenerator } from "./baseGenerator.js";
@@ -201,7 +202,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       if (!this.functionScopedVariables.includes(varName)) {
         throw new Error(
           `Variable '${varName}' used in prompt interpolation but not defined. ` +
-            `Referenced in assignment to '${variableName}'.`
+          `Referenced in assignment to '${variableName}'.`
         );
       }
     }
@@ -227,13 +228,13 @@ export class TypeScriptGenerator extends BaseGenerator {
     }
 
     const properties: Record<string, string> = {};
-    parameters.forEach((param) => {
-      const typeHint = this.typeHints[param] || {
+    parameters.forEach((param: FunctionParameter) => {
+      const typeHint = param.typeHint || {
         type: "primitiveType" as const,
         value: "string",
       };
       const tsType = mapTypeToZodSchema(typeHint, this.typeAliases);
-      properties[param] = tsType;
+      properties[param.name] = tsType;
     });
     let schema = "";
     for (const [key, value] of Object.entries(properties)) {
@@ -257,13 +258,13 @@ export class TypeScriptGenerator extends BaseGenerator {
    */
   protected processFunctionDefinition(node: FunctionDefinition): string {
     const { functionName, body, parameters } = node;
-    this.functionScopedVariables = [...parameters];
+    this.functionScopedVariables = [...parameters.map((p) => p.name)];
     const bodyCode: string[] = [];
     for (const stmt of body) {
       bodyCode.push(this.processNode(stmt));
     }
     this.functionScopedVariables = [];
-    const args = parameters.join(", ") || "";
+    const args = parameters.map((p) => p.name).join(", ") || "";
     return renderFunctionDefinition.default({
       functionName,
       args: "{" + args + "}",

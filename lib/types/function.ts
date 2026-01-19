@@ -1,12 +1,19 @@
-import { AgencyNode } from "../types.js";
+import { AgencyNode, VariableType } from "../types.js";
 import { AccessExpression } from "./access.js";
 import { Literal } from "./literals.js";
+
+export type FunctionParameter = {
+  type: "functionParameter";
+  name: string;
+  typeHint?: VariableType;
+};
 
 export type FunctionDefinition = {
   type: "function";
   functionName: string;
-  parameters: string[];
+  parameters: FunctionParameter[];
   body: AgencyNode[];
+  returnType?: VariableType;
   docString?: DocString;
 };
 

@@ -45,3 +45,10 @@ match(grade) {
 ## chained property access doesn't work
 
 foo.bar.baz()
+
+## semicolons
+should allow spaces before semicolons
+
+```
+        input: '  @model  =  "gpt-4"  ;  ',
+```

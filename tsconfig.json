@@ -26,7 +26,9 @@
     // "rootDir": "./",                                  /* Specify the root folder within your source files. */
     "moduleResolution": "nodenext" /* Specify how TypeScript looks up a file from a given module specifier. */,
     "paths": {
-      "@/*": ["./lib/*"]
+      "@/*": [
+        "./lib/*"
+      ]
     } /* Specify a set of entries that re-map imports to additional lookup locations. */,
     "declaration": true,
     // "rootDirs": [],                                   /* Allow multiple folders to be treated as one when resolving modules. */
@@ -99,6 +101,16 @@
     // "skipDefaultLibCheck": true,                      /* Skip type checking .d.ts files that are included with TypeScript. */
     "skipLibCheck": true /* Skip type checking all .d.ts files. */
   },
-  "include": ["lib", "scripts"],
-  "exclude": ["node_modules", "references", "tests", "*.mts", "examples"]
+  "include": [
+    "lib",
+    "scripts",
+    "index.ts",
+  ],
+  "exclude": [
+    "node_modules",
+    "references",
+    "tests",
+    "*.mts",
+    "examples"
+  ]
 }

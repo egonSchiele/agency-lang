@@ -25,7 +25,13 @@ export * from "./types/whileLoop.js";
 export type Assignment = {
   type: "assignment";
   variableName: string;
-  value: AccessExpression | Literal | FunctionCall | AgencyObject | AgencyArray;
+  value:
+    | AccessExpression
+    | Literal
+    | FunctionCall
+    | AgencyObject
+    | AgencyArray
+    | IndexAccess;
 };
 
 export type AgencyComment = {

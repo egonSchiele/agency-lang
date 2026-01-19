@@ -280,6 +280,8 @@ export class GraphGenerator extends TypeScriptGenerator {
         return this.generateFunctionCallExpression(arg);
       } else if (arg.type === "accessExpression") {
         return this.processAccessExpression(arg);
+      } else if (arg.type === "indexAccess") {
+        return this.processIndexAccess(arg);
       } else {
         return this.generateLiteral(arg);
       }

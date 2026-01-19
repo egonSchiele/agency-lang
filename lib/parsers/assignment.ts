@@ -9,7 +9,7 @@ import {
   set,
   trace,
 } from "tarsec";
-import { accessExpressionParser } from "./access.js";
+import { accessExpressionParser, indexAccessParser } from "./access.js";
 import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
 import { functionCallParser } from "./functionCall.js";
 import { literalParser } from "./literals.js";
@@ -28,6 +28,7 @@ export const assignmentParser: Parser<Assignment> = trace(
     capture(
       or(
         functionCallParser,
+        indexAccessParser,
         accessExpressionParser,
         agencyArrayParser,
         agencyObjectParser,

@@ -1,5 +1,5 @@
 import { Assignment, AgencyComment } from "../types.js";
-import { AccessExpression } from "./access.js";
+import { AccessExpression, IndexAccess } from "./access.js";
 import { Literal } from "./literals.js";
 import { FunctionCall } from "./function.js";
 import { AgencyArray, AgencyObject } from "./dataStructures.js";
@@ -9,7 +9,7 @@ export type DefaultCase = "_";
 
 export type MatchBlockCase = {
   type: "matchBlockCase";
-  caseValue: AccessExpression | Literal | DefaultCase;
+  caseValue: AccessExpression | Literal | DefaultCase | IndexAccess;
   body:
     | Assignment
     | Literal

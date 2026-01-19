@@ -94,27 +94,3 @@ export const indexAccessParser = (input: string): ParserResult<IndexAccess> => {
 
   return parser(input);
 };
-
-/*
-export const dotFunctionCallParser = (
-  input: string
-): ParserResult<DotFunctionCall> => {
-  const parser = seqC(
-    set("type", "dotFunctionCall"),
-    capture(or(functionCallParser, literalParser), "object"),
-    char("."),
-    capture(functionCallParser, "functionCall")
-  );
-
-  return parser(input);
-}; */
-
-/* export const accessExpressionParser: Parser<AccessExpression> = seqC(
-  set("type", "accessExpression"),
-  capture(
-    or(dotFunctionCallParser, dotPropertyParser, indexAccessParser),
-    "expression"
-  ),
-  optionalSemicolon
-);
- */

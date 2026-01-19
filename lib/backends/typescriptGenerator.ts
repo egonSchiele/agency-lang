@@ -26,7 +26,11 @@ import {
   IndexAccess,
 } from "../types/access.js";
 import { AgencyArray, AgencyObject } from "../types/dataStructures.js";
-import { FunctionCall, FunctionDefinition, FunctionParameter } from "../types/function.js";
+import {
+  FunctionCall,
+  FunctionDefinition,
+  FunctionParameter,
+} from "../types/function.js";
 import { MatchBlock } from "../types/matchBlock.js";
 import { escape, zip } from "../utils.js";
 import { BaseGenerator } from "./baseGenerator.js";
@@ -202,7 +206,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       if (!this.functionScopedVariables.includes(varName)) {
         throw new Error(
           `Variable '${varName}' used in prompt interpolation but not defined. ` +
-          `Referenced in assignment to '${variableName}'.`
+            `Referenced in assignment to '${variableName}'.`
         );
       }
     }
@@ -299,6 +303,8 @@ export class TypeScriptGenerator extends BaseGenerator {
         return this.generateFunctionCallExpression(arg);
       } else if (arg.type === "accessExpression") {
         return this.processAccessExpression(arg);
+      } else if (arg.type === "indexAccess") {
+        return this.processIndexAccess(arg);
       } else {
         return this.generateLiteral(arg);
       }

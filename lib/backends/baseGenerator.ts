@@ -164,6 +164,8 @@ export class BaseGenerator {
         return this.processWhileLoop(node);
       case "specialVar":
         return this.processSpecialVar(node);
+      case "indexAccess":
+        return this.processIndexAccess(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }

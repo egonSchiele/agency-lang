@@ -76,12 +76,12 @@ const processDataTool = {
   schema: z.object({})
 };
 //  Test docstrings in functions
-async function add({a, b}) {
+async function add({a, b}) : Promise<any> {
     
-}async function greet({name}) {
+}async function greet({name}) : Promise<any> {
     
-}async function calculateArea({width, height}) {
+}async function calculateArea({width, height}) : Promise<any> {
     
-}async function processData({}) {
+}async function processData({}) : Promise<any> {
     
 }

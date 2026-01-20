@@ -171,7 +171,7 @@ async function _result(x: string, y: string): Promise<string> {
   return responseMessage.output;
   
 }
-async function add({x, y}) {
+async function add({x, y}) : Promise<any> {
     const result = await _result(x, y);
 
 return result
@@ -253,7 +253,7 @@ async function _message(name: string): Promise<string> {
   return responseMessage.output;
   
 }
-async function greet({name}) {
+async function greet({name}) : Promise<any> {
     const message = await _message(name);
 
 return message
@@ -335,7 +335,7 @@ async function _output(label: string, count: string): Promise<string> {
   return responseMessage.output;
   
 }
-async function mixed({count, label}) {
+async function mixed({count, label}) : Promise<any> {
     const output = await _output(label, count);
 
 return output
@@ -417,7 +417,7 @@ async function _result(items: string): Promise<string> {
   return responseMessage.output;
   
 }
-async function processArray({items}) {
+async function processArray({items}) : Promise<any> {
     const result = await _result(items);
 
 return result
@@ -499,7 +499,7 @@ async function _result(value: string): Promise<string> {
   return responseMessage.output;
   
 }
-async function flexible({value}) {
+async function flexible({value}) : Promise<any> {
     const result = await _result(value);
 
 return result

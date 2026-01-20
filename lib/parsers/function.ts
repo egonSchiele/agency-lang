@@ -3,9 +3,11 @@ import {
   DocString,
   FunctionDefinition,
   FunctionParameter,
+  VariableType,
 } from "../types.js";
 import {
   capture,
+  captureCaptures,
   char,
   debug,
   many1,
@@ -132,6 +134,11 @@ export const functionParameterParser: Parser<FunctionParameter> = trace(
   )
 );
 
+export const functionReturnTypeParser: Parser<VariableType> = trace(
+  "functionReturnTypeParser",
+  seqC(char(":"), optionalSpaces, captureCaptures(variableTypeParser))
+);
+
 export const functionParser: Parser<FunctionDefinition> = trace(
   "functionParser",
   seqC(
@@ -150,6 +157,8 @@ export const functionParser: Parser<FunctionDefinition> = trace(
     ),
     optionalSpaces,
     char(")"),
+    optionalSpaces,
+    capture(optional(functionReturnTypeParser), "returnType"),
     optionalSpaces,
     char("{"),
     optionalSpaces,

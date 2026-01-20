@@ -60,11 +60,11 @@ const addTool = {
   description: "No description provided.",
   schema: z.object({"a": z.string(), "b": z.string(), })
 };
-async function test({}) {
+async function test({}) : Promise<any> {
     const foo = 1;
 
 foo
-}console.log(test({}))async function add({a, b}) {
+}console.log(test({}))async function add({a, b}) : Promise<any> {
     //  multi-param function
 
 }

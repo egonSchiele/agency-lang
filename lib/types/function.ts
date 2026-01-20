@@ -1,4 +1,9 @@
-import { AgencyArray, AgencyNode, AgencyObject, VariableType } from "../types.js";
+import {
+  AgencyArray,
+  AgencyNode,
+  AgencyObject,
+  VariableType,
+} from "../types.js";
 import { AccessExpression, IndexAccess } from "./access.js";
 import { Literal } from "./literals.js";
 
@@ -13,14 +18,21 @@ export type FunctionDefinition = {
   functionName: string;
   parameters: FunctionParameter[];
   body: AgencyNode[];
-  returnType?: VariableType;
+  returnType?: VariableType | null;
   docString?: DocString;
 };
 
 export type FunctionCall = {
   type: "functionCall";
   functionName: string;
-  arguments: (AgencyArray | AgencyObject | IndexAccess | Literal | AccessExpression | FunctionCall)[];
+  arguments: (
+    | AgencyArray
+    | AgencyObject
+    | IndexAccess
+    | Literal
+    | AccessExpression
+    | FunctionCall
+  )[];
 };
 
 export type DocString = {

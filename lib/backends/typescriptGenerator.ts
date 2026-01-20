@@ -273,6 +273,9 @@ export class TypeScriptGenerator extends BaseGenerator {
     return renderFunctionDefinition.default({
       functionName,
       args: "{" + args + "}",
+      returnType: node.returnType
+        ? variableTypeToString(node.returnType, this.typeAliases)
+        : "any",
       functionBody: bodyCode.join("\n"),
     });
   }

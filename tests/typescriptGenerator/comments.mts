@@ -63,7 +63,7 @@ const x = 42;
 //  on consecutive lines
 const y = "hello";
 //  Comment before function definition
-async function greet({}) {
+async function greet({}) : Promise<any> {
     //  Comment inside function
 
 const message = "Hello, World!";

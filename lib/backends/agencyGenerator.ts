@@ -158,8 +158,14 @@ export class AgencyGenerator extends BaseGenerator {
       })
       .join(", ");
 
+    const returnTypeStr = node.returnType
+      ? ": " + variableTypeToString(node.returnType, this.typeAliases)
+      : "";
+
     // Start function definition
-    let result = this.indentStr(`def ${functionName}(${params}) {\n`);
+    let result = this.indentStr(
+      `def ${functionName}(${params})${returnTypeStr} {\n`
+    );
 
     // Process body with increased indentation
     this.increaseIndent();

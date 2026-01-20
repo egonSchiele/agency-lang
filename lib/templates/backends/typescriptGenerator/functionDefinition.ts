@@ -3,13 +3,14 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `async function {{{functionName:string}}}({{{args}}}) {
+export const template = `async function {{{functionName:string}}}({{{args}}}) : Promise<{{{returnType}}}> {
     {{{functionBody}}}
 }`;
 
 export type TemplateType = {
   functionName: string;
   args: string | boolean | number;
+  returnType: string | boolean | number;
   functionBody: string | boolean | number;
 };
 

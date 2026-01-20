@@ -131,6 +131,7 @@ describe("functionParser", () => {
           type: "function",
           functionName: "test",
           parameters: [],
+          returnType: null,
           docString: undefined,
           body: [
             {
@@ -150,6 +151,7 @@ describe("functionParser", () => {
           type: "function",
           functionName: "greet",
           parameters: [],
+          returnType: null,
           docString: undefined,
           body: [
             {
@@ -172,6 +174,7 @@ describe("functionParser", () => {
           type: "function",
           functionName: "calculate",
           parameters: [],
+          returnType: null,
           docString: undefined,
           body: [
             {
@@ -196,6 +199,7 @@ describe("functionParser", () => {
           type: "function",
           functionName: "empty",
           parameters: [],
+          returnType: null,
           docString: undefined,
           body: [],
         },
@@ -209,6 +213,7 @@ describe("functionParser", () => {
           type: "function",
           functionName: "withSpaces",
           parameters: [],
+          returnType: null,
           docString: undefined,
           body: [
             {
@@ -228,6 +233,7 @@ describe("functionParser", () => {
           type: "function",
           functionName: "noSpaces",
           parameters: [],
+          returnType: null,
           docString: undefined,
           body: [
             {
@@ -247,6 +253,7 @@ describe("functionParser", () => {
           type: "function",
           functionName: "multiline",
           parameters: [],
+          returnType: null,
           docString: undefined,
           body: [
             {
@@ -296,6 +303,7 @@ describe("functionParser", () => {
           type: "function",
           functionName: "test",
           parameters: [],
+          returnType: null,
           docString: {
             type: "docString",
             value: "This is a test function",
@@ -318,6 +326,7 @@ describe("functionParser", () => {
           type: "function",
           functionName: "greet",
           parameters: [],
+          returnType: null,
           docString: {
             type: "docString",
             value: "Greets the user",
@@ -343,6 +352,7 @@ describe("functionParser", () => {
           type: "function",
           functionName: "calculate",
           parameters: [],
+          returnType: null,
           docString: {
             type: "docString",
             value: "Calculate something",
@@ -370,6 +380,7 @@ describe("functionParser", () => {
           type: "function",
           functionName: "empty",
           parameters: [],
+          returnType: null,
           docString: {
             type: "docString",
             value: "Empty function with docstring",
@@ -387,6 +398,7 @@ describe("functionParser", () => {
           type: "function",
           functionName: "multilineDoc",
           parameters: [],
+          returnType: null,
           docString: {
             type: "docString",
             value: "This is a multi-line\n  docstring",
@@ -410,6 +422,7 @@ describe("functionParser", () => {
           type: "function",
           functionName: "add",
           parameters: [{ type: "functionParameter", name: "x" }],
+          returnType: null,
           docString: undefined,
           body: [
             {
@@ -428,6 +441,7 @@ describe("functionParser", () => {
           type: "function",
           functionName: "greet",
           parameters: [{ type: "functionParameter", name: "name" }],
+          returnType: null,
           docString: undefined,
           body: [
             {
@@ -457,6 +471,7 @@ describe("functionParser", () => {
             { type: "functionParameter", name: "x" },
             { type: "functionParameter", name: "y" },
           ],
+          returnType: null,
           docString: undefined,
           body: [
             {
@@ -479,6 +494,7 @@ describe("functionParser", () => {
             { type: "functionParameter", name: "b" },
             { type: "functionParameter", name: "c" },
           ],
+          returnType: null,
           docString: undefined,
           body: [
             {
@@ -505,6 +521,7 @@ describe("functionParser", () => {
             { type: "functionParameter", name: "x" },
             { type: "functionParameter", name: "y" },
           ],
+          returnType: null,
           docString: undefined,
           body: [
             {
@@ -526,6 +543,7 @@ describe("functionParser", () => {
             { type: "functionParameter", name: "a" },
             { type: "functionParameter", name: "b" },
           ],
+          returnType: null,
           docString: undefined,
           body: [
             {
@@ -548,6 +566,7 @@ describe("functionParser", () => {
             { type: "functionParameter", name: "x" },
             { type: "functionParameter", name: "y" },
           ],
+          returnType: null,
           docString: {
             type: "docString",
             value: "Adds two numbers",
@@ -573,6 +592,7 @@ describe("functionParser", () => {
             { type: "functionParameter", name: "name" },
             { type: "functionParameter", name: "greeting" },
           ],
+          returnType: null,
           docString: {
             type: "docString",
             value: "Greets someone with a custom greeting",
@@ -613,6 +633,7 @@ describe("functionParser", () => {
               typeHint: { type: "primitiveType", value: "number" },
             },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "x" }],
         },
@@ -632,6 +653,7 @@ describe("functionParser", () => {
               typeHint: { type: "primitiveType", value: "string" },
             },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "name" }],
         },
@@ -651,6 +673,7 @@ describe("functionParser", () => {
               typeHint: { type: "primitiveType", value: "boolean" },
             },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "active" }],
         },
@@ -670,6 +693,7 @@ describe("functionParser", () => {
               typeHint: { type: "typeAliasVariable", aliasName: "any" },
             },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "data" }],
         },
@@ -689,6 +713,7 @@ describe("functionParser", () => {
               typeHint: { type: "primitiveType", value: "number" },
             },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "x" }],
         },
@@ -714,6 +739,7 @@ describe("functionParser", () => {
               typeHint: { type: "primitiveType", value: "number" },
             },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "x" }],
         },
@@ -743,6 +769,7 @@ describe("functionParser", () => {
               typeHint: { type: "primitiveType", value: "string" },
             },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "a" }],
         },
@@ -767,6 +794,7 @@ describe("functionParser", () => {
               typeHint: { type: "primitiveType", value: "string" },
             },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "x" }],
         },
@@ -791,6 +819,7 @@ describe("functionParser", () => {
               typeHint: { type: "primitiveType", value: "number" },
             },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "x" }],
         },
@@ -812,6 +841,7 @@ describe("functionParser", () => {
             },
             { type: "functionParameter", name: "y" },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "x" }],
         },
@@ -833,6 +863,7 @@ describe("functionParser", () => {
             },
             { type: "functionParameter", name: "c" },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "a" }],
         },
@@ -853,6 +884,7 @@ describe("functionParser", () => {
             },
             { type: "functionParameter", name: "untyped" },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "typed" }],
         },
@@ -876,6 +908,7 @@ describe("functionParser", () => {
               },
             },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "items" }],
         },
@@ -898,6 +931,7 @@ describe("functionParser", () => {
               },
             },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "names" }],
         },
@@ -917,6 +951,7 @@ describe("functionParser", () => {
               typeHint: { type: "typeAliasVariable", aliasName: "object" },
             },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "obj" }],
         },
@@ -944,6 +979,7 @@ describe("functionParser", () => {
               typeHint: { type: "primitiveType", value: "number" },
             },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "arr" }],
         },
@@ -969,6 +1005,7 @@ describe("functionParser", () => {
               },
             },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "matrix" }],
         },
@@ -995,6 +1032,7 @@ describe("functionParser", () => {
               },
             },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "value" }],
         },
@@ -1021,6 +1059,7 @@ describe("functionParser", () => {
               },
             },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "x" }],
         },
@@ -1051,6 +1090,7 @@ describe("functionParser", () => {
               typeHint: { type: "primitiveType", value: "boolean" },
             },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "a" }],
         },
@@ -1058,7 +1098,8 @@ describe("functionParser", () => {
     },
     // Functions with type hints and docstrings
     {
-      input: 'def add(x: number, y: number) {\n  """Adds two numbers"""\n  x\n}',
+      input:
+        'def add(x: number, y: number) {\n  """Adds two numbers"""\n  x\n}',
       expected: {
         success: true,
         result: {
@@ -1076,6 +1117,7 @@ describe("functionParser", () => {
               typeHint: { type: "primitiveType", value: "number" },
             },
           ],
+          returnType: null,
           docString: {
             type: "docString",
             value: "Adds two numbers",
@@ -1085,7 +1127,8 @@ describe("functionParser", () => {
       },
     },
     {
-      input: 'def greet(name: string) {\n  """Greets a person by name"""\n  name\n}',
+      input:
+        'def greet(name: string) {\n  """Greets a person by name"""\n  name\n}',
       expected: {
         success: true,
         result: {
@@ -1098,6 +1141,7 @@ describe("functionParser", () => {
               typeHint: { type: "primitiveType", value: "string" },
             },
           ],
+          returnType: null,
           docString: {
             type: "docString",
             value: "Greets a person by name",
@@ -1122,6 +1166,7 @@ describe("functionParser", () => {
             },
             { type: "functionParameter", name: "untyped" },
           ],
+          returnType: null,
           docString: {
             type: "docString",
             value: "Mix of typed and untyped params",
@@ -1145,6 +1190,7 @@ describe("functionParser", () => {
               typeHint: { type: "primitiveType", value: "number" },
             },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "x" }],
         },
@@ -1169,6 +1215,7 @@ describe("functionParser", () => {
               typeHint: { type: "primitiveType", value: "string" },
             },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "x" }],
         },
@@ -1188,6 +1235,7 @@ describe("functionParser", () => {
               typeHint: { type: "primitiveType", value: "string" },
             },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "my_var" }],
         },
@@ -1204,9 +1252,13 @@ describe("functionParser", () => {
             {
               type: "functionParameter",
               name: "data",
-              typeHint: { type: "typeAliasVariable", aliasName: "SomeLongTypeName" },
+              typeHint: {
+                type: "typeAliasVariable",
+                aliasName: "SomeLongTypeName",
+              },
             },
           ],
+          returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "data" }],
         },
@@ -1223,6 +1275,392 @@ describe("functionParser", () => {
     },
     {
       input: "def bad(x: number y: string) { x }",
+      expected: { success: false },
+    },
+    // Functions with return types - primitive types
+    {
+      input: "def getNumber(): number { 42 }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "getNumber",
+          parameters: [],
+          returnType: { type: "primitiveType", value: "number" },
+          docString: undefined,
+          body: [{ type: "number", value: "42" }],
+        },
+      },
+    },
+    {
+      input: "def getString(): string { name }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "getString",
+          parameters: [],
+          returnType: { type: "primitiveType", value: "string" },
+          docString: undefined,
+          body: [{ type: "variableName", value: "name" }],
+        },
+      },
+    },
+    {
+      input: "def getBoolean(): boolean { true }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "getBoolean",
+          parameters: [],
+          returnType: { type: "primitiveType", value: "boolean" },
+          docString: undefined,
+          body: [{ type: "variableName", value: "true" }],
+        },
+      },
+    },
+    // Functions with return types and parameters
+    {
+      input: "def add(x: number, y: number): number { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "add",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+            {
+              type: "functionParameter",
+              name: "y",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+          ],
+          returnType: { type: "primitiveType", value: "number" },
+          docString: undefined,
+          body: [{ type: "variableName", value: "x" }],
+        },
+      },
+    },
+    {
+      input: "def greet(name: string): string { name }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "greet",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "name",
+              typeHint: { type: "primitiveType", value: "string" },
+            },
+          ],
+          returnType: { type: "primitiveType", value: "string" },
+          docString: undefined,
+          body: [{ type: "variableName", value: "name" }],
+        },
+      },
+    },
+    {
+      input: "def check(value): boolean { value }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "check",
+          parameters: [{ type: "functionParameter", name: "value" }],
+          returnType: { type: "primitiveType", value: "boolean" },
+          docString: undefined,
+          body: [{ type: "variableName", value: "value" }],
+        },
+      },
+    },
+    // Functions with array return types
+    {
+      input: "def getNumbers(): number[] { items }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "getNumbers",
+          parameters: [],
+          returnType: {
+            type: "arrayType",
+            elementType: { type: "primitiveType", value: "number" },
+          },
+          docString: undefined,
+          body: [{ type: "variableName", value: "items" }],
+        },
+      },
+    },
+    {
+      input: "def getStrings(): string[] { names }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "getStrings",
+          parameters: [],
+          returnType: {
+            type: "arrayType",
+            elementType: { type: "primitiveType", value: "string" },
+          },
+          docString: undefined,
+          body: [{ type: "variableName", value: "names" }],
+        },
+      },
+    },
+    {
+      input: "def processArray(items: number[]): number[] { items }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "processArray",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "items",
+              typeHint: {
+                type: "arrayType",
+                elementType: { type: "primitiveType", value: "number" },
+              },
+            },
+          ],
+          returnType: {
+            type: "arrayType",
+            elementType: { type: "primitiveType", value: "number" },
+          },
+          docString: undefined,
+          body: [{ type: "variableName", value: "items" }],
+        },
+      },
+    },
+    // Functions with union return types
+    {
+      input: "def getValue(): string | number { value }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "getValue",
+          parameters: [],
+          returnType: {
+            type: "unionType",
+            types: [
+              { type: "primitiveType", value: "string" },
+              { type: "primitiveType", value: "number" },
+            ],
+          },
+          docString: undefined,
+          body: [{ type: "variableName", value: "value" }],
+        },
+      },
+    },
+    {
+      input: "def flexible(x: number): string | number | boolean { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "flexible",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+          ],
+          returnType: {
+            type: "unionType",
+            types: [
+              { type: "primitiveType", value: "string" },
+              { type: "primitiveType", value: "number" },
+              { type: "primitiveType", value: "boolean" },
+            ],
+          },
+          docString: undefined,
+          body: [{ type: "variableName", value: "x" }],
+        },
+      },
+    },
+    // Functions with return types and docstrings
+    {
+      input:
+        'def add(x: number, y: number): number {\n  """Adds two numbers"""\n  x\n}',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "add",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+            {
+              type: "functionParameter",
+              name: "y",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+          ],
+          returnType: { type: "primitiveType", value: "number" },
+          docString: {
+            type: "docString",
+            value: "Adds two numbers",
+          },
+          body: [{ type: "variableName", value: "x" }],
+        },
+      },
+    },
+    {
+      input:
+        'def greet(name: string): string {\n  """Greets a person"""\n  name\n}',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "greet",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "name",
+              typeHint: { type: "primitiveType", value: "string" },
+            },
+          ],
+          returnType: { type: "primitiveType", value: "string" },
+          docString: {
+            type: "docString",
+            value: "Greets a person",
+          },
+          body: [{ type: "variableName", value: "name" }],
+        },
+      },
+    },
+    // Functions with whitespace variations in return types
+    {
+      input: "def foo():number { 1 }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "foo",
+          parameters: [],
+          returnType: { type: "primitiveType", value: "number" },
+          docString: undefined,
+          body: [{ type: "number", value: "1" }],
+        },
+      },
+    },
+    {
+      input: "def bar()  :  string { name }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "bar",
+          parameters: [],
+          returnType: { type: "primitiveType", value: "string" },
+          docString: undefined,
+          body: [{ type: "variableName", value: "name" }],
+        },
+      },
+    },
+    {
+      input: "def baz(x: number)  :  number  { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "baz",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+          ],
+          returnType: { type: "primitiveType", value: "number" },
+          docString: undefined,
+          body: [{ type: "variableName", value: "x" }],
+        },
+      },
+    },
+    // Functions with type alias return types
+    {
+      input: "def getPoint(): Point { point }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "getPoint",
+          parameters: [],
+          returnType: { type: "typeAliasVariable", aliasName: "Point" },
+          docString: undefined,
+          body: [{ type: "variableName", value: "point" }],
+        },
+      },
+    },
+    {
+      input: "def getData(id: number): UserData { data }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "getData",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "id",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+          ],
+          returnType: { type: "typeAliasVariable", aliasName: "UserData" },
+          docString: undefined,
+          body: [{ type: "variableName", value: "data" }],
+        },
+      },
+    },
+    // Functions with object return types
+    {
+      input: "def getCoords(): { x: number; y: number } { coords }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "getCoords",
+          parameters: [],
+          returnType: {
+            type: "objectType",
+            properties: [
+              {
+                key: "x",
+                value: { type: "primitiveType", value: "number" },
+              },
+              {
+                key: "y",
+                value: { type: "primitiveType", value: "number" },
+              },
+            ],
+          },
+          docString: undefined,
+          body: [{ type: "variableName", value: "coords" }],
+        },
+      },
+    },
+    // Failure cases for return types
+    {
+      input: "def bad(): { x }",
+      expected: { success: false },
+    },
+    {
+      input: "def bad() : { x }",
       expected: { success: false },
     },
   ];

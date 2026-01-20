@@ -3,7 +3,7 @@ def add(x: number, y: number) {
   Adds two numbers together
   """
   result = `add ${x} and ${y}`
-result
+  return result
 }
 
 def greet(name: string) {
@@ -11,7 +11,7 @@ def greet(name: string) {
   Greets a person by name
   """
   message = `Hello ${name}!`
-message
+  return message
 }
 
 def mixed(count: number, label) {
@@ -19,7 +19,7 @@ def mixed(count: number, label) {
   Mixed typed and untyped parameters
   """
   output = `${label}: ${count}`
-output
+  return output
 }
 
 def processArray(items: number[]) {
@@ -27,7 +27,7 @@ def processArray(items: number[]) {
   Processes an array of numbers
   """
   result = `Processing array with ${items} items`
-result
+  return result
 }
 
 def flexible(value: string | number) {
@@ -35,7 +35,7 @@ def flexible(value: string | number) {
   Handles either a string or number
   """
   result = `Received value: ${value}`
-result
+  return result
 }
 
 // Call the functions

@@ -174,7 +174,8 @@ async function _result(x: string, y: string): Promise<string> {
 async function add({x, y}) {
     const result = await _result(x, y);
 
-result
+return result
+
 }
 async function _message(name: string): Promise<string> {
   const __prompt = `Hello ${name}!`;
@@ -255,7 +256,8 @@ async function _message(name: string): Promise<string> {
 async function greet({name}) {
     const message = await _message(name);
 
-message
+return message
+
 }
 async function _output(label: string, count: string): Promise<string> {
   const __prompt = `${label}: ${count}`;
@@ -336,7 +338,8 @@ async function _output(label: string, count: string): Promise<string> {
 async function mixed({count, label}) {
     const output = await _output(label, count);
 
-output
+return output
+
 }
 async function _result(items: string): Promise<string> {
   const __prompt = `Processing array with ${items} items`;
@@ -417,7 +420,8 @@ async function _result(items: string): Promise<string> {
 async function processArray({items}) {
     const result = await _result(items);
 
-result
+return result
+
 }
 async function _result(value: string): Promise<string> {
   const __prompt = `Received value: ${value}`;
@@ -498,7 +502,8 @@ async function _result(value: string): Promise<string> {
 async function flexible({value}) {
     const result = await _result(value);
 
-result
+return result
+
 }//  Call the functions
 const sum = await add({x: 5, y: 10});
 const greeting = await greet({name: "Alice"});

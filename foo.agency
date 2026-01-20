@@ -1,1 +1,7 @@
-processed = processArray([1, 2, 3, 4, 5])
+node main() {
+  str = "hihihihi
+asdasd
+asdasdsd
+"
+  print(str)
+}

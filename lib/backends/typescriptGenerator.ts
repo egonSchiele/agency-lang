@@ -8,7 +8,7 @@ import {
   PromptSegment,
   TypeAlias,
   TypeHint,
-  TypeHintMap
+  TypeHintMap,
 } from "../types.js";
 
 import { SpecialVar } from "@/types/specialVar.js";
@@ -204,7 +204,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       if (!this.functionScopedVariables.includes(varName)) {
         throw new Error(
           `Variable '${varName}' used in prompt interpolation but not defined. ` +
-          `Referenced in assignment to '${variableName}'.`
+            `Referenced in assignment to '${variableName}'.`
         );
       }
     }
@@ -299,11 +299,12 @@ export class TypeScriptGenerator extends BaseGenerator {
       if (arg.type === "functionCall") {
         this.functionsUsed.add(arg.functionName);
         return this.generateFunctionCallExpression(arg);
-/*       } else if (arg.type === "accessExpression") {
+        /*       } else if (arg.type === "accessExpression") {
         return this.processAccessExpression(arg);
       } else if (arg.type === "indexAccess") {
         return this.processIndexAccess(arg);
- */      } else {
+ */
+      } else {
         //        return this.generateLiteral(arg);
         return this.processNode(arg);
       }
@@ -330,7 +331,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       case "number":
         return literal.value;
       case "string":
-        return `"${escape(literal.value)}"`;
+        return `\`${escape(literal.value)}\``;
       case "variableName":
         return literal.value;
       case "prompt":

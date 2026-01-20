@@ -126,7 +126,16 @@ describe("literals parsers", () => {
       { input: "${foo", expected: { success: false } },
       { input: "$foo}", expected: { success: false } },
       { input: "{foo}", expected: { success: false } },
-      { input: "${}", expected: { success: false } },
+      {
+        input: "${}",
+        expected: {
+          success: true,
+          result: {
+            type: "interpolation",
+            variableName: "",
+          },
+        },
+      },
       { input: "", expected: { success: false } },
       { input: "foo", expected: { success: false } },
     ];

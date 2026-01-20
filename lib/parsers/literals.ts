@@ -18,12 +18,14 @@ import {
   many1Till,
   many1WithJoin,
   manyTill,
+  manyTillStr,
   manyWithJoin,
   map,
   or,
   seq,
   seqC,
   set,
+  str,
 } from "tarsec";
 
 export const textSegmentParser: Parser<TextSegment> = map(
@@ -38,7 +40,7 @@ export const interpolationSegmentParser: Parser<InterpolationSegment> = seqC(
   set("type", "interpolation"),
   char("$"),
   char("{"),
-  capture(many1Till(char("}")), "variableName"),
+  capture(manyTillStr("}"), "variableName"),
   char("}")
 );
 
@@ -55,8 +57,14 @@ export const numberParser: Parser<NumberLiteral> = seqC(
 export const stringParser: Parser<StringLiteral> = seqC(
   set("type", "string"),
   char('"'),
-  capture(manyTill(char('"')), "value"),
+  capture(manyTillStr('"'), "value"),
   char('"')
+);
+export const multiLineStringParser: Parser<StringLiteral> = seqC(
+  set("type", "string"),
+  str('"""'),
+  capture(manyTillStr('"""'), "value"),
+  str('"""')
 );
 
 export const variableNameParser: Parser<VariableNameLiteral> = seq(
@@ -76,6 +84,7 @@ export const variableNameParser: Parser<VariableNameLiteral> = seq(
 export const literalParser: Parser<Literal> = or(
   promptParser,
   numberParser,
+  multiLineStringParser,
   stringParser,
   variableNameParser
 );

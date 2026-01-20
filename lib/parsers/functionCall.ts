@@ -14,6 +14,7 @@ import { accessExpressionParser, indexAccessParser } from "./access.js";
 import { literalParser } from "./literals.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { optionalSpaces, varNameChar } from "./utils.js";
+import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
 
 const comma = seqR(optionalSpaces, char(","), optionalSpaces);
 export const functionCallParser: Parser<FunctionCall> = (input: string) => {
@@ -26,6 +27,8 @@ export const functionCallParser: Parser<FunctionCall> = (input: string) => {
       sepBy(
         comma,
         or(
+          agencyArrayParser,
+          agencyObjectParser,
           indexAccessParser,
           functionCallParser,
           accessExpressionParser,

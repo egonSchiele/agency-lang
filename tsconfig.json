@@ -103,8 +103,7 @@
   },
   "include": [
     "lib",
-    "scripts",
-    "index.ts",
+    "scripts"
   ],
   "exclude": [
     "node_modules",

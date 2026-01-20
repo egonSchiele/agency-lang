@@ -1,6 +1,5 @@
 import { AgencyNode, FunctionCall } from "../types.js";
 import { Literal } from "./literals.js";
-import { AgencyArray } from "./dataStructures.js";
 
 export type DotProperty = {
   type: "dotProperty";
@@ -10,7 +9,7 @@ export type DotProperty = {
 
 export type IndexAccess = {
   type: "indexAccess";
-  array: AgencyNode;// Literal | FunctionCall | AccessExpression | AgencyArray;
+  array: AgencyNode;
   index: Literal | FunctionCall | AccessExpression;
 };
 

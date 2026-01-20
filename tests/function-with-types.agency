@@ -1,32 +1,41 @@
-
 def add(x: number, y: number) {
-  """Adds two numbers together"""
+  """
+  Adds two numbers together
+  """
   result = `add ${x} and ${y}`
-  result
+result
 }
 
 def greet(name: string) {
-  """Greets a person by name"""
+  """
+  Greets a person by name
+  """
   message = `Hello ${name}!`
-  message
+message
 }
 
 def mixed(count: number, label) {
-  """Mixed typed and untyped parameters"""
+  """
+  Mixed typed and untyped parameters
+  """
   output = `${label}: ${count}`
-  output
+output
 }
 
 def processArray(items: number[]) {
-  """Processes an array of numbers"""
+  """
+  Processes an array of numbers
+  """
   result = `Processing array with ${items} items`
-  result
+result
 }
 
 def flexible(value: string | number) {
-  """Handles either a string or number"""
+  """
+  Handles either a string or number
+  """
   result = `Received value: ${value}`
-  result
+result
 }
 
 // Call the functions

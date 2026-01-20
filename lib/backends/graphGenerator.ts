@@ -278,12 +278,13 @@ export class GraphGenerator extends TypeScriptGenerator {
       if (arg.type === "functionCall") {
         this.functionsUsed.add(arg.functionName);
         return this.generateFunctionCallExpression(arg);
-      } else if (arg.type === "accessExpression") {
+/*       } else if (arg.type === "accessExpression") {
         return this.processAccessExpression(arg);
       } else if (arg.type === "indexAccess") {
         return this.processIndexAccess(arg);
-      } else {
-        return this.generateLiteral(arg);
+ */      } else {
+        return this.processNode(arg);
+        //        return this.generateLiteral(arg);
       }
     });
     const argsString = parts.join(", ");

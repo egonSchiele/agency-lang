@@ -1,0 +1,37 @@
+
+def add(x: number, y: number) {
+  """Adds two numbers together"""
+  result = `add ${x} and ${y}`
+  result
+}
+
+def greet(name: string) {
+  """Greets a person by name"""
+  message = `Hello ${name}!`
+  message
+}
+
+def mixed(count: number, label) {
+  """Mixed typed and untyped parameters"""
+  output = `${label}: ${count}`
+  output
+}
+
+def processArray(items: number[]) {
+  """Processes an array of numbers"""
+  result = `Processing array with ${items} items`
+  result
+}
+
+def flexible(value: string | number) {
+  """Handles either a string or number"""
+  result = `Received value: ${value}`
+  result
+}
+
+// Call the functions
+sum = add(5, 10)
+greeting = greet("Alice")
+labeled = mixed(42, "Answer")
+processed = processArray([1, 2, 3, 4, 5])
+flexResult = flexible("test")

@@ -201,7 +201,10 @@ export class TypeScriptGenerator extends BaseGenerator {
       .map((s) => (s as InterpolationSegment).variableName);
 
     for (const varName of interpolatedVars) {
-      if (!this.functionScopedVariables.includes(varName)) {
+      if (
+        !this.functionScopedVariables.includes(varName) &&
+        !this.globalScopedVariables.includes(varName)
+      ) {
         throw new Error(
           `Variable '${varName}' used in prompt interpolation but not defined. ` +
             `Referenced in assignment to '${variableName}'.`

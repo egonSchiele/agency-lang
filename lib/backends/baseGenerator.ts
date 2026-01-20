@@ -1,4 +1,5 @@
 import { SpecialVar } from "@/types/specialVar.js";
+
 import {
   AgencyComment,
   AgencyNode,
@@ -33,6 +34,7 @@ export class BaseGenerator {
   protected generatedStatements: string[] = [];
   protected generatedTypeAliases: string[] = [];
   protected functionScopedVariables: string[] = [];
+  protected globalScopedVariables: string[] = [];
 
   // collect tools for a prompt
   protected toolsUsed: string[] = [];
@@ -79,7 +81,14 @@ export class BaseGenerator {
       }
     }
 
-    // Pass 5: Process all nodes and generate code
+    // Pass 5: Collect global scoped variables
+    for (const node of program.nodes) {
+      if (node.type === "assignment") {
+        this.globalScopedVariables.push(node.variableName);
+      }
+    }
+
+    // Pass 6: Process all nodes and generate code
     for (const node of program.nodes) {
       const result = this.processNode(node);
       this.generatedStatements.push(result);

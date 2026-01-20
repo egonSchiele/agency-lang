@@ -187,6 +187,8 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = trace(
     optionalSpaces,
     char(")"),
     optionalSpaces,
+    capture(optional(functionReturnTypeParser), "returnType"),
+    optionalSpaces,
     char("{"),
     optionalSpaces,
     capture(bodyParser, "body"),

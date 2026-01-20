@@ -234,7 +234,7 @@ async function _message(): Promise<string> {
   return responseMessage.output;
   
 }
-graph.node("main", async (state) => {
+graph.node("main", async (state): Promise<any> => {
     
     
 const count = await _count();

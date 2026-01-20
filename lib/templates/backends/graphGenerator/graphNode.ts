@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `graph.node("{{{name}}}", async (state) => {
+export const template = `graph.node("{{{name}}}", async (state): Promise<any> => {
     {{#hasParam}}
     const {{{paramName}}} = state.data;
     {{/hasParam}}

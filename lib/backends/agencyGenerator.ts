@@ -326,7 +326,12 @@ export class AgencyGenerator extends BaseGenerator {
     const { nodeName, body, parameters } = node;
 
     const params = parameters.join(", ");
-    let result = this.indentStr(`node ${nodeName}(${params}) {\n`);
+    const returnTypeStr = node.returnType
+      ? ": " + variableTypeToString(node.returnType, this.typeAliases)
+      : "";
+    let result = this.indentStr(
+      `node ${nodeName}(${params})${returnTypeStr} {\n`
+    );
 
     this.increaseIndent();
     this.functionScopedVariables = [...parameters];
@@ -341,7 +346,7 @@ export class AgencyGenerator extends BaseGenerator {
     this.functionScopedVariables = [];
     this.decreaseIndent();
 
-    result += this.indentStr(`}\n`);
+    result += this.indentStr(`}\n\n`);
 
     return result;
   }

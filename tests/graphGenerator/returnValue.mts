@@ -69,7 +69,7 @@ const addTool = {
 };
 
 
-graph.node("main", async (state) => {
+graph.node("main", async (state): Promise<any> => {
     
     const x = 42;
 

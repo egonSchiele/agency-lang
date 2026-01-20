@@ -51,7 +51,7 @@ const graphConfig = {
 
 // Define the names of the nodes in the graph
 // Useful for type safety
-const __nodes = [] as const;
+const __nodes = ["foo"] as const;
 type Node = (typeof __nodes)[number];
 
 const graph = new PieMachine<State, Node>(__nodes, graphConfig);
@@ -171,7 +171,7 @@ async function _result(x: string, y: string): Promise<string> {
   return responseMessage.output;
   
 }
-async function add({x, y}) : Promise<any> {
+async function add({x, y}) : Promise<number> {
     const result = await _result(x, y);
 
 return result
@@ -504,11 +504,22 @@ async function flexible({value}) : Promise<any> {
 
 return result
 
-}//  Call the functions
+}graph.node("foo", async (state): Promise<any> => {
+    
+    console.log("This is a node with a return type")
+return { ...state, data: "Node completed"}
+
+});
+//  Call the functions
 const sum = await add({x: 5, y: 10});
 const greeting = await greet({name: "Alice"});
 const labeled = await mixed({count: 42, label: "Answer"});
 const processed = await processArray({items: [1, 2, 3, 4, 5]});
 const flexResult = await flexible({value: "test"});
+
+export async function foo(data:any): Promise<string> {
+  const result = await graph.run("foo", { messages: [], data });
+  return result.data;
+}
 
 export default graph;

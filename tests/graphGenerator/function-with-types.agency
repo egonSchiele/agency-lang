@@ -1,4 +1,4 @@
-def add(x: number, y: number) {
+def add(x: number, y: number): number {
   """
   Adds two numbers together
   """
@@ -36,6 +36,11 @@ def flexible(value: string | number) {
   """
   result = `Received value: ${value}`
   return result
+}
+
+node foo(): string {
+  print("This is a node with a return type")
+  return "Node completed"
 }
 
 // Call the functions

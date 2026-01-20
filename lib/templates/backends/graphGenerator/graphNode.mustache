@@ -1,4 +1,4 @@
-graph.node("{{{name}}}", async (state) => {
+graph.node("{{{name}}}", async (state): Promise<any> => {
     {{#hasParam}}
     const {{{paramName}}} = state.data;
     {{/hasParam}}

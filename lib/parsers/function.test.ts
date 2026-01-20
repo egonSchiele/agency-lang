@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { functionParser, docStringParser } from "./function.js";
+import { functionParser, docStringParser, graphNodeParser } from "./function.js";
 
 describe("docStringParser", () => {
   const testCases = [
@@ -1677,6 +1677,429 @@ describe("functionParser", () => {
     } else {
       it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
         const result = functionParser(input);
+        expect(result.success).toBe(false);
+      });
+    }
+  });
+});
+
+describe("graphNodeParser", () => {
+  const testCases = [
+    // Basic graph nodes without return types
+    {
+      input: "node main() { x = 1 }",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "main",
+          parameters: [],
+          returnType: null,
+          body: [
+            {
+              type: "assignment",
+              variableName: "x",
+              value: { type: "number", value: "1" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "node greet() { message = `hello` }",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "greet",
+          parameters: [],
+          returnType: null,
+          body: [
+            {
+              type: "assignment",
+              variableName: "message",
+              value: {
+                type: "prompt",
+                segments: [{ type: "text", value: "hello" }],
+              },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "node empty() {}",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "empty",
+          parameters: [],
+          returnType: null,
+          body: [],
+        },
+      },
+    },
+    // Graph nodes with parameters
+    {
+      input: "node process(input) { x = input }",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "process",
+          parameters: ["input"],
+          returnType: null,
+          body: [
+            {
+              type: "assignment",
+              variableName: "x",
+              value: { type: "variableName", value: "input" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "node calculate(a, b) { result = 42 }",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "calculate",
+          parameters: ["a", "b"],
+          returnType: null,
+          body: [
+            {
+              type: "assignment",
+              variableName: "result",
+              value: { type: "number", value: "42" },
+            },
+          ],
+        },
+      },
+    },
+    // Graph nodes with return types - primitive types
+    {
+      input: "node getNumber(): number { 42 }",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "getNumber",
+          parameters: [],
+          returnType: { type: "primitiveType", value: "number" },
+          body: [{ type: "number", value: "42" }],
+        },
+      },
+    },
+    {
+      input: "node getString(): string { name }",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "getString",
+          parameters: [],
+          returnType: { type: "primitiveType", value: "string" },
+          body: [{ type: "variableName", value: "name" }],
+        },
+      },
+    },
+    {
+      input: "node getBoolean(): boolean { true }",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "getBoolean",
+          parameters: [],
+          returnType: { type: "primitiveType", value: "boolean" },
+          body: [{ type: "variableName", value: "true" }],
+        },
+      },
+    },
+    // Graph nodes with parameters and return types
+    {
+      input: "node add(x, y): number { result = 10 }",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "add",
+          parameters: ["x", "y"],
+          returnType: { type: "primitiveType", value: "number" },
+          body: [
+            {
+              type: "assignment",
+              variableName: "result",
+              value: { type: "number", value: "10" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "node greet(name): string { message = `hello` }",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "greet",
+          parameters: ["name"],
+          returnType: { type: "primitiveType", value: "string" },
+          body: [
+            {
+              type: "assignment",
+              variableName: "message",
+              value: {
+                type: "prompt",
+                segments: [{ type: "text", value: "hello" }],
+              },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "node process(input): boolean { result }",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "process",
+          parameters: ["input"],
+          returnType: { type: "primitiveType", value: "boolean" },
+          body: [{ type: "variableName", value: "result" }],
+        },
+      },
+    },
+    // Graph nodes with array return types
+    {
+      input: "node getNumbers(): number[] { items }",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "getNumbers",
+          parameters: [],
+          returnType: {
+            type: "arrayType",
+            elementType: { type: "primitiveType", value: "number" },
+          },
+          body: [{ type: "variableName", value: "items" }],
+        },
+      },
+    },
+    {
+      input: "node getStrings(): string[] { names }",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "getStrings",
+          parameters: [],
+          returnType: {
+            type: "arrayType",
+            elementType: { type: "primitiveType", value: "string" },
+          },
+          body: [{ type: "variableName", value: "names" }],
+        },
+      },
+    },
+    {
+      input: "node processArray(items): number[] { items }",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "processArray",
+          parameters: ["items"],
+          returnType: {
+            type: "arrayType",
+            elementType: { type: "primitiveType", value: "number" },
+          },
+          body: [{ type: "variableName", value: "items" }],
+        },
+      },
+    },
+    // Graph nodes with union return types
+    {
+      input: "node getValue(): string | number { value }",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "getValue",
+          parameters: [],
+          returnType: {
+            type: "unionType",
+            types: [
+              { type: "primitiveType", value: "string" },
+              { type: "primitiveType", value: "number" },
+            ],
+          },
+          body: [{ type: "variableName", value: "value" }],
+        },
+      },
+    },
+    {
+      input: "node flexible(x): string | number | boolean { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "flexible",
+          parameters: ["x"],
+          returnType: {
+            type: "unionType",
+            types: [
+              { type: "primitiveType", value: "string" },
+              { type: "primitiveType", value: "number" },
+              { type: "primitiveType", value: "boolean" },
+            ],
+          },
+          body: [{ type: "variableName", value: "x" }],
+        },
+      },
+    },
+    // Graph nodes with whitespace variations in return types
+    {
+      input: "node foo():number { 1 }",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "foo",
+          parameters: [],
+          returnType: { type: "primitiveType", value: "number" },
+          body: [{ type: "number", value: "1" }],
+        },
+      },
+    },
+    {
+      input: "node bar()  :  string { name }",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "bar",
+          parameters: [],
+          returnType: { type: "primitiveType", value: "string" },
+          body: [{ type: "variableName", value: "name" }],
+        },
+      },
+    },
+    {
+      input: "node baz(x)  :  number  { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "baz",
+          parameters: ["x"],
+          returnType: { type: "primitiveType", value: "number" },
+          body: [{ type: "variableName", value: "x" }],
+        },
+      },
+    },
+    // Graph nodes with type alias return types
+    {
+      input: "node getPoint(): Point { point }",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "getPoint",
+          parameters: [],
+          returnType: { type: "typeAliasVariable", aliasName: "Point" },
+          body: [{ type: "variableName", value: "point" }],
+        },
+      },
+    },
+    {
+      input: "node getData(id): UserData { data }",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "getData",
+          parameters: ["id"],
+          returnType: { type: "typeAliasVariable", aliasName: "UserData" },
+          body: [{ type: "variableName", value: "data" }],
+        },
+      },
+    },
+    // Graph nodes with object return types
+    {
+      input: "node getCoords(): { x: number; y: number } { coords }",
+      expected: {
+        success: true,
+        result: {
+          type: "graphNode",
+          nodeName: "getCoords",
+          parameters: [],
+          returnType: {
+            type: "objectType",
+            properties: [
+              {
+                key: "x",
+                value: { type: "primitiveType", value: "number" },
+              },
+              {
+                key: "y",
+                value: { type: "primitiveType", value: "number" },
+              },
+            ],
+          },
+          body: [{ type: "variableName", value: "coords" }],
+        },
+      },
+    },
+    // Failure cases
+    {
+      input: "main() { x = 1 }",
+      expected: { success: false },
+    },
+    {
+      input: "node { x = 1 }",
+      expected: { success: false },
+    },
+    {
+      input: "node main() x = 1",
+      expected: { success: false },
+    },
+    {
+      input: "node main() {",
+      expected: { success: false },
+    },
+    {
+      input: "",
+      expected: { success: false },
+    },
+    // Failure cases for return types
+    {
+      input: "node bad(): { x }",
+      expected: { success: false },
+    },
+    {
+      input: "node bad() : { x }",
+      expected: { success: false },
+    },
+  ];
+
+  testCases.forEach(({ input, expected }) => {
+    if (expected.success) {
+      it(`should parse "${input.replace(/\n/g, "\\n")}" successfully`, () => {
+        const result = graphNodeParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result).toEqual(expected.result);
+        }
+      });
+    } else {
+      it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
+        const result = graphNodeParser(input);
         expect(result.success).toBe(false);
       });
     }

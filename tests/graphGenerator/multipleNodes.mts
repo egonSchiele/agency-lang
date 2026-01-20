@@ -146,7 +146,7 @@ async function _greeting(): Promise<string> {
   return responseMessage.output;
   
 }
-graph.node("greet", async (state) => {
+graph.node("greet", async (state): Promise<any> => {
     
     
 const greeting = await _greeting();
@@ -231,7 +231,7 @@ async function _result(msg: string): Promise<string> {
   return responseMessage.output;
   
 }
-graph.node("processGreeting", async (state) => {
+graph.node("processGreeting", async (state): Promise<any> => {
     
     const msg = state.data;
     
@@ -240,7 +240,7 @@ const result = await _result(msg);
 
 console.log(result)
 });
-graph.node("main", async (state) => {
+graph.node("main", async (state): Promise<any> => {
     
     return goToNode("greet", { messages: state.messages, data:  });
 

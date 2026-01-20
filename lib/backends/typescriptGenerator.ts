@@ -69,7 +69,7 @@ export class TypeScriptGenerator extends BaseGenerator {
   protected typeAliasToString(node: TypeAlias): string {
     const aliasedTypeStr = variableTypeToString(
       node.aliasedType,
-      this.typeAliases
+      this.typeAliases,
     );
     return `type ${node.aliasName} = ${aliasedTypeStr};`;
   }
@@ -78,7 +78,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     if (node.variableType.type === "typeAliasVariable") {
       if (!(node.variableType.aliasName in this.typeAliases)) {
         throw new Error(
-          `Type alias '${node.variableType.aliasName}' not defined for variable '${node.variableName}'.`
+          `Type alias '${node.variableType.aliasName}' not defined for variable '${node.variableName}'.`,
         );
       }
     }
@@ -155,7 +155,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     const objectCode = this.processNode(node.object);
 
     const functionCallCode = this.generateFunctionCallExpression(
-      node.functionCall
+      node.functionCall,
     );
     const fullCall = `${objectCode}.${functionCallCode}`;
     return fullCall;
@@ -193,7 +193,7 @@ export class TypeScriptGenerator extends BaseGenerator {
 
   protected processPromptLiteral(
     variableName: string,
-    node: PromptLiteral
+    node: PromptLiteral,
   ): string {
     // Validate all interpolated variables are in scope
     const interpolatedVars = node.segments
@@ -207,7 +207,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       ) {
         throw new Error(
           `Variable '${varName}' used in prompt interpolation but not defined. ` +
-            `Referenced in assignment to '${variableName}'.`
+            `Referenced in assignment to '${variableName}'.`,
         );
       }
     }
@@ -226,9 +226,9 @@ export class TypeScriptGenerator extends BaseGenerator {
 
   protected processTool(node: FunctionDefinition): string {
     const { functionName, body, parameters } = node;
-    if (this.graphNodes.includes(functionName)) {
+    if (this.graphNodes.map((n) => n.nodeName).includes(functionName)) {
       throw new Error(
-        `There is already a node named '${functionName}'. Functions can't have the same name as an existing node.`
+        `There is already a node named '${functionName}'. Functions can't have the same name as an existing node.`,
       );
     }
 
@@ -411,8 +411,8 @@ export class TypeScriptGenerator extends BaseGenerator {
         (arg) =>
           `${arg}: ${variableTypeToString(
             this.typeHints[arg] || { type: "primitiveType", value: "string" },
-            this.typeAliases
-          )}`
+            this.typeAliases,
+          )}`,
       )
       .join(", ");
 

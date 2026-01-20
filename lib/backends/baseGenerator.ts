@@ -30,7 +30,7 @@ import { WhileLoop } from "../types/whileLoop.js";
 
 export class BaseGenerator {
   protected typeHints: TypeHintMap = {};
-  protected graphNodes: string[] = [];
+  protected graphNodes: GraphNodeDefinition[] = [];
   protected generatedStatements: string[] = [];
   protected generatedTypeAliases: string[] = [];
   protected functionScopedVariables: string[] = [];
@@ -126,7 +126,7 @@ export class BaseGenerator {
 
   protected collectFunctionSignature(node: FunctionDefinition): void {
     this.functionSignatures[node.functionName] = node.parameters.map(
-      (param) => param.name
+      (param) => param.name,
     );
   }
 
@@ -254,7 +254,7 @@ export class BaseGenerator {
 
   protected processPromptLiteral(
     variableName: string,
-    node: PromptLiteral
+    node: PromptLiteral,
   ): string {
     return "processPromptLiteral not implemented";
   }

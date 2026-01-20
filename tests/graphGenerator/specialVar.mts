@@ -237,7 +237,7 @@ async function _response2(msg: string): Promise<string> {
   return responseMessage.output;
   
 }
-graph.node("main", async (state) => {
+graph.node("main", async (state): Promise<any> => {
     
     console.log("lets race!")
 const msg = await _builtinInput("> ");

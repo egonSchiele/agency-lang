@@ -146,7 +146,7 @@ async function _result(input: string): Promise<string> {
   return responseMessage.output;
   
 }
-graph.node("main", async (state) => {
+graph.node("main", async (state): Promise<any> => {
     
     const input = state.data;
     

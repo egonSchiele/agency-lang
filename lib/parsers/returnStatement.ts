@@ -1,6 +1,6 @@
 import { ReturnStatement } from "../types/returnStatement.js";
 import { Parser, seqC, set, str, capture, or } from "tarsec";
-import { accessExpressionParser } from "./access.js";
+import { accessExpressionParser, indexAccessParser } from "./access.js";
 import { functionCallParser } from "./functionCall.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { optionalSpaces } from "./utils.js";
@@ -13,6 +13,7 @@ export const returnStatementParser: Parser<ReturnStatement> = seqC(
   optionalSpaces,
   capture(
     or(
+      indexAccessParser,
       accessExpressionParser,
       functionCallParser,
       literalParser,

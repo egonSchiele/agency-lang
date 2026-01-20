@@ -1,9 +1,10 @@
-import { AccessExpression, Literal } from "../types.js";
+import { AccessExpression, IndexAccess, Literal } from "../types.js";
 import { FunctionCall } from "./function.js";
 
 export type AgencyArray = {
   type: "agencyArray";
   items: (
+    | IndexAccess
     | AccessExpression
     | Literal
     | FunctionCall
@@ -16,6 +17,7 @@ export type AgencyArray = {
 export type AgencyObjectKV = {
   key: string;
   value:
+    | IndexAccess
     | AccessExpression
     | Literal
     | FunctionCall

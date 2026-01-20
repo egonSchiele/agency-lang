@@ -10,10 +10,11 @@ import {
   seqR,
   set,
 } from "tarsec";
-import { accessExpressionParser } from "./access.js";
+import { accessExpressionParser, indexAccessParser } from "./access.js";
 import { literalParser } from "./literals.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { optionalSpaces, varNameChar } from "./utils.js";
+import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
 
 const comma = seqR(optionalSpaces, char(","), optionalSpaces);
 export const functionCallParser: Parser<FunctionCall> = (input: string) => {
@@ -25,7 +26,14 @@ export const functionCallParser: Parser<FunctionCall> = (input: string) => {
     capture(
       sepBy(
         comma,
-        or(functionCallParser, accessExpressionParser, literalParser)
+        or(
+          agencyArrayParser,
+          agencyObjectParser,
+          indexAccessParser,
+          functionCallParser,
+          accessExpressionParser,
+          literalParser
+        )
       ),
       "arguments"
     ),

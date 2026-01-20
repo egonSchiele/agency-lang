@@ -598,6 +598,633 @@ describe("functionParser", () => {
         },
       },
     },
+    // Functions with single parameter with type hint
+    {
+      input: "def add(x: number) { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "add",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "x" }],
+        },
+      },
+    },
+    {
+      input: "def greet(name: string) { name }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "greet",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "name",
+              typeHint: { type: "primitiveType", value: "string" },
+            },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "name" }],
+        },
+      },
+    },
+    {
+      input: "def check(active: boolean) { active }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "check",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "active",
+              typeHint: { type: "primitiveType", value: "boolean" },
+            },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "active" }],
+        },
+      },
+    },
+    {
+      input: "def process(data: any) { data }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "process",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "data",
+              typeHint: { type: "typeAliasVariable", aliasName: "any" },
+            },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "data" }],
+        },
+      },
+    },
+    {
+      input: "def handle(x : number) { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "handle",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "x" }],
+        },
+      },
+    },
+    // Functions with multiple parameters with type hints
+    {
+      input: "def add(x: number, y: number) { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "add",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+            {
+              type: "functionParameter",
+              name: "y",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "x" }],
+        },
+      },
+    },
+    {
+      input: "def concat(a: string, b: string, c: string) { a }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "concat",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "a",
+              typeHint: { type: "primitiveType", value: "string" },
+            },
+            {
+              type: "functionParameter",
+              name: "b",
+              typeHint: { type: "primitiveType", value: "string" },
+            },
+            {
+              type: "functionParameter",
+              name: "c",
+              typeHint: { type: "primitiveType", value: "string" },
+            },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "a" }],
+        },
+      },
+    },
+    {
+      input: "def compare(x: number, y: string) { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "compare",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+            {
+              type: "functionParameter",
+              name: "y",
+              typeHint: { type: "primitiveType", value: "string" },
+            },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "x" }],
+        },
+      },
+    },
+    {
+      input: "def calc(x:number,y:number) { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "calc",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+            {
+              type: "functionParameter",
+              name: "y",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "x" }],
+        },
+      },
+    },
+    // Functions with mixed typed and untyped parameters
+    {
+      input: "def mixed(x: number, y) { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "mixed",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+            { type: "functionParameter", name: "y" },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "x" }],
+        },
+      },
+    },
+    {
+      input: "def partial(a, b: string, c) { a }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "partial",
+          parameters: [
+            { type: "functionParameter", name: "a" },
+            {
+              type: "functionParameter",
+              name: "b",
+              typeHint: { type: "primitiveType", value: "string" },
+            },
+            { type: "functionParameter", name: "c" },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "a" }],
+        },
+      },
+    },
+    {
+      input: "def combo(typed: number, untyped) { typed }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "combo",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "typed",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+            { type: "functionParameter", name: "untyped" },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "typed" }],
+        },
+      },
+    },
+    // Functions with complex type hints (arrays)
+    {
+      input: "def processArray(items: number[]) { items }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "processArray",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "items",
+              typeHint: {
+                type: "arrayType",
+                elementType: { type: "primitiveType", value: "number" },
+              },
+            },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "items" }],
+        },
+      },
+    },
+    {
+      input: "def handleStrings(names: string[]) { names }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "handleStrings",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "names",
+              typeHint: {
+                type: "arrayType",
+                elementType: { type: "primitiveType", value: "string" },
+              },
+            },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "names" }],
+        },
+      },
+    },
+    {
+      input: "def processData(obj: object) { obj }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "processData",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "obj",
+              typeHint: { type: "typeAliasVariable", aliasName: "object" },
+            },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "obj" }],
+        },
+      },
+    },
+    {
+      input: "def multi(arr: string[], count: number) { arr }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "multi",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "arr",
+              typeHint: {
+                type: "arrayType",
+                elementType: { type: "primitiveType", value: "string" },
+              },
+            },
+            {
+              type: "functionParameter",
+              name: "count",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "arr" }],
+        },
+      },
+    },
+    {
+      input: "def nested(matrix: number[][]) { matrix }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "nested",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "matrix",
+              typeHint: {
+                type: "arrayType",
+                elementType: {
+                  type: "arrayType",
+                  elementType: { type: "primitiveType", value: "number" },
+                },
+              },
+            },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "matrix" }],
+        },
+      },
+    },
+    // Functions with union type hints
+    {
+      input: "def flexible(value: string | number) { value }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "flexible",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "value",
+              typeHint: {
+                type: "unionType",
+                types: [
+                  { type: "primitiveType", value: "string" },
+                  { type: "primitiveType", value: "number" },
+                ],
+              },
+            },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "value" }],
+        },
+      },
+    },
+    {
+      input: "def multiUnion(x: number | string | boolean) { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "multiUnion",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: {
+                type: "unionType",
+                types: [
+                  { type: "primitiveType", value: "number" },
+                  { type: "primitiveType", value: "string" },
+                  { type: "primitiveType", value: "boolean" },
+                ],
+              },
+            },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "x" }],
+        },
+      },
+    },
+    {
+      input: "def dual(a: string | number, b: boolean) { a }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "dual",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "a",
+              typeHint: {
+                type: "unionType",
+                types: [
+                  { type: "primitiveType", value: "string" },
+                  { type: "primitiveType", value: "number" },
+                ],
+              },
+            },
+            {
+              type: "functionParameter",
+              name: "b",
+              typeHint: { type: "primitiveType", value: "boolean" },
+            },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "a" }],
+        },
+      },
+    },
+    // Functions with type hints and docstrings
+    {
+      input: 'def add(x: number, y: number) {\n  """Adds two numbers"""\n  x\n}',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "add",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+            {
+              type: "functionParameter",
+              name: "y",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+          ],
+          docString: {
+            type: "docString",
+            value: "Adds two numbers",
+          },
+          body: [{ type: "variableName", value: "x" }],
+        },
+      },
+    },
+    {
+      input: 'def greet(name: string) {\n  """Greets a person by name"""\n  name\n}',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "greet",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "name",
+              typeHint: { type: "primitiveType", value: "string" },
+            },
+          ],
+          docString: {
+            type: "docString",
+            value: "Greets a person by name",
+          },
+          body: [{ type: "variableName", value: "name" }],
+        },
+      },
+    },
+    {
+      input:
+        'def mixedWithDoc(typed: number, untyped) {\n  """Mix of typed and untyped params"""\n  typed\n}',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "mixedWithDoc",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "typed",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+            { type: "functionParameter", name: "untyped" },
+          ],
+          docString: {
+            type: "docString",
+            value: "Mix of typed and untyped params",
+          },
+          body: [{ type: "variableName", value: "typed" }],
+        },
+      },
+    },
+    // Edge cases for type hints
+    {
+      input: "def f(x: number) { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "f",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "x" }],
+        },
+      },
+    },
+    {
+      input: "def add(x  :  number  ,  y  :  string) { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "add",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+            {
+              type: "functionParameter",
+              name: "y",
+              typeHint: { type: "primitiveType", value: "string" },
+            },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "x" }],
+        },
+      },
+    },
+    {
+      input: "def process(my_var: string) { my_var }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "process",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "my_var",
+              typeHint: { type: "primitiveType", value: "string" },
+            },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "my_var" }],
+        },
+      },
+    },
+    {
+      input: "def handle(data: SomeLongTypeName) { data }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "handle",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "data",
+              typeHint: { type: "typeAliasVariable", aliasName: "SomeLongTypeName" },
+            },
+          ],
+          docString: undefined,
+          body: [{ type: "variableName", value: "data" }],
+        },
+      },
+    },
+    // Failure cases for type hints
+    {
+      input: "def bad(x:) { x }",
+      expected: { success: false },
+    },
+    {
+      input: "def bad(: number) { x }",
+      expected: { success: false },
+    },
+    {
+      input: "def bad(x: number y: string) { x }",
+      expected: { success: false },
+    },
   ];
 
   testCases.forEach(({ input, expected }) => {

@@ -1,5 +1,5 @@
-import { AgencyNode, VariableType } from "../types.js";
-import { AccessExpression } from "./access.js";
+import { AgencyArray, AgencyNode, AgencyObject, VariableType } from "../types.js";
+import { AccessExpression, IndexAccess } from "./access.js";
 import { Literal } from "./literals.js";
 
 export type FunctionParameter = {
@@ -20,7 +20,7 @@ export type FunctionDefinition = {
 export type FunctionCall = {
   type: "functionCall";
   functionName: string;
-  arguments: (Literal | AccessExpression | FunctionCall)[];
+  arguments: (AgencyArray | AgencyObject | IndexAccess | Literal | AccessExpression | FunctionCall)[];
 };
 
 export type DocString = {

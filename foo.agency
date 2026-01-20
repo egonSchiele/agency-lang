@@ -1,9 +1,1 @@
-import { categorize } from "./bar.agency"
-
-node main() {
-  @model = "o4-mini"
-  msg = input("Enter a message: ")
-  response = categorize(msg)
-  print(response)
-  return response
-}
+processed = processArray([1, 2, 3, 4, 5])

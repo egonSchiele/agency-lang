@@ -1,148 +1,7 @@
 import { describe, it, expect } from "vitest";
-import {
-  dotPropertyParser,
-  indexAccessParser,
-  dotFunctionCallParser,
-  accessExpressionParser,
-} from "./access.js";
+import { indexAccessParser, accessExpressionParser } from "./access.js";
 
 describe("access expression parsers", () => {
-  describe("dotPropertyParser", () => {
-    const testCases = [
-      // Happy path - variable name with property
-      {
-        input: "obj.foo",
-        expected: {
-          success: true,
-          result: {
-            type: "dotProperty",
-            object: { type: "variableName", value: "obj" },
-            propertyName: "foo",
-          },
-        },
-      },
-      {
-        input: "response.status",
-        expected: {
-          success: true,
-          result: {
-            type: "dotProperty",
-            object: { type: "variableName", value: "response" },
-            propertyName: "status",
-          },
-        },
-      },
-      {
-        input: "user.name",
-        expected: {
-          success: true,
-          result: {
-            type: "dotProperty",
-            object: { type: "variableName", value: "user" },
-            propertyName: "name",
-          },
-        },
-      },
-
-      // Edge cases - single character names
-      {
-        input: "x.y",
-        expected: {
-          success: true,
-          result: {
-            type: "dotProperty",
-            object: { type: "variableName", value: "x" },
-            propertyName: "y",
-          },
-        },
-      },
-      {
-        input: "a.b",
-        expected: {
-          success: true,
-          result: {
-            type: "dotProperty",
-            object: { type: "variableName", value: "a" },
-            propertyName: "b",
-          },
-        },
-      },
-
-      // Property names with numbers
-      {
-        input: "obj.prop123",
-        expected: {
-          success: true,
-          result: {
-            type: "dotProperty",
-            object: { type: "variableName", value: "obj" },
-            propertyName: "prop123",
-          },
-        },
-      },
-      {
-        input: "data.field2",
-        expected: {
-          success: true,
-          result: {
-            type: "dotProperty",
-            object: { type: "variableName", value: "data" },
-            propertyName: "field2",
-          },
-        },
-      },
-
-      // Note: Function calls as objects like "fetch().body" are not currently supported
-      // by this parser due to the order of parsers in the or() combinator on line 24.
-      // The literalParser matches the function name as a variableName before
-      // functionCallParser gets a chance to parse the full function call.
-      // This parser still uses or(literalParser, functionCallParser) instead of
-      // or(functionCallParser, literalParser).
-
-      // Note: Number literals with property access like "42.toString" are not supported
-      // because the dot is consumed as part of the number (decimal point).
-
-      // String literal as object
-      {
-        input: '"hello".length',
-        expected: {
-          success: true,
-          result: {
-            type: "dotProperty",
-            object: { type: "string", value: "hello" },
-            propertyName: "length",
-          },
-        },
-      },
-
-      // Failure cases
-      { input: "obj.", expected: { success: false } },
-      { input: ".property", expected: { success: false } },
-      { input: "obj", expected: { success: false } },
-      { input: "", expected: { success: false } },
-      { input: ".", expected: { success: false } },
-      // Note: "obj.123" actually parses successfully because alphanum includes digits
-      { input: "obj..prop", expected: { success: false } },
-    ];
-
-    testCases.forEach(({ input, expected }) => {
-      if (expected.success) {
-        it(`should parse "${input}" successfully`, () => {
-          const result = dotPropertyParser(input);
-          expect(result.success).toBe(true);
-          if (result.success) {
-            expect(result.result).toEqual(expected.result);
-          }
-        });
-      } else {
-        it(`should fail to parse "${input}"`, () => {
-          const result = dotPropertyParser(input);
-          expect(result.success).toBe(false);
-        });
-      }
-    });
-  });
-
   describe("indexAccessParser", () => {
     const testCases = [
       // Happy path - variable with number index
@@ -376,319 +235,6 @@ describe("access expression parsers", () => {
     });
   });
 
-  describe("dotFunctionCallParser", () => {
-    const testCases = [
-      // Happy path - variable with method call
-      {
-        input: "story.json()",
-        expected: {
-          success: true,
-          result: {
-            type: "dotFunctionCall",
-            object: { type: "variableName", value: "story" },
-            functionCall: {
-              type: "functionCall",
-              functionName: "json",
-              arguments: [],
-            },
-          },
-        },
-      },
-      {
-        input: "response.text()",
-        expected: {
-          success: true,
-          result: {
-            type: "dotFunctionCall",
-            object: { type: "variableName", value: "response" },
-            functionCall: {
-              type: "functionCall",
-              functionName: "text",
-              arguments: [],
-            },
-          },
-        },
-      },
-      {
-        input: "obj.getData()",
-        expected: {
-          success: true,
-          result: {
-            type: "dotFunctionCall",
-            object: { type: "variableName", value: "obj" },
-            functionCall: {
-              type: "functionCall",
-              functionName: "getData",
-              arguments: [],
-            },
-          },
-        },
-      },
-
-      // Method call with arguments
-      {
-        input: "obj.method(42)",
-        expected: {
-          success: true,
-          result: {
-            type: "dotFunctionCall",
-            object: { type: "variableName", value: "obj" },
-            functionCall: {
-              type: "functionCall",
-              functionName: "method",
-              arguments: [{ type: "number", value: "42" }],
-            },
-          },
-        },
-      },
-      {
-        input: 'str.split(",")',
-        expected: {
-          success: true,
-          result: {
-            type: "dotFunctionCall",
-            object: { type: "variableName", value: "str" },
-            functionCall: {
-              type: "functionCall",
-              functionName: "split",
-              arguments: [{ type: "string", value: "," }],
-            },
-          },
-        },
-      },
-      {
-        input: "arr.slice(0)",
-        expected: {
-          success: true,
-          result: {
-            type: "dotFunctionCall",
-            object: { type: "variableName", value: "arr" },
-            functionCall: {
-              type: "functionCall",
-              functionName: "slice",
-              arguments: [{ type: "number", value: "0" }],
-            },
-          },
-        },
-      },
-
-      // Multiple arguments
-      {
-        input: "obj.calculate(1, 2)",
-        expected: {
-          success: true,
-          result: {
-            type: "dotFunctionCall",
-            object: { type: "variableName", value: "obj" },
-            functionCall: {
-              type: "functionCall",
-              functionName: "calculate",
-              arguments: [
-                { type: "number", value: "1" },
-                { type: "number", value: "2" },
-              ],
-            },
-          },
-        },
-      },
-      {
-        input: 'str.replace("old", "new")',
-        expected: {
-          success: true,
-          result: {
-            type: "dotFunctionCall",
-            object: { type: "variableName", value: "str" },
-            functionCall: {
-              type: "functionCall",
-              functionName: "replace",
-              arguments: [
-                { type: "string", value: "old" },
-                { type: "string", value: "new" },
-              ],
-            },
-          },
-        },
-      },
-
-      // Variable as argument
-      {
-        input: "obj.process(data)",
-        expected: {
-          success: true,
-          result: {
-            type: "dotFunctionCall",
-            object: { type: "variableName", value: "obj" },
-            functionCall: {
-              type: "functionCall",
-              functionName: "process",
-              arguments: [{ type: "variableName", value: "data" }],
-            },
-          },
-        },
-      },
-
-      // Chained function calls
-      {
-        input: "fetch().json()",
-        expected: {
-          success: true,
-          result: {
-            type: "dotFunctionCall",
-            object: {
-              type: "functionCall",
-              functionName: "fetch",
-              arguments: [],
-            },
-            functionCall: {
-              type: "functionCall",
-              functionName: "json",
-              arguments: [],
-            },
-          },
-        },
-      },
-      {
-        input: "getData().process()",
-        expected: {
-          success: true,
-          result: {
-            type: "dotFunctionCall",
-            object: {
-              type: "functionCall",
-              functionName: "getData",
-              arguments: [],
-            },
-            functionCall: {
-              type: "functionCall",
-              functionName: "process",
-              arguments: [],
-            },
-          },
-        },
-      },
-      {
-        input: "getResponse().text()",
-        expected: {
-          success: true,
-          result: {
-            type: "dotFunctionCall",
-            object: {
-              type: "functionCall",
-              functionName: "getResponse",
-              arguments: [],
-            },
-            functionCall: {
-              type: "functionCall",
-              functionName: "text",
-              arguments: [],
-            },
-          },
-        },
-      },
-
-      // Chained function calls with arguments
-      {
-        input: 'fetch("url").json()',
-        expected: {
-          success: true,
-          result: {
-            type: "dotFunctionCall",
-            object: {
-              type: "functionCall",
-              functionName: "fetch",
-              arguments: [{ type: "string", value: "url" }],
-            },
-            functionCall: {
-              type: "functionCall",
-              functionName: "json",
-              arguments: [],
-            },
-          },
-        },
-      },
-      {
-        input: "getUser(42).getName()",
-        expected: {
-          success: true,
-          result: {
-            type: "dotFunctionCall",
-            object: {
-              type: "functionCall",
-              functionName: "getUser",
-              arguments: [{ type: "number", value: "42" }],
-            },
-            functionCall: {
-              type: "functionCall",
-              functionName: "getName",
-              arguments: [],
-            },
-          },
-        },
-      },
-
-      // Edge cases - single character names
-      {
-        input: "x.f()",
-        expected: {
-          success: true,
-          result: {
-            type: "dotFunctionCall",
-            object: { type: "variableName", value: "x" },
-            functionCall: {
-              type: "functionCall",
-              functionName: "f",
-              arguments: [],
-            },
-          },
-        },
-      },
-
-      // String literal as object
-      {
-        input: '"hello".toUpperCase()',
-        expected: {
-          success: true,
-          result: {
-            type: "dotFunctionCall",
-            object: { type: "string", value: "hello" },
-            functionCall: {
-              type: "functionCall",
-              functionName: "toUpperCase",
-              arguments: [],
-            },
-          },
-        },
-      },
-
-      // Failure cases
-      { input: "obj.method", expected: { success: false } }, // missing ()
-      { input: "obj.()", expected: { success: false } }, // missing method name
-      { input: ".method()", expected: { success: false } }, // missing object
-      { input: "obj.", expected: { success: false } },
-      { input: "method()", expected: { success: false } }, // no dot
-      { input: "", expected: { success: false } },
-      { input: "obj.method(", expected: { success: false } }, // unclosed paren
-      { input: "obj.method)", expected: { success: false } }, // no opening paren
-    ];
-
-    testCases.forEach(({ input, expected }) => {
-      if (expected.success) {
-        it(`should parse "${input}" successfully`, () => {
-          const result = dotFunctionCallParser(input);
-          expect(result.success).toBe(true);
-          if (result.success) {
-            expect(result.result).toEqual(expected.result);
-          }
-        });
-      } else {
-        it(`should fail to parse "${input}"`, () => {
-          const result = dotFunctionCallParser(input);
-          expect(result.success).toBe(false);
-        });
-      }
-    });
-  });
-
   describe("accessExpressionParser", () => {
     const testCases = [
       // Dot property access
@@ -716,50 +262,6 @@ describe("access expression parsers", () => {
               type: "dotProperty",
               object: { type: "variableName", value: "response" },
               propertyName: "status",
-            },
-          },
-        },
-      },
-
-      // Index access
-      {
-        input: "arr[0]",
-        expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "indexAccess",
-              array: { type: "variableName", value: "arr" },
-              index: { type: "number", value: "0" },
-            },
-          },
-        },
-      },
-      {
-        input: "items[i]",
-        expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "indexAccess",
-              array: { type: "variableName", value: "items" },
-              index: { type: "variableName", value: "i" },
-            },
-          },
-        },
-      },
-      {
-        input: 'data["key"]',
-        expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "indexAccess",
-              array: { type: "variableName", value: "data" },
-              index: { type: "string", value: "key" },
             },
           },
         },
@@ -866,23 +368,52 @@ describe("access expression parsers", () => {
           },
         },
       },
-
-      // Function call with index access
       {
-        input: "getData()[0]",
+        input: "foo.bar().baz()[3].a1",
         expected: {
           success: true,
           result: {
-            type: "accessExpression",
             expression: {
-              type: "indexAccess",
-              array: {
-                type: "functionCall",
-                functionName: "getData",
-                arguments: [],
+              object: {
+                expression: {
+                  array: {
+                    expression: {
+                      functionCall: {
+                        arguments: [],
+                        functionName: "baz",
+                        type: "functionCall",
+                      },
+                      object: {
+                        expression: {
+                          functionCall: {
+                            arguments: [],
+                            functionName: "bar",
+                            type: "functionCall",
+                          },
+                          object: {
+                            type: "variableName",
+                            value: "foo",
+                          },
+                          type: "dotFunctionCall",
+                        },
+                        type: "accessExpression",
+                      },
+                      type: "dotFunctionCall",
+                    },
+                    type: "accessExpression",
+                  },
+                  index: {
+                    type: "number",
+                    value: "3",
+                  },
+                  type: "indexAccess",
+                },
+                type: "accessExpression",
               },
-              index: { type: "number", value: "0" },
+              propertyName: "a1",
+              type: "dotProperty",
             },
+            type: "accessExpression",
           },
         },
       },
@@ -898,20 +429,6 @@ describe("access expression parsers", () => {
               type: "dotProperty",
               object: { type: "variableName", value: "x" },
               propertyName: "y",
-            },
-          },
-        },
-      },
-      {
-        input: "a[0]",
-        expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "indexAccess",
-              array: { type: "variableName", value: "a" },
-              index: { type: "number", value: "0" },
             },
           },
         },

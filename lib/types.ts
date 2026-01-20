@@ -1,7 +1,7 @@
 import { Literal } from "./types/literals.js";
 import { TypeAlias, TypeHint, VariableType } from "./types/typeHints.js";
 import { MatchBlock } from "./types/matchBlock.js";
-import { AccessExpression } from "./types/access.js";
+import { AccessExpression, DotProperty, IndexAccess } from "./types/access.js";
 import { FunctionCall, FunctionDefinition } from "./types/function.js";
 import { AgencyArray, AgencyObject } from "./types/dataStructures.js";
 import { GraphNodeDefinition } from "./types/graphNode.js";
@@ -25,7 +25,13 @@ export * from "./types/whileLoop.js";
 export type Assignment = {
   type: "assignment";
   variableName: string;
-  value: AccessExpression | Literal | FunctionCall | AgencyObject | AgencyArray;
+  value:
+    | AccessExpression
+    | Literal
+    | FunctionCall
+    | AgencyObject
+    | AgencyArray
+    | IndexAccess;
 };
 
 export type AgencyComment = {
@@ -50,7 +56,9 @@ export type AgencyNode =
   | AgencyArray
   | ImportStatement
   | WhileLoop
-  | SpecialVar;
+  | SpecialVar
+  | IndexAccess
+  | DotProperty;
 
 export type AgencyProgram = {
   type: "agencyProgram";

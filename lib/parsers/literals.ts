@@ -13,12 +13,15 @@ import {
   capture,
   char,
   digit,
+  letter,
   many,
   many1Till,
   many1WithJoin,
   manyTill,
+  manyWithJoin,
   map,
   or,
+  seq,
   seqC,
   set,
 } from "tarsec";
@@ -55,9 +58,19 @@ export const stringParser: Parser<StringLiteral> = seqC(
   capture(manyTill(char('"')), "value"),
   char('"')
 );
-export const variableNameParser: Parser<VariableNameLiteral> = seqC(
-  set("type", "variableName"),
-  capture(many1WithJoin(varNameChar), "value")
+
+export const variableNameParser: Parser<VariableNameLiteral> = seq(
+  [
+    set("type", "variableName"),
+    capture(letter, "init"),
+    capture(manyWithJoin(varNameChar), "value"),
+  ],
+  (_, captures) => {
+    return {
+      type: "variableName",
+      value: `${captures.init}${captures.value}`,
+    };
+  }
 );
 
 export const literalParser: Parser<Literal> = or(

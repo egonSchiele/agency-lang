@@ -27,7 +27,7 @@ import { literalParser } from "./literals.js";
 import { assignmentParser } from "./assignment.js";
 import { functionCallParser } from "./functionCall.js";
 import { DefaultCase, MatchBlockCase } from "../types/matchBlock.js";
-import { accessExpressionParser } from "./access.js";
+import { accessExpressionParser, indexAccessParser } from "./access.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
 import * as parsers from "../parser.js";
@@ -40,7 +40,12 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = seqC(
   set("type", "matchBlockCase"),
   optionalSpaces,
   capture(
-    or(defaultCaseParser, accessExpressionParser, literalParser),
+    or(
+      defaultCaseParser,
+      indexAccessParser,
+      accessExpressionParser,
+      literalParser
+    ),
     "caseValue"
   ),
   optionalSpaces,

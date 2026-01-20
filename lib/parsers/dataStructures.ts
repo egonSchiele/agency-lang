@@ -18,7 +18,7 @@ import {
   succeed,
   trace,
 } from "tarsec";
-import { accessExpressionParser } from "./access.js";
+import { accessExpressionParser, indexAccessParser } from "./access.js";
 import { functionCallParser } from "./functionCall.js";
 import { literalParser } from "./literals.js";
 import { comma, optionalSpaces } from "./utils.js";
@@ -35,6 +35,7 @@ export const agencyArrayParser: Parser<AgencyArray> = (
         sepBy(
           comma,
           or(
+            indexAccessParser,
             accessExpressionParser,
             functionCallParser,
             literalParser,
@@ -67,6 +68,7 @@ export const agencyObjectKVParser: Parser<AgencyObjectKV> = (
       optionalSpaces,
       capture(
         or(
+          indexAccessParser,
           accessExpressionParser,
           functionCallParser,
           literalParser,

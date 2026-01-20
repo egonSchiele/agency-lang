@@ -506,9 +506,9 @@ return result
 
 }//  Call the functions
 const sum = await add({x: 5, y: 10});
-const greeting = await greet({name: `Alice`});
-const labeled = await mixed({count: 42, label: `Answer`});
+const greeting = await greet({name: "Alice"});
+const labeled = await mixed({count: 42, label: "Answer"});
 const processed = await processArray({items: [1, 2, 3, 4, 5]});
-const flexResult = await flexible({value: `test`});
+const flexResult = await flexible({value: "test"});
 
 export default graph;

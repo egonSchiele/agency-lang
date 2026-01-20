@@ -5,6 +5,7 @@ import {
   promptParser,
   numberParser,
   stringParser,
+  multiLineStringParser,
   variableNameParser,
   literalParser,
 } from "./literals.js";
@@ -430,13 +431,6 @@ describe("literals parsers", () => {
         },
       },
       {
-        input: '"newline\nhere"',
-        expected: {
-          success: true,
-          result: { type: "string", value: "newline\nhere" },
-        },
-      },
-      {
         input: '"special!@#$%^&*()"',
         expected: {
           success: true,
@@ -464,6 +458,13 @@ describe("literals parsers", () => {
       { input: "'hello'", expected: { success: false } },
       { input: "", expected: { success: false } },
       { input: "hello", expected: { success: false } },
+      /// use """ for multi-line strings
+      {
+        input: '"newline\nhere"',
+        expected: {
+          success: false,
+        },
+      },
     ];
 
     testCases.forEach(({ input, expected }) => {
@@ -478,6 +479,179 @@ describe("literals parsers", () => {
       } else {
         it(`should fail to parse "${input}"`, () => {
           const result = stringParser(input);
+          expect(result.success).toBe(false);
+        });
+      }
+    });
+  });
+
+  describe("multiLineStringParser", () => {
+    const testCases = [
+      // Happy path - simple strings
+      {
+        input: '"""hello"""',
+        expected: {
+          success: true,
+          result: { type: "multiLineString", value: "hello" },
+        },
+      },
+      {
+        input: '"""world"""',
+        expected: {
+          success: true,
+          result: { type: "multiLineString", value: "world" },
+        },
+      },
+
+      // Empty multi-line string
+      {
+        input: '""""""',
+        expected: {
+          success: true,
+          result: { type: "multiLineString", value: "" },
+        },
+      },
+
+      // Multi-line strings with actual newlines
+      {
+        input: '"""line1\nline2"""',
+        expected: {
+          success: true,
+          result: { type: "multiLineString", value: "line1\nline2" },
+        },
+      },
+      {
+        input: '"""line1\nline2\nline3"""',
+        expected: {
+          success: true,
+          result: { type: "multiLineString", value: "line1\nline2\nline3" },
+        },
+      },
+      {
+        input: '"""\nstarts with newline"""',
+        expected: {
+          success: true,
+          result: { type: "multiLineString", value: "\nstarts with newline" },
+        },
+      },
+      {
+        input: '"""ends with newline\n"""',
+        expected: {
+          success: true,
+          result: { type: "multiLineString", value: "ends with newline\n" },
+        },
+      },
+
+      // Strings with special characters
+      {
+        input: '"""Hello, World!"""',
+        expected: {
+          success: true,
+          result: { type: "multiLineString", value: "Hello, World!" },
+        },
+      },
+      {
+        input: '"""123"""',
+        expected: {
+          success: true,
+          result: { type: "multiLineString", value: "123" },
+        },
+      },
+      {
+        input: '"""  spaces  and  tabs\t\t"""',
+        expected: {
+          success: true,
+          result: { type: "multiLineString", value: "  spaces  and  tabs\t\t" },
+        },
+      },
+      {
+        input: '"""special!@#$%^&*()"""',
+        expected: {
+          success: true,
+          result: { type: "multiLineString", value: "special!@#$%^&*()" },
+        },
+      },
+
+      // Strings containing single and double quotes
+      {
+        input: '"""single\'quotes\'here"""',
+        expected: {
+          success: true,
+          result: { type: "multiLineString", value: "single'quotes'here" },
+        },
+      },
+      {
+        input: '"""double"quotes"here"""',
+        expected: {
+          success: true,
+          result: { type: "multiLineString", value: 'double"quotes"here' },
+        },
+      },
+      {
+        input: '"""mixed"and\'quotes"""',
+        expected: {
+          success: true,
+          result: { type: "multiLineString", value: `mixed"and'quotes` },
+        },
+      },
+
+      // Strings containing backticks and interpolation-like syntax
+      {
+        input: '"""`backtick`"""',
+        expected: {
+          success: true,
+          result: { type: "multiLineString", value: "`backtick`" },
+        },
+      },
+      {
+        input: '"""${notInterpolation}"""',
+        expected: {
+          success: true,
+          result: { type: "multiLineString", value: "${notInterpolation}" },
+        },
+      },
+
+      // Multiple consecutive newlines
+      {
+        input: '"""line1\n\n\nline2"""',
+        expected: {
+          success: true,
+          result: { type: "multiLineString", value: "line1\n\n\nline2" },
+        },
+      },
+
+      // Mixed whitespace
+      {
+        input: '"""  \n\t\n  """',
+        expected: {
+          success: true,
+          result: { type: "multiLineString", value: "  \n\t\n  " },
+        },
+      },
+
+      // Failure cases
+      { input: '"""hello', expected: { success: false } },
+      { input: 'hello"""', expected: { success: false } },
+      { input: '""hello"""', expected: { success: false } },
+      { input: '"""hello""', expected: { success: false } },
+      { input: '"hello"', expected: { success: false } },
+      { input: "'hello'", expected: { success: false } },
+      { input: "", expected: { success: false } },
+      { input: "hello", expected: { success: false } },
+    ];
+
+    testCases.forEach(({ input, expected }) => {
+      if (expected.success) {
+        it(`should parse ${JSON.stringify(input)} successfully`, () => {
+          const result = multiLineStringParser(input);
+          expect(result.success).toBe(true);
+          if (result.success) {
+            expect(result.result).toEqual(expected.result);
+          }
+        });
+      } else {
+        it(`should fail to parse ${JSON.stringify(input)}`, () => {
+          const result = multiLineStringParser(input);
           expect(result.success).toBe(false);
         });
       }

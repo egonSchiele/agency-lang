@@ -334,6 +334,8 @@ export class TypeScriptGenerator extends BaseGenerator {
       case "number":
         return literal.value;
       case "string":
+        return `"${escape(literal.value)}"`;
+      case "multiLineString":
         return `\`${escape(literal.value)}\``;
       case "variableName":
         return literal.value;

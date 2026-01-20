@@ -50,7 +50,7 @@ const addTool = {
     },
   };
 
-const name = `Alice`;
+const name = "Alice";
 
 async function _greeting(name: string): Promise<string> {
   const __prompt = `say hi to ${name}`;

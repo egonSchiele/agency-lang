@@ -2,6 +2,7 @@ import { backtick, varNameChar } from "./utils.js";
 import {
   InterpolationSegment,
   Literal,
+  MultiLineStringLiteral,
   NumberLiteral,
   PromptLiteral,
   StringLiteral,
@@ -18,6 +19,7 @@ import {
   many1Till,
   many1WithJoin,
   manyTill,
+  manyTillOneOf,
   manyTillStr,
   manyWithJoin,
   map,
@@ -57,11 +59,11 @@ export const numberParser: Parser<NumberLiteral> = seqC(
 export const stringParser: Parser<StringLiteral> = seqC(
   set("type", "string"),
   char('"'),
-  capture(manyTillStr('"'), "value"),
+  capture(manyTillOneOf(['"', "\n"]), "value"),
   char('"')
 );
-export const multiLineStringParser: Parser<StringLiteral> = seqC(
-  set("type", "string"),
+export const multiLineStringParser: Parser<MultiLineStringLiteral> = seqC(
+  set("type", "multiLineString"),
   str('"""'),
   capture(manyTillStr('"""'), "value"),
   str('"""')

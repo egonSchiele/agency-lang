@@ -106,12 +106,13 @@ export class AgencyGenerator extends BaseGenerator {
         return literal.value;
       case "string":
         // Escape backslashes and quotes
-        const escaped = literal.value
-          .replace(/\\/g, "\\\\")
-          .replace(/"/g, '\\"');
+        const escaped = literal.value;
         return `"${escaped}"`;
       case "variableName":
         return literal.value;
+      case "multiLineString":
+        const escapedMultiLine = literal.value;
+        return `"""${escapedMultiLine}"""`;
       case "prompt":
         return this.generatePromptLiteral(literal);
       default:

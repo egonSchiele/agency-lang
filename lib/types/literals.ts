@@ -1,5 +1,6 @@
 export type Literal =
   | NumberLiteral
+  | MultiLineStringLiteral
   | StringLiteral
   | VariableNameLiteral
   | PromptLiteral;
@@ -11,6 +12,11 @@ export type NumberLiteral = {
 
 export type StringLiteral = {
   type: "string";
+  value: string;
+};
+
+export type MultiLineStringLiteral = {
+  type: "multiLineString";
   value: string;
 };
 

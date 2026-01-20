@@ -151,6 +151,7 @@ export class BaseGenerator {
       case "matchBlock":
         return this.processMatchBlock(node);
       case "number":
+      case "multiLineString":
       case "string":
       case "variableName":
       case "prompt":

@@ -1,6 +1,6 @@
 {
   "name": "agency-lang",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "description": "The Agency language",
   "main": "lib/index.js",
   "scripts": {
@@ -49,7 +49,7 @@
   "devDependencies": {
     "@types/node": "^25.0.3",
     "nanoid": "^5.1.6",
-    "piemachine": "^0.0.2",
+    "piemachine": "^0.0.3",
     "statelog-client": "^0.0.31",
     "tsc-alias": "^1.8.16",
     "typescript": "^5.9.3",

@@ -52,3 +52,15 @@ should allow spaces before semicolons
 ```
         input: '  @model  =  "gpt-4"  ;  ',
 ```
+
+## parens around types
+
+Can't do this yet:
+
+```
+
+type ListIngredientsParams = {
+  includePublicIngredients: boolean;
+  attributes: (name | serving_size | unit | calories | protein | fat | carbohydrates | fiber | sugar | calcium | sodium | public | id)[] | undefined
+}
+```

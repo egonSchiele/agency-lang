@@ -66,7 +66,10 @@ export const arrayTypeParser: Parser<ArrayType> = (input: string) => {
     "arrayTypeParser",
     seqC(
       set("type", "arrayType"),
-      capture(or(objectTypeParser, primitiveTypeParser), "elementType"),
+      capture(
+        or(objectTypeParser, primitiveTypeParser, typeAliasVariableParser),
+        "elementType",
+      ),
       capture(count(str("[]")), "arrayDepth"),
     ),
   );
@@ -94,7 +97,7 @@ export const angleBracketsArrayTypeParser: Parser<ArrayType> = trace(
     set("type", "arrayType"),
     str("array"),
     char("<"),
-    capture(primitiveTypeParser, "elementType"),
+    capture(or(primitiveTypeParser, typeAliasVariableParser), "elementType"),
     char(">"),
   ),
 );

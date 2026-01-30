@@ -3,10 +3,21 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `goToNode("{{{nodeName:string}}}", { messages: state.messages, data: {{{data:string}}} });`;
+export const template = `goToNode("{{{nodeName:string}}}",
+  {
+    messages: state.messages,
+    {{#hasData}}
+    data: {{{data:string}}}
+    {{/hasData}}
+    {{^hasData}}
+    data: null
+    {{/hasData}}
+  }
+);`;
 
 export type TemplateType = {
   nodeName: string;
+  hasData: boolean;
   data: string;
 };
 

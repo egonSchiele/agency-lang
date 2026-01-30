@@ -1,1 +1,11 @@
-goToNode("{{{nodeName:string}}}", { messages: state.messages, data: {{{data:string}}} });
+goToNode("{{{nodeName:string}}}",
+  {
+    messages: state.messages,
+    {{#hasData}}
+    data: {{{data:string}}}
+    {{/hasData}}
+    {{^hasData}}
+    data: null
+    {{/hasData}}
+  }
+);

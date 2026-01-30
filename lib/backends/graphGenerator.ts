@@ -292,9 +292,10 @@ export class GraphGenerator extends TypeScriptGenerator {
         //        return this.generateLiteral(arg);
       }
     });
-    const argsString = parts.join(", ");
+    const argsString = parts.join(", ")
     return goToNode.default({
       nodeName: functionName,
+      hasData: parts.length > 0,
       data: argsString,
     });
   } /* 

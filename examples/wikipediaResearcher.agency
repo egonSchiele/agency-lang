@@ -1,0 +1,52 @@
+import {getSummary, getHtml} from "./wikipedia.ts"
+
+def wikipediaSummary(page: string): string {
+  """
+  Fetches a summary for a given Wikipedia page
+  """
+  return getSummary(page)
+}
+
+def wikipediaFull(page: string): string {
+  """
+  Fetches the full HTML content for a given Wikipedia page
+  """
+  return getHtml(page)
+}
+
+def shouldExit(msg: string): boolean {
+  """
+  Determines if the program should exit based on the message
+  """
+  shouldExit :: boolean
+  shouldExit = `Based on this message, does the user want to exit? ${msg}`
+  return shouldExit
+}
+
+node research(msg) {
+  answer :: string
+  +wikipediaSummary
+  +wikipediaFull
+  answer = `Help the user research the topic: ${msg}`
+  print(answer)
+  return ask("> ")
+}
+
+node exitProgram() {
+  print("Exiting the program as per user request.")
+  exit(0)
+}
+
+node ask(question) {
+  msg = input(question)
+  exitDecision = shouldExit(msg)
+  match(exitDecision) {
+    true => return exitProgram()
+    false => return research(msg)
+  }
+}
+
+node main() {
+  print("Welcome to the Wikipedia Research Assistant!")
+  return ask("What topic would you like to research? ")
+}

@@ -15,6 +15,7 @@ import { functionCallParser } from "./functionCall.js";
 import { literalParser } from "./literals.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { optionalSpaces, varNameChar } from "./utils.js";
+import { timeBlockParser } from "./function.js";
 
 export const assignmentParser: Parser<Assignment> = trace(
   "assignmentParser",
@@ -27,15 +28,16 @@ export const assignmentParser: Parser<Assignment> = trace(
     optionalSpaces,
     capture(
       or(
+        timeBlockParser,
         functionCallParser,
         indexAccessParser,
         accessExpressionParser,
         agencyArrayParser,
         agencyObjectParser,
-        literalParser
+        literalParser,
       ),
-      "value"
+      "value",
     ),
-    optionalSemicolon
-  )
+    optionalSemicolon,
+  ),
 );

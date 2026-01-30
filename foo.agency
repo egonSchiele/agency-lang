@@ -1,7 +1,3 @@
-str = "hihihihi
-asdasd
-asdasdsd
-"
-node main() {
-  print(str)
+time { 
+  x = 1;
 }

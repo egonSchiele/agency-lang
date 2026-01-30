@@ -23,6 +23,7 @@ import { commentParser } from "./parsers/comment.js";
 import {
   functionParser,
   graphNodeParser,
+  timeBlockParser,
   whileLoopParser,
 } from "./parsers/function.js";
 import { functionCallParser } from "./parsers/functionCall.js";
@@ -46,15 +47,16 @@ export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
         whileLoopParser,
         typeHintParser,
         matchBlockParser,
+        timeBlockParser,
         functionParser,
         returnStatementParser,
         specialVarParser,
         accessExpressionParser,
         assignmentParser,
         functionCallParser,
-        commentParser
-      )
-    )
+        commentParser,
+      ),
+    ),
   );
 
   return parser(input);
@@ -63,7 +65,7 @@ export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
 export const agencyParser: Parser<AgencyProgram> = seqC(
   set("type", "agencyProgram"),
   capture(agencyNode, "nodes"),
-  eof
+  eof,
 );
 
 export const _multilineCommentParser = between(str("/*"), str("*/"), anyChar);
@@ -72,7 +74,7 @@ export const multilineCommentParser = search(_multilineCommentParser);
 
 export function parseAgency(
   input: string,
-  verbose: boolean = false
+  verbose: boolean = false,
 ): ParserResult<AgencyProgram> {
   const logger = new EgonLog({ level: verbose ? "debug" : "warn" });
 
@@ -98,7 +100,7 @@ export function parseAgency(
         type: "agencyProgram",
         nodes: [],
       },
-      ""
+      "",
     );
   }
 

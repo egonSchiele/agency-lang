@@ -47,6 +47,7 @@ import {
   DEFAULT_SCHEMA,
   mapTypeToZodSchema,
 } from "./typescriptGenerator/typeToZodSchema.js";
+import { TimeBlock } from "@/types/timeBlock.js";
 
 export class TypeScriptGenerator extends BaseGenerator {
   constructor() {
@@ -179,6 +180,10 @@ export class TypeScriptGenerator extends BaseGenerator {
     } else if (value.type === "functionCall") {
       // Direct assignment for other literal types
       const code = this.processNode(value);
+      return `const ${variableName} = await ${code.trim()};` + "\n";
+    } else if (value.type === "timeBlock") {
+      const timingVarName = `_timeBlockResult_${variableName}`;
+      const code = this.processTimeBlock(value, timingVarName);
       return `const ${variableName} = await ${code.trim()};` + "\n";
     } else {
       // Direct assignment for other literal types
@@ -467,6 +472,15 @@ export class TypeScriptGenerator extends BaseGenerator {
       default:
         throw new Error(`Unhandled SpecialVar name: ${node.name}`);
     }
+  }
+
+  protected processTimeBlock(node: TimeBlock, timingVarName: string): string {
+    const bodyCodes: string[] = [];
+    for (const stmt of node.body) {
+      bodyCodes.push(this.processNode(stmt));
+    }
+    const bodyCodeStr = bodyCodes.join("\n");
+    return bodyCodeStr;
   }
 }
 

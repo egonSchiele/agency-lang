@@ -1,15 +1,16 @@
-import { Literal } from "./types/literals.js";
-import { TypeAlias, TypeHint, VariableType } from "./types/typeHints.js";
-import { MatchBlock } from "./types/matchBlock.js";
 import { AccessExpression, DotProperty, IndexAccess } from "./types/access.js";
-import { FunctionCall, FunctionDefinition } from "./types/function.js";
 import { AgencyArray, AgencyObject } from "./types/dataStructures.js";
+import { FunctionCall, FunctionDefinition } from "./types/function.js";
 import { GraphNodeDefinition } from "./types/graphNode.js";
-import { ReturnStatement } from "./types/returnStatement.js";
-import { UsesTool } from "./types/tools.js";
 import { ImportStatement } from "./types/importStatement.js";
-import { WhileLoop } from "./types/whileLoop.js";
+import { Literal } from "./types/literals.js";
+import { MatchBlock } from "./types/matchBlock.js";
+import { ReturnStatement } from "./types/returnStatement.js";
 import { SpecialVar } from "./types/specialVar.js";
+import { TimeBlock } from "./types/timeBlock.js";
+import { UsesTool } from "./types/tools.js";
+import { TypeAlias, TypeHint, VariableType } from "./types/typeHints.js";
+import { WhileLoop } from "./types/whileLoop.js";
 export * from "./types/access.js";
 export * from "./types/dataStructures.js";
 export * from "./types/function.js";
@@ -31,7 +32,8 @@ export type Assignment = {
     | FunctionCall
     | AgencyObject
     | AgencyArray
-    | IndexAccess;
+    | IndexAccess
+    | TimeBlock;
 };
 
 export type AgencyComment = {
@@ -58,7 +60,8 @@ export type AgencyNode =
   | WhileLoop
   | SpecialVar
   | IndexAccess
-  | DotProperty;
+  | DotProperty
+  | TimeBlock;
 
 export type AgencyProgram = {
   type: "agencyProgram";

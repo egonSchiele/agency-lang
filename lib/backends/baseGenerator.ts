@@ -27,6 +27,7 @@ import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
+import { TimeBlock } from "@/types/timeBlock.js";
 
 export class BaseGenerator {
   protected typeHints: TypeHintMap = {};
@@ -176,9 +177,17 @@ export class BaseGenerator {
         return this.processSpecialVar(node);
       case "indexAccess":
         return this.processIndexAccess(node);
+      case "timeBlock":
+        throw new Error(
+          `Time block needs to be assigned to a variable: ${JSON.stringify(node as any)}`,
+        );
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
+  }
+
+  protected processTimeBlock(node: TimeBlock, timingVarName: string): string {
+    return "processTimeBlock not implemented";
   }
 
   protected processSpecialVar(node: SpecialVar): string {

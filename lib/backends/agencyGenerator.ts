@@ -26,6 +26,7 @@ import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { BaseGenerator } from "./baseGenerator.js";
 import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
+import { TimeBlock } from "@/types/timeBlock.js";
 
 export class AgencyGenerator extends BaseGenerator {
   private indentLevel: number = 0;
@@ -96,8 +97,25 @@ export class AgencyGenerator extends BaseGenerator {
 
   // Assignment and literals
   protected processAssignment(node: Assignment): string {
+    if (node.value.type === "timeBlock") {
+      const code = this.processTimeBlock(node.value);
+      return this.indentStr(`${node.variableName} = ${code.trim()}\n`);
+    }
     const valueCode = this.processNode(node.value).trim();
     return this.indentStr(`${node.variableName} = ${valueCode}\n`);
+  }
+
+  protected processTimeBlock(
+    node: TimeBlock
+  ): string {
+    this.increaseIndent();
+    const bodyCodes: string[] = [];
+    for (const stmt of node.body) {
+      bodyCodes.push(this.processNode(stmt));
+    }
+    this.decreaseIndent();
+    const bodyCodeStr = bodyCodes.join("\n");
+    return `time {\n${bodyCodeStr}${this.indentStr("}")}\n`;
   }
 
   protected generateLiteral(literal: Literal): string {

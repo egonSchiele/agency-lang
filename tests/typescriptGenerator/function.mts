@@ -64,7 +64,7 @@ async function test({}) : Promise<any> {
     const foo = 1;
 
 foo
-}console.log(test({}))async function add({a, b}) : Promise<any> {
+}await console.log(test({}))async function add({a, b}) : Promise<any> {
     //  multi-param function
 
 }

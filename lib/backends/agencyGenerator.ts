@@ -114,7 +114,7 @@ export class AgencyGenerator extends BaseGenerator {
       bodyCodes.push(this.processNode(stmt));
     }
     this.decreaseIndent();
-    const bodyCodeStr = bodyCodes.join("\n");
+    const bodyCodeStr = bodyCodes.join("");
     return `time {\n${bodyCodeStr}${this.indentStr("}")}\n`;
   }
 

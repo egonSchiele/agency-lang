@@ -55,31 +55,31 @@ const addTool = {
 const action = "start";
 switch (action) {
   case "start":
-console.log("Starting...")
+await console.log("Starting...")
     break;
   case "stop":
-console.log("Stopping...")
+await console.log("Stopping...")
     break;
   case "restart":
-console.log("Restarting...")
+await console.log("Restarting...")
     break;
   default:
-console.log("Unknown action")
+await console.log("Unknown action")
     break;
 }//  Match with number literals
 const statusCode = 200;
 switch (statusCode) {
   case 200:
-console.log("OK")
+await console.log("OK")
     break;
   case 404:
-console.log("Not Found")
+await console.log("Not Found")
     break;
   case 500:
-console.log("Internal Server Error")
+await console.log("Internal Server Error")
     break;
   default:
-console.log("Unknown status")
+await console.log("Unknown status")
     break;
 }//  Match with variable assignment in body
 const grade = "A";
@@ -109,16 +109,16 @@ const e = 0;
 const level = "debug";
 switch (level) {
   case "debug":
-console.log("Debug mode enabled")
+await console.log("Debug mode enabled")
     break;
   case "info":
-console.log("Info level logging")
+await console.log("Info level logging")
     break;
   case "warn":
-console.log("Warning level")
+await console.log("Warning level")
     break;
   case "error":
-console.log("Error level")
+await console.log("Error level")
     break;
 }//  Match with array results
 const resultType = "array";

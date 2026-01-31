@@ -246,7 +246,7 @@ graph.node("processGreeting", async (state): Promise<any> => {
     
 const result = await _result(msg);
 
-console.log(result)
+await console.log(result)
 });
 graph.node("main", async (state): Promise<any> => {
     

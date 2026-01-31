@@ -139,4 +139,4 @@ async function _url(): Promise<{ hostname: string; port: number }> {
   
 }
 const url = await _url();
-console.log(url)
+await console.log(url)

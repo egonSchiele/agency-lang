@@ -74,7 +74,7 @@ return message
 
 }//  Comment before function call
 const result = await greet({});
-console.log(result)//  Testing comments in different contexts
+await console.log(result)//  Testing comments in different contexts
 //  1. Before type hints
 const age = 25;
 //  2. Before conditionals
@@ -82,13 +82,13 @@ const status = "active";
 switch (status) {
   //  Comment in match block
   case "active":
-console.log("Running")
+await console.log("Running")
     break;
   case "inactive":
-console.log("Stopped")
+await console.log("Stopped")
     break;
   //  Default case comment
   default:
-console.log("Unknown")
+await console.log("Unknown")
     break;
 }//  Final comment at end of file

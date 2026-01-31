@@ -3,6 +3,7 @@ import * as builtinFunctionsRead from "../../templates/backends/typescriptGenera
 import * as builtinFunctionsReadImage from "../../templates/backends/typescriptGenerator/builtinFunctions/readImage.js";
 import * as builtinFunctionsFetchJSON from "../../templates/backends/typescriptGenerator/builtinFunctions/fetchJSON.js";
 import * as builtinFunctionsFetch from "../../templates/backends/typescriptGenerator/builtinFunctions/fetch.js";
+import * as builtinFunctionsSleep from "../../templates/backends/typescriptGenerator/builtinFunctions/sleep.js";
 
 /**
  * Maps Agency built-in function names to TypeScript equivalents
@@ -16,6 +17,7 @@ export const BUILTIN_FUNCTIONS: Record<string, string> = {
   fetch: "_builtinFetch",
   fetchJSON: "_builtinFetchJSON",
   fetchJson: "_builtinFetchJSON",
+  sleep: "_builtinSleep",
 };
 
 /**
@@ -51,6 +53,10 @@ export function generateBuiltinHelpers(functionsUsed: Set<string>): string {
   if (functionsUsed.has("readImage")) {
     const readImageFunc = builtinFunctionsReadImage.default({});
     helpers.push(readImageFunc);
+  }
+  if (functionsUsed.has("sleep")) {
+    const sleepFunc = builtinFunctionsSleep.default({});
+    helpers.push(sleepFunc);
   }
 
   return helpers.join("\n\n");

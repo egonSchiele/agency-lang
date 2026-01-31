@@ -1,0 +1,10 @@
+node main() {
+  x = time {
+    // Test the sleep built-in function
+    print("Starting...")
+    print("Sleeping for 2.5 seconds...")
+    sleep(2.5)
+    print("Done sleeping!")
+  }
+  print(x)
+}

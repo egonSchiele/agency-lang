@@ -139,4 +139,4 @@ async function _bar(): Promise<number> {
   
 }
 const bar = await _bar();
-console.log(bar)
+await console.log(bar)

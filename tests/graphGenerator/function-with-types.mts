@@ -506,7 +506,7 @@ return result
 
 }graph.node("foo", async (state): Promise<any> => {
     
-    console.log("This is a node with a return type")
+    await console.log("This is a node with a return type")
 return { ...state, data: "Node completed"}
 
 });

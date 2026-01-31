@@ -183,7 +183,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       const code = this.processNode(value);
       return `const ${variableName} = await ${code.trim()};` + "\n";
     } else if (value.type === "timeBlock") {
-      const timingVarName = `_timeBlockResult_${variableName}`;
+      const timingVarName = variableName;
       const code = this.processTimeBlock(value, timingVarName);
       return code;
     } else {
@@ -298,6 +298,13 @@ export class TypeScriptGenerator extends BaseGenerator {
  */ this.functionsUsed.add(node.functionName);
     const functionCallCode = this.generateFunctionCallExpression(node);
 
+    // Check if this is a built-in function that needs await
+    const mappedName = mapFunctionName(node.functionName);
+    const isBuiltinFunction = mappedName !== node.functionName;
+
+    if (isBuiltinFunction) {
+      return `await ${functionCallCode}`;
+    }
     return functionCallCode;
   }
 

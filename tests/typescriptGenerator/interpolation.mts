@@ -129,4 +129,4 @@ async function _greeting(name: string): Promise<string> {
   
 }
 const greeting = await _greeting(name);
-console.log(greeting)
+await console.log(greeting)

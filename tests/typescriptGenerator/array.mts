@@ -139,7 +139,7 @@ async function _numbers(): Promise<number[]> {
   
 }
 const numbers = await _numbers();
-console.log(numbers)
+await console.log(numbers)
 async function _greetings(): Promise<string[]> {
   const __prompt = `a list of 3 common greetings in different languages`;
   const startTime = performance.now();
@@ -228,4 +228,4 @@ async function _greetings(): Promise<string[]> {
   
 }
 const greetings = await _greetings();
-console.log(greetings)
+await console.log(greetings)

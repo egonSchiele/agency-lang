@@ -239,16 +239,16 @@ async function _response2(msg: string): Promise<string> {
 }
 graph.node("main", async (state): Promise<any> => {
     
-    console.log("lets race!")
-const msg = await _builtinInput("> ");
+    await console.log("lets race!")
+const msg = await await _builtinInput("> ");
 
 const response1 = await _response1(msg);
 
-console.log(response1)
+await console.log(response1)
 __client = getClientWithConfig({ model: "gemini-2.5-flash-lite" });
 const response2 = await _response2(msg);
 
-console.log(response2)
+await console.log(response2)
 return { ...state, data: [response1, response2]}
 
 });

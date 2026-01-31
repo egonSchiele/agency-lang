@@ -140,4 +140,4 @@ async function _foo(): Promise<Coords> {
   
 }
 const foo = await _foo();
-console.log(foo)
+await console.log(foo)

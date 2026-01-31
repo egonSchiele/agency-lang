@@ -151,7 +151,7 @@ graph.node("main", async (state): Promise<any> => {
     
 const greeting = await _greeting();
 
-console.log(greeting)
+await console.log(greeting)
 });
 
 const initialState: State = {messages: [], data: {}};

@@ -242,8 +242,8 @@ const count = await _count();
 
 const message = await _message();
 
-console.log(count)
-console.log(message)
+await console.log(count)
+await console.log(message)
 });
 
 const initialState: State = {messages: [], data: {}};

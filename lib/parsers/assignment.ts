@@ -17,27 +17,3 @@ import { optionalSemicolon } from "./parserUtils.js";
 import { optionalSpaces, varNameChar } from "./utils.js";
 import { timeBlockParser } from "./function.js";
 
-export const assignmentParser: Parser<Assignment> = trace(
-  "assignmentParser",
-  seqC(
-    set("type", "assignment"),
-    optionalSpaces,
-    capture(many1WithJoin(varNameChar), "variableName"),
-    optionalSpaces,
-    char("="),
-    optionalSpaces,
-    capture(
-      or(
-        timeBlockParser,
-        functionCallParser,
-        indexAccessParser,
-        accessExpressionParser,
-        agencyArrayParser,
-        agencyObjectParser,
-        literalParser,
-      ),
-      "value",
-    ),
-    optionalSemicolon,
-  ),
-);

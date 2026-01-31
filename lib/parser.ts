@@ -18,9 +18,9 @@ import {
   trace,
 } from "tarsec";
 import { accessExpressionParser } from "./parsers/access.js";
-import { assignmentParser } from "./parsers/assignment.js";
 import { commentParser } from "./parsers/comment.js";
 import {
+  assignmentParser,
   functionParser,
   graphNodeParser,
   timeBlockParser,

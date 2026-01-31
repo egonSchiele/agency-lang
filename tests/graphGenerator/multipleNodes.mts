@@ -151,7 +151,15 @@ graph.node("greet", async (state): Promise<any> => {
     
 const greeting = await _greeting();
 
-return goToNode("processGreeting", { messages: state.messages, data: greeting });
+return goToNode("processGreeting",
+  {
+    messages: state.messages,
+    
+    data: greeting
+    
+    
+  }
+);
 
 });
 
@@ -242,7 +250,15 @@ console.log(result)
 });
 graph.node("main", async (state): Promise<any> => {
     
-    return goToNode("greet", { messages: state.messages, data:  });
+    return goToNode("greet",
+  {
+    messages: state.messages,
+    
+    
+    data: null
+    
+  }
+);
 
 });
 

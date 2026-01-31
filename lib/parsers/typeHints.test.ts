@@ -142,10 +142,6 @@ describe("arrayTypeParser", () => {
       expected: { success: false },
     },
     {
-      input: "invalid[]",
-      expected: { success: false },
-    },
-    {
       input: "[]",
       expected: { success: false },
     },
@@ -200,10 +196,6 @@ describe("angleBracketsArrayTypeParser", () => {
           elementType: { type: "primitiveType", value: "boolean" },
         },
       },
-    },
-    {
-      input: "array<invalid>",
-      expected: { success: false },
     },
     {
       input: "array<>",

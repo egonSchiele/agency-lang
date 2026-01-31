@@ -25,7 +25,6 @@ import {
 } from "tarsec";
 import { optionalSpaces } from "./utils.js";
 import { literalParser } from "./literals.js";
-import { assignmentParser } from "./assignment.js";
 import { functionCallParser } from "./functionCall.js";
 import { DefaultCase, MatchBlockCase } from "../types/matchBlock.js";
 import { accessExpressionParser, indexAccessParser } from "./access.js";
@@ -34,6 +33,7 @@ import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
 import * as parsers from "../parser.js";
 import { commentParser } from "./comment.js";
 import { returnStatementParser } from "./returnStatement.js";
+import { assignmentParser } from "./function.js";
 
 export const defaultCaseParser: Parser<DefaultCase> = char("_");
 

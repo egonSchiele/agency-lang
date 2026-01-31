@@ -23,6 +23,7 @@ import {
 } from "tarsec";
 import {
   AgencyNode,
+  Assignment,
   DocString,
   FunctionDefinition,
   FunctionParameter,
@@ -31,7 +32,6 @@ import {
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { accessExpressionParser, indexAccessParser } from "./access.js";
-import { assignmentParser } from "./assignment.js";
 import { commentParser } from "./comment.js";
 import { functionCallParser } from "./functionCall.js";
 import { literalParser } from "./literals.js";
@@ -46,6 +46,37 @@ import {
   variableTypeParser,
 } from "./typeHints.js";
 import { comma, optionalSpaces, varNameChar } from "./utils.js";
+import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
+
+export const assignmentParser: Parser<Assignment> = (input: string) => {
+
+  const parser = trace(
+    "assignmentParser",
+    seqC(
+      set("type", "assignment"),
+      optionalSpaces,
+      capture(many1WithJoin(varNameChar), "variableName"),
+      optionalSpaces,
+      char("="),
+      optionalSpaces,
+      capture(
+        or(
+          timeBlockParser,
+          functionCallParser,
+          indexAccessParser,
+          accessExpressionParser,
+          agencyArrayParser,
+          agencyObjectParser,
+          literalParser,
+        ),
+        "value",
+      ),
+      optionalSemicolon,
+    ),
+  );
+  return parser(input);
+}
+
 
 const trim = (s: string) => s.trim();
 export const docStringParser: Parser<DocString> = trace(
@@ -61,32 +92,28 @@ export const docStringParser: Parser<DocString> = trace(
 export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
   const parser = trace(
     "functionBodyParser",
-    (input: string): ParserResult<AgencyNode[]> => {
-      const parser: Parser<AgencyNode[]> = sepBy(
-        spaces,
-        or(
-          usesToolParser,
-          debug(typeAliasParser, "error in typeAliasParser"),
-          debug(typeHintParser, "error in typeHintParser"),
-          specialVarParser,
-          returnStatementParser,
-          whileLoopParser,
-          matchBlockParser,
-          functionParser,
-          accessExpressionParser,
-          assignmentParser,
-          functionCallParser,
-          literalParser,
-          commentParser,
-        ),
-      );
-
-      const result = parser(input);
-      return result;
-    },
+    sepBy(
+      spaces,
+      or(
+        usesToolParser,
+        debug(typeAliasParser, "error in typeAliasParser"),
+        debug(typeHintParser, "error in typeHintParser"),
+        specialVarParser,
+        returnStatementParser,
+        whileLoopParser,
+        matchBlockParser,
+        functionParser,
+        accessExpressionParser,
+        assignmentParser,
+        functionCallParser,
+        literalParser,
+        commentParser,
+      ),
+    )
   );
   return parser(input);
 }
+
 export const timeBlockParser: Parser<TimeBlock> = trace(
   "timeBlockParser",
   seqC(

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { assignmentParser } from "./assignment.js";
+import { assignmentParser } from "./function.js";
 
 describe("assignmentParser", () => {
   const testCases = [

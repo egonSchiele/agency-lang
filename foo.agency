@@ -1,3 +1,5 @@
-time { 
-  x = 1;
+node main() {
+  x = time {
+    x = 1
+  }
 }

@@ -18,6 +18,7 @@ import * as renderFunctionDefinition from "../templates/backends/typescriptGener
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as promptFunction from "../templates/backends/typescriptGenerator/promptFunction.js";
 import * as renderTool from "../templates/backends/typescriptGenerator/tool.js";
+import * as renderTime from "../templates/backends/typescriptGenerator/builtinFunctions/time.js";
 import * as renderToolCall from "../templates/backends/typescriptGenerator/toolCall.js";
 import {
   AccessExpression,
@@ -184,7 +185,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     } else if (value.type === "timeBlock") {
       const timingVarName = `_timeBlockResult_${variableName}`;
       const code = this.processTimeBlock(value, timingVarName);
-      return `const ${variableName} = await ${code.trim()};` + "\n";
+      return code;
     } else {
       // Direct assignment for other literal types
       const code = this.processNode(value);
@@ -212,7 +213,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       ) {
         throw new Error(
           `Variable '${varName}' used in prompt interpolation but not defined. ` +
-            `Referenced in assignment to '${variableName}'.`,
+          `Referenced in assignment to '${variableName}'.`,
         );
       }
     }
@@ -480,7 +481,10 @@ export class TypeScriptGenerator extends BaseGenerator {
       bodyCodes.push(this.processNode(stmt));
     }
     const bodyCodeStr = bodyCodes.join("\n");
-    return bodyCodeStr;
+    return renderTime.default({
+      timingVarName,
+      bodyCodeStr,
+    });
   }
 }
 

@@ -58,37 +58,40 @@ export const docStringParser: Parser<DocString> = trace(
   ),
 );
 
-export const bodyParser = trace(
-  "functionBodyParser",
-  (input: string): ParserResult<AgencyNode[]> => {
-    const parser: Parser<AgencyNode[]> = sepBy(
-      spaces,
-      or(
-        usesToolParser,
-        debug(typeAliasParser, "error in typeAliasParser"),
-        debug(typeHintParser, "error in typeHintParser"),
-        specialVarParser,
-        returnStatementParser,
-        whileLoopParser,
-        matchBlockParser,
-        functionParser,
-        accessExpressionParser,
-        assignmentParser,
-        functionCallParser,
-        literalParser,
-        commentParser,
-      ),
-    );
+export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
+  const parser = trace(
+    "functionBodyParser",
+    (input: string): ParserResult<AgencyNode[]> => {
+      const parser: Parser<AgencyNode[]> = sepBy(
+        spaces,
+        or(
+          usesToolParser,
+          debug(typeAliasParser, "error in typeAliasParser"),
+          debug(typeHintParser, "error in typeHintParser"),
+          specialVarParser,
+          returnStatementParser,
+          whileLoopParser,
+          matchBlockParser,
+          functionParser,
+          accessExpressionParser,
+          assignmentParser,
+          functionCallParser,
+          literalParser,
+          commentParser,
+        ),
+      );
 
-    const result = parser(input);
-    return result;
-  },
-);
-
+      const result = parser(input);
+      return result;
+    },
+  );
+  return parser(input);
+}
 export const timeBlockParser: Parser<TimeBlock> = trace(
   "timeBlockParser",
   seqC(
     set("type", "timeBlock"),
+    str("time"),
     optionalSpaces,
     char("{"),
     spaces,

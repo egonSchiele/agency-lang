@@ -1,10 +1,4 @@
-import {
-  AgencyNode,
-  DocString,
-  FunctionDefinition,
-  FunctionParameter,
-  VariableType,
-} from "../types.js";
+import { TimeBlock } from "@/types/timeBlock.js";
 import {
   capture,
   captureCaptures,
@@ -14,7 +8,6 @@ import {
   many1Till,
   many1WithJoin,
   map,
-  oneOf,
   optional,
   or,
   Parser,
@@ -28,6 +21,15 @@ import {
   succeed,
   trace,
 } from "tarsec";
+import {
+  AgencyNode,
+  DocString,
+  FunctionDefinition,
+  FunctionParameter,
+  VariableType,
+} from "../types.js";
+import { GraphNodeDefinition } from "../types/graphNode.js";
+import { WhileLoop } from "../types/whileLoop.js";
 import { accessExpressionParser, indexAccessParser } from "./access.js";
 import { assignmentParser } from "./assignment.js";
 import { commentParser } from "./comment.js";
@@ -35,17 +37,15 @@ import { functionCallParser } from "./functionCall.js";
 import { literalParser } from "./literals.js";
 import { matchBlockParser } from "./matchBlock.js";
 import { optionalSemicolon } from "./parserUtils.js";
+import { returnStatementParser } from "./returnStatement.js";
+import { specialVarParser } from "./specialVar.js";
+import { usesToolParser } from "./tools.js";
 import {
   typeAliasParser,
   typeHintParser,
   variableTypeParser,
 } from "./typeHints.js";
 import { comma, optionalSpaces, varNameChar } from "./utils.js";
-import { GraphNodeDefinition } from "../types/graphNode.js";
-import { returnStatementParser } from "./returnStatement.js";
-import { usesToolParser } from "./tools.js";
-import { WhileLoop } from "../types/whileLoop.js";
-import { specialVarParser } from "./specialVar.js";
 
 const trim = (s: string) => s.trim();
 export const docStringParser: Parser<DocString> = trace(
@@ -54,35 +54,51 @@ export const docStringParser: Parser<DocString> = trace(
     set("type", "docString"),
     str('"""'),
     capture(map(many1Till(str('"""')), trim), "value"),
-    str('"""')
-  )
+    str('"""'),
+  ),
 );
 
-export const bodyParser = trace(
-  "functionBodyParser",
-  (input: string): ParserResult<AgencyNode[]> => {
-    const parser: Parser<AgencyNode[]> = sepBy(
-      spaces,
-      or(
-        usesToolParser,
-        debug(typeAliasParser, "error in typeAliasParser"),
-        debug(typeHintParser, "error in typeHintParser"),
-        specialVarParser,
-        returnStatementParser,
-        whileLoopParser,
-        matchBlockParser,
-        functionParser,
-        accessExpressionParser,
-        assignmentParser,
-        functionCallParser,
-        literalParser,
-        commentParser
-      )
-    );
+export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
+  const parser = trace(
+    "functionBodyParser",
+    (input: string): ParserResult<AgencyNode[]> => {
+      const parser: Parser<AgencyNode[]> = sepBy(
+        spaces,
+        or(
+          usesToolParser,
+          debug(typeAliasParser, "error in typeAliasParser"),
+          debug(typeHintParser, "error in typeHintParser"),
+          specialVarParser,
+          returnStatementParser,
+          whileLoopParser,
+          matchBlockParser,
+          functionParser,
+          accessExpressionParser,
+          assignmentParser,
+          functionCallParser,
+          literalParser,
+          commentParser,
+        ),
+      );
 
-    const result = parser(input);
-    return result;
-  }
+      const result = parser(input);
+      return result;
+    },
+  );
+  return parser(input);
+}
+export const timeBlockParser: Parser<TimeBlock> = trace(
+  "timeBlockParser",
+  seqC(
+    set("type", "timeBlock"),
+    str("time"),
+    optionalSpaces,
+    char("{"),
+    spaces,
+    capture(bodyParser, "body"),
+    optionalSpaces,
+    char("}"),
+  ),
 );
 
 export const whileLoopParser: Parser<WhileLoop> = trace(
@@ -98,9 +114,9 @@ export const whileLoopParser: Parser<WhileLoop> = trace(
         indexAccessParser,
         functionCallParser,
         accessExpressionParser,
-        literalParser
+        literalParser,
       ),
-      "condition"
+      "condition",
     ),
     optionalSpaces,
     char(")"),
@@ -109,8 +125,8 @@ export const whileLoopParser: Parser<WhileLoop> = trace(
     spaces,
     capture(bodyParser, "body"),
     optionalSpaces,
-    char("}")
-  )
+    char("}"),
+  ),
 );
 
 export const functionParameterParserWithTypeHint: Parser<FunctionParameter> =
@@ -122,21 +138,21 @@ export const functionParameterParserWithTypeHint: Parser<FunctionParameter> =
       optionalSpaces,
       char(":"),
       optionalSpaces,
-      capture(variableTypeParser, "typeHint")
-    )
+      capture(variableTypeParser, "typeHint"),
+    ),
   );
 
 export const functionParameterParser: Parser<FunctionParameter> = trace(
   "functionParameterParser",
   seqC(
     set("type", "functionParameter"),
-    capture(many1WithJoin(varNameChar), "name")
-  )
+    capture(many1WithJoin(varNameChar), "name"),
+  ),
 );
 
 export const functionReturnTypeParser: Parser<VariableType> = trace(
   "functionReturnTypeParser",
-  seqC(char(":"), optionalSpaces, captureCaptures(variableTypeParser))
+  seqC(char(":"), optionalSpaces, captureCaptures(variableTypeParser)),
 );
 
 export const functionParser: Parser<FunctionDefinition> = trace(
@@ -151,9 +167,9 @@ export const functionParser: Parser<FunctionDefinition> = trace(
     capture(
       sepBy(
         comma,
-        or(functionParameterParserWithTypeHint, functionParameterParser)
+        or(functionParameterParserWithTypeHint, functionParameterParser),
       ),
-      "parameters"
+      "parameters",
     ),
     optionalSpaces,
     char(")"),
@@ -167,8 +183,8 @@ export const functionParser: Parser<FunctionDefinition> = trace(
     capture(bodyParser, "body"),
     optionalSpaces,
     char("}"),
-    optionalSemicolon
-  )
+    optionalSemicolon,
+  ),
 );
 
 export const graphNodeParser: Parser<GraphNodeDefinition> = trace(
@@ -182,7 +198,7 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = trace(
     optionalSpaces,
     capture(
       or(sepBy(comma, many1WithJoin(varNameChar)), succeed([])),
-      "parameters"
+      "parameters",
     ),
     optionalSpaces,
     char(")"),
@@ -194,6 +210,6 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = trace(
     capture(bodyParser, "body"),
     optionalSpaces,
     char("}"),
-    optionalSemicolon
-  )
+    optionalSemicolon,
+  ),
 );

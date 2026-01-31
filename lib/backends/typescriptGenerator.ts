@@ -18,6 +18,7 @@ import * as renderFunctionDefinition from "../templates/backends/typescriptGener
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as promptFunction from "../templates/backends/typescriptGenerator/promptFunction.js";
 import * as renderTool from "../templates/backends/typescriptGenerator/tool.js";
+import * as renderTime from "../templates/backends/typescriptGenerator/builtinFunctions/time.js";
 import * as renderToolCall from "../templates/backends/typescriptGenerator/toolCall.js";
 import {
   AccessExpression,
@@ -47,6 +48,7 @@ import {
   DEFAULT_SCHEMA,
   mapTypeToZodSchema,
 } from "./typescriptGenerator/typeToZodSchema.js";
+import { TimeBlock } from "@/types/timeBlock.js";
 
 export class TypeScriptGenerator extends BaseGenerator {
   constructor() {
@@ -180,6 +182,10 @@ export class TypeScriptGenerator extends BaseGenerator {
       // Direct assignment for other literal types
       const code = this.processNode(value);
       return `const ${variableName} = await ${code.trim()};` + "\n";
+    } else if (value.type === "timeBlock") {
+      const timingVarName = `_timeBlockResult_${variableName}`;
+      const code = this.processTimeBlock(value, timingVarName);
+      return code;
     } else {
       // Direct assignment for other literal types
       const code = this.processNode(value);
@@ -207,7 +213,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       ) {
         throw new Error(
           `Variable '${varName}' used in prompt interpolation but not defined. ` +
-            `Referenced in assignment to '${variableName}'.`,
+          `Referenced in assignment to '${variableName}'.`,
         );
       }
     }
@@ -467,6 +473,18 @@ export class TypeScriptGenerator extends BaseGenerator {
       default:
         throw new Error(`Unhandled SpecialVar name: ${node.name}`);
     }
+  }
+
+  protected processTimeBlock(node: TimeBlock, timingVarName: string): string {
+    const bodyCodes: string[] = [];
+    for (const stmt of node.body) {
+      bodyCodes.push(this.processNode(stmt));
+    }
+    const bodyCodeStr = bodyCodes.join("\n");
+    return renderTime.default({
+      timingVarName,
+      bodyCodeStr,
+    });
   }
 }
 

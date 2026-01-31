@@ -16,6 +16,7 @@ import {
   optional,
   or,
   Parser,
+  ParserResult,
   sepBy,
   seqC,
   set,
@@ -36,34 +37,37 @@ import { returnStatementParser } from "./returnStatement.js";
 
 export const defaultCaseParser: Parser<DefaultCase> = char("_");
 
-export const matchBlockParserCase: Parser<MatchBlockCase> = seqC(
-  set("type", "matchBlockCase"),
-  optionalSpaces,
-  capture(
-    or(
-      defaultCaseParser,
-      indexAccessParser,
-      accessExpressionParser,
-      literalParser
+export const matchBlockParserCase: Parser<MatchBlockCase> = (input: string): ParserResult<MatchBlockCase> => {
+  const parser = seqC(
+    set("type", "matchBlockCase"),
+    optionalSpaces,
+    capture(
+      or(
+        defaultCaseParser,
+        indexAccessParser,
+        accessExpressionParser,
+        literalParser
+      ),
+      "caseValue"
     ),
-    "caseValue"
-  ),
-  optionalSpaces,
-  str("=>"),
-  optionalSpaces,
-  capture(
-    or(
-      returnStatementParser,
-      agencyArrayParser,
-      agencyObjectParser,
-      accessExpressionParser,
-      assignmentParser,
-      functionCallParser,
-      literalParser
-    ),
-    "body"
-  )
-);
+    optionalSpaces,
+    str("=>"),
+    optionalSpaces,
+    capture(
+      or(
+        returnStatementParser,
+        agencyArrayParser,
+        agencyObjectParser,
+        accessExpressionParser,
+        assignmentParser,
+        functionCallParser,
+        literalParser
+      ),
+      "body"
+    )
+  );
+  return parser(input);
+}
 
 const semicolon = seqC(optionalSpaces, char(";"), optionalSpaces);
 

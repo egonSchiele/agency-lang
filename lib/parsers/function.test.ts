@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { functionParser, docStringParser, graphNodeParser } from "./function.js";
+import { functionParser, docStringParser, graphNodeParser, timeBlockParser } from "./function.js";
 
 describe("docStringParser", () => {
   const testCases = [
@@ -1677,6 +1677,223 @@ describe("functionParser", () => {
     } else {
       it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
         const result = functionParser(input);
+        expect(result.success).toBe(false);
+      });
+    }
+  });
+});
+
+describe("timeBlockParser", () => {
+  const testCases = [
+    // Happy path - basic time blocks
+    {
+      input: "time {\n  x = 1\n}",
+      expected: {
+        success: true,
+        result: {
+          type: "timeBlock",
+          body: [
+            {
+              type: "assignment",
+              variableName: "x",
+              value: { type: "number", value: "1" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "time {\n  foo = `hello`\n}",
+      expected: {
+        success: true,
+        result: {
+          type: "timeBlock",
+          body: [
+            {
+              type: "assignment",
+              variableName: "foo",
+              value: {
+                type: "prompt",
+                segments: [{ type: "text", value: "hello" }],
+              },
+            },
+          ],
+        },
+      },
+    },
+
+    // Multiple statements in body
+    {
+      input: "time {\n  a = 1\n  b = 2\n  c = 3\n}",
+      expected: {
+        success: true,
+        result: {
+          type: "timeBlock",
+          body: [
+            {
+              type: "assignment",
+              variableName: "a",
+              value: { type: "number", value: "1" },
+            },
+            {
+              type: "assignment",
+              variableName: "b",
+              value: { type: "number", value: "2" },
+            },
+            {
+              type: "assignment",
+              variableName: "c",
+              value: { type: "number", value: "3" },
+            },
+          ],
+        },
+      },
+    },
+
+    // Empty body
+    {
+      input: "time {\n}",
+      expected: {
+        success: true,
+        result: {
+          type: "timeBlock",
+          body: [],
+        },
+      },
+    },
+
+    // Whitespace variations
+    {
+      input: "time{\n  x = 1\n}",
+      expected: {
+        success: true,
+        result: {
+          type: "timeBlock",
+          body: [
+            {
+              type: "assignment",
+              variableName: "x",
+              value: { type: "number", value: "1" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "time  {  \n  x = 1\n  }",
+      expected: {
+        success: true,
+        result: {
+          type: "timeBlock",
+          body: [
+            {
+              type: "assignment",
+              variableName: "x",
+              value: { type: "number", value: "1" },
+            },
+          ],
+        },
+      },
+    },
+
+    // Function calls in body
+    {
+      input: "time {\n  result = doSomething()\n}",
+      expected: {
+        success: true,
+        result: {
+          type: "timeBlock",
+          body: [
+            {
+              type: "assignment",
+              variableName: "result",
+              value: {
+                type: "functionCall",
+                functionName: "doSomething",
+                arguments: [],
+              },
+            },
+          ],
+        },
+      },
+    },
+
+    // Complex body with different statement types
+    {
+      input: "time {\n  x = 1\n  y = `prompt`\n  z = foo()\n}",
+      expected: {
+        success: true,
+        result: {
+          type: "timeBlock",
+          body: [
+            {
+              type: "assignment",
+              variableName: "x",
+              value: { type: "number", value: "1" },
+            },
+            {
+              type: "assignment",
+              variableName: "y",
+              value: {
+                type: "prompt",
+                segments: [{ type: "text", value: "prompt" }],
+              },
+            },
+            {
+              type: "assignment",
+              variableName: "z",
+              value: {
+                type: "functionCall",
+                functionName: "foo",
+                arguments: [],
+              },
+            },
+          ],
+        },
+      },
+    },
+
+    // Failure cases - missing braces
+    {
+      input: "time \n  x = 1\n",
+      expected: { success: false },
+    },
+    {
+      input: "time {\n  x = 1",
+      expected: { success: false },
+    },
+    {
+      input: "time \n  x = 1\n}",
+      expected: { success: false },
+    },
+
+    // Failure cases - empty or malformed
+    {
+      input: "",
+      expected: { success: false },
+    },
+    {
+      input: "time",
+      expected: { success: false },
+    },
+    {
+      input: "time {",
+      expected: { success: false },
+    },
+  ];
+
+  testCases.forEach(({ input, expected }) => {
+    if (expected.success) {
+      it(`should parse "${input.replace(/\n/g, "\\n")}" successfully`, () => {
+        const result = timeBlockParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result).toEqual(expected.result);
+        }
+      });
+    } else {
+      it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
+        const result = timeBlockParser(input);
         expect(result.success).toBe(false);
       });
     }

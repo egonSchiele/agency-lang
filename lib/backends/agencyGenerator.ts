@@ -327,25 +327,30 @@ export class AgencyGenerator extends BaseGenerator {
 
   protected processIfElse(node: IfElse): string {
     const conditionCode = this.processNode(node.condition).trim();
-    let result = this.indentStr(`if (${conditionCode}) {\n`);
+    const lines = [];
+    lines.push(this.indentStr(`if (${conditionCode}) {\n`));
 
+    const bodyLines: string[] = [];
     this.increaseIndent();
     for (const stmt of node.thenBody) {
-      result += this.processNode(stmt);
+      bodyLines.push(this.processNode(stmt));
     }
     this.decreaseIndent();
+    lines.push(bodyLines.join("").trimEnd() + "\n");
 
+    const elseBodyLines: string[] = [];
     if (node.elseBody && node.elseBody.length > 0) {
-      result += this.indentStr(`} else {\n`);
+      lines.push(this.indentStr(`} else {\n`));
       this.increaseIndent();
       for (const stmt of node.elseBody) {
-        result += this.processNode(stmt);
+        elseBodyLines.push(this.processNode(stmt));
       }
       this.decreaseIndent();
+      lines.push(elseBodyLines.join("").trimEnd() + "\n");
     }
 
-    result += this.indentStr(`}\n`);
-    return result;
+    lines.push(this.indentStr(`}\n\n`));
+    return lines.join("");
   }
 
   protected processReturnStatement(node: ReturnStatement): string {

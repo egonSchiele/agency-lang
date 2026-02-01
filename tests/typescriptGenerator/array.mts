@@ -51,10 +51,10 @@ const addTool = {
   };
 
 
-async function _numbers(): Promise<number[]> {
+async function _numbers(__messages: Message[] = []): Promise<number[]> {
   const __prompt = `the first 5 prime numbers`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -123,7 +123,8 @@ async function _numbers(): Promise<number[]> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -138,12 +139,12 @@ async function _numbers(): Promise<number[]> {
 
   
 }
-const numbers = await _numbers();
+const numbers = await _numbers(__messages);
 await console.log(numbers)
-async function _greetings(): Promise<string[]> {
+async function _greetings(__messages: Message[] = []): Promise<string[]> {
   const __prompt = `a list of 3 common greetings in different languages`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -212,7 +213,8 @@ async function _greetings(): Promise<string[]> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -227,5 +229,5 @@ async function _greetings(): Promise<string[]> {
 
   
 }
-const greetings = await _greetings();
+const greetings = await _greetings(__messages);
 await console.log(greetings)

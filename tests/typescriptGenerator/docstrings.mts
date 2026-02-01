@@ -77,11 +77,15 @@ const processDataTool = {
 };
 //  Test docstrings in functions
 async function add({a, b}) : Promise<any> {
+    const __messages: Message[] = [];
     
 }async function greet({name}) : Promise<any> {
+    const __messages: Message[] = [];
     
 }async function calculateArea({width, height}) : Promise<any> {
+    const __messages: Message[] = [];
     
 }async function processData({}) : Promise<any> {
+    const __messages: Message[] = [];
     
 }

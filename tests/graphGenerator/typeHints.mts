@@ -70,10 +70,10 @@ const addTool = {
 
 
 
-async function _count(): Promise<number> {
+async function _count(__messages: Message[] = []): Promise<number> {
   const __prompt = `the number 42`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -142,7 +142,8 @@ async function _count(): Promise<number> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -158,10 +159,10 @@ async function _count(): Promise<number> {
   
 }
 
-async function _message(): Promise<string> {
+async function _message(__messages: Message[] = []): Promise<string> {
   const __prompt = `a greeting message`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -227,7 +228,8 @@ async function _message(): Promise<string> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
 
   
@@ -235,12 +237,13 @@ async function _message(): Promise<string> {
   
 }
 graph.node("main", async (state): Promise<any> => {
+    const __messages: Message[] = [];
     
     
-const count = await _count();
+const count = await _count(__messages);
 
 
-const message = await _message();
+const message = await _message(__messages);
 
 await console.log(count)
 await console.log(message)

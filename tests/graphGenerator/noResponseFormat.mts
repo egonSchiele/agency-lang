@@ -70,10 +70,10 @@ const addTool = {
 
 
 
-async function _response1(): Promise<string> {
+async function _response1(__messages: Message[] = []): Promise<string> {
   const __prompt = `say hello`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -139,7 +139,8 @@ async function _response1(): Promise<string> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
 
   
@@ -147,8 +148,9 @@ async function _response1(): Promise<string> {
   
 }
 graph.node("main", async (state): Promise<any> => {
+    const __messages: Message[] = [];
     
-    const response1 = await _response1();
+    const response1 = await _response1(__messages);
 
 });
 

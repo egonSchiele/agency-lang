@@ -51,10 +51,10 @@ const addTool = {
   };
 
 
-async function _bar(): Promise<number> {
+async function _bar(__messages: Message[] = []): Promise<number> {
   const __prompt = `the 10th fibonacci number`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -123,7 +123,8 @@ async function _bar(): Promise<number> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -138,5 +139,5 @@ async function _bar(): Promise<number> {
 
   
 }
-const bar = await _bar();
+const bar = await _bar(__messages);
 await console.log(bar)

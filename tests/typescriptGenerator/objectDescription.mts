@@ -51,10 +51,10 @@ const addTool = {
   };
 
 
-async function _url(): Promise<{ hostname: string; port: number }> {
+async function _url(__messages: Message[] = []): Promise<{ hostname: string; port: number }> {
   const __prompt = `extract the hostname and port from \"https://example.com:8080\"`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -123,7 +123,8 @@ async function _url(): Promise<{ hostname: string; port: number }> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -138,5 +139,5 @@ async function _url(): Promise<{ hostname: string; port: number }> {
 
   
 }
-const url = await _url();
+const url = await _url(__messages);
 await console.log(url)

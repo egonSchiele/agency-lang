@@ -226,7 +226,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     });
     this.generatedStatements.push(functionCode);
 
-    const argsStr = interpolatedVars.join(", ");
+    const argsStr = [...interpolatedVars, "__messages"].join(", ");
     // Generate the function call
     return `const ${variableName} = await _${variableName}(${argsStr});` + "\n";
   }
@@ -420,7 +420,7 @@ export class TypeScriptGenerator extends BaseGenerator {
 
     // Build prompt construction code
     const promptCode = this.buildPromptString(prompt.segments, this.typeHints);
-    const argsStr = functionArgs
+    const parts = functionArgs
       .map(
         (arg) =>
           `${arg}: ${variableTypeToString(
@@ -428,6 +428,9 @@ export class TypeScriptGenerator extends BaseGenerator {
             this.typeAliases,
           )}`,
       )
+
+    parts.push("__messages: Message[] = []");
+    const argsStr = parts
       .join(", ");
 
     const _tools = this.toolsUsed

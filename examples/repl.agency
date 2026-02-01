@@ -1,39 +1,51 @@
-node main() {
-  while (true) {
-    msg = input("> ")
-    save(msg)
-  
-    response :: string
-    +add
-    response = `Respond to this user's input: ${msg}`
-    save(response)
-  }
+import { printLine, readFile, writeFile, confirm, exit } from "./basicFunctions.ts"
+
+def printLineTool(message: string): string {
+  """
+  Prints a line to the console.
+  """
+  printLine(message)
+  return "printed"
 }
 
-
-
-node main() {
-  @messages = []
-  while (true) {
-    msg = input("> ")
-    msg >> convo
-  
-    response :: string
-    +add
-    response, messages = `Respond to this user's input: ${msg}` < convo
-    messages >> convo
-  }
+def readFileTool(filePath: string): string {
+  """
+  Reads the content of a file.
+  """
+  return readFile(filePath)
 }
 
+def writeFileTool(filePath: string, content: string): string {
+  """
+  Writes content to a file.
+  """
+  await writeFile(filePath, content)
+  return "file written"
+}
+
+def confirmTool(message: string): boolean {
+  """
+  Prompts the user for confirmation.
+  """
+  return await confirm(message)
+}
+
+def exitTool(code: number): string {
+  """
+  Exits the program with the given exit code.
+  """
+  exit(code)
+  return "exited"
+}
 
 node main() {
-  @messages = []
   while (true) {
     msg = input("> ")
-  
-    response :: string
-    +add
-    response, messages = `Respond to this user's input: ${msg}`
-    @messages.push(messages)
+    +writeFileTool
+    +readFileTool
+    +printLineTool
+    +exitTool
+    response = `Respond to this user message: ${msg}`
+    print(response)
   }
 }

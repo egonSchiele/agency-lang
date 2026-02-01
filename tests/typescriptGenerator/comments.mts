@@ -64,6 +64,7 @@ const x = 42;
 const y = "hello";
 //  Comment before function definition
 async function greet({}) : Promise<any> {
+    const __messages: Message[] = [];
     //  Comment inside function
 
 const message = "Hello, World!";

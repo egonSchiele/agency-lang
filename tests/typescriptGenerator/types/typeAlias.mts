@@ -52,10 +52,10 @@ const addTool = {
 
 type Coords = { x: number; y: number };
 
-async function _foo(): Promise<Coords> {
+async function _foo(__messages: Message[] = []): Promise<Coords> {
   const __prompt = `a set of coordinates`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -124,7 +124,8 @@ async function _foo(): Promise<Coords> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -139,5 +140,5 @@ async function _foo(): Promise<Coords> {
 
   
 }
-const foo = await _foo();
+const foo = await _foo(__messages);
 await console.log(foo)

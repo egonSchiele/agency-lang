@@ -70,10 +70,10 @@ const addTool = {
 
 
 
-async function _greeting(): Promise<string> {
+async function _greeting(__messages: Message[] = []): Promise<string> {
   const __prompt = `say hello`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -139,7 +139,8 @@ async function _greeting(): Promise<string> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
 
   
@@ -147,9 +148,10 @@ async function _greeting(): Promise<string> {
   
 }
 graph.node("greet", async (state): Promise<any> => {
+    const __messages: Message[] = [];
     
     
-const greeting = await _greeting();
+const greeting = await _greeting(__messages);
 
 return goToNode("processGreeting",
   {
@@ -163,10 +165,10 @@ return goToNode("processGreeting",
 
 });
 
-async function _result(msg: string): Promise<string> {
+async function _result(msg: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `format this greeting: ${msg}`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -232,7 +234,8 @@ async function _result(msg: string): Promise<string> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
 
   
@@ -240,15 +243,17 @@ async function _result(msg: string): Promise<string> {
   
 }
 graph.node("processGreeting", async (state): Promise<any> => {
+    const __messages: Message[] = [];
     
     const msg = state.data;
     
     
-const result = await _result(msg);
+const result = await _result(msg, __messages);
 
 await console.log(result)
 });
 graph.node("main", async (state): Promise<any> => {
+    const __messages: Message[] = [];
     
     return goToNode("greet",
   {

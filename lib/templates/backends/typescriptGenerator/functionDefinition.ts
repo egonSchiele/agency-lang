@@ -4,6 +4,7 @@
 import { apply } from "typestache";
 
 export const template = `async function {{{functionName:string}}}({{{args}}}) : Promise<{{{returnType}}}> {
+    const __messages: Message[] = [];
     {{{functionBody}}}
 }`;
 

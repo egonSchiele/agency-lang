@@ -51,10 +51,10 @@ const addTool = {
   };
 
 
-async function _foo(): Promise<"hi"> {
+async function _foo(__messages: Message[] = []): Promise<"hi"> {
   const __prompt = `the string hi`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -123,7 +123,8 @@ async function _foo(): Promise<"hi"> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -138,12 +139,12 @@ async function _foo(): Promise<"hi"> {
 
   
 }
-const foo = await _foo();
+const foo = await _foo(__messages);
 
-async function _bar(): Promise<42> {
+async function _bar(__messages: Message[] = []): Promise<42> {
   const __prompt = `the number 42`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -212,7 +213,8 @@ async function _bar(): Promise<42> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -227,12 +229,12 @@ async function _bar(): Promise<42> {
 
   
 }
-const bar = await _bar();
+const bar = await _bar(__messages);
 
-async function _baz(): Promise<true> {
+async function _baz(__messages: Message[] = []): Promise<true> {
   const __prompt = `the boolean true`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -301,7 +303,8 @@ async function _baz(): Promise<true> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -316,4 +319,4 @@ async function _baz(): Promise<true> {
 
   
 }
-const baz = await _baz();
+const baz = await _baz(__messages);

@@ -95,10 +95,10 @@ const flexibleTool = {
   schema: z.object({"value": z.union([z.string(), z.number()]), })
 };
 
-async function _result(x: string, y: string): Promise<string> {
+async function _result(x: string, y: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `add ${x} and ${y}`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -164,7 +164,8 @@ async function _result(x: string, y: string): Promise<string> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
 
   
@@ -172,15 +173,16 @@ async function _result(x: string, y: string): Promise<string> {
   
 }
 async function add({x, y}) : Promise<number> {
-    const result = await _result(x, y);
+    const __messages: Message[] = [];
+    const result = await _result(x, y, __messages);
 
 return result
 
 }
-async function _message(name: string): Promise<string> {
+async function _message(name: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `Hello ${name}!`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -246,7 +248,8 @@ async function _message(name: string): Promise<string> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
 
   
@@ -254,15 +257,16 @@ async function _message(name: string): Promise<string> {
   
 }
 async function greet({name}) : Promise<any> {
-    const message = await _message(name);
+    const __messages: Message[] = [];
+    const message = await _message(name, __messages);
 
 return message
 
 }
-async function _output(label: string, count: string): Promise<string> {
+async function _output(label: string, count: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `${label}: ${count}`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -328,7 +332,8 @@ async function _output(label: string, count: string): Promise<string> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
 
   
@@ -336,15 +341,16 @@ async function _output(label: string, count: string): Promise<string> {
   
 }
 async function mixed({count, label}) : Promise<any> {
-    const output = await _output(label, count);
+    const __messages: Message[] = [];
+    const output = await _output(label, count, __messages);
 
 return output
 
 }
-async function _result(items: string): Promise<string> {
+async function _result(items: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `Processing array with ${items} items`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -410,7 +416,8 @@ async function _result(items: string): Promise<string> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
 
   
@@ -418,15 +425,16 @@ async function _result(items: string): Promise<string> {
   
 }
 async function processArray({items}) : Promise<any> {
-    const result = await _result(items);
+    const __messages: Message[] = [];
+    const result = await _result(items, __messages);
 
 return result
 
 }
-async function _result(value: string): Promise<string> {
+async function _result(value: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `Received value: ${value}`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -492,7 +500,8 @@ async function _result(value: string): Promise<string> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
 
   
@@ -500,11 +509,13 @@ async function _result(value: string): Promise<string> {
   
 }
 async function flexible({value}) : Promise<any> {
-    const result = await _result(value);
+    const __messages: Message[] = [];
+    const result = await _result(value, __messages);
 
 return result
 
 }graph.node("foo", async (state): Promise<any> => {
+    const __messages: Message[] = [];
     
     await console.log("This is a node with a return type")
 return { ...state, data: "Node completed"}

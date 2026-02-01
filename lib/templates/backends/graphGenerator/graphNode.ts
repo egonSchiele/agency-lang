@@ -4,6 +4,7 @@
 import { apply } from "typestache";
 
 export const template = `graph.node("{{{name}}}", async (state): Promise<any> => {
+    const __messages: Message[] = [];
     {{#hasParam}}
     const {{{paramName}}} = state.data;
     {{/hasParam}}

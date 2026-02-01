@@ -52,10 +52,10 @@ const addTool = {
 
 const name = "Alice";
 
-async function _greeting(name: string): Promise<string> {
+async function _greeting(name: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `say hi to ${name}`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -121,12 +121,13 @@ async function _greeting(name: string): Promise<string> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
 
   
   return responseMessage.output;
   
 }
-const greeting = await _greeting(name);
+const greeting = await _greeting(name, __messages);
 await console.log(greeting)

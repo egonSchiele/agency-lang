@@ -70,6 +70,7 @@ const addTool = {
 
 
 graph.node("main", async (state): Promise<any> => {
+    const __messages: Message[] = [];
     
     const x = 42;
 

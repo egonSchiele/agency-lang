@@ -66,10 +66,10 @@ function _builtinInput(prompt: string): Promise<string> {
 
 const message = await await _builtinInput("Please enter a message: ");
 
-async function _sentiment(message: string): Promise<"happy" | "sad" | "neutral"> {
+async function _sentiment(message: string, __messages: Message[] = []): Promise<"happy" | "sad" | "neutral"> {
   const __prompt = `Categorize the sentiment in this message: \"${message}\"`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -138,7 +138,8 @@ async function _sentiment(message: string): Promise<"happy" | "sad" | "neutral">
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -153,5 +154,5 @@ async function _sentiment(message: string): Promise<"happy" | "sad" | "neutral">
 
   
 }
-const sentiment = await _sentiment(message);
+const sentiment = await _sentiment(message, __messages);
 await console.log(sentiment)

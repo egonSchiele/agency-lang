@@ -1,9 +1,0 @@
-let {{{name:string}}}:any;
-
-graph.node("{{{name}}}", async (state) => {
-  const innerFunc = async () => {
-    {{{body}}}
-  };
-  {{{name}}} = await innerFunc();
-  return {{{name}}};
-});

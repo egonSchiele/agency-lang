@@ -7,7 +7,7 @@ export const template = `
 async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{typeString:string}}}> {
   const __prompt = {{{promptCode:string}}};
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = {{{tools}}};
 
   {{#hasResponseFormat}}
@@ -78,7 +78,8 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   {{#hasResponseFormat}}
   try {
   const result = JSON.parse(responseMessage.output || "");

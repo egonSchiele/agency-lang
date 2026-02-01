@@ -84,10 +84,10 @@ function _builtinInput(prompt: string): Promise<string> {
 }
 
 
-async function _response1(msg: string): Promise<string> {
+async function _response1(msg: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `${msg}`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -153,7 +153,8 @@ async function _response1(msg: string): Promise<string> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
 
   
@@ -161,10 +162,10 @@ async function _response1(msg: string): Promise<string> {
   
 }
 
-async function _response2(msg: string): Promise<string> {
+async function _response2(msg: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `${msg}`;
   const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
+  __messages.push(userMessage(__prompt));
   const __tools = undefined;
 
   
@@ -230,7 +231,8 @@ async function _response2(msg: string): Promise<string> {
   }
 
   // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
   
 
   
@@ -238,15 +240,16 @@ async function _response2(msg: string): Promise<string> {
   
 }
 graph.node("main", async (state): Promise<any> => {
+    const __messages: Message[] = [];
     
     await console.log("lets race!")
 const msg = await await _builtinInput("> ");
 
-const response1 = await _response1(msg);
+const response1 = await _response1(msg, __messages);
 
 await console.log(response1)
 __client = getClientWithConfig({ model: "gemini-2.5-flash-lite" });
-const response2 = await _response2(msg);
+const response2 = await _response2(msg, __messages);
 
 await console.log(response2)
 return { ...state, data: [response1, response2]}

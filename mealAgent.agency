@@ -1,0 +1,109 @@
+// Define types for Ingredients and Meals
+type Ingredient = {
+  name: string
+  quantity: string
+  nutritionalValue: string
+}
+
+type Meal = {
+  name: string
+  ingredients: Ingredient[]
+  recipe: string
+}
+
+// Initialize pantry and meals
+pantry :: Ingredient[] = []
+meals :: Meal[] = []
+
+// Node to list ingredients
+node listIngredients() {
+  if (pantry.length > 0) {
+    print("Your pantry ingredients:")
+    for (ingredient in pantry) {
+      print(`${ingredient.name} - ${ingredient.quantity} - Nutritional Value: ${ingredient.nutritionalValue}`)
+    }
+  } else {
+    print("Your pantry is empty.")
+  }
+}
+
+// Node to add or edit an ingredient
+node addOrEditIngredient(name: string, quantity: string, nutritionalValue: string) {
+  existingIngredient = pantry.find(ingredient => ingredient.name == name)
+  
+  if (existingIngredient) {
+    existingIngredient.quantity = quantity
+    existingIngredient.nutritionalValue = nutritionalValue
+    print(`Ingredient ${name} updated.`)
+  } else {
+    pantry.push({ name, quantity, nutritionalValue })
+    print(`Ingredient ${name} added.`)
+  }
+}
+
+// Node to list meals
+node listMeals() {
+  if (meals.length > 0) {
+    print("Your meals:")
+    for (meal in meals) {
+      print(`${meal.name} - Recipe: ${meal.recipe}`)
+    }
+  } else {
+    print("You have no meals listed.")
+  }
+}
+
+// Node to add or edit a meal
+node addOrEditMeal(name: string, ingredients: Ingredient[], recipe: string) {
+  existingMeal = meals.find(meal => meal.name == name)
+  
+  if (existingMeal) {
+    existingMeal.ingredients = ingredients
+    existingMeal.recipe = recipe
+    print(`Meal ${name} updated.`)
+  } else {
+    meals.push({ name, ingredients, recipe })
+    print(`Meal ${name} added.`)
+  }
+}
+
+// Node to import a recipe from a URL
+node importRecipe(url: string) {
+  recipeContent = fetch(url)
+  meal = `Extract the meal name and ingredients from the recipe content: ${recipeContent}`
+  ingredients = `Extract the ingredients for ${meal.name}`
+  
+  addOrEditMeal(meal.name, ingredients, recipeContent)
+}
+
+// Main node to handle user requests
+node main() {
+  userMessage = input("What would you like to do? (list ingredients, add ingredient, list meals, add meal, import recipe): ")
+  
+  match(userMessage) {
+    "list ingredients" => return listIngredients()
+    "add ingredient" => {
+      name = input("Enter ingredient name: ")
+      quantity = input("Enter ingredient quantity: ")
+      nutritionalValue = input("Enter nutritional value: ")
+      return addOrEditIngredient(name, quantity, nutritionalValue)
+    }
+    "list meals" => return listMeals()
+    "add meal" => {
+      name = input("Enter meal name: ")
+      ingredientNames = input("Enter ingredients (comma separated): ").split(", ")
+      ingredients = ingredientNames.map(name => {
+        quantity = input(`Enter quantity for ${name}: `)
+        nutritionalValue = input(`Enter nutritional value for ${name}: `)
+        return { name, quantity, nutritionalValue }
+      })
+      recipe = input("Enter the meal recipe: ")
+      return addOrEditMeal(name, ingredients, recipe)
+    }
+    "import recipe" => {
+      url = input("Enter the recipe URL: ")
+      return importRecipe(url)
+    }
+    _ => print("Unknown action.")
+  }
+}

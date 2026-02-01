@@ -15,11 +15,11 @@ def readFileTool(filePath: string): string {
   return readFile(filePath)
 }
 
-def writeFileTool(filePath: string, content: string): string {
+def writeFileTool(filePath: string, content: string, language: string | undefined): string {
   """
-  Writes content to a file.
+  Writes content to a file. If language is provided, the content will be syntax highlighted accordingly.
   """
-  await writeFile(filePath, content)
+  await writeFile(filePath, content, language)
   return "file written"
 }
 

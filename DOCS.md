@@ -94,6 +94,18 @@ type User = {
 }
 ```
 
+NOTE: You currently CANNOT set a type on a variable. This will not work:
+
+```agency
+name: string[] = []
+```
+
+You'll need to skip the type:
+
+```agency
+name = []
+```
+
 ### Functions / tools
 
 Here is an example of a function in Agency:
@@ -217,3 +229,8 @@ node handleTodo(userMessage: string) {
 ### Multiple agency files
 
 Each agency file represents one graph. If you split up your code into multiple files, you're creating multiple graphs. This may be a good way to organize your code.
+
+### Unsupported features
+- else statements aren't supported yet -- use match statements with a default case instead
+- loops aren't supported yet
+- no infix operators yet (e.g., `+`, `-`, `*`, `/`, `&&`, `||`, `>=`, `<=`, `==`, `!=`, etc.)

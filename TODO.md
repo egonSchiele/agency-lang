@@ -64,3 +64,8 @@ type ListIngredientsParams = {
   attributes: (name | serving_size | unit | calories | protein | fat | carbohydrates | fiber | sugar | calcium | sodium | public | id)[] | undefined
 }
 ```
+
+- no loops
+- no else statements
+- no infix operators yet (e.g., `+`, `-`, `*`, `/`, `&&`, `||`, `>=`, `<=`, `==`, `!=`, etc.)
+- can't assign to an access expression (e.g., `obj.key = value` doesn't work yet)

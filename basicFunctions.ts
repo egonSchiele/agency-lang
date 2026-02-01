@@ -1,8 +1,9 @@
-import * as readline from 'readline';
-import fs from 'fs';
-import process from 'process';
-import util from 'util';
-import { exec } from 'child_process';
+import * as readline from "readline";
+import fs from "fs";
+import process from "process";
+import util from "util";
+import { exec } from "child_process";
+import { highlight } from "cli-highlight";
 const asyncExec = util.promisify(exec);
 
 async function runCommand(command: string): Promise<string> {
@@ -15,7 +16,7 @@ async function runCommand(command: string): Promise<string> {
     console.log(stdout);
     return stdout;
   } catch (e) {
-    console.error('An error occurred:', e);
+    console.error("An error occurred:", e);
     // Handle error (e.g., exit code, signal)
     throw e;
   }
@@ -24,7 +25,7 @@ async function runCommand(command: string): Promise<string> {
 function input(prompt: string): Promise<string> {
   const rl = readline.createInterface({
     input: process.stdin,
-    output: process.stdout
+    output: process.stdout,
   });
 
   return new Promise((resolve) => {
@@ -37,21 +38,39 @@ function input(prompt: string): Promise<string> {
 
 export const printLine = console.log;
 
+export const printHighlighted = (
+  code: string,
+  _language: string = "ts",
+): void => {
+  const language = _language === "agency" ? "ts" : _language;
+  const highlightedCode = highlight(code, { language });
+  console.log(highlightedCode);
+};
+
 export const confirm = async (message: string): Promise<boolean> => {
   const response = await input(`${message} (y/N): `);
   return response.toLowerCase() === "y" || response.toLowerCase() === "yes";
-}
+};
 
-export const writeFile = async (path: string, content: string): Promise<void> => {
+export const writeFile = async (
+  path: string,
+  content: string,
+  language?: string,
+): Promise<void> => {
   printLine(`About to write to file: ${path}`);
-  printLine(`Content:\n${content}`);
+  if (language) {
+    printLine("Content:");
+    printHighlighted(content, language);
+  } else {
+    printLine(`Content:\n${content}`);
+  }
   const approve = await confirm(`Approve write to file: ${path}?`);
   if (!approve) {
     printLine("File write cancelled.");
     return;
   }
-  fs.writeFileSync(path, content, 'utf-8');
-}
+  fs.writeFileSync(path, content, "utf-8");
+};
 
 export const readFile = async (path: string): Promise<string> => {
   printLine(`About to read file: ${path}`);
@@ -60,15 +79,15 @@ export const readFile = async (path: string): Promise<string> => {
     printLine("File read cancelled.");
     return "";
   }
-  const content = fs.readFileSync(path, 'utf-8');
+  const content = fs.readFileSync(path, "utf-8");
   return content;
-}
+};
 
 export const exit = (code: number = 0): void => {
   printLine(`Exiting with code: ${code}`);
   printLine("Goodbye!");
   process.exit(code);
-}
+};
 
 export const execCommand = async (command: string): Promise<void> => {
   printLine(`About to execute command: ${command}`);
@@ -78,4 +97,4 @@ export const execCommand = async (command: string): Promise<void> => {
     return;
   }
   await runCommand(command);
-}
+};

@@ -255,13 +255,13 @@ async function _response2(msg: string, __messages: Message[] = []): Promise<stri
 graph.node("main", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    await console.log("lets race!")
-const msg = await await _builtinInput("> ");
+    await console.log(`lets race!`)
+const msg = await await _builtinInput(`> `);
 
 const response1 = await _response1(msg, __messages);
 
 await console.log(response1)
-__client = getClientWithConfig({ model: "gemini-2.5-flash-lite" });
+__client = getClientWithConfig({ model: `gemini-2.5-flash-lite` });
 const response2 = await _response2(msg, __messages);
 
 await console.log(response2)

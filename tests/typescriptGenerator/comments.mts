@@ -61,13 +61,13 @@ const x = 42;
 //  Multiple comments
 //  can be placed
 //  on consecutive lines
-const y = "hello";
+const y = `hello`;
 //  Comment before function definition
 async function greet({}) : Promise<any> {
     const __messages: Message[] = [];
     //  Comment inside function
 
-const message = "Hello, World!";
+const message = `Hello, World!`;
 
 //  Another comment
 
@@ -79,17 +79,17 @@ await console.log(result)//  Testing comments in different contexts
 //  1. Before type hints
 const age = 25;
 //  2. Before conditionals
-const status = "active";
+const status = `active`;
 switch (status) {
   //  Comment in match block
-  case "active":
-await console.log("Running")
+  case `active`:
+await console.log(`Running`)
     break;
-  case "inactive":
-await console.log("Stopped")
+  case `inactive`:
+await console.log(`Stopped`)
     break;
   //  Default case comment
   default:
-await console.log("Unknown")
+await console.log(`Unknown`)
     break;
 }//  Final comment at end of file

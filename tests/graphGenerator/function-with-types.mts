@@ -530,16 +530,16 @@ return result
 }graph.node("foo", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    await console.log("This is a node with a return type")
-return { ...state, data: "Node completed"}
+    await console.log(`This is a node with a return type`)
+return { ...state, data: `Node completed`}
 
 });
 //  Call the functions
 const sum = await add({x: 5, y: 10});
-const greeting = await greet({name: "Alice"});
-const labeled = await mixed({count: 42, label: "Answer"});
+const greeting = await greet({name: `Alice`});
+const labeled = await mixed({count: 42, label: `Answer`});
 const processed = await processArray({items: [1, 2, 3, 4, 5]});
-const flexResult = await flexible({value: "test"});
+const flexResult = await flexible({value: `test`});
 
 export async function foo(data:any): Promise<string> {
   const result = await graph.run("foo", { messages: [], data });

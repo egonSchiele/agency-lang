@@ -12,10 +12,12 @@ import { TimeBlock } from "./types/timeBlock.js";
 import { UsesTool } from "./types/tools.js";
 import { TypeAlias, TypeHint, VariableType } from "./types/typeHints.js";
 import { WhileLoop } from "./types/whileLoop.js";
+import { IfElse } from "./types/ifElse.js";
 export * from "./types/access.js";
 export * from "./types/dataStructures.js";
 export * from "./types/function.js";
 export * from "./types/graphNode.js";
+export * from "./types/ifElse.js";
 export * from "./types/importStatement.js";
 export * from "./types/literals.js";
 export * from "./types/matchBlock.js";
@@ -60,6 +62,7 @@ export type AgencyNode =
   | AgencyArray
   | ImportStatement
   | WhileLoop
+  | IfElse
   | SpecialVar
   | IndexAccess
   | DotProperty

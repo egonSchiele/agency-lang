@@ -23,6 +23,7 @@ import {
   assignmentParser,
   functionParser,
   graphNodeParser,
+  ifParser,
   timeBlockParser,
   whileLoopParser,
 } from "./parsers/function.js";
@@ -45,6 +46,7 @@ export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
         importStatmentParser,
         graphNodeParser,
         typeAliasParser,
+        ifParser,
         whileLoopParser,
         typeHintParser,
         matchBlockParser,

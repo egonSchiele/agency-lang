@@ -24,6 +24,7 @@ import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
+import { IfElse } from "../types/ifElse.js";
 import { BaseGenerator } from "./baseGenerator.js";
 import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
 import { TimeBlock } from "@/types/timeBlock.js";
@@ -321,6 +322,29 @@ export class AgencyGenerator extends BaseGenerator {
 
     result += this.indentStr(`}\n`);
 
+    return result;
+  }
+
+  protected processIfElse(node: IfElse): string {
+    const conditionCode = this.processNode(node.condition).trim();
+    let result = this.indentStr(`if (${conditionCode}) {\n`);
+
+    this.increaseIndent();
+    for (const stmt of node.thenBody) {
+      result += this.processNode(stmt);
+    }
+    this.decreaseIndent();
+
+    if (node.elseBody && node.elseBody.length > 0) {
+      result += this.indentStr(`} else {\n`);
+      this.increaseIndent();
+      for (const stmt of node.elseBody) {
+        result += this.processNode(stmt);
+      }
+      this.decreaseIndent();
+    }
+
+    result += this.indentStr(`}\n`);
     return result;
   }
 

@@ -37,6 +37,7 @@ import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
+import { IfElse } from "../types/ifElse.js";
 import { escape, zip } from "../utils.js";
 import { BaseGenerator } from "./baseGenerator.js";
 import {
@@ -471,6 +472,29 @@ export class TypeScriptGenerator extends BaseGenerator {
     }
     const bodyCodeStr = bodyCodes.join("\n");
     return `while (${conditionCode}) {\n${bodyCodeStr}\n}\n`;
+  }
+
+  protected processIfElse(node: IfElse): string {
+    const conditionCode = this.processNode(node.condition);
+
+    const thenBodyCodes: string[] = [];
+    for (const stmt of node.thenBody) {
+      thenBodyCodes.push(this.processNode(stmt));
+    }
+    const thenBodyStr = thenBodyCodes.join("\n");
+
+    let result = `if (${conditionCode}) {\n${thenBodyStr}\n}`;
+
+    if (node.elseBody && node.elseBody.length > 0) {
+      const elseBodyCodes: string[] = [];
+      for (const stmt of node.elseBody) {
+        elseBodyCodes.push(this.processNode(stmt));
+      }
+      const elseBodyStr = elseBodyCodes.join("\n");
+      result += ` else {\n${elseBodyStr}\n}`;
+    }
+
+    return result + "\n";
   }
 
   protected processSpecialVar(node: SpecialVar): string {

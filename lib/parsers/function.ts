@@ -31,6 +31,7 @@ import {
 } from "../types.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { WhileLoop } from "../types/whileLoop.js";
+import { IfElse } from "../types/ifElse.js";
 import { accessExpressionParser, indexAccessParser } from "./access.js";
 import { commentParser } from "./comment.js";
 import { functionCallParser } from "./functionCall.js";
@@ -105,6 +106,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
         whileLoopParser,
         matchBlockParser,
         awaitParser,
+        ifParser,
         functionParser,
         accessExpressionParser,
         assignmentParser,
@@ -130,6 +132,79 @@ export const timeBlockParser: Parser<TimeBlock> = trace(
     char("}"),
   ),
 );
+
+/* const elseClauseParser: Parser<AgencyNode[]> = seqC(
+  str("else"),
+  optionalSpaces,
+  char("{"),
+  spaces,
+  captureCaptures(bodyParser),
+  optionalSpaces,
+  char("}"),
+);
+
+export const ifElseParser: Parser<IfElse> = (input: string) => {
+  const parser = trace(
+    "ifElseParser",
+    seqC(
+      set("type", "ifElse"),
+      str("if"),
+      optionalSpaces,
+      char("("),
+      optionalSpaces,
+      capture(
+        or(
+          indexAccessParser,
+          functionCallParser,
+          accessExpressionParser,
+          literalParser,
+        ),
+        "condition",
+      ),
+      optionalSpaces,
+      char(")"),
+      optionalSpaces,
+      char("{"),
+      spaces,
+      capture(bodyParser, "thenBody"),
+      optionalSpaces,
+      char("}"),
+      optionalSpaces,
+      capture(optional(elseClauseParser), "elseBody"),
+    ),
+  );
+  return parser(input);
+}; */
+
+export const ifParser: Parser<IfElse> = (input: string) => {
+  const parser = trace(
+    "ifParser",
+    seqC(
+      set("type", "ifElse"),
+      str("if"),
+      optionalSpaces,
+      char("("),
+      optionalSpaces,
+      capture(
+        or(
+          accessExpressionParser,
+          functionCallParser,
+          literalParser,
+        ),
+        "condition",
+      ),
+      optionalSpaces,
+      char(")"),
+      optionalSpaces,
+      char("{"),
+      spaces,
+      capture(bodyParser, "thenBody"),
+      optionalSpaces,
+      char("}"),
+    ),
+  );
+  return parser(input);
+};
 
 export const whileLoopParser: Parser<WhileLoop> = trace(
   "whileLoopParser",

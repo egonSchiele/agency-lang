@@ -27,6 +27,7 @@ import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
+import { IfElse } from "../types/ifElse.js";
 import { TimeBlock } from "@/types/timeBlock.js";
 import { AwaitStatement } from "@/types/await.js";
 
@@ -175,6 +176,8 @@ export class BaseGenerator {
         return "";
       case "whileLoop":
         return this.processWhileLoop(node);
+      case "ifElse":
+        return this.processIfElse(node);
       case "specialVar":
         return this.processSpecialVar(node);
       case "indexAccess":
@@ -204,6 +207,10 @@ export class BaseGenerator {
 
   protected processWhileLoop(node: WhileLoop): string {
     return "processWhileLoop not implemented";
+  }
+
+  protected processIfElse(node: IfElse): string {
+    return "processIfElse not implemented";
   }
 
   protected processImportStatement(node: ImportStatement): string {

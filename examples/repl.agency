@@ -1,4 +1,4 @@
-import { printLine, readFile, writeFile, confirm, exit } from "./basicFunctions.ts"
+import { printLine, readFile, writeFile, confirm, execCommand } from "./basicFunctions.ts"
 
 def printLineTool(message: string): string {
   """
@@ -30,12 +30,12 @@ def confirmTool(message: string): boolean {
   return await confirm(message)
 }
 
-def exitTool(code: number): string {
+def execCommandTool(command: string): string {
   """
-  Exits the program with the given exit code.
+  Executes a shell command and returns its output.
   """
-  exit(code)
-  return "exited"
+  await execCommand(command)
+  return "command executed"
 }
 
 node main() {
@@ -44,7 +44,7 @@ node main() {
     +writeFileTool
     +readFileTool
     +printLineTool
-    +exitTool
+    +execCommandTool
     response = `Respond to this user message: ${msg}`
     print(response)
   }

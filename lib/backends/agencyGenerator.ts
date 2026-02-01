@@ -6,6 +6,7 @@ import {
   Literal,
   NewLine,
   PromptLiteral,
+  StringLiteral,
   TypeAlias,
   TypeHint,
   VariableType,
@@ -127,9 +128,7 @@ export class AgencyGenerator extends BaseGenerator {
       case "number":
         return literal.value;
       case "string":
-        // Escape backslashes and quotes
-        const escaped = literal.value;
-        return `"${escaped}"`;
+        return this.generateStringLiteral(literal);
       case "variableName":
         return literal.value;
       case "multiLineString":
@@ -152,6 +151,19 @@ export class AgencyGenerator extends BaseGenerator {
       }
     }
     result += "`";
+    return result;
+  }
+
+  private generateStringLiteral(node: StringLiteral): string {
+    let result = '"';
+    for (const segment of node.segments) {
+      if (segment.type === "text") {
+        result += segment.value;
+      } else if (segment.type === "interpolation") {
+        result += `\${${segment.variableName}}`;
+      }
+    }
+    result += '"';
     return result;
   }
 

@@ -354,7 +354,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       case "number":
         return literal.value;
       case "string":
-        return `"${escape(literal.value)}"`;
+        return this.generateStringLiteral(literal.segments);
       case "multiLineString":
         return `\`${escape(literal.value)}\``;
       case "variableName":
@@ -397,6 +397,22 @@ export class TypeScriptGenerator extends BaseGenerator {
     }
 
     return "`" + promptParts.join("") + "`";
+  }
+
+  generateStringLiteral(segments: PromptSegment[]): string {
+    const stringParts: string[] = [];
+
+    for (const segment of segments) {
+      if (segment.type === "text") {
+        const escaped = escape(segment.value);
+        stringParts.push(escaped);
+      } else {
+        // Interpolation segment
+        stringParts.push(`\${${segment.variableName}}`);
+      }
+    }
+
+    return "`" + stringParts.join("") + "`";
   }
 
   /**

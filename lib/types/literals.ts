@@ -12,7 +12,7 @@ export type NumberLiteral = {
 
 export type StringLiteral = {
   type: "string";
-  value: string;
+  segments: PromptSegment[];
 };
 
 export type MultiLineStringLiteral = {

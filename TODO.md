@@ -71,3 +71,4 @@ type ListIngredientsParams = {
 - can't assign to an access expression (e.g., `obj.key = value` doesn't work yet)
 - can't interpolate anything except a var name. eg `"hello ${person.name}"` doesn't work because we generate a function with arg named `person.name`, which isn't legal.
 - formatter should retain newlines. There's a newline parser but currently newlines get swallowed up by the `sepBy` in the `bodyParser` and the `optionalSpaces` at the start of assignmentParser, amongst other places.
+- no types supported on node parameters yet

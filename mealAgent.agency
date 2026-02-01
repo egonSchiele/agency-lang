@@ -1,81 +1,18 @@
-type Ingredient = {
-  name: string;
-  quantity: string;
-  nutritionalValues: { calories: number; protein: number; carbs: number; fat: number; };
-}
+node greetUser() {
+  name = input("What is your name?");
+  language = input("What language do you speak? (English, Spanish, French, German)");
 
-type Meal = {
-  name: string;
-  ingredients: Ingredient[];
-  recipe: string;
-}
-
-node listIngredients(ingredients: Ingredient[]) {
-  for (ingredient in ingredients) {
-    print(`Ingredient: ${ingredient.name}, Quantity: ${ingredient.quantity}, Nutritional Values: ${ingredient.nutritionalValues}`)
-  }
-}
-
-node addOrEditIngredient(ingredients: Ingredient[]) {
-  inputName = input('Enter ingredient name: ')
-  inputQuantity = input('Enter quantity: ')
-  inputCalories = input('Enter calories: ')
-  inputProtein = input('Enter protein: ')
-  inputCarbs = input('Enter carbs: ')
-  inputFat = input('Enter fat: ')
-
-  newIngredient: Ingredient = {
-    name: inputName,
-    quantity: inputQuantity,
-    nutritionalValues: {
-      calories: parseInt(inputCalories),
-      protein: parseInt(inputProtein),
-      carbs: parseInt(inputCarbs),
-      fat: parseInt(inputFat),
-    }
+  match(language) {
+    "English" => greeting = `Hello, ${name}!`;
+    "Spanish" => greeting = `¡Hola, ${name}!`;
+    "French" => greeting = `Bonjour, ${name}!`;
+    "German" => greeting = `Hallo, ${name}!`;
+    _ => greeting = `Hello, ${name}! (Language not supported)`;
   }
 
-  ingredients.push(newIngredient)
-  print(`Ingredient ${inputName} added.`)
-}
-
-node listMeals(meals: Meal[]) {
-  for (meal in meals) {
-    print(`Meal: ${meal.name}, Recipe: ${meal.recipe}`)
-  }
-}
-
-node addOrEditMeal(meals: Meal[]) {
-  inputMealName = input('Enter meal name: ')
-  inputRecipe = input('Enter recipe: ')
-  inputIngredients = input('Enter ingredients (comma-separated): ')
-
-  ingredientsList = map(inputIngredients.split(','), i => ({ name: i.trim() }))
-  newMeal: Meal = {
-    name: inputMealName,
-    ingredients: ingredientsList,
-    recipe: inputRecipe,
-  }
-
-  meals.push(newMeal)
-  print(`Meal ${inputMealName} added.`)
-}
-
-node importRecipe(url: string) {
-  recipeData = fetchJson(url)
-  print(`Imported Recipe: ${recipeData.title}`)
-  return recipeData
+  print(greeting);
 }
 
 node main() {
-  ingredients: Ingredient[] = []
-  meals: Meal[] = []
-
-  // Example usage
-  addOrEditIngredient(ingredients)
-  listIngredients(ingredients)
-  addOrEditMeal(meals)
-  listMeals(meals)
-  recipe = importRecipe('https://example.com/recipe')
-  print(recipe)
+  return greetUser();
 }

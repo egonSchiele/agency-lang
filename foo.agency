@@ -59,9 +59,12 @@ def execCommandTool(command: string): CommandResult {
 }
 
 docs = read("DOCS.md")
+//prompt = """
+//Please create a meal planning agent. Each user has a pantry of ingredients with nutritional values and a list of meals, which include the recipes and ingredients for each meal.
+//A user should be able to list their ingredients, add or edit an existing ingredient, list their meals, add or edit an existing meal, or import a recipe from a URL.
+//"""
 prompt = """
-Please create a meal planning agent. Each user has a pantry of ingredients with nutritional values and a list of meals, which include the recipes and ingredients for each meal.
-A user should be able to list their ingredients, add or edit an existing ingredient, list their meals, add or edit an existing meal, or import a recipe from a URL.
+Please create a greeting agent. This agent asks a user for their name and language spoken, and then greets them in that language. The agent should support at least English, Spanish, French, and German.
 """
 
 node main() {
@@ -86,27 +89,39 @@ node saveCode(generatedCode) {
 
   print(result2)
   filename = result2.filename
+  return typecheckFile(filename)
+}
+
+
+node typecheckFile(filename) {
   typecheckResult :: { success: boolean; errors: string }
   +execCommandTool
   typecheckResult = `Typecheck the following Agency code saved in the file ${filename} by running "pnpm agency ast ${filename}"`
 
   result3 = typecheckResult.success
   errors = typecheckResult.errors
-  while (not(result3)) {
-    +readFileTool
-    +writeFileTool
-    result4 = `Please fix the following errors in ${filename}: ${errors}`
-
-    exit()
+  match(result3) {
+    true => print(`The code in ${filename} typechecks successfully.`)
+    false => return fixErrors({filename: filename, errors: errors})
   }
-  while (true) {
-    msg = input("> ")
-    +writeFileTool
-    +readFileTool
-    +printLineTool
-    +execCommandTool
-    response = `Respond to this user message: ${msg}`
+}
 
-    print(response)
-  }
+
+node fixErrors(params) {
+  filename = params.filename
+  errors = params.errors
+  print("Errors found")
+  print(errors)
+  instructions = """
+Here are some reasons you might see typechecking errors:
+- else statements aren't supported yet -- use match statements with a default case instead
+- loops aren't supported yet -- or write the code in a separate typescript file and import it
+- no infix operators yet (e.g., `+`, `-`, `*`, `/`, `&&`, `||`, `>=`, `<=`, `==`, `!=`, etc), use built-in functions instead, like `not`, `eq`, `and`, `or`, `lt`, `gt`, etc.
+"""
+  result4 :: { fixedCode: string }
+  +readFileTool
+  +writeFileTool
+  result4 = `Please fix the following errors in ${filename}: ${errors}`
+
+  return typecheckFile(filename)
 }

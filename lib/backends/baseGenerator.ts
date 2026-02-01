@@ -48,6 +48,7 @@ export class BaseGenerator {
   protected importStatements: string[] = [];
 
   // collect function signatures so we can implement named args
+  // TODO also save return types, check if used as a tool, return type cannot be null/void/undefined
   protected functionSignatures: Record<string, string[]> = {};
   constructor() { }
 

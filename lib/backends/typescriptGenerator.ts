@@ -49,6 +49,7 @@ import {
   mapTypeToZodSchema,
 } from "./typescriptGenerator/typeToZodSchema.js";
 import { TimeBlock } from "@/types/timeBlock.js";
+import { AwaitStatement } from "@/types/await.js";
 
 export class TypeScriptGenerator extends BaseGenerator {
   constructor() {
@@ -492,6 +493,11 @@ export class TypeScriptGenerator extends BaseGenerator {
       timingVarName,
       bodyCodeStr,
     });
+  }
+
+  protected processAwaitStatement(node: AwaitStatement): string {
+    const code = this.processNode(node.expression);
+    return `await ${code}`;
   }
 }
 

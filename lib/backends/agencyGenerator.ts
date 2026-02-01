@@ -27,6 +27,7 @@ import { WhileLoop } from "../types/whileLoop.js";
 import { BaseGenerator } from "./baseGenerator.js";
 import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
 import { TimeBlock } from "@/types/timeBlock.js";
+import { AwaitStatement } from "@/types/await.js";
 
 export class AgencyGenerator extends BaseGenerator {
   private indentLevel: number = 0;
@@ -389,6 +390,10 @@ export class AgencyGenerator extends BaseGenerator {
 
   private indentStr(str: string): string {
     return `${this.indent()}${str}`;
+  }
+  protected processAwaitStatement(node: AwaitStatement): string {
+    const code = this.processNode(node.expression);
+    return this.indentStr(`await ${code.trim()}\n`);
   }
 }
 

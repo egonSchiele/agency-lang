@@ -1,4 +1,5 @@
 import { AccessExpression, DotProperty, IndexAccess } from "./types/access.js";
+import { AwaitStatement } from "./types/await.js";
 import { AgencyArray, AgencyObject } from "./types/dataStructures.js";
 import { FunctionCall, FunctionDefinition } from "./types/function.js";
 import { GraphNodeDefinition } from "./types/graphNode.js";
@@ -27,13 +28,14 @@ export type Assignment = {
   type: "assignment";
   variableName: string;
   value:
-    | AccessExpression
-    | Literal
-    | FunctionCall
-    | AgencyObject
-    | AgencyArray
-    | IndexAccess
-    | TimeBlock;
+  | AccessExpression
+  | Literal
+  | FunctionCall
+  | AgencyObject
+  | AgencyArray
+  | IndexAccess
+  | TimeBlock
+  | AwaitStatement;
 };
 
 export type AgencyComment = {
@@ -61,7 +63,8 @@ export type AgencyNode =
   | SpecialVar
   | IndexAccess
   | DotProperty
-  | TimeBlock;
+  | TimeBlock
+  | AwaitStatement;
 
 export type AgencyProgram = {
   type: "agencyProgram";

@@ -12,7 +12,7 @@ export const template = `if (
   const result = await {{{name}}}(args);
   toolCallEndTime = performance.now();
 
-  console.log("Tool '{{{name:string}}}' called with arguments:", args);
+  // console.log("Tool '{{{name:string}}}' called with arguments:", args);
   // console.log("Tool '{{{name:string}}}' returned result:", result);
 
 statelogClient.toolCall({

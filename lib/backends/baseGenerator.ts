@@ -28,6 +28,7 @@ import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { TimeBlock } from "@/types/timeBlock.js";
+import { AwaitStatement } from "@/types/await.js";
 
 export class BaseGenerator {
   protected typeHints: TypeHintMap = {};
@@ -48,7 +49,7 @@ export class BaseGenerator {
 
   // collect function signatures so we can implement named args
   protected functionSignatures: Record<string, string[]> = {};
-  constructor() {}
+  constructor() { }
 
   generate(program: AgencyProgram): {
     output: string;
@@ -131,7 +132,7 @@ export class BaseGenerator {
     );
   }
 
-  protected processGraphNodeName(node: GraphNodeDefinition): void {}
+  protected processGraphNodeName(node: GraphNodeDefinition): void { }
 
   protected processNode(node: AgencyNode): string {
     switch (node.type) {
@@ -181,9 +182,15 @@ export class BaseGenerator {
         throw new Error(
           `Time block needs to be assigned to a variable: ${JSON.stringify(node as any)}`,
         );
+      case "awaitStatement":
+        return this.processAwaitStatement(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
+  }
+
+  protected processAwaitStatement(node: AwaitStatement): string {
+    return "processAwaitStatement not implemented";
   }
 
   protected processTimeBlock(node: TimeBlock, timingVarName: string): string {

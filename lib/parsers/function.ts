@@ -47,6 +47,7 @@ import {
 } from "./typeHints.js";
 import { comma, optionalSpaces, varNameChar } from "./utils.js";
 import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
+import { awaitParser } from "./await.js";
 
 export const assignmentParser: Parser<Assignment> = (input: string) => {
 
@@ -62,6 +63,7 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
       capture(
         or(
           timeBlockParser,
+          awaitParser,
           functionCallParser,
           indexAccessParser,
           accessExpressionParser,
@@ -102,6 +104,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
         returnStatementParser,
         whileLoopParser,
         matchBlockParser,
+        awaitParser,
         functionParser,
         accessExpressionParser,
         assignmentParser,

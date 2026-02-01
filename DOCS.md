@@ -18,11 +18,13 @@ node greet() {
 }
 
 node main() {
-  greet()
+  return greet()
 }
 ```
 
 You can see that the `main` node is calling the `greet` node. This defines an edge between the two nodes. This is a core feature of Agency: allowing you to build up a graph without needing much boilerplate code. Simply define the nodes and call them as functions; the function call will define an edge.
+
+Note that a call to another node should always `return`. This is because when following an edge from one node to another, we never return to the first node after the second node is executed.
 
 If you plan to run this agency file as a script, you will need a node named `main`, which is the entry point of the script. If you plan to import it into another script instead, the `main` node is not required. More on importing later.
 
@@ -83,6 +85,15 @@ type User = {
 }
 ```
 
+You can describe a property on an object for the LLM:
+
+```agency
+type User = {
+  name: string # The name of the user
+  age: number # The age of the user
+}
+```
+
 ### Functions / tools
 
 Here is an example of a function in Agency:
@@ -103,3 +114,69 @@ response = `Use the greet function to greet Alice`
 ```
 
 The `+greet` line tells Agency to make the `greet` function available as a tool in the LLM prompt.
+
+### Control Flow
+
+Agency supports `if` statements and `match` statements for control flow.
+Here is an example of an `if` statement:
+
+```agency
+condition = false
+if (condition) {
+  print("You are an adult.")
+}
+```
+
+Here is an example of a `match` statement:
+
+```agency
+status = "success"
+match(status) {
+  "success" => print("Operation was successful.")
+  "error" => print("There was an error.")
+  _ => print("Unknown status.")
+}
+```
+
+Agency also supports `while` loops:
+
+```agency
+condition = true
+while (condition) {
+  print(count)
+  condition = false
+}
+```
+
+### Imports
+When an agency file gets transpiled to TypeScript, all of the nodes and functions are available for import. You can import them like this:
+
+```agency
+// This imports the ingredients node
+import { ingredients } from "./ingredients.agency"
+```
+
+and then simply call them as regular functions. If an agency file is going to be imported, don't define a `main` node because it will automatically be executed on import.
+
+### Built-in functions
+Agency has some built-in functions for common tasks:
+- `print(value: any): void` - prints a value to the console
+- `sleep(seconds: number): void` - pauses execution for a specified number of seconds
+- `input(prompt: string): string` - prompts the user for input and returns their response
+- `fetch(url: string): string` - makes an HTTP GET request to the specified URL and returns the response body as a string
+- `fetchJson(url: string): any` - makes an HTTP GET request to the specified URL and returns the response body parsed as JSON
+- `read(path: string): string` - reads the contents of a file at the specified path and returns it as a string
+- `write(path: string, content: string): void` - writes the specified content to a file at the specified path
+- `readImage(path: string): Image` - reads an image file at the specified path and returns it as an Image object
+
+### Typescript interop
+
+There's not much more that agency can do. It is intentionally bare-bones. However, it transpiles to TypeScript and has great interoperability with it. You can import TypeScript code. Any import statement you can use in ESM modules will work:
+
+```agency
+import { someFunction } from "./someModule.js"
+import * as foo from "foo.js"
+import bar from "bar.js"
+```
+
+For any logic that is more complex, implement it in a separate TypeScript file, then import the relevant functions into Agency and use them.

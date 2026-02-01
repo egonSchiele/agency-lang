@@ -180,3 +180,40 @@ import bar from "bar.js"
 ```
 
 For any logic that is more complex, implement it in a separate TypeScript file, then import the relevant functions into Agency and use them.
+
+### A few notes on agent design
+
+As you build more complex agents, a good way to design them is with a decision tree-style approach. Instead of having one big prompt, use several smaller prompts to categorize a user's message and then use the appropriate prompt. This should make your agent faster and more reliable. For example, suppose you are building an agent that a user can use to either report their mood or add an item to their to-do list.
+
+Start with a node that classifies the user's intent:
+
+```agency
+node router(userMessage: string) {
+  intent :: "mood" | "todo"
+  intent = `Classify the user's intent as either "mood" or "todo" based on the message: ${userMessage}`
+
+  match(intent) {
+    "mood" => return handleMood(userMessage)
+    "todo" => return handleTodo(userMessage)
+    _ => print("Unknown intent.")
+  }
+}
+```
+
+Then have separate nodes for handling each intent:
+
+```agency
+node handleMood(userMessage: string) {
+  mood = `Extract the user's mood from the message: ${userMessage}`
+  print(`User's mood is: ${mood}`)
+}
+
+node handleTodo(userMessage: string) {
+  item = `Extract the to-do item from the message: ${userMessage}`
+  print(`Adding to-do item: ${item}`)
+}
+```
+
+### Multiple agency files
+
+Each agency file represents one graph. If you split up your code into multiple files, you're creating multiple graphs. This may be a good way to organize your code.

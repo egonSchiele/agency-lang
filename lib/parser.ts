@@ -1,10 +1,11 @@
 import { typeAliasParser, typeHintParser } from "./parsers/typeHints.js";
-import { AgencyNode, AgencyProgram } from "./types.js";
+import { AgencyNode, AgencyProgram, NewLine } from "./types.js";
 import {
   anyChar,
   between,
   capture,
   eof,
+  many,
   or,
   Parser,
   ParserResult,
@@ -36,9 +37,13 @@ import { EgonLog } from "egonlog";
 import { specialVarParser } from "./parsers/specialVar.js";
 import { awaitParser } from "./parsers/await.js";
 
+export const newLineParser: Parser<NewLine> = seqC(
+  set("type", "newLine"),
+  str("\n"),
+);
+
 export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
-  const parser = sepBy(
-    spaces,
+  const parser = many(
     trace(
       "agencyParser",
       or(
@@ -59,6 +64,7 @@ export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
         assignmentParser,
         functionCallParser,
         commentParser,
+        newLineParser,
       ),
     ),
   );

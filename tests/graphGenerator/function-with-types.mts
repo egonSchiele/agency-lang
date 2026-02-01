@@ -55,6 +55,19 @@ const __nodes = ["foo"] as const;
 type Node = (typeof __nodes)[number];
 
 const graph = new PieMachine<State, Node>(__nodes, graphConfig);
+
+// builtins
+
+const not = (val: any): boolean => !val;
+const eq = (a: any, b: any): boolean => a === b;
+const neq = (a: any, b: any): boolean => a !== b;
+const lt = (a: any, b: any): boolean => a < b;
+const lte = (a: any, b: any): boolean => a <= b;
+const gt = (a: any, b: any): boolean => a > b;
+const gte = (a: any, b: any): boolean => a >= b;
+const and = (a: any, b: any): boolean => a && b;
+const or = (a: any, b: any): boolean => a || b;
+
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }

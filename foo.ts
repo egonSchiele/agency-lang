@@ -1,7 +1,7 @@
 // @ts-nocheck
 
 
-import { printLine, readFile, writeFile, confirm, execCommand }  from "./basicFunctions.ts";
+import { printLine, printHighlighted, readFile, writeFile, confirm, execCommand }  from "./basicFunctions.ts";
 
 import { z } from "zod";
 import * as readline from "readline";
@@ -53,10 +53,23 @@ const graphConfig = {
 
 // Define the names of the nodes in the graph
 // Useful for type safety
-const __nodes = ["main"] as const;
+const __nodes = ["main","saveCode"] as const;
 type Node = (typeof __nodes)[number];
 
 const graph = new PieMachine<State, Node>(__nodes, graphConfig);
+
+// builtins
+
+const not = (val: any): boolean => !val;
+const eq = (a: any, b: any): boolean => a === b;
+const neq = (a: any, b: any): boolean => a !== b;
+const lt = (a: any, b: any): boolean => a < b;
+const lte = (a: any, b: any): boolean => a <= b;
+const gt = (a: any, b: any): boolean => a > b;
+const gte = (a: any, b: any): boolean => a >= b;
+const and = (a: any, b: any): boolean => a && b;
+const or = (a: any, b: any): boolean => a || b;
+
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -91,10 +104,16 @@ function _builtinRead(filename: string): string {
   return contents;
 }
 
+type CommandResult = { stdout: string; stderr: string; canceled: boolean };
 const printLineToolTool = {
   name: "printLineTool",
   description: "Prints a line to the console.",
   schema: z.object({"message": z.string(), })
+};
+const printHighlightedToolTool = {
+  name: "printHighlightedTool",
+  description: "Prints highlighted code to the console in the specified language.",
+  schema: z.object({"code": z.string(), "language": z.string(), })
 };
 const readFileToolTool = {
   name: "readFileTool",
@@ -103,8 +122,8 @@ const readFileToolTool = {
 };
 const writeFileToolTool = {
   name: "writeFileTool",
-  description: "Writes content to a file.",
-  schema: z.object({"filePath": z.string(), "content": z.string(), })
+  description: "Writes content to a file. If language is provided, the content will be syntax highlighted accordingly.",
+  schema: z.object({"filePath": z.string(), "content": z.string(), "language": z.union([z.string(), z.string()]), })
 };
 const confirmToolTool = {
   name: "confirmTool",
@@ -121,23 +140,29 @@ async function printLineTool({message}) : Promise<string> {
     printLine(message)
 return "printed"
 
+}async function printHighlightedTool({code, language}) : Promise<string> {
+    const __messages: Message[] = [];
+    printHighlighted(code, language)
+return "printed"
+
 }async function readFileTool({filePath}) : Promise<string> {
     const __messages: Message[] = [];
     return readFile(filePath)
 
-}async function writeFileTool({filePath, content}) : Promise<string> {
+}async function writeFileTool({filePath, content, language}) : Promise<string> {
     const __messages: Message[] = [];
-    await writeFile(filePath, content)
+    await writeFile(filePath, content, language)
 return "file written"
 
 }async function confirmTool({message}) : Promise<boolean> {
     const __messages: Message[] = [];
     return await confirm(message)
 
-}async function execCommandTool({command}) : Promise<string> {
+}async function execCommandTool({command}) : Promise<CommandResult> {
     const __messages: Message[] = [];
-    await execCommand(command)
-return "command executed"
+    const result = await execCommand(command);
+
+return result
 
 }const docs = await await _builtinRead("DOCS.md");
 const prompt = `
@@ -145,15 +170,18 @@ Please create a meal planning agent. Each user has a pantry of ingredients with 
 A user should be able to list their ingredients, add or edit an existing ingredient, list their meals, add or edit an existing meal, or import a recipe from a URL.
 `;
 
-async function _result(prompt: string, docs: string, __messages: Message[] = []): Promise<string> {
-  const __prompt = `You are an assistant that can create agents using the Agency programming language. Using the following documentation about the Agency language, create an agent that can do the following task: ${prompt}. Here is the documentation about the Agency language: ${docs}`;
+async function _result(prompt: string, docs: string, __messages: Message[] = []): Promise<{ generatedCode: string }> {
+  const __prompt = `You are an assistant that can create agents using the Agency programming language. Using the following documentation about the Agency language, create an agent that can do the following task: ${prompt}. Print the generated code for the user to review. Here is the documentation about the Agency language: ${docs}`;
   const startTime = performance.now();
   __messages.push(userMessage(__prompt));
-  const __tools = [writeFileToolTool, readFileToolTool, printLineToolTool, execCommandToolTool];
+  const __tools = [writeFileToolTool, readFileToolTool, printLineToolTool, printHighlightedToolTool, execCommandToolTool];
 
   
+  // Need to make sure this is always an object
+  const __responseFormat = z.object({
+     response: z.object({ "generatedCode": z.string() })
+  });
   
-  const __responseFormat = undefined;
   
 
   let __completion = await __client.text({
@@ -265,6 +293,32 @@ statelogClient.toolCall({
       }));
 }
 if (
+  toolCall.name === "printHighlightedTool"
+) {
+  const args = toolCall.arguments;
+
+  toolCallStartTime = performance.now();
+  const result = await printHighlightedTool(args);
+  toolCallEndTime = performance.now();
+
+  // console.log("Tool 'printHighlightedTool' called with arguments:", args);
+  // console.log("Tool 'printHighlightedTool' returned result:", result);
+
+statelogClient.toolCall({
+    toolName: "printHighlightedTool",
+    args,
+    output: result,
+    model: __client.getModel(),
+    timeTaken: toolCallEndTime - toolCallStartTime,
+  });
+
+  // Add function result to messages
+  __messages.push(toolMessage(result, {
+            tool_call_id: toolCall.id,
+            name: toolCall.name,
+      }));
+}
+if (
   toolCall.name === "execCommandTool"
 ) {
   const args = toolCall.arguments;
@@ -278,6 +332,395 @@ if (
 
 statelogClient.toolCall({
     toolName: "execCommandTool",
+    args,
+    output: result,
+    model: __client.getModel(),
+    timeTaken: toolCallEndTime - toolCallStartTime,
+  });
+
+  // Add function result to messages
+  __messages.push(toolMessage(result, {
+            tool_call_id: toolCall.id,
+            name: toolCall.name,
+      }));
+}
+    }
+  
+    const nextStartTime = performance.now();
+    let __completion = await __client.text({
+      messages: __messages,
+      tools: __tools,
+      responseFormat: __responseFormat,
+    });
+
+    const nextEndTime = performance.now();
+
+    statelogClient.promptCompletion({
+      messages: __messages,
+      completion: __completion,
+      model: __client.getModel(),
+      timeTaken: nextEndTime - nextStartTime,
+    });
+
+    if (!__completion.success) {
+      throw new Error(
+        `Error getting response from ${__model}: ${__completion.error}`
+      );
+    }
+    responseMessage = __completion.value;
+  }
+
+  // Add final assistant response to history
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
+  
+  try {
+  const result = JSON.parse(responseMessage.output || "");
+  return result.response;
+  } catch (e) {
+    return responseMessage.output;
+    // console.error("Error parsing response for variable 'result':", e);
+    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
+    // throw e;
+  }
+  
+
+  
+}
+graph.node("main", async (state): Promise<any> => {
+    const __messages: Message[] = [];
+    
+    
+
+
+
+
+
+const result = await _result(prompt, docs, __messages);
+
+const generatedCode = result.generatedCode;
+
+return goToNode("saveCode",
+  {
+    messages: state.messages,
+    
+    data: generatedCode
+    
+    
+  }
+);
+
+});
+
+async function _result2(generatedCode: string, __messages: Message[] = []): Promise<{ filename: string }> {
+  const __prompt = `Here's some code in the Agency language. Save the following code to a file named mealAgent.agency, and return the filename you've saved the code to: ${generatedCode}.`;
+  const startTime = performance.now();
+  __messages.push(userMessage(__prompt));
+  const __tools = [writeFileToolTool];
+
+  
+  // Need to make sure this is always an object
+  const __responseFormat = z.object({
+     response: z.object({ "filename": z.string() })
+  });
+  
+  
+
+  let __completion = await __client.text({
+    messages: __messages,
+    tools: __tools,
+    responseFormat: __responseFormat,
+  });
+
+  const endTime = performance.now();
+  statelogClient.promptCompletion({
+    messages: __messages,
+    completion: __completion,
+    model: __client.getModel(),
+    timeTaken: endTime - startTime,
+  });
+
+  if (!__completion.success) {
+    throw new Error(
+      `Error getting response from ${__model}: ${__completion.error}`
+    );
+  }
+
+  let responseMessage = __completion.value;
+
+  // Handle function calls
+  while (responseMessage.toolCalls.length > 0) {
+    // Add assistant's response with tool calls to message history
+    __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+    let toolCallStartTime, toolCallEndTime;
+
+    // Process each tool call
+    for (const toolCall of responseMessage.toolCalls) {
+      if (
+  toolCall.name === "writeFileTool"
+) {
+  const args = toolCall.arguments;
+
+  toolCallStartTime = performance.now();
+  const result = await writeFileTool(args);
+  toolCallEndTime = performance.now();
+
+  // console.log("Tool 'writeFileTool' called with arguments:", args);
+  // console.log("Tool 'writeFileTool' returned result:", result);
+
+statelogClient.toolCall({
+    toolName: "writeFileTool",
+    args,
+    output: result,
+    model: __client.getModel(),
+    timeTaken: toolCallEndTime - toolCallStartTime,
+  });
+
+  // Add function result to messages
+  __messages.push(toolMessage(result, {
+            tool_call_id: toolCall.id,
+            name: toolCall.name,
+      }));
+}
+    }
+  
+    const nextStartTime = performance.now();
+    let __completion = await __client.text({
+      messages: __messages,
+      tools: __tools,
+      responseFormat: __responseFormat,
+    });
+
+    const nextEndTime = performance.now();
+
+    statelogClient.promptCompletion({
+      messages: __messages,
+      completion: __completion,
+      model: __client.getModel(),
+      timeTaken: nextEndTime - nextStartTime,
+    });
+
+    if (!__completion.success) {
+      throw new Error(
+        `Error getting response from ${__model}: ${__completion.error}`
+      );
+    }
+    responseMessage = __completion.value;
+  }
+
+  // Add final assistant response to history
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
+  
+  try {
+  const result = JSON.parse(responseMessage.output || "");
+  return result.response;
+  } catch (e) {
+    return responseMessage.output;
+    // console.error("Error parsing response for variable 'result2':", e);
+    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
+    // throw e;
+  }
+  
+
+  
+}
+
+async function _typecheckResult(filename: string, __messages: Message[] = []): Promise<{ success: boolean; errors: string }> {
+  const __prompt = `Typecheck the following Agency code saved in the file ${filename} by running \"pnpm agency ast ${filename}\"`;
+  const startTime = performance.now();
+  __messages.push(userMessage(__prompt));
+  const __tools = [execCommandToolTool];
+
+  
+  // Need to make sure this is always an object
+  const __responseFormat = z.object({
+     response: z.object({ "success": z.boolean(), "errors": z.string() })
+  });
+  
+  
+
+  let __completion = await __client.text({
+    messages: __messages,
+    tools: __tools,
+    responseFormat: __responseFormat,
+  });
+
+  const endTime = performance.now();
+  statelogClient.promptCompletion({
+    messages: __messages,
+    completion: __completion,
+    model: __client.getModel(),
+    timeTaken: endTime - startTime,
+  });
+
+  if (!__completion.success) {
+    throw new Error(
+      `Error getting response from ${__model}: ${__completion.error}`
+    );
+  }
+
+  let responseMessage = __completion.value;
+
+  // Handle function calls
+  while (responseMessage.toolCalls.length > 0) {
+    // Add assistant's response with tool calls to message history
+    __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+    let toolCallStartTime, toolCallEndTime;
+
+    // Process each tool call
+    for (const toolCall of responseMessage.toolCalls) {
+      if (
+  toolCall.name === "execCommandTool"
+) {
+  const args = toolCall.arguments;
+
+  toolCallStartTime = performance.now();
+  const result = await execCommandTool(args);
+  toolCallEndTime = performance.now();
+
+  // console.log("Tool 'execCommandTool' called with arguments:", args);
+  // console.log("Tool 'execCommandTool' returned result:", result);
+
+statelogClient.toolCall({
+    toolName: "execCommandTool",
+    args,
+    output: result,
+    model: __client.getModel(),
+    timeTaken: toolCallEndTime - toolCallStartTime,
+  });
+
+  // Add function result to messages
+  __messages.push(toolMessage(result, {
+            tool_call_id: toolCall.id,
+            name: toolCall.name,
+      }));
+}
+    }
+  
+    const nextStartTime = performance.now();
+    let __completion = await __client.text({
+      messages: __messages,
+      tools: __tools,
+      responseFormat: __responseFormat,
+    });
+
+    const nextEndTime = performance.now();
+
+    statelogClient.promptCompletion({
+      messages: __messages,
+      completion: __completion,
+      model: __client.getModel(),
+      timeTaken: nextEndTime - nextStartTime,
+    });
+
+    if (!__completion.success) {
+      throw new Error(
+        `Error getting response from ${__model}: ${__completion.error}`
+      );
+    }
+    responseMessage = __completion.value;
+  }
+
+  // Add final assistant response to history
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
+  
+  try {
+  const result = JSON.parse(responseMessage.output || "");
+  return result.response;
+  } catch (e) {
+    return responseMessage.output;
+    // console.error("Error parsing response for variable 'typecheckResult':", e);
+    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
+    // throw e;
+  }
+  
+
+  
+}
+
+async function _result4(filename: string, errors: string, __messages: Message[] = []): Promise<string> {
+  const __prompt = `Please fix the following errors in ${filename}: ${errors}`;
+  const startTime = performance.now();
+  __messages.push(userMessage(__prompt));
+  const __tools = [readFileToolTool, writeFileToolTool];
+
+  
+  
+  const __responseFormat = undefined;
+  
+
+  let __completion = await __client.text({
+    messages: __messages,
+    tools: __tools,
+    responseFormat: __responseFormat,
+  });
+
+  const endTime = performance.now();
+  statelogClient.promptCompletion({
+    messages: __messages,
+    completion: __completion,
+    model: __client.getModel(),
+    timeTaken: endTime - startTime,
+  });
+
+  if (!__completion.success) {
+    throw new Error(
+      `Error getting response from ${__model}: ${__completion.error}`
+    );
+  }
+
+  let responseMessage = __completion.value;
+
+  // Handle function calls
+  while (responseMessage.toolCalls.length > 0) {
+    // Add assistant's response with tool calls to message history
+    __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+    let toolCallStartTime, toolCallEndTime;
+
+    // Process each tool call
+    for (const toolCall of responseMessage.toolCalls) {
+      if (
+  toolCall.name === "readFileTool"
+) {
+  const args = toolCall.arguments;
+
+  toolCallStartTime = performance.now();
+  const result = await readFileTool(args);
+  toolCallEndTime = performance.now();
+
+  // console.log("Tool 'readFileTool' called with arguments:", args);
+  // console.log("Tool 'readFileTool' returned result:", result);
+
+statelogClient.toolCall({
+    toolName: "readFileTool",
+    args,
+    output: result,
+    model: __client.getModel(),
+    timeTaken: toolCallEndTime - toolCallStartTime,
+  });
+
+  // Add function result to messages
+  __messages.push(toolMessage(result, {
+            tool_call_id: toolCall.id,
+            name: toolCall.name,
+      }));
+}
+if (
+  toolCall.name === "writeFileTool"
+) {
+  const args = toolCall.arguments;
+
+  toolCallStartTime = performance.now();
+  const result = await writeFileTool(args);
+  toolCallEndTime = performance.now();
+
+  // console.log("Tool 'writeFileTool' called with arguments:", args);
+  // console.log("Tool 'writeFileTool' returned result:", result);
+
+statelogClient.toolCall({
+    toolName: "writeFileTool",
     args,
     output: result,
     model: __client.getModel(),
@@ -506,16 +949,36 @@ statelogClient.toolCall({
   return responseMessage.output;
   
 }
-graph.node("main", async (state): Promise<any> => {
+graph.node("saveCode", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
+    const generatedCode = state.data;
     
+    //  print(result)
 
 
 
-const result = await _result(prompt, docs, __messages);
+const result2 = await _result2(generatedCode, __messages);
 
-await console.log(result)
+await console.log(result2)
+const filename = result2.filename;
+
+
+
+const typecheckResult = await _typecheckResult(filename, __messages);
+
+const result3 = typecheckResult.success;
+
+const errors = typecheckResult.errors;
+
+while (not(result3)) {
+
+
+const result4 = await _result4(filename, errors, __messages);
+
+exit()
+}
+
 while (true) {
 const msg = await await _builtinInput("> ");
 
@@ -530,10 +993,17 @@ await console.log(response)
 
 });
 
+graph.conditionalEdge("main", ["saveCode"]);
+
 const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
 export async function main(data:any): Promise<any> {
   const result = await graph.run("main", { messages: [], data });
+  return result.data;
+}
+
+export async function saveCode(data:any): Promise<any> {
+  const result = await graph.run("saveCode", { messages: [], data });
   return result.data;
 }
 

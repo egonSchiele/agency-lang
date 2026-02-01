@@ -6,7 +6,10 @@ import { exec } from "child_process";
 import { highlight } from "cli-highlight";
 const asyncExec = util.promisify(exec);
 
-async function runCommand(command: string): Promise<string> {
+// return both stdout and stderr outputs
+async function runCommand(
+  command: string,
+): Promise<{ stdout: string; stderr: string }> {
   try {
     const { stdout, stderr } = await asyncExec(command);
     if (stderr) {
@@ -14,11 +17,12 @@ async function runCommand(command: string): Promise<string> {
       console.error(stderr);
     }
     console.log(stdout);
-    return stdout;
+    return { stdout, stderr };
   } catch (e) {
     console.error("An error occurred:", e);
+    return { stdout: "", stderr: String(e) };
     // Handle error (e.g., exit code, signal)
-    throw e;
+    // throw e;
   }
 }
 
@@ -89,12 +93,15 @@ export const exit = (code: number = 0): void => {
   process.exit(code);
 };
 
-export const execCommand = async (command: string): Promise<void> => {
+export const execCommand = async (
+  command: string,
+): Promise<{ stdout: string; stderr: string; canceled: boolean }> => {
   printLine(`About to execute command: ${command}`);
   const approve = await confirm(`Approve execution of command: ${command}?`);
   if (!approve) {
     printLine("Command execution cancelled.");
-    return;
+    return { stdout: "", stderr: "", canceled: true };
   }
-  await runCommand(command);
+  const result = await runCommand(command);
+  return { ...result, canceled: false };
 };

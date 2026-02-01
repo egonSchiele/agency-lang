@@ -4,6 +4,7 @@ import {
   AgencyProgram,
   Assignment,
   Literal,
+  NewLine,
   PromptLiteral,
   TypeAlias,
   TypeHint,
@@ -103,13 +104,14 @@ export class AgencyGenerator extends BaseGenerator {
       const code = this.processTimeBlock(node.value);
       return this.indentStr(`${node.variableName} = ${code.trim()}\n`);
     }
-    const valueCode = this.processNode(node.value).trim();
+    let valueCode = this.processNode(node.value).trim();
+    if (node.value.type === "prompt") {
+      valueCode += "\n";
+    }
     return this.indentStr(`${node.variableName} = ${valueCode}\n`);
   }
 
-  protected processTimeBlock(
-    node: TimeBlock
-  ): string {
+  protected processTimeBlock(node: TimeBlock): string {
     this.increaseIndent();
     const bodyCodes: string[] = [];
     for (const stmt of node.body) {
@@ -155,7 +157,7 @@ export class AgencyGenerator extends BaseGenerator {
 
   protected processPromptLiteral(
     variableName: string,
-    node: PromptLiteral
+    node: PromptLiteral,
   ): string {
     // For agency code, prompts are just part of assignments
     // This shouldn't be called directly, but return empty string
@@ -184,7 +186,7 @@ export class AgencyGenerator extends BaseGenerator {
 
     // Start function definition
     let result = this.indentStr(
-      `def ${functionName}(${params})${returnTypeStr} {\n`
+      `def ${functionName}(${params})${returnTypeStr} {\n`,
     );
 
     // Process body with increased indentation
@@ -270,7 +272,7 @@ export class AgencyGenerator extends BaseGenerator {
   protected processDotFunctionCall(node: DotFunctionCall): string {
     const objectCode = this.processNode(node.object).trim();
     const functionCallCode = this.generateFunctionCallExpression(
-      node.functionCall
+      node.functionCall,
     );
     return `${objectCode}.${functionCallCode}`;
   }
@@ -365,7 +367,7 @@ export class AgencyGenerator extends BaseGenerator {
 
   protected processImportStatement(node: ImportStatement): string {
     return this.indentStr(
-      `import ${node.importedNames}from ${node.modulePath}`
+      `import ${node.importedNames}from ${node.modulePath}`,
     );
   }
 
@@ -378,7 +380,7 @@ export class AgencyGenerator extends BaseGenerator {
       ? ": " + variableTypeToString(node.returnType, this.typeAliases)
       : "";
     let result = this.indentStr(
-      `node ${nodeName}(${params})${returnTypeStr} {\n`
+      `node ${nodeName}(${params})${returnTypeStr} {\n`,
     );
 
     this.increaseIndent();
@@ -413,7 +415,7 @@ export class AgencyGenerator extends BaseGenerator {
 
   protected processSpecialVar(node: SpecialVar): string {
     return this.indentStr(
-      `@${node.name} = ${this.processNode(node.value).trim()}\n`
+      `@${node.name} = ${this.processNode(node.value).trim()}\n`,
     );
   }
 
@@ -423,6 +425,10 @@ export class AgencyGenerator extends BaseGenerator {
   protected processAwaitStatement(node: AwaitStatement): string {
     const code = this.processNode(node.expression);
     return this.indentStr(`await ${code.trim()}\n`);
+  }
+
+  protected processNewLine(_node: NewLine): string {
+    return "\n";
   }
 }
 

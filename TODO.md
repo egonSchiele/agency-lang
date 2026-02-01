@@ -69,3 +69,4 @@ type ListIngredientsParams = {
 - no else statements
 - no infix operators yet (e.g., `+`, `-`, `*`, `/`, `&&`, `||`, `>=`, `<=`, `==`, `!=`, etc.)
 - can't assign to an access expression (e.g., `obj.key = value` doesn't work yet)
+- can't interpolate anything except a var name. eg `"hello ${person.name}"` doesn't work because we generate a function with arg named `person.name`, which isn't legal.

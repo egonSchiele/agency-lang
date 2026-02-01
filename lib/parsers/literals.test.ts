@@ -391,64 +391,146 @@ describe("literals parsers", () => {
       // Happy path
       {
         input: '"hello"',
-        expected: { success: true, result: { type: "string", value: "hello" } },
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [{ type: "text", value: "hello" }],
+          },
+        },
       },
       {
         input: '"world"',
-        expected: { success: true, result: { type: "string", value: "world" } },
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [{ type: "text", value: "world" }],
+          },
+        },
       },
       {
         input: '"Hello, World!"',
         expected: {
           success: true,
-          result: { type: "string", value: "Hello, World!" },
+          result: {
+            type: "string",
+            segments: [{ type: "text", value: "Hello, World!" }],
+          },
         },
       },
 
       // Empty string
       {
         input: '""',
-        expected: { success: true, result: { type: "string", value: "" } },
+        expected: {
+          success: true,
+          result: { type: "string", segments: [] },
+        },
       },
 
       // Strings with special characters
       {
         input: '"123"',
-        expected: { success: true, result: { type: "string", value: "123" } },
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [{ type: "text", value: "123" }],
+          },
+        },
       },
       {
         input: '"  spaces  "',
         expected: {
           success: true,
-          result: { type: "string", value: "  spaces  " },
+          result: {
+            type: "string",
+            segments: [{ type: "text", value: "  spaces  " }],
+          },
         },
       },
       {
         input: '"tab\there"',
         expected: {
           success: true,
-          result: { type: "string", value: "tab\there" },
+          result: {
+            type: "string",
+            segments: [{ type: "text", value: "tab\there" }],
+          },
         },
       },
       {
         input: '"special!@#$%^&*()"',
         expected: {
           success: true,
-          result: { type: "string", value: "special!@#$%^&*()" },
+          result: {
+            type: "string",
+            segments: [{ type: "text", value: "special!@#$%^&*()" }],
+          },
         },
       },
       {
         input: '"single\'quote"',
         expected: {
           success: true,
-          result: { type: "string", value: "single'quote" },
+          result: {
+            type: "string",
+            segments: [{ type: "text", value: "single'quote" }],
+          },
         },
       },
       {
         input: '"`backtick`"',
         expected: {
           success: true,
-          result: { type: "string", value: "`backtick`" },
+          result: {
+            type: "string",
+            segments: [{ type: "text", value: "`backtick`" }],
+          },
+        },
+      },
+
+      // Strings with interpolation
+      {
+        input: '"Hello ${name}"',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "text", value: "Hello " },
+              { type: "interpolation", variableName: "name" },
+            ],
+          },
+        },
+      },
+      {
+        input: '"${greeting} world"',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "interpolation", variableName: "greeting" },
+              { type: "text", value: " world" },
+            ],
+          },
+        },
+      },
+      {
+        input: '"The value is ${x} and ${y}"',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "text", value: "The value is " },
+              { type: "interpolation", variableName: "x" },
+              { type: "text", value: " and " },
+              { type: "interpolation", variableName: "y" },
+            ],
+          },
         },
       },
 
@@ -802,11 +884,20 @@ describe("literals parsers", () => {
       // String literals
       {
         input: '"hello"',
-        expected: { success: true, result: { type: "string", value: "hello" } },
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [{ type: "text", value: "hello" }],
+          },
+        },
       },
       {
         input: '""',
-        expected: { success: true, result: { type: "string", value: "" } },
+        expected: {
+          success: true,
+          result: { type: "string", segments: [] },
+        },
       },
 
       // Variable name literals (lowest precedence)
@@ -834,7 +925,13 @@ describe("literals parsers", () => {
       // Strings vs other types
       {
         input: '"123"',
-        expected: { success: true, result: { type: "string", value: "123" } },
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [{ type: "text", value: "123" }],
+          },
+        },
       },
 
       // Failure cases

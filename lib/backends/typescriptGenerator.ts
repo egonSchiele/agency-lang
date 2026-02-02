@@ -273,6 +273,12 @@ export class TypeScriptGenerator extends BaseGenerator {
   }
 
   protected processUsesTool(node: UsesTool): string {
+    const functionDef = this.functionDefinitions[node.toolName];
+    if (functionDef && functionDef.returnType == null) {
+      throw new Error(
+        `Function '${node.toolName}' is being used as a tool but has no return type. Tools must have a return type.`,
+      );
+    }
     this.toolsUsed.push(node.toolName);
     return "";
   }

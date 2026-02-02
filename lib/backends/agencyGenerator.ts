@@ -321,7 +321,7 @@ export class AgencyGenerator extends BaseGenerator {
 
     this.decreaseIndent();
 
-    result += this.indentStr(`}\n`);
+    result += this.indentStr(`}`);
 
     return result;
   }

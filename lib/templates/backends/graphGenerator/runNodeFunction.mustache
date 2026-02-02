@@ -1,4 +1,5 @@
-export async function {{{nodeName:string}}}(data:any): Promise<{{{returnType:string}}}> {
+export async function {{{nodeName:string}}}({{{argsStr:string}}}): Promise<{{{returnType:string}}}> {
+  const data = { {{{argsStr}}} };
   const result = await graph.run("{{{nodeName:string}}}", { messages: [], data });
   return result.data;
 }

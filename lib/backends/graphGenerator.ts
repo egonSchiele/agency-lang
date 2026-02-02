@@ -173,9 +173,12 @@ export class GraphGenerator extends TypeScriptGenerator {
     }
 
     for (const node of this.graphNodes) {
+      const args = node.parameters;
+      const argsStr = args.map((arg) => arg.name).join(", ");
       lines.push(
         renderRunNodeFunction.default({
           nodeName: node.nodeName,
+          argsStr,
           returnType: node.returnType
             ? variableTypeToString(node.returnType, this.typeAliases)
             : "any",

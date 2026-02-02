@@ -22,7 +22,10 @@ describe("assignmentParser", () => {
         result: {
           type: "assignment",
           variableName: "name",
-          value: { type: "string", value: "Alice" },
+          value: {
+            type: "string",
+            segments: [{ type: "text", value: "Alice" }],
+          },
         },
       },
     },
@@ -141,7 +144,10 @@ describe("assignmentParser", () => {
             functionName: "calculate",
             arguments: [
               { type: "number", value: "1" },
-              { type: "string", value: "test" },
+              {
+                type: "string",
+                segments: [{ type: "text", value: "test" }],
+              },
             ],
           },
         },
@@ -195,7 +201,10 @@ describe("assignmentParser", () => {
             entries: [
               {
                 key: "key",
-                value: { type: "string", value: "value" },
+                value: {
+                  type: "string",
+                  segments: [{ type: "text", value: "value" }],
+                },
               },
             ],
           },

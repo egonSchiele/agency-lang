@@ -52,8 +52,8 @@ describe("dataStructures parsers", () => {
           result: {
             type: "agencyArray",
             items: [
-              { type: "string", value: "hello" },
-              { type: "string", value: "world" },
+              { type: "string", segments: [{ type: "text", value: \1 }] },
+              { type: "string", segments: [{ type: "text", value: \1 }] },
             ],
           },
         },
@@ -84,7 +84,7 @@ describe("dataStructures parsers", () => {
             type: "agencyArray",
             items: [
               { type: "number", value: "1" },
-              { type: "string", value: "hello" },
+              { type: "string", segments: [{ type: "text", value: \1 }] },
               { type: "variableName", value: "foo" },
             ],
           },
@@ -225,7 +225,7 @@ describe("dataStructures parsers", () => {
           success: true,
           result: {
             key: "name",
-            value: { type: "string", value: "Alice" },
+            value: { type: "string", segments: [{ type: "text", value: \1 }] },
           },
         },
       },
@@ -247,7 +247,7 @@ describe("dataStructures parsers", () => {
           success: true,
           result: {
             key: "name",
-            value: { type: "string", value: "Alice" },
+            value: { type: "string", segments: [{ type: "text", value: \1 }] },
           },
         },
       },
@@ -398,7 +398,7 @@ describe("dataStructures parsers", () => {
             entries: [
               {
                 key: "name",
-                value: { type: "string", value: "Alice" },
+                value: { type: "string", segments: [{ type: "text", value: \1 }] },
               },
             ],
           },
@@ -434,7 +434,7 @@ describe("dataStructures parsers", () => {
             entries: [
               {
                 key: "name",
-                value: { type: "string", value: "Alice" },
+                value: { type: "string", segments: [{ type: "text", value: \1 }] },
               },
               {
                 key: "age",
@@ -442,7 +442,7 @@ describe("dataStructures parsers", () => {
               },
               {
                 key: "city",
-                value: { type: "string", value: "NYC" },
+                value: { type: "string", segments: [{ type: "text", value: \1 }] },
               },
             ],
           },
@@ -636,7 +636,7 @@ describe("dataStructures parsers", () => {
             entries: [
               {
                 key: "name",
-                value: { type: "string", value: "Alice" },
+                value: { type: "string", segments: [{ type: "text", value: \1 }] },
               },
               {
                 key: "age",
@@ -651,8 +651,8 @@ describe("dataStructures parsers", () => {
                 value: {
                   type: "agencyArray",
                   items: [
-                    { type: "string", value: "a" },
-                    { type: "string", value: "b" },
+                    { type: "string", segments: [{ type: "text", value: \1 }] },
+                    { type: "string", segments: [{ type: "text", value: \1 }] },
                   ],
                 },
               },

@@ -383,7 +383,13 @@ export class AgencyGenerator extends BaseGenerator {
   protected processGraphNode(node: GraphNodeDefinition): string {
     // Graph nodes use similar syntax to functions
     const { nodeName, body, parameters } = node;
-    const params = parameters.join(", ");
+    const params = parameters
+      .map((p) =>
+        p.typeHint
+          ? `${p.name}: ${variableTypeToString(p.typeHint, this.typeAliases)}`
+          : p.name,
+      )
+      .join(", ");
     const returnTypeStr = node.returnType
       ? ": " + variableTypeToString(node.returnType, this.typeAliases)
       : "";
@@ -392,7 +398,7 @@ export class AgencyGenerator extends BaseGenerator {
     );
 
     this.increaseIndent();
-    this.functionScopedVariables = [...parameters];
+    this.functionScopedVariables = parameters.map((p) => p.name);
 
     const lines: string[] = [];
     for (const stmt of body) {
@@ -404,7 +410,7 @@ export class AgencyGenerator extends BaseGenerator {
     this.functionScopedVariables = [];
     this.decreaseIndent();
 
-    result += this.indentStr(`}\n`);
+    result += this.indentStr(`}`);
     return result;
   }
 

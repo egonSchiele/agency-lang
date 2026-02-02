@@ -1,5 +1,6 @@
 import { AgencyNode, FunctionCall, VariableType } from "../types.js";
 import { AccessExpression } from "./access.js";
+import { FunctionParameter } from "./function.js";
 import { Literal } from "./literals.js";
 
 /*
@@ -16,7 +17,7 @@ export type FunctionDefinition = {
 export type GraphNodeDefinition = {
   type: "graphNode";
   nodeName: string;
-  parameters: string[];
+  parameters: FunctionParameter[];
   body: AgencyNode[];
   returnType?: VariableType | null;
 };

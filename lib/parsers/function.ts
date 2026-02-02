@@ -303,7 +303,10 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = trace(
     char("("),
     optionalSpaces,
     capture(
-      or(sepBy(comma, many1WithJoin(varNameChar)), succeed([])),
+      sepBy(
+        comma,
+        or(functionParameterParserWithTypeHint, functionParameterParser),
+      ),
       "parameters",
     ),
     optionalSpaces,

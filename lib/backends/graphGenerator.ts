@@ -63,7 +63,7 @@ export class GraphGenerator extends TypeScriptGenerator {
     this.functionScopedVariables = [];
     this.isInsideGraphNode = true;
     if (parameters.length > 0) {
-      this.functionScopedVariables.push(parameters[0]);
+      this.functionScopedVariables.push(parameters[0].name);
     }
 
     const bodyCode: string[] = [];
@@ -80,7 +80,7 @@ export class GraphGenerator extends TypeScriptGenerator {
         : "any", */
       body: bodyCode.join("\n"),
       hasParam: parameters.length > 0,
-      paramName: parameters[0] || "input",
+      paramName: parameters[0]?.name || "input",
     });
   }
 

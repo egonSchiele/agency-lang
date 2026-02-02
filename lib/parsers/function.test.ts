@@ -1987,7 +1987,7 @@ describe("graphNodeParser", () => {
         result: {
           type: "graphNode",
           nodeName: "process",
-          parameters: ["input"],
+          parameters: [{ type: "functionParameter", name: "input" }],
           returnType: null,
           body: [
             {
@@ -2006,7 +2006,10 @@ describe("graphNodeParser", () => {
         result: {
           type: "graphNode",
           nodeName: "calculate",
-          parameters: ["a", "b"],
+          parameters: [
+            { type: "functionParameter", name: "a" },
+            { type: "functionParameter", name: "b" },
+          ],
           returnType: null,
           body: [
             {
@@ -2066,7 +2069,10 @@ describe("graphNodeParser", () => {
         result: {
           type: "graphNode",
           nodeName: "add",
-          parameters: ["x", "y"],
+          parameters: [
+            { type: "functionParameter", name: "x" },
+            { type: "functionParameter", name: "y" },
+          ],
           returnType: { type: "primitiveType", value: "number" },
           body: [
             {
@@ -2085,7 +2091,7 @@ describe("graphNodeParser", () => {
         result: {
           type: "graphNode",
           nodeName: "greet",
-          parameters: ["name"],
+          parameters: [{ type: "functionParameter", name: "name" }],
           returnType: { type: "primitiveType", value: "string" },
           body: [
             {
@@ -2107,7 +2113,7 @@ describe("graphNodeParser", () => {
         result: {
           type: "graphNode",
           nodeName: "process",
-          parameters: ["input"],
+          parameters: [{ type: "functionParameter", name: "input" }],
           returnType: { type: "primitiveType", value: "boolean" },
           body: [{ type: "variableName", value: "result" }],
         },
@@ -2153,7 +2159,7 @@ describe("graphNodeParser", () => {
         result: {
           type: "graphNode",
           nodeName: "processArray",
-          parameters: ["items"],
+          parameters: [{ type: "functionParameter", name: "items" }],
           returnType: {
             type: "arrayType",
             elementType: { type: "primitiveType", value: "number" },
@@ -2189,7 +2195,7 @@ describe("graphNodeParser", () => {
         result: {
           type: "graphNode",
           nodeName: "flexible",
-          parameters: ["x"],
+          parameters: [{ type: "functionParameter", name: "x" }],
           returnType: {
             type: "unionType",
             types: [
@@ -2236,7 +2242,7 @@ describe("graphNodeParser", () => {
         result: {
           type: "graphNode",
           nodeName: "baz",
-          parameters: ["x"],
+          parameters: [{ type: "functionParameter", name: "x" }],
           returnType: { type: "primitiveType", value: "number" },
           body: [{ type: "variableName", value: "x" }],
         },
@@ -2263,7 +2269,7 @@ describe("graphNodeParser", () => {
         result: {
           type: "graphNode",
           nodeName: "getData",
-          parameters: ["id"],
+          parameters: [{ type: "functionParameter", name: "id" }],
           returnType: { type: "typeAliasVariable", aliasName: "UserData" },
           body: [{ type: "variableName", value: "data" }],
         },

@@ -36,7 +36,7 @@ import { IfElse } from "../types/ifElse.js";
 import { accessExpressionParser, indexAccessParser } from "./access.js";
 import { commentParser } from "./comment.js";
 import { functionCallParser } from "./functionCall.js";
-import { literalParser } from "./literals.js";
+import { literalParser, promptParser } from "./literals.js";
 import { matchBlockParser } from "./matchBlock.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { returnStatementParser } from "./returnStatement.js";
@@ -81,6 +81,7 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
         or(
           timeBlockParser,
           awaitParser,
+          promptParser,
           functionCallParser,
           indexAccessParser,
           accessExpressionParser,

@@ -1,105 +1,12 @@
-import { printLine, printHighlighted, readFile, writeFile, confirm, execCommand } from "./basicFunctions.ts"
+claudeFile = read("CLAUDE.md")
 
-def printLineTool(message: string): string {
-  """
-  Prints a line to the console.
-  """
-  printLine(message)
-  return "printed"
-}
-
-def printHighlightedTool(code: string, language: string): string {
-  """
-  Prints highlighted code to the console in the specified language.
-  """
-  printHighlighted(code, language)
-  return "printed"
-}
-
-def readFileTool(filePath: string): string {
-  """
-  Reads the content of a file.
-  """
-  return readFile(filePath)
-}
-
-def writeFileTool(filePath: string, content: string, language: string | undefined): string {
-  """
-  Writes content to a file. If language is provided, the content will be syntax highlighted accordingly.
-  """
-  await writeFile(filePath, content, language)
-  return "file written"
-}
-
-def confirmTool(message: string): boolean {
-  """
-  Prompts the user for confirmation.
-  """
-  return await confirm(message)
-}
-
-type CommandResult = {
-  stdout: string;
-  stderr: string;
-  canceled: boolean # whether the command was canceled by the user
-}
-
-def execCommandTool(command: string): CommandResult {
-  """
-  Executes a shell command and returns its output.
-  """
-  result = await execCommand(command)
-  return result
-}
-
-docs = read("DOCS.md")
-prompt = """
-Please create a meal planning agent. Each user has a pantry of ingredients with nutritional values and a list of meals, which include the recipes and ingredients for each meal.
-A user should be able to list their ingredients, add or edit an existing ingredient, list their meals, add or edit an existing meal, or import a recipe from a URL.
-"""
+contents = "
+Contents of claude.md:
+${claudeFile}
+"
 
 node main() {
-  result :: { generatedCode: string }
-  +writeFileTool
-  +readFileTool
-  +printLineTool
-  +printHighlightedTool
-  +execCommandTool
-  result = `You are an assistant that can create agents using the Agency programming language. Using the following documentation about the Agency language, create an agent that can do the following task: ${prompt}. Print the generated code for the user to review. Here is the documentation about the Agency language: ${docs}`
-
-  generatedCode = result.generatedCode
-  return saveCode(generatedCode)
-}
-
-node saveCode(generatedCode) {
-  // print(result)
-  result2 :: { filename: string }
-  +writeFileTool
-  result2 = `Here's some code in the Agency language. Save the following code to a file named mealAgent.agency, and return the filename you've saved the code to: ${generatedCode}.`
-
-  filename = result2.filename
-  return typecheck(filename)
-}
-node typecheck(filename: string) {
-  +execCommandTool
-  typecheckResult: { success: boolean; errors: string } = `Typecheck the following Agency code saved in the file ${filename} by running "pnpm agency ast ${filename}"`
-
-  result3 = typecheckResult.success
-  errors = typecheckResult.errors
-
-  match(errors) {
-    false => print("Typechecking succeeded with no errors.")
-    true => return fixErrors({ filename: filename, errors: errors })
-  }
-}
-
-node fixErrors(params) {
-  filename = params.filename
-  errors = params.errors
-  print("Errors found in ${filename}")
-  +readFileTool
-  +writeFileTool
-  result4 = `Please fix the following errors in ${filename}: ${errors}`
-  print(result4)
-  return typecheck(filename)
+  print(contents)
+  //response: number = llm("What is 2 + 2?")
+  //print(response)
 }

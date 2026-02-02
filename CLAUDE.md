@@ -1,24 +1,24 @@
-# ADL (Agent Definition Language) - Project Documentation
+# Agency Language - Project Documentation
 
 ## Overview
 
-ADL is a domain-specific language for defining AI agent workflows. It compiles ADL code to executable TypeScript that calls OpenAI's structured output API.
+Agency is a domain-specific language for defining AI agent workflows. It compiles Agency code to executable TypeScript that calls OpenAI's structured output API.
 
 ## Project Structure
 
 ```
-adl-lang/
+agency-lang/
 ├── lib/                           # Core implementation
 │   ├── agencyParser.ts              # Parser using tarsec combinators
 │   ├── types.ts                  # AST type definitions
-│   ├── generate-ts-file.ts       # CLI tool to generate TS from ADL
+│   ├── generate-ts-file.ts       # CLI tool to generate TS from agency
 │   └── backends/                 # Code generation backends
 │       └── typescript.ts         # TypeScript code generator
-├── tests/                        # Example ADL programs
+├── tests/                        # Example agency programs
 │   ├── assignment.agency           # Type hints and prompt assignments
 │   └── function.agency             # Function definitions
 ├── dist/                        # Compiled JavaScript output
-├── adl                          # Shell script to run ADL programs
+├── scripts/agency.ts            # Shell script to run Agency programs
 ├── index.ts                     # File for testing parser
 ├── test-generator.ts            # Generator unit test
 └── test-full-pipeline.ts        # Full pipeline integration test
@@ -26,37 +26,7 @@ adl-lang/
 
 ## Language Features
 
-### Type Hints
-Declare variable types using `::` syntax:
-```adl
-bar :: number
-test :: string
-```
-
-### Assignments
-Assign values to variables:
-```adl
-x = 5
-name = "Alice"
-result = someVariable
-```
-
-### Prompt Literals
-Backtick-delimited prompts for LLM generation:
-```adl
-bar = `the number 1`
-greeting = `say hello`
-```
-
-### Function Definitions
-Define functions with the `def` keyword:
-```adl
-def test() {
-  foo = 1
-  bar = `say hello`
-  bar
-}
-```
+See DOCS.md for a full language reference.
 
 ## Parser Architecture
 
@@ -188,7 +158,7 @@ All types defined in `lib/types.ts`.
 
 ### TypeScript Backend (`lib/backends/typescript.ts`)
 
-The TypeScript generator converts ADL to runnable TypeScript code:
+The TypeScript generator converts agency to runnable TypeScript code:
 
 ### Generator Implementation Details
 
@@ -215,11 +185,11 @@ The TypeScript generator converts ADL to runnable TypeScript code:
 pnpm run build  # Compiles TypeScript to dist/
 ```
 
-### Running ADL Programs
+### Running agency Programs
 
 **Using the agency script:**
 ```bash
-./adl tests/assignment.agency
+pnpm run agency tests/assignment.agency
 ```
 This will:
 1. Parse `assignment.agency` to AST
@@ -228,14 +198,14 @@ This will:
 
 **Manual pipeline:**
 ```bash
-# 1. Parse to JSON
-pnpm run start tests/assignment.agency
+# 1. Parse to AST
+pnpm run agency ast tests/assignment.agency
 
 # 2. Generate TypeScript (programmatically)
-node dist/lib/generate-ts-file.js input.agency output.ts
+pnpm run agency compile input.agency output.ts
 
-# 3. Run TypeScript
-node output.ts
+# 3. Run Agency file directly (compiles and runs)
+pnpm run agency tests/assignment.agency
 ```
 
 ## Testing
@@ -316,7 +286,7 @@ describe('numberParser', () => {
 
 ### `lib/agencyParser.ts`
 Main parser implementation. Exports:
-- `parseAgency(input: string)` - Parses ADL source code
+- `parseAgency(input: string)` - Parses agency source code
 - Individual parsers: `typeHintParser`, `assignmentParser`, etc.
 
 ### `lib/types.ts`
@@ -328,10 +298,10 @@ TypeScript code generator. Exports:
 - `TypeScriptGenerator` class
 
 ### `lib/generate-ts-file.ts`
-CLI tool that reads an ADL file and writes generated TypeScript to a file.
+CLI tool that reads an agency file and writes generated TypeScript to a file.
 
-### `adl` (shell script)
-Convenience script to run ADL programs end-to-end.
+### `agency` (shell script)
+Convenience script to run agency programs end-to-end.
 
 ## Extension Points
 
@@ -359,7 +329,7 @@ case "object":
 
 ## Common Tasks
 
-### Adding a new ADL language feature
+### Adding a new agency language feature
 1. Define the AST node type in `lib/types.ts`
 2. Create parser combinator in `lib/agencyParser.ts`
 3. Add to main `agencyParser` parser

@@ -1,4 +1,4 @@
-import { backtick, varNameChar } from "./utils.js";
+import { backtick, optionalSpaces, varNameChar } from "./utils.js";
 import {
   InterpolationSegment,
   Literal,
@@ -54,12 +54,30 @@ export const interpolationSegmentParser: Parser<InterpolationSegment> = seqC(
   char("}")
 );
 
-export const promptParser: Parser<PromptLiteral> = seqC(
+export const promptParserBackticks: Parser<PromptLiteral> = seqC(
   set("type", "prompt"),
   backtick,
   capture(many(or(textSegmentParser, interpolationSegmentParser)), "segments"),
   backtick
 );
+
+export const promptParserLlmFunction: Parser<PromptLiteral> = (input: string) => {
+  const parser = seqC(
+    set("type", "prompt"),
+    str("llm("),
+    optionalSpaces,
+    capture(map(stringParser, (str) => str.segments), "segments"),
+    optionalSpaces,
+    char(")")
+  );
+  return parser(input);
+}
+
+export const promptParser: Parser<PromptLiteral> = or(
+  promptParserBackticks,
+  promptParserLlmFunction
+);
+
 export const numberParser: Parser<NumberLiteral> = seqC(
   set("type", "number"),
   capture(many1WithJoin(or(char("-"), char("."), digit)), "value")
@@ -70,10 +88,10 @@ export const stringParser: Parser<StringLiteral> = seqC(
   capture(many(or(stringTextSegmentParser, interpolationSegmentParser)), "segments"),
   char('"')
 );
-export const multiLineStringParser: Parser<MultiLineStringLiteral> = seqC(
-  set("type", "multiLineString"),
+export const multiLineStringParser: Parser<StringLiteral> = seqC(
+  set("type", "string"),
   str('"""'),
-  capture(manyTillStr('"""'), "value"),
+  capture(many(or(stringTextSegmentParser, interpolationSegmentParser)), "segments"),
   str('"""')
 );
 

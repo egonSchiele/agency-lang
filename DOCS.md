@@ -29,7 +29,14 @@ Note that a call to another node should always `return`. This is because when fo
 If you plan to run this agency file as a script, you will need a node named `main`, which is the entry point of the script. If you plan to import it into another script instead, the `main` node is not required. More on importing later.
 
 ### LLM Calls
-Any text between backticks, gets sent to an LLM. For example:
+To make an LLM call, use the `llm` function:
+
+```agency
+response: string = llm(`Say hi to me`)
+magicNumber: number = llm(`Add 4 + 5`)
+```
+
+You can also use the older backticks syntax. Any text between backticks, gets sent to an LLM. For example:
 
 ```agency
 greet = `Say hi to me`
@@ -42,7 +49,7 @@ If you want to request a specific output format, use a type hint.
 ### Type Hints
 
 ```agency
-greet: number = `add 4 + 5`
+greet: number = llm("add 4 + 5")
 ```
 
 This will tell the LLM to respond with a number. Here are some supported types:
@@ -57,13 +64,13 @@ Primitive types:
 Union types. Example:
 
 ```agency
-status: "success" | "error" = `Respond with either "success" or "error"`
+status: "success" | "error" = llm("Respond with either 'success' or 'error'")
 ```
 
 Array types. Example:
 
 ```agency
-items: string[] = `List 5 fruits`
+items: string[] = llm("List 5 fruits")
 ```
 
 Object types. Example:

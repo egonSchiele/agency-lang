@@ -1,8 +1,5 @@
 // @ts-nocheck
 
-
-
-
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
@@ -83,116 +80,33 @@ const addTool = {
   }),
 };
 
-
-
-
-
-
-
-async function _response(person_name: string, person_age: string, __messages: Message[] = []): Promise<{ greeting: string }> {
-  const __prompt = `Say hi to ${person_name}, who is ${person_age} years old.`;
-  const startTime = performance.now();
-  __messages.push(userMessage(__prompt));
-  const __tools = undefined;
-
-  
-  // Need to make sure this is always an object
-  const __responseFormat = z.object({
-     response: z.object({ "greeting": z.string() })
-  });
-  
-  
-
-  let __completion = await __client.text({
-    messages: __messages,
-    tools: __tools,
-    responseFormat: __responseFormat,
-  });
-
-  const endTime = performance.now();
-  statelogClient.promptCompletion({
-    messages: __messages,
-    completion: __completion,
-    model: __client.getModel(),
-    timeTaken: endTime - startTime,
-  });
-
-  if (!__completion.success) {
-    throw new Error(
-      `Error getting response from ${__model}: ${__completion.error}`
-    );
-  }
-
-  let responseMessage = __completion.value;
-
-  // Handle function calls
-  while (responseMessage.toolCalls.length > 0) {
-    // Add assistant's response with tool calls to message history
-    __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
-    let toolCallStartTime, toolCallEndTime;
-
-    // Process each tool call
-    for (const toolCall of responseMessage.toolCalls) {
-      
-    }
-  
-    const nextStartTime = performance.now();
-    let __completion = await __client.text({
-      messages: __messages,
-      tools: __tools,
-      responseFormat: __responseFormat,
-    });
-
-    const nextEndTime = performance.now();
-
-    statelogClient.promptCompletion({
-      messages: __messages,
-      completion: __completion,
-      model: __client.getModel(),
-      timeTaken: nextEndTime - nextStartTime,
-    });
-
-    if (!__completion.success) {
-      throw new Error(
-        `Error getting response from ${__model}: ${__completion.error}`
-      );
-    }
-    responseMessage = __completion.value;
-  }
-
-  // Add final assistant response to history
-  // not passing tool calls back this time
-  __messages.push(assistantMessage(responseMessage.output));
-  
-  try {
-  const result = JSON.parse(responseMessage.output || "");
-  return result.response;
-  } catch (e) {
-    return responseMessage.output;
-    // console.error("Error parsing response for variable 'response':", e);
-    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
-    // throw e;
-  }
-  
-
-  
+function _builtinRead(filename: string): string {
+  const data = fs.readFileSync(filename);
+  const contents = data.toString('utf8');
+  return contents;
 }
+const claudeFile = await await _builtinRead(`CLAUDE.md`);
+const contents = `
+Contents of claude.md:
+${claudeFile}
+`;
 graph.node("main", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    const person: any = {"name": `Alice`, "age": 30};
+    await console.log(contents)
+
+// response: number = llm("What is 2 + 2?")
 
 
-const response = await _response(person.name, person.age, __messages);
+// print(response)
 
-
-await console.log(response)
 
 });
 
 const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
-export async function main(data:any): Promise<any> {
+export async function main(): Promise<any> {
+  const data = {  };
   const result = await graph.run("main", { messages: [], data });
   return result.data;
 }

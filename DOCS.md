@@ -42,8 +42,7 @@ If you want to request a specific output format, use a type hint.
 ### Type Hints
 
 ```agency
-greet :: number
-greet = `add 4 + 5`
+greet: number = `add 4 + 5`
 ```
 
 This will tell the LLM to respond with a number. Here are some supported types:
@@ -58,22 +57,19 @@ Primitive types:
 Union types. Example:
 
 ```agency
-status :: "success" | "error"
-status = `Respond with either "success" or "error"`
+status: "success" | "error" = `Respond with either "success" or "error"`
 ```
 
 Array types. Example:
 
 ```agency
-items :: string[]
-items = `List 5 fruits`
+items: string[] = `List 5 fruits`
 ```
 
 Object types. Example:
 
 ```agency
-user :: {name: string, age: number}
-user = `Provide a user object with name and age`
+user: {name: string, age: number} = `Provide a user object with name and age`
 ```
 
 You can define a new type:
@@ -120,9 +116,8 @@ def greet(name: string): string {
 All functions in Agency can automatically be used as tools. For example, you can now use the `greet` function as a tool in a prompt.
 
 ```agency
-response :: string
 +greet
-response = `Use the greet function to greet Alice`
+response: string = `Use the greet function to greet Alice`
 ```
 
 The `+greet` line tells Agency to make the `greet` function available as a tool in the LLM prompt.
@@ -201,8 +196,7 @@ Start with a node that classifies the user's intent:
 
 ```agency
 node router(userMessage: string) {
-  intent :: "mood" | "todo"
-  intent = `Classify the user's intent as either "mood" or "todo" based on the message: ${userMessage}`
+  intent: "mood" | "todo" = `Classify the user's intent as either "mood" or "todo" based on the message: ${userMessage}`
 
   match(intent) {
     "mood" => return handleMood(userMessage)

@@ -426,7 +426,7 @@ export class TypeScriptGenerator extends BaseGenerator {
         stringParts.push(escaped);
       } else {
         // Interpolation segment
-        stringParts.push(`\${${segment.variableName}}`);
+        stringParts.push("${" + segment.variableName + "}");
       }
     }
 
@@ -450,9 +450,9 @@ export class TypeScriptGenerator extends BaseGenerator {
     // Generate async function for prompt-based assignment
     const _variableType = variableType ||
       this.typeHints[variableName] || {
-        type: "primitiveType" as const,
-        value: "string",
-      };
+      type: "primitiveType" as const,
+      value: "string",
+    };
 
     const zodSchema = mapTypeToZodSchema(_variableType, this.typeAliases);
     //console.log("Generated Zod schema for variable", variableName, "Variable type:", variableType, ":", zodSchema, "aliases:", this.typeAliases, "hints:", this.typeHints);

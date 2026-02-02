@@ -28,14 +28,6 @@ def writeFileTool(filePath: string, content: string, language: string | undefine
   Writes content to a file. If language is provided, the content will be syntax highlighted accordingly.
   """
   await writeFile(filePath, content, language)
-
-
-
-
-
-
-
-
   return "file written"
 }
 
@@ -51,13 +43,6 @@ type CommandResult = {
   stderr: string;
   canceled: boolean # whether the command was canceled by the user
 }
-
-
-
-
-
-
-
 
 def execCommandTool(command: string): CommandResult {
   """

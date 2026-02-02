@@ -90,7 +90,7 @@ export class AgencyGenerator extends BaseGenerator {
   protected processTypeAlias(node: TypeAlias): string {
     this.typeAliases[node.aliasName] = node.aliasedType;
     const aliasedTypeStr = this.aliasedTypeToString(node.aliasedType);
-    return this.indentStr(`type ${node.aliasName} = ${aliasedTypeStr}\n`);
+    return this.indentStr(`type ${node.aliasName} = ${aliasedTypeStr}`);
   }
 
   protected processTypeHint(node: TypeHint): string {
@@ -101,8 +101,8 @@ export class AgencyGenerator extends BaseGenerator {
 
   // Assignment and literals
   protected processAssignment(node: Assignment): string {
-    const varName = node.typeHint ?
-      `${node.variableName}: ${variableTypeToString(node.typeHint, this.typeAliases)}`
+    const varName = node.typeHint
+      ? `${node.variableName}: ${variableTypeToString(node.typeHint, this.typeAliases)}`
       : node.variableName;
     if (node.value.type === "timeBlock") {
       const code = this.processTimeBlock(node.value);
@@ -445,7 +445,7 @@ export class AgencyGenerator extends BaseGenerator {
   }
   protected processAwaitStatement(node: AwaitStatement): string {
     const code = this.processNode(node.expression);
-    return this.indentStr(`await ${code.trim()}\n`);
+    return this.indentStr(`await ${code.trim()}`);
   }
 
   protected processNewLine(_node: NewLine): string {

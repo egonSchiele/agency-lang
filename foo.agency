@@ -1,53 +1,5 @@
 import { printLine, printHighlighted, readFile, writeFile, confirm, execCommand } from "./basicFunctions.ts"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def printLineTool(message: string): string {
   """
   Prints a line to the console.
@@ -82,6 +34,8 @@ def writeFileTool(filePath: string, content: string, language: string | undefine
 
 
 
+
+
   return "file written"
 }
 
@@ -97,6 +51,8 @@ type CommandResult = {
   stderr: string;
   canceled: boolean # whether the command was canceled by the user
 }
+
+
 
 
 
@@ -158,7 +114,7 @@ node fixErrors(params) {
   print("Errors found in ${filename}")
   +readFileTool
   +writeFileTool
-  result = `Please fix the following errors in ${filename}: ${errors}`
-  print(result)
+  result4 = `Please fix the following errors in ${filename}: ${errors}`
+  print(result4)
   return typecheck(filename)
 }

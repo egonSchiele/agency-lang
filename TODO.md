@@ -68,5 +68,4 @@ type ListIngredientsParams = {
 - no else statements
 - no infix operators yet (e.g., `+`, `-`, `*`, `/`, `&&`, `||`, `>=`, `<=`, `==`, `!=`, etc.) -- builtin replacements provided
 - can't assign to an access expression (e.g., `obj.key = value` doesn't work yet)
-- nodes can't support multiple params yet -- figure out how we're handling state in the graph first?
 - match blocks don't support blocks

@@ -178,7 +178,7 @@ return goToNode("processGreeting",
   {
     messages: state.messages,
     
-    data: greeting
+    data: {msg: greeting}
     
     
   }
@@ -267,7 +267,7 @@ async function _result(msg: string, __messages: Message[] = []): Promise<string>
 graph.node("processGreeting", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    const msg = state.data;
+    const {msg} = state.data;
     
     
 

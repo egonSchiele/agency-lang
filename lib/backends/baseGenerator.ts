@@ -31,6 +31,7 @@ import { WhileLoop } from "../types/whileLoop.js";
 import { IfElse } from "../types/ifElse.js";
 import { TimeBlock } from "@/types/timeBlock.js";
 import { AwaitStatement } from "@/types/await.js";
+import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
 
 export class BaseGenerator {
   protected typeHints: TypeHintMap = {};
@@ -51,8 +52,7 @@ export class BaseGenerator {
 
   // collect function signatures so we can implement named args
   // TODO also save return types, check if used as a tool, return type cannot be null/void/undefined
-  protected functionSignatures: Record<string, string[]> = {};
-  constructor() { }
+  protected functionDefinitions: Record<string, FunctionDefinition> = {};
 
   generate(program: AgencyProgram): {
     output: string;
@@ -130,12 +130,10 @@ export class BaseGenerator {
   }
 
   protected collectFunctionSignature(node: FunctionDefinition): void {
-    this.functionSignatures[node.functionName] = node.parameters.map(
-      (param) => param.name,
-    );
+    this.functionDefinitions[node.functionName] = node;
   }
 
-  protected processGraphNodeName(node: GraphNodeDefinition): void { }
+  protected processGraphNodeName(node: GraphNodeDefinition): void {}
 
   protected processNode(node: AgencyNode): string {
     switch (node.type) {

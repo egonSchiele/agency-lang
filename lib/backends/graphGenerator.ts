@@ -8,7 +8,7 @@ import {
 import * as builtinTools from "../templates/backends/graphGenerator/builtinTools.js";
 import * as renderConditionalEdge from "../templates/backends/graphGenerator/conditionalEdge.js";
 import * as goToNode from "../templates/backends/graphGenerator/goToNode.js";
-import * as graphNode from "../templates/backends/graphGenerator/graphNode.js";
+import * as renderGraphNode from "../templates/backends/graphGenerator/graphNode.js";
 import * as renderImports from "../templates/backends/graphGenerator/imports.js";
 import * as renderStartNode from "../templates/backends/graphGenerator/startNode.js";
 import * as renderRunNodeFunction from "../templates/backends/graphGenerator/runNodeFunction.js";
@@ -53,17 +53,17 @@ export class GraphGenerator extends TypeScriptGenerator {
 
   protected processGraphNode(node: GraphNodeDefinition): string {
     const { nodeName, body, parameters } = node;
-    if (parameters.length > 1) {
+    /* if (parameters.length > 1) {
       throw new Error(
         `Graph node '${nodeName}' has more than one parameter. Only one parameter is supported for now.`,
       );
-    }
+    } */
     this.adjacentNodes[nodeName] = [];
     this.currentAdjacentNodes = [];
     this.functionScopedVariables = [];
     this.isInsideGraphNode = true;
-    if (parameters.length > 0) {
-      this.functionScopedVariables.push(parameters[0].name);
+    for (const param of parameters) {
+      this.functionScopedVariables.push(param.name);
     }
 
     const bodyCode: string[] = [];
@@ -73,14 +73,17 @@ export class GraphGenerator extends TypeScriptGenerator {
     this.functionScopedVariables = [];
     this.adjacentNodes[nodeName] = [...this.currentAdjacentNodes];
     this.isInsideGraphNode = false;
-    return graphNode.default({
+
+    const paramNames = "{" + parameters.map((p) => p.name).join(", ") + "}";
+
+    return renderGraphNode.default({
       name: nodeName,
       /* returnType: node.returnType
         ? variableTypeToString(node.returnType, this.typeAliases)
         : "any", */
       body: bodyCode.join("\n"),
       hasParam: parameters.length > 0,
-      paramName: parameters[0]?.name || "input",
+      paramNames,
     });
   }
 
@@ -113,7 +116,14 @@ export class GraphGenerator extends TypeScriptGenerator {
         //        return this.generateLiteral(arg);
       }
     });
-    const argsString = parts.join(", ")
+    const argNames =
+      this.graphNodes
+        .find((n) => n.nodeName === node.functionName)
+        ?.parameters.map((p) => p.name) || [];
+    const pairedArgs = argNames.map((name, index) => {
+      return `${name}: ${parts[index]}`;
+    });
+    const argsString = "{" + pairedArgs.join(", ") + "}";
     return goToNode.default({
       nodeName: functionName,
       hasData: parts.length > 0,

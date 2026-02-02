@@ -170,7 +170,7 @@ async function _greeting(name: string, __messages: Message[] = []): Promise<stri
 graph.node("greet", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    const name = state.data;
+    const {name} = state.data;
     
     const greeting = await _greeting(name, __messages);
 

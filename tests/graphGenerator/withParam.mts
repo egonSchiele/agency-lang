@@ -169,7 +169,7 @@ async function _result(input: string, __messages: Message[] = []): Promise<strin
 graph.node("main", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    const input = state.data;
+    const {input} = state.data;
     
     
 

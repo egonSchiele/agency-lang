@@ -1,4 +1,3 @@
-- comments at the end of lines don't work right now. example: `foo = 1 // this is a comment`
 - objects don't support `obj[key]` syntax yet, just `obj.key`
 
 can't have nested match blocks, eg:
@@ -69,6 +68,5 @@ type ListIngredientsParams = {
 - no else statements
 - no infix operators yet (e.g., `+`, `-`, `*`, `/`, `&&`, `||`, `>=`, `<=`, `==`, `!=`, etc.) -- builtin replacements provided
 - can't assign to an access expression (e.g., `obj.key = value` doesn't work yet)
-- can't interpolate anything except a var name. eg `"hello ${person.name}"` doesn't work because we generate a function with arg named `person.name`, which isn't legal.
-- nodes can't support multiple params yet
+- nodes can't support multiple params yet -- figure out how we're handling state in the graph first?
 - match blocks don't support blocks

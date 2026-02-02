@@ -8,6 +8,46 @@ import { printLine, printHighlighted, readFile, writeFile, confirm, execCommand 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def printLineTool(message: string): string {
   """
   Prints a line to the console.
@@ -37,6 +77,11 @@ def writeFileTool(filePath: string, content: string, language: string | undefine
   """
   await writeFile(filePath, content, language)
 
+
+
+
+
+
   return "file written"
 }
 
@@ -53,6 +98,11 @@ type CommandResult = {
   canceled: boolean # whether the command was canceled by the user
 }
 
+
+
+
+
+
 def execCommandTool(command: string): CommandResult {
   """
   Executes a shell command and returns its output.
@@ -66,6 +116,7 @@ prompt = """
 Please create a meal planning agent. Each user has a pantry of ingredients with nutritional values and a list of meals, which include the recipes and ingredients for each meal.
 A user should be able to list their ingredients, add or edit an existing ingredient, list their meals, add or edit an existing meal, or import a recipe from a URL.
 """
+
 node main() {
   result :: { generatedCode: string }
   +writeFileTool
@@ -85,30 +136,29 @@ node saveCode(generatedCode) {
   +writeFileTool
   result2 = `Here's some code in the Agency language. Save the following code to a file named mealAgent.agency, and return the filename you've saved the code to: ${generatedCode}.`
 
-  print(result2)
   filename = result2.filename
-  typecheckResult :: { success: boolean; errors: string }
+  return typecheck(filename)
+}
+node typecheck(filename: string) {
   +execCommandTool
-  typecheckResult = `Typecheck the following Agency code saved in the file ${filename} by running "pnpm agency ast ${filename}"`
+  typecheckResult: { success: boolean; errors: string } = `Typecheck the following Agency code saved in the file ${filename} by running "pnpm agency ast ${filename}"`
 
   result3 = typecheckResult.success
   errors = typecheckResult.errors
-  while (not(result3)) {
-    +readFileTool
-    +writeFileTool
-    result4 = `Please fix the following errors in ${filename}: ${errors}`
 
-    exit()
+  match(errors) {
+    false => print("Typechecking succeeded with no errors.")
+    true => return fixErrors({ filename: filename, errors: errors })
   }
+}
 
-  while (true) {
-    msg = input("> ")
-    +writeFileTool
-    +readFileTool
-    +printLineTool
-    +execCommandTool
-    response = `Respond to this user message: ${msg}`
-
-    print(response)
-  }
+node fixErrors(params) {
+  filename = params.filename
+  errors = params.errors
+  print("Errors found in ${filename}")
+  +readFileTool
+  +writeFileTool
+  result = `Please fix the following errors in ${filename}: ${errors}`
+  print(result)
+  return typecheck(filename)
 }

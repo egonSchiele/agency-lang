@@ -23,7 +23,7 @@ import {
   str,
   trace,
 } from "tarsec";
-import { optionalSpaces } from "./utils.js";
+import { optionalSpaces, optionalSpacesOrNewline } from "./utils.js";
 import { literalParser } from "./literals.js";
 import { functionCallParser } from "./functionCall.js";
 import { DefaultCase, MatchBlockCase } from "../types/matchBlock.js";
@@ -37,7 +37,9 @@ import { assignmentParser } from "./function.js";
 
 export const defaultCaseParser: Parser<DefaultCase> = char("_");
 
-export const matchBlockParserCase: Parser<MatchBlockCase> = (input: string): ParserResult<MatchBlockCase> => {
+export const matchBlockParserCase: Parser<MatchBlockCase> = (
+  input: string,
+): ParserResult<MatchBlockCase> => {
   const parser = seqC(
     set("type", "matchBlockCase"),
     optionalSpaces,
@@ -46,9 +48,9 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (input: string): Par
         defaultCaseParser,
         indexAccessParser,
         accessExpressionParser,
-        literalParser
+        literalParser,
       ),
-      "caseValue"
+      "caseValue",
     ),
     optionalSpaces,
     str("=>"),
@@ -61,13 +63,13 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (input: string): Par
         accessExpressionParser,
         assignmentParser,
         functionCallParser,
-        literalParser
+        literalParser,
       ),
-      "body"
-    )
+      "body",
+    ),
   );
   return parser(input);
-}
+};
 
 const semicolon = seqC(optionalSpaces, char(";"), optionalSpaces);
 
@@ -80,12 +82,12 @@ export const matchBlockParser = seqC(
   char(")"),
   optionalSpaces,
   char("{"),
-  optionalSpaces,
+  optionalSpacesOrNewline,
   capture(
     sepBy(or(semicolon, newline), or(commentParser, matchBlockParserCase)),
-    "cases"
+    "cases",
   ),
   optionalSpaces,
   char("}"),
-  optionalSemicolon
+  optionalSemicolon,
 );

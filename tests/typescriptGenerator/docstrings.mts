@@ -1,3 +1,7 @@
+
+
+
+
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
@@ -50,56 +54,49 @@ const addTool = {
     },
   };
 
+
+
+
+
 const addTool = {
   name: "add",
-  description: `No description provided.`,
+  description: `Add two numbers together.
+This is a simple addition function.`,
   schema: z.object({"a": z.string(), "b": z.string(), })
 };
 const greetTool = {
   name: "greet",
-  description: `No description provided.`,
+  description: `Generate a greeting message for the given name.`,
   schema: z.object({"name": z.string(), })
 };
 const calculateAreaTool = {
   name: "calculateArea",
-  description: `No description provided.`,
+  description: `Calculate the area of a rectangle.
+
+Parameters:
+- width: the width of the rectangle
+- height: the height of the rectangle
+
+Returns: the area as a number`,
   schema: z.object({"width": z.string(), "height": z.string(), })
 };
 const processDataTool = {
   name: "processData",
-  description: `No description provided.`,
+  description: `Single line docstring`,
   schema: z.object({})
 };
 //  Test docstrings in functions
 async function add({a, b}) : Promise<any> {
     const __messages: Message[] = [];
     
-`
-Add two numbers together.
-This is a simple addition function.
-`
-
 }async function greet({name}) : Promise<any> {
     const __messages: Message[] = [];
     
-`
-Generate a greeting message for the given name.
-`
-
 }async function calculateArea({width, height}) : Promise<any> {
     const __messages: Message[] = [];
     
-`
-Calculate the area of a rectangle.
-Parameters:
-- width: the width of the rectangle
-- height: the height of the rectangle
-Returns: the area as a number
-`
-
 }async function processData({}) : Promise<any> {
     const __messages: Message[] = [];
     
-`Single line docstring`
-
 }
+

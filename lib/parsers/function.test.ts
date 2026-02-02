@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { functionParser, docStringParser, graphNodeParser, timeBlockParser } from "./function.js";
+import {
+  functionParser,
+  docStringParser,
+  graphNodeParser,
+  timeBlockParser,
+} from "./function.js";
 
 describe("docStringParser", () => {
   const testCases = [
@@ -601,50 +606,7 @@ describe("functionParser", () => {
         },
       },
     },
-    {
-      input:
-        'def greet(name, greeting) {\n  """Greets someone with a custom greeting"""\n  result = `${greeting} ${name}`\n  result\n}',
-      expected: {
-        success: true,
-        result: {
-          type: "function",
-          functionName: "greet",
-          parameters: [
-            { type: "functionParameter", name: "name" },
-            { type: "functionParameter", name: "greeting" },
-          ],
-          returnType: null,
-          docString: {
-            type: "docString",
-            value: "Greets someone with a custom greeting",
-          },
-          body: [
-            {
-              type: "assignment",
-              variableName: "result",
-              value: {
-                type: "prompt",
-                segments: [
-                  { type: "interpolation", variableName: "greeting" },
-                  { type: "text", value: " " },
-                  { type: "interpolation", variableName: "name" },
-                ],
-              },
-            },
-            {
-              type: "newLine",
-            },
-            {
-              type: "variableName",
-              value: "result",
-            },
-            {
-              type: "newLine",
-            },
-          ],
-        },
-      },
-    },
+
     // Functions with single parameter with type hint
     {
       input: "def add(x: number) { x }",

@@ -1,3 +1,7 @@
+
+
+
+
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
@@ -50,6 +54,10 @@ const addTool = {
     },
   };
 
+
+
+
+
 const testTool = {
   name: "test",
   description: `No description provided.`,
@@ -62,16 +70,15 @@ const addTool = {
 };
 async function test({}) : Promise<any> {
     const __messages: Message[] = [];
-    
-const foo = 1;
+    const foo = 1;
 
 
 foo
 
 }await console.log(test({}))async function add({a, b}) : Promise<any> {
     const __messages: Message[] = [];
-    
-//  multi-param function
+    //  multi-param function
 
 
 }
+

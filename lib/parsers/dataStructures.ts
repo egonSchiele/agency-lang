@@ -21,10 +21,10 @@ import {
 import { accessExpressionParser, indexAccessParser } from "./access.js";
 import { functionCallParser } from "./functionCall.js";
 import { literalParser } from "./literals.js";
-import { comma, optionalSpaces } from "./utils.js";
+import { comma, optionalSpaces, optionalSpacesOrNewline } from "./utils.js";
 
 export const agencyArrayParser: Parser<AgencyArray> = (
-  input: string
+  input: string,
 ): ParserResult<AgencyArray> => {
   const parser = trace(
     "agencyArrayParser",
@@ -40,21 +40,21 @@ export const agencyArrayParser: Parser<AgencyArray> = (
             functionCallParser,
             literalParser,
             agencyObjectParser,
-            agencyArrayParser
-          )
+            agencyArrayParser,
+          ),
         ),
-        "items"
+        "items",
       ),
 
-      char("]")
-    )
+      char("]"),
+    ),
   );
 
   return parser(input);
 };
 
 export const agencyObjectKVParser: Parser<AgencyObjectKV> = (
-  input: string
+  input: string,
 ): ParserResult<AgencyObjectKV> => {
   const parser = trace(
     "agencyObjectKVParser",
@@ -73,11 +73,11 @@ export const agencyObjectKVParser: Parser<AgencyObjectKV> = (
           functionCallParser,
           literalParser,
           agencyObjectParser,
-          agencyArrayParser
+          agencyArrayParser,
         ),
-        "value"
-      )
-    )
+        "value",
+      ),
+    ),
   );
 
   return parser(input);
@@ -86,9 +86,9 @@ export const agencyObjectKVParser: Parser<AgencyObjectKV> = (
 export const agencyObjectParser: Parser<AgencyObject> = seqC(
   set("type", "agencyObject"),
   char("{"),
-  optionalSpaces,
+  optionalSpacesOrNewline,
   capture(or(sepBy(comma, agencyObjectKVParser), succeed([])), "entries"),
   optional(char(",")),
-  optionalSpaces,
-  char("}")
+  optionalSpacesOrNewline,
+  char("}"),
 );

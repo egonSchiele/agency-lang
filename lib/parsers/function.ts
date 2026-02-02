@@ -47,7 +47,12 @@ import {
   typeHintParser,
   variableTypeParser,
 } from "./typeHints.js";
-import { comma, optionalSpaces, varNameChar } from "./utils.js";
+import {
+  comma,
+  optionalSpaces,
+  optionalSpacesOrNewline,
+  varNameChar,
+} from "./utils.js";
 import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
 import { awaitParser } from "./await.js";
 import { newLineParser } from "./newline.js";
@@ -278,9 +283,9 @@ export const functionParser: Parser<FunctionDefinition> = trace(
     capture(optional(functionReturnTypeParser), "returnType"),
     optionalSpaces,
     char("{"),
-    optionalSpaces,
+    optionalSpacesOrNewline,
     capture(or(docStringParser, succeed(undefined)), "docString"),
-    optionalSpaces,
+    optionalSpacesOrNewline,
     capture(bodyParser, "body"),
     optionalSpaces,
     char("}"),
@@ -307,7 +312,7 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = trace(
     capture(optional(functionReturnTypeParser), "returnType"),
     optionalSpaces,
     char("{"),
-    optionalSpaces,
+    optionalSpacesOrNewline,
     capture(bodyParser, "body"),
     optionalSpaces,
     char("}"),

@@ -98,7 +98,6 @@ export function parseAgency(
     .map((line: string) => {
       return line.trim();
     })
-    .filter((l) => l.length > 0)
     .join("\n");
   if (normalized.trim().length === 0) {
     return success(

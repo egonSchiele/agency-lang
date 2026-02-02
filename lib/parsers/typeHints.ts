@@ -1,4 +1,8 @@
-import { optionalSpaces, varNameChar } from "./utils.js";
+import {
+  optionalSpaces,
+  optionalSpacesOrNewline,
+  varNameChar,
+} from "./utils.js";
 import {
   ArrayType,
   BooleanLiteralType,
@@ -131,9 +135,10 @@ export const booleanLiteralTypeParser: Parser<BooleanLiteralType> = trace(
   ),
 );
 
-export const objectPropertyDelimiter = or(
-  char("\n"),
-  seqR(optionalSpaces, oneOf(",;"), optionalSpaces),
+export const objectPropertyDelimiter = seqR(
+  optionalSpaces,
+  oneOf(",;"),
+  optionalSpacesOrNewline,
 );
 
 export const objectPropertyParser: Parser<ObjectProperty> = trace(
@@ -173,7 +178,7 @@ export const objectTypeParser: Parser<ObjectType> = trace(
     const parser = seqC(
       set("type", "objectType"),
       char("{"),
-      optionalSpaces,
+      optionalSpacesOrNewline,
       capture(
         sepBy(
           objectPropertyDelimiter,
@@ -181,7 +186,7 @@ export const objectTypeParser: Parser<ObjectType> = trace(
         ),
         "properties",
       ),
-      optionalSpaces,
+      optionalSpacesOrNewline,
       char("}"),
     );
     return parser(input);

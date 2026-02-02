@@ -1,3 +1,7 @@
+
+
+
+
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
@@ -50,9 +54,13 @@ const addTool = {
     },
   };
 
+
+
+
+
 const greetTool = {
   name: "greet",
-  description: "No description provided.",
+  description: `No description provided.`,
   schema: z.object({})
 };
 //  This is a single line comment at the top of the file
@@ -69,6 +77,7 @@ async function greet({}) : Promise<any> {
 
 
 const message = `Hello, World!`;
+
 
 //  Another comment
 
@@ -96,3 +105,5 @@ await console.log(`Stopped`)
 await console.log(`Unknown`)
     break;
 }//  Final comment at end of file
+
+

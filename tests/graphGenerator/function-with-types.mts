@@ -1,6 +1,8 @@
 // @ts-nocheck
 
 
+
+
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
@@ -82,29 +84,33 @@ const addTool = {
 };
 
 
+
+
+
+
 const addTool = {
   name: "add",
-  description: `No description provided.`,
+  description: `Adds two numbers together`,
   schema: z.object({"x": z.number(), "y": z.number(), })
 };
 const greetTool = {
   name: "greet",
-  description: `No description provided.`,
+  description: `Greets a person by name`,
   schema: z.object({"name": z.string(), })
 };
 const mixedTool = {
   name: "mixed",
-  description: `No description provided.`,
+  description: `Mixed typed and untyped parameters`,
   schema: z.object({"count": z.number(), "label": z.string(), })
 };
 const processArrayTool = {
   name: "processArray",
-  description: `No description provided.`,
+  description: `Processes an array of numbers`,
   schema: z.object({"items": z.array(z.number()), })
 };
 const flexibleTool = {
   name: "flexible",
-  description: `No description provided.`,
+  description: `Handles either a string or number`,
   schema: z.object({"value": z.union([z.string(), z.number()]), })
 };
 
@@ -187,12 +193,7 @@ async function _result(x: string, y: string, __messages: Message[] = []): Promis
 }
 async function add({x, y}) : Promise<number> {
     const __messages: Message[] = [];
-    
-`
-Adds two numbers together
-`
-
-const result = await _result(x, y, __messages);
+    const result = await _result(x, y, __messages);
 
 
 return result
@@ -278,12 +279,7 @@ async function _message(name: string, __messages: Message[] = []): Promise<strin
 }
 async function greet({name}) : Promise<any> {
     const __messages: Message[] = [];
-    
-`
-Greets a person by name
-`
-
-const message = await _message(name, __messages);
+    const message = await _message(name, __messages);
 
 
 return message
@@ -369,12 +365,7 @@ async function _output(label: string, count: string, __messages: Message[] = [])
 }
 async function mixed({count, label}) : Promise<any> {
     const __messages: Message[] = [];
-    
-`
-Mixed typed and untyped parameters
-`
-
-const output = await _output(label, count, __messages);
+    const output = await _output(label, count, __messages);
 
 
 return output
@@ -460,12 +451,7 @@ async function _result(items: string, __messages: Message[] = []): Promise<strin
 }
 async function processArray({items}) : Promise<any> {
     const __messages: Message[] = [];
-    
-`
-Processes an array of numbers
-`
-
-const result = await _result(items, __messages);
+    const result = await _result(items, __messages);
 
 
 return result
@@ -551,12 +537,7 @@ async function _result(value: string, __messages: Message[] = []): Promise<strin
 }
 async function flexible({value}) : Promise<any> {
     const __messages: Message[] = [];
-    
-`
-Handles either a string or number
-`
-
-const result = await _result(value, __messages);
+    const result = await _result(value, __messages);
 
 
 return result
@@ -565,8 +546,7 @@ return result
 }graph.node("foo", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    
-await console.log(`This is a node with a return type`)
+    await console.log(`This is a node with a return type`)
 
 return { ...state, data: `Node completed`}
 

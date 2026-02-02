@@ -61,13 +61,13 @@ Can't do this yet:
 
 type ListIngredientsParams = {
   includePublicIngredients: boolean;
-  attributes: (name | serving_size | unit | calories | protein | fat | carbohydrates | fiber | sugar | calcium | sodium | public | id)[] | undefined
+  attributes: (name | serving_size)[] | undefined
 }
 ```
 
 - no loops
 - no else statements
-- no infix operators yet (e.g., `+`, `-`, `*`, `/`, `&&`, `||`, `>=`, `<=`, `==`, `!=`, etc.)
+- no infix operators yet (e.g., `+`, `-`, `*`, `/`, `&&`, `||`, `>=`, `<=`, `==`, `!=`, etc.) -- builtin replacements provided
 - can't assign to an access expression (e.g., `obj.key = value` doesn't work yet)
 - can't interpolate anything except a var name. eg `"hello ${person.name}"` doesn't work because we generate a function with arg named `person.name`, which isn't legal.
 - formatter should retain newlines. There's a newline parser but currently newlines get swallowed up by the `sepBy` in the `bodyParser` and the `optionalSpaces` at the start of assignmentParser, amongst other places.

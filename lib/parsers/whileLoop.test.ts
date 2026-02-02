@@ -239,14 +239,23 @@ describe("whileLoopParser", () => {
               value: { type: "number", value: "1" },
             },
             {
+              type: "newLine",
+            },
+            {
               type: "assignment",
               variableName: "b",
               value: { type: "number", value: "2" },
             },
             {
+              type: "newLine",
+            },
+            {
               type: "assignment",
               variableName: "c",
               value: { type: "number", value: "3" },
+            },
+            {
+              type: "newLine",
             },
           ],
         },

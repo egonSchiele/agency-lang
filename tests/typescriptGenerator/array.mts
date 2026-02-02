@@ -1,3 +1,7 @@
+
+
+
+
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
@@ -49,6 +53,10 @@ const addTool = {
       },
     },
   };
+
+
+
+
 
 
 async function _numbers(__messages: Message[] = []): Promise<number[]> {
@@ -231,3 +239,4 @@ async function _greetings(__messages: Message[] = []): Promise<string[]> {
 }
 const greetings = await _greetings(__messages);
 await console.log(greetings)
+

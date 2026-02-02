@@ -1,3 +1,7 @@
+
+
+
+
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
@@ -49,6 +53,10 @@ const addTool = {
       },
     },
   };
+
+
+
+
 
 type Coords = { x: number; y: number };
 
@@ -142,3 +150,4 @@ async function _foo(__messages: Message[] = []): Promise<Coords> {
 }
 const foo = await _foo(__messages);
 await console.log(foo)
+

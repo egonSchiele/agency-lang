@@ -43,6 +43,7 @@ node foo(): string {
   return "Node completed"
 }
 
+
 // Call the functions
 sum = add(5, 10)
 greeting = greet("Alice")

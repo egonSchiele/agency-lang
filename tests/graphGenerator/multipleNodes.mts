@@ -1,6 +1,8 @@
 // @ts-nocheck
 
 
+
+
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
@@ -80,6 +82,10 @@ const addTool = {
     b: z.number().describe("The second number to add"),
   }),
 };
+
+
+
+
 
 
 
@@ -164,7 +170,6 @@ graph.node("greet", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
     
-
 
 const greeting = await _greeting(__messages);
 
@@ -266,7 +271,6 @@ graph.node("processGreeting", async (state): Promise<any> => {
     
     
 
-
 const result = await _result(msg, __messages);
 
 
@@ -276,8 +280,7 @@ await console.log(result)
 graph.node("main", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    
-return goToNode("greet",
+    return goToNode("greet",
   {
     messages: state.messages,
     

@@ -96,7 +96,7 @@ export class AgencyGenerator extends BaseGenerator {
   protected processTypeHint(node: TypeHint): string {
     this.typeHints[node.variableName] = node.variableType;
     const typeStr = variableTypeToString(node.variableType, this.typeAliases);
-    return this.indentStr(`${node.variableName} :: ${typeStr}\n`);
+    return this.indentStr(`${node.variableName} :: ${typeStr}`);
   }
 
   // Assignment and literals
@@ -106,10 +106,7 @@ export class AgencyGenerator extends BaseGenerator {
       return this.indentStr(`${node.variableName} = ${code.trim()}\n`);
     }
     let valueCode = this.processNode(node.value).trim();
-    if (node.value.type === "prompt") {
-      valueCode += "\n";
-    }
-    return this.indentStr(`${node.variableName} = ${valueCode}\n`);
+    return this.indentStr(`${node.variableName} = ${valueCode}`);
   }
 
   protected processTimeBlock(node: TimeBlock): string {
@@ -224,14 +221,14 @@ export class AgencyGenerator extends BaseGenerator {
     this.decreaseIndent();
 
     // Close function
-    result += this.indentStr(`}\n\n`);
+    result += this.indentStr(`}`);
 
     return result;
   }
 
   protected processFunctionCall(node: FunctionCall): string {
     const expr = this.generateFunctionCallExpression(node);
-    return this.indentStr(`${expr}\n`);
+    return this.indentStr(`${expr}`);
   }
 
   protected generateFunctionCallExpression(node: FunctionCall): string {
@@ -374,7 +371,7 @@ export class AgencyGenerator extends BaseGenerator {
 
   // Utility methods
   protected processComment(node: AgencyComment): string {
-    return this.indentStr(`//${node.content}\n`);
+    return this.indentStr(`//${node.content}`);
   }
 
   protected processImportStatement(node: ImportStatement): string {
@@ -386,7 +383,6 @@ export class AgencyGenerator extends BaseGenerator {
   protected processGraphNode(node: GraphNodeDefinition): string {
     // Graph nodes use similar syntax to functions
     const { nodeName, body, parameters } = node;
-
     const params = parameters.join(", ");
     const returnTypeStr = node.returnType
       ? ": " + variableTypeToString(node.returnType, this.typeAliases)
@@ -408,8 +404,7 @@ export class AgencyGenerator extends BaseGenerator {
     this.functionScopedVariables = [];
     this.decreaseIndent();
 
-    result += this.indentStr(`}\n\n`);
-
+    result += this.indentStr(`}\n`);
     return result;
   }
 
@@ -422,7 +417,7 @@ export class AgencyGenerator extends BaseGenerator {
   protected processUsesTool(node: UsesTool): string {
     // Track tool usage but don't generate code
     this.toolsUsed.push(node.toolName);
-    return this.indentStr(`+${node.toolName}\n`);
+    return this.indentStr(`+${node.toolName}`);
   }
 
   protected processSpecialVar(node: SpecialVar): string {

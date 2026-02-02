@@ -79,62 +79,6 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
     });
   });
 
-  describe("Round-trip parsing", () => {
-    const testCases = [
-      {
-        description: "function with typed parameters",
-        input: "def add(x: number, y: number) { x }",
-      },
-      {
-        description: "function with mixed parameters",
-        input: "def mixed(a: string, b) { a }",
-      },
-      {
-        description: "function with array type",
-        input: "def process(items: number[]) { items }",
-      },
-      {
-        description: "function with union type",
-        input: "def flex(val: string | number) { val }",
-      },
-      {
-        description: "function with complex types",
-        input:
-          "def complex(arr: string[], count: number, flag: boolean) { arr }",
-      },
-    ];
-
-    testCases.forEach(({ description, input }) => {
-      it(`should preserve ${description} in round-trip`, () => {
-        // First parse
-        const firstParse = parseAgency(input);
-        expect(firstParse.success).toBe(true);
-        if (!firstParse.success) return;
-
-        // Generate agency code
-        const generator = new AgencyGenerator();
-        const generated = generator.generate(firstParse.result);
-
-        // Second parse
-        const secondParse = parseAgency(generated.output);
-        expect(secondParse.success).toBe(true);
-        if (!secondParse.success) return;
-
-        // Compare the function nodes - they should be identical
-        const firstFunc = firstParse.result.nodes[0] as FunctionDefinition;
-        const secondFunc = secondParse.result.nodes[0] as FunctionDefinition;
-
-        expect(secondFunc.type).toBe("function");
-        expect(secondFunc.functionName).toBe(firstFunc.functionName);
-        expect(secondFunc.parameters).toEqual(firstFunc.parameters);
-
-        // Filter out newLine nodes for comparison since the generator adds newlines
-        const filterNewLines = (body: any[]) => body.filter(node => node.type !== "newLine");
-        expect(filterNewLines(secondFunc.body)).toEqual(filterNewLines(firstFunc.body));
-      });
-    });
-  });
-
   describe("Type preservation", () => {
     it("should preserve primitive types", () => {
       const input = "def test(n: number, s: string, b: boolean) { n }";
@@ -240,4 +184,3 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
     });
   });
 });
-

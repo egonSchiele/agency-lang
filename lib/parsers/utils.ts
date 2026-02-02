@@ -1,6 +1,6 @@
 import { char, many, oneOf, Parser, seqR, space } from "tarsec";
 
-//export const optionalSpaces = many(space);
+export const optionalSpacesOrNewline = many(space);
 export const optionalSpaces = many(oneOf(" \t"));
 export const backtick = char("`");
 export const comma = seqR(optionalSpaces, char(","), optionalSpaces);

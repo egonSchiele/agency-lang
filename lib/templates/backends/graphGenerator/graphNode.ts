@@ -6,7 +6,7 @@ import { apply } from "typestache";
 export const template = `graph.node("{{{name}}}", async (state): Promise<any> => {
     const __messages: Message[] = [];
     {{#hasParam}}
-    const {{{paramName}}} = state.data;
+    const {{{paramNames}}} = state.data;
     {{/hasParam}}
     {{{body}}}
 });
@@ -15,7 +15,7 @@ export const template = `graph.node("{{{name}}}", async (state): Promise<any> =>
 export type TemplateType = {
   name: string | boolean | number;
   hasParam: boolean;
-  paramName: string | boolean | number;
+  paramNames: string | boolean | number;
   body: string | boolean | number;
 };
 

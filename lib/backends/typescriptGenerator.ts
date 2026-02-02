@@ -188,7 +188,9 @@ export class TypeScriptGenerator extends BaseGenerator {
     } else if (value.type === "functionCall") {
       // Direct assignment for other literal types
       const code = this.processNode(value);
-      return `const ${variableName}${typeAnnotation} = await ${code.trim()};` + "\n";
+      return (
+        `const ${variableName}${typeAnnotation} = await ${code.trim()};` + "\n"
+      );
     } else if (value.type === "timeBlock") {
       const timingVarName = variableName;
       const code = this.processTimeBlock(value, timingVarName);
@@ -271,6 +273,12 @@ export class TypeScriptGenerator extends BaseGenerator {
   }
 
   protected processUsesTool(node: UsesTool): string {
+    const functionDef = this.functionDefinitions[node.toolName];
+    if (functionDef && functionDef.returnType == null) {
+      throw new Error(
+        `Function '${node.toolName}' is being used as a tool but has no return type. Tools must have a return type.`,
+      );
+    }
     this.toolsUsed.push(node.toolName);
     return "";
   }
@@ -340,7 +348,10 @@ export class TypeScriptGenerator extends BaseGenerator {
       }
     });
     let argsString = "";
-    const paramNames = this.functionSignatures[node.functionName];
+    const paramNames =
+      this.functionDefinitions[node.functionName]?.parameters.map(
+        (p) => p.name,
+      ) || null;
     if (paramNames) {
       const partsWithNames = zip(paramNames, parts).map(([paramName, part]) => {
         return `${paramName}: ${part}`;
@@ -437,10 +448,11 @@ export class TypeScriptGenerator extends BaseGenerator {
     prompt: PromptLiteral;
   }): string {
     // Generate async function for prompt-based assignment
-    const _variableType = variableType || this.typeHints[variableName] || {
-      type: "primitiveType" as const,
-      value: "string",
-    };
+    const _variableType = variableType ||
+      this.typeHints[variableName] || {
+        type: "primitiveType" as const,
+        value: "string",
+      };
 
     const zodSchema = mapTypeToZodSchema(_variableType, this.typeAliases);
     //console.log("Generated Zod schema for variable", variableName, "Variable type:", variableType, ":", zodSchema, "aliases:", this.typeAliases, "hints:", this.typeHints);

@@ -25,7 +25,7 @@ agency infile.agency
 Note that the generated files use several other libraries that you will need to install as well:
 
 ```bash
-pnpm i nanoid openai egonSchiele/simplemachine statelog-client zod
+pnpm i nanoid openai piemachine smoltalk statelog-client zod
 ```
 
 ## troubleshooting

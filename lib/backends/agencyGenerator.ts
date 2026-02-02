@@ -101,12 +101,15 @@ export class AgencyGenerator extends BaseGenerator {
 
   // Assignment and literals
   protected processAssignment(node: Assignment): string {
+    const varName = node.typeHint ?
+      `${node.variableName}: ${variableTypeToString(node.typeHint, this.typeAliases)}`
+      : node.variableName;
     if (node.value.type === "timeBlock") {
       const code = this.processTimeBlock(node.value);
-      return this.indentStr(`${node.variableName} = ${code.trim()}\n`);
+      return this.indentStr(`${varName} = ${code.trim()}\n`);
     }
     let valueCode = this.processNode(node.value).trim();
-    return this.indentStr(`${node.variableName} = ${valueCode}`);
+    return this.indentStr(`${varName} = ${valueCode}`);
   }
 
   protected processTimeBlock(node: TimeBlock): string {
@@ -166,6 +169,7 @@ export class AgencyGenerator extends BaseGenerator {
 
   protected processPromptLiteral(
     variableName: string,
+    variableType: VariableType | undefined,
     node: PromptLiteral,
   ): string {
     // For agency code, prompts are just part of assignments
@@ -251,7 +255,10 @@ export class AgencyGenerator extends BaseGenerator {
       const valueCode = this.processNode(entry.value).trim();
       return `${entry.key}: ${valueCode}`;
     });
-    return `{${entries.join(", ")}}`;
+    if (entries.length === 0) {
+      return `{}`;
+    }
+    return `{ ${entries.join(", ")} }`;
   }
 
   // Access expressions

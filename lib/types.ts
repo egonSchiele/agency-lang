@@ -29,6 +29,7 @@ export * from "./types/whileLoop.js";
 export type Assignment = {
   type: "assignment";
   variableName: string;
+  typeHint?: VariableType;
   value:
     | AccessExpression
     | Literal

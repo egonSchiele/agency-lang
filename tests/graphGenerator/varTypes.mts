@@ -180,7 +180,7 @@ async function _response(person_name: string, person_age: string, __messages: Me
 graph.node("main", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    const person: any = {"name": `Alice`, "age": 30};
+    const person = {"name": `Alice`, "age": 30};
 
 
 const response = await _response(person.name, person.age, __messages);

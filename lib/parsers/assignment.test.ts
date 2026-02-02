@@ -272,6 +272,156 @@ describe("assignmentParser", () => {
       },
     },
 
+    // Typed assignments - primitive types
+    {
+      input: "foo: number = 1",
+      expected: {
+        success: true,
+        result: {
+          type: "assignment",
+          variableName: "foo",
+          typeHint: { type: "primitiveType", value: "number" },
+          value: { type: "number", value: "1" },
+        },
+      },
+    },
+    {
+      input: "bar: number = `the number 1`",
+      expected: {
+        success: true,
+        result: {
+          type: "assignment",
+          variableName: "bar",
+          typeHint: { type: "primitiveType", value: "number" },
+          value: {
+            type: "prompt",
+            segments: [{ type: "text", value: "the number 1" }],
+          },
+        },
+      },
+    },
+    {
+      input: 'name: string = "Alice"',
+      expected: {
+        success: true,
+        result: {
+          type: "assignment",
+          variableName: "name",
+          typeHint: { type: "primitiveType", value: "string" },
+          value: {
+            type: "string",
+            segments: [{ type: "text", value: "Alice" }],
+          },
+        },
+      },
+    },
+    {
+      input: "isActive: boolean = true",
+      expected: {
+        success: true,
+        result: {
+          type: "assignment",
+          variableName: "isActive",
+          typeHint: { type: "primitiveType", value: "boolean" },
+          value: { type: "variableName", value: "true" },
+        },
+      },
+    },
+
+    // Typed assignments - array types
+    {
+      input: "items: number[] = [1, 2, 3]",
+      expected: {
+        success: true,
+        result: {
+          type: "assignment",
+          variableName: "items",
+          typeHint: {
+            type: "arrayType",
+            elementType: { type: "primitiveType", value: "number" },
+          },
+          value: {
+            type: "agencyArray",
+            items: [
+              { type: "number", value: "1" },
+              { type: "number", value: "2" },
+              { type: "number", value: "3" },
+            ],
+          },
+        },
+      },
+    },
+    {
+      input: 'names: string[] = ["Alice", "Bob"]',
+      expected: {
+        success: true,
+        result: {
+          type: "assignment",
+          variableName: "names",
+          typeHint: {
+            type: "arrayType",
+            elementType: { type: "primitiveType", value: "string" },
+          },
+          value: {
+            type: "agencyArray",
+            items: [
+              {
+                type: "string",
+                segments: [{ type: "text", value: "Alice" }],
+              },
+              {
+                type: "string",
+                segments: [{ type: "text", value: "Bob" }],
+              },
+            ],
+          },
+        },
+      },
+    },
+
+    // Typed assignments - with whitespace variations
+    {
+      input: "x:number=5",
+      expected: {
+        success: true,
+        result: {
+          type: "assignment",
+          variableName: "x",
+          typeHint: { type: "primitiveType", value: "number" },
+          value: { type: "number", value: "5" },
+        },
+      },
+    },
+    {
+      input: "  y  :  string  =  `hello`  ",
+      expected: {
+        success: true,
+        result: {
+          type: "assignment",
+          variableName: "y",
+          typeHint: { type: "primitiveType", value: "string" },
+          value: {
+            type: "prompt",
+            segments: [{ type: "text", value: "hello" }],
+          },
+        },
+      },
+    },
+
+    // Typed assignments - with semicolons
+    {
+      input: "count: number = 42;",
+      expected: {
+        success: true,
+        result: {
+          type: "assignment",
+          variableName: "count",
+          typeHint: { type: "primitiveType", value: "number" },
+          value: { type: "number", value: "42" },
+        },
+      },
+    },
+
     // Failure cases
     { input: "=5", expected: { success: false } },
     { input: "x =", expected: { success: false } },

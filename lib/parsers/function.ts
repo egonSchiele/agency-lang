@@ -65,6 +65,16 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
       optionalSpaces,
       capture(many1WithJoin(varNameChar), "variableName"),
       optionalSpaces,
+      optional(
+        captureCaptures(
+          seqC(
+            char(":"),
+            optionalSpaces,
+            capture(variableTypeParser, "typeHint"),
+          ),
+        )
+      ),
+      optionalSpaces,
       char("="),
       optionalSpaces,
       capture(

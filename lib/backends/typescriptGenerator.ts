@@ -9,6 +9,7 @@ import {
   TypeAlias,
   TypeHint,
   TypeHintMap,
+  VariableType,
 } from "../types.js";
 
 import { SpecialVar } from "@/types/specialVar.js";
@@ -174,16 +175,20 @@ export class TypeScriptGenerator extends BaseGenerator {
   }
 
   protected processAssignment(node: Assignment): string {
-    const { variableName, value } = node;
+    const { variableName, typeHint, value } = node;
     // Track this variable as in scope
     this.functionScopedVariables.push(variableName);
 
+    const typeAnnotation = typeHint
+      ? `: ${variableTypeToString(typeHint, this.typeAliases)}`
+      : "";
+
     if (value.type === "prompt") {
-      return this.processPromptLiteral(variableName, value);
+      return this.processPromptLiteral(variableName, typeHint, value);
     } else if (value.type === "functionCall") {
       // Direct assignment for other literal types
       const code = this.processNode(value);
-      return `const ${variableName} = await ${code.trim()};` + "\n";
+      return `const ${variableName}${typeAnnotation} = await ${code.trim()};` + "\n";
     } else if (value.type === "timeBlock") {
       const timingVarName = variableName;
       const code = this.processTimeBlock(value, timingVarName);
@@ -191,7 +196,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     } else {
       // Direct assignment for other literal types
       const code = this.processNode(value);
-      return `const ${variableName} = ${code.trim()};` + "\n";
+      return `const ${variableName}${typeAnnotation} = ${code.trim()};` + "\n";
     }
   }
   /*
@@ -201,6 +206,7 @@ export class TypeScriptGenerator extends BaseGenerator {
 
   protected processPromptLiteral(
     variableName: string,
+    variableType: VariableType | undefined,
     node: PromptLiteral,
   ): string {
     // Validate all interpolated variables are in scope
@@ -224,6 +230,7 @@ export class TypeScriptGenerator extends BaseGenerator {
 
     const functionCode = this.generatePromptFunction({
       variableName,
+      variableType,
       functionArgs: interpolatedVars,
       prompt: node,
     });
@@ -384,7 +391,7 @@ export class TypeScriptGenerator extends BaseGenerator {
         promptParts.push(escaped);
       } else {
         // Interpolation segment
-        const varName = segment.variableName;
+        const varName = segment.variableName.replace(".", "_");
         const varType = typeHints[varName];
 
         // Serialize complex types to JSON
@@ -420,28 +427,30 @@ export class TypeScriptGenerator extends BaseGenerator {
    */
   generatePromptFunction({
     variableName,
+    variableType,
     functionArgs = [],
     prompt,
   }: {
     variableName: string;
+    variableType: VariableType | undefined;
     functionArgs: string[];
     prompt: PromptLiteral;
   }): string {
     // Generate async function for prompt-based assignment
-    const variableType = this.typeHints[variableName] || {
+    const _variableType = variableType || this.typeHints[variableName] || {
       type: "primitiveType" as const,
       value: "string",
     };
 
-    const zodSchema = mapTypeToZodSchema(variableType, this.typeAliases);
+    const zodSchema = mapTypeToZodSchema(_variableType, this.typeAliases);
     //console.log("Generated Zod schema for variable", variableName, "Variable type:", variableType, ":", zodSchema, "aliases:", this.typeAliases, "hints:", this.typeHints);
-    const typeString = variableTypeToString(variableType, this.typeAliases);
+    const typeString = variableTypeToString(_variableType, this.typeAliases);
 
     // Build prompt construction code
     const promptCode = this.buildPromptString(prompt.segments, this.typeHints);
     const parts = functionArgs.map(
       (arg) =>
-        `${arg}: ${variableTypeToString(
+        `${arg.replace(".", "_")}: ${variableTypeToString(
           this.typeHints[arg] || { type: "primitiveType", value: "string" },
           this.typeAliases,
         )}`,

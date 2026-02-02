@@ -2,7 +2,9 @@ import { ImportStatement } from "../types/importStatement.js";
 import {
   capture,
   many1Till,
+  newline,
   oneOf,
+  optional,
   Parser,
   seqC,
   set,
@@ -22,6 +24,7 @@ export const importStatmentParser: Parser<ImportStatement> = trace(
     str("from"),
     spaces,
     capture(many1Till(oneOf(";\n")), "modulePath"),
-    optionalSemicolon
+    optionalSemicolon,
+    optional(newline)
   )
 );

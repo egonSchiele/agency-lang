@@ -276,13 +276,13 @@ export class AgencyGenerator extends BaseGenerator {
   protected processDotProperty(node: DotProperty): string {
     let objectCode = this.processNode(node.object);
     objectCode = objectCode.trim();
-    return `${objectCode}.${node.propertyName}`;
+    return this.indentStr(`${objectCode}.${node.propertyName}`);
   }
 
   protected processIndexAccess(node: IndexAccess): string {
     const arrayCode = this.processNode(node.array).trim();
     const indexCode = this.processNode(node.index).trim();
-    return `${arrayCode}[${indexCode}]`;
+    return this.indentStr(`${arrayCode}[${indexCode}]`);
   }
 
   protected processDotFunctionCall(node: DotFunctionCall): string {
@@ -290,7 +290,7 @@ export class AgencyGenerator extends BaseGenerator {
     const functionCallCode = this.generateFunctionCallExpression(
       node.functionCall,
     );
-    return `${objectCode}.${functionCallCode}`;
+    return this.indentStr(`${objectCode}.${functionCallCode}`);
   }
 
   // Control flow
@@ -382,9 +382,10 @@ export class AgencyGenerator extends BaseGenerator {
   }
 
   protected processImportStatement(node: ImportStatement): string {
-    return this.indentStr(
+    const str = this.indentStr(
       `import ${node.importedNames}from ${node.modulePath}`,
     );
+    return str;
   }
 
   protected processGraphNode(node: GraphNodeDefinition): string {

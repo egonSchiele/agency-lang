@@ -1,7 +1,3 @@
-
-
-
-
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
@@ -53,11 +49,6 @@ const addTool = {
       },
     },
   };
-
-
-
-
-
 const testTool = {
   name: "test",
   description: `No description provided.`,
@@ -81,4 +72,3 @@ foo
 
 
 }
-

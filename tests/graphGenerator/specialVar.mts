@@ -1,8 +1,5 @@
 // @ts-nocheck
 
-
-
-
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
@@ -83,7 +80,6 @@ const addTool = {
   }),
 };
 
-
 function _builtinInput(prompt: string): Promise<string> {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -97,9 +93,6 @@ function _builtinInput(prompt: string): Promise<string> {
     });
   });
 }
-
-
-
 
 async function _response1(msg: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `${msg}`;

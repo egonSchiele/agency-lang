@@ -1,7 +1,3 @@
-
-
-
-
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
@@ -53,7 +49,6 @@ const addTool = {
       },
     },
   };
-
 function _builtinInput(prompt: string): Promise<string> {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -67,9 +62,6 @@ function _builtinInput(prompt: string): Promise<string> {
     });
   });
 }
-
-
-
 const message = await await _builtinInput(`Please enter a message: `);
 
 async function _sentiment(message: string, __messages: Message[] = []): Promise<"happy" | "sad" | "neutral"> {
@@ -162,4 +154,3 @@ async function _sentiment(message: string, __messages: Message[] = []): Promise<
 }
 const sentiment = await _sentiment(message, __messages);
 await console.log(sentiment)
-

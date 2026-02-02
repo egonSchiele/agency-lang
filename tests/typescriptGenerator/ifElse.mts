@@ -1,7 +1,3 @@
-
-
-
-
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
@@ -53,11 +49,6 @@ const addTool = {
       },
     },
   };
-
-
-
-
-
 //  Basic if statement with boolean variable
 const flag = true;
 if (flag) {
@@ -120,5 +111,3 @@ const y = 20;
 
 
 }
-
-

@@ -101,18 +101,22 @@ export class BaseGenerator {
 
     const output: string[] = [];
 
-    output.push(this.preprocess() + "\n");
-    output.push(this.importStatements.join("\n") + "\n");
-    output.push(this.generateImports() + "\n");
-    output.push(this.generateBuiltins() + "\n");
-    output.push("\n");
+    this.addIfNonEmpty(this.preprocess(), output);
+    this.addIfNonEmpty(this.importStatements.join("\n"), output);
+    this.addIfNonEmpty(this.generateImports(), output);
+    this.addIfNonEmpty(this.generateBuiltins(), output);
     output.push(...this.generatedTypeAliases);
-
     output.push(this.generatedStatements.join(""));
-    output.push(this.postprocess() + "\n");
+    this.addIfNonEmpty(this.postprocess(), output);
     return {
       output: output.join("\n"), //filter((line) => line.trim() !== "").join("\n"),
     };
+  }
+
+  addIfNonEmpty(str: string, lines: string[]): void {
+    if (str.trim() !== "") {
+      lines.push(str);
+    }
   }
 
   protected generateBuiltins(): string {
@@ -133,7 +137,7 @@ export class BaseGenerator {
     this.functionDefinitions[node.functionName] = node;
   }
 
-  protected processGraphNodeName(node: GraphNodeDefinition): void {}
+  protected processGraphNodeName(node: GraphNodeDefinition): void { }
 
   protected processNode(node: AgencyNode): string {
     switch (node.type) {

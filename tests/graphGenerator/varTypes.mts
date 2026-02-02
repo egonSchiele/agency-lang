@@ -1,8 +1,5 @@
 // @ts-nocheck
 
-
-
-
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
@@ -82,11 +79,6 @@ const addTool = {
     b: z.number().describe("The second number to add"),
   }),
 };
-
-
-
-
-
 
 
 async function _response(person_name: string, person_age: string, __messages: Message[] = []): Promise<{ greeting: string }> {

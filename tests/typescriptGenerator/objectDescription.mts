@@ -1,7 +1,3 @@
-
-
-
-
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
@@ -53,11 +49,6 @@ const addTool = {
       },
     },
   };
-
-
-
-
-
 
 async function _url(__messages: Message[] = []): Promise<{ hostname: string; port: number }> {
   const __prompt = `extract the hostname and port from \"https://example.com:8080\"`;
@@ -149,4 +140,3 @@ async function _url(__messages: Message[] = []): Promise<{ hostname: string; por
 }
 const url = await _url(__messages);
 await console.log(url)
-

@@ -153,8 +153,8 @@ describe("functionCallParser", () => {
             {
               type: "agencyArray",
               items: [
-                { type: "string", value: "hello" },
-                { type: "string", value: "world" },
+                { type: "string", segments: [{ type: "text", value: "hello" }] },
+                { type: "string", segments: [{ type: "text", value: "world" }] },
               ],
             },
           ],
@@ -222,7 +222,7 @@ describe("functionCallParser", () => {
               entries: [
                 {
                   key: "key",
-                  value: { type: "string", value: "value" },
+                  value: { type: "string", segments: [{ type: "text", value: "value" }] },
                 },
               ],
             },
@@ -243,7 +243,7 @@ describe("functionCallParser", () => {
               entries: [
                 {
                   key: "name",
-                  value: { type: "string", value: "Alice" },
+                  value: { type: "string", segments: [{ type: "text", value: "Alice" }] },
                 },
                 {
                   key: "age",
@@ -350,7 +350,7 @@ describe("functionCallParser", () => {
               entries: [
                 {
                   key: "key",
-                  value: { type: "string", value: "value" },
+                  value: { type: "string", segments: [{ type: "text", value: "value" }] },
                 },
               ],
             },
@@ -366,7 +366,7 @@ describe("functionCallParser", () => {
           type: "functionCall",
           functionName: "complexCall",
           arguments: [
-            { type: "string", value: "test" },
+            { type: "string", segments: [{ type: "text", value: "test" }] },
             {
               type: "agencyArray",
               items: [],

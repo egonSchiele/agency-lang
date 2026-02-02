@@ -72,8 +72,8 @@ describe("matchBlockParserCase", () => {
         success: true,
         result: {
           type: "matchBlockCase",
-          caseValue: { type: "string", value: "hello" },
-          body: { type: "string", value: "world" },
+          caseValue: { type: "string", segments: [{ type: "text", value: "hello" }] },
+          body: { type: "string", segments: [{ type: "text", value: "world" }] },
         },
       },
     },
@@ -279,13 +279,13 @@ describe("matchBlockParser", () => {
           cases: [
             {
               type: "matchBlockCase",
-              caseValue: { type: "string", value: "active" },
-              body: { type: "string", value: "running" },
+              caseValue: { type: "string", segments: [{ type: "text", value: "active" }] },
+              body: { type: "string", segments: [{ type: "text", value: "running" }] },
             },
             {
               type: "matchBlockCase",
-              caseValue: { type: "string", value: "inactive" },
-              body: { type: "string", value: "stopped" },
+              caseValue: { type: "string", segments: [{ type: "text", value: "inactive" }] },
+              body: { type: "string", segments: [{ type: "text", value: "stopped" }] },
             },
           ],
         },
@@ -307,17 +307,17 @@ describe("matchBlockParser", () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "number", value: "200" },
-              body: { type: "string", value: "OK" },
+              body: { type: "string", segments: [{ type: "text", value: "OK" }] },
             },
             {
               type: "matchBlockCase",
               caseValue: { type: "number", value: "404" },
-              body: { type: "string", value: "Not Found" },
+              body: { type: "string", segments: [{ type: "text", value: "Not Found" }] },
             },
             {
               type: "matchBlockCase",
               caseValue: { type: "number", value: "500" },
-              body: { type: "string", value: "Error" },
+              body: { type: "string", segments: [{ type: "text", value: "Error" }] },
             },
           ],
         },
@@ -371,20 +371,20 @@ describe("matchBlockParser", () => {
           cases: [
             {
               type: "matchBlockCase",
-              caseValue: { type: "string", value: "start" },
+              caseValue: { type: "string", segments: [{ type: "text", value: "start" }] },
               body: {
                 type: "functionCall",
                 functionName: "print",
-                arguments: [{ type: "string", value: "Starting" }],
+                arguments: [{ type: "string", segments: [{ type: "text", value: "Starting" }] }],
               },
             },
             {
               type: "matchBlockCase",
-              caseValue: { type: "string", value: "stop" },
+              caseValue: { type: "string", segments: [{ type: "text", value: "stop" }] },
               body: {
                 type: "functionCall",
                 functionName: "print",
-                arguments: [{ type: "string", value: "Stopping" }],
+                arguments: [{ type: "string", segments: [{ type: "text", value: "Stopping" }] }],
               },
             },
           ],
@@ -423,7 +423,7 @@ describe("matchBlockParser", () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "number", value: "42" },
-              body: { type: "string", value: "found" },
+              body: { type: "string", segments: [{ type: "text", value: "found" }] },
             },
           ],
         },
@@ -438,11 +438,11 @@ describe("matchBlockParser", () => {
         success: true,
         result: {
           type: "matchBlock",
-          expression: { type: "string", value: "test" },
+          expression: { type: "string", segments: [{ type: "text", value: "test" }] },
           cases: [
             {
               type: "matchBlockCase",
-              caseValue: { type: "string", value: "test" },
+              caseValue: { type: "string", segments: [{ type: "text", value: "test" }] },
               body: { type: "number", value: "1" },
             },
           ],

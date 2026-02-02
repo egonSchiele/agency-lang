@@ -78,7 +78,7 @@ describe("whileLoopParser", () => {
         success: true,
         result: {
           type: "whileLoop",
-          condition: { type: "string", value: "running" },
+          condition: { type: "string", segments: [{ type: "text", value: "running" }] },
           body: [
             {
               type: "assignment",

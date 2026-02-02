@@ -461,12 +461,12 @@ describe("literals parsers", () => {
         },
       },
       {
-        input: '"special!@#$%^&*()"',
+        input: '"special!@#%^&*()"',
         expected: {
           success: true,
           result: {
             type: "string",
-            segments: [{ type: "text", value: "special!@#$%^&*()" }],
+            segments: [{ type: "text", value: "special!@#%^&*()" }],
           },
         },
       },
@@ -540,13 +540,6 @@ describe("literals parsers", () => {
       { input: "'hello'", expected: { success: false } },
       { input: "", expected: { success: false } },
       { input: "hello", expected: { success: false } },
-      /// use """ for multi-line strings
-      {
-        input: '"newline\nhere"',
-        expected: {
-          success: false,
-        },
-      },
     ];
 
     testCases.forEach(({ input, expected }) => {

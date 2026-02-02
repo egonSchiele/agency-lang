@@ -20,7 +20,7 @@ describe("returnStatementParser", () => {
         success: true,
         result: {
           type: "returnStatement",
-          value: { type: "string", value: "hello" },
+          value: { type: "string", segments: [{ type: "text", value: "hello" }] },
         },
       },
     },
@@ -178,7 +178,7 @@ describe("returnStatementParser", () => {
             entries: [
               {
                 key: "key",
-                value: { type: "string", value: "value" },
+                value: { type: "string", segments: [{ type: "text", value: "value" }] },
               },
             ],
           },

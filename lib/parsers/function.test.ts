@@ -183,6 +183,9 @@ describe("functionParser", () => {
               value: { type: "number", value: "5" },
             },
             {
+              type: "newLine",
+            },
+            {
               type: "assignment",
               variableName: "y",
               value: { type: "number", value: "10" },
@@ -262,9 +265,15 @@ describe("functionParser", () => {
               value: { type: "number", value: "5" },
             },
             {
+              type: "newLine",
+            },
+            {
               type: "assignment",
               variableName: "y",
               value: { type: "number", value: "10" },
+            },
+            {
+              type: "newLine",
             },
           ],
         },
@@ -340,6 +349,9 @@ describe("functionParser", () => {
                 segments: [{ type: "text", value: "say hello" }],
               },
             },
+            {
+              type: "newLine",
+            },
           ],
         },
       },
@@ -362,6 +374,9 @@ describe("functionParser", () => {
               type: "assignment",
               variableName: "x",
               value: { type: "number", value: "5" },
+            },
+            {
+              type: "newLine",
             },
             {
               type: "assignment",
@@ -408,6 +423,9 @@ describe("functionParser", () => {
               type: "assignment",
               variableName: "x",
               value: { type: "number", value: "5" },
+            },
+            {
+              type: "newLine",
             },
           ],
         },
@@ -501,6 +519,9 @@ describe("functionParser", () => {
               type: "assignment",
               variableName: "result",
               value: { type: "number", value: "42" },
+            },
+            {
+              type: "newLine",
             },
             {
               type: "variableName",
@@ -611,8 +632,14 @@ describe("functionParser", () => {
               },
             },
             {
+              type: "newLine",
+            },
+            {
               type: "variableName",
               value: "result",
+            },
+            {
+              type: "newLine",
             },
           ],
         },
@@ -1122,7 +1149,7 @@ describe("functionParser", () => {
             type: "docString",
             value: "Adds two numbers",
           },
-          body: [{ type: "variableName", value: "x" }],
+          body: [{ type: "variableName", value: "x" }, { type: "newLine" }],
         },
       },
     },
@@ -1146,7 +1173,7 @@ describe("functionParser", () => {
             type: "docString",
             value: "Greets a person by name",
           },
-          body: [{ type: "variableName", value: "name" }],
+          body: [{ type: "variableName", value: "name" }, { type: "newLine" }],
         },
       },
     },
@@ -1171,7 +1198,7 @@ describe("functionParser", () => {
             type: "docString",
             value: "Mix of typed and untyped params",
           },
-          body: [{ type: "variableName", value: "typed" }],
+          body: [{ type: "variableName", value: "typed" }, { type: "newLine" }],
         },
       },
     },
@@ -1515,7 +1542,7 @@ describe("functionParser", () => {
             type: "docString",
             value: "Adds two numbers",
           },
-          body: [{ type: "variableName", value: "x" }],
+          body: [{ type: "variableName", value: "x" }, { type: "newLine" }],
         },
       },
     },
@@ -1539,7 +1566,7 @@ describe("functionParser", () => {
             type: "docString",
             value: "Greets a person",
           },
-          body: [{ type: "variableName", value: "name" }],
+          body: [{ type: "variableName", value: "name" }, { type: "newLine" }],
         },
       },
     },
@@ -1698,6 +1725,9 @@ describe("timeBlockParser", () => {
               variableName: "x",
               value: { type: "number", value: "1" },
             },
+            {
+              type: "newLine",
+            },
           ],
         },
       },
@@ -1716,6 +1746,9 @@ describe("timeBlockParser", () => {
                 type: "prompt",
                 segments: [{ type: "text", value: "hello" }],
               },
+            },
+            {
+              type: "newLine",
             },
           ],
         },
@@ -1736,14 +1769,23 @@ describe("timeBlockParser", () => {
               value: { type: "number", value: "1" },
             },
             {
+              type: "newLine",
+            },
+            {
               type: "assignment",
               variableName: "b",
               value: { type: "number", value: "2" },
             },
             {
+              type: "newLine",
+            },
+            {
               type: "assignment",
               variableName: "c",
               value: { type: "number", value: "3" },
+            },
+            {
+              type: "newLine",
             },
           ],
         },
@@ -1775,6 +1817,9 @@ describe("timeBlockParser", () => {
               variableName: "x",
               value: { type: "number", value: "1" },
             },
+            {
+              type: "newLine",
+            },
           ],
         },
       },
@@ -1790,6 +1835,9 @@ describe("timeBlockParser", () => {
               type: "assignment",
               variableName: "x",
               value: { type: "number", value: "1" },
+            },
+            {
+              type: "newLine",
             },
           ],
         },
@@ -1813,6 +1861,9 @@ describe("timeBlockParser", () => {
                 arguments: [],
               },
             },
+            {
+              type: "newLine",
+            },
           ],
         },
       },
@@ -1832,12 +1883,18 @@ describe("timeBlockParser", () => {
               value: { type: "number", value: "1" },
             },
             {
+              type: "newLine",
+            },
+            {
               type: "assignment",
               variableName: "y",
               value: {
                 type: "prompt",
                 segments: [{ type: "text", value: "prompt" }],
               },
+            },
+            {
+              type: "newLine",
             },
             {
               type: "assignment",
@@ -1847,6 +1904,9 @@ describe("timeBlockParser", () => {
                 functionName: "foo",
                 arguments: [],
               },
+            },
+            {
+              type: "newLine",
             },
           ],
         },

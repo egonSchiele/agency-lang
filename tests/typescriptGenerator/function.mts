@@ -52,21 +52,26 @@ const addTool = {
 
 const testTool = {
   name: "test",
-  description: "No description provided.",
+  description: `No description provided.`,
   schema: z.object({})
 };
 const addTool = {
   name: "add",
-  description: "No description provided.",
+  description: `No description provided.`,
   schema: z.object({"a": z.string(), "b": z.string(), })
 };
 async function test({}) : Promise<any> {
     const __messages: Message[] = [];
-    const foo = 1;
+    
+const foo = 1;
+
 
 foo
+
 }await console.log(test({}))async function add({a, b}) : Promise<any> {
     const __messages: Message[] = [];
-    //  multi-param function
+    
+//  multi-param function
+
 
 }

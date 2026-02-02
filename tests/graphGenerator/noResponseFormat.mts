@@ -163,7 +163,9 @@ async function _response1(__messages: Message[] = []): Promise<string> {
 graph.node("main", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    const response1 = await _response1(__messages);
+    
+const response1 = await _response1(__messages);
+
 
 });
 

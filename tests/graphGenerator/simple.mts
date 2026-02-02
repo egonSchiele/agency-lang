@@ -164,9 +164,13 @@ graph.node("main", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
     
+
+
 const greeting = await _greeting(__messages);
 
+
 await console.log(greeting)
+
 });
 
 const initialState: State = {messages: [], data: {}};

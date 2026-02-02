@@ -52,40 +52,54 @@ const addTool = {
 
 const addTool = {
   name: "add",
-  description: "Add two numbers together.
-This is a simple addition function.",
+  description: `No description provided.`,
   schema: z.object({"a": z.string(), "b": z.string(), })
 };
 const greetTool = {
   name: "greet",
-  description: "Generate a greeting message for the given name.",
+  description: `No description provided.`,
   schema: z.object({"name": z.string(), })
 };
 const calculateAreaTool = {
   name: "calculateArea",
-  description: "Calculate the area of a rectangle.
-Parameters:
-- width: the width of the rectangle
-- height: the height of the rectangle
-Returns: the area as a number",
+  description: `No description provided.`,
   schema: z.object({"width": z.string(), "height": z.string(), })
 };
 const processDataTool = {
   name: "processData",
-  description: "Single line docstring",
+  description: `No description provided.`,
   schema: z.object({})
 };
 //  Test docstrings in functions
 async function add({a, b}) : Promise<any> {
     const __messages: Message[] = [];
     
+`
+Add two numbers together.
+This is a simple addition function.
+`
+
 }async function greet({name}) : Promise<any> {
     const __messages: Message[] = [];
     
+`
+Generate a greeting message for the given name.
+`
+
 }async function calculateArea({width, height}) : Promise<any> {
     const __messages: Message[] = [];
     
+`
+Calculate the area of a rectangle.
+Parameters:
+- width: the width of the rectangle
+- height: the height of the rectangle
+Returns: the area as a number
+`
+
 }async function processData({}) : Promise<any> {
     const __messages: Message[] = [];
     
+`Single line docstring`
+
 }

@@ -47,7 +47,7 @@ describe("agencyNode", () => {
       input: "bar :: number\nx = 5",
       expected: {
         success: true,
-        nodeCount: 2,
+        nodeCount: 3,
         firstNodeType: "typeHint",
       },
     },
@@ -55,7 +55,7 @@ describe("agencyNode", () => {
       input: "foo :: string\nfoo = `hello`",
       expected: {
         success: true,
-        nodeCount: 2,
+        nodeCount: 3,
         firstNodeType: "typeHint",
       },
     },
@@ -110,14 +110,14 @@ describe("agencyParser", () => {
       input: "bar :: number\nbar = 5",
       expected: {
         success: true,
-        nodeCount: 2,
+        nodeCount: 3,
       },
     },
     {
       input: "x = 5\ny = 10\nz = 15",
       expected: {
         success: true,
-        nodeCount: 3,
+        nodeCount: 5,
       },
     },
     {
@@ -138,7 +138,7 @@ describe("agencyParser", () => {
       input: "result :: number\nresult = `the number 42`",
       expected: {
         success: true,
-        nodeCount: 2,
+        nodeCount: 3,
       },
     },
     {
@@ -184,7 +184,7 @@ describe("parseAgency", () => {
       expected: {
         success: true,
         programType: "agencyProgram",
-        nodeCount: 2,
+        nodeCount: 3,
       },
     },
     {
@@ -208,7 +208,7 @@ describe("parseAgency", () => {
       expected: {
         success: true,
         programType: "agencyProgram",
-        nodeCount: 4,
+        nodeCount: 5,
       },
     },
     {
@@ -260,6 +260,9 @@ bar = \`the number 1\``;
         variableType: { type: "primitiveType", value: "number" },
       });
       expect(result.result.nodes[1]).toMatchObject({
+        type: "newLine",
+      });
+      expect(result.result.nodes[2]).toMatchObject({
         type: "assignment",
         variableName: "bar",
       });

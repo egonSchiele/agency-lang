@@ -46,6 +46,9 @@ describe("functionBodyParser", () => {
             },
           },
           {
+            type: "newLine",
+          },
+          {
             type: "variableName",
             value: "foo",
           },
@@ -61,6 +64,9 @@ describe("functionBodyParser", () => {
             type: "assignment",
             variableName: "x",
             value: { type: "number", value: "5" },
+          },
+          {
+            type: "newLine",
           },
           {
             type: "assignment",

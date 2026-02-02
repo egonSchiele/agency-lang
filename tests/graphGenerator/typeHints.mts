@@ -253,13 +253,20 @@ graph.node("main", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
     
+
+
 const count = await _count(__messages);
+
+
 
 
 const message = await _message(__messages);
 
+
 await console.log(count)
+
 await console.log(message)
+
 });
 
 const initialState: State = {messages: [], data: {}};

@@ -127,7 +127,10 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
         expect(secondFunc.type).toBe("function");
         expect(secondFunc.functionName).toBe(firstFunc.functionName);
         expect(secondFunc.parameters).toEqual(firstFunc.parameters);
-        expect(secondFunc.body).toEqual(firstFunc.body);
+
+        // Filter out newLine nodes for comparison since the generator adds newlines
+        const filterNewLines = (body: any[]) => body.filter(node => node.type !== "newLine");
+        expect(filterNewLines(secondFunc.body)).toEqual(filterNewLines(firstFunc.body));
       });
     });
   });

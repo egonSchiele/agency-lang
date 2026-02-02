@@ -17,6 +17,9 @@ describe("ifParser", () => {
               variableName: "x",
               value: { type: "number", value: "1" },
             },
+            {
+              type: "newLine",
+            },
           ],
           elseBody: undefined,
         },
@@ -34,6 +37,9 @@ describe("ifParser", () => {
               type: "assignment",
               variableName: "y",
               value: { type: "number", value: "2" },
+            },
+            {
+              type: "newLine",
             },
           ],
           elseBody: undefined,
@@ -53,6 +59,9 @@ describe("ifParser", () => {
               variableName: "foo",
               value: { type: "number", value: "1" },
             },
+            {
+              type: "newLine",
+            },
           ],
           elseBody: undefined,
         },
@@ -71,6 +80,9 @@ describe("ifParser", () => {
               variableName: "x",
               value: { type: "number", value: "2" },
             },
+            {
+              type: "newLine",
+            },
           ],
           elseBody: undefined,
         },
@@ -88,6 +100,9 @@ describe("ifParser", () => {
               type: "assignment",
               variableName: "x",
               value: { type: "number", value: "3" },
+            },
+            {
+              type: "newLine",
             },
           ],
           elseBody: undefined,
@@ -112,6 +127,9 @@ describe("ifParser", () => {
               type: "assignment",
               variableName: "x",
               value: { type: "number", value: "1" },
+            },
+            {
+              type: "newLine",
             },
           ],
           elseBody: undefined,
@@ -139,6 +157,9 @@ describe("ifParser", () => {
               type: "assignment",
               variableName: "x",
               value: { type: "number", value: "1" },
+            },
+            {
+              type: "newLine",
             },
           ],
           elseBody: undefined,
@@ -203,14 +224,23 @@ describe("ifParser", () => {
               value: { type: "number", value: "1" },
             },
             {
+              type: "newLine",
+            },
+            {
               type: "assignment",
               variableName: "b",
               value: { type: "number", value: "2" },
             },
             {
+              type: "newLine",
+            },
+            {
               type: "assignment",
               variableName: "c",
               value: { type: "number", value: "3" },
+            },
+            {
+              type: "newLine",
             },
           ],
           elseBody: undefined,
@@ -233,6 +263,9 @@ describe("ifParser", () => {
               variableName: "foo",
               value: { type: "number", value: "1" },
             },
+            {
+              type: "newLine",
+            },
           ],
           elseBody: undefined,
         },
@@ -251,6 +284,9 @@ describe("ifParser", () => {
               variableName: "foo",
               value: { type: "number", value: "1" },
             },
+            {
+              type: "newLine",
+            },
           ],
           elseBody: undefined,
         },
@@ -268,6 +304,9 @@ describe("ifParser", () => {
               type: "assignment",
               variableName: "foo",
               value: { type: "number", value: "1" },
+            },
+            {
+              type: "newLine",
             },
           ],
           elseBody: undefined,

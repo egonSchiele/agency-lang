@@ -55,9 +55,11 @@ const flag = true;
 if (flag) {
 const result = `condition was true`;
 
+
 }
 if (isReady()) {
 const status = `ready`;
+
 
 }
 //  If statement with property access
@@ -65,16 +67,20 @@ const obj = {"active": true};
 if (obj.active) {
 const message = `object is active`;
 
+
 }
 //  Nested if statements
 const outer = true;
 if (outer) {
 const inner = false;
 
+
 if (inner) {
 const nested = `both true`;
 
+
 }
+
 
 }
 //  TODO fix
@@ -88,9 +94,12 @@ const condition = true;
 if (condition) {
 const a = 1;
 
+
 const b = 2;
 
+
 const c = 3;
+
 
 }
 //  Multiple statements in both then and else bodies
@@ -98,6 +107,8 @@ const value = false;
 if (value) {
 const x = 10;
 
+
 const y = 20;
+
 
 }

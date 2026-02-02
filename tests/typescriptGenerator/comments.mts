@@ -67,11 +67,14 @@ async function greet({}) : Promise<any> {
     const __messages: Message[] = [];
     //  Comment inside function
 
+
 const message = `Hello, World!`;
 
 //  Another comment
 
+
 return message
+
 
 }//  Comment before function call
 const result = await greet({});

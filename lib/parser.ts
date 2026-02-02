@@ -36,11 +36,7 @@ import { usesToolParser } from "./parsers/tools.js";
 import { EgonLog } from "egonlog";
 import { specialVarParser } from "./parsers/specialVar.js";
 import { awaitParser } from "./parsers/await.js";
-
-export const newLineParser: Parser<NewLine> = seqC(
-  set("type", "newLine"),
-  str("\n"),
-);
+import { newLineParser } from "./parsers/newline.js";
 
 export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
   const parser = many(

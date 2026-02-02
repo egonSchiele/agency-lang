@@ -4,6 +4,7 @@ import {
   captureCaptures,
   char,
   debug,
+  many,
   many1,
   many1Till,
   many1WithJoin,
@@ -49,6 +50,7 @@ import {
 import { comma, optionalSpaces, varNameChar } from "./utils.js";
 import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
 import { awaitParser } from "./await.js";
+import { newLineParser } from "./newline.js";
 
 export const assignmentParser: Parser<Assignment> = (input: string) => {
   const parser = trace(
@@ -93,8 +95,7 @@ export const docStringParser: Parser<DocString> = trace(
 export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
   const parser = trace(
     "functionBodyParser",
-    sepBy(
-      spaces,
+    many(
       or(
         usesToolParser,
         debug(typeAliasParser, "error in typeAliasParser"),
@@ -111,6 +112,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
         functionCallParser,
         literalParser,
         commentParser,
+        newLineParser,
       ),
     ),
   );

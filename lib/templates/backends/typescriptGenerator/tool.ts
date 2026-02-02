@@ -5,7 +5,7 @@ import { apply } from "typestache";
 
 export const template = `const {{{name:string}}}Tool = {
   name: "{{{name:string}}}",
-  description: "{{{description:string}}}",
+  description: \`{{{description:string}}}\`,
   schema: z.object({{{schema:string}}})
 };
 `;

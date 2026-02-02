@@ -17,6 +17,9 @@ describe("whileLoopParser", () => {
               variableName: "x",
               value: { type: "number", value: "1" },
             },
+            {
+              type: "newLine",
+            },
           ],
         },
       },
@@ -33,6 +36,9 @@ describe("whileLoopParser", () => {
               type: "assignment",
               variableName: "y",
               value: { type: "number", value: "2" },
+            },
+            {
+              type: "newLine",
             },
           ],
         },
@@ -51,6 +57,9 @@ describe("whileLoopParser", () => {
               variableName: "foo",
               value: { type: "number", value: "1" },
             },
+            {
+              type: "newLine",
+            },
           ],
         },
       },
@@ -68,6 +77,9 @@ describe("whileLoopParser", () => {
               variableName: "x",
               value: { type: "number", value: "2" },
             },
+            {
+              type: "newLine",
+            },
           ],
         },
       },
@@ -84,6 +96,9 @@ describe("whileLoopParser", () => {
               type: "assignment",
               variableName: "x",
               value: { type: "number", value: "3" },
+            },
+            {
+              type: "newLine",
             },
           ],
         },
@@ -108,6 +123,9 @@ describe("whileLoopParser", () => {
               variableName: "x",
               value: { type: "number", value: "1" },
             },
+            {
+              type: "newLine",
+            },
           ],
         },
       },
@@ -128,6 +146,9 @@ describe("whileLoopParser", () => {
               type: "functionCall",
               functionName: "process",
               arguments: [],
+            },
+            {
+              type: "newLine",
             },
           ],
         },
@@ -155,6 +176,9 @@ describe("whileLoopParser", () => {
               variableName: "x",
               value: { type: "number", value: "1" },
             },
+            {
+              type: "newLine",
+            },
           ],
         },
       },
@@ -178,6 +202,9 @@ describe("whileLoopParser", () => {
               type: "functionCall",
               functionName: "tick",
               arguments: [],
+            },
+            {
+              type: "newLine",
             },
           ],
         },
@@ -240,6 +267,9 @@ describe("whileLoopParser", () => {
               variableName: "foo",
               value: { type: "number", value: "1" },
             },
+            {
+              type: "newLine",
+            },
           ],
         },
       },
@@ -256,6 +286,9 @@ describe("whileLoopParser", () => {
               type: "assignment",
               variableName: "foo",
               value: { type: "number", value: "1" },
+            },
+            {
+              type: "newLine",
             },
           ],
         },
@@ -275,6 +308,9 @@ describe("whileLoopParser", () => {
               type: "assignment",
               variableName: "foo",
               value: { type: "number", value: "1" },
+            },
+            {
+              type: "newLine",
             },
           ],
         },

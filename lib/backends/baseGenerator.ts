@@ -6,6 +6,7 @@ import {
   AgencyProgram,
   Assignment,
   Literal,
+  NewLine,
   PromptLiteral,
   TypeAlias,
   TypeHint,
@@ -51,7 +52,7 @@ export class BaseGenerator {
   // collect function signatures so we can implement named args
   // TODO also save return types, check if used as a tool, return type cannot be null/void/undefined
   protected functionSignatures: Record<string, string[]> = {};
-  constructor() { }
+  constructor() {}
 
   generate(program: AgencyProgram): {
     output: string;
@@ -134,7 +135,7 @@ export class BaseGenerator {
     );
   }
 
-  protected processGraphNodeName(node: GraphNodeDefinition): void { }
+  protected processGraphNodeName(node: GraphNodeDefinition): void {}
 
   protected processNode(node: AgencyNode): string {
     switch (node.type) {
@@ -188,9 +189,15 @@ export class BaseGenerator {
         );
       case "awaitStatement":
         return this.processAwaitStatement(node);
+      case "newLine":
+        return this.processNewLine(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
+  }
+
+  protected processNewLine(_node: NewLine): string {
+    return "";
   }
 
   protected processAwaitStatement(node: AwaitStatement): string {

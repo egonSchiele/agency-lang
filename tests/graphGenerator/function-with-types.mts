@@ -55,6 +55,19 @@ const __nodes = ["foo"] as const;
 type Node = (typeof __nodes)[number];
 
 const graph = new PieMachine<State, Node>(__nodes, graphConfig);
+
+// builtins
+
+const not = (val: any): boolean => !val;
+const eq = (a: any, b: any): boolean => a === b;
+const neq = (a: any, b: any): boolean => a !== b;
+const lt = (a: any, b: any): boolean => a < b;
+const lte = (a: any, b: any): boolean => a <= b;
+const gt = (a: any, b: any): boolean => a > b;
+const gte = (a: any, b: any): boolean => a >= b;
+const and = (a: any, b: any): boolean => a && b;
+const or = (a: any, b: any): boolean => a || b;
+
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -517,16 +530,16 @@ return result
 }graph.node("foo", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    await console.log("This is a node with a return type")
-return { ...state, data: "Node completed"}
+    await console.log(`This is a node with a return type`)
+return { ...state, data: `Node completed`}
 
 });
 //  Call the functions
 const sum = await add({x: 5, y: 10});
-const greeting = await greet({name: "Alice"});
-const labeled = await mixed({count: 42, label: "Answer"});
+const greeting = await greet({name: `Alice`});
+const labeled = await mixed({count: 42, label: `Answer`});
 const processed = await processArray({items: [1, 2, 3, 4, 5]});
-const flexResult = await flexible({value: "test"});
+const flexResult = await flexible({value: `test`});
 
 export async function foo(data:any): Promise<string> {
   const result = await graph.run("foo", { messages: [], data });

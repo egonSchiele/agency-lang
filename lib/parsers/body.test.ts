@@ -24,7 +24,10 @@ describe("functionBodyParser", () => {
           {
             type: "assignment",
             variableName: "bar",
-            value: { type: "string", value: "hello" },
+            value: {
+              type: "string",
+              segments: [{ type: "text", value: "hello" }],
+            },
           },
         ],
       },

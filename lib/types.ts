@@ -30,19 +30,23 @@ export type Assignment = {
   type: "assignment";
   variableName: string;
   value:
-  | AccessExpression
-  | Literal
-  | FunctionCall
-  | AgencyObject
-  | AgencyArray
-  | IndexAccess
-  | TimeBlock
-  | AwaitStatement;
+    | AccessExpression
+    | Literal
+    | FunctionCall
+    | AgencyObject
+    | AgencyArray
+    | IndexAccess
+    | TimeBlock
+    | AwaitStatement;
 };
 
 export type AgencyComment = {
   type: "comment";
   content: string;
+};
+
+export type NewLine = {
+  type: "newLine";
 };
 
 export type AgencyNode =
@@ -67,7 +71,8 @@ export type AgencyNode =
   | IndexAccess
   | DotProperty
   | TimeBlock
-  | AwaitStatement;
+  | AwaitStatement
+  | NewLine;
 
 export type AgencyProgram = {
   type: "agencyProgram";

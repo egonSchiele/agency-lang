@@ -38,7 +38,7 @@ import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { IfElse } from "../types/ifElse.js";
-import { escape, zip } from "../utils.js";
+import { escape, uniq, zip } from "../utils.js";
 import { BaseGenerator } from "./baseGenerator.js";
 import {
   generateBuiltinHelpers,
@@ -204,21 +204,23 @@ export class TypeScriptGenerator extends BaseGenerator {
     node: PromptLiteral,
   ): string {
     // Validate all interpolated variables are in scope
-    const interpolatedVars = node.segments
-      .filter((s) => s.type === "interpolation")
-      .map((s) => (s as InterpolationSegment).variableName);
+    const interpolatedVars = uniq(
+      node.segments
+        .filter((s) => s.type === "interpolation")
+        .map((s) => (s as InterpolationSegment).variableName),
+    );
 
-    for (const varName of interpolatedVars) {
+    /*     for (const varName of interpolatedVars) {
       if (
         !this.functionScopedVariables.includes(varName) &&
         !this.globalScopedVariables.includes(varName)
       ) {
         throw new Error(
           `Variable '${varName}' used in prompt interpolation but not defined. ` +
-          `Referenced in assignment to '${variableName}'.`,
+            `Referenced in assignment to '${variableName}'.`,
         );
       }
-    }
+    } */
 
     const functionCode = this.generatePromptFunction({
       variableName,
@@ -352,7 +354,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       case "number":
         return literal.value;
       case "string":
-        return `"${escape(literal.value)}"`;
+        return this.generateStringLiteral(literal.segments);
       case "multiLineString":
         return `\`${escape(literal.value)}\``;
       case "variableName":
@@ -397,6 +399,22 @@ export class TypeScriptGenerator extends BaseGenerator {
     return "`" + promptParts.join("") + "`";
   }
 
+  generateStringLiteral(segments: PromptSegment[]): string {
+    const stringParts: string[] = [];
+
+    for (const segment of segments) {
+      if (segment.type === "text") {
+        const escaped = escape(segment.value);
+        stringParts.push(escaped);
+      } else {
+        // Interpolation segment
+        stringParts.push(`\${${segment.variableName}}`);
+      }
+    }
+
+    return "`" + stringParts.join("") + "`";
+  }
+
   /**
    * Generates an async for prompt-based assignments
    */
@@ -421,18 +439,16 @@ export class TypeScriptGenerator extends BaseGenerator {
 
     // Build prompt construction code
     const promptCode = this.buildPromptString(prompt.segments, this.typeHints);
-    const parts = functionArgs
-      .map(
-        (arg) =>
-          `${arg}: ${variableTypeToString(
-            this.typeHints[arg] || { type: "primitiveType", value: "string" },
-            this.typeAliases,
-          )}`,
-      )
+    const parts = functionArgs.map(
+      (arg) =>
+        `${arg}: ${variableTypeToString(
+          this.typeHints[arg] || { type: "primitiveType", value: "string" },
+          this.typeAliases,
+        )}`,
+    );
 
     parts.push("__messages: Message[] = []");
-    const argsStr = parts
-      .join(", ");
+    const argsStr = parts.join(", ");
 
     const _tools = this.toolsUsed
       .map((toolName) => `${toolName}Tool`)

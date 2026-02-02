@@ -71,7 +71,10 @@ describe("access expression parsers", () => {
           result: {
             type: "indexAccess",
             array: { type: "variableName", value: "obj" },
-            index: { type: "string", value: "key" },
+            index: {
+              type: "string",
+              segments: [{ type: "text", value: "key" }],
+            },
           },
         },
       },
@@ -82,7 +85,10 @@ describe("access expression parsers", () => {
           result: {
             type: "indexAccess",
             array: { type: "variableName", value: "data" },
-            index: { type: "string", value: "field" },
+            index: {
+              type: "string",
+              segments: [{ type: "text", value: "field" }],
+            },
           },
         },
       },
@@ -161,7 +167,12 @@ describe("access expression parsers", () => {
             array: {
               type: "functionCall",
               functionName: "getUsers",
-              arguments: [{ type: "string", value: "active" }],
+              arguments: [
+                {
+                  type: "string",
+                  segments: [{ type: "text", value: "active" }],
+                },
+              ],
             },
             index: { type: "number", value: "0" },
           },

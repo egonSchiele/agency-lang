@@ -53,17 +53,17 @@ const addTool = {
 //  Basic if statement with boolean variable
 const flag = true;
 if (flag) {
-const result = "condition was true";
+const result = `condition was true`;
 
 }
 if (isReady()) {
-const status = "ready";
+const status = `ready`;
 
 }
 //  If statement with property access
 const obj = {"active": true};
 if (obj.active) {
-const message = "object is active";
+const message = `object is active`;
 
 }
 //  Nested if statements
@@ -72,7 +72,7 @@ if (outer) {
 const inner = false;
 
 if (inner) {
-const nested = "both true";
+const nested = `both true`;
 
 }
 

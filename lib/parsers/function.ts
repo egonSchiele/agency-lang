@@ -51,7 +51,6 @@ import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
 import { awaitParser } from "./await.js";
 
 export const assignmentParser: Parser<Assignment> = (input: string) => {
-
   const parser = trace(
     "assignmentParser",
     seqC(
@@ -78,8 +77,7 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
     ),
   );
   return parser(input);
-}
-
+};
 
 const trim = (s: string) => s.trim();
 export const docStringParser: Parser<DocString> = trace(
@@ -114,10 +112,10 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
         literalParser,
         commentParser,
       ),
-    )
+    ),
   );
   return parser(input);
-}
+};
 
 export const timeBlockParser: Parser<TimeBlock> = trace(
   "timeBlockParser",
@@ -186,11 +184,7 @@ export const ifParser: Parser<IfElse> = (input: string) => {
       char("("),
       optionalSpaces,
       capture(
-        or(
-          accessExpressionParser,
-          functionCallParser,
-          literalParser,
-        ),
+        or(accessExpressionParser, functionCallParser, literalParser),
         "condition",
       ),
       optionalSpaces,

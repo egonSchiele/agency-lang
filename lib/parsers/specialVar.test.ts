@@ -12,7 +12,7 @@ describe("specialVar parsers", () => {
           result: {
             type: "specialVar",
             name: "model",
-            value: { type: "string", value: "gpt-4" },
+            value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] },
           },
         },
       },
@@ -61,7 +61,7 @@ describe("specialVar parsers", () => {
           result: {
             type: "specialVar",
             name: "model",
-            value: { type: "string", value: "gpt-4" },
+            value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] },
           },
         },
       },
@@ -72,7 +72,7 @@ describe("specialVar parsers", () => {
           result: {
             type: "specialVar",
             name: "model",
-            value: { type: "string", value: "gpt-4" },
+            value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] },
           },
         },
       },
@@ -102,8 +102,8 @@ describe("specialVar parsers", () => {
             value: {
               type: "agencyArray",
               items: [
-                { type: "string", value: "gpt-4" },
-                { type: "string", value: "claude" },
+                { type: "string", segments: [{ type: "text", value: "gpt-4" }] },
+                { type: "string", segments: [{ type: "text", value: "claude" }] },
               ],
             },
           },
@@ -137,7 +137,7 @@ describe("specialVar parsers", () => {
               entries: [
                 {
                   key: "name",
-                  value: { type: "string", value: "gpt-4" },
+                  value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] },
                 },
               ],
             },
@@ -156,7 +156,7 @@ describe("specialVar parsers", () => {
               entries: [
                 {
                   key: "name",
-                  value: { type: "string", value: "gpt-4" },
+                  value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] },
                 },
                 {
                   key: "version",

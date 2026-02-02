@@ -82,7 +82,7 @@ describe("ifParser", () => {
         success: true,
         result: {
           type: "ifElse",
-          condition: { type: "string", value: "yes" },
+          condition: { type: "string", segments: [{ type: "text", value: "yes" }] },
           thenBody: [
             {
               type: "assignment",

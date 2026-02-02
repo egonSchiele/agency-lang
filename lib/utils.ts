@@ -18,3 +18,7 @@ export function zip<T, U>(arr1: T[], arr2: U[]): Array<[T, U]> {
   }
   return result;
 }
+
+export function uniq<T>(arr: T[]): T[] {
+  return Array.from(new Set(arr));
+}

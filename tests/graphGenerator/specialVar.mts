@@ -55,6 +55,19 @@ const __nodes = ["main"] as const;
 type Node = (typeof __nodes)[number];
 
 const graph = new PieMachine<State, Node>(__nodes, graphConfig);
+
+// builtins
+
+const not = (val: any): boolean => !val;
+const eq = (a: any, b: any): boolean => a === b;
+const neq = (a: any, b: any): boolean => a !== b;
+const lt = (a: any, b: any): boolean => a < b;
+const lte = (a: any, b: any): boolean => a <= b;
+const gt = (a: any, b: any): boolean => a > b;
+const gte = (a: any, b: any): boolean => a >= b;
+const and = (a: any, b: any): boolean => a && b;
+const or = (a: any, b: any): boolean => a || b;
+
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -242,13 +255,13 @@ async function _response2(msg: string, __messages: Message[] = []): Promise<stri
 graph.node("main", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    await console.log("lets race!")
-const msg = await await _builtinInput("> ");
+    await console.log(`lets race!`)
+const msg = await await _builtinInput(`> `);
 
 const response1 = await _response1(msg, __messages);
 
 await console.log(response1)
-__client = getClientWithConfig({ model: "gemini-2.5-flash-lite" });
+__client = getClientWithConfig({ model: `gemini-2.5-flash-lite` });
 const response2 = await _response2(msg, __messages);
 
 await console.log(response2)

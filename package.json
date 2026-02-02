@@ -48,6 +48,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.0.3",
+    "cli-highlight": "^2.1.11",
     "nanoid": "^5.1.6",
     "piemachine": "^0.0.3",
     "statelog-client": "^0.0.31",

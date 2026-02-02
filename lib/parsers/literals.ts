@@ -38,6 +38,14 @@ export const textSegmentParser: Parser<TextSegment> = map(
   })
 );
 
+export const stringTextSegmentParser: Parser<TextSegment> = map(
+  many1Till(or(char('"'), char("$"))),
+  (text) => ({
+    type: "text",
+    value: text,
+  })
+);
+
 export const interpolationSegmentParser: Parser<InterpolationSegment> = seqC(
   set("type", "interpolation"),
   char("$"),
@@ -59,7 +67,7 @@ export const numberParser: Parser<NumberLiteral> = seqC(
 export const stringParser: Parser<StringLiteral> = seqC(
   set("type", "string"),
   char('"'),
-  capture(manyTillOneOf(['"', "\n"]), "value"),
+  capture(many(or(stringTextSegmentParser, interpolationSegmentParser)), "segments"),
   char('"')
 );
 export const multiLineStringParser: Parser<MultiLineStringLiteral> = seqC(

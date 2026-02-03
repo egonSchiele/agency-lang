@@ -106,7 +106,9 @@ const flexibleTool = {
   description: `Handles either a string or number`,
   schema: z.object({"value": z.union([z.string(), z.number()]), })
 };
-
+async function add({x, y}) : Promise<number> {
+    const __messages: Message[] = [];
+    
 async function _result(x: string, y: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `add ${x} and ${y}`;
   const startTime = performance.now();
@@ -184,15 +186,16 @@ async function _result(x: string, y: string, __messages: Message[] = []): Promis
   return responseMessage.output;
   
 }
-async function add({x, y}) : Promise<number> {
-    const __messages: Message[] = [];
-    const result = await _result(x, y, __messages);
+
+const result = await _result(x, y, __messages);
 
 
 return result
 
 
-}
+}async function greet({name}) : Promise<any> {
+    const __messages: Message[] = [];
+    
 async function _message(name: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `Hello ${name}!`;
   const startTime = performance.now();
@@ -270,15 +273,16 @@ async function _message(name: string, __messages: Message[] = []): Promise<strin
   return responseMessage.output;
   
 }
-async function greet({name}) : Promise<any> {
-    const __messages: Message[] = [];
-    const message = await _message(name, __messages);
+
+const message = await _message(name, __messages);
 
 
 return message
 
 
-}
+}async function mixed({count, label}) : Promise<any> {
+    const __messages: Message[] = [];
+    
 async function _output(label: string, count: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `${label}: ${count}`;
   const startTime = performance.now();
@@ -356,15 +360,16 @@ async function _output(label: string, count: string, __messages: Message[] = [])
   return responseMessage.output;
   
 }
-async function mixed({count, label}) : Promise<any> {
-    const __messages: Message[] = [];
-    const output = await _output(label, count, __messages);
+
+const output = await _output(label, count, __messages);
 
 
 return output
 
 
-}
+}async function processArray({items}) : Promise<any> {
+    const __messages: Message[] = [];
+    
 async function _result(items: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `Processing array with ${items} items`;
   const startTime = performance.now();
@@ -442,15 +447,16 @@ async function _result(items: string, __messages: Message[] = []): Promise<strin
   return responseMessage.output;
   
 }
-async function processArray({items}) : Promise<any> {
-    const __messages: Message[] = [];
-    const result = await _result(items, __messages);
+
+const result = await _result(items, __messages);
 
 
 return result
 
 
-}
+}async function flexible({value}) : Promise<any> {
+    const __messages: Message[] = [];
+    
 async function _result(value: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `Received value: ${value}`;
   const startTime = performance.now();
@@ -528,9 +534,8 @@ async function _result(value: string, __messages: Message[] = []): Promise<strin
   return responseMessage.output;
   
 }
-async function flexible({value}) : Promise<any> {
-    const __messages: Message[] = [];
-    const result = await _result(value, __messages);
+
+const result = await _result(value, __messages);
 
 
 return result

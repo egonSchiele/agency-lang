@@ -81,6 +81,11 @@ const addTool = {
   }),
 };
 
+graph.node("main", async (state): Promise<any> => {
+    const __messages: Message[] = [];
+    
+    
+
 
 async function _count(__messages: Message[] = []): Promise<number> {
   const __prompt = `the number 42`;
@@ -171,6 +176,13 @@ async function _count(__messages: Message[] = []): Promise<number> {
   
 }
 
+const count = await _count(__messages);
+
+
+
+
+
+
 async function _message(__messages: Message[] = []): Promise<string> {
   const __prompt = `a greeting message`;
   const startTime = performance.now();
@@ -248,16 +260,6 @@ async function _message(__messages: Message[] = []): Promise<string> {
   return responseMessage.output;
   
 }
-graph.node("main", async (state): Promise<any> => {
-    const __messages: Message[] = [];
-    
-    
-
-const count = await _count(__messages);
-
-
-
-
 
 const message = await _message(__messages);
 

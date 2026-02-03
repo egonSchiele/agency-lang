@@ -81,6 +81,13 @@ const addTool = {
   }),
 };
 
+graph.node("main", async (state): Promise<any> => {
+    const __messages: Message[] = [];
+    
+    const {input} = state.data;
+    
+    
+
 
 async function _result(input: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `process this input: ${input}`;
@@ -159,12 +166,6 @@ async function _result(input: string, __messages: Message[] = []): Promise<strin
   return responseMessage.output;
   
 }
-graph.node("main", async (state): Promise<any> => {
-    const __messages: Message[] = [];
-    
-    const {input} = state.data;
-    
-    
 
 const result = await _result(input, __messages);
 

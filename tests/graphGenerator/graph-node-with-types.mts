@@ -82,7 +82,12 @@ const addTool = {
 };
 
 //  Test graph nodes with typed parameters
-
+graph.node("greet", async (state): Promise<any> => {
+    const __messages: Message[] = [];
+    
+    const {name} = state.data;
+    
+    
 async function _greeting(name: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `Say hello to ${name}`;
   const startTime = performance.now();
@@ -160,12 +165,8 @@ async function _greeting(name: string, __messages: Message[] = []): Promise<stri
   return responseMessage.output;
   
 }
-graph.node("greet", async (state): Promise<any> => {
-    const __messages: Message[] = [];
-    
-    const {name} = state.data;
-    
-    const greeting = await _greeting(name, __messages);
+
+const greeting = await _greeting(name, __messages);
 
 
 });

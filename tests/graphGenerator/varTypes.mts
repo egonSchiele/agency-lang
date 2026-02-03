@@ -81,6 +81,12 @@ const addTool = {
   }),
 };
 
+graph.node("main", async (state): Promise<any> => {
+    const __messages: Message[] = [];
+    
+    const person = {"name": `Alice`, "age": 30};
+
+
 
 async function _response(person_name: string, person_age: string, __messages: Message[] = []): Promise<{ greeting: string }> {
   const __prompt = `Say hi to ${person_name}, who is ${person_age} years old.`;
@@ -170,11 +176,6 @@ async function _response(person_name: string, person_age: string, __messages: Me
 
   
 }
-graph.node("main", async (state): Promise<any> => {
-    const __messages: Message[] = [];
-    
-    const person = {"name": `Alice`, "age": 30};
-
 
 const response = await _response(person.name, person.age, __messages);
 

@@ -138,6 +138,7 @@ async function _numbers(__messages: Message[] = []): Promise<number[]> {
 
   
 }
+
 const numbers = await _numbers(__messages);
 await console.log(numbers)
 async function _greetings(__messages: Message[] = []): Promise<string[]> {
@@ -228,5 +229,6 @@ async function _greetings(__messages: Message[] = []): Promise<string[]> {
 
   
 }
+
 const greetings = await _greetings(__messages);
 await console.log(greetings)

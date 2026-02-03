@@ -81,6 +81,11 @@ const addTool = {
   }),
 };
 
+graph.node("greet", async (state): Promise<any> => {
+    const __messages: Message[] = [];
+    
+    
+
 
 async function _greeting(__messages: Message[] = []): Promise<string> {
   const __prompt = `say hello`;
@@ -159,10 +164,6 @@ async function _greeting(__messages: Message[] = []): Promise<string> {
   return responseMessage.output;
   
 }
-graph.node("greet", async (state): Promise<any> => {
-    const __messages: Message[] = [];
-    
-    
 
 const greeting = await _greeting(__messages);
 
@@ -179,6 +180,13 @@ return goToNode("processGreeting",
 
 
 });
+graph.node("processGreeting", async (state): Promise<any> => {
+    const __messages: Message[] = [];
+    
+    const {msg} = state.data;
+    
+    
+
 
 async function _result(msg: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `format this greeting: ${msg}`;
@@ -257,12 +265,6 @@ async function _result(msg: string, __messages: Message[] = []): Promise<string>
   return responseMessage.output;
   
 }
-graph.node("processGreeting", async (state): Promise<any> => {
-    const __messages: Message[] = [];
-    
-    const {msg} = state.data;
-    
-    
 
 const result = await _result(msg, __messages);
 

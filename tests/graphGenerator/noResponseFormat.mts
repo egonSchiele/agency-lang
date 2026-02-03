@@ -81,7 +81,10 @@ const addTool = {
   }),
 };
 
-
+graph.node("main", async (state): Promise<any> => {
+    const __messages: Message[] = [];
+    
+    
 async function _response1(__messages: Message[] = []): Promise<string> {
   const __prompt = `say hello`;
   const startTime = performance.now();
@@ -159,10 +162,8 @@ async function _response1(__messages: Message[] = []): Promise<string> {
   return responseMessage.output;
   
 }
-graph.node("main", async (state): Promise<any> => {
-    const __messages: Message[] = [];
-    
-    const response1 = await _response1(__messages);
+
+const response1 = await _response1(__messages);
 
 
 });

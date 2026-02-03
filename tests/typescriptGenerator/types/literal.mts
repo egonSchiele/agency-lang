@@ -138,6 +138,7 @@ async function _foo(__messages: Message[] = []): Promise<"hi"> {
 
   
 }
+
 const foo = await _foo(__messages);
 
 async function _bar(__messages: Message[] = []): Promise<42> {
@@ -228,6 +229,7 @@ async function _bar(__messages: Message[] = []): Promise<42> {
 
   
 }
+
 const bar = await _bar(__messages);
 
 async function _baz(__messages: Message[] = []): Promise<true> {
@@ -318,4 +320,5 @@ async function _baz(__messages: Message[] = []): Promise<true> {
 
   
 }
+
 const baz = await _baz(__messages);

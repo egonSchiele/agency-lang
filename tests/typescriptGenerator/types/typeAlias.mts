@@ -139,5 +139,6 @@ async function _foo(__messages: Message[] = []): Promise<Coords> {
 
   
 }
+
 const foo = await _foo(__messages);
 await console.log(foo)

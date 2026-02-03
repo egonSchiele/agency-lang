@@ -81,6 +81,11 @@ const addTool = {
   }),
 };
 
+graph.node("main", async (state): Promise<any> => {
+    const __messages: Message[] = [];
+    
+    
+
 
 async function _greeting(__messages: Message[] = []): Promise<string> {
   const __prompt = `say hello`;
@@ -159,10 +164,6 @@ async function _greeting(__messages: Message[] = []): Promise<string> {
   return responseMessage.output;
   
 }
-graph.node("main", async (state): Promise<any> => {
-    const __messages: Message[] = [];
-    
-    
 
 const greeting = await _greeting(__messages);
 

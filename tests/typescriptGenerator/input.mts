@@ -152,5 +152,6 @@ async function _sentiment(message: string, __messages: Message[] = []): Promise<
 
   
 }
+
 const sentiment = await _sentiment(message, __messages);
 await console.log(sentiment)

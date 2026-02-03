@@ -142,7 +142,7 @@ export class AgencyGenerator extends BaseGenerator {
   }
 
   private generatePromptLiteral(node: PromptLiteral): string {
-    let result = "`";
+    let result = 'llm("'
     for (const segment of node.segments) {
       if (segment.type === "text") {
         result += segment.value;
@@ -150,7 +150,7 @@ export class AgencyGenerator extends BaseGenerator {
         result += `\${${segment.variableName}}`;
       }
     }
-    result += "`";
+    result += `")`;
     return result;
   }
 

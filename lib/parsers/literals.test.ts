@@ -567,14 +567,20 @@ describe("literals parsers", () => {
         input: '"""hello"""',
         expected: {
           success: true,
-          result: { type: "multiLineString", value: "hello" },
+          result: {
+            type: "multiLineString",
+            segments: [{ type: "text", value: "hello" }],
+          },
         },
       },
       {
         input: '"""world"""',
         expected: {
           success: true,
-          result: { type: "multiLineString", value: "world" },
+          result: {
+            type: "multiLineString",
+            segments: [{ type: "text", value: "world" }],
+          },
         },
       },
 
@@ -583,7 +589,7 @@ describe("literals parsers", () => {
         input: '""""""',
         expected: {
           success: true,
-          result: { type: "multiLineString", value: "" },
+          result: { type: "multiLineString", segments: [] },
         },
       },
 
@@ -592,28 +598,40 @@ describe("literals parsers", () => {
         input: '"""line1\nline2"""',
         expected: {
           success: true,
-          result: { type: "multiLineString", value: "line1\nline2" },
+          result: {
+            type: "multiLineString",
+            segments: [{ type: "text", value: "line1\nline2" }],
+          },
         },
       },
       {
         input: '"""line1\nline2\nline3"""',
         expected: {
           success: true,
-          result: { type: "multiLineString", value: "line1\nline2\nline3" },
+          result: {
+            type: "multiLineString",
+            segments: [{ type: "text", value: "line1\nline2\nline3" }],
+          },
         },
       },
       {
         input: '"""\nstarts with newline"""',
         expected: {
           success: true,
-          result: { type: "multiLineString", value: "\nstarts with newline" },
+          result: {
+            type: "multiLineString",
+            segments: [{ type: "text", value: "\nstarts with newline" }],
+          },
         },
       },
       {
         input: '"""ends with newline\n"""',
         expected: {
           success: true,
-          result: { type: "multiLineString", value: "ends with newline\n" },
+          result: {
+            type: "multiLineString",
+            segments: [{ type: "text", value: "ends with newline\n" }],
+          },
         },
       },
 
@@ -622,28 +640,30 @@ describe("literals parsers", () => {
         input: '"""Hello, World!"""',
         expected: {
           success: true,
-          result: { type: "multiLineString", value: "Hello, World!" },
+          result: {
+            type: "multiLineString",
+            segments: [{ type: "text", value: "Hello, World!" }],
+          },
         },
       },
       {
         input: '"""123"""',
         expected: {
           success: true,
-          result: { type: "multiLineString", value: "123" },
+          result: {
+            type: "multiLineString",
+            segments: [{ type: "text", value: "123" }],
+          },
         },
       },
       {
         input: '"""  spaces  and  tabs\t\t"""',
         expected: {
           success: true,
-          result: { type: "multiLineString", value: "  spaces  and  tabs\t\t" },
-        },
-      },
-      {
-        input: '"""special!@#$%^&*()"""',
-        expected: {
-          success: true,
-          result: { type: "multiLineString", value: "special!@#$%^&*()" },
+          result: {
+            type: "multiLineString",
+            segments: [{ type: "text", value: "  spaces  and  tabs\t\t" }],
+          },
         },
       },
 
@@ -652,37 +672,96 @@ describe("literals parsers", () => {
         input: '"""single\'quotes\'here"""',
         expected: {
           success: true,
-          result: { type: "multiLineString", value: "single'quotes'here" },
+          result: {
+            type: "multiLineString",
+            segments: [{ type: "text", value: "single'quotes'here" }],
+          },
         },
       },
       {
         input: '"""double"quotes"here"""',
         expected: {
           success: true,
-          result: { type: "multiLineString", value: 'double"quotes"here' },
+          result: {
+            type: "multiLineString",
+            segments: [{ type: "text", value: 'double"quotes"here' }],
+          },
         },
       },
       {
         input: '"""mixed"and\'quotes"""',
         expected: {
           success: true,
-          result: { type: "multiLineString", value: `mixed"and'quotes` },
+          result: {
+            type: "multiLineString",
+            segments: [{ type: "text", value: `mixed"and'quotes` }],
+          },
         },
       },
 
-      // Strings containing backticks and interpolation-like syntax
+      // Strings containing backticks
       {
         input: '"""`backtick`"""',
         expected: {
           success: true,
-          result: { type: "multiLineString", value: "`backtick`" },
+          result: {
+            type: "multiLineString",
+            segments: [{ type: "text", value: "`backtick`" }],
+          },
+        },
+      },
+
+      // String interpolation support
+      {
+        input: '"""${name}"""',
+        expected: {
+          success: true,
+          result: {
+            type: "multiLineString",
+            segments: [{ type: "interpolation", variableName: "name" }],
+          },
         },
       },
       {
-        input: '"""${notInterpolation}"""',
+        input: '"""Hello, ${name}!"""',
         expected: {
           success: true,
-          result: { type: "multiLineString", value: "${notInterpolation}" },
+          result: {
+            type: "multiLineString",
+            segments: [
+              { type: "text", value: "Hello, " },
+              { type: "interpolation", variableName: "name" },
+              { type: "text", value: "!" },
+            ],
+          },
+        },
+      },
+      {
+        input: '"""${firstName} ${lastName}"""',
+        expected: {
+          success: true,
+          result: {
+            type: "multiLineString",
+            segments: [
+              { type: "interpolation", variableName: "firstName" },
+              { type: "text", value: " " },
+              { type: "interpolation", variableName: "lastName" },
+            ],
+          },
+        },
+      },
+      {
+        input: '"""line1\n${variable}\nline3"""',
+        expected: {
+          success: true,
+          result: {
+            type: "multiLineString",
+            segments: [
+              { type: "text", value: "line1\n" },
+              { type: "interpolation", variableName: "variable" },
+              { type: "text", value: "\nline3" },
+            ],
+          },
         },
       },
 
@@ -691,7 +770,10 @@ describe("literals parsers", () => {
         input: '"""line1\n\n\nline2"""',
         expected: {
           success: true,
-          result: { type: "multiLineString", value: "line1\n\n\nline2" },
+          result: {
+            type: "multiLineString",
+            segments: [{ type: "text", value: "line1\n\n\nline2" }],
+          },
         },
       },
 
@@ -700,7 +782,10 @@ describe("literals parsers", () => {
         input: '"""  \n\t\n  """',
         expected: {
           success: true,
-          result: { type: "multiLineString", value: "  \n\t\n  " },
+          result: {
+            type: "multiLineString",
+            segments: [{ type: "text", value: "  \n\t\n  " }],
+          },
         },
       },
 

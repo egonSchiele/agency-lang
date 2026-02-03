@@ -35,7 +35,7 @@ export const textSegmentParser: Parser<TextSegment> = map(
   (text) => ({
     type: "text",
     value: text,
-  })
+  }),
 );
 
 export const stringTextSegmentParser: Parser<TextSegment> = map(
@@ -43,7 +43,15 @@ export const stringTextSegmentParser: Parser<TextSegment> = map(
   (text) => ({
     type: "text",
     value: text,
-  })
+  }),
+);
+
+export const multiLineStringTextSegmentParser: Parser<TextSegment> = map(
+  many1Till(or(str('"""'), char("$"))),
+  (text) => ({
+    type: "text",
+    value: text,
+  }),
 );
 
 export const interpolationSegmentParser: Parser<InterpolationSegment> = seqC(
@@ -51,48 +59,59 @@ export const interpolationSegmentParser: Parser<InterpolationSegment> = seqC(
   char("$"),
   char("{"),
   capture(manyTillStr("}"), "variableName"),
-  char("}")
+  char("}"),
 );
 
 export const promptParserBackticks: Parser<PromptLiteral> = seqC(
   set("type", "prompt"),
   backtick,
   capture(many(or(textSegmentParser, interpolationSegmentParser)), "segments"),
-  backtick
+  backtick,
 );
 
-export const promptParserLlmFunction: Parser<PromptLiteral> = (input: string) => {
+export const promptParserLlmFunction: Parser<PromptLiteral> = (
+  input: string,
+) => {
   const parser = seqC(
     set("type", "prompt"),
     str("llm("),
     optionalSpaces,
-    capture(map(stringParser, (str) => str.segments), "segments"),
+    capture(
+      map(stringParser, (str) => str.segments),
+      "segments",
+    ),
     optionalSpaces,
-    char(")")
+    char(")"),
   );
   return parser(input);
-}
+};
 
 export const promptParser: Parser<PromptLiteral> = or(
   promptParserBackticks,
-  promptParserLlmFunction
+  promptParserLlmFunction,
 );
 
 export const numberParser: Parser<NumberLiteral> = seqC(
   set("type", "number"),
-  capture(many1WithJoin(or(char("-"), char("."), digit)), "value")
+  capture(many1WithJoin(or(char("-"), char("."), digit)), "value"),
 );
 export const stringParser: Parser<StringLiteral> = seqC(
   set("type", "string"),
   char('"'),
-  capture(many(or(stringTextSegmentParser, interpolationSegmentParser)), "segments"),
-  char('"')
+  capture(
+    many(or(stringTextSegmentParser, interpolationSegmentParser)),
+    "segments",
+  ),
+  char('"'),
 );
-export const multiLineStringParser: Parser<StringLiteral> = seqC(
-  set("type", "string"),
+export const multiLineStringParser: Parser<MultiLineStringLiteral> = seqC(
+  set("type", "multiLineString"),
   str('"""'),
-  capture(many(or(stringTextSegmentParser, interpolationSegmentParser)), "segments"),
-  str('"""')
+  capture(
+    many(or(multiLineStringTextSegmentParser, interpolationSegmentParser)),
+    "segments",
+  ),
+  str('"""'),
 );
 
 export const variableNameParser: Parser<VariableNameLiteral> = seq(
@@ -106,7 +125,7 @@ export const variableNameParser: Parser<VariableNameLiteral> = seq(
       type: "variableName",
       value: `${captures.init}${captures.value}`,
     };
-  }
+  },
 );
 
 export const literalParser: Parser<Literal> = or(
@@ -114,5 +133,5 @@ export const literalParser: Parser<Literal> = or(
   numberParser,
   multiLineStringParser,
   stringParser,
-  variableNameParser
+  variableNameParser,
 );

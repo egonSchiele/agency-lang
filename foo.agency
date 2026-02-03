@@ -1,9 +1,9 @@
 claudeFile = read("CLAUDE.md")
 
-contents = "
+contents = """
 Contents of claude.md:
 ${claudeFile}
-"
+"""
 
 node main() {
   print(contents)

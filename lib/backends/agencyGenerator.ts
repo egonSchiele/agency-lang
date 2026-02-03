@@ -4,6 +4,7 @@ import {
   AgencyProgram,
   Assignment,
   Literal,
+  MultiLineStringLiteral,
   NewLine,
   PromptLiteral,
   StringLiteral,
@@ -132,8 +133,7 @@ export class AgencyGenerator extends BaseGenerator {
       case "variableName":
         return literal.value;
       case "multiLineString":
-        const escapedMultiLine = literal.value;
-        return `"""${escapedMultiLine}"""`;
+        return this.generateMultiLineStringLiteral(literal);
       case "prompt":
         return this.generatePromptLiteral(literal);
       default:
@@ -164,6 +164,19 @@ export class AgencyGenerator extends BaseGenerator {
       }
     }
     result += '"';
+    return result;
+  }
+
+  private generateMultiLineStringLiteral(node: MultiLineStringLiteral): string {
+    let result = '"""';
+    for (const segment of node.segments) {
+      if (segment.type === "text") {
+        result += segment.value;
+      } else if (segment.type === "interpolation") {
+        result += `\${${segment.variableName}}`;
+      }
+    }
+    result += '"""';
     return result;
   }
 

@@ -169,7 +169,8 @@ graph.node("greet", async (state): Promise<any> => {
 
 });
 
-export async function greet(data:any): Promise<string> {
+export async function greet(name): Promise<string> {
+  const data = { name };
   const result = await graph.run("greet", { messages: [], data });
   return result.data;
 }

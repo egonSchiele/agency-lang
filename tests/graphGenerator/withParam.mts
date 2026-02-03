@@ -174,7 +174,8 @@ await console.log(result)
 
 const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
-export async function main(data:any): Promise<any> {
+export async function main(input): Promise<any> {
+  const data = { input };
   const result = await graph.run("main", { messages: [], data });
   return result.data;
 }

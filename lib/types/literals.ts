@@ -17,7 +17,7 @@ export type StringLiteral = {
 
 export type MultiLineStringLiteral = {
   type: "multiLineString";
-  value: string;
+  segments: PromptSegment[];
 };
 
 export type VariableNameLiteral = {

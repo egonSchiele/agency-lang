@@ -374,7 +374,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       case "string":
         return this.generateStringLiteral(literal.segments);
       case "multiLineString":
-        return `\`${escape(literal.value)}\``;
+        return this.generateStringLiteral(literal.segments);
       case "variableName":
         return literal.value;
       case "prompt":

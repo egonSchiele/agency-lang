@@ -236,11 +236,11 @@ export class TypeScriptGenerator extends BaseGenerator {
       functionArgs: interpolatedVars,
       prompt: node,
     });
-    this.generatedStatements.push(functionCode);
+    //this.generatedStatements.push(functionCode);
 
     const argsStr = [...interpolatedVars, "__messages"].join(", ");
     // Generate the function call
-    return `const ${variableName} = await _${variableName}(${argsStr});` + "\n";
+    return `${functionCode}\nconst ${variableName} = await _${variableName}(${argsStr});` + "\n";
   }
 
   protected processTool(node: FunctionDefinition): string {

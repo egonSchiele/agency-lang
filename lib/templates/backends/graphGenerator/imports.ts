@@ -69,7 +69,8 @@ const gt = (a: any, b: any): boolean => a > b;
 const gte = (a: any, b: any): boolean => a >= b;
 const and = (a: any, b: any): boolean => a && b;
 const or = (a: any, b: any): boolean => a || b;
-`;
+const head = <T>(arr: T[]): T | undefined => arr[0];
+const tail = <T>(arr: T[]): T[] => arr.slice(1);`;
 
 export type TemplateType = {
   nodes: string;

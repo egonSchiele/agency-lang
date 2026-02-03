@@ -142,7 +142,7 @@ export class AgencyGenerator extends BaseGenerator {
   }
 
   private generatePromptLiteral(node: PromptLiteral): string {
-    let result = 'llm("'
+    let result = 'llm("';
     for (const segment of node.segments) {
       if (segment.type === "text") {
         result += segment.value;
@@ -380,13 +380,13 @@ export class AgencyGenerator extends BaseGenerator {
       lines.push(elseBodyLines.join("").trimEnd() + "\n");
     }
 
-    lines.push(this.indentStr(`}\n\n`));
+    lines.push(this.indentStr(`}`));
     return lines.join("");
   }
 
   protected processReturnStatement(node: ReturnStatement): string {
     const valueCode = this.processNode(node.value).trim();
-    return this.indentStr(`return ${valueCode}\n`);
+    return this.indentStr(`return ${valueCode}`);
   }
 
   // Utility methods
@@ -449,7 +449,7 @@ export class AgencyGenerator extends BaseGenerator {
 
   protected processSpecialVar(node: SpecialVar): string {
     return this.indentStr(
-      `@${node.name} = ${this.processNode(node.value).trim()}\n`,
+      `@${node.name} = ${this.processNode(node.value).trim()}`,
     );
   }
 

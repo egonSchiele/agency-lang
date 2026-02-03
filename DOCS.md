@@ -233,6 +233,7 @@ Each agency file represents one graph. If you split up your code into multiple f
 
 ### Unsupported features
 - else statements aren't supported yet -- use match statements with a default case instead
-- loops aren't supported yet
+- loops aren't supported yet -- use recursion
+- no higher order functions yet (e.g., `map`, `filter`, `reduce`, etc.) or lambda functions
 - no infix operators yet (e.g., `+`, `-`, `*`, `/`, `&&`, `||`, `>=`, `<=`, `==`, `!=`, etc.)
-- string interpolation is limited -- you can only interpolate variable names, not expressions, and it only works in backticks, but those get sent to an LLM. So basically, don't use string interpolation.
+- string interpolation is limited -- you can only interpolate variable names, not expressions.

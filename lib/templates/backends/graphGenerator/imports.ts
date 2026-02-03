@@ -70,7 +70,8 @@ const gte = (a: any, b: any): boolean => a >= b;
 const and = (a: any, b: any): boolean => a && b;
 const or = (a: any, b: any): boolean => a || b;
 const head = <T>(arr: T[]): T | undefined => arr[0];
-const tail = <T>(arr: T[]): T[] => arr.slice(1);`;
+const tail = <T>(arr: T[]): T[] => arr.slice(1);
+const empty = <T>(arr: T[]): boolean => arr.length === 0;`;
 
 export type TemplateType = {
   nodes: string;

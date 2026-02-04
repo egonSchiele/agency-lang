@@ -28,6 +28,11 @@ statelogClient.toolCall({
             tool_call_id: toolCall.id,
             name: toolCall.name,
       }));
+
+  if (isInterrupt(result)) {
+    haltExecution = true;
+    break;
+  }
 }`;
 
 export type TemplateType = {

@@ -93,10 +93,26 @@ async function _foo(__messages: Message[] = []): Promise<"hi"> {
     // Add assistant's response with tool calls to message history
     __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
+    let haltExecution = false;
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
       
+    }
+
+    if (haltExecution) {
+      statelogClient.debug(`Tool call interrupted execution.`, {
+        messages: __messages,
+        model: __client.getModel(),
+      });
+      try {
+        const obj = JSON.parse(__messages.at(-1).content);
+        obj.__messages = __messages;
+        return obj;
+      } catch (e) {
+        return __messages.at(-1).content;
+      }
+      //return __messages;
     }
   
     const nextStartTime = performance.now();
@@ -186,10 +202,26 @@ async function _bar(__messages: Message[] = []): Promise<42> {
     // Add assistant's response with tool calls to message history
     __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
+    let haltExecution = false;
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
       
+    }
+
+    if (haltExecution) {
+      statelogClient.debug(`Tool call interrupted execution.`, {
+        messages: __messages,
+        model: __client.getModel(),
+      });
+      try {
+        const obj = JSON.parse(__messages.at(-1).content);
+        obj.__messages = __messages;
+        return obj;
+      } catch (e) {
+        return __messages.at(-1).content;
+      }
+      //return __messages;
     }
   
     const nextStartTime = performance.now();
@@ -279,10 +311,26 @@ async function _baz(__messages: Message[] = []): Promise<true> {
     // Add assistant's response with tool calls to message history
     __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
+    let haltExecution = false;
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
       
+    }
+
+    if (haltExecution) {
+      statelogClient.debug(`Tool call interrupted execution.`, {
+        messages: __messages,
+        model: __client.getModel(),
+      });
+      try {
+        const obj = JSON.parse(__messages.at(-1).content);
+        obj.__messages = __messages;
+        return obj;
+      } catch (e) {
+        return __messages.at(-1).content;
+      }
+      //return __messages;
     }
   
     const nextStartTime = performance.now();

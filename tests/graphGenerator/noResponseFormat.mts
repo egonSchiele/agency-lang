@@ -69,6 +69,28 @@ const or = (a: any, b: any): boolean => a || b;
 const head = <T>(arr: T[]): T | undefined => arr[0];
 const tail = <T>(arr: T[]): T[] => arr.slice(1);
 const empty = <T>(arr: T[]): boolean => arr.length === 0;
+
+// interrupts
+
+type Interrupt<T> = {
+  type: "interrupt";
+  data: T;
+};
+
+function interrupt<T>(data: T): Interrupt<T> {
+  return {
+    type: "interrupt",
+    data,
+  };
+}
+
+function isInterrupt<T>(obj: any): obj is Interrupt<T> {
+  return obj && obj.type === "interrupt";
+}
+
+function printJSON(obj: any) {
+  console.log(JSON.stringify(obj, null, 2));
+}
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -126,10 +148,26 @@ async function _response1(__messages: Message[] = []): Promise<string> {
     // Add assistant's response with tool calls to message history
     __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
+    let haltExecution = false;
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
       
+    }
+
+    if (haltExecution) {
+      statelogClient.debug(`Tool call interrupted execution.`, {
+        messages: __messages,
+        model: __client.getModel(),
+      });
+      try {
+        const obj = JSON.parse(__messages.at(-1).content);
+        obj.__messages = __messages;
+        return obj;
+      } catch (e) {
+        return __messages.at(-1).content;
+      }
+      //return __messages;
     }
   
     const nextStartTime = performance.now();

@@ -71,7 +71,29 @@ const and = (a: any, b: any): boolean => a && b;
 const or = (a: any, b: any): boolean => a || b;
 const head = <T>(arr: T[]): T | undefined => arr[0];
 const tail = <T>(arr: T[]): T[] => arr.slice(1);
-const empty = <T>(arr: T[]): boolean => arr.length === 0;`;
+const empty = <T>(arr: T[]): boolean => arr.length === 0;
+
+// interrupts
+
+type Interrupt<T> = {
+  type: "interrupt";
+  data: T;
+};
+
+function interrupt<T>(data: T): Interrupt<T> {
+  return {
+    type: "interrupt",
+    data,
+  };
+}
+
+function isInterrupt<T>(obj: any): obj is Interrupt<T> {
+  return obj && obj.type === "interrupt";
+}
+
+function printJSON(obj: any) {
+  console.log(JSON.stringify(obj, null, 2));
+}`;
 
 export type TemplateType = {
   nodes: string;

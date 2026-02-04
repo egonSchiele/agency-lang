@@ -99,6 +99,8 @@ async function _greeting(__messages: Message[] = []): Promise<string> {
   const __responseFormat = undefined;
   
 
+  const __client = getClientWithConfig({});
+
   let __completion = await __client.text({
     messages: __messages,
     tools: __tools,
@@ -199,6 +201,8 @@ async function _result(msg: string, __messages: Message[] = []): Promise<string>
   
   const __responseFormat = undefined;
   
+
+  const __client = getClientWithConfig({});
 
   let __completion = await __client.text({
     messages: __messages,

@@ -150,8 +150,27 @@ export class AgencyGenerator extends BaseGenerator {
         result += `\${${segment.variableName}}`;
       }
     }
+    if (node.config) {
+      result += `", ${this.renderObjectLiteral(node.config)}`;
+    }
+
     result += `")`;
     return result;
+  }
+
+  private renderObjectLiteral(obj: Record<string, any>): string {
+    const entries = Object.entries(obj).map(([key, value]) => {
+      let valueStr: string;
+      if (typeof value === "string") {
+        valueStr = `"${value}"`;
+      } else if (typeof value === "object") {
+        valueStr = this.renderObjectLiteral(value);
+      } else {
+        valueStr = String(value);
+      }
+      return `${key}: ${valueStr}`;
+    });
+    return `{ ${entries.join(", ")} }`;
   }
 
   private generateStringLiteral(node: StringLiteral): string {
@@ -264,14 +283,19 @@ export class AgencyGenerator extends BaseGenerator {
   }
 
   protected processAgencyObject(node: AgencyObject): string {
+    this.increaseIndent();
+
     const entries = node.entries.map((entry) => {
       const valueCode = this.processNode(entry.value).trim();
-      return `${entry.key}: ${valueCode}`;
+      return this.indentStr(`${entry.key}: ${valueCode}`);
     });
+    this.decreaseIndent();
     if (entries.length === 0) {
       return `{}`;
     }
-    return `{ ${entries.join(", ")} }`;
+    let entriesStr = "\n" + entries.join(",\n") + "\n";
+
+    return `{ ${entriesStr}` + this.indentStr("}");
   }
 
   // Access expressions

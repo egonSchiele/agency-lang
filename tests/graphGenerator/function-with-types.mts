@@ -121,6 +121,8 @@ async function _result(x: string, y: string, __messages: Message[] = []): Promis
   const __responseFormat = undefined;
   
 
+  const __client = getClientWithConfig({});
+
   let __completion = await __client.text({
     messages: __messages,
     tools: __tools,
@@ -207,6 +209,8 @@ async function _message(name: string, __messages: Message[] = []): Promise<strin
   
   const __responseFormat = undefined;
   
+
+  const __client = getClientWithConfig({});
 
   let __completion = await __client.text({
     messages: __messages,
@@ -295,6 +299,8 @@ async function _output(label: string, count: string, __messages: Message[] = [])
   const __responseFormat = undefined;
   
 
+  const __client = getClientWithConfig({});
+
   let __completion = await __client.text({
     messages: __messages,
     tools: __tools,
@@ -382,6 +388,8 @@ async function _result(items: string, __messages: Message[] = []): Promise<strin
   const __responseFormat = undefined;
   
 
+  const __client = getClientWithConfig({});
+
   let __completion = await __client.text({
     messages: __messages,
     tools: __tools,
@@ -468,6 +476,8 @@ async function _result(value: string, __messages: Message[] = []): Promise<strin
   
   const __responseFormat = undefined;
   
+
+  const __client = getClientWithConfig({});
 
   let __completion = await __client.text({
     messages: __messages,

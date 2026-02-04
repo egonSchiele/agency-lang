@@ -13,10 +13,9 @@ import {
 import { accessExpressionParser, indexAccessParser } from "./access.js";
 import { literalParser } from "./literals.js";
 import { optionalSemicolon } from "./parserUtils.js";
-import { optionalSpaces, varNameChar } from "./utils.js";
+import { comma, optionalSpaces, varNameChar } from "./utils.js";
 import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
 
-const comma = seqR(optionalSpaces, char(","), optionalSpaces);
 export const functionCallParser: Parser<FunctionCall> = (input: string) => {
   const parser = seqC(
     set("type", "functionCall"),
@@ -32,14 +31,14 @@ export const functionCallParser: Parser<FunctionCall> = (input: string) => {
           indexAccessParser,
           functionCallParser,
           accessExpressionParser,
-          literalParser
-        )
+          literalParser,
+        ),
       ),
-      "arguments"
+      "arguments",
     ),
     optionalSpaces,
     char(")"),
-    optionalSemicolon
+    optionalSemicolon,
   );
   return parser(input);
 };

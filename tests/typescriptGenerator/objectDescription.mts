@@ -64,6 +64,8 @@ async function _url(__messages: Message[] = []): Promise<{ hostname: string; por
   
   
 
+  const __client = getClientWithConfig({});
+
   let __completion = await __client.text({
     messages: __messages,
     tools: __tools,

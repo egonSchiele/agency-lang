@@ -65,6 +65,8 @@ async function _foo(__messages: Message[] = []): Promise<Coords> {
   
   
 
+  const __client = getClientWithConfig({});
+
   let __completion = await __client.text({
     messages: __messages,
     tools: __tools,

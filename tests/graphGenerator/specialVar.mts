@@ -116,6 +116,8 @@ async function _response1(msg: string, __messages: Message[] = []): Promise<stri
   const __responseFormat = undefined;
   
 
+  const __client = getClientWithConfig({});
+
   let __completion = await __client.text({
     messages: __messages,
     tools: __tools,
@@ -202,6 +204,8 @@ async function _response2(msg: string, __messages: Message[] = []): Promise<stri
   
   const __responseFormat = undefined;
   
+
+  const __client = getClientWithConfig({});
 
   let __completion = await __client.text({
     messages: __messages,

@@ -64,6 +64,8 @@ async function _bar(__messages: Message[] = []): Promise<number> {
   
   
 
+  const __client = getClientWithConfig({});
+
   let __completion = await __client.text({
     messages: __messages,
     tools: __tools,

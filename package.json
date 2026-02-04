@@ -1,6 +1,6 @@
 {
   "name": "agency-lang",
-  "version": "0.0.33",
+  "version": "0.0.34",
   "description": "The Agency language",
   "main": "lib/index.js",
   "scripts": {
@@ -41,7 +41,7 @@
   "homepage": "https://github.com/egonSchiele/agency-lang#readme",
   "dependencies": {
     "egonlog": "^0.0.2",
-    "smoltalk": "^0.0.11",
+    "smoltalk": "^0.0.12",
     "tarsec": "^0.1.1",
     "typestache": "^0.4.4",
     "zod": "^4.3.5"

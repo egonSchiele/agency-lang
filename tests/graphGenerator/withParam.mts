@@ -101,6 +101,8 @@ async function _result(input: string, __messages: Message[] = []): Promise<strin
   const __responseFormat = undefined;
   
 
+  const __client = getClientWithConfig({});
+
   let __completion = await __client.text({
     messages: __messages,
     tools: __tools,

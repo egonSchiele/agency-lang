@@ -1,4 +1,11 @@
-import { backtick, optionalSpaces, varNameChar } from "./utils.js";
+import {
+  backtick,
+  comma,
+  commaWithNewline,
+  optionalSpaces,
+  optionalSpacesOrNewline,
+  varNameChar,
+} from "./utils.js";
 import {
   InterpolationSegment,
   Literal,
@@ -11,6 +18,7 @@ import {
 } from "../types.js";
 import {
   Parser,
+  ParserResult,
   capture,
   char,
   digit,
@@ -23,12 +31,18 @@ import {
   manyTillStr,
   manyWithJoin,
   map,
+  noneOf,
+  optional,
   or,
+  sepBy,
   seq,
   seqC,
   set,
+  succeed,
   str,
+  trace,
 } from "tarsec";
+import { indexAccessParser } from "./access.js";
 
 export const textSegmentParser: Parser<TextSegment> = map(
   many1Till(or(backtick, char("$"))),
@@ -69,6 +83,69 @@ export const promptParserBackticks: Parser<PromptLiteral> = seqC(
   backtick,
 );
 
+const objectParser = (input: string): ParserResult<Record<string, any>> => {
+  const kvParser = trace(
+    "objectKVParser",
+    seqC(
+      optionalSpaces,
+      optional(char('"')),
+      capture(manyWithJoin(noneOf('":\n\t ')), "key"),
+      optional(char('"')),
+      optionalSpaces,
+      char(":"),
+      optionalSpaces,
+      capture(
+        or(literalParser, objectParser),
+        // arrayParser,
+        "value",
+      ),
+    ),
+  );
+
+  const arrayToObj = (arr: { key: string; value: any }[]) => {
+    const obj: Record<string, any> = {};
+    arr.forEach(({ key, value }) => {
+      obj[key] = value;
+    });
+    return obj;
+  };
+
+  const parser = seq(
+    [
+      char("{"),
+      optionalSpacesOrNewline,
+      capture(map(sepBy(commaWithNewline, kvParser), arrayToObj), "entries"),
+      optionalSpacesOrNewline,
+      char("}"),
+    ],
+    (_, captures) => {
+      return captures.entries;
+    },
+  );
+
+  return parser(input);
+};
+
+/* export const promptParserLlmFunctionWithConfig: Parser<PromptLiteral> = (
+  input: string,
+) => {
+  const parser = seqC(
+    set("type", "prompt"),
+    str("llm("),
+    optionalSpaces,
+    capture(
+      map(stringParser, (str) => str.segments),
+      "segments",
+    ),
+    optionalSpaces,
+    char(","),
+    capture(objectParser, "config"),
+    optionalSpaces,
+    char(")"),
+  );
+  return parser(input);
+};
+
 export const promptParserLlmFunction: Parser<PromptLiteral> = (
   input: string,
 ) => {
@@ -85,11 +162,12 @@ export const promptParserLlmFunction: Parser<PromptLiteral> = (
   );
   return parser(input);
 };
-
-export const promptParser: Parser<PromptLiteral> = or(
+ */
+export const promptParser: Parser<PromptLiteral> = promptParserBackticks; /* or(
   promptParserBackticks,
+  promptParserLlmFunctionWithConfig,
   promptParserLlmFunction,
-);
+); */
 
 export const numberParser: Parser<NumberLiteral> = seqC(
   set("type", "number"),

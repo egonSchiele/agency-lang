@@ -20,6 +20,8 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
   const __responseFormat = undefined;
   {{/hasResponseFormat}}
 
+  const __client = getClientWithConfig({{{clientConfig:string}}});
+
   let __completion = await __client.text({
     messages: __messages,
     tools: __tools,
@@ -106,6 +108,7 @@ export type TemplateType = {
   tools: string | boolean | number;
   hasResponseFormat: boolean;
   zodSchema: string;
+  clientConfig: string;
   functionCalls: string;
 };
 

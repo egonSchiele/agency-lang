@@ -186,6 +186,32 @@ export class TypeScriptGenerator extends BaseGenerator {
     if (value.type === "prompt") {
       return this.processPromptLiteral(variableName, typeHint, value);
     } else if (value.type === "functionCall") {
+      if (value.functionName === "llm") {
+        const args = value.arguments;
+        if (args.length === 0) {
+          throw new Error(
+            `llm function call must have at least one argument for the prompt.`,
+          );
+        }
+        const promptArg = args[0];
+        if (promptArg.type !== "string") {
+          throw new Error(
+            `First argument to llm function must be a prompt literal.`,
+          );
+        }
+        const promptConfig = args[1];
+        if (promptConfig && promptConfig.type !== "agencyObject") {
+          throw new Error(
+            `Second argument to llm function must be an object literal for configuration.`,
+          );
+        }
+        return this.processPromptLiteral(variableName, typeHint, {
+          type: "prompt",
+          segments: promptArg.segments,
+          config: promptConfig as AgencyObject | undefined,
+        });
+      }
+
       // Direct assignment for other literal types
       const code = this.processNode(value);
       return (
@@ -240,7 +266,10 @@ export class TypeScriptGenerator extends BaseGenerator {
 
     const argsStr = [...interpolatedVars, "__messages"].join(", ");
     // Generate the function call
-    return `${functionCode}\nconst ${variableName} = await _${variableName}(${argsStr});` + "\n";
+    return (
+      `${functionCode}\nconst ${variableName} = await _${variableName}(${argsStr});` +
+      "\n"
+    );
   }
 
   protected processTool(node: FunctionDefinition): string {
@@ -450,9 +479,9 @@ export class TypeScriptGenerator extends BaseGenerator {
     // Generate async function for prompt-based assignment
     const _variableType = variableType ||
       this.typeHints[variableName] || {
-      type: "primitiveType" as const,
-      value: "string",
-    };
+        type: "primitiveType" as const,
+        value: "string",
+      };
 
     const zodSchema = mapTypeToZodSchema(_variableType, this.typeAliases);
     //console.log("Generated Zod schema for variable", variableName, "Variable type:", variableType, ":", zodSchema, "aliases:", this.typeAliases, "hints:", this.typeHints);
@@ -484,6 +513,9 @@ export class TypeScriptGenerator extends BaseGenerator {
         });
       })
       .join("\n");
+
+    const clientConfig = prompt.config ? this.processNode(prompt.config) : "{}";
+
     this.toolsUsed = []; // reset after use
     return promptFunction.default({
       variableName,
@@ -494,6 +526,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       zodSchema,
       tools,
       functionCalls,
+      clientConfig,
     });
   }
 

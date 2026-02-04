@@ -103,6 +103,8 @@ async function _response(person_name: string, person_age: string, __messages: Me
   
   
 
+  const __client = getClientWithConfig({});
+
   let __completion = await __client.text({
     messages: __messages,
     tools: __tools,

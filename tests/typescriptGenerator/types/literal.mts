@@ -64,6 +64,8 @@ async function _foo(__messages: Message[] = []): Promise<"hi"> {
   
   
 
+  const __client = getClientWithConfig({});
+
   let __completion = await __client.text({
     messages: __messages,
     tools: __tools,
@@ -155,6 +157,8 @@ async function _bar(__messages: Message[] = []): Promise<42> {
   
   
 
+  const __client = getClientWithConfig({});
+
   let __completion = await __client.text({
     messages: __messages,
     tools: __tools,
@@ -245,6 +249,8 @@ async function _baz(__messages: Message[] = []): Promise<true> {
   });
   
   
+
+  const __client = getClientWithConfig({});
 
   let __completion = await __client.text({
     messages: __messages,

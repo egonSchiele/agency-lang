@@ -78,6 +78,8 @@ async function _sentiment(message: string, __messages: Message[] = []): Promise<
   
   
 
+  const __client = getClientWithConfig({});
+
   let __completion = await __client.text({
     messages: __messages,
     tools: __tools,

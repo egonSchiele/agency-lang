@@ -62,6 +62,8 @@ async function _greeting(name: string, __messages: Message[] = []): Promise<stri
   const __responseFormat = undefined;
   
 
+  const __client = getClientWithConfig({});
+
   let __completion = await __client.text({
     messages: __messages,
     tools: __tools,

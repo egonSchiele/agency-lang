@@ -21,7 +21,12 @@ import {
 import { accessExpressionParser, indexAccessParser } from "./access.js";
 import { functionCallParser } from "./functionCall.js";
 import { literalParser } from "./literals.js";
-import { comma, optionalSpaces, optionalSpacesOrNewline } from "./utils.js";
+import {
+  comma,
+  commaWithNewline,
+  optionalSpaces,
+  optionalSpacesOrNewline,
+} from "./utils.js";
 
 export const agencyArrayParser: Parser<AgencyArray> = (
   input: string,
@@ -87,7 +92,10 @@ export const agencyObjectParser: Parser<AgencyObject> = seqC(
   set("type", "agencyObject"),
   char("{"),
   optionalSpacesOrNewline,
-  capture(or(sepBy(comma, agencyObjectKVParser), succeed([])), "entries"),
+  capture(
+    or(sepBy(commaWithNewline, agencyObjectKVParser), succeed([])),
+    "entries",
+  ),
   optional(char(",")),
   optionalSpacesOrNewline,
   char("}"),

@@ -12,8 +12,8 @@ importers:
         specifier: ^0.0.2
         version: 0.0.2
       smoltalk:
-        specifier: ^0.0.11
-        version: 0.0.11(ws@8.19.0)(zod@4.3.5)
+        specifier: ^0.0.12
+        version: 0.0.12(ws@8.19.0)(zod@4.3.5)
       tarsec:
         specifier: ^0.1.1
         version: 0.1.1
@@ -207,11 +207,11 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@google/genai@1.36.0':
-    resolution: {integrity: sha512-f4S31aVi5G6U1phMKTaNqpik+sfsU1Z25QW3sGyCjtzNj1/0SnCEfWU0Gyq0iR4pjCsaqeeZtSfzHYW3OcEWUQ==}
+  '@google/genai@1.39.0':
+    resolution: {integrity: sha512-Vz7AQsOdBeiIcxmXIQNy/hzDvyAOE1lSpWA10itUQza7h3aQFF6QSGaQ7o1GYsjMD3XslK4Ee/Ol0eLhRXb7gA==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
-      '@modelcontextprotocol/sdk': ^1.24.0
+      '@modelcontextprotocol/sdk': ^1.25.2
     peerDependenciesMeta:
       '@modelcontextprotocol/sdk':
         optional: true
@@ -786,8 +786,8 @@ packages:
   ollama@0.6.3:
     resolution: {integrity: sha512-KEWEhIqE5wtfzEIZbDCLH51VFZ6Z3ZSa6sIOg/E/tBV8S51flyqBOXi+bRxlOYKDf8i327zG9eSTb8IJxvm3Zg==}
 
-  openai@6.16.0:
-    resolution: {integrity: sha512-fZ1uBqjFUjXzbGc35fFtYKEOxd20kd9fDpFeqWtsOZWiubY8CZ1NAlXHW3iathaFvqmNtCWMIsosCuyeI7Joxg==}
+  openai@6.17.0:
+    resolution: {integrity: sha512-NHRpPEUPzAvFOAFs9+9pC6+HCw/iWsYsKCMPXH5Kw7BpMxqd8g/A07/1o7Gx2TWtCnzevVRyKMRFqyiHyAlqcA==}
     hasBin: true
     peerDependencies:
       ws: ^8.18.0
@@ -907,8 +907,8 @@ packages:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}
     engines: {node: '>=8'}
 
-  smoltalk@0.0.11:
-    resolution: {integrity: sha512-wnE4BMJHu152ii3MEzYSgXHawp8rtx7dGtCSapI9flZM3gdj+WApaMsu3AN4pq3zchy+tEVfbrAnYVuP4ox9VA==}
+  smoltalk@0.0.12:
+    resolution: {integrity: sha512-LKA8lSfi0v0iLwJvPr7XuMUQSFckrD3dzUi/BVZy8NlGIcJuFUbToV81OXtptfHkQS4rw5cTnzY6eAo/RcWH3A==}
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -1205,7 +1205,7 @@ snapshots:
   '@esbuild/win32-x64@0.27.2':
     optional: true
 
-  '@google/genai@1.36.0':
+  '@google/genai@1.39.0':
     dependencies:
       google-auth-library: 10.5.0
       protobufjs: 7.5.4
@@ -1759,7 +1759,7 @@ snapshots:
     dependencies:
       whatwg-fetch: 3.6.20
 
-  openai@6.16.0(ws@8.19.0)(zod@4.3.5):
+  openai@6.17.0(ws@8.19.0)(zod@4.3.5):
     optionalDependencies:
       ws: 8.19.0
       zod: 4.3.5
@@ -1889,12 +1889,12 @@ snapshots:
 
   slash@3.0.0: {}
 
-  smoltalk@0.0.11(ws@8.19.0)(zod@4.3.5):
+  smoltalk@0.0.12(ws@8.19.0)(zod@4.3.5):
     dependencies:
-      '@google/genai': 1.36.0
+      '@google/genai': 1.39.0
       egonlog: 0.0.2
       ollama: 0.6.3
-      openai: 6.16.0(ws@8.19.0)(zod@4.3.5)
+      openai: 6.17.0(ws@8.19.0)(zod@4.3.5)
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
       - bufferutil

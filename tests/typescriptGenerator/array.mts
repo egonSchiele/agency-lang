@@ -64,6 +64,8 @@ async function _numbers(__messages: Message[] = []): Promise<number[]> {
   
   
 
+  const __client = getClientWithConfig({});
+
   let __completion = await __client.text({
     messages: __messages,
     tools: __tools,
@@ -154,6 +156,8 @@ async function _greetings(__messages: Message[] = []): Promise<string[]> {
   });
   
   
+
+  const __client = getClientWithConfig({});
 
   let __completion = await __client.text({
     messages: __messages,

@@ -1,3 +1,5 @@
+import { AgencyObject } from "./dataStructures.js";
+
 export type Literal =
   | NumberLiteral
   | MultiLineStringLiteral
@@ -41,4 +43,5 @@ export type InterpolationSegment = {
 export type PromptLiteral = {
   type: "prompt";
   segments: PromptSegment[];
+  config?: AgencyObject;
 };

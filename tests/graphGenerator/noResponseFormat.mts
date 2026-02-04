@@ -97,6 +97,8 @@ async function _response1(__messages: Message[] = []): Promise<string> {
   const __responseFormat = undefined;
   
 
+  const __client = getClientWithConfig({});
+
   let __completion = await __client.text({
     messages: __messages,
     tools: __tools,

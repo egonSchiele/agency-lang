@@ -8,6 +8,7 @@ export const template = `graph.node("{{{name}}}", async (state): Promise<any> =>
     {{#hasParam}}
     const {{{paramNames}}} = state.data;
     {{/hasParam}}
+    __nodesTraversed.push("{{{name}}}");
     {{{body}}}
 });
 `;

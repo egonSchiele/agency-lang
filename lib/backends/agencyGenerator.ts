@@ -22,7 +22,10 @@ import {
 import { AgencyArray, AgencyObject } from "../types/dataStructures.js";
 import { FunctionCall, FunctionDefinition } from "../types/function.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
-import { ImportStatement } from "../types/importStatement.js";
+import {
+  ImportNodeStatement,
+  ImportStatement,
+} from "../types/importStatement.js";
 import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
@@ -420,9 +423,13 @@ export class AgencyGenerator extends BaseGenerator {
 
   protected processImportStatement(node: ImportStatement): string {
     const str = this.indentStr(
-      `import ${node.importedNames}from ${node.modulePath}`,
+      `import ${node.importedNames}from "${node.modulePath}"`,
     );
     return str;
+  }
+
+  protected processImportNodeStatement(node: ImportNodeStatement): string {
+    return `import node { ${node.importedNodes.join(", ")} } from "${node.agencyFile}"`;
   }
 
   protected processGraphNode(node: GraphNodeDefinition): string {

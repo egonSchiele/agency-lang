@@ -36,12 +36,11 @@ export class GraphGenerator extends TypeScriptGenerator {
       return super.processReturnStatement(node);
     } else {
       const returnCode = this.processNode(node.value);
-      if (
-        node.value.type === "functionCall" &&
-        this.graphNodes.map((n) => n.nodeName).includes(node.value.functionName)
-      ) {
-        // we're going to return a goToNode call, so just return that directly
-        return `return ${returnCode}\n`;
+      if (node.value.type === "functionCall") {
+        if (this.isGraphNode(node.value.functionName)) {
+          // we're going to return a goToNode call, so just return that directly
+          return `return ${returnCode}\n`;
+        }
       }
       return `return { ...state, data: ${returnCode}}\n`;
     }
@@ -68,13 +67,18 @@ export class GraphGenerator extends TypeScriptGenerator {
 
     const bodyCode: string[] = [];
     for (const stmt of body) {
+      if (stmt.type === "functionCall" && this.isGraphNode(stmt.functionName)) {
+        throw new Error(
+          `Call to graph node '${stmt.functionName}' inside graph node '${nodeName}' was not returned. All calls to graph nodes must be returned, eg (return ${stmt.functionName}(...)).`,
+        );
+      }
       bodyCode.push(this.processNode(stmt));
     }
     this.functionScopedVariables = [];
     this.adjacentNodes[nodeName] = [...this.currentAdjacentNodes];
     this.isInsideGraphNode = false;
 
-    const paramNames = "{" + parameters.map((p) => p.name).join(", ") + "}";
+    const paramNames = "[" + parameters.map((p) => p.name).join(", ") + "]";
 
     return renderGraphNode.default({
       name: nodeName,
@@ -87,8 +91,18 @@ export class GraphGenerator extends TypeScriptGenerator {
     });
   }
 
+  private isGraphNode(functionName: string): boolean {
+    return (
+      this.graphNodes.map((n) => n.nodeName).includes(functionName) ||
+      this.importedNodes
+        .map((n) => n.importedNodes)
+        .flat()
+        .includes(functionName)
+    );
+  }
+
   protected processFunctionCall(node: FunctionCall): string {
-    if (this.graphNodes.map((n) => n.nodeName).includes(node.functionName)) {
+    if (this.isGraphNode(node.functionName)) {
       this.currentAdjacentNodes.push(node.functionName);
       this.functionsUsed.add(node.functionName);
       const functionCallCode = this.generateNodeCallExpression(node);
@@ -116,14 +130,15 @@ export class GraphGenerator extends TypeScriptGenerator {
         //        return this.generateLiteral(arg);
       }
     });
-    const argNames =
+    /* const argNames =
       this.graphNodes
         .find((n) => n.nodeName === node.functionName)
         ?.parameters.map((p) => p.name) || [];
     const pairedArgs = argNames.map((name, index) => {
       return `${name}: ${parts[index]}`;
     });
-    const argsString = "{" + pairedArgs.join(", ") + "}";
+    const argsString = "{" + pairedArgs.join(", ") + "}"; */
+    const argsString = "[" + parts.join(", ") + "]";
     return goToNode.default({
       nodeName: functionName,
       hasData: parts.length > 0,
@@ -146,7 +161,22 @@ export class GraphGenerator extends TypeScriptGenerator {
   }
 
   protected preprocess(): string {
-    return "// @ts-nocheck\n";
+    const lines: string[] = [];
+    lines.push("// @ts-nocheck\n");
+    this.importedNodes.forEach((importNode) => {
+      const defaultImportName = this.agencyFileToDefaultImportName(
+        importNode.agencyFile,
+      );
+      lines.push(
+        `import ${defaultImportName} from "${importNode.agencyFile.replace(".agency", ".ts")}";`,
+      );
+    });
+
+    return lines.join("\n");
+  }
+
+  private agencyFileToDefaultImportName(agencyFile: string): string {
+    return `__graph_${agencyFile.replace(".agency", "").replace(/[^a-zA-Z0-9_]/g, "_")}`;
   }
 
   protected postprocess(): string {
@@ -164,6 +194,13 @@ export class GraphGenerator extends TypeScriptGenerator {
       );
     });
 
+    this.importedNodes.forEach((importNode) => {
+      const defaultImportName = this.agencyFileToDefaultImportName(
+        importNode.agencyFile,
+      );
+      lines.push(`graph.merge(${defaultImportName});`);
+    });
+
     if (this.graphNodes.map((n) => n.nodeName).includes("main")) {
       lines.push(
         renderStartNode.default({
@@ -178,7 +215,7 @@ export class GraphGenerator extends TypeScriptGenerator {
       lines.push(
         renderRunNodeFunction.default({
           nodeName: node.nodeName,
-          argsStr,
+          // argsStr,
           returnType: node.returnType
             ? variableTypeToString(node.returnType, this.typeAliases)
             : "any",

@@ -54,9 +54,8 @@ const graphConfig = {
 // Define the names of the nodes in the graph
 // Useful for type safety
 const __nodes = {{{nodes:string}}} as const;
-type Node = (typeof __nodes)[number];
 
-const graph = new PieMachine<State, Node>(__nodes, graphConfig);
+const graph = new PieMachine<State>(__nodes, graphConfig);
 
 // builtins
 
@@ -93,7 +92,9 @@ function isInterrupt<T>(obj: any): obj is Interrupt<T> {
 
 function printJSON(obj: any) {
   console.log(JSON.stringify(obj, null, 2));
-}`;
+}
+
+const __nodesTraversed = [];`;
 
 export type TemplateType = {
   nodes: string;

@@ -33,7 +33,10 @@ import {
   FunctionDefinition,
   FunctionParameter,
 } from "../types/function.js";
-import { ImportStatement } from "../types/importStatement.js";
+import {
+  ImportNodeStatement,
+  ImportStatement,
+} from "../types/importStatement.js";
 import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
@@ -531,7 +534,11 @@ export class TypeScriptGenerator extends BaseGenerator {
   }
 
   protected processImportStatement(node: ImportStatement): string {
-    return `import ${node.importedNames} from ${node.modulePath};`;
+    return `import ${node.importedNames} from "${node.modulePath}";`;
+  }
+
+  protected processImportNodeStatement(node: ImportNodeStatement): string {
+    return ""; //processImportNodeStatement not implemented";
   }
 
   protected processWhileLoop(node: WhileLoop): string {

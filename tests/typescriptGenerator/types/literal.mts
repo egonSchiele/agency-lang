@@ -108,6 +108,7 @@ async function _foo(__messages: Message[] = []): Promise<"hi"> {
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
+        obj.__nodesTraversed = __nodesTraversed;
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -217,6 +218,7 @@ async function _bar(__messages: Message[] = []): Promise<42> {
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
+        obj.__nodesTraversed = __nodesTraversed;
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -326,6 +328,7 @@ async function _baz(__messages: Message[] = []): Promise<true> {
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
+        obj.__nodesTraversed = __nodesTraversed;
         return obj;
       } catch (e) {
         return __messages.at(-1).content;

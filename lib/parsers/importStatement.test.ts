@@ -3,28 +3,14 @@ import { importStatmentParser } from "./importStatement.js";
 
 describe("importStatmentParser", () => {
   const testCases = [
-    // Happy path - basic import
+    // Unquoted module paths are no longer supported
     {
       input: "import foo from bar;",
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "foo ",
-          modulePath: "bar",
-        },
-      },
+      expected: { success: false },
     },
     {
       input: "import myModule from path/to/module;",
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "myModule ",
-          modulePath: "path/to/module",
-        },
-      },
+      expected: { success: false },
     },
 
     // Module paths with double quotes
@@ -35,7 +21,7 @@ describe("importStatmentParser", () => {
         result: {
           type: "importStatement",
           importedNames: "foo ",
-          modulePath: '"bar"',
+          modulePath: "bar",
         },
       },
     },
@@ -46,7 +32,7 @@ describe("importStatmentParser", () => {
         result: {
           type: "importStatement",
           importedNames: "foo ",
-          modulePath: '"./local/path.js"',
+          modulePath: "./local/path.js",
         },
       },
     },
@@ -57,7 +43,7 @@ describe("importStatmentParser", () => {
         result: {
           type: "importStatement",
           importedNames: "bar ",
-          modulePath: '"../utils/helper.js"',
+          modulePath: "../utils/helper.js",
         },
       },
     },
@@ -68,7 +54,7 @@ describe("importStatmentParser", () => {
         result: {
           type: "importStatement",
           importedNames: "{ useState } ",
-          modulePath: '"react"',
+          modulePath: "react",
         },
       },
     },
@@ -81,7 +67,7 @@ describe("importStatmentParser", () => {
         result: {
           type: "importStatement",
           importedNames: "foo ",
-          modulePath: "'bar'",
+          modulePath: "bar",
         },
       },
     },
@@ -92,14 +78,22 @@ describe("importStatmentParser", () => {
         result: {
           type: "importStatement",
           importedNames: "test ",
-          modulePath: "'./module.js'",
+          modulePath: "./module.js",
         },
       },
     },
 
-    // Without semicolon (should still parse due to optionalSemicolon)
+    // Without semicolon - unquoted paths no longer supported
     {
       input: "import foo from bar\n",
+      expected: { success: false },
+    },
+    {
+      input: "import test from module",
+      expected: { success: false },
+    },
+    {
+      input: 'import foo from "bar"\n',
       expected: {
         success: true,
         result: {
@@ -109,40 +103,11 @@ describe("importStatmentParser", () => {
         },
       },
     },
-    {
-      input: "import test from module",
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "test ",
-          modulePath: "module",
-        },
-      },
-    },
-    {
-      input: 'import foo from "bar"\n',
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "foo ",
-          modulePath: '"bar"',
-        },
-      },
-    },
 
-    // Multiple imported names (destructured imports)
+    // Multiple imported names (destructured imports) - unquoted paths no longer supported
     {
       input: "import { foo, bar } from module;",
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "{ foo, bar } ",
-          modulePath: "module",
-        },
-      },
+      expected: { success: false },
     },
     {
       input: 'import { foo, bar, baz } from "myModule";',
@@ -151,7 +116,7 @@ describe("importStatmentParser", () => {
         result: {
           type: "importStatement",
           importedNames: "{ foo, bar, baz } ",
-          modulePath: '"myModule"',
+          modulePath: "myModule",
         },
       },
     },
@@ -164,7 +129,7 @@ describe("importStatmentParser", () => {
         result: {
           type: "importStatement",
           importedNames: "React, { useState } ",
-          modulePath: '"react"',
+          modulePath: "react",
         },
       },
     },
@@ -177,7 +142,7 @@ describe("importStatmentParser", () => {
         result: {
           type: "importStatement",
           importedNames: "* as utils ",
-          modulePath: '"utils"',
+          modulePath: "utils",
         },
       },
     },
@@ -190,27 +155,24 @@ describe("importStatmentParser", () => {
         result: {
           type: "importStatement",
           importedNames: "{ Parser } ",
-          modulePath: '"@typescript-eslint/parser"',
+          modulePath: "@typescript-eslint/parser",
         },
       },
     },
 
-    // Spaces around keywords
+    // Spaces around keywords - unquoted paths no longer supported
     {
       input: "import   foo   from   bar;",
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "foo   ",
-          modulePath: "bar",
-        },
-      },
+      expected: { success: false },
     },
 
-    // Edge cases - single character names
+    // Edge cases - single character names with unquoted path
     {
       input: "import x from y;",
+      expected: { success: false },
+    },
+    {
+      input: 'import x from "y";',
       expected: {
         success: true,
         result: {
@@ -220,29 +182,11 @@ describe("importStatmentParser", () => {
         },
       },
     },
-    {
-      input: 'import x from "y";',
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "x ",
-          modulePath: '"y"',
-        },
-      },
-    },
 
-    // Complex paths
+    // Complex paths - unquoted paths no longer supported
     {
       input: "import foo from ../../../utils/helpers;",
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "foo ",
-          modulePath: "../../../utils/helpers",
-        },
-      },
+      expected: { success: false },
     },
     {
       input: 'import foo from "../../../utils/helpers.js";',
@@ -251,7 +195,7 @@ describe("importStatmentParser", () => {
         result: {
           type: "importStatement",
           importedNames: "foo ",
-          modulePath: '"../../../utils/helpers.js"',
+          modulePath: "../../../utils/helpers.js",
         },
       },
     },
@@ -264,7 +208,7 @@ describe("importStatmentParser", () => {
         result: {
           type: "importStatement",
           importedNames: "{ foo as bar } ",
-          modulePath: '"module"',
+          modulePath: "module",
         },
       },
     },

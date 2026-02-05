@@ -108,6 +108,7 @@ async function _numbers(__messages: Message[] = []): Promise<number[]> {
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
+        obj.__nodesTraversed = __nodesTraversed;
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -217,6 +218,7 @@ async function _greetings(__messages: Message[] = []): Promise<string[]> {
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
+        obj.__nodesTraversed = __nodesTraversed;
         return obj;
       } catch (e) {
         return __messages.at(-1).content;

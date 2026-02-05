@@ -3,7 +3,10 @@ import { AwaitStatement } from "./types/await.js";
 import { AgencyArray, AgencyObject } from "./types/dataStructures.js";
 import { FunctionCall, FunctionDefinition } from "./types/function.js";
 import { GraphNodeDefinition } from "./types/graphNode.js";
-import { ImportStatement } from "./types/importStatement.js";
+import {
+  ImportNodeStatement,
+  ImportStatement,
+} from "./types/importStatement.js";
 import { Literal } from "./types/literals.js";
 import { MatchBlock } from "./types/matchBlock.js";
 import { ReturnStatement } from "./types/returnStatement.js";
@@ -66,6 +69,7 @@ export type AgencyNode =
   | AgencyObject
   | AgencyArray
   | ImportStatement
+  | ImportNodeStatement
   | WhileLoop
   | IfElse
   | SpecialVar

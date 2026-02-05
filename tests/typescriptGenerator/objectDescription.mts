@@ -108,6 +108,7 @@ async function _url(__messages: Message[] = []): Promise<{ hostname: string; por
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
+        obj.__nodesTraversed = __nodesTraversed;
         return obj;
       } catch (e) {
         return __messages.at(-1).content;

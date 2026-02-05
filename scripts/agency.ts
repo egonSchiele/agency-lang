@@ -6,7 +6,10 @@ import { parseAgency } from "../lib/parser.js";
 import { AgencyProgram, generateGraph } from "@/index.js";
 import { generateAgency } from "@/backends/agencyGenerator.js";
 import { ParserResult } from "tarsec";
-import { ImportStatement } from "@/types/importStatement.js";
+import {
+  ImportNodeStatement,
+  ImportStatement,
+} from "@/types/importStatement.js";
 
 function help(): void {
   console.log(`
@@ -87,12 +90,8 @@ function readFile(inputFile: string): string {
 
 function getImports(program: AgencyProgram): string[] {
   return program.nodes
-    .filter((node): node is ImportStatement => node.type === "importStatement")
-    .filter((importNode) => {
-      const modulePath = importNode.modulePath.trim().replace(/['"]/g, "");
-      return modulePath.includes(".agency");
-    })
-    .map((node) => node.modulePath.trim().replace(/['"]/g, ""));
+    .filter((node) => node.type === "importNodeStatement")
+    .map((node) => node.agencyFile.trim());
 }
 
 const compiledFiles: Set<string> = new Set();
@@ -100,7 +99,7 @@ const dirSearched: Set<string> = new Set();
 function compile(
   inputFile: string,
   _outputFile?: string,
-  verbose: boolean = false
+  verbose: boolean = false,
 ): string | null {
   // Check if the input is a directory
   const stats = fs.statSync(inputFile);
@@ -154,11 +153,11 @@ function compile(
   }
 
   // Update the import path in the AST to reference the new .ts file
-  parsedProgram.nodes.forEach((node) => {
+  /*  parsedProgram.nodes.forEach((node) => {
     if (node.type === "importStatement") {
       node.modulePath = node.modulePath.replace(".agency", ".ts");
     }
-  });
+  }); */
 
   const generatedCode = generateGraph(parsedProgram);
   fs.writeFileSync(outputFile, generatedCode, "utf-8");
@@ -171,7 +170,7 @@ function compile(
 function run(
   inputFile: string,
   outputFile?: string,
-  verbose: boolean = false
+  verbose: boolean = false,
 ): void {
   // Compile the file
   const output = compile(inputFile, outputFile, verbose);
@@ -203,7 +202,7 @@ function run(
 
 async function format(
   contents: string,
-  verbose: boolean = false
+  verbose: boolean = false,
 ): Promise<string> {
   const parsedProgram = parse(contents, verbose);
   const generatedCode = generateAgency(parsedProgram);
@@ -223,13 +222,13 @@ async function main(): Promise<void> {
 
   // Extract verbose flag
   const verboseIndex = args.findIndex(
-    (arg) => arg === "-v" || arg === "--verbose"
+    (arg) => arg === "-v" || arg === "--verbose",
   );
   const verbose = verboseIndex !== -1;
 
   // Remove verbose flag from args
   const filteredArgs = args.filter(
-    (arg) => arg !== "-v" && arg !== "--verbose"
+    (arg) => arg !== "-v" && arg !== "--verbose",
   );
 
   const command = filteredArgs[0];
@@ -244,7 +243,7 @@ async function main(): Promise<void> {
     case "compile":
       if (filteredArgs.length < 2) {
         console.error(
-          "Error: 'compile' command requires an input file or directory"
+          "Error: 'compile' command requires an input file or directory",
         );
         console.error("Usage: agency compile <input> [output]");
         process.exit(1);

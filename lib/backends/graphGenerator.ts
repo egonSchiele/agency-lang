@@ -37,14 +37,7 @@ export class GraphGenerator extends TypeScriptGenerator {
     } else {
       const returnCode = this.processNode(node.value);
       if (node.value.type === "functionCall") {
-        const isGraphNode = this.graphNodes
-          .map((n) => n.nodeName)
-          .includes(node.value.functionName);
-        const isImportedGraphNode = this.importedNodes
-          .map((n) => n.importedNodes)
-          .flat()
-          .includes(node.value.functionName);
-        if (isGraphNode || isImportedGraphNode) {
+        if (this.isGraphNode(node.value.functionName)) {
           // we're going to return a goToNode call, so just return that directly
           return `return ${returnCode}\n`;
         }
@@ -74,6 +67,11 @@ export class GraphGenerator extends TypeScriptGenerator {
 
     const bodyCode: string[] = [];
     for (const stmt of body) {
+      if (stmt.type === "functionCall" && this.isGraphNode(stmt.functionName)) {
+        throw new Error(
+          `Call to graph node '${stmt.functionName}' inside graph node '${nodeName}' was not returned. All calls to graph nodes must be returned, eg (return ${stmt.functionName}(...)).`,
+        );
+      }
       bodyCode.push(this.processNode(stmt));
     }
     this.functionScopedVariables = [];
@@ -93,16 +91,18 @@ export class GraphGenerator extends TypeScriptGenerator {
     });
   }
 
-  protected processFunctionCall(node: FunctionCall): string {
-    const isGraphNode = this.graphNodes
-      .map((n) => n.nodeName)
-      .includes(node.functionName);
-    const isImportedGraphNode = this.importedNodes
-      .map((n) => n.importedNodes)
-      .flat()
-      .includes(node.functionName);
+  private isGraphNode(functionName: string): boolean {
+    return (
+      this.graphNodes.map((n) => n.nodeName).includes(functionName) ||
+      this.importedNodes
+        .map((n) => n.importedNodes)
+        .flat()
+        .includes(functionName)
+    );
+  }
 
-    if (isGraphNode || isImportedGraphNode) {
+  protected processFunctionCall(node: FunctionCall): string {
+    if (this.isGraphNode(node.functionName)) {
       this.currentAdjacentNodes.push(node.functionName);
       this.functionsUsed.add(node.functionName);
       const functionCallCode = this.generateNodeCallExpression(node);

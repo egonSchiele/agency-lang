@@ -90,8 +90,6 @@ function isInterrupt<T>(obj: any): obj is Interrupt<T> {
 function printJSON(obj: any) {
   console.log(JSON.stringify(obj, null, 2));
 }
-
-const __nodesTraversed = [];
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -111,7 +109,6 @@ graph.node("greet", async (state): Promise<any> => {
     
     const [name] = state.data;
     
-    __nodesTraversed.push("greet");
     
 async function _greeting(name: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `Say hello to ${name}`;
@@ -168,7 +165,7 @@ async function _greeting(name: string, __messages: Message[] = []): Promise<stri
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
-        obj.__nodesTraversed = __nodesTraversed;
+        obj.__nodesTraversed = graph.getNodesTraversed();
         return obj;
       } catch (e) {
         return __messages.at(-1).content;

@@ -90,8 +90,6 @@ function isInterrupt<T>(obj: any): obj is Interrupt<T> {
 function printJSON(obj: any) {
   console.log(JSON.stringify(obj, null, 2));
 }
-
-const __nodesTraversed = [];
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -121,7 +119,6 @@ function _builtinInput(prompt: string): Promise<string> {
 graph.node("main", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    __nodesTraversed.push("main");
     await console.log(`lets race!`)
 
 const msg = await await _builtinInput(`> `);
@@ -184,7 +181,7 @@ async function _response1(msg: string, __messages: Message[] = []): Promise<stri
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
-        obj.__nodesTraversed = __nodesTraversed;
+        obj.__nodesTraversed = graph.getNodesTraversed();
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -290,7 +287,7 @@ async function _response2(msg: string, __messages: Message[] = []): Promise<stri
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
-        obj.__nodesTraversed = __nodesTraversed;
+        obj.__nodesTraversed = graph.getNodesTraversed();
         return obj;
       } catch (e) {
         return __messages.at(-1).content;

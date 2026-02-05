@@ -90,8 +90,6 @@ function isInterrupt<T>(obj: any): obj is Interrupt<T> {
 function printJSON(obj: any) {
   console.log(JSON.stringify(obj, null, 2));
 }
-
-const __nodesTraversed = [];
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -189,7 +187,7 @@ async function _result(x: string, y: string, __messages: Message[] = []): Promis
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
-        obj.__nodesTraversed = __nodesTraversed;
+        obj.__nodesTraversed = graph.getNodesTraversed();
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -296,7 +294,7 @@ async function _message(name: string, __messages: Message[] = []): Promise<strin
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
-        obj.__nodesTraversed = __nodesTraversed;
+        obj.__nodesTraversed = graph.getNodesTraversed();
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -403,7 +401,7 @@ async function _output(label: string, count: string, __messages: Message[] = [])
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
-        obj.__nodesTraversed = __nodesTraversed;
+        obj.__nodesTraversed = graph.getNodesTraversed();
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -510,7 +508,7 @@ async function _result(items: string, __messages: Message[] = []): Promise<strin
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
-        obj.__nodesTraversed = __nodesTraversed;
+        obj.__nodesTraversed = graph.getNodesTraversed();
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -617,7 +615,7 @@ async function _result(value: string, __messages: Message[] = []): Promise<strin
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
-        obj.__nodesTraversed = __nodesTraversed;
+        obj.__nodesTraversed = graph.getNodesTraversed();
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -668,7 +666,6 @@ return result
 }graph.node("foo", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    __nodesTraversed.push("foo");
     await console.log(`This is a node with a return type`)
 
 return { ...state, data: `Node completed`}

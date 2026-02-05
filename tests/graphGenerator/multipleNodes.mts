@@ -90,8 +90,6 @@ function isInterrupt<T>(obj: any): obj is Interrupt<T> {
 function printJSON(obj: any) {
   console.log(JSON.stringify(obj, null, 2));
 }
-
-const __nodesTraversed = [];
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -108,7 +106,6 @@ const addTool = {
 graph.node("greet", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    __nodesTraversed.push("greet");
     
 
 
@@ -167,7 +164,7 @@ async function _greeting(__messages: Message[] = []): Promise<string> {
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
-        obj.__nodesTraversed = __nodesTraversed;
+        obj.__nodesTraversed = graph.getNodesTraversed();
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -229,7 +226,6 @@ graph.node("processGreeting", async (state): Promise<any> => {
     
     const [msg] = state.data;
     
-    __nodesTraversed.push("processGreeting");
     
 
 
@@ -288,7 +284,7 @@ async function _result(msg: string, __messages: Message[] = []): Promise<string>
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
-        obj.__nodesTraversed = __nodesTraversed;
+        obj.__nodesTraversed = graph.getNodesTraversed();
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -339,7 +335,6 @@ await console.log(result)
 graph.node("main", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    __nodesTraversed.push("main");
     return goToNode("greet",
   {
     messages: state.messages,

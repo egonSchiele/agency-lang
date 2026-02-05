@@ -90,8 +90,6 @@ function isInterrupt<T>(obj: any): obj is Interrupt<T> {
 function printJSON(obj: any) {
   console.log(JSON.stringify(obj, null, 2));
 }
-
-const __nodesTraversed = [];
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -108,7 +106,6 @@ const addTool = {
 graph.node("main", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    __nodesTraversed.push("main");
     const x = 42;
 
 

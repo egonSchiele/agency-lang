@@ -153,11 +153,11 @@ function compile(
   }
 
   // Update the import path in the AST to reference the new .ts file
-  /*  parsedProgram.nodes.forEach((node) => {
+  parsedProgram.nodes.forEach((node) => {
     if (node.type === "importStatement") {
       node.modulePath = node.modulePath.replace(".agency", ".ts");
     }
-  }); */
+  });
 
   const generatedCode = generateGraph(parsedProgram);
   fs.writeFileSync(outputFile, generatedCode, "utf-8");

@@ -92,9 +92,7 @@ function isInterrupt<T>(obj: any): obj is Interrupt<T> {
 
 function printJSON(obj: any) {
   console.log(JSON.stringify(obj, null, 2));
-}
-
-const __nodesTraversed = [];`;
+}`;
 
 export type TemplateType = {
   nodes: string;

@@ -193,9 +193,11 @@ export class BaseGenerator {
         this.importStatements.push(this.processImportStatement(node));
         return "";
       case "importNodeStatement":
-        return this.processImportNodeStatement(node);
+        this.importStatements.push(this.processImportNodeStatement(node));
+        return "";
       case "importToolStatement":
-        return this.processImportToolStatement(node);
+        this.importStatements.push(this.processImportToolStatement(node));
+        return "";
       case "whileLoop":
         return this.processWhileLoop(node);
       case "ifElse":

@@ -535,11 +535,11 @@ export class TypeScriptGenerator extends BaseGenerator {
   }
 
   protected processImportStatement(node: ImportStatement): string {
-    return `import ${node.importedNames} from "${node.modulePath}";`;
+    return `import ${node.importedNames} from "${node.modulePath.replace(/\.agency$/, ".ts")}";`;
   }
 
   protected processImportNodeStatement(node: ImportNodeStatement): string {
-    return ""; //processImportNodeStatement not implemented";
+    return ""; // handled in preprocess in graphgenerator
   }
 
   protected processImportToolStatement(node: ImportToolStatement): string {

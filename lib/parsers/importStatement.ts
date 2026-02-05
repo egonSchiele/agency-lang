@@ -10,6 +10,7 @@ import {
   char,
   many1Till,
   many1WithJoin,
+  map,
   newline,
   oneOf,
   optional,
@@ -24,7 +25,25 @@ import {
   trace,
 } from "tarsec";
 import { optionalSemicolon } from "./parserUtils.js";
-import { optionalSpaces } from "./utils.js";
+import { comma, optionalSpaces } from "./utils.js";
+
+// Helper parser for quoted file paths - supports both single and double quotes
+const doubleQuotedPath: Parser<{ path: string }> = seqC(
+  char('"'),
+  capture(many1Till(char('"')), "path"),
+  char('"'),
+);
+
+const singleQuotedPath: Parser<{ path: string }> = seqC(
+  char("'"),
+  capture(many1Till(char("'")), "path"),
+  char("'"),
+);
+
+const quotedPath: Parser<string> = map(
+  or(doubleQuotedPath, singleQuotedPath),
+  (res) => res.path,
+);
 
 export const importNodeStatmentParser: Parser<ImportNodeStatement> = trace(
   "importNodeStatement",
@@ -36,15 +55,13 @@ export const importNodeStatmentParser: Parser<ImportNodeStatement> = trace(
     spaces,
     char("{"),
     optionalSpaces,
-    capture(sepBy(char(","), many1WithJoin(alphanum)), "importedNodes"),
+    capture(sepBy1(comma, many1WithJoin(alphanum)), "importedNodes"),
     optionalSpaces,
     char("}"),
     spaces,
     str("from"),
     spaces,
-    oneOf(`'"`),
-    capture(many1Till(oneOf(`'"`)), "agencyFile"),
-    oneOf(`'"`),
+    capture(quotedPath, "agencyFile"),
     optionalSemicolon,
   ),
 );
@@ -58,15 +75,13 @@ export const importToolStatmentParser: Parser<ImportToolStatement> = trace(
     spaces,
     char("{"),
     optionalSpaces,
-    capture(sepBy(char(","), many1WithJoin(alphanum)), "importedTools"),
+    capture(sepBy1(comma, many1WithJoin(alphanum)), "importedTools"),
     optionalSpaces,
     char("}"),
     spaces,
     str("from"),
     spaces,
-    oneOf(`'"`),
-    capture(many1Till(oneOf(`'"`)), "agencyFile"),
-    oneOf(`'"`),
+    capture(quotedPath, "agencyFile"),
     optionalSemicolon,
   ),
 );

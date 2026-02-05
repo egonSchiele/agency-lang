@@ -1,0 +1,7 @@
+import foo from "./foo.ts"
+import {foo} from "./foo.ts"
+import * as foo from "./foo.ts"
+import foo from "./foo.agency"
+import {foo} from "./foo.agency"
+import node { foo } from "./foo.agency"
+import tool { foo } from "./foo.agency"

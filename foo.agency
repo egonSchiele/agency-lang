@@ -11,7 +11,7 @@ node bar(msg) {
 
 node main() {
   msg = input("> ")
-  return bar(msg)
+  //return bar(msg)
   return categorize(msg)
 
   // +readFileTool

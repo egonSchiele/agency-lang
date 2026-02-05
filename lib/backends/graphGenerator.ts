@@ -80,7 +80,7 @@ export class GraphGenerator extends TypeScriptGenerator {
     this.adjacentNodes[nodeName] = [...this.currentAdjacentNodes];
     this.isInsideGraphNode = false;
 
-    const paramNames = "{" + parameters.map((p) => p.name).join(", ") + "}";
+    const paramNames = "[" + parameters.map((p) => p.name).join(", ") + "]";
 
     return renderGraphNode.default({
       name: nodeName,
@@ -130,14 +130,15 @@ export class GraphGenerator extends TypeScriptGenerator {
         //        return this.generateLiteral(arg);
       }
     });
-    const argNames =
+    /* const argNames =
       this.graphNodes
         .find((n) => n.nodeName === node.functionName)
         ?.parameters.map((p) => p.name) || [];
     const pairedArgs = argNames.map((name, index) => {
       return `${name}: ${parts[index]}`;
     });
-    const argsString = "{" + pairedArgs.join(", ") + "}";
+    const argsString = "{" + pairedArgs.join(", ") + "}"; */
+    const argsString = "[" + parts.join(", ") + "]";
     return goToNode.default({
       nodeName: functionName,
       hasData: parts.length > 0,
@@ -214,7 +215,7 @@ export class GraphGenerator extends TypeScriptGenerator {
       lines.push(
         renderRunNodeFunction.default({
           nodeName: node.nodeName,
-          argsStr,
+          // argsStr,
           returnType: node.returnType
             ? variableTypeToString(node.returnType, this.typeAliases)
             : "any",

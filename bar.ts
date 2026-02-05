@@ -6,24 +6,20 @@ import fs from "fs";
 import { PieMachine, goToNode } from "piemachine";
 import { StatelogClient } from "statelog-client";
 import { nanoid } from "nanoid";
-import {
-  assistantMessage,
-  getClient,
-  userMessage,
-  toolMessage,
-} from "smoltalk";
+import { assistantMessage, getClient, userMessage, toolMessage } from "smoltalk";
 
 const statelogHost = "https://statelog.adit.io";
 const traceId = nanoid();
 const statelogConfig = {
-  host: statelogHost,
-  traceId: traceId,
-  apiKey: process.env.STATELOG_API_KEY || "",
-  projectId: "agency-lang",
-  debugMode: false,
-};
+    host: statelogHost,
+    traceId: traceId,
+    apiKey: process.env.STATELOG_API_KEY || "",
+    projectId: "agency-lang",
+    debugMode: false,
+  };
 const statelogClient = new StatelogClient(statelogConfig);
 const __model: ModelName = "gpt-4o-mini";
+
 
 const getClientWithConfig = (config = {}) => {
   const defaultConfig = {
@@ -41,7 +37,7 @@ let __client = getClientWithConfig();
 type State = {
   messages: string[];
   data: any;
-};
+}
 
 // enable debug logging
 const graphConfig = {
@@ -96,7 +92,7 @@ function printJSON(obj: any) {
 }
 
 const __nodesTraversed = [];
-function add({ a, b }: { a: number; b: number }): number {
+function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
 
@@ -110,128 +106,133 @@ const addTool = {
 };
 
 graph.node("categorize", async (state): Promise<any> => {
-  const __messages: Message[] = [];
+    const __messages: Message[] = [];
+    
+    const [msg] = state.data;
+    
+    __nodesTraversed.push("categorize");
+    
 
-  const { msg } = state.data;
 
-  __nodesTraversed.push("categorize");
+async function _category(msg: string, __messages: Message[] = []): Promise<"happy" | "sad"> {
+  const __prompt = `determine if the user is happy or sad based on this message: ${msg}`;
+  const startTime = performance.now();
+  __messages.push(userMessage(__prompt));
+  const __tools = undefined;
 
-  async function _category(
-    msg: string,
-    __messages: Message[] = [],
-  ): Promise<"happy" | "sad"> {
-    const __prompt = `determine if the user is happy or sad based on this message: ${msg}`;
-    const startTime = performance.now();
-    __messages.push(userMessage(__prompt));
-    const __tools = undefined;
+  
+  // Need to make sure this is always an object
+  const __responseFormat = z.object({
+     response: z.union([z.literal("happy"), z.literal("sad")])
+  });
+  
+  
 
-    // Need to make sure this is always an object
-    const __responseFormat = z.object({
-      response: z.union([z.literal("happy"), z.literal("sad")]),
-    });
+  const __client = getClientWithConfig({});
 
-    const __client = getClientWithConfig({});
+  let __completion = await __client.text({
+    messages: __messages,
+    tools: __tools,
+    responseFormat: __responseFormat,
+  });
 
+  const endTime = performance.now();
+  statelogClient.promptCompletion({
+    messages: __messages,
+    completion: __completion,
+    model: __client.getModel(),
+    timeTaken: endTime - startTime,
+  });
+
+  if (!__completion.success) {
+    throw new Error(
+      `Error getting response from ${__model}: ${__completion.error}`
+    );
+  }
+
+  let responseMessage = __completion.value;
+
+  // Handle function calls
+  while (responseMessage.toolCalls.length > 0) {
+    // Add assistant's response with tool calls to message history
+    __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+    let toolCallStartTime, toolCallEndTime;
+    let haltExecution = false;
+
+    // Process each tool call
+    for (const toolCall of responseMessage.toolCalls) {
+      
+    }
+
+    if (haltExecution) {
+      statelogClient.debug(`Tool call interrupted execution.`, {
+        messages: __messages,
+        model: __client.getModel(),
+      });
+      try {
+        const obj = JSON.parse(__messages.at(-1).content);
+        obj.__messages = __messages;
+        obj.__nodesTraversed = __nodesTraversed;
+        return obj;
+      } catch (e) {
+        return __messages.at(-1).content;
+      }
+      //return __messages;
+    }
+  
+    const nextStartTime = performance.now();
     let __completion = await __client.text({
       messages: __messages,
       tools: __tools,
       responseFormat: __responseFormat,
     });
 
-    const endTime = performance.now();
+    const nextEndTime = performance.now();
+
     statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
-      timeTaken: endTime - startTime,
+      timeTaken: nextEndTime - nextStartTime,
     });
 
     if (!__completion.success) {
       throw new Error(
-        `Error getting response from ${__model}: ${__completion.error}`,
+        `Error getting response from ${__model}: ${__completion.error}`
       );
     }
-
-    let responseMessage = __completion.value;
-
-    // Handle function calls
-    while (responseMessage.toolCalls.length > 0) {
-      // Add assistant's response with tool calls to message history
-      __messages.push(
-        assistantMessage(responseMessage.output, {
-          toolCalls: responseMessage.toolCalls,
-        }),
-      );
-      let toolCallStartTime, toolCallEndTime;
-      let haltExecution = false;
-
-      // Process each tool call
-      for (const toolCall of responseMessage.toolCalls) {
-      }
-
-      if (haltExecution) {
-        statelogClient.debug(`Tool call interrupted execution.`, {
-          messages: __messages,
-          model: __client.getModel(),
-        });
-        try {
-          const obj = JSON.parse(__messages.at(-1).content);
-          obj.__messages = __messages;
-          obj.__nodesTraversed = __nodesTraversed;
-          return obj;
-        } catch (e) {
-          return __messages.at(-1).content;
-        }
-        //return __messages;
-      }
-
-      const nextStartTime = performance.now();
-      let __completion = await __client.text({
-        messages: __messages,
-        tools: __tools,
-        responseFormat: __responseFormat,
-      });
-
-      const nextEndTime = performance.now();
-
-      statelogClient.promptCompletion({
-        messages: __messages,
-        completion: __completion,
-        model: __client.getModel(),
-        timeTaken: nextEndTime - nextStartTime,
-      });
-
-      if (!__completion.success) {
-        throw new Error(
-          `Error getting response from ${__model}: ${__completion.error}`,
-        );
-      }
-      responseMessage = __completion.value;
-    }
-
-    // Add final assistant response to history
-    // not passing tool calls back this time
-    __messages.push(assistantMessage(responseMessage.output));
-
-    try {
-      const result = JSON.parse(responseMessage.output || "");
-      return result.response;
-    } catch (e) {
-      return responseMessage.output;
-      // console.error("Error parsing response for variable 'category':", e);
-      // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
-      // throw e;
-    }
+    responseMessage = __completion.value;
   }
 
-  const category = await _category(msg, __messages);
+  // Add final assistant response to history
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
+  
+  try {
+  const result = JSON.parse(responseMessage.output || "");
+  return result.response;
+  } catch (e) {
+    return responseMessage.output;
+    // console.error("Error parsing response for variable 'category':", e);
+    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
+    // throw e;
+  }
+  
 
-  return { ...state, data: category };
+  
+}
+
+const category = await _category(msg, __messages);
+
+
+await console.log(`Categorized message: ${msg} as ${category}`)
+
+return { ...state, data: category}
+
+
 });
 
-export async function categorize(msg): Promise<any> {
-  console.log("hi from categorize");
-  const data = { msg };
+export async function categorize(data): Promise<any> {
   const result = await graph.run("categorize", { messages: [], data });
   return result.data;
 }

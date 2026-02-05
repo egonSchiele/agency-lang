@@ -133,7 +133,7 @@ async function readFileTool({path}) : Promise<string> {
 }graph.node("bar", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    const {msg} = state.data;
+    const [msg] = state.data;
     
     __nodesTraversed.push("bar");
     await console.log(`This is the bar node.`)
@@ -146,22 +146,14 @@ graph.node("main", async (state): Promise<any> => {
     const msg = await await _builtinInput(`> `);
 
 
-return goToNode("bar",
-  {
-    messages: state.messages,
-    
-    data: {msg: msg}
-    
-    
-  }
-);
+// return bar(msg)
 
 
 return goToNode("categorize",
   {
     messages: state.messages,
     
-    data: {}
+    data: [msg]
     
     
   }
@@ -180,19 +172,17 @@ return goToNode("categorize",
 
 });
 
-graph.conditionalEdge("main", ["bar","categorize"]);
+graph.conditionalEdge("main", ["categorize"]);
 
 graph.merge(__graph___bar);
 const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
-export async function bar(msg): Promise<any> {
-  const data = { msg };
+export async function bar(data): Promise<any> {
   const result = await graph.run("bar", { messages: [], data });
   return result.data;
 }
 
-export async function main(): Promise<any> {
-  const data = {  };
+export async function main(data): Promise<any> {
   const result = await graph.run("main", { messages: [], data });
   return result.data;
 }

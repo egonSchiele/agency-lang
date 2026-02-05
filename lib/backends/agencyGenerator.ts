@@ -25,6 +25,7 @@ import { GraphNodeDefinition } from "../types/graphNode.js";
 import {
   ImportNodeStatement,
   ImportStatement,
+  ImportToolStatement,
 } from "../types/importStatement.js";
 import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
@@ -430,6 +431,10 @@ export class AgencyGenerator extends BaseGenerator {
 
   protected processImportNodeStatement(node: ImportNodeStatement): string {
     return `import node { ${node.importedNodes.join(", ")} } from "${node.agencyFile}"`;
+  }
+
+  protected processImportToolStatement(node: ImportToolStatement): string {
+    return `import tool { ${node.importedTools.join(", ")} } from "${node.agencyFile}"`;
   }
 
   protected processGraphNode(node: GraphNodeDefinition): string {

@@ -6,7 +6,7 @@ all:
 	pnpm run templates && pnpm run build
 
 test:
-	DEBUG=1 node dist/scripts/generateGraph.js foo.agency
+	pnpm run test
 	
 graphtest:
 	node dist/scripts/generateGraph.js foo.agency > foo.mts

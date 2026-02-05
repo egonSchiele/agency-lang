@@ -1,5 +1,16 @@
-node categorize(msg) {
-  category :: "happy" | "sad"
-  category = `determine if the user is happy or sad based on this message: ${msg}`
-  return category
+def greet(name: string): string {
+  return "Kya chal raha jai, ${name}!"
 }
+
+node sayHi() {
+  msg = input("> ")
+  +greet
+  response = llm("Greet the user with their name: ${msg} using the greet function.")
+  print(response)
+}
+
+// node categorize(msg) {
+//   category :: "happy" | "sad"
+//   category = llm("determine if the user is happy or sad based on this message: ${msg}")
+//   return category
+// }

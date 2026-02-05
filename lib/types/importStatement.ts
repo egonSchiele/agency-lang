@@ -9,3 +9,9 @@ export type ImportNodeStatement = {
   importedNodes: string[];
   agencyFile: string;
 };
+
+export type ImportToolStatement = {
+  type: "importToolStatement";
+  importedTools: string[];
+  agencyFile: string;
+};

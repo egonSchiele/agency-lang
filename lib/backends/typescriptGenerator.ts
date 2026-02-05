@@ -36,6 +36,7 @@ import {
 import {
   ImportNodeStatement,
   ImportStatement,
+  ImportToolStatement,
 } from "../types/importStatement.js";
 import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
@@ -504,7 +505,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     const argsStr = parts.join(", ");
 
     const _tools = this.toolsUsed
-      .map((toolName) => `${toolName}Tool`)
+      .map((toolName) => `__${toolName}Tool`)
       .join(", ");
 
     const tools = _tools.length > 0 ? `[${_tools}]` : "undefined";
@@ -539,6 +540,13 @@ export class TypeScriptGenerator extends BaseGenerator {
 
   protected processImportNodeStatement(node: ImportNodeStatement): string {
     return ""; //processImportNodeStatement not implemented";
+  }
+
+  protected processImportToolStatement(node: ImportToolStatement): string {
+    const importNames = node.importedTools
+      .map((toolName) => [toolName, `__${toolName}Tool`])
+      .flat();
+    return `import { ${importNames.join(", ")} } from "${node.agencyFile.replace(/\.agency$/, ".ts")}";`;
   }
 
   protected processWhileLoop(node: WhileLoop): string {

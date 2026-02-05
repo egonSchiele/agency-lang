@@ -163,14 +163,34 @@ while (condition) {
 ```
 
 ### Imports
-When an agency file gets transpiled to TypeScript, all of the nodes and functions are available for import. You can import them like this:
+When an agency file gets transpiled to TypeScript, all of the nodes and functions are available for import. You can import them into a typescript file like this:
 
-```agency
+```ts
 // This imports the ingredients node
 import { ingredients } from "./ingredients.agency"
 ```
 
-and then simply call them as regular functions. If an agency file is going to be imported, don't define a `main` node because it will automatically be executed on import.
+and then simply call them as regular functions.
+
+If you're importing into another agency file, you should use `import node` and `import tool` statements.
+
+For example, to import nodes from another agency file:
+
+```agency
+import node { ingredients, steps } from "./recipe.agency"
+```
+
+If you use `import` instead of `import node`, the node won't get merged into the graph, which may be desirable if you want that node to be in a separate graph.
+
+To import functions (tools) from another agency file:
+
+```agency
+import tool { fetchRecipe } from "./recipe.agency"
+```
+
+If you use `import` instead of `import tool`, you'll be able to use the imported function as a function but not as a tool.
+
+If an agency file is going to be imported, don't define a `main` node because it will automatically be executed on import.
 
 ### Built-in functions
 Agency has some built-in functions for common tasks:
@@ -230,6 +250,8 @@ node handleTodo(userMessage: string) {
 ### Multiple agency files
 
 Each agency file represents one graph. If you split up your code into multiple files, you're creating multiple graphs. This may be a good way to organize your code.
+
+Note, when you create multiple agency files, the nodes in all the files will get merged into a single graph, so the node names must be unique across all files.
 
 ### Unsupported features
 - else statements aren't supported yet -- use match statements with a default case instead

@@ -1,12 +1,15 @@
-claudeFile = read("CLAUDE.md")
+import { sayHi } from "./bar.agency"
+import tool { greet } from "./bar.agency"
 
-contents = """
-Contents of claude.md:
-${claudeFile}
-"""
 
 node main() {
-  print(contents)
+  return sayHi()
+  msg = input("> ")
+  +greet
+  response = llm("Greet the user with their name: ${msg} using the greet function.")
+  print(response)
+
+  //print(contents)
   //response: number = llm("What is 2 + 2?")
   //print(response)
 }

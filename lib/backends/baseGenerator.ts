@@ -26,6 +26,7 @@ import { GraphNodeDefinition } from "../types/graphNode.js";
 import {
   ImportNodeStatement,
   ImportStatement,
+  ImportToolStatement,
 } from "../types/importStatement.js";
 import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
@@ -53,6 +54,7 @@ export class BaseGenerator {
 
   protected importStatements: string[] = [];
   protected importedNodes: ImportNodeStatement[] = [];
+  protected importedTools: ImportToolStatement[] = [];
 
   // collect function signatures so we can implement named args
   // TODO also save return types, check if used as a tool, return type cannot be null/void/undefined
@@ -82,10 +84,12 @@ export class BaseGenerator {
       }
     }
 
-    // Pass 4: Collect all node imports
+    // Pass 4: Collect all node and tool imports
     for (const node of program.nodes) {
       if (node.type === "importNodeStatement") {
         this.importedNodes.push(node);
+      } else if (node.type === "importToolStatement") {
+        this.importedTools.push(node);
       }
     }
 
@@ -190,6 +194,8 @@ export class BaseGenerator {
         return "";
       case "importNodeStatement":
         return this.processImportNodeStatement(node);
+      case "importToolStatement":
+        return this.processImportToolStatement(node);
       case "whileLoop":
         return this.processWhileLoop(node);
       case "ifElse":
@@ -241,6 +247,10 @@ export class BaseGenerator {
 
   protected processImportNodeStatement(node: ImportNodeStatement): string {
     return "processImportNodeStatement not implemented";
+  }
+
+  protected processImportToolStatement(node: ImportToolStatement): string {
+    return "processImportToolStatement not implemented";
   }
 
   protected processTool(node: FunctionDefinition): string {

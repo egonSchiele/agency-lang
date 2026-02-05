@@ -1,6 +1,7 @@
 import {
   ImportNodeStatement,
   ImportStatement,
+  ImportToolStatement,
 } from "../types/importStatement.js";
 import {
   alphanum,
@@ -36,6 +37,28 @@ export const importNodeStatmentParser: Parser<ImportNodeStatement> = trace(
     char("{"),
     optionalSpaces,
     capture(sepBy(char(","), many1WithJoin(alphanum)), "importedNodes"),
+    optionalSpaces,
+    char("}"),
+    spaces,
+    str("from"),
+    spaces,
+    oneOf(`'"`),
+    capture(many1Till(oneOf(`'"`)), "agencyFile"),
+    oneOf(`'"`),
+    optionalSemicolon,
+  ),
+);
+export const importToolStatmentParser: Parser<ImportToolStatement> = trace(
+  "importToolStatement",
+  seqC(
+    set("type", "importToolStatement"),
+    str("import"),
+    spaces,
+    or(str("tools"), str("tool")),
+    spaces,
+    char("{"),
+    optionalSpaces,
+    capture(sepBy(char(","), many1WithJoin(alphanum)), "importedTools"),
     optionalSpaces,
     char("}"),
     spaces,

@@ -6,6 +6,7 @@ import { GraphNodeDefinition } from "./types/graphNode.js";
 import {
   ImportNodeStatement,
   ImportStatement,
+  ImportToolStatement,
 } from "./types/importStatement.js";
 import { Literal } from "./types/literals.js";
 import { MatchBlock } from "./types/matchBlock.js";
@@ -70,6 +71,7 @@ export type AgencyNode =
   | AgencyArray
   | ImportStatement
   | ImportNodeStatement
+  | ImportToolStatement
   | WhileLoop
   | IfElse
   | SpecialVar

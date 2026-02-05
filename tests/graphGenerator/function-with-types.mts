@@ -105,32 +105,33 @@ const addTool = {
   }),
 };
 
-const addTool = {
+export const __addTool = {
   name: "add",
   description: `Adds two numbers together`,
   schema: z.object({"x": z.number(), "y": z.number(), })
 };
-const greetTool = {
+export const __greetTool = {
   name: "greet",
   description: `Greets a person by name`,
   schema: z.object({"name": z.string(), })
 };
-const mixedTool = {
+export const __mixedTool = {
   name: "mixed",
   description: `Mixed typed and untyped parameters`,
   schema: z.object({"count": z.number(), "label": z.string(), })
 };
-const processArrayTool = {
+export const __processArrayTool = {
   name: "processArray",
   description: `Processes an array of numbers`,
   schema: z.object({"items": z.array(z.number()), })
 };
-const flexibleTool = {
+export const __flexibleTool = {
   name: "flexible",
   description: `Handles either a string or number`,
   schema: z.object({"value": z.union([z.string(), z.number()]), })
 };
-async function add({x, y}) : Promise<number> {
+
+export async function add({x, y}) : Promise<number> {
     const __messages: Message[] = [];
     
 async function _result(x: string, y: string, __messages: Message[] = []): Promise<string> {
@@ -236,7 +237,8 @@ const result = await _result(x, y, __messages);
 return result
 
 
-}async function greet({name}) : Promise<any> {
+}
+export async function greet({name}) : Promise<any> {
     const __messages: Message[] = [];
     
 async function _message(name: string, __messages: Message[] = []): Promise<string> {
@@ -342,7 +344,8 @@ const message = await _message(name, __messages);
 return message
 
 
-}async function mixed({count, label}) : Promise<any> {
+}
+export async function mixed({count, label}) : Promise<any> {
     const __messages: Message[] = [];
     
 async function _output(label: string, count: string, __messages: Message[] = []): Promise<string> {
@@ -448,7 +451,8 @@ const output = await _output(label, count, __messages);
 return output
 
 
-}async function processArray({items}) : Promise<any> {
+}
+export async function processArray({items}) : Promise<any> {
     const __messages: Message[] = [];
     
 async function _result(items: string, __messages: Message[] = []): Promise<string> {
@@ -554,7 +558,8 @@ const result = await _result(items, __messages);
 return result
 
 
-}async function flexible({value}) : Promise<any> {
+}
+export async function flexible({value}) : Promise<any> {
     const __messages: Message[] = [];
     
 async function _result(value: string, __messages: Message[] = []): Promise<string> {

@@ -49,7 +49,7 @@ const addTool = {
       },
     },
   };
-const greetTool = {
+export const __greetTool = {
   name: "greet",
   description: `No description provided.`,
   schema: z.object({})
@@ -62,7 +62,8 @@ const x = 42;
 //  on consecutive lines
 const y = `hello`;
 //  Comment before function definition
-async function greet({}) : Promise<any> {
+
+export async function greet({}) : Promise<any> {
     const __messages: Message[] = [];
     //  Comment inside function
 

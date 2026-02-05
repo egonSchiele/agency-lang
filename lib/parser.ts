@@ -32,6 +32,7 @@ import { functionCallParser } from "./parsers/functionCall.js";
 import {
   importNodeStatmentParser,
   importStatmentParser,
+  importToolStatmentParser,
 } from "./parsers/importStatement.js";
 import { matchBlockParser } from "./parsers/matchBlock.js";
 import { returnStatementParser } from "./parsers/returnStatement.js";
@@ -48,6 +49,7 @@ export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
       or(
         usesToolParser,
         importNodeStatmentParser,
+        importToolStatmentParser,
         importStatmentParser,
         graphNodeParser,
         typeAliasParser,

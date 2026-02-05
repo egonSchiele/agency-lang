@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `const {{{name:string}}}Tool = {
+export const template = `export const __{{{name:string}}}Tool = {
   name: "{{{name:string}}}",
   description: \`{{{description:string}}}\`,
   schema: z.object({{{schema:string}}})

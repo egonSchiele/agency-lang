@@ -1,5 +1,6 @@
 // @ts-nocheck
 
+import { sayHi }  from "./bar.agency";
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
@@ -51,9 +52,8 @@ const graphConfig = {
 // Define the names of the nodes in the graph
 // Useful for type safety
 const __nodes = ["main"] as const;
-type Node = (typeof __nodes)[number];
 
-const graph = new PieMachine<State, Node>(__nodes, graphConfig);
+const graph = new PieMachine<State>(__nodes, graphConfig);
 
 // builtins
 
@@ -66,7 +66,33 @@ const gt = (a: any, b: any): boolean => a > b;
 const gte = (a: any, b: any): boolean => a >= b;
 const and = (a: any, b: any): boolean => a && b;
 const or = (a: any, b: any): boolean => a || b;
+const head = <T>(arr: T[]): T | undefined => arr[0];
+const tail = <T>(arr: T[]): T[] => arr.slice(1);
+const empty = <T>(arr: T[]): boolean => arr.length === 0;
 
+// interrupts
+
+type Interrupt<T> = {
+  type: "interrupt";
+  data: T;
+};
+
+function interrupt<T>(data: T): Interrupt<T> {
+  return {
+    type: "interrupt",
+    data,
+  };
+}
+
+function isInterrupt<T>(obj: any): obj is Interrupt<T> {
+  return obj && obj.type === "interrupt";
+}
+
+function printJSON(obj: any) {
+  console.log(JSON.stringify(obj, null, 2));
+}
+
+const __nodesTraversed = [];
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -80,20 +106,167 @@ const addTool = {
   }),
 };
 
-function _builtinRead(filename: string): string {
-  const data = fs.readFileSync(filename);
-  const contents = data.toString('utf8');
-  return contents;
+function _builtinInput(prompt: string): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  return new Promise((resolve) => {
+    rl.question(prompt, (answer: string) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
 }
-const claudeFile = await await _builtinRead(`CLAUDE.md`);
-const contents = `
-Contents of claude.md:
-${claudeFile}
-`;
-graph.node("main", async (state): Promise<any> => {
+import { greet, __greetTool } from "./bar.ts";graph.node("main", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    await console.log(contents)
+    __nodesTraversed.push("main");
+    return { ...state, data: sayHi()}
+
+
+const msg = await await _builtinInput(`> `);
+
+
+
+
+
+async function _response(msg: string, __messages: Message[] = []): Promise<string> {
+  const __prompt = `Greet the user with their name: ${msg} using the greet function.`;
+  const startTime = performance.now();
+  __messages.push(userMessage(__prompt));
+  const __tools = [__greetTool];
+
+  
+  
+  const __responseFormat = undefined;
+  
+
+  const __client = getClientWithConfig({});
+
+  let __completion = await __client.text({
+    messages: __messages,
+    tools: __tools,
+    responseFormat: __responseFormat,
+  });
+
+  const endTime = performance.now();
+  statelogClient.promptCompletion({
+    messages: __messages,
+    completion: __completion,
+    model: __client.getModel(),
+    timeTaken: endTime - startTime,
+  });
+
+  if (!__completion.success) {
+    throw new Error(
+      `Error getting response from ${__model}: ${__completion.error}`
+    );
+  }
+
+  let responseMessage = __completion.value;
+
+  // Handle function calls
+  while (responseMessage.toolCalls.length > 0) {
+    // Add assistant's response with tool calls to message history
+    __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+    let toolCallStartTime, toolCallEndTime;
+    let haltExecution = false;
+
+    // Process each tool call
+    for (const toolCall of responseMessage.toolCalls) {
+      if (
+  toolCall.name === "greet"
+) {
+  const args = toolCall.arguments;
+
+  toolCallStartTime = performance.now();
+  const result = await greet(args);
+  toolCallEndTime = performance.now();
+
+  // console.log("Tool 'greet' called with arguments:", args);
+  // console.log("Tool 'greet' returned result:", result);
+
+statelogClient.toolCall({
+    toolName: "greet",
+    args,
+    output: result,
+    model: __client.getModel(),
+    timeTaken: toolCallEndTime - toolCallStartTime,
+  });
+
+  // Add function result to messages
+  __messages.push(toolMessage(result, {
+            tool_call_id: toolCall.id,
+            name: toolCall.name,
+      }));
+
+  if (isInterrupt(result)) {
+    haltExecution = true;
+    break;
+  }
+}
+    }
+
+    if (haltExecution) {
+      statelogClient.debug(`Tool call interrupted execution.`, {
+        messages: __messages,
+        model: __client.getModel(),
+      });
+      try {
+        const obj = JSON.parse(__messages.at(-1).content);
+        obj.__messages = __messages;
+        obj.__nodesTraversed = __nodesTraversed;
+        return obj;
+      } catch (e) {
+        return __messages.at(-1).content;
+      }
+      //return __messages;
+    }
+  
+    const nextStartTime = performance.now();
+    let __completion = await __client.text({
+      messages: __messages,
+      tools: __tools,
+      responseFormat: __responseFormat,
+    });
+
+    const nextEndTime = performance.now();
+
+    statelogClient.promptCompletion({
+      messages: __messages,
+      completion: __completion,
+      model: __client.getModel(),
+      timeTaken: nextEndTime - nextStartTime,
+    });
+
+    if (!__completion.success) {
+      throw new Error(
+        `Error getting response from ${__model}: ${__completion.error}`
+      );
+    }
+    responseMessage = __completion.value;
+  }
+
+  // Add final assistant response to history
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
+  
+
+  
+  return responseMessage.output;
+  
+}
+
+const response = await _response(msg, __messages);
+
+
+await console.log(response)
+
+
+// print(contents)
+
 
 // response: number = llm("What is 2 + 2?")
 
@@ -105,8 +278,7 @@ graph.node("main", async (state): Promise<any> => {
 
 const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
-export async function main(): Promise<any> {
-  const data = {  };
+export async function main(data): Promise<any> {
   const result = await graph.run("main", { messages: [], data });
   return result.data;
 }

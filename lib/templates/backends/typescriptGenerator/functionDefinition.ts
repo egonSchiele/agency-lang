@@ -3,7 +3,8 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `async function {{{functionName:string}}}({{{args}}}) : Promise<{{{returnType}}}> {
+export const template = `
+export async function {{{functionName:string}}}({{{args}}}) : Promise<{{{returnType}}}> {
     const __messages: Message[] = [];
     {{{functionBody}}}
 }`;

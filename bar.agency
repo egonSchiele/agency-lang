@@ -1,5 +1,6 @@
 node categorize(msg) {
   category :: "happy" | "sad"
-  category = `determine if the user is happy or sad based on this message: ${msg}`
+  category = llm("determine if the user is happy or sad based on this message: ${msg}")
+  print("Categorized message: ${msg} as ${category}")
   return category
 }

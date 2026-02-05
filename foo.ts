@@ -1,5 +1,7 @@
 // @ts-nocheck
 
+import __graph___bar from "./bar.ts";
+import { readFile }  from "./basicFunctions.ts";
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
@@ -50,10 +52,9 @@ const graphConfig = {
 
 // Define the names of the nodes in the graph
 // Useful for type safety
-const __nodes = ["main"] as const;
-type Node = (typeof __nodes)[number];
+const __nodes = ["bar","main"] as const;
 
-const graph = new PieMachine<State, Node>(__nodes, graphConfig);
+const graph = new PieMachine<State>(__nodes, graphConfig);
 
 // builtins
 
@@ -66,7 +67,33 @@ const gt = (a: any, b: any): boolean => a > b;
 const gte = (a: any, b: any): boolean => a >= b;
 const and = (a: any, b: any): boolean => a && b;
 const or = (a: any, b: any): boolean => a || b;
+const head = <T>(arr: T[]): T | undefined => arr[0];
+const tail = <T>(arr: T[]): T[] => arr.slice(1);
+const empty = <T>(arr: T[]): boolean => arr.length === 0;
 
+// interrupts
+
+type Interrupt<T> = {
+  type: "interrupt";
+  data: T;
+};
+
+function interrupt<T>(data: T): Interrupt<T> {
+  return {
+    type: "interrupt",
+    data,
+  };
+}
+
+function isInterrupt<T>(obj: any): obj is Interrupt<T> {
+  return obj && obj.type === "interrupt";
+}
+
+function printJSON(obj: any) {
+  console.log(JSON.stringify(obj, null, 2));
+}
+
+const __nodesTraversed = [];
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -80,31 +107,90 @@ const addTool = {
   }),
 };
 
-function _builtinRead(filename: string): string {
-  const data = fs.readFileSync(filename);
-  const contents = data.toString('utf8');
-  return contents;
+function _builtinInput(prompt: string): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  return new Promise((resolve) => {
+    rl.question(prompt, (answer: string) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
 }
-const claudeFile = await await _builtinRead(`CLAUDE.md`);
-const contents = `
-Contents of claude.md:
-${claudeFile}
-`;
+const readFileToolTool = {
+  name: "readFileTool",
+  description: `No description provided.`,
+  schema: z.object({"path": z.string(), })
+};
+async function readFileTool({path}) : Promise<string> {
+    const __messages: Message[] = [];
+    return await readFile(path)
+
+
+}graph.node("bar", async (state): Promise<any> => {
+    const __messages: Message[] = [];
+    
+    const {msg} = state.data;
+    
+    __nodesTraversed.push("bar");
+    await console.log(`This is the bar node.`)
+
+});
 graph.node("main", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    await console.log(contents)
+    __nodesTraversed.push("main");
+    const msg = await await _builtinInput(`> `);
 
-// response: number = llm("What is 2 + 2?")
+
+return goToNode("bar",
+  {
+    messages: state.messages,
+    
+    data: {msg: msg}
+    
+    
+  }
+);
 
 
-// print(response)
+return goToNode("categorize",
+  {
+    messages: state.messages,
+    
+    data: {}
+    
+    
+  }
+);
+
+
+
+//  +readFileTool
+
+
+//  response = llm("Help me read the specified file: ${msg}")
+
+
+//  printJSON(response)
 
 
 });
 
+graph.conditionalEdge("main", ["bar","categorize"]);
+
+graph.merge(__graph___bar);
 const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
+export async function bar(msg): Promise<any> {
+  const data = { msg };
+  const result = await graph.run("bar", { messages: [], data });
+  return result.data;
+}
+
 export async function main(): Promise<any> {
   const data = {  };
   const result = await graph.run("main", { messages: [], data });

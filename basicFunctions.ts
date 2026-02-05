@@ -6,6 +6,18 @@ import { exec } from "child_process";
 import { highlight } from "cli-highlight";
 const asyncExec = util.promisify(exec);
 
+type Interrupt<T> = {
+  type: "interrupt";
+  data: T;
+};
+
+function interrupt<T>(data: T): Interrupt<T> {
+  return {
+    type: "interrupt",
+    data,
+  };
+}
+
 // return both stdout and stderr outputs
 async function runCommand(
   command: string,
@@ -76,8 +88,15 @@ export const writeFile = async (
   fs.writeFileSync(path, content, "utf-8");
 };
 
-export const readFile = async (path: string): Promise<string> => {
+export const readFile = async (
+  path: string,
+): Promise<string | Interrupt<any>> => {
   printLine(`About to read file: ${path}`);
+  return interrupt({
+    message: `About to read file: ${path}`,
+    type: "readFile",
+    path,
+  });
   const approve = await confirm(`Approve read from file: ${path}?`);
   if (!approve) {
     printLine("File read cancelled.");

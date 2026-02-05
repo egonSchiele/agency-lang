@@ -29,7 +29,10 @@ import {
   whileLoopParser,
 } from "./parsers/function.js";
 import { functionCallParser } from "./parsers/functionCall.js";
-import { importStatmentParser } from "./parsers/importStatement.js";
+import {
+  importNodeStatmentParser,
+  importStatmentParser,
+} from "./parsers/importStatement.js";
 import { matchBlockParser } from "./parsers/matchBlock.js";
 import { returnStatementParser } from "./parsers/returnStatement.js";
 import { usesToolParser } from "./parsers/tools.js";
@@ -44,6 +47,7 @@ export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
       "agencyParser",
       or(
         usesToolParser,
+        importNodeStatmentParser,
         importStatmentParser,
         graphNodeParser,
         typeAliasParser,

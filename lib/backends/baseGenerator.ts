@@ -23,7 +23,10 @@ import {
 import { AgencyArray, AgencyObject } from "../types/dataStructures.js";
 import { FunctionCall, FunctionDefinition } from "../types/function.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
-import { ImportStatement } from "../types/importStatement.js";
+import {
+  ImportNodeStatement,
+  ImportStatement,
+} from "../types/importStatement.js";
 import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
@@ -49,6 +52,7 @@ export class BaseGenerator {
   protected functionsUsed: Set<string> = new Set();
 
   protected importStatements: string[] = [];
+  protected importedNodes: ImportNodeStatement[] = [];
 
   // collect function signatures so we can implement named args
   // TODO also save return types, check if used as a tool, return type cannot be null/void/undefined
@@ -78,7 +82,14 @@ export class BaseGenerator {
       }
     }
 
-    // Pass 4: Generate code for tools
+    // Pass 4: Collect all node imports
+    for (const node of program.nodes) {
+      if (node.type === "importNodeStatement") {
+        this.importedNodes.push(node);
+      }
+    }
+
+    // Pass 5: Generate code for tools
     for (const node of program.nodes) {
       if (node.type === "function") {
         this.generatedStatements.push(this.processTool(node));
@@ -86,14 +97,14 @@ export class BaseGenerator {
       }
     }
 
-    // Pass 5: Collect global scoped variables
+    // Pass 6: Collect global scoped variables
     for (const node of program.nodes) {
       if (node.type === "assignment") {
         this.globalScopedVariables.push(node.variableName);
       }
     }
 
-    // Pass 6: Process all nodes and generate code
+    // Pass 7: Process all nodes and generate code
     for (const node of program.nodes) {
       const result = this.processNode(node);
       this.generatedStatements.push(result);
@@ -137,7 +148,7 @@ export class BaseGenerator {
     this.functionDefinitions[node.functionName] = node;
   }
 
-  protected processGraphNodeName(node: GraphNodeDefinition): void { }
+  protected processGraphNodeName(node: GraphNodeDefinition): void {}
 
   protected processNode(node: AgencyNode): string {
     switch (node.type) {
@@ -177,6 +188,8 @@ export class BaseGenerator {
       case "importStatement":
         this.importStatements.push(this.processImportStatement(node));
         return "";
+      case "importNodeStatement":
+        return this.processImportNodeStatement(node);
       case "whileLoop":
         return this.processWhileLoop(node);
       case "ifElse":
@@ -224,6 +237,10 @@ export class BaseGenerator {
 
   protected processImportStatement(node: ImportStatement): string {
     return "processImportStatement not implemented";
+  }
+
+  protected processImportNodeStatement(node: ImportNodeStatement): string {
+    return "processImportNodeStatement not implemented";
   }
 
   protected processTool(node: FunctionDefinition): string {

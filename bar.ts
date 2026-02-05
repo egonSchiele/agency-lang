@@ -1,24 +1,29 @@
 // @ts-nocheck
+
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
 import { PieMachine, goToNode } from "piemachine";
 import { StatelogClient } from "statelog-client";
 import { nanoid } from "nanoid";
-import { assistantMessage, getClient, userMessage } from "smoltalk";
+import {
+  assistantMessage,
+  getClient,
+  userMessage,
+  toolMessage,
+} from "smoltalk";
 
 const statelogHost = "https://statelog.adit.io";
 const traceId = nanoid();
 const statelogConfig = {
-    host: statelogHost,
-    traceId: traceId,
-    apiKey: process.env.STATELOG_API_KEY || "",
-    projectId: "agency-lang",
-    debugMode: false,
-  };
+  host: statelogHost,
+  traceId: traceId,
+  apiKey: process.env.STATELOG_API_KEY || "",
+  projectId: "agency-lang",
+  debugMode: false,
+};
 const statelogClient = new StatelogClient(statelogConfig);
 const __model: ModelName = "gpt-4o-mini";
-
 
 const getClientWithConfig = (config = {}) => {
   const defaultConfig = {
@@ -36,7 +41,7 @@ let __client = getClientWithConfig();
 type State = {
   messages: string[];
   data: any;
-}
+};
 
 // enable debug logging
 const graphConfig = {
@@ -50,138 +55,183 @@ const graphConfig = {
 // Define the names of the nodes in the graph
 // Useful for type safety
 const __nodes = ["categorize"] as const;
-type Node = (typeof __nodes)[number];
 
-const graph = new PieMachine<State, Node>(__nodes, graphConfig);
-function add({a, b}: {a:number, b:number}):number {
+const graph = new PieMachine<State>(__nodes, graphConfig);
+
+// builtins
+
+const not = (val: any): boolean => !val;
+const eq = (a: any, b: any): boolean => a === b;
+const neq = (a: any, b: any): boolean => a !== b;
+const lt = (a: any, b: any): boolean => a < b;
+const lte = (a: any, b: any): boolean => a <= b;
+const gt = (a: any, b: any): boolean => a > b;
+const gte = (a: any, b: any): boolean => a >= b;
+const and = (a: any, b: any): boolean => a && b;
+const or = (a: any, b: any): boolean => a || b;
+const head = <T>(arr: T[]): T | undefined => arr[0];
+const tail = <T>(arr: T[]): T[] => arr.slice(1);
+const empty = <T>(arr: T[]): boolean => arr.length === 0;
+
+// interrupts
+
+type Interrupt<T> = {
+  type: "interrupt";
+  data: T;
+};
+
+function interrupt<T>(data: T): Interrupt<T> {
+  return {
+    type: "interrupt",
+    data,
+  };
+}
+
+function isInterrupt<T>(obj: any): obj is Interrupt<T> {
+  return obj && obj.type === "interrupt";
+}
+
+function printJSON(obj: any) {
+  console.log(JSON.stringify(obj, null, 2));
+}
+
+const __nodesTraversed = [];
+function add({ a, b }: { a: number; b: number }): number {
   return a + b;
 }
 
-// Define the function tool for OpenAI
 const addTool = {
-    type: "function" as const,
-    function: {
-      name: "add",
-      description:
-        "Adds two numbers together and returns the result.",
-      parameters: {
-        type: "object",
-        properties: {
-          a: {
-            type: "number",
-            description: "The first number to add",
-          },
-          b: {
-            type: "number",
-            description: "The second number to add",
-          },
-        },
-        required: ["a", "b"],
-        additionalProperties: false,
-      },
-    },
-  };
+  name: "add",
+  description: "Adds two numbers together and returns the result.",
+  schema: z.object({
+    a: z.number().describe("The first number to add"),
+    b: z.number().describe("The second number to add"),
+  }),
+};
 
+graph.node("categorize", async (state): Promise<any> => {
+  const __messages: Message[] = [];
 
-async function _category(msg: string): Promise<"happy" | "sad"> {
-  const __prompt = `determine if the user is happy or sad based on this message: ${msg}`;
-  const startTime = performance.now();
-  const __messages: Message[] = [userMessage(__prompt)];
-  const __tools = undefined;
+  const { msg } = state.data;
 
-  
-  // Need to make sure this is always an object
-  const __responseFormat = z.object({
-     response: z.union([z.literal("happy"), z.literal("sad")])
-  });
-  
-  
+  __nodesTraversed.push("categorize");
 
-  let __completion = await __client.text({
-    messages: __messages,
-    tools: __tools,
-    responseFormat: __responseFormat,
-  });
+  async function _category(
+    msg: string,
+    __messages: Message[] = [],
+  ): Promise<"happy" | "sad"> {
+    const __prompt = `determine if the user is happy or sad based on this message: ${msg}`;
+    const startTime = performance.now();
+    __messages.push(userMessage(__prompt));
+    const __tools = undefined;
 
-  const endTime = performance.now();
-  statelogClient.promptCompletion({
-    messages: __messages,
-    completion: __completion,
-    model: __client.getModel(),
-    timeTaken: endTime - startTime,
-  });
+    // Need to make sure this is always an object
+    const __responseFormat = z.object({
+      response: z.union([z.literal("happy"), z.literal("sad")]),
+    });
 
-  if (!__completion.success) {
-    throw new Error(
-      `Error getting response from ${__model}: ${__completion.error}`
-    );
-  }
+    const __client = getClientWithConfig({});
 
-  let responseMessage = __completion.value;
-
-  // Handle function calls
-  while (responseMessage.toolCalls.length > 0) {
-    // Add assistant's response with tool calls to message history
-    __messages.push(assistantMessage(responseMessage.output));
-    let toolCallStartTime, toolCallEndTime;
-
-    // Process each tool call
-    for (const toolCall of responseMessage.toolCalls) {
-      
-    }
-  
-    const nextStartTime = performance.now();
     let __completion = await __client.text({
       messages: __messages,
       tools: __tools,
       responseFormat: __responseFormat,
     });
 
-    const nextEndTime = performance.now();
-
+    const endTime = performance.now();
     statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
-      timeTaken: nextEndTime - nextStartTime,
+      timeTaken: endTime - startTime,
     });
 
     if (!__completion.success) {
       throw new Error(
-        `Error getting response from ${__model}: ${__completion.error}`
+        `Error getting response from ${__model}: ${__completion.error}`,
       );
     }
-    responseMessage = __completion.value;
+
+    let responseMessage = __completion.value;
+
+    // Handle function calls
+    while (responseMessage.toolCalls.length > 0) {
+      // Add assistant's response with tool calls to message history
+      __messages.push(
+        assistantMessage(responseMessage.output, {
+          toolCalls: responseMessage.toolCalls,
+        }),
+      );
+      let toolCallStartTime, toolCallEndTime;
+      let haltExecution = false;
+
+      // Process each tool call
+      for (const toolCall of responseMessage.toolCalls) {
+      }
+
+      if (haltExecution) {
+        statelogClient.debug(`Tool call interrupted execution.`, {
+          messages: __messages,
+          model: __client.getModel(),
+        });
+        try {
+          const obj = JSON.parse(__messages.at(-1).content);
+          obj.__messages = __messages;
+          obj.__nodesTraversed = __nodesTraversed;
+          return obj;
+        } catch (e) {
+          return __messages.at(-1).content;
+        }
+        //return __messages;
+      }
+
+      const nextStartTime = performance.now();
+      let __completion = await __client.text({
+        messages: __messages,
+        tools: __tools,
+        responseFormat: __responseFormat,
+      });
+
+      const nextEndTime = performance.now();
+
+      statelogClient.promptCompletion({
+        messages: __messages,
+        completion: __completion,
+        model: __client.getModel(),
+        timeTaken: nextEndTime - nextStartTime,
+      });
+
+      if (!__completion.success) {
+        throw new Error(
+          `Error getting response from ${__model}: ${__completion.error}`,
+        );
+      }
+      responseMessage = __completion.value;
+    }
+
+    // Add final assistant response to history
+    // not passing tool calls back this time
+    __messages.push(assistantMessage(responseMessage.output));
+
+    try {
+      const result = JSON.parse(responseMessage.output || "");
+      return result.response;
+    } catch (e) {
+      return responseMessage.output;
+      // console.error("Error parsing response for variable 'category':", e);
+      // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
+      // throw e;
+    }
   }
 
-  // Add final assistant response to history
-  __messages.push(assistantMessage(responseMessage.output));
-  
-  try {
-  const result = JSON.parse(responseMessage.output || "");
-  return result.response;
-  } catch (e) {
-    return responseMessage.output;
-    // console.error("Error parsing response for variable 'category':", e);
-    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
-    // throw e;
-  }
-  
+  const category = await _category(msg, __messages);
 
-  
-}
-graph.node("categorize", async (state) => {
-    
-    const msg = state.data;
-    
-    
-const category = await _category(msg);
-
-return { ...state, data: category}
-
+  return { ...state, data: category };
 });
 
-export async function categorize(data:any): Promise<any> {
+export async function categorize(msg): Promise<any> {
+  console.log("hi from categorize");
+  const data = { msg };
   const result = await graph.run("categorize", { messages: [], data });
   return result.data;
 }

@@ -36,12 +36,18 @@ export class GraphGenerator extends TypeScriptGenerator {
       return super.processReturnStatement(node);
     } else {
       const returnCode = this.processNode(node.value);
-      if (
-        node.value.type === "functionCall" &&
-        this.graphNodes.map((n) => n.nodeName).includes(node.value.functionName)
-      ) {
-        // we're going to return a goToNode call, so just return that directly
-        return `return ${returnCode}\n`;
+      if (node.value.type === "functionCall") {
+        const isGraphNode = this.graphNodes
+          .map((n) => n.nodeName)
+          .includes(node.value.functionName);
+        const isImportedGraphNode = this.importedNodes
+          .map((n) => n.importedNodes)
+          .flat()
+          .includes(node.value.functionName);
+        if (isGraphNode || isImportedGraphNode) {
+          // we're going to return a goToNode call, so just return that directly
+          return `return ${returnCode}\n`;
+        }
       }
       return `return { ...state, data: ${returnCode}}\n`;
     }
@@ -88,7 +94,15 @@ export class GraphGenerator extends TypeScriptGenerator {
   }
 
   protected processFunctionCall(node: FunctionCall): string {
-    if (this.graphNodes.map((n) => n.nodeName).includes(node.functionName)) {
+    const isGraphNode = this.graphNodes
+      .map((n) => n.nodeName)
+      .includes(node.functionName);
+    const isImportedGraphNode = this.importedNodes
+      .map((n) => n.importedNodes)
+      .flat()
+      .includes(node.functionName);
+
+    if (isGraphNode || isImportedGraphNode) {
       this.currentAdjacentNodes.push(node.functionName);
       this.functionsUsed.add(node.functionName);
       const functionCallCode = this.generateNodeCallExpression(node);
@@ -146,7 +160,22 @@ export class GraphGenerator extends TypeScriptGenerator {
   }
 
   protected preprocess(): string {
-    return "// @ts-nocheck\n";
+    const lines: string[] = [];
+    lines.push("// @ts-nocheck\n");
+    this.importedNodes.forEach((importNode) => {
+      const defaultImportName = this.agencyFileToDefaultImportName(
+        importNode.agencyFile,
+      );
+      lines.push(
+        `import ${defaultImportName} from "${importNode.agencyFile.replace(".agency", ".ts")}";`,
+      );
+    });
+
+    return lines.join("\n");
+  }
+
+  private agencyFileToDefaultImportName(agencyFile: string): string {
+    return `__graph_${agencyFile.replace(".agency", "").replace(/[^a-zA-Z0-9_]/g, "_")}`;
   }
 
   protected postprocess(): string {
@@ -162,6 +191,13 @@ export class GraphGenerator extends TypeScriptGenerator {
           toNodes: JSON.stringify(adjacent),
         }),
       );
+    });
+
+    this.importedNodes.forEach((importNode) => {
+      const defaultImportName = this.agencyFileToDefaultImportName(
+        importNode.agencyFile,
+      );
+      lines.push(`graph.merge(${defaultImportName});`);
     });
 
     if (this.graphNodes.map((n) => n.nodeName).includes("main")) {

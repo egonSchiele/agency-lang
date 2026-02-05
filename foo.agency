@@ -1,12 +1,20 @@
-claudeFile = read("CLAUDE.md")
+import { readFile } from "./basicFunctions.ts"
+import node { categorize } from "./bar.agency"
 
-contents = """
-Contents of claude.md:
-${claudeFile}
-"""
+def readFileTool(path: string): string {
+  return await readFile(path)
+}
+
+node bar(msg) {
+  print("This is the bar node.")
+}
 
 node main() {
-  print(contents)
-  //response: number = llm("What is 2 + 2?")
-  //print(response)
+  msg = input("> ")
+  return bar(msg)
+  return categorize(msg)
+
+  // +readFileTool
+  // response = llm("Help me read the specified file: ${msg}")
+  // printJSON(response)
 }

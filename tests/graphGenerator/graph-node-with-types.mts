@@ -51,9 +51,8 @@ const graphConfig = {
 // Define the names of the nodes in the graph
 // Useful for type safety
 const __nodes = ["greet"] as const;
-type Node = (typeof __nodes)[number];
 
-const graph = new PieMachine<State, Node>(__nodes, graphConfig);
+const graph = new PieMachine<State>(__nodes, graphConfig);
 
 // builtins
 
@@ -91,6 +90,8 @@ function isInterrupt<T>(obj: any): obj is Interrupt<T> {
 function printJSON(obj: any) {
   console.log(JSON.stringify(obj, null, 2));
 }
+
+const __nodesTraversed = [];
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -108,8 +109,9 @@ const addTool = {
 graph.node("greet", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    const {name} = state.data;
+    const [name] = state.data;
     
+    __nodesTraversed.push("greet");
     
 async function _greeting(name: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `Say hello to ${name}`;
@@ -166,6 +168,7 @@ async function _greeting(name: string, __messages: Message[] = []): Promise<stri
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
+        obj.__nodesTraversed = __nodesTraversed;
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -212,8 +215,7 @@ const greeting = await _greeting(name, __messages);
 
 });
 
-export async function greet(name): Promise<string> {
-  const data = { name };
+export async function greet(data): Promise<string> {
   const result = await graph.run("greet", { messages: [], data });
   return result.data;
 }

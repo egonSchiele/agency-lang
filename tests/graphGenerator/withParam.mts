@@ -51,9 +51,8 @@ const graphConfig = {
 // Define the names of the nodes in the graph
 // Useful for type safety
 const __nodes = ["main"] as const;
-type Node = (typeof __nodes)[number];
 
-const graph = new PieMachine<State, Node>(__nodes, graphConfig);
+const graph = new PieMachine<State>(__nodes, graphConfig);
 
 // builtins
 
@@ -91,6 +90,8 @@ function isInterrupt<T>(obj: any): obj is Interrupt<T> {
 function printJSON(obj: any) {
   console.log(JSON.stringify(obj, null, 2));
 }
+
+const __nodesTraversed = [];
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -107,8 +108,9 @@ const addTool = {
 graph.node("main", async (state): Promise<any> => {
     const __messages: Message[] = [];
     
-    const {input} = state.data;
+    const [input] = state.data;
     
+    __nodesTraversed.push("main");
     
 
 
@@ -167,6 +169,7 @@ async function _result(input: string, __messages: Message[] = []): Promise<strin
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
+        obj.__nodesTraversed = __nodesTraversed;
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -217,8 +220,7 @@ await console.log(result)
 
 const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
-export async function main(input): Promise<any> {
-  const data = { input };
+export async function main(data): Promise<any> {
   const result = await graph.run("main", { messages: [], data });
   return result.data;
 }

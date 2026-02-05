@@ -109,6 +109,7 @@ async function _foo(__messages: Message[] = []): Promise<Coords> {
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
+        obj.__nodesTraversed = __nodesTraversed;
         return obj;
       } catch (e) {
         return __messages.at(-1).content;

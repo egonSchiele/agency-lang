@@ -15,7 +15,7 @@ export const template = `if (
   // console.log("Tool '{{{name:string}}}' called with arguments:", args);
   // console.log("Tool '{{{name:string}}}' returned result:", result);
 
-statelogClient.toolCall({
+await statelogClient.toolCall({
     toolName: "{{{name:string}}}",
     args,
     output: result,

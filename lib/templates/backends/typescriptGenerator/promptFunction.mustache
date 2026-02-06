@@ -24,7 +24,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
   });
 
   const endTime = performance.now();
-  statelogClient.promptCompletion({
+  await statelogClient.promptCompletion({
     messages: __messages,
     completion: __completion,
     model: __client.getModel(),
@@ -52,14 +52,14 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
     }
 
     if (haltExecution) {
-      statelogClient.debug(`Tool call interrupted execution.`, {
+      await statelogClient.debug(`Tool call interrupted execution.`, {
         messages: __messages,
         model: __client.getModel(),
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
-        obj.__nodesTraversed = graph.getNodesTraversed();
+        obj.__nodesTraversed = __graph.getNodesTraversed();
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -76,7 +76,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
 
     const nextEndTime = performance.now();
 
-    statelogClient.promptCompletion({
+    await statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),

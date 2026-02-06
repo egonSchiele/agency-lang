@@ -215,7 +215,7 @@ export class GraphGenerator extends TypeScriptGenerator {
       lines.push(
         renderRunNodeFunction.default({
           nodeName: node.nodeName,
-          // argsStr,
+          argsStr,
           returnType: node.returnType
             ? variableTypeToString(node.returnType, this.typeAliases)
             : "any",

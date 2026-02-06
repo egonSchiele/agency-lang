@@ -12,11 +12,14 @@ importers:
         specifier: ^0.0.2
         version: 0.0.2
       piemachine:
-        specifier: ^0.0.4
-        version: 0.0.4
+        specifier: ^0.0.6
+        version: 0.0.6
       smoltalk:
         specifier: ^0.0.12
         version: 0.0.12(ws@8.19.0)(zod@4.3.5)
+      statelog-client:
+        specifier: ^0.0.34
+        version: 0.0.34
       tarsec:
         specifier: ^0.1.1
         version: 0.1.1
@@ -36,9 +39,6 @@ importers:
       nanoid:
         specifier: ^5.1.6
         version: 5.1.6
-      statelog-client:
-        specifier: ^0.0.31
-        version: 0.0.31
       tsc-alias:
         specifier: ^1.8.16
         version: 1.8.16
@@ -836,8 +836,8 @@ packages:
     resolution: {integrity: sha512-5gTmgEY/sqK6gFXLIsQNH19lWb4ebPDLA4SdLP7dsWkIXHWlG66oPuVvXSGFPppYZz8ZDZq0dYYrbHfBCVUb1Q==}
     engines: {node: '>=12'}
 
-  piemachine@0.0.4:
-    resolution: {integrity: sha512-9SEitJzsKqqXZWc7njF4Vb7yARMwZcJWEGyMN7ACjg7tPvbP+ebGu0RHK56Yw8D6JCiG+kb9jc1Mm4MDqWSG7Q==}
+  piemachine@0.0.6:
+    resolution: {integrity: sha512-SOc0O7/aNiqVa7uZmCjH8FonE01Zrf7c3cs0JdlrOyczbPN0Ufo1PD6nMYBloKPjZ8o8XmMwWNcPXwmjptfeTQ==}
 
   plimit-lit@1.6.1:
     resolution: {integrity: sha512-B7+VDyb8Tl6oMJT9oSO2CW8XC/T4UcJGrwOVoNGwOQsQYhlpfajmrMj5xeejqaASq3V/EqThyOeATEOMuSEXiA==}
@@ -917,8 +917,11 @@ packages:
   stackback@0.0.2:
     resolution: {integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==}
 
-  statelog-client@0.0.31:
-    resolution: {integrity: sha512-YFzvNBfSRFgDQzlH42Lhe31s5HA/aUh5/sBF4gpUPLRHat9U2zzQOYyOlJVNG97T9KxvZ8aSXgFA1B2Tbiloag==}
+  statelog-client@0.0.33:
+    resolution: {integrity: sha512-gLJ52T6l4zWl9OyUtoCtvwo9EKWwymQfuy4qfkn8yvTiED9xA/5eD/xVTlHRYbnTKd1rVjyK3Vgy8/WhARUc1w==}
+
+  statelog-client@0.0.34:
+    resolution: {integrity: sha512-P4K9TljohP4kjmaRSUqIk683Rc1z4x/hyN1QcvT2eKvcTjWFigJqTSlJy75yudzgGkIKPCtHygvoEdR/WgrIOg==}
 
   std-env@3.10.0:
     resolution: {integrity: sha512-5GS12FdOZNliM5mAOxFRg7Ir0pWz8MdpYm6AY6VPkGpbA7ZzmbzNcBJQ0GPvvyWgcY7QAhCgf9Uy89I03faLkg==}
@@ -1791,10 +1794,10 @@ snapshots:
 
   picomatch@4.0.3: {}
 
-  piemachine@0.0.4:
+  piemachine@0.0.6:
     dependencies:
       nanoid: 5.1.6
-      statelog-client: 0.0.31
+      statelog-client: 0.0.33
       termcolors: https://codeload.github.com/egonSchiele/termcolors/tar.gz/d5c1f497618398ce1440d2383d2aad2642e4051f
 
   plimit-lit@1.6.1:
@@ -1907,7 +1910,11 @@ snapshots:
 
   stackback@0.0.2: {}
 
-  statelog-client@0.0.31:
+  statelog-client@0.0.33:
+    dependencies:
+      nanoid: 5.1.6
+
+  statelog-client@0.0.34:
     dependencies:
       nanoid: 5.1.6
 

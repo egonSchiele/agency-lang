@@ -13,7 +13,7 @@ import { nanoid } from "nanoid";
 
 const statelogHost = "http://localhost:1065";
 const traceId = nanoid();
-const statelogClient = new StatelogClient({
+const __statelogClient = new StatelogClient({
     host: statelogHost,
     traceId: traceId,
     apiKey: process.env.STATELOG_API_KEY || "",

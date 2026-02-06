@@ -6,6 +6,10 @@ import { apply } from "typestache";
 export const template = `goToNode("{{{nodeName:string}}}",
   {
     messages: state.messages,
+    __metadata: {
+      graph: __graph,
+      statelogClient,
+    },
     {{#hasData}}
     data: {{{data:string}}}
     {{/hasData}}

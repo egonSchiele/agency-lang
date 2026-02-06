@@ -1,6 +1,6 @@
 {
   "name": "agency-lang",
-  "version": "0.0.36",
+  "version": "0.0.39",
   "description": "The Agency language",
   "main": "lib/index.js",
   "scripts": {
@@ -41,8 +41,9 @@
   "homepage": "https://github.com/egonSchiele/agency-lang#readme",
   "dependencies": {
     "egonlog": "^0.0.2",
-    "piemachine": "^0.0.4",
+    "piemachine": "^0.0.6",
     "smoltalk": "^0.0.12",
+    "statelog-client": "^0.0.34",
     "tarsec": "^0.1.1",
     "typestache": "^0.4.4",
     "zod": "^4.3.5"
@@ -51,7 +52,6 @@
     "@types/node": "^25.0.3",
     "cli-highlight": "^2.1.11",
     "nanoid": "^5.1.6",
-    "statelog-client": "^0.0.31",
     "tsc-alias": "^1.8.16",
     "typescript": "^5.9.3",
     "vitest": "^4.0.16"

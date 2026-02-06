@@ -63,6 +63,7 @@ export const importNodeStatmentParser: Parser<ImportNodeStatement> = trace(
     spaces,
     capture(quotedPath, "agencyFile"),
     optionalSemicolon,
+    optional(newline),
   ),
 );
 export const importToolStatmentParser: Parser<ImportToolStatement> = trace(
@@ -83,6 +84,7 @@ export const importToolStatmentParser: Parser<ImportToolStatement> = trace(
     spaces,
     capture(quotedPath, "agencyFile"),
     optionalSemicolon,
+    optional(newline),
   ),
 );
 export const importStatmentParser: Parser<ImportStatement> = trace(

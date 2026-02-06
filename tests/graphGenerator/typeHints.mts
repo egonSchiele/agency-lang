@@ -328,6 +328,7 @@ await console.log(count)
 
 await console.log(message)
 
+    return { ...state, data: undefined };
 });
 
 const initialState: State = {messages: [], data: {}};

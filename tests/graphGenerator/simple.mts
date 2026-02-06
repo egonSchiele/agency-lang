@@ -210,6 +210,7 @@ const greeting = await _greeting(__messages);
 
 await console.log(greeting)
 
+    return { ...state, data: undefined };
 });
 
 const initialState: State = {messages: [], data: {}};

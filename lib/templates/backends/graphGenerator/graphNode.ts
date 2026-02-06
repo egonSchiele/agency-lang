@@ -12,6 +12,7 @@ graph.node("{{{name}}}", async (state): Promise<any> => {
     const {{{paramNames}}} = state.data;
     {{/hasParam}}
     {{{body}}}
+    return { ...state, data: undefined };
 });
 `;
 

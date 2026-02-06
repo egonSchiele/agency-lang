@@ -337,6 +337,7 @@ await console.log(response2)
 return { ...state, data: [response1, response2]}
 
 
+    return { ...state, data: undefined };
 });
 
 const initialState: State = {messages: [], data: {}};

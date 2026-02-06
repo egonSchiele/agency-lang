@@ -223,6 +223,7 @@ return goToNode("processGreeting",
 );
 
 
+    return { ...state, data: undefined };
 });
 
 graph.node("processGreeting", async (state): Promise<any> => {
@@ -337,6 +338,7 @@ const result = await _result(msg, __messages);
 
 await console.log(result)
 
+    return { ...state, data: undefined };
 });
 
 graph.node("main", async (state): Promise<any> => {
@@ -359,6 +361,7 @@ graph.node("main", async (state): Promise<any> => {
 );
 
 
+    return { ...state, data: undefined };
 });
 
 graph.conditionalEdge("greet", ["processGreeting"]);

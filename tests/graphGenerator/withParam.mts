@@ -212,6 +212,7 @@ const result = await _result(input, __messages);
 
 await console.log(result)
 
+    return { ...state, data: undefined };
 });
 
 const initialState: State = {messages: [], data: {}};

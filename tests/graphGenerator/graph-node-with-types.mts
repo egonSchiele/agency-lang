@@ -209,6 +209,7 @@ async function _greeting(name: string, __messages: Message[] = []): Promise<stri
 const greeting = await _greeting(name, __messages);
 
 
+    return { ...state, data: undefined };
 });
 
 export async function greet(name): Promise<string> {

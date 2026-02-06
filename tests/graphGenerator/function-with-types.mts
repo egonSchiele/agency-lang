@@ -670,6 +670,7 @@ graph.node("foo", async (state): Promise<any> => {
 return { ...state, data: `Node completed`}
 
 
+    return { ...state, data: undefined };
 });
 //  Call the functions
 const sum = await add({x: 5, y: 10});

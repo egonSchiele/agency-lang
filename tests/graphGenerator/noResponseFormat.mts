@@ -206,6 +206,7 @@ async function _response1(__messages: Message[] = []): Promise<string> {
 const response1 = await _response1(__messages);
 
 
+    return { ...state, data: undefined };
 });
 
 const initialState: State = {messages: [], data: {}};

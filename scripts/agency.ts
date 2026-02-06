@@ -89,9 +89,18 @@ function readFile(inputFile: string): string {
 }
 
 function getImports(program: AgencyProgram): string[] {
-  return program.nodes
-    .filter((node) => node.type === "importNodeStatement")
+  const toolAndNodeImports = program.nodes
+    .filter(
+      (node) =>
+        node.type === "importNodeStatement" ||
+        node.type === "importToolStatement",
+    )
     .map((node) => node.agencyFile.trim());
+  const importStatements = program.nodes
+    .filter((node) => node.type === "importStatement")
+    .map((node) => (node as ImportStatement).modulePath.trim());
+
+  return [...toolAndNodeImports, ...importStatements];
 }
 
 const compiledFiles: Set<string> = new Set();

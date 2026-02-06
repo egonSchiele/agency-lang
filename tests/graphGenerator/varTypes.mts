@@ -222,6 +222,7 @@ const response = await _response(person.name, person.age, __messages);
 
 await console.log(response)
 
+    return { ...state, data: undefined };
 });
 
 const initialState: State = {messages: [], data: {}};

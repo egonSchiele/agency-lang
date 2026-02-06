@@ -111,6 +111,7 @@ graph.node("main", async (state): Promise<any> => {
 return { ...state, data: x}
 
 
+    return { ...state, data: undefined };
 });
 
 const initialState: State = {messages: [], data: {}};

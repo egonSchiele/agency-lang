@@ -102,7 +102,7 @@ const addTool = {
 //  Test graph nodes with typed parameters
 
 graph.node("greet", async (state): Promise<any> => {
-    const __messages: Message[] = [];
+    const __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     

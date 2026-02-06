@@ -1,6 +1,8 @@
 // @ts-nocheck
 
-import { sayHi }  from "./bar.ts";
+import __graph___bar from "./bar.ts";
+
+import { greet, __greetTool } from "./bar.ts";
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
@@ -18,7 +20,7 @@ const statelogConfig = {
     projectId: "agency-lang",
     debugMode: false,
   };
-const statelogClient = new StatelogClient(statelogConfig);
+const __statelogClient = new StatelogClient(statelogConfig);
 const __model: ModelName = "gpt-4o-mini";
 
 
@@ -44,16 +46,12 @@ type State = {
 const graphConfig = {
   debug: {
     log: true,
-    logData: true,
+    logData: false,
   },
   statelog: statelogConfig,
 };
 
-// Define the names of the nodes in the graph
-// Useful for type safety
-const __nodes = ["main"] as const;
-
-const graph = new PieMachine<State>(__nodes, graphConfig);
+const graph = new PieMachine<State>(graphConfig);
 
 // builtins
 
@@ -117,27 +115,28 @@ function _builtinInput(prompt: string): Promise<string> {
     });
   });
 }
-import { greet, __greetTool } from "./bar.ts";graph.node("main", async (state): Promise<any> => {
-    const __messages: Message[] = [];
+
+graph.node("main", async (state): Promise<any> => {
+    const __messages: Message[] = state.messages || [];
+    const __graph = state.__metadata?.graph || graph;
+    const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
-    return { ...state, data: sayHi()}
-
-
-const msg = await await _builtinInput(`> `);
+    const name = await await _builtinInput(`> `);
 
 
 
-
-
-async function _response(msg: string, __messages: Message[] = []): Promise<string> {
-  const __prompt = `Greet the user with their name: ${msg} using the greet function.`;
+async function _fibs(__messages: Message[] = []): Promise<number[]> {
+  const __prompt = `Generate a list of first 10 Fibonacci numbers.`;
   const startTime = performance.now();
   __messages.push(userMessage(__prompt));
-  const __tools = [__greetTool];
+  const __tools = undefined;
 
   
+  // Need to make sure this is always an object
+  const __responseFormat = z.object({
+     response: z.array(z.number())
+  });
   
-  const __responseFormat = undefined;
   
 
   const __client = getClientWithConfig({});
@@ -149,7 +148,7 @@ async function _response(msg: string, __messages: Message[] = []): Promise<strin
   });
 
   const endTime = performance.now();
-  statelogClient.promptCompletion({
+  await statelogClient.promptCompletion({
     messages: __messages,
     completion: __completion,
     model: __client.getModel(),
@@ -173,48 +172,18 @@ async function _response(msg: string, __messages: Message[] = []): Promise<strin
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
-      if (
-  toolCall.name === "greet"
-) {
-  const args = toolCall.arguments;
-
-  toolCallStartTime = performance.now();
-  const result = await greet(args);
-  toolCallEndTime = performance.now();
-
-  // console.log("Tool 'greet' called with arguments:", args);
-  // console.log("Tool 'greet' returned result:", result);
-
-statelogClient.toolCall({
-    toolName: "greet",
-    args,
-    output: result,
-    model: __client.getModel(),
-    timeTaken: toolCallEndTime - toolCallStartTime,
-  });
-
-  // Add function result to messages
-  __messages.push(toolMessage(result, {
-            tool_call_id: toolCall.id,
-            name: toolCall.name,
-      }));
-
-  if (isInterrupt(result)) {
-    haltExecution = true;
-    break;
-  }
-}
+      
     }
 
     if (haltExecution) {
-      statelogClient.debug(`Tool call interrupted execution.`, {
+      await statelogClient.debug(`Tool call interrupted execution.`, {
         messages: __messages,
         model: __client.getModel(),
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
-        obj.__nodesTraversed = graph.getNodesTraversed();
+        obj.__nodesTraversed = __graph.getNodesTraversed();
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -231,7 +200,7 @@ statelogClient.toolCall({
 
     const nextEndTime = performance.now();
 
-    statelogClient.promptCompletion({
+    await statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
@@ -250,32 +219,49 @@ statelogClient.toolCall({
   // not passing tool calls back this time
   __messages.push(assistantMessage(responseMessage.output));
   
-
+  try {
+  const result = JSON.parse(responseMessage.output || "");
+  return result.response;
+  } catch (e) {
+    return responseMessage.output;
+    // console.error("Error parsing response for variable 'fibs':", e);
+    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
+    // throw e;
+  }
   
-  return responseMessage.output;
+
   
 }
 
-const response = await _response(msg, __messages);
+const fibs = await _fibs(__messages);
 
 
-await console.log(response)
+await console.log(`First 10 Fibonacci numbers: ${fibs}`)
 
-
-// print(contents)
-
-
-// response: number = llm("What is 2 + 2?")
-
-
-// print(response)
+return goToNode("sayHi",
+  {
+    messages: __messages,
+    __metadata: {
+      graph: __graph,
+      statelogClient,
+    },
+    
+    data: [name]
+    
+    
+  }
+);
 
 
 });
 
+graph.conditionalEdge("main", ["sayHi"]);
+
+graph.merge(__graph___bar);
 const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
-export async function main(data): Promise<any> {
+export async function main(): Promise<any> {
+  const data = [  ];
   const result = await graph.run("main", { messages: [], data });
   return result.data;
 }

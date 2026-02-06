@@ -17,7 +17,7 @@ const statelogConfig = {
     projectId: "agency-lang",
     debugMode: false,
   };
-const statelogClient = new StatelogClient(statelogConfig);
+const __statelogClient = new StatelogClient(statelogConfig);
 const __model: ModelName = "gpt-4o-mini";
 
 
@@ -43,16 +43,12 @@ type State = {
 const graphConfig = {
   debug: {
     log: true,
-    logData: true,
+    logData: false,
   },
   statelog: statelogConfig,
 };
 
-// Define the names of the nodes in the graph
-// Useful for type safety
-const __nodes = ["sayHi"] as const;
-
-const graph = new PieMachine<State>(__nodes, graphConfig);
+const graph = new PieMachine<State>(graphConfig);
 
 // builtins
 
@@ -90,8 +86,6 @@ function isInterrupt<T>(obj: any): obj is Interrupt<T> {
 function printJSON(obj: any) {
   console.log(JSON.stringify(obj, null, 2));
 }
-
-const __nodesTraversed = [];
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -105,41 +99,30 @@ const addTool = {
   }),
 };
 
-function _builtinInput(prompt: string): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-
-  return new Promise((resolve) => {
-    rl.question(prompt, (answer: string) => {
-      rl.close();
-      resolve(answer);
-    });
-  });
-}
 export const __greetTool = {
   name: "greet",
   description: `No description provided.`,
   schema: z.object({"name": z.string(), })
 };
+
 export async function greet({name}) : Promise<string> {
     const __messages: Message[] = [];
     return `Kya chal raha jai, ${name}!`
 
 
-}graph.node("sayHi", async (state): Promise<any> => {
-    const __messages: Message[] = [];
+}
+graph.node("sayHi", async (state): Promise<any> => {
+    const __messages: Message[] = state.messages || [];
+    const __graph = state.__metadata?.graph || graph;
+    const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
-    __nodesTraversed.push("sayHi");
-    const msg = await await _builtinInput(`> `);
+    const [name] = state.data;
+    
+    
 
 
-
-
-
-async function _response(msg: string, __messages: Message[] = []): Promise<string> {
-  const __prompt = `Greet the user with their name: ${msg} using the greet function.`;
+async function _response(name: string, __messages: Message[] = []): Promise<string> {
+  const __prompt = `Greet the user with their name: ${name} using the greet function.`;
   const startTime = performance.now();
   __messages.push(userMessage(__prompt));
   const __tools = [__greetTool];
@@ -158,7 +141,7 @@ async function _response(msg: string, __messages: Message[] = []): Promise<strin
   });
 
   const endTime = performance.now();
-  statelogClient.promptCompletion({
+  await statelogClient.promptCompletion({
     messages: __messages,
     completion: __completion,
     model: __client.getModel(),
@@ -194,7 +177,7 @@ async function _response(msg: string, __messages: Message[] = []): Promise<strin
   // console.log("Tool 'greet' called with arguments:", args);
   // console.log("Tool 'greet' returned result:", result);
 
-statelogClient.toolCall({
+await statelogClient.toolCall({
     toolName: "greet",
     args,
     output: result,
@@ -216,14 +199,14 @@ statelogClient.toolCall({
     }
 
     if (haltExecution) {
-      statelogClient.debug(`Tool call interrupted execution.`, {
+      await statelogClient.debug(`Tool call interrupted execution.`, {
         messages: __messages,
         model: __client.getModel(),
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
-        obj.__nodesTraversed = __nodesTraversed;
+        obj.__nodesTraversed = __graph.getNodesTraversed();
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -240,7 +223,7 @@ statelogClient.toolCall({
 
     const nextEndTime = performance.now();
 
-    statelogClient.promptCompletion({
+    await statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
@@ -265,19 +248,15 @@ statelogClient.toolCall({
   
 }
 
-const response = await _response(msg, __messages);
+const response = await _response(name, __messages);
 
 
 await console.log(response)
 
 });
-//  node categorize(msg) {
-//    category :: "happy" | "sad"
-//    category = llm("determine if the user is happy or sad based on this message: ${msg}")
-//    return category
-//  }
 
-export async function sayHi(data): Promise<any> {
+export async function sayHi(name): Promise<any> {
+  const data = [ name ];
   const result = await graph.run("sayHi", { messages: [], data });
   return result.data;
 }

@@ -101,7 +101,7 @@ const addTool = {
 
 
 graph.node("greet", async (state): Promise<any> => {
-    const __messages: Message[] = [];
+    const __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
@@ -210,7 +210,7 @@ const greeting = await _greeting(__messages);
 
 return goToNode("processGreeting",
   {
-    messages: state.messages,
+    messages: __messages,
     __metadata: {
       graph: __graph,
       statelogClient,
@@ -226,7 +226,7 @@ return goToNode("processGreeting",
 });
 
 graph.node("processGreeting", async (state): Promise<any> => {
-    const __messages: Message[] = [];
+    const __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
@@ -340,13 +340,13 @@ await console.log(result)
 });
 
 graph.node("main", async (state): Promise<any> => {
-    const __messages: Message[] = [];
+    const __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
     return goToNode("greet",
   {
-    messages: state.messages,
+    messages: __messages,
     __metadata: {
       graph: __graph,
       statelogClient,

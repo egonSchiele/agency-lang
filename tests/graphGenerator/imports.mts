@@ -25,7 +25,7 @@ const statelogConfig = {
     projectId: "agency-lang",
     debugMode: false,
   };
-const statelogClient = new StatelogClient(statelogConfig);
+const __statelogClient = new StatelogClient(statelogConfig);
 const __model: ModelName = "gpt-4o-mini";
 
 
@@ -51,16 +51,12 @@ type State = {
 const graphConfig = {
   debug: {
     log: true,
-    logData: true,
+    logData: false,
   },
   statelog: statelogConfig,
 };
 
-// Define the names of the nodes in the graph
-// Useful for type safety
-const __nodes = [] as const;
-
-const graph = new PieMachine<State>(__nodes, graphConfig);
+const graph = new PieMachine<State>(graphConfig);
 
 // builtins
 

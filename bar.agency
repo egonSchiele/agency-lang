@@ -2,15 +2,8 @@ def greet(name: string): string {
   return "Kya chal raha jai, ${name}!"
 }
 
-node sayHi() {
-  msg = input("> ")
+node sayHi(name) {
   +greet
-  response = llm("Greet the user with their name: ${msg} using the greet function.")
+  response = llm("Greet the user with their name: ${name} using the greet function.")
   print(response)
 }
-
-// node categorize(msg) {
-//   category :: "happy" | "sad"
-//   category = llm("determine if the user is happy or sad based on this message: ${msg}")
-//   return category
-// }

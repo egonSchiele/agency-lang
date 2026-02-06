@@ -1,15 +1,8 @@
-import { sayHi } from "./bar.agency"
+import node { sayHi } from "./bar.agency"
 import tool { greet } from "./bar.agency"
 
 
 node main() {
-  return sayHi()
-  msg = input("> ")
-  +greet
-  response = llm("Greet the user with their name: ${msg} using the greet function.")
-  print(response)
-
-  //print(contents)
-  //response: number = llm("What is 2 + 2?")
-  //print(response)
+  name = input("> ")
+  return sayHi(name)
 }

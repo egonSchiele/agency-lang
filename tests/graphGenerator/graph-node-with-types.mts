@@ -17,7 +17,7 @@ const statelogConfig = {
     projectId: "agency-lang",
     debugMode: false,
   };
-const statelogClient = new StatelogClient(statelogConfig);
+const __statelogClient = new StatelogClient(statelogConfig);
 const __model: ModelName = "gpt-4o-mini";
 
 
@@ -43,16 +43,12 @@ type State = {
 const graphConfig = {
   debug: {
     log: true,
-    logData: true,
+    logData: false,
   },
   statelog: statelogConfig,
 };
 
-// Define the names of the nodes in the graph
-// Useful for type safety
-const __nodes = ["greet"] as const;
-
-const graph = new PieMachine<State>(__nodes, graphConfig);
+const graph = new PieMachine<State>(graphConfig);
 
 // builtins
 
@@ -104,8 +100,11 @@ const addTool = {
 };
 
 //  Test graph nodes with typed parameters
+
 graph.node("greet", async (state): Promise<any> => {
     const __messages: Message[] = [];
+    const __graph = state.__metadata?.graph || graph;
+    const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
     const [name] = state.data;
     
@@ -130,7 +129,7 @@ async function _greeting(name: string, __messages: Message[] = []): Promise<stri
   });
 
   const endTime = performance.now();
-  statelogClient.promptCompletion({
+  await statelogClient.promptCompletion({
     messages: __messages,
     completion: __completion,
     model: __client.getModel(),
@@ -158,14 +157,14 @@ async function _greeting(name: string, __messages: Message[] = []): Promise<stri
     }
 
     if (haltExecution) {
-      statelogClient.debug(`Tool call interrupted execution.`, {
+      await statelogClient.debug(`Tool call interrupted execution.`, {
         messages: __messages,
         model: __client.getModel(),
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
-        obj.__nodesTraversed = graph.getNodesTraversed();
+        obj.__nodesTraversed = __graph.getNodesTraversed();
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -182,7 +181,7 @@ async function _greeting(name: string, __messages: Message[] = []): Promise<stri
 
     const nextEndTime = performance.now();
 
-    statelogClient.promptCompletion({
+    await statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
@@ -212,7 +211,8 @@ const greeting = await _greeting(name, __messages);
 
 });
 
-export async function greet(data): Promise<string> {
+export async function greet(name): Promise<string> {
+  const data = [ name ];
   const result = await graph.run("greet", { messages: [], data });
   return result.data;
 }

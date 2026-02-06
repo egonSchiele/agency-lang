@@ -17,7 +17,7 @@ const statelogConfig = {
     projectId: "agency-lang",
     debugMode: false,
   };
-const statelogClient = new StatelogClient(statelogConfig);
+const __statelogClient = new StatelogClient(statelogConfig);
 const __model: ModelName = "gpt-4o-mini";
 
 
@@ -43,16 +43,12 @@ type State = {
 const graphConfig = {
   debug: {
     log: true,
-    logData: true,
+    logData: false,
   },
   statelog: statelogConfig,
 };
 
-// Define the names of the nodes in the graph
-// Useful for type safety
-const __nodes = ["main"] as const;
-
-const graph = new PieMachine<State>(__nodes, graphConfig);
+const graph = new PieMachine<State>(graphConfig);
 
 // builtins
 
@@ -103,8 +99,11 @@ const addTool = {
   }),
 };
 
+
 graph.node("main", async (state): Promise<any> => {
     const __messages: Message[] = [];
+    const __graph = state.__metadata?.graph || graph;
+    const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
     
 
@@ -132,7 +131,7 @@ async function _count(__messages: Message[] = []): Promise<number> {
   });
 
   const endTime = performance.now();
-  statelogClient.promptCompletion({
+  await statelogClient.promptCompletion({
     messages: __messages,
     completion: __completion,
     model: __client.getModel(),
@@ -160,14 +159,14 @@ async function _count(__messages: Message[] = []): Promise<number> {
     }
 
     if (haltExecution) {
-      statelogClient.debug(`Tool call interrupted execution.`, {
+      await statelogClient.debug(`Tool call interrupted execution.`, {
         messages: __messages,
         model: __client.getModel(),
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
-        obj.__nodesTraversed = graph.getNodesTraversed();
+        obj.__nodesTraversed = __graph.getNodesTraversed();
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -184,7 +183,7 @@ async function _count(__messages: Message[] = []): Promise<number> {
 
     const nextEndTime = performance.now();
 
-    statelogClient.promptCompletion({
+    await statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
@@ -244,7 +243,7 @@ async function _message(__messages: Message[] = []): Promise<string> {
   });
 
   const endTime = performance.now();
-  statelogClient.promptCompletion({
+  await statelogClient.promptCompletion({
     messages: __messages,
     completion: __completion,
     model: __client.getModel(),
@@ -272,14 +271,14 @@ async function _message(__messages: Message[] = []): Promise<string> {
     }
 
     if (haltExecution) {
-      statelogClient.debug(`Tool call interrupted execution.`, {
+      await statelogClient.debug(`Tool call interrupted execution.`, {
         messages: __messages,
         model: __client.getModel(),
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
-        obj.__nodesTraversed = graph.getNodesTraversed();
+        obj.__nodesTraversed = __graph.getNodesTraversed();
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -296,7 +295,7 @@ async function _message(__messages: Message[] = []): Promise<string> {
 
     const nextEndTime = performance.now();
 
-    statelogClient.promptCompletion({
+    await statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
@@ -333,7 +332,8 @@ await console.log(message)
 
 const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
-export async function main(data): Promise<any> {
+export async function main(): Promise<any> {
+  const data = [  ];
   const result = await graph.run("main", { messages: [], data });
   return result.data;
 }

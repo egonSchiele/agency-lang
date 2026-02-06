@@ -8,7 +8,7 @@ import { nanoid } from "nanoid";
 
 const statelogHost = "http://localhost:1065";
 const traceId = nanoid();
-const statelogClient = new StatelogClient({
+const __statelogClient = new StatelogClient({
     host: statelogHost,
     traceId: traceId,
     apiKey: process.env.STATELOG_API_KEY || "",
@@ -74,7 +74,7 @@ async function _foo(__messages: Message[] = []): Promise<Coords> {
   });
 
   const endTime = performance.now();
-  statelogClient.promptCompletion({
+  await statelogClient.promptCompletion({
     messages: __messages,
     completion: __completion,
     model: __client.getModel(),
@@ -102,14 +102,14 @@ async function _foo(__messages: Message[] = []): Promise<Coords> {
     }
 
     if (haltExecution) {
-      statelogClient.debug(`Tool call interrupted execution.`, {
+      await statelogClient.debug(`Tool call interrupted execution.`, {
         messages: __messages,
         model: __client.getModel(),
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
-        obj.__nodesTraversed = graph.getNodesTraversed();
+        obj.__nodesTraversed = __graph.getNodesTraversed();
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -126,7 +126,7 @@ async function _foo(__messages: Message[] = []): Promise<Coords> {
 
     const nextEndTime = performance.now();
 
-    statelogClient.promptCompletion({
+    await statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),

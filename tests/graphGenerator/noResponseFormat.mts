@@ -211,9 +211,12 @@ const response1 = await _response1(__messages);
 
 const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
-export async function main(): Promise<any> {
+
+
+export async function main({ messages = [] }): Promise<any> {
+
   const data = [  ];
-  const result = await graph.run("main", { messages: [], data });
+  const result = await graph.run("main", { messages, data });
   return result.data;
 }
 

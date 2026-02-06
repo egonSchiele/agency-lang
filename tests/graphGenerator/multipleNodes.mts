@@ -370,21 +370,30 @@ graph.conditionalEdge("main", ["greet"]);
 
 const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
-export async function greet(): Promise<any> {
+
+
+export async function greet({ messages = [] }): Promise<any> {
+
   const data = [  ];
-  const result = await graph.run("greet", { messages: [], data });
+  const result = await graph.run("greet", { messages, data });
   return result.data;
 }
 
-export async function processGreeting(msg): Promise<any> {
+
+export async function processGreeting(msg, { messages = [] }): Promise<any> {
+
+
   const data = [ msg ];
-  const result = await graph.run("processGreeting", { messages: [], data });
+  const result = await graph.run("processGreeting", { messages, data });
   return result.data;
 }
 
-export async function main(): Promise<any> {
+
+
+export async function main({ messages = [] }): Promise<any> {
+
   const data = [  ];
-  const result = await graph.run("main", { messages: [], data });
+  const result = await graph.run("main", { messages, data });
   return result.data;
 }
 

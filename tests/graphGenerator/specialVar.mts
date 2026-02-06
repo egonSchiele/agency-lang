@@ -342,9 +342,12 @@ return { ...state, data: [response1, response2]}
 
 const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
-export async function main(): Promise<any> {
+
+
+export async function main({ messages = [] }): Promise<any> {
+
   const data = [  ];
-  const result = await graph.run("main", { messages: [], data });
+  const result = await graph.run("main", { messages, data });
   return result.data;
 }
 

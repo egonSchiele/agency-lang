@@ -3,14 +3,20 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `export async function {{{nodeName:string}}}({{{argsStr:string}}}): Promise<{{{returnType:string}}}> {
+export const template = `{{#hasArgs}}
+export async function {{{nodeName:string}}}({{{argsStr:string}}}, { messages = [] }): Promise<{{{returnType:string}}}> {
+{{/hasArgs}}
+{{^hasArgs}}
+export async function {{{nodeName:string}}}({ messages = [] }): Promise<{{{returnType:string}}}> {
+{{/hasArgs}}
   const data = [ {{{argsStr:string}}} ];
-  const result = await graph.run("{{{nodeName:string}}}", { messages: [], data });
+  const result = await graph.run("{{{nodeName:string}}}", { messages, data });
   return result.data;
 }
 `;
 
 export type TemplateType = {
+  hasArgs: boolean;
   nodeName: string;
   argsStr: string;
   returnType: string;

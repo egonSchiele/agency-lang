@@ -679,9 +679,12 @@ const labeled = await mixed({count: 42, label: `Answer`});
 const processed = await processArray({items: [1, 2, 3, 4, 5]});
 const flexResult = await flexible({value: `test`});
 
-export async function foo(): Promise<string> {
+
+
+export async function foo({ messages = [] }): Promise<string> {
+
   const data = [  ];
-  const result = await graph.run("foo", { messages: [], data });
+  const result = await graph.run("foo", { messages, data });
   return result.data;
 }
 

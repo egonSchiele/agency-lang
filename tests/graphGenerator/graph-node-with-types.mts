@@ -212,9 +212,12 @@ const greeting = await _greeting(name, __messages);
     return { ...state, data: undefined };
 });
 
-export async function greet(name): Promise<string> {
+
+export async function greet(name, { messages = [] }): Promise<string> {
+
+
   const data = [ name ];
-  const result = await graph.run("greet", { messages: [], data });
+  const result = await graph.run("greet", { messages, data });
   return result.data;
 }
 

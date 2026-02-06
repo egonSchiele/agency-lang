@@ -65,15 +65,28 @@ export class GraphGenerator extends TypeScriptGenerator {
       this.functionScopedVariables.push(param.name);
     }
 
-    const bodyCode: string[] = [];
+    const parts: string[][] = [];
     for (const stmt of body) {
       if (stmt.type === "functionCall" && this.isGraphNode(stmt.functionName)) {
         throw new Error(
           `Call to graph node '${stmt.functionName}' inside graph node '${nodeName}' was not returned. All calls to graph nodes must be returned, eg (return ${stmt.functionName}(...)).`,
         );
       }
-      bodyCode.push(this.processNode(stmt));
+      parts.push([]);
+      parts[parts.length - 1].push(this.processNode(stmt));
     }
+    const bodyCode: string[] = [];
+    let partNum = 0;
+    for (const part of parts) {
+      const partCode = `
+      if (__part >= ${partNum}) {
+        ${part.join("").trimEnd()}
+      }
+      `;
+      bodyCode.push(partCode);
+      partNum++;
+    }
+
     this.functionScopedVariables = [];
     this.adjacentNodes[nodeName] = [...this.currentAdjacentNodes];
     this.isInsideGraphNode = false;

@@ -116,129 +116,24 @@ function _builtinInput(prompt: string): Promise<string> {
   });
 }
 
-graph.node("main", async (state): Promise<any> => {
+graph.node("foo", async (state): Promise<any> => {
     const __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
-    const name = await await _builtinInput(`> `);
-
-
-
-async function _fibs(__messages: Message[] = []): Promise<number[]> {
-  const __prompt = `Generate a list of first 10 Fibonacci numbers.`;
-  const startTime = performance.now();
-  __messages.push(userMessage(__prompt));
-  const __tools = undefined;
-
-  
-  // Need to make sure this is always an object
-  const __responseFormat = z.object({
-     response: z.array(z.number())
-  });
-  
-  
-
-  const __client = getClientWithConfig({});
-
-  let __completion = await __client.text({
-    messages: __messages,
-    tools: __tools,
-    responseFormat: __responseFormat,
-  });
-
-  const endTime = performance.now();
-  await statelogClient.promptCompletion({
-    messages: __messages,
-    completion: __completion,
-    model: __client.getModel(),
-    timeTaken: endTime - startTime,
-  });
-
-  if (!__completion.success) {
-    throw new Error(
-      `Error getting response from ${__model}: ${__completion.error}`
-    );
-  }
-
-  let responseMessage = __completion.value;
-
-  // Handle function calls
-  while (responseMessage.toolCalls.length > 0) {
-    // Add assistant's response with tool calls to message history
-    __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
-    let toolCallStartTime, toolCallEndTime;
-    let haltExecution = false;
-
-    // Process each tool call
-    for (const toolCall of responseMessage.toolCalls) {
-      
-    }
-
-    if (haltExecution) {
-      await statelogClient.debug(`Tool call interrupted execution.`, {
-        messages: __messages,
-        model: __client.getModel(),
-      });
-      try {
-        const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
-        obj.__nodesTraversed = __graph.getNodesTraversed();
-        return obj;
-      } catch (e) {
-        return __messages.at(-1).content;
+    
+      if (__part >= 0) {
+        const name = await await _builtinInput(`> `);
       }
-      //return __messages;
-    }
-  
-    const nextStartTime = performance.now();
-    let __completion = await __client.text({
-      messages: __messages,
-      tools: __tools,
-      responseFormat: __responseFormat,
-    });
+      
 
-    const nextEndTime = performance.now();
+      if (__part >= 1) {
+        
+      }
+      
 
-    await statelogClient.promptCompletion({
-      messages: __messages,
-      completion: __completion,
-      model: __client.getModel(),
-      timeTaken: nextEndTime - nextStartTime,
-    });
-
-    if (!__completion.success) {
-      throw new Error(
-        `Error getting response from ${__model}: ${__completion.error}`
-      );
-    }
-    responseMessage = __completion.value;
-  }
-
-  // Add final assistant response to history
-  // not passing tool calls back this time
-  __messages.push(assistantMessage(responseMessage.output));
-  
-  try {
-  const result = JSON.parse(responseMessage.output || "");
-  return result.response;
-  } catch (e) {
-    return responseMessage.output;
-    // console.error("Error parsing response for variable 'fibs':", e);
-    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
-    // throw e;
-  }
-  
-
-  
-}
-
-const fibs = await _fibs(__messages);
-
-
-await console.log(`First 10 Fibonacci numbers: ${fibs}`)
-
-return goToNode("sayHi",
+      if (__part >= 2) {
+        return goToNode("sayHi",
   {
     messages: __messages,
     __metadata: {
@@ -251,18 +146,25 @@ return goToNode("sayHi",
     
   }
 );
+      }
+      
 
-
+      if (__part >= 3) {
+        
+      }
+      
+    return { ...state, data: undefined };
 });
 
-graph.conditionalEdge("main", ["sayHi"]);
+graph.conditionalEdge("foo", ["sayHi"]);
 
 graph.merge(__graph___bar);
-const initialState: State = {messages: [], data: {}};
-const finalState = graph.run("main", initialState);
-export async function main(): Promise<any> {
+
+
+export async function foo({ messages } = {}): Promise<any> {
+
   const data = [  ];
-  const result = await graph.run("main", { messages: [], data });
+  const result = await graph.run("foo", { messages: messages || [], data });
   return result.data;
 }
 

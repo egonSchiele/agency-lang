@@ -107,7 +107,10 @@ export const __greetTool = {
 
 export async function greet({name}) : Promise<string> {
     const __messages: Message[] = [];
-    return `Kya chal raha jai, ${name}!`
+    return interrupt(`interrupt in greet`)
+
+
+return `Kya chal raha jai, ${name}!`
 
 
 }
@@ -119,12 +122,26 @@ graph.node("sayHi", async (state): Promise<any> => {
     const [name] = state.data;
     
     
+      if (__part >= 0) {
+        
+      }
+      
 
+      if (__part >= 1) {
+        
+      }
+      
 
+      if (__part >= 2) {
+        
 async function _response(name: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `Greet the user with their name: ${name} using the greet function.`;
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = [__greetTool];
 
   
@@ -162,6 +179,7 @@ async function _response(name: string, __messages: Message[] = []): Promise<stri
     __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
+    let haltToolCall = {}
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
@@ -192,6 +210,10 @@ await statelogClient.toolCall({
       }));
 
   if (isInterrupt(result)) {
+    haltToolCall = {
+      id: toolCall.id,
+      name: toolCall.name,
+    };
     haltExecution = true;
     break;
   }
@@ -205,10 +227,12 @@ await statelogClient.toolCall({
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
+        obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -250,14 +274,55 @@ await statelogClient.toolCall({
 
 const response = await _response(name, __messages);
 
+if (isInterrupt(response)) {
+  return { ...state, data: response };
+}
+      }
+      
 
-await console.log(response)
+      if (__part >= 3) {
+        
+      }
+      
 
+      if (__part >= 4) {
+        await console.log(response)
+      }
+      
+
+      if (__part >= 5) {
+        
+      }
+      
+
+      if (__part >= 6) {
+        await console.log(`Greeting sent.`)
+      }
+      
+
+      if (__part >= 7) {
+        
+      }
+      
+
+      if (__part >= 8) {
+        return { ...state, data: response}
+      }
+      
+
+      if (__part >= 9) {
+        
+      }
+      
+    return { ...state, data: undefined };
 });
 
-export async function sayHi(name): Promise<any> {
+
+export async function sayHi(name, { messages } = {}): Promise<any> {
+
+
   const data = [ name ];
-  const result = await graph.run("sayHi", { messages: [], data });
+  const result = await graph.run("sayHi", { messages: messages || [], data });
   return result.data;
 }
 

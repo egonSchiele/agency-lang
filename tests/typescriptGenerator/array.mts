@@ -53,7 +53,11 @@ const addTool = {
 async function _numbers(__messages: Message[] = []): Promise<number[]> {
   const __prompt = `the first 5 prime numbers`;
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = undefined;
 
   
@@ -108,11 +112,12 @@ async function _numbers(__messages: Message[] = []): Promise<number[]> {
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
         obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -161,11 +166,18 @@ async function _numbers(__messages: Message[] = []): Promise<number[]> {
 }
 
 const numbers = await _numbers(__messages);
-await console.log(numbers)
+
+if (isInterrupt(numbers)) {
+  return { ...state, data: numbers };
+}await console.log(numbers)
 async function _greetings(__messages: Message[] = []): Promise<string[]> {
   const __prompt = `a list of 3 common greetings in different languages`;
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = undefined;
 
   
@@ -220,11 +232,12 @@ async function _greetings(__messages: Message[] = []): Promise<string[]> {
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
         obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -273,4 +286,7 @@ async function _greetings(__messages: Message[] = []): Promise<string[]> {
 }
 
 const greetings = await _greetings(__messages);
-await console.log(greetings)
+
+if (isInterrupt(greetings)) {
+  return { ...state, data: greetings };
+}await console.log(greetings)

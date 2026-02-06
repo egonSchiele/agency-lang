@@ -111,7 +111,11 @@ graph.node("greet", async (state): Promise<any> => {
 async function _greeting(__messages: Message[] = []): Promise<string> {
   const __prompt = `say hello`;
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = undefined;
 
   
@@ -163,11 +167,12 @@ async function _greeting(__messages: Message[] = []): Promise<string> {
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
         obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -209,6 +214,9 @@ async function _greeting(__messages: Message[] = []): Promise<string> {
 
 const greeting = await _greeting(__messages);
 
+if (isInterrupt(greeting)) {
+  return { ...state, data: greeting };
+}
 
 return goToNode("processGreeting",
   {
@@ -241,7 +249,11 @@ graph.node("processGreeting", async (state): Promise<any> => {
 async function _result(msg: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `format this greeting: ${msg}`;
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = undefined;
 
   
@@ -293,11 +305,12 @@ async function _result(msg: string, __messages: Message[] = []): Promise<string>
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
         obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -339,6 +352,9 @@ async function _result(msg: string, __messages: Message[] = []): Promise<string>
 
 const result = await _result(msg, __messages);
 
+if (isInterrupt(result)) {
+  return { ...state, data: result };
+}
 
 await console.log(result)
 
@@ -376,28 +392,28 @@ const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
 
 
-export async function greet({ messages = [] }?: Record<string, any>|undefined): Promise<any> {
+export async function greet({ messages } = {}): Promise<any> {
 
   const data = [  ];
-  const result = await graph.run("greet", { messages, data });
+  const result = await graph.run("greet", { messages: messages || [], data });
   return result.data;
 }
 
 
-export async function processGreeting(msg, { messages = [] }?: Record<string, any>|undefined): Promise<any> {
+export async function processGreeting(msg, { messages } = {}): Promise<any> {
 
 
   const data = [ msg ];
-  const result = await graph.run("processGreeting", { messages, data });
+  const result = await graph.run("processGreeting", { messages: messages || [], data });
   return result.data;
 }
 
 
 
-export async function main({ messages = [] }?: Record<string, any>|undefined): Promise<any> {
+export async function main({ messages } = {}): Promise<any> {
 
   const data = [  ];
-  const result = await graph.run("main", { messages, data });
+  const result = await graph.run("main", { messages: messages || [], data });
   return result.data;
 }
 

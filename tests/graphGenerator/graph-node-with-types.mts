@@ -112,7 +112,11 @@ graph.node("greet", async (state): Promise<any> => {
 async function _greeting(name: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `Say hello to ${name}`;
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = undefined;
 
   
@@ -164,11 +168,12 @@ async function _greeting(name: string, __messages: Message[] = []): Promise<stri
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
         obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -210,16 +215,19 @@ async function _greeting(name: string, __messages: Message[] = []): Promise<stri
 
 const greeting = await _greeting(name, __messages);
 
+if (isInterrupt(greeting)) {
+  return { ...state, data: greeting };
+}
 
     return { ...state, data: undefined };
 });
 
 
-export async function greet(name, { messages = [] }?: Record<string, any>|undefined): Promise<string> {
+export async function greet(name, { messages } = {}): Promise<string> {
 
 
   const data = [ name ];
-  const result = await graph.run("greet", { messages, data });
+  const result = await graph.run("greet", { messages: messages || [], data });
   return result.data;
 }
 

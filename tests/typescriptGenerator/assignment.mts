@@ -53,7 +53,11 @@ const addTool = {
 async function _bar(__messages: Message[] = []): Promise<number> {
   const __prompt = `the number 1`;
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = undefined;
 
   
@@ -108,11 +112,12 @@ async function _bar(__messages: Message[] = []): Promise<number> {
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
         obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -161,3 +166,7 @@ async function _bar(__messages: Message[] = []): Promise<number> {
 }
 
 const bar = await _bar(__messages);
+
+if (isInterrupt(bar)) {
+  return { ...state, data: bar };
+}

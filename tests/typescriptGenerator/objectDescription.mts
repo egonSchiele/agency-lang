@@ -53,7 +53,11 @@ const addTool = {
 async function _url(__messages: Message[] = []): Promise<{ hostname: string; port: number }> {
   const __prompt = `extract the hostname and port from \"https://example.com:8080\"`;
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = undefined;
 
   
@@ -108,11 +112,12 @@ async function _url(__messages: Message[] = []): Promise<{ hostname: string; por
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
         obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -161,4 +166,7 @@ async function _url(__messages: Message[] = []): Promise<{ hostname: string; por
 }
 
 const url = await _url(__messages);
-await console.log(url)
+
+if (isInterrupt(url)) {
+  return { ...state, data: url };
+}await console.log(url)

@@ -67,7 +67,11 @@ const message = await await _builtinInput(`Please enter a message: `);
 async function _sentiment(message: string, __messages: Message[] = []): Promise<"happy" | "sad" | "neutral"> {
   const __prompt = `Categorize the sentiment in this message: \"${message}\"`;
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = undefined;
 
   
@@ -122,11 +126,12 @@ async function _sentiment(message: string, __messages: Message[] = []): Promise<
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
         obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -175,4 +180,7 @@ async function _sentiment(message: string, __messages: Message[] = []): Promise<
 }
 
 const sentiment = await _sentiment(message, __messages);
-await console.log(sentiment)
+
+if (isInterrupt(sentiment)) {
+  return { ...state, data: sentiment };
+}await console.log(sentiment)

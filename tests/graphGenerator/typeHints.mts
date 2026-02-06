@@ -111,7 +111,11 @@ graph.node("main", async (state): Promise<any> => {
 async function _count(__messages: Message[] = []): Promise<number> {
   const __prompt = `the number 42`;
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = undefined;
 
   
@@ -166,11 +170,12 @@ async function _count(__messages: Message[] = []): Promise<number> {
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
         obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -220,6 +225,9 @@ async function _count(__messages: Message[] = []): Promise<number> {
 
 const count = await _count(__messages);
 
+if (isInterrupt(count)) {
+  return { ...state, data: count };
+}
 
 
 
@@ -228,7 +236,11 @@ const count = await _count(__messages);
 async function _message(__messages: Message[] = []): Promise<string> {
   const __prompt = `a greeting message`;
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = undefined;
 
   
@@ -280,11 +292,12 @@ async function _message(__messages: Message[] = []): Promise<string> {
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
         obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -326,6 +339,9 @@ async function _message(__messages: Message[] = []): Promise<string> {
 
 const message = await _message(__messages);
 
+if (isInterrupt(message)) {
+  return { ...state, data: message };
+}
 
 
 await console.log(count)
@@ -339,10 +355,10 @@ const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
 
 
-export async function main({ messages = [] }?: Record<string, any>|undefined): Promise<any> {
+export async function main({ messages } = {}): Promise<any> {
 
   const data = [  ];
-  const result = await graph.run("main", { messages, data });
+  const result = await graph.run("main", { messages: messages || [], data });
   return result.data;
 }
 

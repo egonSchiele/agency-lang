@@ -53,7 +53,11 @@ const addTool = {
 async function _foo(__messages: Message[] = []): Promise<"hi"> {
   const __prompt = `the string hi`;
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = undefined;
 
   
@@ -108,11 +112,12 @@ async function _foo(__messages: Message[] = []): Promise<"hi"> {
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
         obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -162,10 +167,17 @@ async function _foo(__messages: Message[] = []): Promise<"hi"> {
 
 const foo = await _foo(__messages);
 
+if (isInterrupt(foo)) {
+  return { ...state, data: foo };
+}
 async function _bar(__messages: Message[] = []): Promise<42> {
   const __prompt = `the number 42`;
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = undefined;
 
   
@@ -220,11 +232,12 @@ async function _bar(__messages: Message[] = []): Promise<42> {
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
         obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -274,10 +287,17 @@ async function _bar(__messages: Message[] = []): Promise<42> {
 
 const bar = await _bar(__messages);
 
+if (isInterrupt(bar)) {
+  return { ...state, data: bar };
+}
 async function _baz(__messages: Message[] = []): Promise<true> {
   const __prompt = `the boolean true`;
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = undefined;
 
   
@@ -332,11 +352,12 @@ async function _baz(__messages: Message[] = []): Promise<true> {
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
         obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -385,3 +406,7 @@ async function _baz(__messages: Message[] = []): Promise<true> {
 }
 
 const baz = await _baz(__messages);
+
+if (isInterrupt(baz)) {
+  return { ...state, data: baz };
+}

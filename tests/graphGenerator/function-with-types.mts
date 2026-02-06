@@ -131,7 +131,11 @@ export async function add({x, y}) : Promise<number> {
 async function _result(x: string, y: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `add ${x} and ${y}`;
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = undefined;
 
   
@@ -183,11 +187,12 @@ async function _result(x: string, y: string, __messages: Message[] = []): Promis
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
         obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -229,6 +234,9 @@ async function _result(x: string, y: string, __messages: Message[] = []): Promis
 
 const result = await _result(x, y, __messages);
 
+if (isInterrupt(result)) {
+  return { ...state, data: result };
+}
 
 return result
 
@@ -240,7 +248,11 @@ export async function greet({name}) : Promise<any> {
 async function _message(name: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `Hello ${name}!`;
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = undefined;
 
   
@@ -292,11 +304,12 @@ async function _message(name: string, __messages: Message[] = []): Promise<strin
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
         obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -338,6 +351,9 @@ async function _message(name: string, __messages: Message[] = []): Promise<strin
 
 const message = await _message(name, __messages);
 
+if (isInterrupt(message)) {
+  return { ...state, data: message };
+}
 
 return message
 
@@ -349,7 +365,11 @@ export async function mixed({count, label}) : Promise<any> {
 async function _output(label: string, count: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `${label}: ${count}`;
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = undefined;
 
   
@@ -401,11 +421,12 @@ async function _output(label: string, count: string, __messages: Message[] = [])
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
         obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -447,6 +468,9 @@ async function _output(label: string, count: string, __messages: Message[] = [])
 
 const output = await _output(label, count, __messages);
 
+if (isInterrupt(output)) {
+  return { ...state, data: output };
+}
 
 return output
 
@@ -458,7 +482,11 @@ export async function processArray({items}) : Promise<any> {
 async function _result(items: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `Processing array with ${items} items`;
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = undefined;
 
   
@@ -510,11 +538,12 @@ async function _result(items: string, __messages: Message[] = []): Promise<strin
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
         obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -556,6 +585,9 @@ async function _result(items: string, __messages: Message[] = []): Promise<strin
 
 const result = await _result(items, __messages);
 
+if (isInterrupt(result)) {
+  return { ...state, data: result };
+}
 
 return result
 
@@ -567,7 +599,11 @@ export async function flexible({value}) : Promise<any> {
 async function _result(value: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `Received value: ${value}`;
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = undefined;
 
   
@@ -619,11 +655,12 @@ async function _result(value: string, __messages: Message[] = []): Promise<strin
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
         obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -665,6 +702,9 @@ async function _result(value: string, __messages: Message[] = []): Promise<strin
 
 const result = await _result(value, __messages);
 
+if (isInterrupt(result)) {
+  return { ...state, data: result };
+}
 
 return result
 
@@ -691,10 +731,10 @@ const flexResult = await flexible({value: `test`});
 
 
 
-export async function foo({ messages = [] }?: Record<string, any>|undefined): Promise<string> {
+export async function foo({ messages } = {}): Promise<string> {
 
   const data = [  ];
-  const result = await graph.run("foo", { messages, data });
+  const result = await graph.run("foo", { messages: messages || [], data });
   return result.data;
 }
 

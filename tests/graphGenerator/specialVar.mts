@@ -128,7 +128,11 @@ const msg = await await _builtinInput(`> `);
 async function _response1(msg: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `${msg}`;
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = undefined;
 
   
@@ -180,11 +184,12 @@ async function _response1(msg: string, __messages: Message[] = []): Promise<stri
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
         obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -226,6 +231,9 @@ async function _response1(msg: string, __messages: Message[] = []): Promise<stri
 
 const response1 = await _response1(msg, __messages);
 
+if (isInterrupt(response1)) {
+  return { ...state, data: response1 };
+}
 
 
 await console.log(response1)
@@ -236,7 +244,11 @@ __client = getClientWithConfig({ model: `gemini-2.5-flash-lite` });
 async function _response2(msg: string, __messages: Message[] = []): Promise<string> {
   const __prompt = `${msg}`;
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = undefined;
 
   
@@ -288,11 +300,12 @@ async function _response2(msg: string, __messages: Message[] = []): Promise<stri
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
         obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -334,6 +347,9 @@ async function _response2(msg: string, __messages: Message[] = []): Promise<stri
 
 const response2 = await _response2(msg, __messages);
 
+if (isInterrupt(response2)) {
+  return { ...state, data: response2 };
+}
 
 
 await console.log(response2)
@@ -348,10 +364,10 @@ const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
 
 
-export async function main({ messages = [] }?: Record<string, any>|undefined): Promise<any> {
+export async function main({ messages } = {}): Promise<any> {
 
   const data = [  ];
-  const result = await graph.run("main", { messages, data });
+  const result = await graph.run("main", { messages: messages || [], data });
   return result.data;
 }
 

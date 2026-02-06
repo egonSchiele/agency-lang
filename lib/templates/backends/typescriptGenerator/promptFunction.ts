@@ -7,7 +7,11 @@ export const template = `
 async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{typeString:string}}}> {
   const __prompt = {{{promptCode:string}}};
   const startTime = performance.now();
+
+  if (__messages.at(-1)?.role !== "tool") {
   __messages.push(userMessage(__prompt));
+  }
+
   const __tools = {{{tools}}};
 
   {{#hasResponseFormat}}
@@ -64,11 +68,12 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
       });
       try {
         const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages;
+        obj.__messages = __messages.slice(0, -1);
         obj.__nodesTraversed = __graph.getNodesTraversed();
         obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
+        console.error("Error parsing messages for interrupt response:", e);
         return __messages.at(-1).content;
       }
       //return __messages;
@@ -119,7 +124,10 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
 }
 
 const {{{variableName:string}}} = await _{{{variableName:string}}}({{{funcCallParams:string}}});
-`;
+
+if (isInterrupt({{{variableName:string}}})) {
+  return { ...state, data: {{{variableName:string}}} };
+}`;
 
 export type TemplateType = {
   variableName: string;

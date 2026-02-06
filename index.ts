@@ -17,7 +17,7 @@ function isInterrupt<T>(obj: any): obj is Interrupt<T> {
 }
 
 const finalState = (await foo()) as any;
-console.log(finalState);
+console.log({ finalState });
 if (isInterrupt(finalState)) {
   console.log("Execution interrupted with message:", finalState.data);
   const messages = finalState.__messages;

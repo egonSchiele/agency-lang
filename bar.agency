@@ -1,5 +1,5 @@
 def greet(name: string): string {
-  return interrupt("Generating greeting message...")
+  return interrupt("interrupt in greet")
   return "Kya chal raha jai, ${name}!"
 }
 

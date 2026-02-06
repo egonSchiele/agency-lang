@@ -268,12 +268,12 @@ export class TypeScriptGenerator extends BaseGenerator {
     });
     //this.generatedStatements.push(functionCode);
 
-    const argsStr = [...interpolatedVars, "__messages"].join(", ");
+    //const argsStr = [...interpolatedVars, "__messages"].join(", ");
     // Generate the function call
-    return (
+    return functionCode; /* (
       `${functionCode}\nconst ${variableName} = await _${variableName}(${argsStr});` +
       "\n"
-    );
+    ); */
   }
 
   protected processTool(node: FunctionDefinition): string {
@@ -524,6 +524,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     return promptFunction.default({
       variableName,
       argsStr,
+      funcCallParams: [...functionArgs, "__messages"].join(", "),
       typeString,
       promptCode,
       hasResponseFormat: zodSchema !== DEFAULT_SCHEMA,

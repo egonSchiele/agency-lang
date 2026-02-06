@@ -30,6 +30,10 @@ await statelogClient.toolCall({
       }));
 
   if (isInterrupt(result)) {
+    haltToolCall = {
+      id: toolCall.id,
+      name: toolCall.name,
+    };
     haltExecution = true;
     break;
   }

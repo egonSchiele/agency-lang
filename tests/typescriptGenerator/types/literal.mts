@@ -94,6 +94,7 @@ async function _foo(__messages: Message[] = []): Promise<"hi"> {
     __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
+    let haltToolCall = {}
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
@@ -109,6 +110,7 @@ async function _foo(__messages: Message[] = []): Promise<"hi"> {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
         obj.__nodesTraversed = __graph.getNodesTraversed();
+        obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -204,6 +206,7 @@ async function _bar(__messages: Message[] = []): Promise<42> {
     __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
+    let haltToolCall = {}
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
@@ -219,6 +222,7 @@ async function _bar(__messages: Message[] = []): Promise<42> {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
         obj.__nodesTraversed = __graph.getNodesTraversed();
+        obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -314,6 +318,7 @@ async function _baz(__messages: Message[] = []): Promise<true> {
     __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
+    let haltToolCall = {}
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
@@ -329,6 +334,7 @@ async function _baz(__messages: Message[] = []): Promise<true> {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
         obj.__nodesTraversed = __graph.getNodesTraversed();
+        obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
         return __messages.at(-1).content;

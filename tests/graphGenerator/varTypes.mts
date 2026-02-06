@@ -153,6 +153,7 @@ async function _response(person_name: string, person_age: string, __messages: Me
     __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
+    let haltToolCall = {}
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
@@ -168,6 +169,7 @@ async function _response(person_name: string, person_age: string, __messages: Me
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
         obj.__nodesTraversed = __graph.getNodesTraversed();
+        obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -229,7 +231,7 @@ const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
 
 
-export async function main({ messages = [] }): Promise<any> {
+export async function main({ messages = [] }?: Record<string, any>|undefined): Promise<any> {
 
   const data = [  ];
   const result = await graph.run("main", { messages, data });

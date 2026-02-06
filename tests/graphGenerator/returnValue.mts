@@ -118,7 +118,7 @@ const initialState: State = {messages: [], data: {}};
 const finalState = graph.run("main", initialState);
 
 
-export async function main({ messages = [] }): Promise<any> {
+export async function main({ messages = [] }?: Record<string, any>|undefined): Promise<any> {
 
   const data = [  ];
   const result = await graph.run("main", { messages, data });

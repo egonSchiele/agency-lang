@@ -169,6 +169,7 @@ async function _result(x: string, y: string, __messages: Message[] = []): Promis
     __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
+    let haltToolCall = {}
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
@@ -184,6 +185,7 @@ async function _result(x: string, y: string, __messages: Message[] = []): Promis
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
         obj.__nodesTraversed = __graph.getNodesTraversed();
+        obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -276,6 +278,7 @@ async function _message(name: string, __messages: Message[] = []): Promise<strin
     __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
+    let haltToolCall = {}
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
@@ -291,6 +294,7 @@ async function _message(name: string, __messages: Message[] = []): Promise<strin
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
         obj.__nodesTraversed = __graph.getNodesTraversed();
+        obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -383,6 +387,7 @@ async function _output(label: string, count: string, __messages: Message[] = [])
     __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
+    let haltToolCall = {}
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
@@ -398,6 +403,7 @@ async function _output(label: string, count: string, __messages: Message[] = [])
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
         obj.__nodesTraversed = __graph.getNodesTraversed();
+        obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -490,6 +496,7 @@ async function _result(items: string, __messages: Message[] = []): Promise<strin
     __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
+    let haltToolCall = {}
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
@@ -505,6 +512,7 @@ async function _result(items: string, __messages: Message[] = []): Promise<strin
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
         obj.__nodesTraversed = __graph.getNodesTraversed();
+        obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -597,6 +605,7 @@ async function _result(value: string, __messages: Message[] = []): Promise<strin
     __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
+    let haltToolCall = {}
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
@@ -612,6 +621,7 @@ async function _result(value: string, __messages: Message[] = []): Promise<strin
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
         obj.__nodesTraversed = __graph.getNodesTraversed();
+        obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -681,7 +691,7 @@ const flexResult = await flexible({value: `test`});
 
 
 
-export async function foo({ messages = [] }): Promise<string> {
+export async function foo({ messages = [] }?: Record<string, any>|undefined): Promise<string> {
 
   const data = [  ];
   const result = await graph.run("foo", { messages, data });

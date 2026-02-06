@@ -1,9 +1,7 @@
 import node { sayHi } from "./bar.agency"
 import tool { greet } from "./bar.agency"
 
-node main() {
+node foo() {
   name = input("> ")
-  fibs: number[] = llm("Generate a list of first 10 Fibonacci numbers.")
-  print("First 10 Fibonacci numbers: ${fibs}")
   return sayHi(name)
 }

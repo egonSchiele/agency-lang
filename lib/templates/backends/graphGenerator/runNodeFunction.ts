@@ -4,10 +4,10 @@
 import { apply } from "typestache";
 
 export const template = `{{#hasArgs}}
-export async function {{{nodeName:string}}}({{{argsStr:string}}}, { messages = [] }): Promise<{{{returnType:string}}}> {
+export async function {{{nodeName:string}}}({{{argsStr:string}}}, { messages = [] }?: Record<string, any>|undefined): Promise<{{{returnType:string}}}> {
 {{/hasArgs}}
 {{^hasArgs}}
-export async function {{{nodeName:string}}}({ messages = [] }): Promise<{{{returnType:string}}}> {
+export async function {{{nodeName:string}}}({ messages = [] }?: Record<string, any>|undefined): Promise<{{{returnType:string}}}> {
 {{/hasArgs}}
   const data = [ {{{argsStr:string}}} ];
   const result = await graph.run("{{{nodeName:string}}}", { messages, data });

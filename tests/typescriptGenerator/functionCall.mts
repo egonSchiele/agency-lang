@@ -94,6 +94,7 @@ async function _bar(__messages: Message[] = []): Promise<number> {
     __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
+    let haltToolCall = {}
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
@@ -109,6 +110,7 @@ async function _bar(__messages: Message[] = []): Promise<number> {
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
         obj.__nodesTraversed = __graph.getNodesTraversed();
+        obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
         return __messages.at(-1).content;

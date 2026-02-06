@@ -1,4 +1,5 @@
 def greet(name: string): string {
+  return interrupt("Generating greeting message...")
   return "Kya chal raha jai, ${name}!"
 }
 
@@ -6,4 +7,6 @@ node sayHi(name) {
   +greet
   response = llm("Greet the user with their name: ${name} using the greet function.")
   print(response)
+  print("Greeting sent.")
+  return response
 }

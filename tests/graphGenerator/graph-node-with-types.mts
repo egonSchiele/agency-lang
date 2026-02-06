@@ -150,6 +150,7 @@ async function _greeting(name: string, __messages: Message[] = []): Promise<stri
     __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
+    let haltToolCall = {}
 
     // Process each tool call
     for (const toolCall of responseMessage.toolCalls) {
@@ -165,6 +166,7 @@ async function _greeting(name: string, __messages: Message[] = []): Promise<stri
         const obj = JSON.parse(__messages.at(-1).content);
         obj.__messages = __messages;
         obj.__nodesTraversed = __graph.getNodesTraversed();
+        obj.__toolCall = haltToolCall;
         return obj;
       } catch (e) {
         return __messages.at(-1).content;
@@ -213,7 +215,7 @@ const greeting = await _greeting(name, __messages);
 });
 
 
-export async function greet(name, { messages = [] }): Promise<string> {
+export async function greet(name, { messages = [] }?: Record<string, any>|undefined): Promise<string> {
 
 
   const data = [ name ];

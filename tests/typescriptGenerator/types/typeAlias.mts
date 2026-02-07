@@ -51,14 +51,15 @@ const addTool = {
   };
 type Coords = { x: number; y: number };
 
-async function _foo(__messages: Message[] = []): Promise<Coords> {
+async function _foo(__metadata?: Record<string, any>): Promise<Coords> {
   const __prompt = `a set of coordinates`;
   const startTime = performance.now();
+  const __messages: Message[] = __metadata?.messages || [];
 
-  if (__messages.at(-1)?.role !== "tool") {
-  __messages.push(userMessage(__prompt));
-  }
-
+  // These are to restore state after interrupt.
+  // TODO I think this could be implemented in a cleaner way.
+  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
   const __tools = undefined;
 
   
@@ -68,41 +69,52 @@ async function _foo(__messages: Message[] = []): Promise<Coords> {
   });
   
   
-
+  
   const __client = getClientWithConfig({});
+  let responseMessage:any;
 
-  let __completion = await __client.text({
-    messages: __messages,
-    tools: __tools,
-    responseFormat: __responseFormat,
-  });
+  if (__toolCalls.length === 0) {
+    __messages.push(userMessage(__prompt));
+  
+  
+    let __completion = await __client.text({
+      messages: __messages,
+      tools: __tools,
+      responseFormat: __responseFormat,
+    });
+  
+    const endTime = performance.now();
+    await statelogClient.promptCompletion({
+      messages: __messages,
+      completion: __completion,
+      model: __client.getModel(),
+      timeTaken: endTime - startTime,
+    });
+  
+    if (!__completion.success) {
+      throw new Error(
+        `Error getting response from ${__model}: ${__completion.error}`
+      );
+    }
+  
+    responseMessage = __completion.value;
+    __toolCalls = responseMessage.toolCalls || [];
 
-  const endTime = performance.now();
-  await statelogClient.promptCompletion({
-    messages: __messages,
-    completion: __completion,
-    model: __client.getModel(),
-    timeTaken: endTime - startTime,
-  });
-
-  if (!__completion.success) {
-    throw new Error(
-      `Error getting response from ${__model}: ${__completion.error}`
-    );
+    if (__toolCalls.length > 0) {
+      // Add assistant's response with tool calls to message history
+      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+    }
   }
 
-  let responseMessage = __completion.value;
-
   // Handle function calls
-  while (responseMessage.toolCalls.length > 0) {
-    // Add assistant's response with tool calls to message history
-    __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  if (__toolCalls.length > 0) {
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
     let haltToolCall = {}
+    let haltInterrupt:any = null;
 
     // Process each tool call
-    for (const toolCall of responseMessage.toolCalls) {
+    for (const toolCall of __toolCalls) {
       
     }
 
@@ -111,17 +123,14 @@ async function _foo(__messages: Message[] = []): Promise<Coords> {
         messages: __messages,
         model: __client.getModel(),
       });
-      try {
-        const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages.slice(0, -1);
-        obj.__nodesTraversed = __graph.getNodesTraversed();
-        obj.__toolCall = haltToolCall;
-        return obj;
-      } catch (e) {
-        console.error("Error parsing messages for interrupt response:", e);
-        return __messages.at(-1).content;
-      }
-      //return __messages;
+
+      __stateStack.other = {
+        messages: __messages.map((msg) => msg.toJSON()),
+        nodesTraversed: __graph.getNodesTraversed(),
+        toolCall: haltToolCall,
+      };
+      haltInterrupt.__state = __stateStack.toJSON();
+      return haltInterrupt;
     }
   
     const nextStartTime = performance.now();
@@ -166,8 +175,13 @@ async function _foo(__messages: Message[] = []): Promise<Coords> {
   
 }
 
-const foo = await _foo(__messages);
+__self.foo = await _foo({
+      messages: __messages,
+      interruptResponse: __interruptResponse,
+      toolCall: __toolCall,
+    });
 
-if (isInterrupt(foo)) {
-  return { ...state, data: foo };
-}await console.log(foo)
+// return early from node if this is an interrupt
+if (isInterrupt(__self.foo)) {
+  return { ...state, data: __self.foo };
+}await console.log(__stateStack.globals.foo)

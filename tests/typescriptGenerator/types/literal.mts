@@ -50,14 +50,15 @@ const addTool = {
     },
   };
 
-async function _foo(__messages: Message[] = []): Promise<"hi"> {
+async function _foo(__metadata?: Record<string, any>): Promise<"hi"> {
   const __prompt = `the string hi`;
   const startTime = performance.now();
+  const __messages: Message[] = __metadata?.messages || [];
 
-  if (__messages.at(-1)?.role !== "tool") {
-  __messages.push(userMessage(__prompt));
-  }
-
+  // These are to restore state after interrupt.
+  // TODO I think this could be implemented in a cleaner way.
+  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
   const __tools = undefined;
 
   
@@ -67,41 +68,52 @@ async function _foo(__messages: Message[] = []): Promise<"hi"> {
   });
   
   
-
+  
   const __client = getClientWithConfig({});
+  let responseMessage:any;
 
-  let __completion = await __client.text({
-    messages: __messages,
-    tools: __tools,
-    responseFormat: __responseFormat,
-  });
+  if (__toolCalls.length === 0) {
+    __messages.push(userMessage(__prompt));
+  
+  
+    let __completion = await __client.text({
+      messages: __messages,
+      tools: __tools,
+      responseFormat: __responseFormat,
+    });
+  
+    const endTime = performance.now();
+    await statelogClient.promptCompletion({
+      messages: __messages,
+      completion: __completion,
+      model: __client.getModel(),
+      timeTaken: endTime - startTime,
+    });
+  
+    if (!__completion.success) {
+      throw new Error(
+        `Error getting response from ${__model}: ${__completion.error}`
+      );
+    }
+  
+    responseMessage = __completion.value;
+    __toolCalls = responseMessage.toolCalls || [];
 
-  const endTime = performance.now();
-  await statelogClient.promptCompletion({
-    messages: __messages,
-    completion: __completion,
-    model: __client.getModel(),
-    timeTaken: endTime - startTime,
-  });
-
-  if (!__completion.success) {
-    throw new Error(
-      `Error getting response from ${__model}: ${__completion.error}`
-    );
+    if (__toolCalls.length > 0) {
+      // Add assistant's response with tool calls to message history
+      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+    }
   }
 
-  let responseMessage = __completion.value;
-
   // Handle function calls
-  while (responseMessage.toolCalls.length > 0) {
-    // Add assistant's response with tool calls to message history
-    __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  if (__toolCalls.length > 0) {
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
     let haltToolCall = {}
+    let haltInterrupt:any = null;
 
     // Process each tool call
-    for (const toolCall of responseMessage.toolCalls) {
+    for (const toolCall of __toolCalls) {
       
     }
 
@@ -110,17 +122,14 @@ async function _foo(__messages: Message[] = []): Promise<"hi"> {
         messages: __messages,
         model: __client.getModel(),
       });
-      try {
-        const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages.slice(0, -1);
-        obj.__nodesTraversed = __graph.getNodesTraversed();
-        obj.__toolCall = haltToolCall;
-        return obj;
-      } catch (e) {
-        console.error("Error parsing messages for interrupt response:", e);
-        return __messages.at(-1).content;
-      }
-      //return __messages;
+
+      __stateStack.other = {
+        messages: __messages.map((msg) => msg.toJSON()),
+        nodesTraversed: __graph.getNodesTraversed(),
+        toolCall: haltToolCall,
+      };
+      haltInterrupt.__state = __stateStack.toJSON();
+      return haltInterrupt;
     }
   
     const nextStartTime = performance.now();
@@ -165,19 +174,25 @@ async function _foo(__messages: Message[] = []): Promise<"hi"> {
   
 }
 
-const foo = await _foo(__messages);
+__self.foo = await _foo({
+      messages: __messages,
+      interruptResponse: __interruptResponse,
+      toolCall: __toolCall,
+    });
 
-if (isInterrupt(foo)) {
-  return { ...state, data: foo };
+// return early from node if this is an interrupt
+if (isInterrupt(__self.foo)) {
+  return { ...state, data: __self.foo };
 }
-async function _bar(__messages: Message[] = []): Promise<42> {
+async function _bar(__metadata?: Record<string, any>): Promise<42> {
   const __prompt = `the number 42`;
   const startTime = performance.now();
+  const __messages: Message[] = __metadata?.messages || [];
 
-  if (__messages.at(-1)?.role !== "tool") {
-  __messages.push(userMessage(__prompt));
-  }
-
+  // These are to restore state after interrupt.
+  // TODO I think this could be implemented in a cleaner way.
+  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
   const __tools = undefined;
 
   
@@ -187,41 +202,52 @@ async function _bar(__messages: Message[] = []): Promise<42> {
   });
   
   
-
+  
   const __client = getClientWithConfig({});
+  let responseMessage:any;
 
-  let __completion = await __client.text({
-    messages: __messages,
-    tools: __tools,
-    responseFormat: __responseFormat,
-  });
+  if (__toolCalls.length === 0) {
+    __messages.push(userMessage(__prompt));
+  
+  
+    let __completion = await __client.text({
+      messages: __messages,
+      tools: __tools,
+      responseFormat: __responseFormat,
+    });
+  
+    const endTime = performance.now();
+    await statelogClient.promptCompletion({
+      messages: __messages,
+      completion: __completion,
+      model: __client.getModel(),
+      timeTaken: endTime - startTime,
+    });
+  
+    if (!__completion.success) {
+      throw new Error(
+        `Error getting response from ${__model}: ${__completion.error}`
+      );
+    }
+  
+    responseMessage = __completion.value;
+    __toolCalls = responseMessage.toolCalls || [];
 
-  const endTime = performance.now();
-  await statelogClient.promptCompletion({
-    messages: __messages,
-    completion: __completion,
-    model: __client.getModel(),
-    timeTaken: endTime - startTime,
-  });
-
-  if (!__completion.success) {
-    throw new Error(
-      `Error getting response from ${__model}: ${__completion.error}`
-    );
+    if (__toolCalls.length > 0) {
+      // Add assistant's response with tool calls to message history
+      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+    }
   }
 
-  let responseMessage = __completion.value;
-
   // Handle function calls
-  while (responseMessage.toolCalls.length > 0) {
-    // Add assistant's response with tool calls to message history
-    __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  if (__toolCalls.length > 0) {
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
     let haltToolCall = {}
+    let haltInterrupt:any = null;
 
     // Process each tool call
-    for (const toolCall of responseMessage.toolCalls) {
+    for (const toolCall of __toolCalls) {
       
     }
 
@@ -230,17 +256,14 @@ async function _bar(__messages: Message[] = []): Promise<42> {
         messages: __messages,
         model: __client.getModel(),
       });
-      try {
-        const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages.slice(0, -1);
-        obj.__nodesTraversed = __graph.getNodesTraversed();
-        obj.__toolCall = haltToolCall;
-        return obj;
-      } catch (e) {
-        console.error("Error parsing messages for interrupt response:", e);
-        return __messages.at(-1).content;
-      }
-      //return __messages;
+
+      __stateStack.other = {
+        messages: __messages.map((msg) => msg.toJSON()),
+        nodesTraversed: __graph.getNodesTraversed(),
+        toolCall: haltToolCall,
+      };
+      haltInterrupt.__state = __stateStack.toJSON();
+      return haltInterrupt;
     }
   
     const nextStartTime = performance.now();
@@ -285,19 +308,25 @@ async function _bar(__messages: Message[] = []): Promise<42> {
   
 }
 
-const bar = await _bar(__messages);
+__self.bar = await _bar({
+      messages: __messages,
+      interruptResponse: __interruptResponse,
+      toolCall: __toolCall,
+    });
 
-if (isInterrupt(bar)) {
-  return { ...state, data: bar };
+// return early from node if this is an interrupt
+if (isInterrupt(__self.bar)) {
+  return { ...state, data: __self.bar };
 }
-async function _baz(__messages: Message[] = []): Promise<true> {
+async function _baz(__metadata?: Record<string, any>): Promise<true> {
   const __prompt = `the boolean true`;
   const startTime = performance.now();
+  const __messages: Message[] = __metadata?.messages || [];
 
-  if (__messages.at(-1)?.role !== "tool") {
-  __messages.push(userMessage(__prompt));
-  }
-
+  // These are to restore state after interrupt.
+  // TODO I think this could be implemented in a cleaner way.
+  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
   const __tools = undefined;
 
   
@@ -307,41 +336,52 @@ async function _baz(__messages: Message[] = []): Promise<true> {
   });
   
   
-
+  
   const __client = getClientWithConfig({});
+  let responseMessage:any;
 
-  let __completion = await __client.text({
-    messages: __messages,
-    tools: __tools,
-    responseFormat: __responseFormat,
-  });
+  if (__toolCalls.length === 0) {
+    __messages.push(userMessage(__prompt));
+  
+  
+    let __completion = await __client.text({
+      messages: __messages,
+      tools: __tools,
+      responseFormat: __responseFormat,
+    });
+  
+    const endTime = performance.now();
+    await statelogClient.promptCompletion({
+      messages: __messages,
+      completion: __completion,
+      model: __client.getModel(),
+      timeTaken: endTime - startTime,
+    });
+  
+    if (!__completion.success) {
+      throw new Error(
+        `Error getting response from ${__model}: ${__completion.error}`
+      );
+    }
+  
+    responseMessage = __completion.value;
+    __toolCalls = responseMessage.toolCalls || [];
 
-  const endTime = performance.now();
-  await statelogClient.promptCompletion({
-    messages: __messages,
-    completion: __completion,
-    model: __client.getModel(),
-    timeTaken: endTime - startTime,
-  });
-
-  if (!__completion.success) {
-    throw new Error(
-      `Error getting response from ${__model}: ${__completion.error}`
-    );
+    if (__toolCalls.length > 0) {
+      // Add assistant's response with tool calls to message history
+      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+    }
   }
 
-  let responseMessage = __completion.value;
-
   // Handle function calls
-  while (responseMessage.toolCalls.length > 0) {
-    // Add assistant's response with tool calls to message history
-    __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  if (__toolCalls.length > 0) {
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
     let haltToolCall = {}
+    let haltInterrupt:any = null;
 
     // Process each tool call
-    for (const toolCall of responseMessage.toolCalls) {
+    for (const toolCall of __toolCalls) {
       
     }
 
@@ -350,17 +390,14 @@ async function _baz(__messages: Message[] = []): Promise<true> {
         messages: __messages,
         model: __client.getModel(),
       });
-      try {
-        const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages.slice(0, -1);
-        obj.__nodesTraversed = __graph.getNodesTraversed();
-        obj.__toolCall = haltToolCall;
-        return obj;
-      } catch (e) {
-        console.error("Error parsing messages for interrupt response:", e);
-        return __messages.at(-1).content;
-      }
-      //return __messages;
+
+      __stateStack.other = {
+        messages: __messages.map((msg) => msg.toJSON()),
+        nodesTraversed: __graph.getNodesTraversed(),
+        toolCall: haltToolCall,
+      };
+      haltInterrupt.__state = __stateStack.toJSON();
+      return haltInterrupt;
     }
   
     const nextStartTime = performance.now();
@@ -405,8 +442,13 @@ async function _baz(__messages: Message[] = []): Promise<true> {
   
 }
 
-const baz = await _baz(__messages);
+__self.baz = await _baz({
+      messages: __messages,
+      interruptResponse: __interruptResponse,
+      toolCall: __toolCall,
+    });
 
-if (isInterrupt(baz)) {
-  return { ...state, data: baz };
+// return early from node if this is an interrupt
+if (isInterrupt(__self.baz)) {
+  return { ...state, data: __self.baz };
 }

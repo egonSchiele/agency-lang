@@ -62,16 +62,17 @@ function _builtinInput(prompt: string): Promise<string> {
     });
   });
 }
-const message = await await _builtinInput(`Please enter a message: `);
+__stateStack.globals.message = await await _builtinInput(`Please enter a message: `);
 
-async function _sentiment(message: string, __messages: Message[] = []): Promise<"happy" | "sad" | "neutral"> {
+async function _sentiment(message: string, __metadata?: Record<string, any>): Promise<"happy" | "sad" | "neutral"> {
   const __prompt = `Categorize the sentiment in this message: \"${message}\"`;
   const startTime = performance.now();
+  const __messages: Message[] = __metadata?.messages || [];
 
-  if (__messages.at(-1)?.role !== "tool") {
-  __messages.push(userMessage(__prompt));
-  }
-
+  // These are to restore state after interrupt.
+  // TODO I think this could be implemented in a cleaner way.
+  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
   const __tools = undefined;
 
   
@@ -81,41 +82,52 @@ async function _sentiment(message: string, __messages: Message[] = []): Promise<
   });
   
   
-
+  
   const __client = getClientWithConfig({});
+  let responseMessage:any;
 
-  let __completion = await __client.text({
-    messages: __messages,
-    tools: __tools,
-    responseFormat: __responseFormat,
-  });
+  if (__toolCalls.length === 0) {
+    __messages.push(userMessage(__prompt));
+  
+  
+    let __completion = await __client.text({
+      messages: __messages,
+      tools: __tools,
+      responseFormat: __responseFormat,
+    });
+  
+    const endTime = performance.now();
+    await statelogClient.promptCompletion({
+      messages: __messages,
+      completion: __completion,
+      model: __client.getModel(),
+      timeTaken: endTime - startTime,
+    });
+  
+    if (!__completion.success) {
+      throw new Error(
+        `Error getting response from ${__model}: ${__completion.error}`
+      );
+    }
+  
+    responseMessage = __completion.value;
+    __toolCalls = responseMessage.toolCalls || [];
 
-  const endTime = performance.now();
-  await statelogClient.promptCompletion({
-    messages: __messages,
-    completion: __completion,
-    model: __client.getModel(),
-    timeTaken: endTime - startTime,
-  });
-
-  if (!__completion.success) {
-    throw new Error(
-      `Error getting response from ${__model}: ${__completion.error}`
-    );
+    if (__toolCalls.length > 0) {
+      // Add assistant's response with tool calls to message history
+      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+    }
   }
 
-  let responseMessage = __completion.value;
-
   // Handle function calls
-  while (responseMessage.toolCalls.length > 0) {
-    // Add assistant's response with tool calls to message history
-    __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  if (__toolCalls.length > 0) {
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
     let haltToolCall = {}
+    let haltInterrupt:any = null;
 
     // Process each tool call
-    for (const toolCall of responseMessage.toolCalls) {
+    for (const toolCall of __toolCalls) {
       
     }
 
@@ -124,17 +136,14 @@ async function _sentiment(message: string, __messages: Message[] = []): Promise<
         messages: __messages,
         model: __client.getModel(),
       });
-      try {
-        const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages.slice(0, -1);
-        obj.__nodesTraversed = __graph.getNodesTraversed();
-        obj.__toolCall = haltToolCall;
-        return obj;
-      } catch (e) {
-        console.error("Error parsing messages for interrupt response:", e);
-        return __messages.at(-1).content;
-      }
-      //return __messages;
+
+      __stateStack.other = {
+        messages: __messages.map((msg) => msg.toJSON()),
+        nodesTraversed: __graph.getNodesTraversed(),
+        toolCall: haltToolCall,
+      };
+      haltInterrupt.__state = __stateStack.toJSON();
+      return haltInterrupt;
     }
   
     const nextStartTime = performance.now();
@@ -179,8 +188,13 @@ async function _sentiment(message: string, __messages: Message[] = []): Promise<
   
 }
 
-const sentiment = await _sentiment(message, __messages);
+__self.sentiment = await _sentiment(__stateStack.globals.message, {
+      messages: __messages,
+      interruptResponse: __interruptResponse,
+      toolCall: __toolCall,
+    });
 
-if (isInterrupt(sentiment)) {
-  return { ...state, data: sentiment };
-}await console.log(sentiment)
+// return early from node if this is an interrupt
+if (isInterrupt(__self.sentiment)) {
+  return { ...state, data: __self.sentiment };
+}await console.log(__stateStack.globals.sentiment)

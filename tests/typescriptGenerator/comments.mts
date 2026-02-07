@@ -56,35 +56,58 @@ export const __greetTool = {
 };
 //  This is a single line comment at the top of the file
 //  Variable assignment with comment above
-const x = 42;
+__stateStack.globals.x = 42;
 //  Multiple comments
 //  can be placed
 //  on consecutive lines
-const y = `hello`;
+__stateStack.globals.y = `hello`;
 //  Comment before function definition
 
-export async function greet({}) : Promise<any> {
+export async function greet(args, __metadata={}) : Promise<any> {
     const __messages: Message[] = [];
-    //  Comment inside function
+    const __stack = __stateStack.getNewState();
+    const __step = __stack.step;
+    const __self: Record<string, any> = __stack.locals;
+
+    // TODO: Note that we don't need to use the same kind of restoration
+    // from state for arguments as we do for nodes,
+    // because the args are serialized in the tool call.
+    // But what about situations where it was a function call, not a tool call?
+    // In that case, we would want to deserialize the argument.
+    const __params = [];
+    (args).forEach((item, index) => {
+      __stack.args[__params[index]] = item;
+    });
 
 
-const message = `Hello, World!`;
+    
+      if (__step <= 0) {
+        //  Comment inside function
+        __stack.step++;
+      }
+      
 
-
+      if (__step <= 1) {
+        __stack.locals.message = `Hello, World!`;
 //  Another comment
+        __stack.step++;
+      }
+      
 
-
-return message
-
-
+      if (__step <= 2) {
+        __stateStack.pop();
+return __stack.locals.message
+        __stack.step++;
+      }
+      
 }//  Comment before function call
-const result = await greet({});
-await console.log(result)//  Testing comments in different contexts
+__stateStack.globals.result = await greet([]);
+await console.log(__stateStack.globals.result)//  Testing comments in different contexts
 //  1. Before type hints
-const age = 25;
+__stateStack.globals.age = 25;
 //  2. Before conditionals
-const status = `active`;
-switch (status) {
+__stateStack.globals.status = `active`;
+switch (__stateStack.globals.status) {
   //  Comment in match block
   case `active`:
 await console.log(`Running`)

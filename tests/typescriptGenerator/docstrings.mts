@@ -78,19 +78,99 @@ export const __processDataTool = {
 };
 //  Test docstrings in functions
 
-export async function add({a, b}) : Promise<any> {
+export async function add(args, __metadata={}) : Promise<any> {
     const __messages: Message[] = [];
+    const __stack = __stateStack.getNewState();
+    const __step = __stack.step;
+    const __self: Record<string, any> = __stack.locals;
+
+    // TODO: Note that we don't need to use the same kind of restoration
+    // from state for arguments as we do for nodes,
+    // because the args are serialized in the tool call.
+    // But what about situations where it was a function call, not a tool call?
+    // In that case, we would want to deserialize the argument.
+    const __params = ["a", "b"];
+    (args).forEach((item, index) => {
+      __stack.args[__params[index]] = item;
+    });
+
+
     
+      if (__step <= 0) {
+        
+        __stack.step++;
+      }
+      
 }
-export async function greet({name}) : Promise<any> {
+export async function greet(args, __metadata={}) : Promise<any> {
     const __messages: Message[] = [];
+    const __stack = __stateStack.getNewState();
+    const __step = __stack.step;
+    const __self: Record<string, any> = __stack.locals;
+
+    // TODO: Note that we don't need to use the same kind of restoration
+    // from state for arguments as we do for nodes,
+    // because the args are serialized in the tool call.
+    // But what about situations where it was a function call, not a tool call?
+    // In that case, we would want to deserialize the argument.
+    const __params = ["name"];
+    (args).forEach((item, index) => {
+      __stack.args[__params[index]] = item;
+    });
+
+
     
+      if (__step <= 0) {
+        
+        __stack.step++;
+      }
+      
 }
-export async function calculateArea({width, height}) : Promise<any> {
+export async function calculateArea(args, __metadata={}) : Promise<any> {
     const __messages: Message[] = [];
+    const __stack = __stateStack.getNewState();
+    const __step = __stack.step;
+    const __self: Record<string, any> = __stack.locals;
+
+    // TODO: Note that we don't need to use the same kind of restoration
+    // from state for arguments as we do for nodes,
+    // because the args are serialized in the tool call.
+    // But what about situations where it was a function call, not a tool call?
+    // In that case, we would want to deserialize the argument.
+    const __params = ["width", "height"];
+    (args).forEach((item, index) => {
+      __stack.args[__params[index]] = item;
+    });
+
+
     
+      if (__step <= 0) {
+        
+        __stack.step++;
+      }
+      
 }
-export async function processData({}) : Promise<any> {
+export async function processData(args, __metadata={}) : Promise<any> {
     const __messages: Message[] = [];
+    const __stack = __stateStack.getNewState();
+    const __step = __stack.step;
+    const __self: Record<string, any> = __stack.locals;
+
+    // TODO: Note that we don't need to use the same kind of restoration
+    // from state for arguments as we do for nodes,
+    // because the args are serialized in the tool call.
+    // But what about situations where it was a function call, not a tool call?
+    // In that case, we would want to deserialize the argument.
+    const __params = [];
+    (args).forEach((item, index) => {
+      __stack.args[__params[index]] = item;
+    });
+
+
     
+      if (__step <= 0) {
+        
+        __stack.step++;
+      }
+      
 }

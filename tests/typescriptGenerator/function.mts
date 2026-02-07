@@ -60,17 +60,63 @@ export const __addTool = {
   schema: z.object({"a": z.string(), "b": z.string(), })
 };
 
-export async function test({}) : Promise<any> {
+export async function test(args, __metadata={}) : Promise<any> {
     const __messages: Message[] = [];
-    const foo = 1;
+    const __stack = __stateStack.getNewState();
+    const __step = __stack.step;
+    const __self: Record<string, any> = __stack.locals;
+
+    // TODO: Note that we don't need to use the same kind of restoration
+    // from state for arguments as we do for nodes,
+    // because the args are serialized in the tool call.
+    // But what about situations where it was a function call, not a tool call?
+    // In that case, we would want to deserialize the argument.
+    const __params = [];
+    (args).forEach((item, index) => {
+      __stack.args[__params[index]] = item;
+    });
 
 
-foo
+    
+      if (__step <= 0) {
+        
+        __stack.step++;
+      }
+      
 
-}await console.log(test({}))
-export async function add({a, b}) : Promise<any> {
+      if (__step <= 1) {
+        __stack.locals.foo = 1;
+        __stack.step++;
+      }
+      
+
+      if (__step <= 2) {
+        __stack.locals.foo
+        __stack.step++;
+      }
+      
+}await console.log(test([]))
+export async function add(args, __metadata={}) : Promise<any> {
     const __messages: Message[] = [];
-    //  multi-param function
+    const __stack = __stateStack.getNewState();
+    const __step = __stack.step;
+    const __self: Record<string, any> = __stack.locals;
+
+    // TODO: Note that we don't need to use the same kind of restoration
+    // from state for arguments as we do for nodes,
+    // because the args are serialized in the tool call.
+    // But what about situations where it was a function call, not a tool call?
+    // In that case, we would want to deserialize the argument.
+    const __params = ["a", "b"];
+    (args).forEach((item, index) => {
+      __stack.args[__params[index]] = item;
+    });
 
 
+    
+      if (__step <= 0) {
+        //  multi-param function
+        __stack.step++;
+      }
+      
 }

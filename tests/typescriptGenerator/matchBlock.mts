@@ -51,8 +51,8 @@ const addTool = {
   };
 //  Test match blocks (pattern matching)
 //  Simple match with string literals
-const action = `start`;
-switch (action) {
+__stateStack.globals.action = `start`;
+switch (__stateStack.globals.action) {
   case `start`:
 await console.log(`Starting...`)
     break;
@@ -66,8 +66,8 @@ await console.log(`Restarting...`)
 await console.log(`Unknown action`)
     break;
 }//  Match with number literals
-const statusCode = 200;
-switch (statusCode) {
+__stateStack.globals.statusCode = 200;
+switch (__stateStack.globals.statusCode) {
   case 200:
 await console.log(`OK`)
     break;
@@ -81,32 +81,32 @@ await console.log(`Internal Server Error`)
 await console.log(`Unknown status`)
     break;
 }//  Match with variable assignment in body
-const grade = `A`;
-const points = 0;
-switch (grade) {
+__stateStack.globals.grade = `A`;
+__stateStack.globals.points = 0;
+switch (__stateStack.globals.grade) {
   case `A`:
-const a = 100;
+__stateStack.globals.a = 100;
 
     break;
   case `B`:
-const b = 85;
+__stateStack.globals.b = 85;
 
     break;
   case `C`:
-const c = 70;
+__stateStack.globals.c = 70;
 
     break;
   case `D`:
-const d = 55;
+__stateStack.globals.d = 55;
 
     break;
   default:
-const e = 0;
+__stateStack.globals.e = 0;
 
     break;
 }//  Match with function calls in body
-const level = `debug`;
-switch (level) {
+__stateStack.globals.level = `debug`;
+switch (__stateStack.globals.level) {
   case `debug`:
 await console.log(`Debug mode enabled`)
     break;
@@ -120,37 +120,37 @@ await console.log(`Warning level`)
 await console.log(`Error level`)
     break;
 }//  Match with array results
-const resultType = `array`;
-switch (resultType) {
+__stateStack.globals.resultType = `array`;
+switch (__stateStack.globals.resultType) {
   case `array`:
-const data1 = [1, 2, 3];
+__stateStack.globals.data1 = [1, 2, 3];
 
     break;
   case `object`:
-const data2 = {"x": 1, "y": 2};
+__stateStack.globals.data2 = {"x": 1, "y": 2};
 
     break;
   default:
-const data3 = [];
+__stateStack.globals.data3 = [];
 
     break;
 }//  Match with object results
-const format = `json`;
-switch (format) {
+__stateStack.globals.format = `json`;
+switch (__stateStack.globals.format) {
   case `xml`:
-const output1 = {"type": `xml`, "ext": `.xml`};
+__stateStack.globals.output1 = {"type": `xml`, "ext": `.xml`};
 
     break;
   case `json`:
-const output2 = {"type": `json`, "ext": `.json`};
+__stateStack.globals.output2 = {"type": `json`, "ext": `.json`};
 
     break;
   case `csv`:
-const output3 = {"type": `csv`, "ext": `.csv`};
+__stateStack.globals.output3 = {"type": `csv`, "ext": `.csv`};
 
     break;
   default:
-const output4 = {"type": `unknown`, "ext": ``};
+__stateStack.globals.output4 = {"type": `unknown`, "ext": ``};
 
     break;
 }

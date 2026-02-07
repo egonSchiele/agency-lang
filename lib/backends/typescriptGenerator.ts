@@ -188,8 +188,12 @@ export class TypeScriptGenerator extends BaseGenerator {
 
   protected processAssignment(node: Assignment): string {
     const { variableName, typeHint, value } = node;
-    // check is scope is global
-    this.functionScopedVariables.push(variableName);
+    const _currentScope = this.getCurrentScope();
+    if (_currentScope === "global") {
+      this.globalScopedVariables.push(variableName);
+    } else {
+      this.functionScopedVariables.push(variableName);
+    }
 
     const typeAnnotation = typeHint
       ? `: ${variableTypeToString(typeHint, this.typeAliases)}`
@@ -508,9 +512,9 @@ export class TypeScriptGenerator extends BaseGenerator {
     // Generate async function for prompt-based assignment
     const _variableType = variableType ||
       this.typeHints[variableName] || {
-      type: "primitiveType" as const,
-      value: "string",
-    };
+        type: "primitiveType" as const,
+        value: "string",
+      };
 
     const zodSchema = mapTypeToZodSchema(_variableType, this.typeAliases);
     //console.log("Generated Zod schema for variable", variableName, "Variable type:", variableType, ":", zodSchema, "aliases:", this.typeAliases, "hints:", this.typeHints);

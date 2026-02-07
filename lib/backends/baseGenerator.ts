@@ -362,6 +362,10 @@ export class BaseGenerator {
     this.currentScope.pop();
   }
 
+  protected getCurrentScope(): Scope {
+    return this.currentScope[this.currentScope.length - 1];
+  }
+
   protected getScopeVar(): string {
     const currentScope = this.currentScope[this.currentScope.length - 1];
     switch (currentScope) {

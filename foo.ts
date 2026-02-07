@@ -109,7 +109,7 @@ export async function respondToInterrupt(_interrupt: Interrupt, _interruptRespon
   const interrupt = structuredClone(_interrupt);
   const interruptResponse = structuredClone(_interruptResponse);
   __stateStack = StateStack.fromJSON(interrupt.__state || {});
-  __stateStack.setMode("deserialize");
+  __stateStack.deserializeMode();
   const messages = (__stateStack.other.messages || []).map((json: any) => {
     return messageFromJSON(json);
   });
@@ -172,9 +172,11 @@ class PackagedState {
 
 class StateStack {
   public stack: StateItem[] = [];
-  public mode: "serialize" | "deserialize" = "serialize";
+  private mode: "serialize" | "deserialize" = "serialize";
   public globals: Record<string, any> = {};
   public other: Record<string, any> = {};
+
+  private deserializeStackLength = 0;
 
   constructor(stack: StateItem[] = [], mode: "serialize" | "deserialize" = "serialize") {
     this.stack = stack;
@@ -182,7 +184,7 @@ class StateStack {
   }
 
   getNewState(): StateItem | null {
-    if (this.stack.length === 0 && this.mode !== "serialize") {
+    if (this.mode === "deserialize" && this.deserializeStackLength <= 0) {
       console.log("Forcing mode to serialize, nothing left to deserialize");
       this.mode = "serialize";
     }
@@ -195,6 +197,7 @@ class StateStack {
       this.stack.push(newState);
       return newState;
     } else if (this.mode === "deserialize") {
+      this.deserializeStackLength -= 1;
       const item = this.stack.shift();
       this.stack.push(item);
       return item;
@@ -202,8 +205,9 @@ class StateStack {
     return null;
   }
 
-  setMode(mode: "serialize" | "deserialize") {
-    this.mode = mode;
+  deserializeMode() {
+    this.mode = "deserialize";
+    this.deserializeStackLength = this.stack.length;
   }
 
   pop(): StateItem | undefined {
@@ -216,6 +220,7 @@ class StateStack {
       globals: this.globals,
       other: this.other,
       mode: this.mode,
+      deserializeStackLength: this.deserializeStackLength,
     });
   }
 
@@ -225,6 +230,7 @@ class StateStack {
     stateStack.globals = json.globals || {};
     stateStack.other = json.other || {};
     stateStack.mode = json.mode || "serialize";
+    stateStack.deserializeStackLength = json.deserializeStackLength || 0;
     return stateStack;
   }
 }

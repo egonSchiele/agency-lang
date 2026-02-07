@@ -33,9 +33,3 @@ while (isInterrupt(finalState)) {
 }
 
 //console.log("Execution completed with final state:", JSON.stringify(finalState, null, 2));
-
-type StateItem = {
-  args: Record<string, any>;
-  locals: Record<string, any>;
-  step: number;
-};

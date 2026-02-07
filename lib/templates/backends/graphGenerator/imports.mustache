@@ -68,7 +68,9 @@ const empty = <T>(arr: T[]): boolean => arr.length === 0;
 export type Interrupt<T> = {
   type: "interrupt";
   data: T;
-  __state?: PackagedState;
+
+  // JSONified StateStack, i.e. serialized execution state
+  __state?: Record<string, any>;
 };
 
 export function interrupt<T>(data: T): Interrupt<T> {
@@ -102,12 +104,16 @@ export type InterruptResponseModify = {
 export async function respondToInterrupt(_interrupt: Interrupt, _interruptResponse: InterruptResponseType) {
   const interrupt = structuredClone(_interrupt);
   const interruptResponse = structuredClone(_interruptResponse);
+
   __stateStack = StateStack.fromJSON(interrupt.__state || {});
   __stateStack.deserializeMode();
+  
   const messages = (__stateStack.other.messages || []).map((json: any) => {
+    // create message objects from JSON
     return messageFromJSON(json);
   });
 
+  // start at the last node we visited
   const nodesTraversed = __stateStack.other.nodesTraversed || [];
   const nodeName = nodesTraversed[nodesTraversed.length - 1];
   const result = await graph.run(nodeName, {
@@ -119,9 +125,10 @@ export async function respondToInterrupt(_interrupt: Interrupt, _interruptRespon
       state: interrupt.__state,
       __stateStack: __stateStack,
     },
+
+    // restore args from the state stack
     data: "<from-stack>"
   });
-  //console.log(`Result of graph.run("\${nodeName}"):`, JSON.stringify(result, null, 2));
   return result.data;
 }
 
@@ -133,43 +140,32 @@ export async function rejectInterrupt(interrupt: Interrupt) {
   return await respondToInterrupt(interrupt, { type: "reject" });
 }
 
-class PackagedState {
-  public messages?: Message[];
-  public nodesTraversed?: string[];
-  public toolCall?: Record<string, any>;
-  public step?: number;
-  public self?: Record<string, any>;
-  public global?: Record<string, any>;
-  public args?: any;
-  constructor(_state: Record<string, any>, args?: any) {
-    const state = structuredClone(_state);
-    this.messages = state.messages;
-    this.nodesTraversed = state.graph?.getNodesTraversed();
-    this.toolCall = state.toolCall;
-    this.step = state.part;
-    this.self = state.self;
-    this.global = state.global;
-    this.args = state.args;
-  }
+type StateItem = {
+  args: Record<string, any>;
+  locals: Record<string, any>;
+  step: number;
+};
 
-  toJSON() {
-    return {
-      messages: this.messages,
-      nodesTraversed: this.nodesTraversed,
-      toolCall: this.toolCall,
-      step: this.step,
-      self: this.self,
-      global: this.global,
-      args: this.args,
-    };
-  }
-
-  nextStep() {
-    this.step ||= 0;
-    this.step += 1;
-  }
-}
-
+// Here's how serialization and deserialization works:
+// 
+// - `this.stack`: an array containing the state of every frame in the stack.
+//   For each frame, it tracks the local variables, the arguments to the function
+//   or node, and what line the execution is currently on.
+// - `this.globals`: keeps track of any global variables. 
+// 
+// Note that since every agency file has its own state stack.
+// This means that we will only be tracking variables global to *that file*.
+// This should be fine since nodes and functions can't and shouldn't be able
+// to access global variables from other files.
+// 
+// But it does mean that when we restore state,
+// it's important to restore THE STATE STACK OF THE CORRECT FILE,
+// so that global variables are set correctly!
+// 
+// This is why we don't restore the `__stateStack` and `__global` variables right here.
+// Instead we run the correct node and pass the StateStack into that node,
+// so that the *node* can restore the global state, thus ensuring it will restore those values
+// to the `__stateStack` and `__global` variables local to its file.
 
 class StateStack {
   public stack: StateItem[] = [];

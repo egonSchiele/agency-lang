@@ -665,6 +665,16 @@ export class TypeScriptGenerator extends BaseGenerator {
     return `await ${code}`;
   }
 
+  /* This generates the body of a node or function separated into multiple parts.
+  You can think of a part as roughly corresponding to a single statement
+  (although some statements don't need their own parts, such as a newlines or type definitions).
+
+  This is done so that we can keep track of what statement we're currently executing,
+  so that we can serialize that as part of the state if we return from an interrupt,
+  so that when we deserialize the state, we can pick up where we were and avoid having to
+  re-execute all the statements that we already executed.
+
+  Basically, this is part of the reason why agency can pick up exactly where you left off. */
   protected processBodyAsParts(body: AgencyNode[]): string[] {
     const parts: string[][] = [[]];
     for (const stmt of body) {

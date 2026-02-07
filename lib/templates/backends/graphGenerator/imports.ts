@@ -104,7 +104,9 @@ export type InterruptResponseModify = {
 };
 
 
-export async function respondToInterrupt(interrupt: Interrupt, interruptResponse: InterruptResponseType) {
+export async function respondToInterrupt(_interrupt: Interrupt, _interruptResponse: InterruptResponseType) {
+  const interrupt = structuredClone(_interrupt);
+  const interruptResponse = structuredClone(_interruptResponse);
   __stateStack = StateStack.fromJSON(interrupt.__state || {});
   __stateStack.setMode("deserialize");
   const messages = (__stateStack.other.messages || []).map((json: any) => {
@@ -113,7 +115,7 @@ export async function respondToInterrupt(interrupt: Interrupt, interruptResponse
 
   const nodesTraversed = __stateStack.other.nodesTraversed || [];
   const nodeName = nodesTraversed[nodesTraversed.length - 1];
-  return graph.run(nodeName, {
+  const result = await graph.run(nodeName, {
     messages: messages,
     __metadata: {
       graph: graph,
@@ -124,6 +126,8 @@ export async function respondToInterrupt(interrupt: Interrupt, interruptResponse
     },
     data: "<from-stack>"
   });
+  //console.log(\`Result of graph.run("\${nodeName}"):\`, JSON.stringify(result, null, 2));
+  return result.data;
 }
 
 
@@ -177,6 +181,10 @@ class StateStack {
   }
 
   getNewState(): StateItem | null {
+    if (this.stack.length === 0 && this.mode !== "serialize") {
+      console.log("Forcing mode to serialize, nothing left to deserialize");
+      this.mode = "serialize";
+    }
     if (this.mode === "serialize") {
       const newState: StateItem = {
         args: {},

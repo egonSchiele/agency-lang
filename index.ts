@@ -17,19 +17,22 @@ function _builtinInput(prompt: string): Promise<string> {
   });
 }
 
-const finalState = (await foo()) as any;
+let finalState = (await foo()) as any;
 // console.log(JSON.stringify({ finalState }, null, 2));
-if (isInterrupt(finalState)) {
+while (isInterrupt(finalState)) {
+  //console.log(JSON.stringify({ finalState }, null, 2));
   console.log("Execution interrupted with message:", finalState.data);
   const approval = await _builtinInput(
     "Do you want to approve this interrupt? (yes/no): ",
   );
   if (approval.toLowerCase() === "yes" || approval.toLowerCase() === "y") {
-    await respondToInterrupt(finalState, { type: "approve" });
+    finalState = await respondToInterrupt(finalState, { type: "approve" });
   } else {
-    await respondToInterrupt(finalState, { type: "reject" });
+    finalState = await respondToInterrupt(finalState, { type: "reject" });
   }
 }
+
+//console.log("Execution completed with final state:", JSON.stringify(finalState, null, 2));
 
 type StateItem = {
   args: Record<string, any>;

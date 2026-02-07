@@ -1,6 +1,7 @@
 def greet(name: string): string {
   print("About to try and greet ${name}...")
   return interrupt("Do you want to greet ${name}?")
+  return interrupt("2nd interrupt")
   return "Kya chal raha jai, ${name}!"
 }
 

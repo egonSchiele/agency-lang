@@ -123,7 +123,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       node.value.type === "functionCall" &&
       node.value.functionName === "interrupt"
     ) {
-      return `return ${returnCode}\n`;
+      return `__stack.step++;\nreturn ${returnCode}\n`;
     }
     return `__stateStack.pop();\nreturn ${returnCode}\n`;
   }
@@ -508,9 +508,9 @@ export class TypeScriptGenerator extends BaseGenerator {
     // Generate async function for prompt-based assignment
     const _variableType = variableType ||
       this.typeHints[variableName] || {
-        type: "primitiveType" as const,
-        value: "string",
-      };
+      type: "primitiveType" as const,
+      value: "string",
+    };
 
     const zodSchema = mapTypeToZodSchema(_variableType, this.typeAliases);
     //console.log("Generated Zod schema for variable", variableName, "Variable type:", variableType, ":", zodSchema, "aliases:", this.typeAliases, "hints:", this.typeHints);

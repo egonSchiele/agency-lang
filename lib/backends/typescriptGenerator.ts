@@ -13,6 +13,7 @@ import {
   VariableType,
 } from "../types.js";
 
+import { TYPES_THAT_DONT_TRIGGER_NEW_PART } from "@/config.js";
 import { AwaitStatement } from "@/types/await.js";
 import { SpecialVar } from "@/types/specialVar.js";
 import { TimeBlock } from "@/types/timeBlock.js";
@@ -46,7 +47,7 @@ import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
-import { escape, uniq, zip } from "../utils.js";
+import { escape, uniq } from "../utils.js";
 import { BaseGenerator } from "./baseGenerator.js";
 import {
   generateBuiltinHelpers,
@@ -57,7 +58,6 @@ import {
   DEFAULT_SCHEMA,
   mapTypeToZodSchema,
 } from "./typescriptGenerator/typeToZodSchema.js";
-import { TYPES_THAT_DONT_TRIGGER_NEW_PART } from "@/config.js";
 
 export class TypeScriptGenerator extends BaseGenerator {
   constructor() {
@@ -512,9 +512,9 @@ export class TypeScriptGenerator extends BaseGenerator {
     // Generate async function for prompt-based assignment
     const _variableType = variableType ||
       this.typeHints[variableName] || {
-        type: "primitiveType" as const,
-        value: "string",
-      };
+      type: "primitiveType" as const,
+      value: "string",
+    };
 
     const zodSchema = mapTypeToZodSchema(_variableType, this.typeAliases);
     //console.log("Generated Zod schema for variable", variableName, "Variable type:", variableType, ":", zodSchema, "aliases:", this.typeAliases, "hints:", this.typeHints);

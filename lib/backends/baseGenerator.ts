@@ -14,6 +14,8 @@ import {
   VariableType,
 } from "../types.js";
 
+import { AwaitStatement } from "@/types/await.js";
+import { TimeBlock } from "@/types/timeBlock.js";
 import {
   AccessExpression,
   DotFunctionCall,
@@ -23,6 +25,7 @@ import {
 import { AgencyArray, AgencyObject } from "../types/dataStructures.js";
 import { FunctionCall, FunctionDefinition } from "../types/function.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
+import { IfElse } from "../types/ifElse.js";
 import {
   ImportNodeStatement,
   ImportStatement,
@@ -32,10 +35,6 @@ import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
-import { IfElse } from "../types/ifElse.js";
-import { TimeBlock } from "@/types/timeBlock.js";
-import { AwaitStatement } from "@/types/await.js";
-import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
 
 type Scope = "global" | "function" | "node";
 
@@ -156,7 +155,7 @@ export class BaseGenerator {
     this.functionDefinitions[node.functionName] = node;
   }
 
-  protected processGraphNodeName(node: GraphNodeDefinition): void {}
+  protected processGraphNodeName(node: GraphNodeDefinition): void { }
 
   protected processNode(node: AgencyNode): string {
     switch (node.type) {

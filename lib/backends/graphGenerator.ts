@@ -1,9 +1,8 @@
 import {
-  AgencyNode,
   AgencyProgram,
   FunctionCall,
   TypeHintMap,
-  VariableType,
+  VariableType
 } from "../types.js";
 
 import * as builtinTools from "../templates/backends/graphGenerator/builtinTools.js";
@@ -11,14 +10,13 @@ import * as renderConditionalEdge from "../templates/backends/graphGenerator/con
 import * as goToNode from "../templates/backends/graphGenerator/goToNode.js";
 import * as renderGraphNode from "../templates/backends/graphGenerator/graphNode.js";
 import * as renderImports from "../templates/backends/graphGenerator/imports.js";
-import * as renderStartNode from "../templates/backends/graphGenerator/startNode.js";
 import * as renderRunNodeFunction from "../templates/backends/graphGenerator/runNodeFunction.js";
+import * as renderStartNode from "../templates/backends/graphGenerator/startNode.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { TypeScriptGenerator } from "./typescriptGenerator.js";
 import { mapFunctionName } from "./typescriptGenerator/builtins.js";
 import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
-import { TYPES_THAT_DONT_TRIGGER_NEW_PART } from "@/config.js";
 
 export class GraphGenerator extends TypeScriptGenerator {
   protected typeHints: TypeHintMap = {};

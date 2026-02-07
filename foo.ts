@@ -105,7 +105,6 @@ export type InterruptResponseModify = {
 
 
 export async function respondToInterrupt(interrupt: Interrupt, interruptResponse: InterruptResponseType) {
-  console.log("responseToInterrupt:", JSON.stringify({ interrupt, interruptResponse }, null, 2));
   __stateStack = StateStack.fromJSON(interrupt.__state || {});
   __stateStack.setMode("deserialize");
   const messages = (__stateStack.other.messages || []).map((json: any) => {
@@ -114,7 +113,6 @@ export async function respondToInterrupt(interrupt: Interrupt, interruptResponse
 
   const nodesTraversed = __stateStack.other.nodesTraversed || [];
   const nodeName = nodesTraversed[nodesTraversed.length - 1];
-  console.log(`Going to node ${nodeName} with response:`, interruptResponse);
   return graph.run(nodeName, {
     messages: messages,
     __metadata: {
@@ -286,7 +284,6 @@ export async function test(args, __metadata={}) : Promise<any> {
       
 }
 graph.node("foo", async (state): Promise<any> => {
-    console.log(">>", JSON.stringify({ state, __stateStack }, null, 2));
     const __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
@@ -294,8 +291,6 @@ graph.node("foo", async (state): Promise<any> => {
       __stateStack = state.__metadata.__stateStack;
     }
     const __stack = __stateStack.getNewState();
-    console.log(">>statestack again", JSON.stringify({ __stateStack }, null, 2));
-    console.log("!!!!", JSON.stringify(__stack, null, 2));
     const __step = __stack.step;
 
     const __self: Record<string, any> = __stack.locals;

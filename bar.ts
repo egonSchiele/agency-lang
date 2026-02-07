@@ -102,7 +102,6 @@ export type InterruptResponseModify = {
 
 
 export async function respondToInterrupt(interrupt: Interrupt, interruptResponse: InterruptResponseType) {
-  console.log("responseToInterrupt:", JSON.stringify({ interrupt, interruptResponse }, null, 2));
   __stateStack = StateStack.fromJSON(interrupt.__state || {});
   __stateStack.setMode("deserialize");
   const messages = (__stateStack.other.messages || []).map((json: any) => {
@@ -111,7 +110,6 @@ export async function respondToInterrupt(interrupt: Interrupt, interruptResponse
 
   const nodesTraversed = __stateStack.other.nodesTraversed || [];
   const nodeName = nodesTraversed[nodesTraversed.length - 1];
-  console.log(`Going to node ${nodeName} with response:`, interruptResponse);
   return graph.run(nodeName, {
     messages: messages,
     __metadata: {
@@ -257,12 +255,18 @@ export async function greet(args, __metadata={}) : Promise<string> {
       
 
       if (__step <= 1) {
-        return interrupt(`interrupt in greet`)
+        await console.log(`About to try and greet ${__stack.args.name}...`)
         __stack.step++;
       }
       
 
       if (__step <= 2) {
+        return interrupt(`Do you want to greet ${__stack.args.name}?`)
+        __stack.step++;
+      }
+      
+
+      if (__step <= 3) {
         __stateStack.pop();
 return `Kya chal raha jai, ${__stack.args.name}!`
         __stack.step++;
@@ -270,7 +274,6 @@ return `Kya chal raha jai, ${__stack.args.name}!`
       
 }
 graph.node("sayHi", async (state): Promise<any> => {
-    console.log(">>", JSON.stringify({ state, __stateStack }, null, 2));
     const __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
@@ -278,8 +281,6 @@ graph.node("sayHi", async (state): Promise<any> => {
       __stateStack = state.__metadata.__stateStack;
     }
     const __stack = __stateStack.getNewState();
-    console.log(">>statestack again", JSON.stringify({ __stateStack }, null, 2));
-    console.log("!!!!", JSON.stringify(__stack, null, 2));
     const __step = __stack.step;
 
     const __self: Record<string, any> = __stack.locals;
@@ -316,7 +317,6 @@ graph.node("sayHi", async (state): Promise<any> => {
       if (__step <= 2) {
         
 async function _response(name: string, __metadata?: Record<string, any>): Promise<string> {
-  console.log("Inside prompt func, metedata:", __metadata);
   const __prompt = `Greet the user with their name: ${name} using the greet function.`;
   const startTime = performance.now();
   const __messages: Message[] = __metadata?.messages || [];
@@ -365,10 +365,6 @@ async function _response(name: string, __metadata?: Record<string, any>): Promis
     }
   }
 
-  console.log("++++++++++++++++++++++++++")
-  console.log("Tool calls to process:", JSON.stringify(__toolCalls, null, 2));
-  console.log("++++++++++++++++++++++++++")
-
   // Handle function calls
   if (__toolCalls.length > 0) {
     let toolCallStartTime, toolCallEndTime;
@@ -385,9 +381,6 @@ async function _response(name: string, __metadata?: Record<string, any>): Promis
 
   const params = [ args["name"] ];
 
-  console.log(`>> Tool 'greet' called with arguments:`, params);
-  
-
   toolCallStartTime = performance.now();
   
   let result: any;
@@ -400,9 +393,6 @@ async function _response(name: string, __metadata?: Record<string, any>): Promis
     result = await greet(params);
   }
   toolCallEndTime = performance.now();
-
-  // console.log("Tool 'greet' called with arguments:", params);
-  // console.log("Tool 'greet' returned result:", result);
 
 await statelogClient.toolCall({
     toolName: "greet",

@@ -10,9 +10,6 @@ export const template = `if (
 
   const params = [ {{{paramsStr:string}}} ];
 
-  console.log(\`>> Tool '{{{name:string}}}' called with arguments:\`, params);
-  
-
   toolCallStartTime = performance.now();
   
   let result: any;
@@ -25,9 +22,6 @@ export const template = `if (
     result = await {{{name}}}(params);
   }
   toolCallEndTime = performance.now();
-
-  // console.log("Tool '{{{name:string}}}' called with arguments:", params);
-  // console.log("Tool '{{{name:string}}}' returned result:", result);
 
 await statelogClient.toolCall({
     toolName: "{{{name:string}}}",

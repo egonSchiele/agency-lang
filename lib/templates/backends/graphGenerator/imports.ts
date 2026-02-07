@@ -105,7 +105,6 @@ export type InterruptResponseModify = {
 
 
 export async function respondToInterrupt(interrupt: Interrupt, interruptResponse: InterruptResponseType) {
-  console.log("responseToInterrupt:", JSON.stringify({ interrupt, interruptResponse }, null, 2));
   __stateStack = StateStack.fromJSON(interrupt.__state || {});
   __stateStack.setMode("deserialize");
   const messages = (__stateStack.other.messages || []).map((json: any) => {
@@ -114,7 +113,6 @@ export async function respondToInterrupt(interrupt: Interrupt, interruptResponse
 
   const nodesTraversed = __stateStack.other.nodesTraversed || [];
   const nodeName = nodesTraversed[nodesTraversed.length - 1];
-  console.log(\`Going to node \${nodeName} with response:\`, interruptResponse);
   return graph.run(nodeName, {
     messages: messages,
     __metadata: {

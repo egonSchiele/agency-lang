@@ -1,6 +1,5 @@
 
 async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{typeString:string}}}> {
-  console.log("Inside prompt func, metedata:", __metadata);
   const __prompt = {{{promptCode:string}}};
   const startTime = performance.now();
   const __messages: Message[] = __metadata?.messages || [];
@@ -53,10 +52,6 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
       __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
     }
   }
-
-  console.log("++++++++++++++++++++++++++")
-  console.log("Tool calls to process:", JSON.stringify(__toolCalls, null, 2));
-  console.log("++++++++++++++++++++++++++")
 
   // Handle function calls
   if (__toolCalls.length > 0) {

@@ -215,7 +215,107 @@ import bar from "bar.js"
 
 For any logic that is more complex, implement it in a separate TypeScript file, then import the relevant functions into Agency and use them.
 
-### A few notes on agent design
+## Using your agent
+
+You can either run an agency file directly, in which case you need to define a node named `main` that will get executed as the entry point to your agent, or you can import your agent into a TypeScript file. Here is an example of that:
+
+```agency
+// foo.agency
+node foo() {
+  name = input("> ")
+  response = llm("Greet the person named ${name}")
+  return response
+}
+```
+
+Compile the agency file to TypeScript using `agency compile foo.agency`, which will generate a `foo.ts` file. Then import the generated TypeScript file:
+
+```ts
+import { foo } from "./foo.ts"
+
+async function main() {
+  const response = await foo()
+
+  // response is a string containing the LLM's response
+  console.log(response)
+}
+```
+
+You can import any node defined in your agency file and call it like a function to run the graph with that node as the entrypoint. You can also import the graph object as the default import from the generated file.
+
+```ts
+import graph from "./foo.ts"
+```
+
+## Interrupts and Human-in-the-loop
+Agency has support for interrupts, which you can use to implement a human-in-the-loop system. Interrupts are very simple to use and work quite well.
+
+Here's an example. Suppose I have the following agency code:
+
+```ts
+import { readTodos } from "./tools.ts"
+
+def readTodosTool(filename: string) {
+  return readTodos(filename)
+}
+
+node todos(prompt: string) {
+  +readTodosTool
+  response = llm("Help the user with their todos: ${prompt}")
+}
+
+node foo() {
+  prompt = input("> ")
+  return todos(prompt)
+}
+```
+
+Here is an example of me using this agent in a TypeScript file:
+
+```ts
+import { foo } from "./foo.ts"
+async function main() {
+  const response = await foo()
+  console.log(response)
+}
+```
+
+This is an agent that helps a user manage their todos. It includes a read todos tool that will read the user's todos from a given file. Suppose we want to insert an approval step, so that the agent confirms this action with the user before reading the file. Here is how you would do that.
+
+```ts
+def readTodosTool(filename: string) {
+  // just add this line!
+  return interrupt(`Read file ${filename}`)
+  return readTodos(filename)
+}
+```
+
+All we need to do is return an interrupt. Then, in your code that's using this agent, check for interrupts and respond to them:
+
+
+```ts
+import { foo, isInterrupt, approveInterrupt, rejectInterrupt } from "./foo.ts"
+async function main() {
+  const response = await foo()
+  while (isInterrupt(response)) {
+    // input is a function that gets user input from stdin
+    const userResponse = input(`The agent is requesting an interrupt with message: "${response.data}". Do you approve? (yes/no)`)
+    if (userResponse.toLowerCase() === "yes") {
+      response = await approveInterrupt(response)
+    } else {
+      response = await rejectInterrupt(response)
+    }
+  }
+}
+```
+
+We check if the agent returned an interrupt. If so, we ask the user whether they approve or not, and call `approveInterrupt` or `rejectInterrupt` accordingly. We wrap all of this in a `while` loop in case there are more interrupts.
+
+That's it! Execution will pick up exactly where it left off, down to the statement. Nothing else for you to manage. You can have multiple interrupts, interrupts that are several layers deep in the call stack, etc. Agency will handle all of it for you. Magic!
+
+> Note: currently you have to return an interrupt from an Agency file. You can't return an interrupt from a TypeScript file, because Agency can't jump to a specific line in TypeScript code, but it can with Agency code.
+
+## A few notes on agent design
 
 As you build more complex agents, a good way to design them is with a decision tree-style approach. Instead of having one big prompt, use several smaller prompts to categorize a user's message and then use the appropriate prompt. This should make your agent faster and more reliable. For example, suppose you are building an agent that a user can use to either report their mood or add an item to their to-do list.
 

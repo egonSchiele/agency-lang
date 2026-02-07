@@ -2,7 +2,7 @@ import {
   AgencyProgram,
   FunctionCall,
   TypeHintMap,
-  VariableType,
+  VariableType
 } from "../types.js";
 
 import * as builtinTools from "../templates/backends/graphGenerator/builtinTools.js";
@@ -10,8 +10,8 @@ import * as renderConditionalEdge from "../templates/backends/graphGenerator/con
 import * as goToNode from "../templates/backends/graphGenerator/goToNode.js";
 import * as renderGraphNode from "../templates/backends/graphGenerator/graphNode.js";
 import * as renderImports from "../templates/backends/graphGenerator/imports.js";
-import * as renderStartNode from "../templates/backends/graphGenerator/startNode.js";
 import * as renderRunNodeFunction from "../templates/backends/graphGenerator/runNodeFunction.js";
+import * as renderStartNode from "../templates/backends/graphGenerator/startNode.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { TypeScriptGenerator } from "./typescriptGenerator.js";
@@ -51,6 +51,7 @@ export class GraphGenerator extends TypeScriptGenerator {
   }
 
   protected processGraphNode(node: GraphNodeDefinition): string {
+    this.startScope("node");
     const { nodeName, body, parameters } = node;
     /* if (parameters.length > 1) {
       throw new Error(
@@ -59,26 +60,28 @@ export class GraphGenerator extends TypeScriptGenerator {
     } */
     this.adjacentNodes[nodeName] = [];
     this.currentAdjacentNodes = [];
-    this.functionScopedVariables = [];
+    this.functionParameters = [];
     this.isInsideGraphNode = true;
     for (const param of parameters) {
-      this.functionScopedVariables.push(param.name);
+      this.functionParameters.push(param.name);
     }
 
-    const bodyCode: string[] = [];
     for (const stmt of body) {
       if (stmt.type === "functionCall" && this.isGraphNode(stmt.functionName)) {
         throw new Error(
           `Call to graph node '${stmt.functionName}' inside graph node '${nodeName}' was not returned. All calls to graph nodes must be returned, eg (return ${stmt.functionName}(...)).`,
         );
       }
-      bodyCode.push(this.processNode(stmt));
     }
-    this.functionScopedVariables = [];
+
+    const bodyCode = this.processBodyAsParts(body);
+
+    this.functionParameters = [];
     this.adjacentNodes[nodeName] = [...this.currentAdjacentNodes];
     this.isInsideGraphNode = false;
-
-    const paramNames = "[" + parameters.map((p) => p.name).join(", ") + "]";
+    this.endScope();
+    const paramNames =
+      "[" + parameters.map((p) => `"${p.name}"`).join(", ") + "]";
 
     return renderGraphNode.default({
       name: nodeName,

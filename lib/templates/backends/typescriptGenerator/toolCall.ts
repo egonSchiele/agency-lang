@@ -8,39 +8,50 @@ export const template = `if (
 ) {
   const args = toolCall.arguments;
 
-  toolCallStartTime = performance.now();
-  const result = await {{{name}}}(args);
-  toolCallEndTime = performance.now();
+  const params = [ {{{paramsStr:string}}} ];
 
-  // console.log("Tool '{{{name:string}}}' called with arguments:", args);
-  // console.log("Tool '{{{name:string}}}' returned result:", result);
+  toolCallStartTime = performance.now();
+  
+  let result: any;
+  if (__interruptResponse && __interruptResponse.type === "reject") {
+        __messages.push(toolMessage("tool call rejected", {
+        tool_call_id: toolCall.id,
+        name: toolCall.name,
+     }));
+  } else {
+    result = await {{{name}}}(params);
+  }
+  toolCallEndTime = performance.now();
 
 await statelogClient.toolCall({
     toolName: "{{{name:string}}}",
-    args,
+    params,
     output: result,
     model: __client.getModel(),
     timeTaken: toolCallEndTime - toolCallStartTime,
   });
 
-  // Add function result to messages
-  __messages.push(toolMessage(result, {
-            tool_call_id: toolCall.id,
-            name: toolCall.name,
-      }));
-
   if (isInterrupt(result)) {
+    haltInterrupt = result;
     haltToolCall = {
       id: toolCall.id,
       name: toolCall.name,
-    };
+      arguments: toolCall.arguments,
+    }
     haltExecution = true;
     break;
   }
+
+    // Add function result to messages
+  __messages.push(toolMessage(result, {
+        tool_call_id: toolCall.id,
+        name: toolCall.name,
+  }));
 }`;
 
 export type TemplateType = {
   name: string;
+  paramsStr: string;
 };
 
 const render = (args: TemplateType) => {

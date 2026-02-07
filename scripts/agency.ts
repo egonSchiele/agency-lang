@@ -96,8 +96,9 @@ function getImports(program: AgencyProgram): string[] {
         node.type === "importToolStatement",
     )
     .map((node) => node.agencyFile.trim());
+  // this makes compile() try to parse non-agency files
   const importStatements = program.nodes
-    .filter((node) => node.type === "importStatement")
+    .filter((node) => node.type === "importStatement" && node.modulePath.endsWith(".agency"))
     .map((node) => (node as ImportStatement).modulePath.trim());
 
   return [...toolAndNodeImports, ...importStatements];
@@ -151,6 +152,7 @@ function compile(
   compiledFiles.add(absoluteInputFile);
 
   const contents = readFile(inputFile);
+  console.log(`Compiling ${inputFile}...`);
   const parsedProgram = parse(contents, verbose);
 
   const imports = getImports(parsedProgram);

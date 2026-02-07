@@ -1,3 +1,5 @@
+import { Message } from "smoltalk";
+
 export function escape(str: string): string {
   return str
     .replace(/\\/g, "\\\\")

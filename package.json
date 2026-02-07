@@ -1,6 +1,6 @@
 {
   "name": "agency-lang",
-  "version": "0.0.41",
+  "version": "0.0.45",
   "description": "The Agency language",
   "main": "lib/index.js",
   "scripts": {
@@ -42,7 +42,7 @@
   "dependencies": {
     "egonlog": "^0.0.2",
     "piemachine": "^0.0.6",
-    "smoltalk": "^0.0.12",
+    "smoltalk": "^0.0.15",
     "statelog-client": "^0.0.34",
     "tarsec": "^0.1.1",
     "typestache": "^0.4.4",

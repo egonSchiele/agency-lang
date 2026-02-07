@@ -69,3 +69,12 @@ type ListIngredientsParams = {
 - no infix operators yet (e.g., `+`, `-`, `*`, `/`, `&&`, `||`, `>=`, `<=`, `==`, `!=`, etc.) -- builtin replacements provided
 - can't assign to an access expression (e.g., `obj.key = value` doesn't work yet)
 - match blocks don't support blocks
+
+imported tools currently can't be used because to create the array that gets passed into the tool, we rely on knowing the names of the arguments so we can put them in the correct order in the array. One way to solve this would be to export a variable containing the arguments of the tool, import it when `import tool` is used, and use it to construct the array.
+
+- todo in lib/templates/backends/typescriptGenerator/functionDefinition.mustache
+- todo in lib/templates/backends/typescriptGenerator/promptFunction.mustache
+
+We currently aren't handling the case where a node calls a function, which calls another function, which then returns an interrupt. We need to handle returning immediately due to an interrupt in that middle function, and we need to restore the state of that middle function correctly.
+
+We're also not currently handling the case where the user wants to request changes after an interrupt.

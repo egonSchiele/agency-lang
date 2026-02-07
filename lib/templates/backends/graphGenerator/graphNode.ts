@@ -8,10 +8,33 @@ graph.node("{{{name}}}", async (state): Promise<any> => {
     const __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
+    if (state.__metadata?.__stateStack) {
+      __stateStack = state.__metadata.__stateStack;
+    }
+    const __stack = __stateStack.getNewState();
+    const __step = __stack.step;
+
+    const __self: Record<string, any> = __stack.locals;
+
+    const __interruptResponse: InterruptResponseType | undefined = state.__metadata?.interruptResponse;
+    const __toolCall: Record<string, any>|undefined = __stateStack.other?.toolCall;
+
+    if (state.__metadata?.state?.global) {
+      __global = state.__metadata.state.global;
+    }
+
     {{#hasParam}}
-    const {{{paramNames}}} = state.data;
+    
+    const __params = {{{paramNames}}};
+    if (state.data !== "<from-stack>") {
+      (state.data).forEach((item, index) => {
+        __stack.args[__params[index]] = item;
+      });
+    }
     {{/hasParam}}
     {{{body}}}
+    
+    // this is just here to have a default return value from a node if the user doesn't specify one
     return { ...state, data: undefined };
 });
 `;

@@ -1,5 +1,6 @@
 import {
   AgencyComment,
+  AgencyNode,
   AgencyProgram,
   Assignment,
   InterpolationSegment,
@@ -12,14 +13,17 @@ import {
   VariableType,
 } from "../types.js";
 
+import { TYPES_THAT_DONT_TRIGGER_NEW_PART } from "@/config.js";
+import { AwaitStatement } from "@/types/await.js";
 import { SpecialVar } from "@/types/specialVar.js";
+import { TimeBlock } from "@/types/timeBlock.js";
 import * as renderSpecialVar from "../templates/backends/graphGenerator/specialVar.js";
+import * as renderTime from "../templates/backends/typescriptGenerator/builtinFunctions/time.js";
 import * as builtinTools from "../templates/backends/typescriptGenerator/builtinTools.js";
 import * as renderFunctionDefinition from "../templates/backends/typescriptGenerator/functionDefinition.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as promptFunction from "../templates/backends/typescriptGenerator/promptFunction.js";
 import * as renderTool from "../templates/backends/typescriptGenerator/tool.js";
-import * as renderTime from "../templates/backends/typescriptGenerator/builtinFunctions/time.js";
 import * as renderToolCall from "../templates/backends/typescriptGenerator/toolCall.js";
 import {
   AccessExpression,
@@ -33,6 +37,7 @@ import {
   FunctionDefinition,
   FunctionParameter,
 } from "../types/function.js";
+import { IfElse } from "../types/ifElse.js";
 import {
   ImportNodeStatement,
   ImportStatement,
@@ -42,8 +47,7 @@ import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
-import { IfElse } from "../types/ifElse.js";
-import { escape, uniq, zip } from "../utils.js";
+import { escape, uniq } from "../utils.js";
 import { BaseGenerator } from "./baseGenerator.js";
 import {
   generateBuiltinHelpers,
@@ -54,8 +58,6 @@ import {
   DEFAULT_SCHEMA,
   mapTypeToZodSchema,
 } from "./typescriptGenerator/typeToZodSchema.js";
-import { TimeBlock } from "@/types/timeBlock.js";
-import { AwaitStatement } from "@/types/await.js";
 
 export class TypeScriptGenerator extends BaseGenerator {
   constructor() {
@@ -117,7 +119,19 @@ export class TypeScriptGenerator extends BaseGenerator {
 
   protected processReturnStatement(node: ReturnStatement): string {
     const returnCode = this.processNode(node.value);
-    return `return ${returnCode}\n`;
+    if (
+      node.value.type === "functionCall" &&
+      node.value.functionName === "interrupt"
+    ) {
+      /* In this case we're not popping off the stack, because we need to save the state,
+      because we will be restoring it (since this is an interrupt). However we do need to
+      advance the step so that the next time we come here, we start at the part after this
+      interrupt. */
+      return `__stack.step++;\nreturn ${returnCode}\n`;
+    }
+    /* Pop the state off the stack, we won't be coming back.
+    Doesn't matter if we update the step or not, since we won't be coming back here. */
+    return `__stateStack.pop();\nreturn ${returnCode}\n`;
   }
 
   protected processAccessExpression(node: AccessExpression): string {
@@ -180,8 +194,12 @@ export class TypeScriptGenerator extends BaseGenerator {
 
   protected processAssignment(node: Assignment): string {
     const { variableName, typeHint, value } = node;
-    // Track this variable as in scope
-    this.functionScopedVariables.push(variableName);
+    const _currentScope = this.getCurrentScope();
+    if (_currentScope === "global") {
+      this.globalScopedVariables.push(variableName);
+    } else {
+      this.functionScopedVariables.push(variableName);
+    }
 
     const typeAnnotation = typeHint
       ? `: ${variableTypeToString(typeHint, this.typeAliases)}`
@@ -198,7 +216,12 @@ export class TypeScriptGenerator extends BaseGenerator {
           );
         }
         const promptArg = args[0];
-        if (promptArg.type !== "string") {
+        const promptArgIsPrompt =
+          promptArg.type === "prompt" ||
+          promptArg.type === "string" ||
+          promptArg.type === "multiLineString" ||
+          promptArg.type === "variableName"; // if variable name, assume its a string
+        if (!promptArgIsPrompt) {
           throw new Error(
             `First argument to llm function must be a prompt literal.`,
           );
@@ -209,9 +232,18 @@ export class TypeScriptGenerator extends BaseGenerator {
             `Second argument to llm function must be an object literal for configuration.`,
           );
         }
+
         return this.processPromptLiteral(variableName, typeHint, {
           type: "prompt",
-          segments: promptArg.segments,
+          segments:
+            promptArg.type === "variableName"
+              ? [
+                  {
+                    type: "interpolation",
+                    variableName: promptArg.value,
+                  },
+                ]
+              : promptArg.segments,
           config: promptConfig as AgencyObject | undefined,
         });
       }
@@ -219,7 +251,8 @@ export class TypeScriptGenerator extends BaseGenerator {
       // Direct assignment for other literal types
       const code = this.processNode(value);
       return (
-        `const ${variableName}${typeAnnotation} = await ${code.trim()};` + "\n"
+        `${this.getScopeVar()}.${variableName}${typeAnnotation} = await ${code.trim()};` +
+        "\n"
       );
     } else if (value.type === "timeBlock") {
       const timingVarName = variableName;
@@ -228,7 +261,10 @@ export class TypeScriptGenerator extends BaseGenerator {
     } else {
       // Direct assignment for other literal types
       const code = this.processNode(value);
-      return `const ${variableName}${typeAnnotation} = ${code.trim()};` + "\n";
+      return (
+        `${this.getScopeVar()}.${variableName}${typeAnnotation} = ${code.trim()};` +
+        "\n"
+      );
     }
   }
   /*
@@ -271,7 +307,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     //const argsStr = [...interpolatedVars, "__messages"].join(", ");
     // Generate the function call
     return functionCode; /* (
-      `${functionCode}\nconst ${variableName} = await _${variableName}(${argsStr});` +
+      `${functionCode}\nconst __self.${variableName} = await _${variableName}(${argsStr});` +
       "\n"
     ); */
   }
@@ -320,17 +356,21 @@ export class TypeScriptGenerator extends BaseGenerator {
    * Process a function definition node
    */
   protected processFunctionDefinition(node: FunctionDefinition): string {
+    this.startScope("function");
     const { functionName, body, parameters } = node;
+    const args = parameters.map((p) => p.name);
     this.functionScopedVariables = [...parameters.map((p) => p.name)];
-    const bodyCode: string[] = [];
-    for (const stmt of body) {
-      bodyCode.push(this.processNode(stmt));
-    }
+    this.functionParameters = args;
+
+    const bodyCode = this.processBodyAsParts(body);
+
     this.functionScopedVariables = [];
-    const args = parameters.map((p) => p.name).join(", ") || "";
+    this.functionParameters = [];
+    this.endScope();
+    const argsStr = args.map((arg) => `"${arg}"`).join(", ") || "";
     return renderFunctionDefinition.default({
       functionName,
-      args: "{" + args + "}",
+      argsStr,
       returnType: node.returnType
         ? variableTypeToString(node.returnType, this.typeAliases)
         : "any",
@@ -381,20 +421,11 @@ export class TypeScriptGenerator extends BaseGenerator {
       }
     });
     let argsString = "";
-    const paramNames =
-      this.functionDefinitions[node.functionName]?.parameters.map(
-        (p) => p.name,
-      ) || null;
-    if (paramNames) {
-      const partsWithNames = zip(paramNames, parts).map(([paramName, part]) => {
-        return `${paramName}: ${part}`;
-      });
-      argsString = partsWithNames.join(", ");
-      return `${functionName}({${argsString}})`;
+    if (this.isInternalFunction(node.functionName)) {
+      argsString = parts.join(", ");
+      return `${functionName}([${argsString}])`;
     } else {
-      // must be a builtin function or imported function,
-      // as we don't have the signature info
-      // in that case don't do named parameters
+      // must be a builtin function or imported function
       argsString = parts.join(", ");
       return `${functionName}(${argsString})`;
     }
@@ -409,7 +440,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       case "multiLineString":
         return this.generateStringLiteral(literal.segments);
       case "variableName":
-        return literal.value;
+        return this.generateScopedVariableName(literal.value);
       case "prompt":
         //return this.processPromptLiteral("asd", literal).trim();
         // Reconstruct text for comment from segments
@@ -459,7 +490,9 @@ export class TypeScriptGenerator extends BaseGenerator {
         stringParts.push(escaped);
       } else {
         // Interpolation segment
-        stringParts.push("${" + segment.variableName + "}");
+        stringParts.push(
+          "${" + this.generateScopedVariableName(segment.variableName) + "}",
+        );
       }
     }
 
@@ -500,10 +533,8 @@ export class TypeScriptGenerator extends BaseGenerator {
           this.typeAliases,
         )}`,
     );
-
-    parts.push("__messages: Message[] = []");
+    parts.push("__metadata?: Record<string, any>");
     const argsStr = parts.join(", ");
-
     const _tools = this.toolsUsed
       .map((toolName) => `__${toolName}Tool`)
       .join(", ");
@@ -512,19 +543,40 @@ export class TypeScriptGenerator extends BaseGenerator {
 
     const functionCalls = this.toolsUsed
       .map((toolName) => {
+        const func = this.functionDefinitions[toolName];
+        if (!func) {
+          throw new Error(
+            `Tool '${toolName}' is being used but no function definition found for it. Make sure to define a function for this tool.`,
+          );
+        }
+        const paramsStr = func.parameters
+          .map((param, index) => {
+            return `args["${param.name}"]`;
+          })
+          .join(", ");
         return renderToolCall.default({
           name: toolName,
+          paramsStr,
         });
       })
       .join("\n");
 
     const clientConfig = prompt.config ? this.processNode(prompt.config) : "{}";
-
+    const metadataObj = `{
+      messages: __messages,
+      interruptResponse: __interruptResponse,
+      toolCall: __toolCall,
+    }`;
     this.toolsUsed = []; // reset after use
+
+    const scopedFunctionArgs = functionArgs.map((arg) =>
+      this.generateScopedVariableName(arg),
+    );
+
     return promptFunction.default({
       variableName,
       argsStr,
-      funcCallParams: [...functionArgs, "__messages"].join(", "),
+      funcCallParams: [...scopedFunctionArgs, metadataObj].join(", "),
       typeString,
       promptCode,
       hasResponseFormat: zodSchema !== DEFAULT_SCHEMA,
@@ -611,6 +663,39 @@ export class TypeScriptGenerator extends BaseGenerator {
   protected processAwaitStatement(node: AwaitStatement): string {
     const code = this.processNode(node.expression);
     return `await ${code}`;
+  }
+
+  /* This generates the body of a node or function separated into multiple parts.
+  You can think of a part as roughly corresponding to a single statement
+  (although some statements don't need their own parts, such as a newlines or type definitions).
+
+  This is done so that we can keep track of what statement we're currently executing,
+  so that we can serialize that as part of the state if we return from an interrupt,
+  so that when we deserialize the state, we can pick up where we were and avoid having to
+  re-execute all the statements that we already executed.
+
+  Basically, this is part of the reason why agency can pick up exactly where you left off. */
+  protected processBodyAsParts(body: AgencyNode[]): string[] {
+    const parts: string[][] = [[]];
+    for (const stmt of body) {
+      if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type)) {
+        parts.push([]);
+      }
+      parts[parts.length - 1].push(this.processNode(stmt));
+    }
+    const bodyCode: string[] = [];
+    let partNum = 0;
+    for (const part of parts) {
+      const partCode = `
+      if (__step <= ${partNum}) {
+        ${part.join("").trimEnd()}
+        __stack.step++;
+      }
+      `;
+      bodyCode.push(partCode);
+      partNum++;
+    }
+    return bodyCode;
   }
 }
 

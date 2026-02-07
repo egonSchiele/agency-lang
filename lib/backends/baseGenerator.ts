@@ -14,6 +14,8 @@ import {
   VariableType,
 } from "../types.js";
 
+import { AwaitStatement } from "@/types/await.js";
+import { TimeBlock } from "@/types/timeBlock.js";
 import {
   AccessExpression,
   DotFunctionCall,
@@ -23,6 +25,7 @@ import {
 import { AgencyArray, AgencyObject } from "../types/dataStructures.js";
 import { FunctionCall, FunctionDefinition } from "../types/function.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
+import { IfElse } from "../types/ifElse.js";
 import {
   ImportNodeStatement,
   ImportStatement,
@@ -32,10 +35,8 @@ import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
-import { IfElse } from "../types/ifElse.js";
-import { TimeBlock } from "@/types/timeBlock.js";
-import { AwaitStatement } from "@/types/await.js";
-import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
+
+type Scope = "global" | "function" | "node";
 
 export class BaseGenerator {
   protected typeHints: TypeHintMap = {};
@@ -44,6 +45,7 @@ export class BaseGenerator {
   protected generatedTypeAliases: string[] = [];
   protected functionScopedVariables: string[] = [];
   protected globalScopedVariables: string[] = [];
+  protected functionParameters: string[] = [];
 
   // collect tools for a prompt
   protected toolsUsed: string[] = [];
@@ -59,6 +61,7 @@ export class BaseGenerator {
   // collect function signatures so we can implement named args
   // TODO also save return types, check if used as a tool, return type cannot be null/void/undefined
   protected functionDefinitions: Record<string, FunctionDefinition> = {};
+  protected currentScope: Scope[] = ["global"];
 
   generate(program: AgencyProgram): {
     output: string;
@@ -348,5 +351,60 @@ export class BaseGenerator {
 
   protected postprocess(): string {
     return "";
+  }
+
+  protected startScope(scope: Scope): void {
+    this.currentScope.push(scope);
+  }
+
+  protected endScope(): void {
+    this.currentScope.pop();
+  }
+
+  protected getCurrentScope(): Scope {
+    return this.currentScope[this.currentScope.length - 1];
+  }
+
+  /* This function is used during assignment, so we can figure out whether this variable
+  should be assigned on local or global scope. There's a related function `generateScopedVariableName`,
+  which is used when retrieving the value of a variable. */
+  protected getScopeVar(): string {
+    const currentScope = this.currentScope[this.currentScope.length - 1];
+    switch (currentScope) {
+      case "global":
+        return "__stateStack.globals";
+      case "function":
+      case "node":
+        return "__stack.locals";
+    }
+  }
+
+  protected generateScopedVariableName(variableName: string): string {
+    if (this.functionParameters.includes(variableName)) {
+      return `__stack.args.${variableName}`;
+    }
+    if (this.functionScopedVariables.includes(variableName)) {
+      return `__stack.locals.${variableName}`;
+    } else if (this.globalScopedVariables.includes(variableName)) {
+      return `__stateStack.globals.${variableName}`;
+    }
+    return variableName;
+  }
+
+  protected isImportedTool(functionName: string): boolean {
+    return this.importedTools
+      .map((node) => node.importedTools)
+      .flat()
+      .includes(functionName);
+  }
+
+  /* Internal function means the user defined this function in an Agency file,
+    as opposed to an external function, which was defined in an external TypeScript file
+    and imported into Agency. */
+  protected isInternalFunction(functionName: string): boolean {
+    return (
+      !!this.functionDefinitions[functionName] ||
+      this.isImportedTool(functionName)
+    );
   }
 }

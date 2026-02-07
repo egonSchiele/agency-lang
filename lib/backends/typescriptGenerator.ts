@@ -257,6 +257,7 @@ export class TypeScriptGenerator extends BaseGenerator {
         typeAnnotation,
         functionCode: code.trim(),
         nodeContext: this.getCurrentScope() === "node",
+        globalScope: this.getCurrentScope() === "global",
       });
     } else if (value.type === "timeBlock") {
       const timingVarName = variableName;

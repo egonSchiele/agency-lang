@@ -122,13 +122,17 @@ export async function respondToInterrupt(_interrupt: Interrupt, _interruptRespon
       ...__stateStack.interruptData.toolCall,
       arguments: { ...__stateStack.interruptData.toolCall.arguments, ...interruptResponse.newArguments },
     };
-    const lastMessage = __stateStack.interruptData.messages[__stateStack.interruptData.messages.length - 1];
-    if (lastMessage && lastMessage.role === "assistant") {
-      const toolCall = lastMessage.toolCalls?.[lastMessage.toolCalls.length - 1];
-      if (toolCall) {
-        toolCall.arguments = { ...toolCall.arguments, ...interruptResponse.newArguments };
-      }
-    }
+    // Error:
+    // TypeError: Cannot set property arguments of #<ToolCall> which has only a getter
+    //         toolCall.arguments = { ...toolCall.arguments, ...interruptResponse.newArguments };
+    //
+    // const lastMessage = __stateStack.interruptData.messages[__stateStack.interruptData.messages.length - 1];
+    // if (lastMessage && lastMessage.role === "assistant") {
+    //   const toolCall = lastMessage.toolCalls?.[lastMessage.toolCalls.length - 1];
+    //   if (toolCall) {
+    //     toolCall.arguments = { ...toolCall.arguments, ...interruptResponse.newArguments };
+    //   }
+    // }
   }
 
 

@@ -1,5 +1,6 @@
 {{{variableName:string}}}{{{typeAnnotation:string}}} = await {{{functionCode:string}}};
 
+{{^globalScope}}
 if (isInterrupt({{{variableName:string}}})) {
   {{#nodeContext}}
   return { ...state, data: {{{variableName:string}}} };
@@ -8,3 +9,4 @@ if (isInterrupt({{{variableName:string}}})) {
    return { data: {{{variableName:string}}} };
    {{/nodeContext}}
 }
+{{/globalScope}}

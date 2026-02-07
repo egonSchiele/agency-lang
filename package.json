@@ -41,9 +41,9 @@
   "homepage": "https://github.com/egonSchiele/agency-lang#readme",
   "dependencies": {
     "egonlog": "^0.0.2",
-    "piemachine": "^0.0.6",
+    "piemachine": "^0.0.7",
     "smoltalk": "^0.0.15",
-    "statelog-client": "^0.0.34",
+    "statelog-client": "^0.0.35",
     "tarsec": "^0.1.1",
     "typestache": "^0.4.4",
     "zod": "^4.3.5"

@@ -23,7 +23,7 @@ export const template = `if (
   }
   toolCallEndTime = performance.now();
 
-await statelogClient.toolCall({
+  statelogClient.toolCall({
     toolName: "{{{name:string}}}",
     params,
     output: result,

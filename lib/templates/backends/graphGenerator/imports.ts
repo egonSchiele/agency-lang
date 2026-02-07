@@ -194,7 +194,9 @@ class StateStack {
       this.stack.push(newState);
       return newState;
     } else if (this.mode === "deserialize") {
-      return this.stack.shift() || null;
+      const item = this.stack.shift();
+      this.stack.push(item);
+      return item;
     }
     return null;
   }

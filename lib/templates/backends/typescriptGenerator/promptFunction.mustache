@@ -3,6 +3,9 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
   const __prompt = {{{promptCode:string}}};
   const startTime = performance.now();
   const __messages: Message[] = __metadata?.messages || [];
+
+  // These are to restore state after interrupt.
+  // TODO I think this could be implemented in a cleaner way.
   let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
   const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
   const __tools = {{{tools}}};
@@ -126,6 +129,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
 
 __self.{{{variableName:string}}} = await _{{{variableName:string}}}({{{funcCallParams:string}}});
 
+// return early from node if this is an interrupt
 if (isInterrupt(__self.{{{variableName:string}}})) {
   return { ...state, data: __self.{{{variableName:string}}} };
 }

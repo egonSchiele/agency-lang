@@ -7,13 +7,18 @@ export const template = `
 export async function {{{functionName:string}}}(args, __metadata={}) : Promise<{{{returnType}}}> {
     const __messages: Message[] = [];
     const __stack = __stateStack.getNewState();
-    const __step = __stack.step; // > 0 ? __stack.step + 1 : 0;
+    const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
 
+    // TODO: Note that we don't need to use the same kind of restoration
+    // from state for arguments as we do for nodes,
+    // because the args are serialized in the tool call.
+    // But what about situations where it was a function call, not a tool call?
+    // In that case, we would want to deserialize the argument.
     const __params = [{{{argsStr}}}];
-      (args).forEach((item, index) => {
-        __stack.args[__params[index]] = item;
-      });
+    (args).forEach((item, index) => {
+      __stack.args[__params[index]] = item;
+    });
 
 
     {{{functionBody}}}

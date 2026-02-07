@@ -73,7 +73,9 @@ const empty = <T>(arr: T[]): boolean => arr.length === 0;
 export type Interrupt<T> = {
   type: "interrupt";
   data: T;
-  __state?: PackagedState;
+
+  // JSONified StateStack, i.e. serialized execution state
+  __state?: Record<string, any>;
 };
 
 export function interrupt<T>(data: T): Interrupt<T> {
@@ -107,12 +109,16 @@ export type InterruptResponseModify = {
 export async function respondToInterrupt(_interrupt: Interrupt, _interruptResponse: InterruptResponseType) {
   const interrupt = structuredClone(_interrupt);
   const interruptResponse = structuredClone(_interruptResponse);
+
   __stateStack = StateStack.fromJSON(interrupt.__state || {});
   __stateStack.deserializeMode();
+  
   const messages = (__stateStack.other.messages || []).map((json: any) => {
+    // create message objects from JSON
     return messageFromJSON(json);
   });
 
+  // start at the last node we visited
   const nodesTraversed = __stateStack.other.nodesTraversed || [];
   const nodeName = nodesTraversed[nodesTraversed.length - 1];
   const result = await graph.run(nodeName, {
@@ -124,9 +130,10 @@ export async function respondToInterrupt(_interrupt: Interrupt, _interruptRespon
       state: interrupt.__state,
       __stateStack: __stateStack,
     },
+
+    // restore args from the state stack
     data: "<from-stack>"
   });
-  //console.log(\`Result of graph.run("\${nodeName}"):\`, JSON.stringify(result, null, 2));
   return result.data;
 }
 
@@ -138,64 +145,33 @@ export async function rejectInterrupt(interrupt: Interrupt) {
   return await respondToInterrupt(interrupt, { type: "reject" });
 }
 
-class PackagedState {
-  public messages?: Message[];
-  public nodesTraversed?: string[];
-  public toolCall?: Record<string, any>;
-  public step?: number;
-  public self?: Record<string, any>;
-  public global?: Record<string, any>;
-  public args?: any;
-  constructor(_state: Record<string, any>, args?: any) {
-    const state = structuredClone(_state);
-    this.messages = state.messages;
-    this.nodesTraversed = state.graph?.getNodesTraversed();
-    this.toolCall = state.toolCall;
-    this.step = state.part;
-    this.self = state.self;
-    this.global = state.global;
-    this.args = state.args;
-  }
+type StackFrame = {
+  args: Record<string, any>;
+  locals: Record<string, any>;
+  step: number;
+};
 
-  toJSON() {
-    return {
-      messages: this.messages,
-      nodesTraversed: this.nodesTraversed,
-      toolCall: this.toolCall,
-      step: this.step,
-      self: this.self,
-      global: this.global,
-      args: this.args,
-    };
-  }
-
-  nextStep() {
-    this.step ||= 0;
-    this.step += 1;
-  }
-}
-
-
+// See docs for notes on how this works.
 class StateStack {
-  public stack: StateItem[] = [];
+  public stack: StackFrame[] = [];
   private mode: "serialize" | "deserialize" = "serialize";
   public globals: Record<string, any> = {};
   public other: Record<string, any> = {};
 
   private deserializeStackLength = 0;
 
-  constructor(stack: StateItem[] = [], mode: "serialize" | "deserialize" = "serialize") {
+  constructor(stack: StackFrame[] = [], mode: "serialize" | "deserialize" = "serialize") {
     this.stack = stack;
     this.mode = mode;
   }
 
-  getNewState(): StateItem | null {
+  getNewState(): StackFrame | null {
     if (this.mode === "deserialize" && this.deserializeStackLength <= 0) {
       console.log("Forcing mode to serialize, nothing left to deserialize");
       this.mode = "serialize";
     }
     if (this.mode === "serialize") {
-      const newState: StateItem = {
+      const newState: StackFrame = {
         args: {},
         locals: {},
         step: 0,
@@ -216,7 +192,7 @@ class StateStack {
     this.deserializeStackLength = this.stack.length;
   }
 
-  pop(): StateItem | undefined {
+  pop(): StackFrame | undefined {
     return this.stack.pop();
   }
 

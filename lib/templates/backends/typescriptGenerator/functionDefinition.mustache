@@ -1,15 +1,18 @@
 
 export async function {{{functionName:string}}}(args, __metadata={}) : Promise<{{{returnType}}}> {
-    const __messages: Message[] = [];
+    const __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
+    const __graph = __metadata?.graph || graph;
+    const statelogClient = __metadata?.statelogClient || __statelogClient;
 
-    // TODO: Note that we don't need to use the same kind of restoration
-    // from state for arguments as we do for nodes,
-    // because the args are serialized in the tool call.
-    // But what about situations where it was a function call, not a tool call?
-    // In that case, we would want to deserialize the argument.
+    // args are always set whether we're restoring from state or not.
+    // If we're not restoring from state, args were obviously passed in through the code.
+    // If we are restoring from state, the node that called this function had to have passed 
+    // these arguments into this function call.
+    // if we're restoring state, this will override __stack.args (which will be set),
+    // but with the same values, so it doesn't matter that those values are being overwritten.
     const __params = [{{{argsStr}}}];
     (args).forEach((item, index) => {
       __stack.args[__params[index]] = item;

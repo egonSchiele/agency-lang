@@ -11,8 +11,8 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
-  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
-  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
+  let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
   const __tools = {{{tools}}};
 
   {{#hasResponseFormat}}
@@ -79,7 +79,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
         model: __client.getModel(),
       });
 
-      __stateStack.other = {
+      __stateStack.interruptData = {
         messages: __messages.map((msg) => msg.toJSON()),
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
@@ -136,7 +136,12 @@ __self.{{{variableName:string}}} = await _{{{variableName:string}}}({{{funcCallP
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.{{{variableName:string}}})) {
+  {{#nodeContext}}
   return { ...state, data: __self.{{{variableName:string}}} };
+  {{/nodeContext}}
+   {{^nodeContext}}
+   return  __self.{{{variableName:string}}};
+   {{/nodeContext}}
 }`;
 
 export type TemplateType = {
@@ -150,6 +155,7 @@ export type TemplateType = {
   clientConfig: string;
   functionCalls: string;
   funcCallParams: string;
+  nodeContext: boolean;
 };
 
 const render = (args: TemplateType) => {

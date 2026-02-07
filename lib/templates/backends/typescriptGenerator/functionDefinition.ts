@@ -5,10 +5,12 @@ import { apply } from "typestache";
 
 export const template = `
 export async function {{{functionName:string}}}(args, __metadata={}) : Promise<{{{returnType}}}> {
-    const __messages: Message[] = [];
+    const __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
+    const __graph = __metadata?.graph || graph;
+    const statelogClient = __metadata?.statelogClient || __statelogClient;
 
     // TODO: Note that we don't need to use the same kind of restoration
     // from state for arguments as we do for nodes,

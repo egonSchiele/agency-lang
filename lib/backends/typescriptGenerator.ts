@@ -21,6 +21,8 @@ import * as renderSpecialVar from "../templates/backends/graphGenerator/specialV
 import * as renderTime from "../templates/backends/typescriptGenerator/builtinFunctions/time.js";
 import * as builtinTools from "../templates/backends/typescriptGenerator/builtinTools.js";
 import * as renderFunctionDefinition from "../templates/backends/typescriptGenerator/functionDefinition.js";
+import * as renderInternalFunctionCall from "../templates/backends/typescriptGenerator/internalFunctionCall.js";
+import * as renderFunctionCallAssignment from "../templates/backends/typescriptGenerator/functionCallAssignment.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as promptFunction from "../templates/backends/typescriptGenerator/promptFunction.js";
 import * as renderTool from "../templates/backends/typescriptGenerator/tool.js";
@@ -250,10 +252,12 @@ export class TypeScriptGenerator extends BaseGenerator {
 
       // Direct assignment for other literal types
       const code = this.processNode(value);
-      return (
-        `${this.getScopeVar()}.${variableName}${typeAnnotation} = await ${code.trim()};` +
-        "\n"
-      );
+      return renderFunctionCallAssignment.default({
+        variableName: `${this.getScopeVar()}.${variableName}`,
+        typeAnnotation,
+        functionCode: code.trim(),
+        nodeContext: this.getCurrentScope() === "node",
+      });
     } else if (value.type === "timeBlock") {
       const timingVarName = variableName;
       const code = this.processTimeBlock(value, timingVarName);
@@ -423,7 +427,16 @@ export class TypeScriptGenerator extends BaseGenerator {
     let argsString = "";
     if (this.isInternalFunction(node.functionName)) {
       argsString = parts.join(", ");
-      return `${functionName}([${argsString}])`;
+      const metadata = `{
+        statelogClient,
+        graph: __graph,
+        messages: __messages,
+      }`;
+      return renderInternalFunctionCall.default({
+        functionName,
+        argsString,
+        metadata,
+      });
     } else {
       // must be a builtin function or imported function
       argsString = parts.join(", ");
@@ -564,8 +577,6 @@ export class TypeScriptGenerator extends BaseGenerator {
     const clientConfig = prompt.config ? this.processNode(prompt.config) : "{}";
     const metadataObj = `{
       messages: __messages,
-      interruptResponse: __interruptResponse,
-      toolCall: __toolCall,
     }`;
     this.toolsUsed = []; // reset after use
 
@@ -584,6 +595,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       tools,
       functionCalls,
       clientConfig,
+      nodeContext: this.getCurrentScope() === "node",
     });
   }
 

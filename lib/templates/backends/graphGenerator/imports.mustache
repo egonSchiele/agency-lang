@@ -108,21 +108,21 @@ export async function respondToInterrupt(_interrupt: Interrupt, _interruptRespon
   __stateStack = StateStack.fromJSON(interrupt.__state || {});
   __stateStack.deserializeMode();
   
-  const messages = (__stateStack.other.messages || []).map((json: any) => {
+  const messages = (__stateStack.interruptData.messages || []).map((json: any) => {
     // create message objects from JSON
     return messageFromJSON(json);
   });
+  __stateStack.interruptData.messages = messages;
+  __stateStack.interruptData.interruptResponse = interruptResponse;
 
   // start at the last node we visited
-  const nodesTraversed = __stateStack.other.nodesTraversed || [];
+  const nodesTraversed = __stateStack.interruptData.nodesTraversed || [];
   const nodeName = nodesTraversed[nodesTraversed.length - 1];
   const result = await graph.run(nodeName, {
     messages: messages,
     __metadata: {
       graph: graph,
       statelogClient: __statelogClient,
-      interruptResponse: interruptResponse,
-      state: interrupt.__state,
       __stateStack: __stateStack,
     },
 
@@ -152,6 +152,7 @@ class StateStack {
   private mode: "serialize" | "deserialize" = "serialize";
   public globals: Record<string, any> = {};
   public other: Record<string, any> = {};
+  public interruptData: Record<string, any> = {};
 
   private deserializeStackLength = 0;
 
@@ -196,6 +197,7 @@ class StateStack {
       stack: this.stack,
       globals: this.globals,
       other: this.other,
+      interruptData: this.interruptData,
       mode: this.mode,
       deserializeStackLength: this.deserializeStackLength,
     });
@@ -206,6 +208,7 @@ class StateStack {
     stateStack.stack = json.stack || [];
     stateStack.globals = json.globals || {};
     stateStack.other = json.other || {};
+    stateStack.interruptData = json.interruptData || {};
     stateStack.mode = json.mode || "serialize";
     stateStack.deserializeStackLength = json.deserializeStackLength || 0;
     return stateStack;

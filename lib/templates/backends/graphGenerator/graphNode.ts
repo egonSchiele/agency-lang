@@ -14,6 +14,11 @@ graph.node("{{{name}}}", async (state): Promise<any> => {
     if (state.__metadata?.__stateStack) {
       __stateStack = state.__metadata.__stateStack;
       
+      // restore global state
+      if (state.__metadata?.__stateStack?.global) {
+        __global = state.__metadata.__stateStack.global;
+      }
+
       // clear the state stack from metadata so it doesn't propagate to other nodes.
       state.__metadata.__stateStack = undefined;
     }
@@ -29,17 +34,6 @@ graph.node("{{{name}}}", async (state): Promise<any> => {
     const __step = __stack.step;
 
     const __self: Record<string, any> = __stack.locals;
-
-    // If we're resuming after an interrupt, these will be set.
-    // There should be a cleaner way to handle this,
-    // instead of littering this scope with these variables
-    const __interruptResponse: InterruptResponseType | undefined = state.__metadata?.interruptResponse;
-    const __toolCall: Record<string, any>|undefined = __stateStack.other?.toolCall;
-
-    // TODO pretty sure this isn't needed, check and remove
-    if (state.__metadata?.state?.global) {
-      __global = state.__metadata.state.global;
-    }
 
     {{#hasParam}}
     

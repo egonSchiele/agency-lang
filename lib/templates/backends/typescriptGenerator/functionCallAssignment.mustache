@@ -1,0 +1,10 @@
+{{{variableName:string}}}{{{typeAnnotation:string}}} = await {{{functionCode:string}}};
+
+if (isInterrupt({{{variableName:string}}})) {
+  {{#nodeContext}}
+  return { ...state, data: {{{variableName:string}}} };
+  {{/nodeContext}}
+   {{^nodeContext}}
+   return { data: {{{variableName:string}}} };
+   {{/nodeContext}}
+}

@@ -1,0 +1,21 @@
+def greet(name: string, age: number): string {
+  return interrupt("Agent wants to call the greet function with name: ${name} and age: ${age}")
+  return "Kya chal raha jai, ${name}! You are ${age} years old."
+}
+
+def foo2(name: string, age: number): string {
+  print("In foo2, name is ${name} and age is ${age}, this message should only print once...")
+  +greet
+  response = llm("Greet the user with their name: ${name} and age ${age} using the greet function.")
+  print("Greeted, age is still ${age}...")
+  return response
+}
+
+node sayHi(name) {
+  print("Saying hi to ${name}...")
+  age = 30
+  response = foo2(name, age)
+  print(response)
+  print("Greeting sent.")
+  return response
+}

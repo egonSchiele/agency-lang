@@ -61,10 +61,12 @@ export const __addTool = {
 };
 
 export async function test(args, __metadata={}) : Promise<any> {
-    const __messages: Message[] = [];
+    const __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
+    const __graph = __metadata?.graph || graph;
+    const statelogClient = __metadata?.statelogClient || __statelogClient;
 
     // TODO: Note that we don't need to use the same kind of restoration
     // from state for arguments as we do for nodes,
@@ -95,12 +97,18 @@ export async function test(args, __metadata={}) : Promise<any> {
         __stack.step++;
       }
       
-}await console.log(test([]))
+}await console.log(test([], {
+        statelogClient,
+        graph: __graph,
+        messages: __messages,
+      });)
 export async function add(args, __metadata={}) : Promise<any> {
-    const __messages: Message[] = [];
+    const __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
+    const __graph = __metadata?.graph || graph;
+    const statelogClient = __metadata?.statelogClient || __statelogClient;
 
     // TODO: Note that we don't need to use the same kind of restoration
     // from state for arguments as we do for nodes,

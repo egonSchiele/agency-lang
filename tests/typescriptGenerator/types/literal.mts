@@ -57,8 +57,8 @@ async function _foo(__metadata?: Record<string, any>): Promise<"hi"> {
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
-  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
-  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
+  let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
   const __tools = undefined;
 
   
@@ -123,7 +123,7 @@ async function _foo(__metadata?: Record<string, any>): Promise<"hi"> {
         model: __client.getModel(),
       });
 
-      __stateStack.other = {
+      __stateStack.interruptData = {
         messages: __messages.map((msg) => msg.toJSON()),
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
@@ -176,13 +176,14 @@ async function _foo(__metadata?: Record<string, any>): Promise<"hi"> {
 
 __self.foo = await _foo({
       messages: __messages,
-      interruptResponse: __interruptResponse,
-      toolCall: __toolCall,
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.foo)) {
-  return { ...state, data: __self.foo };
+  
+   
+   return  __self.foo;
+   
 }
 async function _bar(__metadata?: Record<string, any>): Promise<42> {
   const __prompt = `the number 42`;
@@ -191,8 +192,8 @@ async function _bar(__metadata?: Record<string, any>): Promise<42> {
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
-  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
-  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
+  let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
   const __tools = undefined;
 
   
@@ -257,7 +258,7 @@ async function _bar(__metadata?: Record<string, any>): Promise<42> {
         model: __client.getModel(),
       });
 
-      __stateStack.other = {
+      __stateStack.interruptData = {
         messages: __messages.map((msg) => msg.toJSON()),
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
@@ -310,13 +311,14 @@ async function _bar(__metadata?: Record<string, any>): Promise<42> {
 
 __self.bar = await _bar({
       messages: __messages,
-      interruptResponse: __interruptResponse,
-      toolCall: __toolCall,
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.bar)) {
-  return { ...state, data: __self.bar };
+  
+   
+   return  __self.bar;
+   
 }
 async function _baz(__metadata?: Record<string, any>): Promise<true> {
   const __prompt = `the boolean true`;
@@ -325,8 +327,8 @@ async function _baz(__metadata?: Record<string, any>): Promise<true> {
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
-  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
-  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
+  let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
   const __tools = undefined;
 
   
@@ -391,7 +393,7 @@ async function _baz(__metadata?: Record<string, any>): Promise<true> {
         model: __client.getModel(),
       });
 
-      __stateStack.other = {
+      __stateStack.interruptData = {
         messages: __messages.map((msg) => msg.toJSON()),
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
@@ -444,11 +446,12 @@ async function _baz(__metadata?: Record<string, any>): Promise<true> {
 
 __self.baz = await _baz({
       messages: __messages,
-      interruptResponse: __interruptResponse,
-      toolCall: __toolCall,
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.baz)) {
-  return { ...state, data: __self.baz };
+  
+   
+   return  __self.baz;
+   
 }

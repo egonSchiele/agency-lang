@@ -57,8 +57,8 @@ async function _url(__metadata?: Record<string, any>): Promise<{ hostname: strin
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
-  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
-  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
+  let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
   const __tools = undefined;
 
   
@@ -123,7 +123,7 @@ async function _url(__metadata?: Record<string, any>): Promise<{ hostname: strin
         model: __client.getModel(),
       });
 
-      __stateStack.other = {
+      __stateStack.interruptData = {
         messages: __messages.map((msg) => msg.toJSON()),
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
@@ -176,11 +176,12 @@ async function _url(__metadata?: Record<string, any>): Promise<{ hostname: strin
 
 __self.url = await _url({
       messages: __messages,
-      interruptResponse: __interruptResponse,
-      toolCall: __toolCall,
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.url)) {
-  return { ...state, data: __self.url };
+  
+   
+   return  __self.url;
+   
 }await console.log(__stateStack.globals.url)

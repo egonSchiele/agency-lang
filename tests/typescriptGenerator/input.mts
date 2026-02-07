@@ -64,6 +64,12 @@ function _builtinInput(prompt: string): Promise<string> {
 }
 __stateStack.globals.message = await await _builtinInput(`Please enter a message: `);
 
+if (isInterrupt(__stateStack.globals.message)) {
+  
+   
+   return { data: __stateStack.globals.message };
+   
+}
 async function _sentiment(message: string, __metadata?: Record<string, any>): Promise<"happy" | "sad" | "neutral"> {
   const __prompt = `Categorize the sentiment in this message: \"${message}\"`;
   const startTime = performance.now();
@@ -71,8 +77,8 @@ async function _sentiment(message: string, __metadata?: Record<string, any>): Pr
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
-  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
-  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
+  let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
   const __tools = undefined;
 
   
@@ -137,7 +143,7 @@ async function _sentiment(message: string, __metadata?: Record<string, any>): Pr
         model: __client.getModel(),
       });
 
-      __stateStack.other = {
+      __stateStack.interruptData = {
         messages: __messages.map((msg) => msg.toJSON()),
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
@@ -190,11 +196,12 @@ async function _sentiment(message: string, __metadata?: Record<string, any>): Pr
 
 __self.sentiment = await _sentiment(__stateStack.globals.message, {
       messages: __messages,
-      interruptResponse: __interruptResponse,
-      toolCall: __toolCall,
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.sentiment)) {
-  return { ...state, data: __self.sentiment };
+  
+   
+   return  __self.sentiment;
+   
 }await console.log(__stateStack.globals.sentiment)

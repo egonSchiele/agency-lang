@@ -110,21 +110,21 @@ export async function respondToInterrupt(_interrupt: Interrupt, _interruptRespon
   __stateStack = StateStack.fromJSON(interrupt.__state || {});
   __stateStack.deserializeMode();
   
-  const messages = (__stateStack.other.messages || []).map((json: any) => {
+  const messages = (__stateStack.interruptData.messages || []).map((json: any) => {
     // create message objects from JSON
     return messageFromJSON(json);
   });
+  __stateStack.interruptData.messages = messages;
+  __stateStack.interruptData.interruptResponse = interruptResponse;
 
   // start at the last node we visited
-  const nodesTraversed = __stateStack.other.nodesTraversed || [];
+  const nodesTraversed = __stateStack.interruptData.nodesTraversed || [];
   const nodeName = nodesTraversed[nodesTraversed.length - 1];
   const result = await graph.run(nodeName, {
     messages: messages,
     __metadata: {
       graph: graph,
       statelogClient: __statelogClient,
-      interruptResponse: interruptResponse,
-      state: interrupt.__state,
       __stateStack: __stateStack,
     },
 
@@ -154,6 +154,7 @@ class StateStack {
   private mode: "serialize" | "deserialize" = "serialize";
   public globals: Record<string, any> = {};
   public other: Record<string, any> = {};
+  public interruptData: Record<string, any> = {};
 
   private deserializeStackLength = 0;
 
@@ -198,6 +199,7 @@ class StateStack {
       stack: this.stack,
       globals: this.globals,
       other: this.other,
+      interruptData: this.interruptData,
       mode: this.mode,
       deserializeStackLength: this.deserializeStackLength,
     });
@@ -208,6 +210,7 @@ class StateStack {
     stateStack.stack = json.stack || [];
     stateStack.globals = json.globals || {};
     stateStack.other = json.other || {};
+    stateStack.interruptData = json.interruptData || {};
     stateStack.mode = json.mode || "serialize";
     stateStack.deserializeStackLength = json.deserializeStackLength || 0;
     return stateStack;
@@ -255,10 +258,12 @@ export const __flexibleTool = {
 };
 
 export async function add(args, __metadata={}) : Promise<number> {
-    const __messages: Message[] = [];
+    const __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
+    const __graph = __metadata?.graph || graph;
+    const statelogClient = __metadata?.statelogClient || __statelogClient;
 
     // TODO: Note that we don't need to use the same kind of restoration
     // from state for arguments as we do for nodes,
@@ -287,8 +292,8 @@ async function _result(x: string, y: string, __metadata?: Record<string, any>): 
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
-  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
-  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
+  let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
   const __tools = undefined;
 
   
@@ -350,7 +355,7 @@ async function _result(x: string, y: string, __metadata?: Record<string, any>): 
         model: __client.getModel(),
       });
 
-      __stateStack.other = {
+      __stateStack.interruptData = {
         messages: __messages.map((msg) => msg.toJSON()),
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
@@ -395,13 +400,14 @@ async function _result(x: string, y: string, __metadata?: Record<string, any>): 
 
 __self.result = await _result(__stack.args.x, __stack.args.y, {
       messages: __messages,
-      interruptResponse: __interruptResponse,
-      toolCall: __toolCall,
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.result)) {
-  return { ...state, data: __self.result };
+  
+   
+   return  __self.result;
+   
 }
         __stack.step++;
       }
@@ -415,10 +421,12 @@ return __stack.locals.result
       
 }
 export async function greet(args, __metadata={}) : Promise<any> {
-    const __messages: Message[] = [];
+    const __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
+    const __graph = __metadata?.graph || graph;
+    const statelogClient = __metadata?.statelogClient || __statelogClient;
 
     // TODO: Note that we don't need to use the same kind of restoration
     // from state for arguments as we do for nodes,
@@ -447,8 +455,8 @@ async function _message(name: string, __metadata?: Record<string, any>): Promise
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
-  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
-  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
+  let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
   const __tools = undefined;
 
   
@@ -510,7 +518,7 @@ async function _message(name: string, __metadata?: Record<string, any>): Promise
         model: __client.getModel(),
       });
 
-      __stateStack.other = {
+      __stateStack.interruptData = {
         messages: __messages.map((msg) => msg.toJSON()),
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
@@ -555,13 +563,14 @@ async function _message(name: string, __metadata?: Record<string, any>): Promise
 
 __self.message = await _message(__stack.args.name, {
       messages: __messages,
-      interruptResponse: __interruptResponse,
-      toolCall: __toolCall,
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.message)) {
-  return { ...state, data: __self.message };
+  
+   
+   return  __self.message;
+   
 }
         __stack.step++;
       }
@@ -575,10 +584,12 @@ return __stack.locals.message
       
 }
 export async function mixed(args, __metadata={}) : Promise<any> {
-    const __messages: Message[] = [];
+    const __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
+    const __graph = __metadata?.graph || graph;
+    const statelogClient = __metadata?.statelogClient || __statelogClient;
 
     // TODO: Note that we don't need to use the same kind of restoration
     // from state for arguments as we do for nodes,
@@ -607,8 +618,8 @@ async function _output(label: string, count: string, __metadata?: Record<string,
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
-  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
-  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
+  let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
   const __tools = undefined;
 
   
@@ -670,7 +681,7 @@ async function _output(label: string, count: string, __metadata?: Record<string,
         model: __client.getModel(),
       });
 
-      __stateStack.other = {
+      __stateStack.interruptData = {
         messages: __messages.map((msg) => msg.toJSON()),
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
@@ -715,13 +726,14 @@ async function _output(label: string, count: string, __metadata?: Record<string,
 
 __self.output = await _output(__stack.args.label, __stack.args.count, {
       messages: __messages,
-      interruptResponse: __interruptResponse,
-      toolCall: __toolCall,
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.output)) {
-  return { ...state, data: __self.output };
+  
+   
+   return  __self.output;
+   
 }
         __stack.step++;
       }
@@ -735,10 +747,12 @@ return __stack.locals.output
       
 }
 export async function processArray(args, __metadata={}) : Promise<any> {
-    const __messages: Message[] = [];
+    const __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
+    const __graph = __metadata?.graph || graph;
+    const statelogClient = __metadata?.statelogClient || __statelogClient;
 
     // TODO: Note that we don't need to use the same kind of restoration
     // from state for arguments as we do for nodes,
@@ -767,8 +781,8 @@ async function _result(items: string, __metadata?: Record<string, any>): Promise
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
-  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
-  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
+  let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
   const __tools = undefined;
 
   
@@ -830,7 +844,7 @@ async function _result(items: string, __metadata?: Record<string, any>): Promise
         model: __client.getModel(),
       });
 
-      __stateStack.other = {
+      __stateStack.interruptData = {
         messages: __messages.map((msg) => msg.toJSON()),
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
@@ -875,13 +889,14 @@ async function _result(items: string, __metadata?: Record<string, any>): Promise
 
 __self.result = await _result(__stack.args.items, {
       messages: __messages,
-      interruptResponse: __interruptResponse,
-      toolCall: __toolCall,
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.result)) {
-  return { ...state, data: __self.result };
+  
+   
+   return  __self.result;
+   
 }
         __stack.step++;
       }
@@ -895,10 +910,12 @@ return __stack.locals.result
       
 }
 export async function flexible(args, __metadata={}) : Promise<any> {
-    const __messages: Message[] = [];
+    const __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
+    const __graph = __metadata?.graph || graph;
+    const statelogClient = __metadata?.statelogClient || __statelogClient;
 
     // TODO: Note that we don't need to use the same kind of restoration
     // from state for arguments as we do for nodes,
@@ -927,8 +944,8 @@ async function _result(value: string, __metadata?: Record<string, any>): Promise
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
-  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
-  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
+  let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
   const __tools = undefined;
 
   
@@ -990,7 +1007,7 @@ async function _result(value: string, __metadata?: Record<string, any>): Promise
         model: __client.getModel(),
       });
 
-      __stateStack.other = {
+      __stateStack.interruptData = {
         messages: __messages.map((msg) => msg.toJSON()),
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
@@ -1035,13 +1052,14 @@ async function _result(value: string, __metadata?: Record<string, any>): Promise
 
 __self.result = await _result(__stack.args.value, {
       messages: __messages,
-      interruptResponse: __interruptResponse,
-      toolCall: __toolCall,
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.result)) {
-  return { ...state, data: __self.result };
+  
+   
+   return  __self.result;
+   
 }
         __stack.step++;
       }
@@ -1064,6 +1082,11 @@ graph.node("foo", async (state): Promise<any> => {
     if (state.__metadata?.__stateStack) {
       __stateStack = state.__metadata.__stateStack;
       
+      // restore global state
+      if (state.__metadata?.__stateStack?.global) {
+        __global = state.__metadata.__stateStack.global;
+      }
+
       // clear the state stack from metadata so it doesn't propagate to other nodes.
       state.__metadata.__stateStack = undefined;
     }
@@ -1079,17 +1102,6 @@ graph.node("foo", async (state): Promise<any> => {
     const __step = __stack.step;
 
     const __self: Record<string, any> = __stack.locals;
-
-    // If we're resuming after an interrupt, these will be set.
-    // There should be a cleaner way to handle this,
-    // instead of littering this scope with these variables
-    const __interruptResponse: InterruptResponseType | undefined = state.__metadata?.interruptResponse;
-    const __toolCall: Record<string, any>|undefined = __stateStack.other?.toolCall;
-
-    // TODO pretty sure this isn't needed, check and remove
-    if (state.__metadata?.state?.global) {
-      __global = state.__metadata.state.global;
-    }
 
     
     
@@ -1115,12 +1127,62 @@ graph.node("foo", async (state): Promise<any> => {
     return { ...state, data: undefined };
 });
 //  Call the functions
-__stateStack.globals.sum = await add([5, 10]);
-__stateStack.globals.greeting = await greet([`Alice`]);
-__stateStack.globals.labeled = await mixed([42, `Answer`]);
-__stateStack.globals.processed = await processArray([[1, 2, 3, 4, 5]]);
-__stateStack.globals.flexResult = await flexible([`test`]);
+__stateStack.globals.sum = await add([5, 10], {
+        statelogClient,
+        graph: __graph,
+        messages: __messages,
+      });;
 
+if (isInterrupt(__stateStack.globals.sum)) {
+  
+   
+   return { data: __stateStack.globals.sum };
+   
+}__stateStack.globals.greeting = await greet([`Alice`], {
+        statelogClient,
+        graph: __graph,
+        messages: __messages,
+      });;
+
+if (isInterrupt(__stateStack.globals.greeting)) {
+  
+   
+   return { data: __stateStack.globals.greeting };
+   
+}__stateStack.globals.labeled = await mixed([42, `Answer`], {
+        statelogClient,
+        graph: __graph,
+        messages: __messages,
+      });;
+
+if (isInterrupt(__stateStack.globals.labeled)) {
+  
+   
+   return { data: __stateStack.globals.labeled };
+   
+}__stateStack.globals.processed = await processArray([[1, 2, 3, 4, 5]], {
+        statelogClient,
+        graph: __graph,
+        messages: __messages,
+      });;
+
+if (isInterrupt(__stateStack.globals.processed)) {
+  
+   
+   return { data: __stateStack.globals.processed };
+   
+}__stateStack.globals.flexResult = await flexible([`test`], {
+        statelogClient,
+        graph: __graph,
+        messages: __messages,
+      });;
+
+if (isInterrupt(__stateStack.globals.flexResult)) {
+  
+   
+   return { data: __stateStack.globals.flexResult };
+   
+}
 
 
 export async function foo({ messages } = {}): Promise<string> {

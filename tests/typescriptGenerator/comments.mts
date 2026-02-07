@@ -64,10 +64,12 @@ __stateStack.globals.y = `hello`;
 //  Comment before function definition
 
 export async function greet(args, __metadata={}) : Promise<any> {
-    const __messages: Message[] = [];
+    const __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
+    const __graph = __metadata?.graph || graph;
+    const statelogClient = __metadata?.statelogClient || __statelogClient;
 
     // TODO: Note that we don't need to use the same kind of restoration
     // from state for arguments as we do for nodes,
@@ -101,8 +103,18 @@ return __stack.locals.message
       }
       
 }//  Comment before function call
-__stateStack.globals.result = await greet([]);
-await console.log(__stateStack.globals.result)//  Testing comments in different contexts
+__stateStack.globals.result = await greet([], {
+        statelogClient,
+        graph: __graph,
+        messages: __messages,
+      });;
+
+if (isInterrupt(__stateStack.globals.result)) {
+  
+   
+   return { data: __stateStack.globals.result };
+   
+}await console.log(__stateStack.globals.result)//  Testing comments in different contexts
 //  1. Before type hints
 __stateStack.globals.age = 25;
 //  2. Before conditionals

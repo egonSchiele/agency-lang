@@ -57,8 +57,8 @@ async function _numbers(__metadata?: Record<string, any>): Promise<number[]> {
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
-  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
-  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
+  let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
   const __tools = undefined;
 
   
@@ -123,7 +123,7 @@ async function _numbers(__metadata?: Record<string, any>): Promise<number[]> {
         model: __client.getModel(),
       });
 
-      __stateStack.other = {
+      __stateStack.interruptData = {
         messages: __messages.map((msg) => msg.toJSON()),
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
@@ -176,13 +176,14 @@ async function _numbers(__metadata?: Record<string, any>): Promise<number[]> {
 
 __self.numbers = await _numbers({
       messages: __messages,
-      interruptResponse: __interruptResponse,
-      toolCall: __toolCall,
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.numbers)) {
-  return { ...state, data: __self.numbers };
+  
+   
+   return  __self.numbers;
+   
 }await console.log(__stateStack.globals.numbers)
 async function _greetings(__metadata?: Record<string, any>): Promise<string[]> {
   const __prompt = `a list of 3 common greetings in different languages`;
@@ -191,8 +192,8 @@ async function _greetings(__metadata?: Record<string, any>): Promise<string[]> {
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
-  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
-  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
+  let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
   const __tools = undefined;
 
   
@@ -257,7 +258,7 @@ async function _greetings(__metadata?: Record<string, any>): Promise<string[]> {
         model: __client.getModel(),
       });
 
-      __stateStack.other = {
+      __stateStack.interruptData = {
         messages: __messages.map((msg) => msg.toJSON()),
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
@@ -310,11 +311,12 @@ async function _greetings(__metadata?: Record<string, any>): Promise<string[]> {
 
 __self.greetings = await _greetings({
       messages: __messages,
-      interruptResponse: __interruptResponse,
-      toolCall: __toolCall,
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.greetings)) {
-  return { ...state, data: __self.greetings };
+  
+   
+   return  __self.greetings;
+   
 }await console.log(__stateStack.globals.greetings)

@@ -58,8 +58,8 @@ async function _greeting(name: string, __metadata?: Record<string, any>): Promis
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
-  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
-  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
+  let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
   const __tools = undefined;
 
   
@@ -121,7 +121,7 @@ async function _greeting(name: string, __metadata?: Record<string, any>): Promis
         model: __client.getModel(),
       });
 
-      __stateStack.other = {
+      __stateStack.interruptData = {
         messages: __messages.map((msg) => msg.toJSON()),
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
@@ -166,11 +166,12 @@ async function _greeting(name: string, __metadata?: Record<string, any>): Promis
 
 __self.greeting = await _greeting(__stateStack.globals.name, {
       messages: __messages,
-      interruptResponse: __interruptResponse,
-      toolCall: __toolCall,
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.greeting)) {
-  return { ...state, data: __self.greeting };
+  
+   
+   return  __self.greeting;
+   
 }await console.log(__stateStack.globals.greeting)

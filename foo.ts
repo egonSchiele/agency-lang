@@ -30,7 +30,7 @@ const getClientWithConfig = (config = {}) => {
     openAiApiKey: process.env.OPENAI_API_KEY || "",
     googleApiKey: process.env.GEMINI_API_KEY || "",
     model: __model,
-    logLevel: "debug",
+    logLevel: "warn",
   };
 
   return getClient({ ...defaultConfig, ...config });
@@ -139,7 +139,7 @@ class PackagedState {
     this.step = state.part;
     this.self = state.self;
     this.global = state.global;
-    this.args = args;
+    this.args = state.args;
   }
 
   toJSON() {

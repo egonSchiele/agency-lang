@@ -83,7 +83,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
         step: __currentStep,
         self: __self,
         global: __global,
-        nodeData: state.data,
+        args: state.data,
       });
       haltInterrupt.__state = packagedState;
       return haltInterrupt;

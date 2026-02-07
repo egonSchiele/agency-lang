@@ -78,3 +78,7 @@ imported tools currently can't be used because to create the array that gets pas
 We currently aren't handling the case where a node calls a function, which calls another function, which then returns an interrupt. We need to handle returning immediately due to an interrupt in that middle function, and we need to restore the state of that middle function correctly.
 
 We're also not currently handling the case where the user wants to request changes after an interrupt.
+
+Settings file so users can pick whether they want verbose output while building, what level of logging they want, and whether they want state log logging. If they don't, generate the code without the state log calls.
+Update the state log UI to hide metadata, also need to log some of the new things around statestack.
+How to handle interrupts in agent code?

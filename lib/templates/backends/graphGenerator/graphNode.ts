@@ -5,20 +5,22 @@ import { apply } from "typestache";
 
 export const template = `
 graph.node("{{{name}}}", async (state): Promise<any> => {
-    console.log({state})
+    console.log(">>", JSON.stringify({ state, __stateStack }, null, 2));
     const __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
-    if (state.__metadata?.stateStack) {
-      __stateStack = state.__metadata.stateStack;
+    if (state.__metadata?.__stateStack) {
+      __stateStack = state.__metadata.__stateStack;
     }
     const __stack = __stateStack.getNewState();
+    console.log(">>statestack again", JSON.stringify({ __stateStack }, null, 2));
+    console.log("!!!!", JSON.stringify(__stack, null, 2));
     const __step = __stack.step;
 
     const __self: Record<string, any> = __stack.locals;
 
     const __interruptResponse: InterruptResponseType | undefined = state.__metadata?.interruptResponse;
-    const __toolCall: Record<string, any>|undefined = state.__metadata?.state?.toolCall;
+    const __toolCall: Record<string, any>|undefined = __stateStack.other?.toolCall;
 
     if (state.__metadata?.state?.global) {
       __global = state.__metadata.state.global;

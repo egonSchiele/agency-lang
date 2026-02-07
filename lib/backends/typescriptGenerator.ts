@@ -525,10 +525,8 @@ export class TypeScriptGenerator extends BaseGenerator {
           this.typeAliases,
         )}`,
     );
-
     parts.push("__metadata?: Record<string, any>");
     const argsStr = parts.join(", ");
-
     const _tools = this.toolsUsed
       .map((toolName) => `__${toolName}Tool`)
       .join(", ");
@@ -537,8 +535,20 @@ export class TypeScriptGenerator extends BaseGenerator {
 
     const functionCalls = this.toolsUsed
       .map((toolName) => {
+        const func = this.functionDefinitions[toolName];
+        if (!func) {
+          throw new Error(
+            `Tool '${toolName}' is being used but no function definition found for it. Make sure to define a function for this tool.`,
+          );
+        }
+        const paramsStr = func.parameters
+          .map((param, index) => {
+            return `args["${param.name}"]`;
+          })
+          .join(", ");
         return renderToolCall.default({
           name: toolName,
+          paramsStr,
         });
       })
       .join("\n");

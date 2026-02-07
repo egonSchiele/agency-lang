@@ -169,7 +169,7 @@ class PackagedState {
 
 class StateStack {
   public stack: StateItem[] = [];
-  private mode: "serialize" | "deserialize" = "serialize";
+  public mode: "serialize" | "deserialize" = "serialize";
   public globals: Record<string, any> = {};
   public other: Record<string, any> = {};
 
@@ -206,6 +206,7 @@ class StateStack {
       stack: this.stack,
       globals: this.globals,
       other: this.other,
+      mode: this.mode,
     });
   }
 
@@ -214,6 +215,7 @@ class StateStack {
     stateStack.stack = json.stack || [];
     stateStack.globals = json.globals || {};
     stateStack.other = json.other || {};
+    stateStack.mode = json.mode || "serialize";
     return stateStack;
   }
 }

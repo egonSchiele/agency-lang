@@ -4,10 +4,10 @@
 import { apply } from "typestache";
 
 export const template = `
-export async function {{{functionName:string}}}(args) : Promise<{{{returnType}}}> {
+export async function {{{functionName:string}}}(args, __metadata={}) : Promise<{{{returnType}}}> {
     const __messages: Message[] = [];
     const __stack = __stateStack.getNewState();
-    const __step = __stack.step;
+    const __step = __stack.step > 0 ? __stack.step + 1 : 0;
     const __self: Record<string, any> = __stack.locals;
 
     const __params = [{{{argsStr}}}];

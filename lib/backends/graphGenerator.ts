@@ -1,4 +1,5 @@
 import {
+  AgencyNode,
   AgencyProgram,
   FunctionCall,
   TypeHintMap,
@@ -17,6 +18,7 @@ import { ReturnStatement } from "../types/returnStatement.js";
 import { TypeScriptGenerator } from "./typescriptGenerator.js";
 import { mapFunctionName } from "./typescriptGenerator/builtins.js";
 import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
+import { TYPES_THAT_DONT_TRIGGER_NEW_PART } from "@/config.js";
 
 export class GraphGenerator extends TypeScriptGenerator {
   protected typeHints: TypeHintMap = {};
@@ -51,6 +53,7 @@ export class GraphGenerator extends TypeScriptGenerator {
   }
 
   protected processGraphNode(node: GraphNodeDefinition): string {
+    this.startScope("node");
     const { nodeName, body, parameters } = node;
     /* if (parameters.length > 1) {
       throw new Error(
@@ -65,33 +68,22 @@ export class GraphGenerator extends TypeScriptGenerator {
       this.functionScopedVariables.push(param.name);
     }
 
-    const parts: string[][] = [];
     for (const stmt of body) {
       if (stmt.type === "functionCall" && this.isGraphNode(stmt.functionName)) {
         throw new Error(
           `Call to graph node '${stmt.functionName}' inside graph node '${nodeName}' was not returned. All calls to graph nodes must be returned, eg (return ${stmt.functionName}(...)).`,
         );
       }
-      parts.push([]);
-      parts[parts.length - 1].push(this.processNode(stmt));
     }
-    const bodyCode: string[] = [];
-    let partNum = 0;
-    for (const part of parts) {
-      const partCode = `
-      if (__part >= ${partNum}) {
-        ${part.join("").trimEnd()}
-      }
-      `;
-      bodyCode.push(partCode);
-      partNum++;
-    }
+
+    const bodyCode = this.processBodyAsParts(body);
 
     this.functionScopedVariables = [];
     this.adjacentNodes[nodeName] = [...this.currentAdjacentNodes];
     this.isInsideGraphNode = false;
-
-    const paramNames = "[" + parameters.map((p) => p.name).join(", ") + "]";
+    this.endScope();
+    const paramNames =
+      "[" + parameters.map((p) => `"${p.name}"`).join(", ") + "]";
 
     return renderGraphNode.default({
       name: nodeName,

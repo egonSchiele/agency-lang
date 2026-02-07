@@ -7,6 +7,14 @@ export const template = `if (
   toolCall.name === "{{{name:string}}}"
 ) {
   const args = toolCall.arguments;
+  console.log(\`>> Tool '{{{name:string}}}' called with arguments:\`, args);
+  if (__interruptResponse) {
+    if (__interruptResponse.type === "approve") {
+      args.__metadata = {
+        part: 2
+      }
+    }
+  }
 
   toolCallStartTime = performance.now();
   const result = await {{{name}}}(args);
@@ -23,20 +31,22 @@ await statelogClient.toolCall({
     timeTaken: toolCallEndTime - toolCallStartTime,
   });
 
-  // Add function result to messages
-  __messages.push(toolMessage(result, {
-            tool_call_id: toolCall.id,
-            name: toolCall.name,
-      }));
-
   if (isInterrupt(result)) {
+    haltInterrupt = result;
     haltToolCall = {
       id: toolCall.id,
       name: toolCall.name,
-    };
+      arguments: toolCall.arguments,
+    }
     haltExecution = true;
     break;
   }
+
+    // Add function result to messages
+  __messages.push(toolMessage(result, {
+        tool_call_id: toolCall.id,
+        name: toolCall.name,
+  }));
 }`;
 
 export type TemplateType = {

@@ -1,7 +1,17 @@
 import node { sayHi } from "./bar.agency"
 import tool { greet } from "./bar.agency"
 
+prompt = "What is your name?"
+
+def test(x: string) {
+  y = 1
+  print("Hello, ${x}!")
+}
+
 node foo() {
+  test("Alice")
+  print(prompt)
   name = input("> ")
+  print("Your name is ${name}. Greeting you with a tool")
   return sayHi(name)
 }

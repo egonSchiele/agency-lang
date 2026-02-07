@@ -1,3 +1,5 @@
+import { Message } from "smoltalk";
+
 export function escape(str: string): string {
   return str
     .replace(/\\/g, "\\\\")
@@ -21,4 +23,35 @@ export function zip<T, U>(arr1: T[], arr2: U[]): Array<[T, U]> {
 
 export function uniq<T>(arr: T[]): T[] {
   return Array.from(new Set(arr));
+}
+
+class PackagedState {
+  public messages?: Message[];
+  public nodesTraversed?: string[];
+  public toolCall?: Record<string, any>;
+  public step?: number;
+  public selfState?: Record<string, any>;
+  public globalState?: Record<string, any>;
+  public args?: any;
+  constructor(state: Record<string, any>, args?: any) {
+    this.messages = state.messages;
+    this.nodesTraversed = state.graph?.getNodesTraversed();
+    this.toolCall = state.toolCall;
+    this.step = state.part;
+    this.selfState = JSON.parse(JSON.stringify(state.self));
+    this.globalState = JSON.parse(JSON.stringify(state.global));
+    this.args = args;
+  }
+
+  toJSON() {
+    return {
+      messages: this.messages,
+      nodesTraversed: this.nodesTraversed,
+      toolCall: this.toolCall,
+      step: this.step,
+      selfState: this.selfState,
+      globalState: this.globalState,
+      args: this.args,
+    };
+  }
 }

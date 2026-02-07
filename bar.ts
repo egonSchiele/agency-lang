@@ -7,6 +7,7 @@ import { PieMachine, goToNode } from "piemachine";
 import { StatelogClient } from "statelog-client";
 import { nanoid } from "nanoid";
 import { assistantMessage, getClient, userMessage, toolMessage } from "smoltalk";
+import type { Message } from "smoltalk";
 
 const statelogHost = "https://statelog.adit.io";
 const traceId = nanoid();
@@ -19,14 +20,14 @@ const statelogConfig = {
   };
 const __statelogClient = new StatelogClient(statelogConfig);
 const __model: ModelName = "gpt-4o-mini";
-
+const __global: Record<string, any> = {};
 
 const getClientWithConfig = (config = {}) => {
   const defaultConfig = {
     openAiApiKey: process.env.OPENAI_API_KEY || "",
     googleApiKey: process.env.GEMINI_API_KEY || "",
     model: __model,
-    logLevel: "warn",
+    logLevel: "debug",
   };
 
   return getClient({ ...defaultConfig, ...config });
@@ -67,25 +68,95 @@ const empty = <T>(arr: T[]): boolean => arr.length === 0;
 
 // interrupts
 
-type Interrupt<T> = {
+export type Interrupt<T> = {
   type: "interrupt";
   data: T;
+  __state?: PackagedState;
 };
 
-function interrupt<T>(data: T): Interrupt<T> {
+export function interrupt<T>(data: T): Interrupt<T> {
   return {
     type: "interrupt",
     data,
   };
 }
 
-function isInterrupt<T>(obj: any): obj is Interrupt<T> {
+export function isInterrupt<T>(obj: any): obj is Interrupt<T> {
   return obj && obj.type === "interrupt";
 }
 
 function printJSON(obj: any) {
   console.log(JSON.stringify(obj, null, 2));
 }
+
+export type InterruptResponseType = InterruptResponseApprove | InterruptResponseReject | InterruptResponseModify;
+export type InterruptResponseApprove = {
+  type: "approve";
+};
+export type InterruptResponseReject = {
+  type: "reject";
+};
+export type InterruptResponseModify = {
+  type: "modify";
+  newArguments: Record<string, any>;
+};
+
+
+export async function respondToInterrupt(interrupt: Interrupt, interruptResponse: InterruptResponseType) {
+  console.log(JSON.stringify({ interrupt, interruptResponse }, null, 2));
+  const nodeName = nodesTraversed[nodesTraversed.length - 1];
+  console.log(`Going to node ${nodeName} with response:`, interruptResponse);
+  return graph.run(nodeName, {
+    messages: messages,
+    __metadata: {
+      graph: graph,
+      part: part,
+      statelogClient: __statelogClient,
+      interruptResponse: interruptResponse,
+      state: interrupt.__state,
+    },
+    data: interrupt.__state.args
+  });
+}
+
+
+class PackagedState {
+  public messages?: Message[];
+  public nodesTraversed?: string[];
+  public toolCall?: Record<string, any>;
+  public step?: number;
+  public self?: Record<string, any>;
+  public global?: Record<string, any>;
+  public args?: any;
+  constructor(_state: Record<string, any>, args?: any) {
+    const state = structuredClone(_state);
+    this.messages = state.messages;
+    this.nodesTraversed = state.graph?.getNodesTraversed();
+    this.toolCall = state.toolCall;
+    this.step = state.part;
+    this.self = state.self;
+    this.global = state.global;
+    this.args = args;
+  }
+
+  toJSON() {
+    return {
+      messages: this.messages,
+      nodesTraversed: this.nodesTraversed,
+      toolCall: this.toolCall,
+      step: this.step,
+      self: this.self,
+      global: this.global,
+      args: this.args,
+    };
+  }
+
+  nextStep() {
+    this.step ||= 0;
+    this.step += 1;
+  }
+}
+
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -105,88 +176,144 @@ export const __greetTool = {
   schema: z.object({"name": z.string(), })
 };
 
-export async function greet({name}) : Promise<string> {
+export async function greet({name, __metadata}) : Promise<string> {
     const __messages: Message[] = [];
-    return interrupt(`interrupt in greet`)
+    const __step = __metadata?.part || 0;
+    const __self: Record<string, any> = {};
 
+    let __currentStep = __step;
+    
+      if (__step <= 0) {
+        
+        __currentStep++;
+      }
+      
 
-return `Kya chal raha jai, ${name}!`
+      if (__step <= 1) {
+        return interrupt(`interrupt in greet`)
+        __currentStep++;
+      }
+      
 
-
+      if (__step <= 2) {
+        return `Kya chal raha jai, ${name}!`
+        __currentStep++;
+      }
+      
 }
 graph.node("sayHi", async (state): Promise<any> => {
+    console.log({state})
     const __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
+    const __step = state.__metadata?.state?.step || 0;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
+    const __self: Record<string, any> = state.__metadata?.state?.self || {};
+    const __interruptResponse: InterruptResponseType | undefined = state.__metadata?.interruptResponse;
+    const __toolCall: Record<string, any>|undefined = state.__metadata?.state?.toolCall;
+
+    if (state.__metadata?.state?.global) {
+      __global = state.__metadata.state.global;
+    }
+
+    let __currentStep = __step;
+
     
-    const [name] = state.data;
+    
+    const __params = ["name"];
+    (state.data || []).forEach((item, index) => {
+      __self[__params[index]] = item;
+    });
     
     
-      if (__part >= 0) {
+      if (__step <= 0) {
         
+        __currentStep++;
       }
       
 
-      if (__part >= 1) {
-        
+      if (__step <= 1) {
+        await console.log(`Saying hi to ${__self.name}...`)
+        __currentStep++;
       }
       
 
-      if (__part >= 2) {
+      if (__step <= 2) {
         
-async function _response(name: string, __messages: Message[] = []): Promise<string> {
+async function _response(name: string, __metadata?: Record<string, any>): Promise<string> {
+  console.log("Inside prompt func, metedata:", __metadata);
   const __prompt = `Greet the user with their name: ${name} using the greet function.`;
   const startTime = performance.now();
-
-  if (__messages.at(-1)?.role !== "tool") {
-  __messages.push(userMessage(__prompt));
-  }
-
+  const __messages: Message[] = __metadata?.messages || [];
+  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
   const __tools = [__greetTool];
 
   
   
   const __responseFormat = undefined;
   
-
+  
   const __client = getClientWithConfig({});
+  let responseMessage:any;
 
-  let __completion = await __client.text({
-    messages: __messages,
-    tools: __tools,
-    responseFormat: __responseFormat,
-  });
+  if (__toolCalls.length === 0) {
+    __messages.push(userMessage(__prompt));
+  
+  
+    let __completion = await __client.text({
+      messages: __messages,
+      tools: __tools,
+      responseFormat: __responseFormat,
+    });
+  
+    const endTime = performance.now();
+    await statelogClient.promptCompletion({
+      messages: __messages,
+      completion: __completion,
+      model: __client.getModel(),
+      timeTaken: endTime - startTime,
+    });
+  
+    if (!__completion.success) {
+      throw new Error(
+        `Error getting response from ${__model}: ${__completion.error}`
+      );
+    }
+  
+    responseMessage = __completion.value;
+    __toolCalls = responseMessage.toolCalls || [];
 
-  const endTime = performance.now();
-  await statelogClient.promptCompletion({
-    messages: __messages,
-    completion: __completion,
-    model: __client.getModel(),
-    timeTaken: endTime - startTime,
-  });
-
-  if (!__completion.success) {
-    throw new Error(
-      `Error getting response from ${__model}: ${__completion.error}`
-    );
+    if (__toolCalls.length > 0) {
+      // Add assistant's response with tool calls to message history
+      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+    }
   }
 
-  let responseMessage = __completion.value;
+  console.log("++++++++++++++++++++++++++")
+  console.log("Tool calls to process:", JSON.stringify(__toolCalls, null, 2));
+  console.log("++++++++++++++++++++++++++")
 
   // Handle function calls
-  while (responseMessage.toolCalls.length > 0) {
-    // Add assistant's response with tool calls to message history
-    __messages.push(assistantMessage(responseMessage.output, { toolCalls: responseMessage.toolCalls }));
+  if (__toolCalls.length > 0) {
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
     let haltToolCall = {}
+    let haltInterrupt:any = null;
 
     // Process each tool call
-    for (const toolCall of responseMessage.toolCalls) {
+    for (const toolCall of __toolCalls) {
       if (
   toolCall.name === "greet"
 ) {
   const args = toolCall.arguments;
+  console.log(`>> Tool 'greet' called with arguments:`, args);
+  if (__interruptResponse) {
+    if (__interruptResponse.type === "approve") {
+      args.__metadata = {
+        part: 2
+      }
+    }
+  }
 
   toolCallStartTime = performance.now();
   const result = await greet(args);
@@ -203,20 +330,22 @@ await statelogClient.toolCall({
     timeTaken: toolCallEndTime - toolCallStartTime,
   });
 
-  // Add function result to messages
-  __messages.push(toolMessage(result, {
-            tool_call_id: toolCall.id,
-            name: toolCall.name,
-      }));
-
   if (isInterrupt(result)) {
+    haltInterrupt = result;
     haltToolCall = {
       id: toolCall.id,
       name: toolCall.name,
-    };
+      arguments: toolCall.arguments,
+    }
     haltExecution = true;
     break;
   }
+
+    // Add function result to messages
+  __messages.push(toolMessage(result, {
+        tool_call_id: toolCall.id,
+        name: toolCall.name,
+  }));
 }
     }
 
@@ -225,17 +354,18 @@ await statelogClient.toolCall({
         messages: __messages,
         model: __client.getModel(),
       });
-      try {
-        const obj = JSON.parse(__messages.at(-1).content);
-        obj.__messages = __messages.slice(0, -1);
-        obj.__nodesTraversed = __graph.getNodesTraversed();
-        obj.__toolCall = haltToolCall;
-        return obj;
-      } catch (e) {
-        console.error("Error parsing messages for interrupt response:", e);
-        return __messages.at(-1).content;
-      }
-      //return __messages;
+      
+      const packagedState = new PackagedState({
+        messages: __messages,
+        nodesTraversed: __graph.getNodesTraversed(),
+        toolCall: haltToolCall,
+        step: __currentStep,
+        self: __self,
+        global: __global,
+        nodeData: state.data,
+      });
+      haltInterrupt.__state = packagedState;
+      return haltInterrupt;
     }
   
     const nextStartTime = performance.now();
@@ -272,48 +402,38 @@ await statelogClient.toolCall({
   
 }
 
-const response = await _response(name, __messages);
+__self.response = await _response(__self.name, {
+      messages: __messages,
+      interruptResponse: __interruptResponse,
+      toolCall: __toolCall,
+    });
 
-if (isInterrupt(response)) {
-  return { ...state, data: response };
+if (isInterrupt(__self.response)) {
+  return { ...state, data: __self.response };
 }
+        __currentStep++;
       }
       
 
-      if (__part >= 3) {
-        
+      if (__step <= 3) {
+        await console.log(__self.response)
+        __currentStep++;
       }
       
 
-      if (__part >= 4) {
-        await console.log(response)
-      }
-      
-
-      if (__part >= 5) {
-        
-      }
-      
-
-      if (__part >= 6) {
+      if (__step <= 4) {
         await console.log(`Greeting sent.`)
+        __currentStep++;
       }
       
 
-      if (__part >= 7) {
-        
+      if (__step <= 5) {
+        return { ...state, data: __self.response}
+        __currentStep++;
       }
       
-
-      if (__part >= 8) {
-        return { ...state, data: response}
-      }
-      
-
-      if (__part >= 9) {
-        
-      }
-      
+    
+    // this is just here to have a default return value from a node if the user doesn't specify one
     return { ...state, data: undefined };
 });
 

@@ -1,5 +1,6 @@
 import {
   AgencyComment,
+  AgencyNode,
   AgencyProgram,
   Assignment,
   InterpolationSegment,
@@ -12,14 +13,16 @@ import {
   VariableType,
 } from "../types.js";
 
+import { AwaitStatement } from "@/types/await.js";
 import { SpecialVar } from "@/types/specialVar.js";
+import { TimeBlock } from "@/types/timeBlock.js";
 import * as renderSpecialVar from "../templates/backends/graphGenerator/specialVar.js";
+import * as renderTime from "../templates/backends/typescriptGenerator/builtinFunctions/time.js";
 import * as builtinTools from "../templates/backends/typescriptGenerator/builtinTools.js";
 import * as renderFunctionDefinition from "../templates/backends/typescriptGenerator/functionDefinition.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as promptFunction from "../templates/backends/typescriptGenerator/promptFunction.js";
 import * as renderTool from "../templates/backends/typescriptGenerator/tool.js";
-import * as renderTime from "../templates/backends/typescriptGenerator/builtinFunctions/time.js";
 import * as renderToolCall from "../templates/backends/typescriptGenerator/toolCall.js";
 import {
   AccessExpression,
@@ -33,6 +36,7 @@ import {
   FunctionDefinition,
   FunctionParameter,
 } from "../types/function.js";
+import { IfElse } from "../types/ifElse.js";
 import {
   ImportNodeStatement,
   ImportStatement,
@@ -42,7 +46,6 @@ import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
-import { IfElse } from "../types/ifElse.js";
 import { escape, uniq, zip } from "../utils.js";
 import { BaseGenerator } from "./baseGenerator.js";
 import {
@@ -54,8 +57,7 @@ import {
   DEFAULT_SCHEMA,
   mapTypeToZodSchema,
 } from "./typescriptGenerator/typeToZodSchema.js";
-import { TimeBlock } from "@/types/timeBlock.js";
-import { AwaitStatement } from "@/types/await.js";
+import { TYPES_THAT_DONT_TRIGGER_NEW_PART } from "@/config.js";
 
 export class TypeScriptGenerator extends BaseGenerator {
   constructor() {
@@ -219,7 +221,8 @@ export class TypeScriptGenerator extends BaseGenerator {
       // Direct assignment for other literal types
       const code = this.processNode(value);
       return (
-        `const ${variableName}${typeAnnotation} = await ${code.trim()};` + "\n"
+        `${this.getScopeVar()}.${variableName}${typeAnnotation} = await ${code.trim()};` +
+        "\n"
       );
     } else if (value.type === "timeBlock") {
       const timingVarName = variableName;
@@ -228,7 +231,10 @@ export class TypeScriptGenerator extends BaseGenerator {
     } else {
       // Direct assignment for other literal types
       const code = this.processNode(value);
-      return `const ${variableName}${typeAnnotation} = ${code.trim()};` + "\n";
+      return (
+        `${this.getScopeVar()}.${variableName}${typeAnnotation} = ${code.trim()};` +
+        "\n"
+      );
     }
   }
   /*
@@ -271,7 +277,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     //const argsStr = [...interpolatedVars, "__messages"].join(", ");
     // Generate the function call
     return functionCode; /* (
-      `${functionCode}\nconst ${variableName} = await _${variableName}(${argsStr});` +
+      `${functionCode}\nconst __self.${variableName} = await _${variableName}(${argsStr});` +
       "\n"
     ); */
   }
@@ -320,17 +326,21 @@ export class TypeScriptGenerator extends BaseGenerator {
    * Process a function definition node
    */
   protected processFunctionDefinition(node: FunctionDefinition): string {
+    this.startScope("function");
     const { functionName, body, parameters } = node;
+    const args = parameters.map((p) => p.name);
     this.functionScopedVariables = [...parameters.map((p) => p.name)];
-    const bodyCode: string[] = [];
-    for (const stmt of body) {
-      bodyCode.push(this.processNode(stmt));
-    }
+    this.functionParameters = args;
+
+    const bodyCode = this.processBodyAsParts(body);
+
     this.functionScopedVariables = [];
-    const args = parameters.map((p) => p.name).join(", ") || "";
+    this.functionParameters = [];
+    this.endScope();
+    const argsStr = [...args, "__metadata"].join(", ") || "";
     return renderFunctionDefinition.default({
       functionName,
-      args: "{" + args + "}",
+      args: "{" + argsStr + "}",
       returnType: node.returnType
         ? variableTypeToString(node.returnType, this.typeAliases)
         : "any",
@@ -400,6 +410,18 @@ export class TypeScriptGenerator extends BaseGenerator {
     }
   }
 
+  protected generateScopedVariableName(variableName: string): string {
+    if (this.functionParameters.includes(variableName)) {
+      return variableName;
+    }
+    if (this.functionScopedVariables.includes(variableName)) {
+      return `__self.${variableName}`;
+    } else if (this.globalScopedVariables.includes(variableName)) {
+      return `__global.${variableName}`;
+    }
+    return variableName;
+  }
+
   protected generateLiteral(literal: Literal): string {
     switch (literal.type) {
       case "number":
@@ -409,7 +431,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       case "multiLineString":
         return this.generateStringLiteral(literal.segments);
       case "variableName":
-        return literal.value;
+        return this.generateScopedVariableName(literal.value);
       case "prompt":
         //return this.processPromptLiteral("asd", literal).trim();
         // Reconstruct text for comment from segments
@@ -459,7 +481,9 @@ export class TypeScriptGenerator extends BaseGenerator {
         stringParts.push(escaped);
       } else {
         // Interpolation segment
-        stringParts.push("${" + segment.variableName + "}");
+        stringParts.push(
+          "${" + this.generateScopedVariableName(segment.variableName) + "}",
+        );
       }
     }
 
@@ -501,7 +525,7 @@ export class TypeScriptGenerator extends BaseGenerator {
         )}`,
     );
 
-    parts.push("__messages: Message[] = []");
+    parts.push("__metadata?: Record<string, any>");
     const argsStr = parts.join(", ");
 
     const _tools = this.toolsUsed
@@ -519,12 +543,21 @@ export class TypeScriptGenerator extends BaseGenerator {
       .join("\n");
 
     const clientConfig = prompt.config ? this.processNode(prompt.config) : "{}";
-
+    const metadataObj = `{
+      messages: __messages,
+      interruptResponse: __interruptResponse,
+      toolCall: __toolCall,
+    }`;
     this.toolsUsed = []; // reset after use
+
+    const scopedFunctionArgs = functionArgs.map((arg) =>
+      this.generateScopedVariableName(arg),
+    );
+
     return promptFunction.default({
       variableName,
       argsStr,
-      funcCallParams: [...functionArgs, "__messages"].join(", "),
+      funcCallParams: [...scopedFunctionArgs, metadataObj].join(", "),
       typeString,
       promptCode,
       hasResponseFormat: zodSchema !== DEFAULT_SCHEMA,
@@ -611,6 +644,29 @@ export class TypeScriptGenerator extends BaseGenerator {
   protected processAwaitStatement(node: AwaitStatement): string {
     const code = this.processNode(node.expression);
     return `await ${code}`;
+  }
+
+  protected processBodyAsParts(body: AgencyNode[]): string[] {
+    const parts: string[][] = [[]];
+    for (const stmt of body) {
+      if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type)) {
+        parts.push([]);
+      }
+      parts[parts.length - 1].push(this.processNode(stmt));
+    }
+    const bodyCode: string[] = [];
+    let partNum = 0;
+    for (const part of parts) {
+      const partCode = `
+      if (__step <= ${partNum}) {
+        ${part.join("").trimEnd()}
+        __currentStep++;
+      }
+      `;
+      bodyCode.push(partCode);
+      partNum++;
+    }
+    return bodyCode;
   }
 }
 

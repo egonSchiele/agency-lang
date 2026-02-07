@@ -37,6 +37,8 @@ import { TimeBlock } from "@/types/timeBlock.js";
 import { AwaitStatement } from "@/types/await.js";
 import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
 
+type Scope = "global" | "function" | "node";
+
 export class BaseGenerator {
   protected typeHints: TypeHintMap = {};
   protected graphNodes: GraphNodeDefinition[] = [];
@@ -44,6 +46,7 @@ export class BaseGenerator {
   protected generatedTypeAliases: string[] = [];
   protected functionScopedVariables: string[] = [];
   protected globalScopedVariables: string[] = [];
+  protected functionParameters: string[] = [];
 
   // collect tools for a prompt
   protected toolsUsed: string[] = [];
@@ -59,6 +62,7 @@ export class BaseGenerator {
   // collect function signatures so we can implement named args
   // TODO also save return types, check if used as a tool, return type cannot be null/void/undefined
   protected functionDefinitions: Record<string, FunctionDefinition> = {};
+  protected currentScope: Scope[] = ["global"];
 
   generate(program: AgencyProgram): {
     output: string;
@@ -348,5 +352,24 @@ export class BaseGenerator {
 
   protected postprocess(): string {
     return "";
+  }
+
+  protected startScope(scope: Scope): void {
+    this.currentScope.push(scope);
+  }
+
+  protected endScope(): void {
+    this.currentScope.pop();
+  }
+
+  protected getScopeVar(): string {
+    const currentScope = this.currentScope[this.currentScope.length - 1];
+    switch (currentScope) {
+      case "global":
+        return "__global";
+      case "function":
+      case "node":
+        return "__self";
+    }
   }
 }

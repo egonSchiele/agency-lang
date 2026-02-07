@@ -69,3 +69,4 @@ type ListIngredientsParams = {
 - no infix operators yet (e.g., `+`, `-`, `*`, `/`, `&&`, `||`, `>=`, `<=`, `==`, `!=`, etc.) -- builtin replacements provided
 - can't assign to an access expression (e.g., `obj.key = value` doesn't work yet)
 - match blocks don't support blocks
+- imported func doesn't get called correctly, should get an obj with named params. Maybe switch to array.

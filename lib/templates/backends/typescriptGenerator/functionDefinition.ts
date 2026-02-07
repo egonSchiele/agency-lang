@@ -6,6 +6,10 @@ import { apply } from "typestache";
 export const template = `
 export async function {{{functionName:string}}}({{{args}}}) : Promise<{{{returnType}}}> {
     const __messages: Message[] = [];
+    const __step = __metadata?.part || 0;
+    const __self: Record<string, any> = {};
+
+    let __currentStep = __step;
     {{{functionBody}}}
 }`;
 

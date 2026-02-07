@@ -10,6 +10,7 @@ import { PieMachine, goToNode } from "piemachine";
 import { StatelogClient } from "statelog-client";
 import { nanoid } from "nanoid";
 import { assistantMessage, getClient, userMessage, toolMessage } from "smoltalk";
+import type { Message } from "smoltalk";
 
 const statelogHost = "https://statelog.adit.io";
 const traceId = nanoid();
@@ -22,14 +23,14 @@ const statelogConfig = {
   };
 const __statelogClient = new StatelogClient(statelogConfig);
 const __model: ModelName = "gpt-4o-mini";
-
+const __global: Record<string, any> = {};
 
 const getClientWithConfig = (config = {}) => {
   const defaultConfig = {
     openAiApiKey: process.env.OPENAI_API_KEY || "",
     googleApiKey: process.env.GEMINI_API_KEY || "",
     model: __model,
-    logLevel: "warn",
+    logLevel: "debug",
   };
 
   return getClient({ ...defaultConfig, ...config });
@@ -70,25 +71,95 @@ const empty = <T>(arr: T[]): boolean => arr.length === 0;
 
 // interrupts
 
-type Interrupt<T> = {
+export type Interrupt<T> = {
   type: "interrupt";
   data: T;
+  __state?: PackagedState;
 };
 
-function interrupt<T>(data: T): Interrupt<T> {
+export function interrupt<T>(data: T): Interrupt<T> {
   return {
     type: "interrupt",
     data,
   };
 }
 
-function isInterrupt<T>(obj: any): obj is Interrupt<T> {
+export function isInterrupt<T>(obj: any): obj is Interrupt<T> {
   return obj && obj.type === "interrupt";
 }
 
 function printJSON(obj: any) {
   console.log(JSON.stringify(obj, null, 2));
-}`;
+}
+
+export type InterruptResponseType = InterruptResponseApprove | InterruptResponseReject | InterruptResponseModify;
+export type InterruptResponseApprove = {
+  type: "approve";
+};
+export type InterruptResponseReject = {
+  type: "reject";
+};
+export type InterruptResponseModify = {
+  type: "modify";
+  newArguments: Record<string, any>;
+};
+
+
+export async function respondToInterrupt(interrupt: Interrupt, interruptResponse: InterruptResponseType) {
+  console.log(JSON.stringify({ interrupt, interruptResponse }, null, 2));
+  const nodeName = nodesTraversed[nodesTraversed.length - 1];
+  console.log(\`Going to node \${nodeName} with response:\`, interruptResponse);
+  return graph.run(nodeName, {
+    messages: messages,
+    __metadata: {
+      graph: graph,
+      part: part,
+      statelogClient: __statelogClient,
+      interruptResponse: interruptResponse,
+      state: interrupt.__state,
+    },
+    data: interrupt.__state.args
+  });
+}
+
+
+class PackagedState {
+  public messages?: Message[];
+  public nodesTraversed?: string[];
+  public toolCall?: Record<string, any>;
+  public step?: number;
+  public self?: Record<string, any>;
+  public global?: Record<string, any>;
+  public args?: any;
+  constructor(_state: Record<string, any>, args?: any) {
+    const state = structuredClone(_state);
+    this.messages = state.messages;
+    this.nodesTraversed = state.graph?.getNodesTraversed();
+    this.toolCall = state.toolCall;
+    this.step = state.part;
+    this.self = state.self;
+    this.global = state.global;
+    this.args = args;
+  }
+
+  toJSON() {
+    return {
+      messages: this.messages,
+      nodesTraversed: this.nodesTraversed,
+      toolCall: this.toolCall,
+      step: this.step,
+      self: this.self,
+      global: this.global,
+      args: this.args,
+    };
+  }
+
+  nextStep() {
+    this.step ||= 0;
+    this.step += 1;
+  }
+}
+`;
 
 export type TemplateType = {
 };

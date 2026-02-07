@@ -140,53 +140,33 @@ export async function rejectInterrupt(interrupt: Interrupt) {
   return await respondToInterrupt(interrupt, { type: "reject" });
 }
 
-type StateItem = {
+type StackFrame = {
   args: Record<string, any>;
   locals: Record<string, any>;
   step: number;
 };
 
-// Here's how serialization and deserialization works:
-// 
-// - `this.stack`: an array containing the state of every frame in the stack.
-//   For each frame, it tracks the local variables, the arguments to the function
-//   or node, and what line the execution is currently on.
-// - `this.globals`: keeps track of any global variables. 
-// 
-// Note that since every agency file has its own state stack.
-// This means that we will only be tracking variables global to *that file*.
-// This should be fine since nodes and functions can't and shouldn't be able
-// to access global variables from other files.
-// 
-// But it does mean that when we restore state,
-// it's important to restore THE STATE STACK OF THE CORRECT FILE,
-// so that global variables are set correctly!
-// 
-// This is why we don't restore the `__stateStack` and `__global` variables right here.
-// Instead we run the correct node and pass the StateStack into that node,
-// so that the *node* can restore the global state, thus ensuring it will restore those values
-// to the `__stateStack` and `__global` variables local to its file.
-
+// See docs for notes on how this works.
 class StateStack {
-  public stack: StateItem[] = [];
+  public stack: StackFrame[] = [];
   private mode: "serialize" | "deserialize" = "serialize";
   public globals: Record<string, any> = {};
   public other: Record<string, any> = {};
 
   private deserializeStackLength = 0;
 
-  constructor(stack: StateItem[] = [], mode: "serialize" | "deserialize" = "serialize") {
+  constructor(stack: StackFrame[] = [], mode: "serialize" | "deserialize" = "serialize") {
     this.stack = stack;
     this.mode = mode;
   }
 
-  getNewState(): StateItem | null {
+  getNewState(): StackFrame | null {
     if (this.mode === "deserialize" && this.deserializeStackLength <= 0) {
       console.log("Forcing mode to serialize, nothing left to deserialize");
       this.mode = "serialize";
     }
     if (this.mode === "serialize") {
-      const newState: StateItem = {
+      const newState: StackFrame = {
         args: {},
         locals: {},
         step: 0,
@@ -207,7 +187,7 @@ class StateStack {
     this.deserializeStackLength = this.stack.length;
   }
 
-  pop(): StateItem | undefined {
+  pop(): StackFrame | undefined {
     return this.stack.pop();
   }
 

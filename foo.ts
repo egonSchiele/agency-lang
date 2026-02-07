@@ -3,6 +3,7 @@
 import __graph___bar from "./bar.ts";
 
 import { greet, __greetTool } from "./bar.ts";
+import { printLine, readFile, writeFile }  from "./basicFunctions.ts";
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
@@ -255,12 +256,117 @@ function _builtinInput(prompt: string): Promise<string> {
     });
   });
 }
+export const __printLineToolTool = {
+  name: "printLineTool",
+  description: `Prints a line to the console.`,
+  schema: z.object({"message": z.string(), })
+};
+export const __readFileToolTool = {
+  name: "readFileTool",
+  description: `Reads the content of a file.`,
+  schema: z.object({"filePath": z.string(), })
+};
+export const __writeFileToolTool = {
+  name: "writeFileTool",
+  description: `Writes content to a file. If language is provided, the content will be syntax highlighted accordingly.`,
+  schema: z.object({"filePath": z.string(), "content": z.string(), "language": z.union([z.string(), z.string()]), })
+};
 export const __testTool = {
   name: "test",
   description: `No description provided.`,
   schema: z.object({"x": z.string(), })
 };
-__stateStack.globals.prompt = `What is your name?`;
+
+export async function printLineTool(args, __metadata={}) : Promise<string> {
+    const __messages: Message[] = [];
+    const __stack = __stateStack.getNewState();
+    const __step = __stack.step; // > 0 ? __stack.step + 1 : 0;
+    const __self: Record<string, any> = __stack.locals;
+
+    const __params = ["message"];
+      (args).forEach((item, index) => {
+        __stack.args[__params[index]] = item;
+      });
+
+
+    
+      if (__step <= 0) {
+        
+        __stack.step++;
+      }
+      
+
+      if (__step <= 1) {
+        printLine(__stack.args.message)
+        __stack.step++;
+      }
+      
+
+      if (__step <= 2) {
+        __stateStack.pop();
+return `printed`
+        __stack.step++;
+      }
+      
+}
+export async function readFileTool(args, __metadata={}) : Promise<string> {
+    const __messages: Message[] = [];
+    const __stack = __stateStack.getNewState();
+    const __step = __stack.step; // > 0 ? __stack.step + 1 : 0;
+    const __self: Record<string, any> = __stack.locals;
+
+    const __params = ["filePath"];
+      (args).forEach((item, index) => {
+        __stack.args[__params[index]] = item;
+      });
+
+
+    
+      if (__step <= 0) {
+        
+        __stack.step++;
+      }
+      
+
+      if (__step <= 1) {
+        __stateStack.pop();
+return readFile(__stack.args.filePath)
+        __stack.step++;
+      }
+      
+}
+export async function writeFileTool(args, __metadata={}) : Promise<string> {
+    const __messages: Message[] = [];
+    const __stack = __stateStack.getNewState();
+    const __step = __stack.step; // > 0 ? __stack.step + 1 : 0;
+    const __self: Record<string, any> = __stack.locals;
+
+    const __params = ["filePath", "content", "language"];
+      (args).forEach((item, index) => {
+        __stack.args[__params[index]] = item;
+      });
+
+
+    
+      if (__step <= 0) {
+        
+        __stack.step++;
+      }
+      
+
+      if (__step <= 1) {
+        await writeFile(__stack.args.filePath, __stack.args.content, __stack.args.language)
+        __stack.step++;
+      }
+      
+
+      if (__step <= 2) {
+        __stateStack.pop();
+return `file written`
+        __stack.step++;
+      }
+      
+}__stateStack.globals.prompt = `What is your name?`;
 
 export async function test(args, __metadata={}) : Promise<any> {
     const __messages: Message[] = [];

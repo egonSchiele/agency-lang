@@ -188,7 +188,7 @@ export class TypeScriptGenerator extends BaseGenerator {
 
   protected processAssignment(node: Assignment): string {
     const { variableName, typeHint, value } = node;
-    // Track this variable as in scope
+    // check is scope is global
     this.functionScopedVariables.push(variableName);
 
     const typeAnnotation = typeHint

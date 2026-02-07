@@ -1,5 +1,31 @@
 import node { sayHi } from "./bar.agency"
 import tool { greet } from "./bar.agency"
+import { printLine, readFile, writeFile } from "./basicFunctions.ts"
+
+
+def printLineTool(message: string): string {
+  """
+  Prints a line to the console.
+  """
+  printLine(message)
+  return "printed"
+}
+
+def readFileTool(filePath: string): string {
+  """
+  Reads the content of a file.
+  """
+  return readFile(filePath)
+}
+
+
+def writeFileTool(filePath: string, content: string, language: string | undefined): string {
+  """
+  Writes content to a file. If language is provided, the content will be syntax highlighted accordingly.
+  """
+  await writeFile(filePath, content, language)
+  return "file written"
+}
 
 prompt = "What is your name?"
 

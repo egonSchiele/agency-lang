@@ -243,39 +243,32 @@ const addTool = {
   }),
 };
 
+export const __greetTool = {
+  name: "greet",
+  description: `No description provided.`,
+  schema: z.object({"name": z.string(), "age": z.number(), })
+};
 
-graph.node("greet", async (state): Promise<any> => {
-    const __messages: Message[] = state.messages || [];
-    const __graph = state.__metadata?.graph || graph;
-    const statelogClient = state.__metadata?.statelogClient || __statelogClient;
-    
-    // if `state.__metadata?.__stateStack` is set, that means we are resuming execution
-    // at this node after an interrupt. In that case, this is the line that restores the state.
-    if (state.__metadata?.__stateStack) {
-      __stateStack = state.__metadata.__stateStack;
-      
-      // restore global state
-      if (state.__metadata?.__stateStack?.global) {
-        __global = state.__metadata.__stateStack.global;
-      }
-
-      // clear the state stack from metadata so it doesn't propagate to other nodes.
-      state.__metadata.__stateStack = undefined;
-    }
-
-    // either creates a new stack for this node,
-    // or restores the stack if we're resuming after an interrupt,
-    // depending on the mode of the state stack (serialize or deserialize).
+export async function greet(args, __metadata={}) : Promise<string> {
+    const __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
-    
-    // We're going to modify __stack.step to keep track of what line we're on,
-    // but first we save this value. This will help us figure out if we should execute
-    // from the start of this node or from a specific line.
     const __step = __stack.step;
-
     const __self: Record<string, any> = __stack.locals;
+    const __graph = __metadata?.graph || graph;
+    const statelogClient = __metadata?.statelogClient || __statelogClient;
 
-    
+    // args are always set whether we're restoring from state or not.
+    // If we're not restoring from state, args were obviously passed in through the code.
+    // If we are restoring from state, the node that called this function had to have passed 
+    // these arguments into this function call.
+    // if we're restoring state, this will override __stack.args (which will be set),
+    // but with the same values, so it doesn't matter that those values are being overwritten.
+    const __params = ["name", "age"];
+    (args).forEach((item, index) => {
+      __stack.args[__params[index]] = item;
+    });
+
+
     
       if (__step <= 0) {
         
@@ -284,158 +277,20 @@ graph.node("greet", async (state): Promise<any> => {
       
 
       if (__step <= 1) {
-        
-async function _greeting(__metadata?: Record<string, any>): Promise<string> {
-  const __prompt = `say hello`;
-  const startTime = performance.now();
-  const __messages: Message[] = __metadata?.messages || [];
-
-  // These are to restore state after interrupt.
-  // TODO I think this could be implemented in a cleaner way.
-  let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
-  const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
-  const __tools = undefined;
-
-  
-  
-  const __responseFormat = undefined;
-  
-  
-  const __client = getClientWithConfig({});
-  let responseMessage:any;
-
-  if (__toolCalls.length === 0) {
-    __messages.push(userMessage(__prompt));
-  
-  
-    let __completion = await __client.text({
-      messages: __messages,
-      tools: __tools,
-      responseFormat: __responseFormat,
-    });
-  
-    const endTime = performance.now();
-    statelogClient.promptCompletion({
-      messages: __messages,
-      completion: __completion,
-      model: __client.getModel(),
-      timeTaken: endTime - startTime,
-    });
-  
-    if (!__completion.success) {
-      throw new Error(
-        `Error getting response from ${__model}: ${__completion.error}`
-      );
-    }
-  
-    responseMessage = __completion.value;
-    __toolCalls = responseMessage.toolCalls || [];
-
-    if (__toolCalls.length > 0) {
-      // Add assistant's response with tool calls to message history
-      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
-    }
-  }
-
-  // Handle function calls
-  if (__toolCalls.length > 0) {
-    let toolCallStartTime, toolCallEndTime;
-    let haltExecution = false;
-    let haltToolCall = {}
-    let haltInterrupt:any = null;
-
-    // Process each tool call
-    for (const toolCall of __toolCalls) {
-      
-    }
-
-    if (haltExecution) {
-      statelogClient.debug(`Tool call interrupted execution.`, {
-        messages: __messages,
-        model: __client.getModel(),
-      });
-
-      __stateStack.interruptData = {
-        messages: __messages.map((msg) => msg.toJSON()),
-        nodesTraversed: __graph.getNodesTraversed(),
-        toolCall: haltToolCall,
-      };
-      haltInterrupt.__state = __stateStack.toJSON();
-      return haltInterrupt;
-    }
-  
-    const nextStartTime = performance.now();
-    let __completion = await __client.text({
-      messages: __messages,
-      tools: __tools,
-      responseFormat: __responseFormat,
-    });
-
-    const nextEndTime = performance.now();
-
-    statelogClient.promptCompletion({
-      messages: __messages,
-      completion: __completion,
-      model: __client.getModel(),
-      timeTaken: nextEndTime - nextStartTime,
-    });
-
-    if (!__completion.success) {
-      throw new Error(
-        `Error getting response from ${__model}: ${__completion.error}`
-      );
-    }
-    responseMessage = __completion.value;
-  }
-
-  // Add final assistant response to history
-  // not passing tool calls back this time
-  __messages.push(assistantMessage(responseMessage.output));
-  
-
-  
-  return responseMessage.output;
-  
-}
-
-__self.greeting = await _greeting({
-      messages: __messages,
-    });
-
-// return early from node if this is an interrupt
-if (isInterrupt(__self.greeting)) {
-  
-  return { ...state, data: __self.greeting };
-  
-   
-}
+        __stack.step++;
+return interrupt(`Agent wants to call the greet function with name: ${__stack.args.name} and age: ${__stack.args.age}`)
         __stack.step++;
       }
       
 
       if (__step <= 2) {
-        return goToNode("processGreeting",
-  {
-    messages: __messages,
-    __metadata: {
-      graph: __graph,
-      statelogClient,
-    },
-    
-    data: [__stack.locals.greeting]
-    
-    
-  }
-);
+        __stateStack.pop();
+return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`
         __stack.step++;
       }
       
-    
-    // this is just here to have a default return value from a node if the user doesn't specify one
-    return { ...state, data: undefined };
-});
-
-graph.node("processGreeting", async (state): Promise<any> => {
+}
+graph.node("foo2", async (state): Promise<any> => {
     const __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
@@ -468,7 +323,7 @@ graph.node("processGreeting", async (state): Promise<any> => {
 
     
     
-    const __params = ["msg"];
+    const __params = ["name", "age"];
     
     // Any arguments that were passed into this node,
     // save them onto the stack, unless we are restoring the stack after an interrupt,
@@ -487,9 +342,15 @@ graph.node("processGreeting", async (state): Promise<any> => {
       
 
       if (__step <= 1) {
+        await console.log(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`)
+        __stack.step++;
+      }
+      
+
+      if (__step <= 2) {
         
-async function _result(msg: string, __metadata?: Record<string, any>): Promise<string> {
-  const __prompt = `format this greeting: ${msg}`;
+async function _response(name: string, age: string, __metadata?: Record<string, any>): Promise<string> {
+  const __prompt = `Greet the user with their name: ${name} and age ${age} using the greet function.`;
   const startTime = performance.now();
   const __messages: Message[] = __metadata?.messages || [];
 
@@ -497,7 +358,7 @@ async function _result(msg: string, __metadata?: Record<string, any>): Promise<s
   // TODO I think this could be implemented in a cleaner way.
   let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
   const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
-  const __tools = undefined;
+  const __tools = [__greetTool];
 
   
   
@@ -549,7 +410,51 @@ async function _result(msg: string, __metadata?: Record<string, any>): Promise<s
 
     // Process each tool call
     for (const toolCall of __toolCalls) {
-      
+      if (
+  toolCall.name === "greet"
+) {
+  const args = toolCall.arguments;
+
+  const params = [ args["name"], args["age"] ];
+
+  toolCallStartTime = performance.now();
+  
+  let result: any;
+  if (__interruptResponse && __interruptResponse.type === "reject") {
+        __messages.push(toolMessage("tool call rejected", {
+        tool_call_id: toolCall.id,
+        name: toolCall.name,
+     }));
+  } else {
+    result = await greet(params);
+  }
+  toolCallEndTime = performance.now();
+
+  statelogClient.toolCall({
+    toolName: "greet",
+    params,
+    output: result,
+    model: __client.getModel(),
+    timeTaken: toolCallEndTime - toolCallStartTime,
+  });
+
+  if (isInterrupt(result)) {
+    haltInterrupt = result;
+    haltToolCall = {
+      id: toolCall.id,
+      name: toolCall.name,
+      arguments: toolCall.arguments,
+    }
+    haltExecution = true;
+    break;
+  }
+
+    // Add function result to messages
+  __messages.push(toolMessage(result, {
+        tool_call_id: toolCall.id,
+        name: toolCall.name,
+  }));
+}
     }
 
     if (haltExecution) {
@@ -601,14 +506,14 @@ async function _result(msg: string, __metadata?: Record<string, any>): Promise<s
   
 }
 
-__self.result = await _result(__stack.args.msg, {
+__self.response = await _response(__stack.args.name, __stack.args.age, {
       messages: __messages,
     });
 
 // return early from node if this is an interrupt
-if (isInterrupt(__self.result)) {
+if (isInterrupt(__self.response)) {
   
-  return { ...state, data: __self.result };
+  return { ...state, data: __self.response };
   
    
 }
@@ -616,8 +521,14 @@ if (isInterrupt(__self.result)) {
       }
       
 
-      if (__step <= 2) {
-        await console.log(__stack.locals.result)
+      if (__step <= 3) {
+        await console.log(`Greeted, age is still ${__stack.args.age}...`)
+        __stack.step++;
+      }
+      
+
+      if (__step <= 4) {
+        return { ...state, data: __stack.locals.response}
         __stack.step++;
       }
       
@@ -626,7 +537,7 @@ if (isInterrupt(__self.result)) {
     return { ...state, data: undefined };
 });
 
-graph.node("main", async (state): Promise<any> => {
+graph.node("sayHi", async (state): Promise<any> => {
     const __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
@@ -659,6 +570,18 @@ graph.node("main", async (state): Promise<any> => {
 
     
     
+    const __params = ["name"];
+    
+    // Any arguments that were passed into this node,
+    // save them onto the stack, unless we are restoring the stack after an interrupt,
+    // in which case leave as is
+    if (state.data !== "<from-stack>") {
+      (state.data).forEach((item, index) => {
+        __stack.args[__params[index]] = item;
+      });
+    }
+    
+    
       if (__step <= 0) {
         
         __stack.step++;
@@ -666,7 +589,19 @@ graph.node("main", async (state): Promise<any> => {
       
 
       if (__step <= 1) {
-        return goToNode("greet",
+        await console.log(`Saying hi to ${__stack.args.name}...`)
+        __stack.step++;
+      }
+      
+
+      if (__step <= 2) {
+        __stack.locals.age = 30;
+        __stack.step++;
+      }
+      
+
+      if (__step <= 3) {
+        return goToNode("foo2",
   {
     messages: __messages,
     __metadata: {
@@ -674,8 +609,8 @@ graph.node("main", async (state): Promise<any> => {
       statelogClient,
     },
     
+    data: [__stack.args.name, __stack.locals.age]
     
-    data: null
     
   }
 );
@@ -687,36 +622,23 @@ graph.node("main", async (state): Promise<any> => {
     return { ...state, data: undefined };
 });
 
-graph.conditionalEdge("greet", ["processGreeting"]);
-
-graph.conditionalEdge("main", ["greet"]);
-
-const initialState: State = {messages: [], data: {}};
-const finalState = graph.run("main", initialState);
+graph.conditionalEdge("sayHi", ["foo2"]);
 
 
-export async function greet({ messages } = {}): Promise<any> {
+export async function foo2(name, age, { messages } = {}): Promise<string> {
 
-  const data = [  ];
-  const result = await graph.run("greet", { messages: messages || [], data });
+
+  const data = [ name, age ];
+  const result = await graph.run("foo2", { messages: messages || [], data });
   return result.data;
 }
 
 
-export async function processGreeting(msg, { messages } = {}): Promise<any> {
+export async function sayHi(name, { messages } = {}): Promise<any> {
 
 
-  const data = [ msg ];
-  const result = await graph.run("processGreeting", { messages: messages || [], data });
-  return result.data;
-}
-
-
-
-export async function main({ messages } = {}): Promise<any> {
-
-  const data = [  ];
-  const result = await graph.run("main", { messages: messages || [], data });
+  const data = [ name ];
+  const result = await graph.run("sayHi", { messages: messages || [], data });
   return result.data;
 }
 

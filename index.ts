@@ -34,7 +34,12 @@ while (isInterrupt(finalState)) {
   const response = await input("Do you want to approve? (yes/no) ");
   if (response.toLowerCase() === "yes" || response.toLowerCase() === "y") {
     finalState = await approveInterrupt(finalState);
-  } else {
+  } else if (
+    response.toLowerCase() === "no" ||
+    response.toLowerCase() === "n"
+  ) {
     finalState = await rejectInterrupt(finalState);
+  } else {
+    finalState = await approveInterrupt(finalState, { name: response });
   }
 }

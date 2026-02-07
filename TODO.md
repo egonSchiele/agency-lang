@@ -74,8 +74,5 @@ imported tools currently can't be used because to create the array that gets pas
 
 - todo in lib/templates/backends/typescriptGenerator/promptFunction.mustache
 
-We're also not currently handling the case where the user wants to request changes after an interrupt.
-
 Settings file so users can pick whether they want verbose output while building, what level of logging they want, and whether they want state log logging. If they don't, generate the code without the state log calls.
-Update the state log UI to hide metadata, also need to log some of the new things around statestack.
 How to handle interrupts in agent code?

@@ -90,18 +90,15 @@ function printJSON(obj: any) {
   console.log(JSON.stringify(obj, null, 2));
 }
 
-export type InterruptResponseType = InterruptResponseApprove | InterruptResponseReject | InterruptResponseModify;
+export type InterruptResponseType = InterruptResponseApprove | InterruptResponseReject;
+
 export type InterruptResponseApprove = {
   type: "approve";
+  newArguments?: Record<string, any>;
 };
 export type InterruptResponseReject = {
   type: "reject";
 };
-export type InterruptResponseModify = {
-  type: "modify";
-  newArguments: Record<string, any>;
-};
-
 
 export async function respondToInterrupt(_interrupt: Interrupt, _interruptResponse: InterruptResponseType) {
   const interrupt = structuredClone(_interrupt);
@@ -116,6 +113,21 @@ export async function respondToInterrupt(_interrupt: Interrupt, _interruptRespon
   });
   __stateStack.interruptData.messages = messages;
   __stateStack.interruptData.interruptResponse = interruptResponse;
+
+  if (interruptResponse.type === "approve" && interruptResponse.newArguments) {
+    __stateStack.interruptData.toolCall = {
+      ...__stateStack.interruptData.toolCall,
+      arguments: { ...__stateStack.interruptData.toolCall.arguments, ...interruptResponse.newArguments },
+    };
+    const lastMessage = __stateStack.interruptData.messages[__stateStack.interruptData.messages.length - 1];
+    if (lastMessage && lastMessage.role === "assistant") {
+      const toolCall = lastMessage.toolCalls?.[lastMessage.toolCalls.length - 1];
+      if (toolCall) {
+        toolCall.arguments = { ...toolCall.arguments, ...interruptResponse.newArguments };
+      }
+    }
+  }
+
 
   // start at the last node we visited
   const nodesTraversed = __stateStack.interruptData.nodesTraversed || [];
@@ -134,8 +146,8 @@ export async function respondToInterrupt(_interrupt: Interrupt, _interruptRespon
   return result.data;
 }
 
-export async function approveInterrupt(interrupt: Interrupt) {
-  return await respondToInterrupt(interrupt, { type: "approve" });
+export async function approveInterrupt(interrupt: Interrupt, newArguments?: Record<string, any>) {
+  return await respondToInterrupt(interrupt, { type: "approve", newArguments });
 }
 
 export async function rejectInterrupt(interrupt: Interrupt) {
@@ -265,11 +277,12 @@ export async function add(args, __metadata={}) : Promise<number> {
     const __graph = __metadata?.graph || graph;
     const statelogClient = __metadata?.statelogClient || __statelogClient;
 
-    // TODO: Note that we don't need to use the same kind of restoration
-    // from state for arguments as we do for nodes,
-    // because the args are serialized in the tool call.
-    // But what about situations where it was a function call, not a tool call?
-    // In that case, we would want to deserialize the argument.
+    // args are always set whether we're restoring from state or not.
+    // If we're not restoring from state, args were obviously passed in through the code.
+    // If we are restoring from state, the node that called this function had to have passed 
+    // these arguments into this function call.
+    // if we're restoring state, this will override __stack.args (which will be set),
+    // but with the same values, so it doesn't matter that those values are being overwritten.
     const __params = ["x", "y"];
     (args).forEach((item, index) => {
       __stack.args[__params[index]] = item;
@@ -428,11 +441,12 @@ export async function greet(args, __metadata={}) : Promise<any> {
     const __graph = __metadata?.graph || graph;
     const statelogClient = __metadata?.statelogClient || __statelogClient;
 
-    // TODO: Note that we don't need to use the same kind of restoration
-    // from state for arguments as we do for nodes,
-    // because the args are serialized in the tool call.
-    // But what about situations where it was a function call, not a tool call?
-    // In that case, we would want to deserialize the argument.
+    // args are always set whether we're restoring from state or not.
+    // If we're not restoring from state, args were obviously passed in through the code.
+    // If we are restoring from state, the node that called this function had to have passed 
+    // these arguments into this function call.
+    // if we're restoring state, this will override __stack.args (which will be set),
+    // but with the same values, so it doesn't matter that those values are being overwritten.
     const __params = ["name"];
     (args).forEach((item, index) => {
       __stack.args[__params[index]] = item;
@@ -591,11 +605,12 @@ export async function mixed(args, __metadata={}) : Promise<any> {
     const __graph = __metadata?.graph || graph;
     const statelogClient = __metadata?.statelogClient || __statelogClient;
 
-    // TODO: Note that we don't need to use the same kind of restoration
-    // from state for arguments as we do for nodes,
-    // because the args are serialized in the tool call.
-    // But what about situations where it was a function call, not a tool call?
-    // In that case, we would want to deserialize the argument.
+    // args are always set whether we're restoring from state or not.
+    // If we're not restoring from state, args were obviously passed in through the code.
+    // If we are restoring from state, the node that called this function had to have passed 
+    // these arguments into this function call.
+    // if we're restoring state, this will override __stack.args (which will be set),
+    // but with the same values, so it doesn't matter that those values are being overwritten.
     const __params = ["count", "label"];
     (args).forEach((item, index) => {
       __stack.args[__params[index]] = item;
@@ -754,11 +769,12 @@ export async function processArray(args, __metadata={}) : Promise<any> {
     const __graph = __metadata?.graph || graph;
     const statelogClient = __metadata?.statelogClient || __statelogClient;
 
-    // TODO: Note that we don't need to use the same kind of restoration
-    // from state for arguments as we do for nodes,
-    // because the args are serialized in the tool call.
-    // But what about situations where it was a function call, not a tool call?
-    // In that case, we would want to deserialize the argument.
+    // args are always set whether we're restoring from state or not.
+    // If we're not restoring from state, args were obviously passed in through the code.
+    // If we are restoring from state, the node that called this function had to have passed 
+    // these arguments into this function call.
+    // if we're restoring state, this will override __stack.args (which will be set),
+    // but with the same values, so it doesn't matter that those values are being overwritten.
     const __params = ["items"];
     (args).forEach((item, index) => {
       __stack.args[__params[index]] = item;
@@ -917,11 +933,12 @@ export async function flexible(args, __metadata={}) : Promise<any> {
     const __graph = __metadata?.graph || graph;
     const statelogClient = __metadata?.statelogClient || __statelogClient;
 
-    // TODO: Note that we don't need to use the same kind of restoration
-    // from state for arguments as we do for nodes,
-    // because the args are serialized in the tool call.
-    // But what about situations where it was a function call, not a tool call?
-    // In that case, we would want to deserialize the argument.
+    // args are always set whether we're restoring from state or not.
+    // If we're not restoring from state, args were obviously passed in through the code.
+    // If we are restoring from state, the node that called this function had to have passed 
+    // these arguments into this function call.
+    // if we're restoring state, this will override __stack.args (which will be set),
+    // but with the same values, so it doesn't matter that those values are being overwritten.
     const __params = ["value"];
     (args).forEach((item, index) => {
       __stack.args[__params[index]] = item;

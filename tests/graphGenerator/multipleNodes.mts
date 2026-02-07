@@ -237,7 +237,7 @@ graph.node("greet", async (state): Promise<any> => {
     // if `state.__metadata?.__stateStack` is set, that means we are resuming execution
     // at this node after an interrupt. In that case, this is the line that restores the state.
     if (state.__metadata?.__stateStack) {
-      __stateStack = structuredClone(state.__metadata.__stateStack);
+      __stateStack = state.__metadata.__stateStack;
       
       // clear the state stack from metadata so it doesn't propagate to other nodes.
       state.__metadata.__stateStack = undefined;
@@ -433,7 +433,7 @@ graph.node("processGreeting", async (state): Promise<any> => {
     // if `state.__metadata?.__stateStack` is set, that means we are resuming execution
     // at this node after an interrupt. In that case, this is the line that restores the state.
     if (state.__metadata?.__stateStack) {
-      __stateStack = structuredClone(state.__metadata.__stateStack);
+      __stateStack = state.__metadata.__stateStack;
       
       // clear the state stack from metadata so it doesn't propagate to other nodes.
       state.__metadata.__stateStack = undefined;
@@ -629,7 +629,7 @@ graph.node("main", async (state): Promise<any> => {
     // if `state.__metadata?.__stateStack` is set, that means we are resuming execution
     // at this node after an interrupt. In that case, this is the line that restores the state.
     if (state.__metadata?.__stateStack) {
-      __stateStack = structuredClone(state.__metadata.__stateStack);
+      __stateStack = state.__metadata.__stateStack;
       
       // clear the state stack from metadata so it doesn't propagate to other nodes.
       state.__metadata.__stateStack = undefined;

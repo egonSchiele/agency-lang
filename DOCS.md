@@ -249,9 +249,7 @@ node handleTodo(userMessage: string) {
 
 ### Multiple agency files
 
-Each agency file represents one graph. If you split up your code into multiple files, you're creating multiple graphs. This may be a good way to organize your code.
-
-Note, when you create multiple agency files, the nodes in all the files will get merged into a single graph, so the node names must be unique across all files.
+When you create multiple agency files and import nodes from one file into another, the nodes in all the files will get merged into a single graph. This means the node names must be unique across all files.
 
 ### Unsupported features
 - else statements aren't supported yet -- use match statements with a default case instead

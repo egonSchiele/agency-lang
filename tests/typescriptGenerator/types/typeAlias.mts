@@ -84,7 +84,7 @@ async function _foo(__metadata?: Record<string, any>): Promise<Coords> {
     });
   
     const endTime = performance.now();
-    await statelogClient.promptCompletion({
+    statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
@@ -119,7 +119,7 @@ async function _foo(__metadata?: Record<string, any>): Promise<Coords> {
     }
 
     if (haltExecution) {
-      await statelogClient.debug(`Tool call interrupted execution.`, {
+      statelogClient.debug(`Tool call interrupted execution.`, {
         messages: __messages,
         model: __client.getModel(),
       });
@@ -142,7 +142,7 @@ async function _foo(__metadata?: Record<string, any>): Promise<Coords> {
 
     const nextEndTime = performance.now();
 
-    await statelogClient.promptCompletion({
+    statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),

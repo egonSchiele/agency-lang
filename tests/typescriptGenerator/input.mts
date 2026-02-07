@@ -97,7 +97,7 @@ async function _sentiment(message: string, __metadata?: Record<string, any>): Pr
     });
   
     const endTime = performance.now();
-    await statelogClient.promptCompletion({
+    statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
@@ -132,7 +132,7 @@ async function _sentiment(message: string, __metadata?: Record<string, any>): Pr
     }
 
     if (haltExecution) {
-      await statelogClient.debug(`Tool call interrupted execution.`, {
+      statelogClient.debug(`Tool call interrupted execution.`, {
         messages: __messages,
         model: __client.getModel(),
       });
@@ -155,7 +155,7 @@ async function _sentiment(message: string, __metadata?: Record<string, any>): Pr
 
     const nextEndTime = performance.now();
 
-    await statelogClient.promptCompletion({
+    statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),

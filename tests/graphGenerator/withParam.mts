@@ -318,7 +318,7 @@ async function _result(input: string, __metadata?: Record<string, any>): Promise
     });
   
     const endTime = performance.now();
-    await statelogClient.promptCompletion({
+    statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
@@ -353,7 +353,7 @@ async function _result(input: string, __metadata?: Record<string, any>): Promise
     }
 
     if (haltExecution) {
-      await statelogClient.debug(`Tool call interrupted execution.`, {
+      statelogClient.debug(`Tool call interrupted execution.`, {
         messages: __messages,
         model: __client.getModel(),
       });
@@ -376,7 +376,7 @@ async function _result(input: string, __metadata?: Record<string, any>): Promise
 
     const nextEndTime = performance.now();
 
-    await statelogClient.promptCompletion({
+    statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),

@@ -1,6 +1,18 @@
-import { foo } from "./foo.ts";
-import { sayHi } from "./bar.ts";
-import { toolMessage } from "smoltalk";
+import { foo, approveInterrupt, rejectInterrupt } from "./foo.ts";
+import readline from "readline";
+function input(prompt: string): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise((resolve) => {
+    rl.question(prompt, (answer: string) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
 
 type Interrupt<T> = {
   type: "interrupt";
@@ -16,16 +28,13 @@ function isInterrupt<T>(obj: any): obj is Interrupt<T> {
   return obj && obj.type === "interrupt";
 }
 
-const finalState = (await foo()) as any;
-console.log({ finalState });
-if (isInterrupt(finalState)) {
+let finalState = (await foo()) as any;
+while (isInterrupt(finalState)) {
   console.log("Execution interrupted with message:", finalState.data);
-  const messages = finalState.__messages;
-  messages.push(
-    toolMessage("guten tag dave!", {
-      tool_call_id: finalState.__toolCall.id,
-      name: finalState.__toolCall.name,
-    }),
-  );
-  await sayHi("Dave", { messages });
+  const response = await input("Do you want to approve? (yes/no) ");
+  if (response.toLowerCase() === "yes" || response.toLowerCase() === "y") {
+    finalState = await approveInterrupt(finalState);
+  } else {
+    finalState = await rejectInterrupt(finalState);
+  }
 }

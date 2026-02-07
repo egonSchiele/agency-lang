@@ -9,7 +9,7 @@ import fs from "fs";
 import { PieMachine, goToNode } from "piemachine";
 import { StatelogClient } from "statelog-client";
 import { nanoid } from "nanoid";
-import { assistantMessage, getClient, userMessage, toolMessage } from "smoltalk";
+import { assistantMessage, getClient, userMessage, toolMessage, messageFromJSON } from "smoltalk";
 import type { Message } from "smoltalk";
 
 const statelogHost = "https://statelog.adit.io";
@@ -23,7 +23,6 @@ const statelogConfig = {
   };
 const __statelogClient = new StatelogClient(statelogConfig);
 const __model: ModelName = "gpt-4o-mini";
-const __global: Record<string, any> = {};
 
 const getClientWithConfig = (config = {}) => {
   const defaultConfig = {
@@ -106,19 +105,26 @@ export type InterruptResponseModify = {
 
 
 export async function respondToInterrupt(interrupt: Interrupt, interruptResponse: InterruptResponseType) {
-  console.log(JSON.stringify({ interrupt, interruptResponse }, null, 2));
+  console.log("responseToInterrupt:", JSON.stringify({ interrupt, interruptResponse }, null, 2));
+  __stateStack = StateStack.fromJSON(interrupt.__state || {});
+  __stateStack.setMode("deserialize");
+  const messages = (__stateStack.other.messages || []).map((json: any) => {
+    return messageFromJSON(json);
+  });
+
+  const nodesTraversed = __stateStack.other.nodesTraversed || [];
   const nodeName = nodesTraversed[nodesTraversed.length - 1];
   console.log(\`Going to node \${nodeName} with response:\`, interruptResponse);
   return graph.run(nodeName, {
     messages: messages,
     __metadata: {
       graph: graph,
-      part: part,
       statelogClient: __statelogClient,
       interruptResponse: interruptResponse,
       state: interrupt.__state,
+      __stateStack: __stateStack,
     },
-    data: interrupt.__state.args
+    data: "<from-stack>"
   });
 }
 
@@ -159,7 +165,60 @@ class PackagedState {
     this.step += 1;
   }
 }
-`;
+
+
+class StateStack {
+  public stack: StateItem[] = [];
+  private mode: "serialize" | "deserialize" = "serialize";
+  public globals: Record<string, any> = {};
+  public other: Record<string, any> = {};
+
+  constructor(stack: StateItem[] = [], mode: "serialize" | "deserialize" = "serialize") {
+    this.stack = stack;
+    this.mode = mode;
+  }
+
+  getNewState(): StateItem | null {
+    if (this.mode === "serialize") {
+      const newState: StateItem = {
+        args: {},
+        locals: {},
+        step: 0,
+      };
+      this.stack.push(newState);
+      return newState;
+    } else if (this.mode === "deserialize") {
+      return this.stack.shift() || null;
+    }
+    return null;
+  }
+
+  setMode(mode: "serialize" | "deserialize") {
+    this.mode = mode;
+  }
+
+  pop(): StateItem | undefined {
+    return this.stack.pop();
+  }
+
+  toJSON() {
+    return structuredClone({
+      stack: this.stack,
+      globals: this.globals,
+      other: this.other,
+    });
+  }
+
+  static fromJSON(json: any): StateStack {
+    const stateStack = new StateStack([], "serialize");
+    stateStack.stack = json.stack || [];
+    stateStack.globals = json.globals || {};
+    stateStack.other = json.other || {};
+    return stateStack;
+  }
+}
+
+let __stateStack = new StateStack();`;
 
 export type TemplateType = {
 };

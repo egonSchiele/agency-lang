@@ -9,7 +9,7 @@ import fs from "fs";
 import { PieMachine, goToNode } from "piemachine";
 import { StatelogClient } from "statelog-client";
 import { nanoid } from "nanoid";
-import { assistantMessage, getClient, userMessage, toolMessage } from "smoltalk";
+import { assistantMessage, getClient, userMessage, toolMessage, messageFromJSON } from "smoltalk";
 import type { Message } from "smoltalk";
 
 const statelogHost = "https://statelog.adit.io";
@@ -23,7 +23,6 @@ const statelogConfig = {
   };
 const __statelogClient = new StatelogClient(statelogConfig);
 const __model: ModelName = "gpt-4o-mini";
-const __global: Record<string, any> = {};
 
 const getClientWithConfig = (config = {}) => {
   const defaultConfig = {
@@ -106,19 +105,26 @@ export type InterruptResponseModify = {
 
 
 export async function respondToInterrupt(interrupt: Interrupt, interruptResponse: InterruptResponseType) {
-  console.log(JSON.stringify({ interrupt, interruptResponse }, null, 2));
+  console.log("responseToInterrupt:", JSON.stringify({ interrupt, interruptResponse }, null, 2));
+  __stateStack = StateStack.fromJSON(interrupt.__state || {});
+  __stateStack.setMode("deserialize");
+  const messages = (__stateStack.other.messages || []).map((json: any) => {
+    return messageFromJSON(json);
+  });
+
+  const nodesTraversed = __stateStack.other.nodesTraversed || [];
   const nodeName = nodesTraversed[nodesTraversed.length - 1];
   console.log(`Going to node ${nodeName} with response:`, interruptResponse);
   return graph.run(nodeName, {
     messages: messages,
     __metadata: {
       graph: graph,
-      part: part,
       statelogClient: __statelogClient,
       interruptResponse: interruptResponse,
       state: interrupt.__state,
+      __stateStack: __stateStack,
     },
-    data: interrupt.__state.args
+    data: "<from-stack>"
   });
 }
 
@@ -160,6 +166,59 @@ class PackagedState {
   }
 }
 
+
+class StateStack {
+  public stack: StateItem[] = [];
+  private mode: "serialize" | "deserialize" = "serialize";
+  public globals: Record<string, any> = {};
+  public other: Record<string, any> = {};
+
+  constructor(stack: StateItem[] = [], mode: "serialize" | "deserialize" = "serialize") {
+    this.stack = stack;
+    this.mode = mode;
+  }
+
+  getNewState(): StateItem | null {
+    if (this.mode === "serialize") {
+      const newState: StateItem = {
+        args: {},
+        locals: {},
+        step: 0,
+      };
+      this.stack.push(newState);
+      return newState;
+    } else if (this.mode === "deserialize") {
+      return this.stack.shift() || null;
+    }
+    return null;
+  }
+
+  setMode(mode: "serialize" | "deserialize") {
+    this.mode = mode;
+  }
+
+  pop(): StateItem | undefined {
+    return this.stack.pop();
+  }
+
+  toJSON() {
+    return structuredClone({
+      stack: this.stack,
+      globals: this.globals,
+      other: this.other,
+    });
+  }
+
+  static fromJSON(json: any): StateStack {
+    const stateStack = new StateStack([], "serialize");
+    stateStack.stack = json.stack || [];
+    stateStack.globals = json.globals || {};
+    stateStack.other = json.other || {};
+    return stateStack;
+  }
+}
+
+let __stateStack = new StateStack();
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -191,30 +250,36 @@ export const __testTool = {
   description: `No description provided.`,
   schema: z.object({"x": z.string(), })
 };
-__global.prompt = `What is your name?`;
+__stateStack.globals.prompt = `What is your name?`;
 
-export async function test({x, __metadata}) : Promise<any> {
+export async function test(args) : Promise<any> {
     const __messages: Message[] = [];
-    const __step = __metadata?.part || 0;
-    const __self: Record<string, any> = {};
+    const __stack = __stateStack.getNewState();
+    const __step = __stack.step;
+    const __self: Record<string, any> = __stack.locals;
 
-    let __currentStep = __step;
+    const __params = ["x"];
+      (args).forEach((item, index) => {
+        __stack.args[__params[index]] = item;
+      });
+
+
     
       if (__step <= 0) {
         
-        __currentStep++;
+        __stack.step++;
       }
       
 
       if (__step <= 1) {
-        __self.y = 1;
-        __currentStep++;
+        __stack.locals.y = 1;
+        __stack.step++;
       }
       
 
       if (__step <= 2) {
-        await console.log(`Hello, ${x}!`)
-        __currentStep++;
+        await console.log(`Hello, ${__stack.args.x}!`)
+        __stack.step++;
       }
       
 }
@@ -222,9 +287,15 @@ graph.node("foo", async (state): Promise<any> => {
     console.log({state})
     const __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
-    const __step = state.__metadata?.state?.step || 0;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
-    const __self: Record<string, any> = state.__metadata?.state?.self || {};
+    if (state.__metadata?.stateStack) {
+      __stateStack = state.__metadata.stateStack;
+    }
+    const __stack = __stateStack.getNewState();
+    const __step = __stack.step;
+
+    const __self: Record<string, any> = __stack.locals;
+
     const __interruptResponse: InterruptResponseType | undefined = state.__metadata?.interruptResponse;
     const __toolCall: Record<string, any>|undefined = state.__metadata?.state?.toolCall;
 
@@ -232,37 +303,35 @@ graph.node("foo", async (state): Promise<any> => {
       __global = state.__metadata.state.global;
     }
 
-    let __currentStep = __step;
-
     
     
       if (__step <= 0) {
         
-        __currentStep++;
+        __stack.step++;
       }
       
 
       if (__step <= 1) {
-        test({x: `Alice`})
-        __currentStep++;
+        test([`Alice`])
+        __stack.step++;
       }
       
 
       if (__step <= 2) {
-        await console.log(__global.prompt)
-        __currentStep++;
+        await console.log(__stateStack.globals.prompt)
+        __stack.step++;
       }
       
 
       if (__step <= 3) {
-        __self.name = await await _builtinInput(`> `);
-        __currentStep++;
+        __stack.locals.name = await await _builtinInput(`> `);
+        __stack.step++;
       }
       
 
       if (__step <= 4) {
-        await console.log(`Your name is ${__self.name}. Greeting you with a tool`)
-        __currentStep++;
+        await console.log(`Your name is ${__stack.locals.name}. Greeting you with a tool`)
+        __stack.step++;
       }
       
 
@@ -275,12 +344,12 @@ graph.node("foo", async (state): Promise<any> => {
       statelogClient,
     },
     
-    data: [__self.name]
+    data: [__stack.locals.name]
     
     
   }
 );
-        __currentStep++;
+        __stack.step++;
       }
       
     

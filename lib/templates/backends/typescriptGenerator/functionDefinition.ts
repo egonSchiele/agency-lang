@@ -4,19 +4,25 @@
 import { apply } from "typestache";
 
 export const template = `
-export async function {{{functionName:string}}}({{{args}}}) : Promise<{{{returnType}}}> {
+export async function {{{functionName:string}}}(args) : Promise<{{{returnType}}}> {
     const __messages: Message[] = [];
-    const __step = __metadata?.part || 0;
-    const __self: Record<string, any> = {};
+    const __stack = __stateStack.getNewState();
+    const __step = __stack.step;
+    const __self: Record<string, any> = __stack.locals;
 
-    let __currentStep = __step;
+    const __params = [{{{argsStr}}}];
+      (args).forEach((item, index) => {
+        __stack.args[__params[index]] = item;
+      });
+
+
     {{{functionBody}}}
 }`;
 
 export type TemplateType = {
   functionName: string;
-  args: string | boolean | number;
   returnType: string | boolean | number;
+  argsStr: string | boolean | number;
   functionBody: string | boolean | number;
 };
 

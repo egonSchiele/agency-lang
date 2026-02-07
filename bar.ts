@@ -6,21 +6,26 @@ import fs from "fs";
 import { PieMachine, goToNode } from "piemachine";
 import { StatelogClient } from "statelog-client";
 import { nanoid } from "nanoid";
-import { assistantMessage, getClient, userMessage, toolMessage } from "smoltalk";
+import {
+  assistantMessage,
+  getClient,
+  userMessage,
+  toolMessage,
+  messageFromJSON,
+} from "smoltalk";
 import type { Message } from "smoltalk";
 
 const statelogHost = "https://statelog.adit.io";
 const traceId = nanoid();
 const statelogConfig = {
-    host: statelogHost,
-    traceId: traceId,
-    apiKey: process.env.STATELOG_API_KEY || "",
-    projectId: "agency-lang",
-    debugMode: false,
-  };
+  host: statelogHost,
+  traceId: traceId,
+  apiKey: process.env.STATELOG_API_KEY || "",
+  projectId: "agency-lang",
+  debugMode: false,
+};
 const __statelogClient = new StatelogClient(statelogConfig);
 const __model: ModelName = "gpt-4o-mini";
-const __global: Record<string, any> = {};
 
 const getClientWithConfig = (config = {}) => {
   const defaultConfig = {
@@ -38,7 +43,7 @@ let __client = getClientWithConfig();
 type State = {
   messages: string[];
   data: any;
-}
+};
 
 // enable debug logging
 const graphConfig = {
@@ -89,7 +94,10 @@ function printJSON(obj: any) {
   console.log(JSON.stringify(obj, null, 2));
 }
 
-export type InterruptResponseType = InterruptResponseApprove | InterruptResponseReject | InterruptResponseModify;
+export type InterruptResponseType =
+  | InterruptResponseApprove
+  | InterruptResponseReject
+  | InterruptResponseModify;
 export type InterruptResponseApprove = {
   type: "approve";
 };
@@ -101,24 +109,35 @@ export type InterruptResponseModify = {
   newArguments: Record<string, any>;
 };
 
+export async function respondToInterrupt(
+  interrupt: Interrupt,
+  interruptResponse: InterruptResponseType,
+) {
+  console.log(
+    "responseToInterrupt:",
+    JSON.stringify({ interrupt, interruptResponse }, null, 2),
+  );
+  __stateStack = StateStack.fromJSON(interrupt.__state || {});
+  __stateStack.setMode("deserialize");
+  const messages = (__stateStack.other.messages || []).map((json: any) => {
+    return messageFromJSON(json);
+  });
 
-export async function respondToInterrupt(interrupt: Interrupt, interruptResponse: InterruptResponseType) {
-  console.log(JSON.stringify({ interrupt, interruptResponse }, null, 2));
+  const nodesTraversed = __stateStack.other.nodesTraversed || [];
   const nodeName = nodesTraversed[nodesTraversed.length - 1];
   console.log(`Going to node ${nodeName} with response:`, interruptResponse);
   return graph.run(nodeName, {
     messages: messages,
     __metadata: {
       graph: graph,
-      part: part,
       statelogClient: __statelogClient,
       interruptResponse: interruptResponse,
       state: interrupt.__state,
+      __stateStack: __stateStack,
     },
-    data: interrupt.__state.args
+    data: "<from-stack>",
   });
 }
-
 
 class PackagedState {
   public messages?: Message[];
@@ -157,7 +176,62 @@ class PackagedState {
   }
 }
 
-function add({a, b}: {a:number, b:number}):number {
+class StateStack {
+  public stack: StateItem[] = [];
+  private mode: "serialize" | "deserialize" = "serialize";
+  public globals: Record<string, any> = {};
+  public other: Record<string, any> = {};
+
+  constructor(
+    stack: StateItem[] = [],
+    mode: "serialize" | "deserialize" = "serialize",
+  ) {
+    this.stack = stack;
+    this.mode = mode;
+  }
+
+  getNewState(): StateItem | null {
+    if (this.mode === "serialize") {
+      const newState: StateItem = {
+        args: {},
+        locals: {},
+        step: 0,
+      };
+      this.stack.push(newState);
+      return newState;
+    } else if (this.mode === "deserialize") {
+      return this.stack.shift() || null;
+    }
+    return null;
+  }
+
+  setMode(mode: "serialize" | "deserialize") {
+    this.mode = mode;
+  }
+
+  pop(): StateItem | undefined {
+    return this.stack.pop();
+  }
+
+  toJSON() {
+    return structuredClone({
+      stack: this.stack,
+      globals: this.globals,
+      other: this.other,
+    });
+  }
+
+  static fromJSON(json: any): StateStack {
+    const stateStack = new StateStack([], "serialize");
+    stateStack.stack = json.stack || [];
+    stateStack.globals = json.globals || {};
+    stateStack.other = json.other || {};
+    return stateStack;
+  }
+}
+
+let __stateStack = new StateStack();
+function add({ a, b }: { a: number; b: number }): number {
   return a + b;
 }
 
@@ -173,275 +247,271 @@ const addTool = {
 export const __greetTool = {
   name: "greet",
   description: `No description provided.`,
-  schema: z.object({"name": z.string(), })
+  schema: z.object({ name: z.string() }),
 };
 
-export async function greet({name, __metadata}) : Promise<string> {
-    const __messages: Message[] = [];
-    const __step = __metadata?.part || 0;
-    const __self: Record<string, any> = {};
+export async function greet(args): Promise<string> {
+  const __messages: Message[] = [];
+  const __stack = __stateStack.getNewState();
+  const __step = __stack.step;
+  const __self: Record<string, any> = __stack.locals;
 
-    let __currentStep = __step;
-    
-      if (__step <= 0) {
-        
-        __currentStep++;
-      }
-      
-
-      if (__step <= 1) {
-        return interrupt(`interrupt in greet`)
-        __currentStep++;
-      }
-      
-
-      if (__step <= 2) {
-        return `Kya chal raha jai, ${name}!`
-        __currentStep++;
-      }
-      
-}
-graph.node("sayHi", async (state): Promise<any> => {
-    console.log({state})
-    const __messages: Message[] = state.messages || [];
-    const __graph = state.__metadata?.graph || graph;
-    const __step = state.__metadata?.state?.step || 0;
-    const statelogClient = state.__metadata?.statelogClient || __statelogClient;
-    const __self: Record<string, any> = state.__metadata?.state?.self || {};
-    const __interruptResponse: InterruptResponseType | undefined = state.__metadata?.interruptResponse;
-    const __toolCall: Record<string, any>|undefined = state.__metadata?.state?.toolCall;
-
-    if (state.__metadata?.state?.global) {
-      __global = state.__metadata.state.global;
-    }
-
-    let __currentStep = __step;
-
-    
-    
-    const __params = ["name"];
-    (state.data || []).forEach((item, index) => {
-      __self[__params[index]] = item;
-    });
-    
-    
-      if (__step <= 0) {
-        
-        __currentStep++;
-      }
-      
-
-      if (__step <= 1) {
-        await console.log(`Saying hi to ${__self.name}...`)
-        __currentStep++;
-      }
-      
-
-      if (__step <= 2) {
-        
-async function _response(name: string, __metadata?: Record<string, any>): Promise<string> {
-  console.log("Inside prompt func, metedata:", __metadata);
-  const __prompt = `Greet the user with their name: ${name} using the greet function.`;
-  const startTime = performance.now();
-  const __messages: Message[] = __metadata?.messages || [];
-  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
-  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
-  const __tools = [__greetTool];
-
-  
-  
-  const __responseFormat = undefined;
-  
-  
-  const __client = getClientWithConfig({});
-  let responseMessage:any;
-
-  if (__toolCalls.length === 0) {
-    __messages.push(userMessage(__prompt));
-  
-  
-    let __completion = await __client.text({
-      messages: __messages,
-      tools: __tools,
-      responseFormat: __responseFormat,
-    });
-  
-    const endTime = performance.now();
-    await statelogClient.promptCompletion({
-      messages: __messages,
-      completion: __completion,
-      model: __client.getModel(),
-      timeTaken: endTime - startTime,
-    });
-  
-    if (!__completion.success) {
-      throw new Error(
-        `Error getting response from ${__model}: ${__completion.error}`
-      );
-    }
-  
-    responseMessage = __completion.value;
-    __toolCalls = responseMessage.toolCalls || [];
-
-    if (__toolCalls.length > 0) {
-      // Add assistant's response with tool calls to message history
-      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
-    }
-  }
-
-  console.log("++++++++++++++++++++++++++")
-  console.log("Tool calls to process:", JSON.stringify(__toolCalls, null, 2));
-  console.log("++++++++++++++++++++++++++")
-
-  // Handle function calls
-  if (__toolCalls.length > 0) {
-    let toolCallStartTime, toolCallEndTime;
-    let haltExecution = false;
-    let haltToolCall = {}
-    let haltInterrupt:any = null;
-
-    // Process each tool call
-    for (const toolCall of __toolCalls) {
-      if (
-  toolCall.name === "greet"
-) {
-  const args = toolCall.arguments;
-  console.log(`>> Tool 'greet' called with arguments:`, args);
-  if (__interruptResponse) {
-    if (__interruptResponse.type === "approve") {
-      args.__metadata = {
-        part: 2
-      }
-    }
-  }
-
-  toolCallStartTime = performance.now();
-  const result = await greet(args);
-  toolCallEndTime = performance.now();
-
-  // console.log("Tool 'greet' called with arguments:", args);
-  // console.log("Tool 'greet' returned result:", result);
-
-await statelogClient.toolCall({
-    toolName: "greet",
-    args,
-    output: result,
-    model: __client.getModel(),
-    timeTaken: toolCallEndTime - toolCallStartTime,
+  const __params = ["name"];
+  console.log({ args });
+  args.forEach((item, index) => {
+    __stack.args[__params[index]] = item;
   });
 
-  if (isInterrupt(result)) {
-    haltInterrupt = result;
-    haltToolCall = {
-      id: toolCall.id,
-      name: toolCall.name,
-      arguments: toolCall.arguments,
-    }
-    haltExecution = true;
-    break;
+  if (__step <= 0) {
+    __stack.step++;
   }
 
-    // Add function result to messages
-  __messages.push(toolMessage(result, {
-        tool_call_id: toolCall.id,
-        name: toolCall.name,
-  }));
+  if (__step <= 1) {
+    return interrupt(`interrupt in greet`);
+    __stack.step++;
+  }
+
+  if (__step <= 2) {
+    __stateStack.pop();
+    return `Kya chal raha jai, ${__stack.args.name}!`;
+    __stack.step++;
+  }
 }
-    }
+graph.node("sayHi", async (state): Promise<any> => {
+  console.log({ state });
+  const __messages: Message[] = state.messages || [];
+  const __graph = state.__metadata?.graph || graph;
+  const statelogClient = state.__metadata?.statelogClient || __statelogClient;
+  if (state.__metadata?.stateStack) {
+    __stateStack = state.__metadata.stateStack;
+  }
+  const __stack = __stateStack.getNewState();
+  const __step = __stack.step;
 
-    if (haltExecution) {
-      await statelogClient.debug(`Tool call interrupted execution.`, {
-        messages: __messages,
-        model: __client.getModel(),
-      });
-      
-      const packagedState = new PackagedState({
-        messages: __messages,
-        nodesTraversed: __graph.getNodesTraversed(),
-        toolCall: haltToolCall,
-        step: __currentStep,
-        self: __self,
-        global: __global,
-        args: state.data,
-      });
-      haltInterrupt.__state = packagedState;
-      return haltInterrupt;
-    }
-  
-    const nextStartTime = performance.now();
-    let __completion = await __client.text({
-      messages: __messages,
-      tools: __tools,
-      responseFormat: __responseFormat,
+  const __self: Record<string, any> = __stack.locals;
+
+  const __interruptResponse: InterruptResponseType | undefined =
+    state.__metadata?.interruptResponse;
+  const __toolCall: Record<string, any> | undefined =
+    state.__metadata?.state?.toolCall;
+
+  if (state.__metadata?.state?.global) {
+    __global = state.__metadata.state.global;
+  }
+
+  const __params = ["name"];
+  if (state.data !== "<from-stack>") {
+    state.data.forEach((item, index) => {
+      __stack.args[__params[index]] = item;
     });
+  }
 
-    const nextEndTime = performance.now();
+  if (__step <= 0) {
+    __stack.step++;
+  }
 
-    await statelogClient.promptCompletion({
-      messages: __messages,
-      completion: __completion,
-      model: __client.getModel(),
-      timeTaken: nextEndTime - nextStartTime,
-    });
+  if (__step <= 1) {
+    await console.log(`Saying hi to ${__stack.args.name}...`);
+    __stack.step++;
+  }
 
-    if (!__completion.success) {
-      throw new Error(
-        `Error getting response from ${__model}: ${__completion.error}`
+  if (__step <= 2) {
+    async function _response(
+      name: string,
+      __metadata?: Record<string, any>,
+    ): Promise<string> {
+      console.log("Inside prompt func, metedata:", __metadata);
+      const __prompt = `Greet the user with their name: ${name} using the greet function.`;
+      const startTime = performance.now();
+      const __messages: Message[] = __metadata?.messages || [];
+      let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
+      const __interruptResponse: InterruptResponseType | undefined =
+        __metadata?.interruptResponse;
+      const __tools = [__greetTool];
+
+      const __responseFormat = undefined;
+
+      const __client = getClientWithConfig({});
+      let responseMessage: any;
+
+      if (__toolCalls.length === 0) {
+        __messages.push(userMessage(__prompt));
+
+        let __completion = await __client.text({
+          messages: __messages,
+          tools: __tools,
+          responseFormat: __responseFormat,
+        });
+
+        const endTime = performance.now();
+        await statelogClient.promptCompletion({
+          messages: __messages,
+          completion: __completion,
+          model: __client.getModel(),
+          timeTaken: endTime - startTime,
+        });
+
+        if (!__completion.success) {
+          throw new Error(
+            `Error getting response from ${__model}: ${__completion.error}`,
+          );
+        }
+
+        responseMessage = __completion.value;
+        __toolCalls = responseMessage.toolCalls || [];
+
+        if (__toolCalls.length > 0) {
+          // Add assistant's response with tool calls to message history
+          __messages.push(
+            assistantMessage(responseMessage.output, {
+              toolCalls: __toolCalls,
+            }),
+          );
+        }
+      }
+
+      console.log("++++++++++++++++++++++++++");
+      console.log(
+        "Tool calls to process:",
+        JSON.stringify(__toolCalls, null, 2),
       );
+      console.log("++++++++++++++++++++++++++");
+
+      // Handle function calls
+      if (__toolCalls.length > 0) {
+        let toolCallStartTime, toolCallEndTime;
+        let haltExecution = false;
+        let haltToolCall = {};
+        let haltInterrupt: any = null;
+
+        // Process each tool call
+        for (const toolCall of __toolCalls) {
+          if (toolCall.name === "greet") {
+            const args = toolCall.arguments;
+            console.log(`>> Tool 'greet' called with arguments:`, args);
+            if (__interruptResponse) {
+              if (__interruptResponse.type === "approve") {
+                args.__metadata = {
+                  part: 2,
+                };
+              }
+            }
+
+            toolCallStartTime = performance.now();
+            const result = await greet(args);
+            toolCallEndTime = performance.now();
+
+            // console.log("Tool 'greet' called with arguments:", args);
+            // console.log("Tool 'greet' returned result:", result);
+
+            await statelogClient.toolCall({
+              toolName: "greet",
+              args,
+              output: result,
+              model: __client.getModel(),
+              timeTaken: toolCallEndTime - toolCallStartTime,
+            });
+
+            if (isInterrupt(result)) {
+              haltInterrupt = result;
+              haltToolCall = {
+                id: toolCall.id,
+                name: toolCall.name,
+                arguments: toolCall.arguments,
+              };
+              haltExecution = true;
+              break;
+            }
+
+            // Add function result to messages
+            __messages.push(
+              toolMessage(result, {
+                tool_call_id: toolCall.id,
+                name: toolCall.name,
+              }),
+            );
+          }
+        }
+
+        if (haltExecution) {
+          await statelogClient.debug(`Tool call interrupted execution.`, {
+            messages: __messages,
+            model: __client.getModel(),
+          });
+
+          __stateStack.other = {
+            messages: __messages.map((msg) => msg.toJSON()),
+            nodesTraversed: __graph.getNodesTraversed(),
+            toolCall: haltToolCall,
+          };
+          haltInterrupt.__state = __stateStack.toJSON();
+          return haltInterrupt;
+        }
+
+        const nextStartTime = performance.now();
+        let __completion = await __client.text({
+          messages: __messages,
+          tools: __tools,
+          responseFormat: __responseFormat,
+        });
+
+        const nextEndTime = performance.now();
+
+        await statelogClient.promptCompletion({
+          messages: __messages,
+          completion: __completion,
+          model: __client.getModel(),
+          timeTaken: nextEndTime - nextStartTime,
+        });
+
+        if (!__completion.success) {
+          throw new Error(
+            `Error getting response from ${__model}: ${__completion.error}`,
+          );
+        }
+        responseMessage = __completion.value;
+      }
+
+      // Add final assistant response to history
+      // not passing tool calls back this time
+      __messages.push(assistantMessage(responseMessage.output));
+
+      return responseMessage.output;
     }
-    responseMessage = __completion.value;
-  }
 
-  // Add final assistant response to history
-  // not passing tool calls back this time
-  __messages.push(assistantMessage(responseMessage.output));
-  
-
-  
-  return responseMessage.output;
-  
-}
-
-__self.response = await _response(__self.name, {
+    __self.response = await _response(__stack.args.name, {
       messages: __messages,
       interruptResponse: __interruptResponse,
       toolCall: __toolCall,
     });
 
-if (isInterrupt(__self.response)) {
-  return { ...state, data: __self.response };
-}
-        __currentStep++;
-      }
-      
+    if (isInterrupt(__self.response)) {
+      return { ...state, data: __self.response };
+    }
+    __stack.step++;
+  }
 
-      if (__step <= 3) {
-        await console.log(__self.response)
-        __currentStep++;
-      }
-      
+  if (__step <= 3) {
+    await console.log(__stack.locals.response);
+    __stack.step++;
+  }
 
-      if (__step <= 4) {
-        await console.log(`Greeting sent.`)
-        __currentStep++;
-      }
-      
+  if (__step <= 4) {
+    await console.log(`Greeting sent.`);
+    __stack.step++;
+  }
 
-      if (__step <= 5) {
-        return { ...state, data: __self.response}
-        __currentStep++;
-      }
-      
-    
-    // this is just here to have a default return value from a node if the user doesn't specify one
-    return { ...state, data: undefined };
+  if (__step <= 5) {
+    return { ...state, data: __stack.locals.response };
+    __stack.step++;
+  }
+
+  // this is just here to have a default return value from a node if the user doesn't specify one
+  return { ...state, data: undefined };
 });
 
-
 export async function sayHi(name, { messages } = {}): Promise<any> {
-
-
-  const data = [ name ];
+  const data = [name];
   const result = await graph.run("sayHi", { messages: messages || [], data });
   return result.data;
 }

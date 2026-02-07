@@ -366,10 +366,10 @@ export class BaseGenerator {
     const currentScope = this.currentScope[this.currentScope.length - 1];
     switch (currentScope) {
       case "global":
-        return "__global";
+        return "__stateStack.globals";
       case "function":
       case "node":
-        return "__self";
+        return "__stack.locals";
     }
   }
 }

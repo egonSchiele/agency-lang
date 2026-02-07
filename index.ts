@@ -30,3 +30,9 @@ if (isInterrupt(finalState)) {
     await respondToInterrupt(finalState, { type: "reject" });
   }
 }
+
+type StateItem = {
+  args: Record<string, any>;
+  locals: Record<string, any>;
+  step: number;
+};

@@ -119,7 +119,13 @@ export class TypeScriptGenerator extends BaseGenerator {
 
   protected processReturnStatement(node: ReturnStatement): string {
     const returnCode = this.processNode(node.value);
-    return `return ${returnCode}\n`;
+    if (
+      node.value.type === "functionCall" &&
+      node.value.functionName === "interrupt"
+    ) {
+      return `return ${returnCode}\n`;
+    }
+    return `__stateStack.pop();\nreturn ${returnCode}\n`;
   }
 
   protected processAccessExpression(node: AccessExpression): string {
@@ -337,10 +343,10 @@ export class TypeScriptGenerator extends BaseGenerator {
     this.functionScopedVariables = [];
     this.functionParameters = [];
     this.endScope();
-    const argsStr = [...args, "__metadata"].join(", ") || "";
+    const argsStr = args.map((arg) => `"${arg}"`).join(", ") || "";
     return renderFunctionDefinition.default({
       functionName,
-      args: "{" + argsStr + "}",
+      argsStr,
       returnType: node.returnType
         ? variableTypeToString(node.returnType, this.typeAliases)
         : "any",
@@ -391,20 +397,15 @@ export class TypeScriptGenerator extends BaseGenerator {
       }
     });
     let argsString = "";
-    const paramNames =
-      this.functionDefinitions[node.functionName]?.parameters.map(
-        (p) => p.name,
-      ) || null;
-    if (paramNames) {
-      const partsWithNames = zip(paramNames, parts).map(([paramName, part]) => {
-        return `${paramName}: ${part}`;
-      });
-      argsString = partsWithNames.join(", ");
-      return `${functionName}({${argsString}})`;
+    const isImportedTool = this.importedTools
+      .map((node) => node.importedTools)
+      .flat()
+      .includes(node.functionName);
+    if (this.functionDefinitions[node.functionName] || isImportedTool) {
+      argsString = parts.join(", ");
+      return `${functionName}([${argsString}])`;
     } else {
-      // must be a builtin function or imported function,
-      // as we don't have the signature info
-      // in that case don't do named parameters
+      // must be a builtin function or imported function
       argsString = parts.join(", ");
       return `${functionName}(${argsString})`;
     }
@@ -412,12 +413,12 @@ export class TypeScriptGenerator extends BaseGenerator {
 
   protected generateScopedVariableName(variableName: string): string {
     if (this.functionParameters.includes(variableName)) {
-      return variableName;
+      return `__stack.args.${variableName}`;
     }
     if (this.functionScopedVariables.includes(variableName)) {
-      return `__self.${variableName}`;
+      return `__stack.locals.${variableName}`;
     } else if (this.globalScopedVariables.includes(variableName)) {
-      return `__global.${variableName}`;
+      return `__stateStack.globals.${variableName}`;
     }
     return variableName;
   }
@@ -660,7 +661,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       const partCode = `
       if (__step <= ${partNum}) {
         ${part.join("").trimEnd()}
-        __currentStep++;
+        __stack.step++;
       }
       `;
       bodyCode.push(partCode);

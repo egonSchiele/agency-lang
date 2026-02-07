@@ -80,17 +80,13 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
         messages: __messages,
         model: __client.getModel(),
       });
-      
-      const packagedState = new PackagedState({
-        messages: __messages,
+
+      __stateStack.other = {
+        messages: __messages.map((msg) => msg.toJSON()),
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
-        step: __currentStep,
-        self: __self,
-        global: __global,
-        args: state.data,
-      });
-      haltInterrupt.__state = packagedState;
+      };
+      haltInterrupt.__state = __stateStack.toJSON();
       return haltInterrupt;
     }
   

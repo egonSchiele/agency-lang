@@ -130,6 +130,13 @@ export async function respondToInterrupt(_interrupt: Interrupt, _interruptRespon
   return result.data;
 }
 
+export async function approveInterrupt(interrupt: Interrupt) {
+  return await respondToInterrupt(interrupt, { type: "approve" });
+}
+
+export async function rejectInterrupt(interrupt: Interrupt) {
+  return await respondToInterrupt(interrupt, { type: "reject" });
+}
 
 class PackagedState {
   public messages?: Message[];

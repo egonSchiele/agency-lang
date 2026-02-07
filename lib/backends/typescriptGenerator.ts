@@ -123,8 +123,14 @@ export class TypeScriptGenerator extends BaseGenerator {
       node.value.type === "functionCall" &&
       node.value.functionName === "interrupt"
     ) {
+      /* In this case we're not popping off the stack, because we need to save the state,
+      because we will be restoring it (since this is an interrupt). However we do need to
+      advance the step so that the next time we come here, we start at the part after this
+      interrupt. */
       return `__stack.step++;\nreturn ${returnCode}\n`;
     }
+    /* Pop the state off the stack, we won't be coming back.
+    Doesn't matter if we update the step or not, since we won't be coming back here. */
     return `__stateStack.pop();\nreturn ${returnCode}\n`;
   }
 
@@ -210,7 +216,12 @@ export class TypeScriptGenerator extends BaseGenerator {
           );
         }
         const promptArg = args[0];
-        if (promptArg.type !== "string") {
+        const promptArgIsPrompt =
+          promptArg.type === "prompt" ||
+          promptArg.type === "string" ||
+          promptArg.type === "multiLineString" ||
+          promptArg.type === "variableName"; // if variable name, assume its a string
+        if (!promptArgIsPrompt) {
           throw new Error(
             `First argument to llm function must be a prompt literal.`,
           );
@@ -221,9 +232,18 @@ export class TypeScriptGenerator extends BaseGenerator {
             `Second argument to llm function must be an object literal for configuration.`,
           );
         }
+
         return this.processPromptLiteral(variableName, typeHint, {
           type: "prompt",
-          segments: promptArg.segments,
+          segments:
+            promptArg.type === "variableName"
+              ? [
+                  {
+                    type: "interpolation",
+                    variableName: promptArg.value,
+                  },
+                ]
+              : promptArg.segments,
           config: promptConfig as AgencyObject | undefined,
         });
       }
@@ -401,11 +421,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       }
     });
     let argsString = "";
-    const isImportedTool = this.importedTools
-      .map((node) => node.importedTools)
-      .flat()
-      .includes(node.functionName);
-    if (this.functionDefinitions[node.functionName] || isImportedTool) {
+    if (this.isInternalFunction(node.functionName)) {
       argsString = parts.join(", ");
       return `${functionName}([${argsString}])`;
     } else {
@@ -413,18 +429,6 @@ export class TypeScriptGenerator extends BaseGenerator {
       argsString = parts.join(", ");
       return `${functionName}(${argsString})`;
     }
-  }
-
-  protected generateScopedVariableName(variableName: string): string {
-    if (this.functionParameters.includes(variableName)) {
-      return `__stack.args.${variableName}`;
-    }
-    if (this.functionScopedVariables.includes(variableName)) {
-      return `__stack.locals.${variableName}`;
-    } else if (this.globalScopedVariables.includes(variableName)) {
-      return `__stateStack.globals.${variableName}`;
-    }
-    return variableName;
   }
 
   protected generateLiteral(literal: Literal): string {
@@ -512,9 +516,9 @@ export class TypeScriptGenerator extends BaseGenerator {
     // Generate async function for prompt-based assignment
     const _variableType = variableType ||
       this.typeHints[variableName] || {
-      type: "primitiveType" as const,
-      value: "string",
-    };
+        type: "primitiveType" as const,
+        value: "string",
+      };
 
     const zodSchema = mapTypeToZodSchema(_variableType, this.typeAliases);
     //console.log("Generated Zod schema for variable", variableName, "Variable type:", variableType, ":", zodSchema, "aliases:", this.typeAliases, "hints:", this.typeHints);

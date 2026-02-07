@@ -155,7 +155,7 @@ export class BaseGenerator {
     this.functionDefinitions[node.functionName] = node;
   }
 
-  protected processGraphNodeName(node: GraphNodeDefinition): void { }
+  protected processGraphNodeName(node: GraphNodeDefinition): void {}
 
   protected processNode(node: AgencyNode): string {
     switch (node.type) {
@@ -365,6 +365,9 @@ export class BaseGenerator {
     return this.currentScope[this.currentScope.length - 1];
   }
 
+  /* This function is used during assignment, so we can figure out whether this variable
+  should be assigned on local or global scope. There's a related function `generateScopedVariableName`,
+  which is used when retrieving the value of a variable. */
   protected getScopeVar(): string {
     const currentScope = this.currentScope[this.currentScope.length - 1];
     switch (currentScope) {
@@ -374,5 +377,34 @@ export class BaseGenerator {
       case "node":
         return "__stack.locals";
     }
+  }
+
+  protected generateScopedVariableName(variableName: string): string {
+    if (this.functionParameters.includes(variableName)) {
+      return `__stack.args.${variableName}`;
+    }
+    if (this.functionScopedVariables.includes(variableName)) {
+      return `__stack.locals.${variableName}`;
+    } else if (this.globalScopedVariables.includes(variableName)) {
+      return `__stateStack.globals.${variableName}`;
+    }
+    return variableName;
+  }
+
+  protected isImportedTool(functionName: string): boolean {
+    return this.importedTools
+      .map((node) => node.importedTools)
+      .flat()
+      .includes(functionName);
+  }
+
+  /* Internal function means the user defined this function in an Agency file,
+    as opposed to an external function, which was defined in an external TypeScript file
+    and imported into Agency. */
+  protected isInternalFunction(functionName: string): boolean {
+    return (
+      !!this.functionDefinitions[functionName] ||
+      this.isImportedTool(functionName)
+    );
   }
 }

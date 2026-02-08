@@ -9,6 +9,7 @@ export const template = `goToNode("{{{nodeName:string}}}",
     __metadata: {
       graph: __graph,
       statelogClient,
+      callbacks: __callbacks,
     },
     {{#hasData}}
     data: {{{data:string}}}

@@ -18,6 +18,10 @@ graph.node("{{{name}}}", async (state): Promise<any> => {
       state.__metadata.__stateStack = undefined;
     }
 
+    if (state.__metadata?.callbacks) {
+      __callbacks = state.__metadata.callbacks;
+    }
+
     // either creates a new stack for this node,
     // or restores the stack if we're resuming after an interrupt,
     // depending on the mode of the state stack (serialize or deserialize).

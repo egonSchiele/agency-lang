@@ -39,6 +39,9 @@ importers:
       nanoid:
         specifier: ^5.1.6
         version: 5.1.6
+      termcolors:
+        specifier: github:egonSchiele/termcolors
+        version: https://codeload.github.com/egonSchiele/termcolors/tar.gz/d5c1f497618398ce1440d2383d2aad2642e4051f
       tsc-alias:
         specifier: ^1.8.16
         version: 1.8.16

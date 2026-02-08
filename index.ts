@@ -1,5 +1,6 @@
 import { foo, approveInterrupt, rejectInterrupt } from "./foo.ts";
 import readline from "readline";
+import { StreamChunk } from "smoltalk";
 function input(prompt: string): Promise<string> {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -28,18 +29,17 @@ function isInterrupt<T>(obj: any): obj is Interrupt<T> {
   return obj && obj.type === "interrupt";
 }
 
-let finalState = (await foo()) as any;
-while (isInterrupt(finalState)) {
-  console.log("Execution interrupted with message:", finalState.data);
-  const response = await input("Do you want to approve? (yes/no) ");
-  if (response.toLowerCase() === "yes" || response.toLowerCase() === "y") {
-    finalState = await approveInterrupt(finalState);
-  } else if (
-    response.toLowerCase() === "no" ||
-    response.toLowerCase() === "n"
-  ) {
-    finalState = await rejectInterrupt(finalState);
-  } else {
-    finalState = await approveInterrupt(finalState, { name: response });
-  }
+const callbacks = {
+  onStream: (chunk: StreamChunk) => {
+    if (chunk.type === "text") {
+      process.stdout.write(chunk.text);
+    }
+  },
+};
+
+async function main() {
+  const resp = await foo({ callbacks });
+  console.log({ resp });
 }
+
+main();

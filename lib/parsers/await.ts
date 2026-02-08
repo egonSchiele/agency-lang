@@ -10,9 +10,21 @@ export const usesToolParser: Parser<UsesTool> = seqC(
  */
 
 import { AwaitStatement } from "@/types/await.js";
-import { capture, or, Parser, ParserResult, seqC, set, spaces, str } from "tarsec";
+import {
+  capture,
+  or,
+  Parser,
+  ParserResult,
+  seqC,
+  set,
+  spaces,
+  str,
+} from "tarsec";
 import { accessExpressionParser } from "./access.js";
-import { functionCallParser } from "./functionCall.js";
+import {
+  functionCallParser,
+  llmPromptFunctionCallParser,
+} from "./functionCall.js";
 import { literalParser } from "./literals.js";
 
 export const awaitParser = (input: string): ParserResult<AwaitStatement> => {
@@ -20,7 +32,15 @@ export const awaitParser = (input: string): ParserResult<AwaitStatement> => {
     set("type", "awaitStatement"),
     str("await"),
     spaces,
-    capture(or(accessExpressionParser, functionCallParser, literalParser), "expression"),
+    capture(
+      or(
+        accessExpressionParser,
+        llmPromptFunctionCallParser,
+        functionCallParser,
+        literalParser,
+      ),
+      "expression",
+    ),
   );
   return parser(input);
-}
+};

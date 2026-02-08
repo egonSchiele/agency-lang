@@ -236,7 +236,17 @@ class StateStack {
   }
 }
 
-let __stateStack = new StateStack();`;
+let __stateStack = new StateStack();
+
+function isGenerator(variable) {
+  const toString = Object.prototype.toString.call(variable);
+  return (
+    toString === "[object Generator]" ||
+    toString === "[object AsyncGenerator]"
+  );
+}
+
+let __callbacks: Record<string, any> = {};`;
 
 export type TemplateType = {
 };

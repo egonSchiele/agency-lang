@@ -35,7 +35,11 @@ import { WhileLoop } from "../types/whileLoop.js";
 import { IfElse } from "../types/ifElse.js";
 import { accessExpressionParser, indexAccessParser } from "./access.js";
 import { commentParser } from "./comment.js";
-import { functionCallParser } from "./functionCall.js";
+import {
+  functionCallParser,
+  llmPromptFunctionCallParser,
+  streamingPromptLiteralParser,
+} from "./functionCall.js";
 import { literalParser, promptParser } from "./literals.js";
 import { matchBlockParser } from "./matchBlock.js";
 import { optionalSemicolon } from "./parserUtils.js";
@@ -72,7 +76,7 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
             optionalSpaces,
             capture(variableTypeParser, "typeHint"),
           ),
-        )
+        ),
       ),
       optionalSpaces,
       char("="),
@@ -82,6 +86,8 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
           timeBlockParser,
           awaitParser,
           promptParser,
+          streamingPromptLiteralParser,
+          llmPromptFunctionCallParser,
           functionCallParser,
           indexAccessParser,
           accessExpressionParser,
@@ -121,10 +127,12 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
         whileLoopParser,
         matchBlockParser,
         awaitParser,
+        streamingPromptLiteralParser,
         ifParser,
         functionParser,
         accessExpressionParser,
         assignmentParser,
+        llmPromptFunctionCallParser,
         functionCallParser,
         literalParser,
         commentParser,

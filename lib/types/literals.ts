@@ -44,4 +44,5 @@ export type PromptLiteral = {
   type: "prompt";
   segments: PromptSegment[];
   config?: AgencyObject;
+  isStreaming?: boolean;
 };

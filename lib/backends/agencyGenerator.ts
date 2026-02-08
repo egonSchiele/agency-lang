@@ -146,7 +146,11 @@ export class AgencyGenerator extends BaseGenerator {
   }
 
   private generatePromptLiteral(node: PromptLiteral): string {
-    let result = 'llm("';
+    let result = "";
+    if (node.isStreaming) {
+      result += "stream ";
+    }
+    result += 'llm("';
     for (const segment of node.segments) {
       if (segment.type === "text") {
         result += segment.value;

@@ -210,46 +210,6 @@ export class TypeScriptGenerator extends BaseGenerator {
     if (value.type === "prompt") {
       return this.processPromptLiteral(variableName, typeHint, value);
     } else if (value.type === "functionCall") {
-      if (value.functionName === "llm") {
-        const args = value.arguments;
-        if (args.length === 0) {
-          throw new Error(
-            `llm function call must have at least one argument for the prompt.`,
-          );
-        }
-        const promptArg = args[0];
-        const promptArgIsPrompt =
-          promptArg.type === "prompt" ||
-          promptArg.type === "string" ||
-          promptArg.type === "multiLineString" ||
-          promptArg.type === "variableName"; // if variable name, assume its a string
-        if (!promptArgIsPrompt) {
-          throw new Error(
-            `First argument to llm function must be a prompt literal.`,
-          );
-        }
-        const promptConfig = args[1];
-        if (promptConfig && promptConfig.type !== "agencyObject") {
-          throw new Error(
-            `Second argument to llm function must be an object literal for configuration.`,
-          );
-        }
-
-        return this.processPromptLiteral(variableName, typeHint, {
-          type: "prompt",
-          segments:
-            promptArg.type === "variableName"
-              ? [
-                  {
-                    type: "interpolation",
-                    variableName: promptArg.value,
-                  },
-                ]
-              : promptArg.segments,
-          config: promptConfig as AgencyObject | undefined,
-        });
-      }
-
       // Direct assignment for other literal types
       const code = this.processNode(value);
       return renderFunctionCallAssignment.default({
@@ -597,6 +557,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       functionCalls,
       clientConfig,
       nodeContext: this.getCurrentScope() === "node",
+      isStreaming: prompt.isStreaming || false,
     });
   }
 

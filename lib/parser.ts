@@ -28,7 +28,11 @@ import {
   timeBlockParser,
   whileLoopParser,
 } from "./parsers/function.js";
-import { functionCallParser } from "./parsers/functionCall.js";
+import {
+  functionCallParser,
+  llmPromptFunctionCallParser,
+  streamingPromptLiteralParser,
+} from "./parsers/functionCall.js";
 import {
   importNodeStatmentParser,
   importStatmentParser,
@@ -59,11 +63,13 @@ export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
         matchBlockParser,
         timeBlockParser,
         awaitParser,
+        streamingPromptLiteralParser,
         functionParser,
         returnStatementParser,
         specialVarParser,
         accessExpressionParser,
         assignmentParser,
+        llmPromptFunctionCallParser,
         functionCallParser,
         commentParser,
         newLineParser,

@@ -315,6 +315,66 @@ That's it! Execution will pick up exactly where it left off, down to the stateme
 
 > Note: currently you have to return an interrupt from an Agency file. You can't return an interrupt from a TypeScript file, because Agency can't jump to a specific line in TypeScript code, but it can with Agency code.
 
+## Streaming
+
+You can optionally stream responses from Agency by using the Stream keyword.
+
+```agency
+node foo() {
+  response: string = stream llm("Tell me a joke and explain it")
+  print(response)
+  return response
+}
+
+Streaming only works when you run your agent from a TypeScript file and provide an `onStream` callback.
+
+```ts
+const callbacks = {
+  onStream: (chunk: any) => {
+    if (chunk.type === "text") {
+      process.stdout.write(chunk.text);
+    }
+  },
+};
+
+async function main() {
+  const resp = await foo({ callbacks });
+  console.log({ resp });
+}
+
+main();
+```
+
+If you choose to use streaming, your agent will continue to function exactly as is, but will also stream the response to your callback. This means you can continue to use tools etc, and the rest of the code will flow exactly as is.
+
+```agency
+node foo() {
+  response: string = stream llm("Tell me a joke and explain it")
+  print(response) // the response variable will still be set to the full response once the stream is complete, so you can use it as normal
+}
+```
+
+The returned chunks are of the `StreamChunk` type from the `smoltalk` package:
+
+```ts
+export type StreamChunk = {
+    type: "text";
+    text: string;
+} | {
+    type: "tool_call";
+    toolCall: ToolCall;
+} | {
+    type: "done";
+
+    // the complete result of the prompt,
+    // as you would have received if you weren't streaming
+    result: PromptResult;
+} | {
+    type: "error";
+    error: string;
+};
+```
+
 ## A few notes on agent design
 
 As you build more complex agents, a good way to design them is with a decision tree-style approach. Instead of having one big prompt, use several smaller prompts to categorize a user's message and then use the appropriate prompt. This should make your agent faster and more reliable. For example, suppose you are building an agent that a user can use to either report their mood or add an item to their to-do list.

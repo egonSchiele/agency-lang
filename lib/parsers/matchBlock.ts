@@ -25,7 +25,11 @@ import {
 } from "tarsec";
 import { optionalSpaces, optionalSpacesOrNewline } from "./utils.js";
 import { literalParser } from "./literals.js";
-import { functionCallParser } from "./functionCall.js";
+import {
+  functionCallParser,
+  llmPromptFunctionCallParser,
+  streamingPromptLiteralParser,
+} from "./functionCall.js";
 import { DefaultCase, MatchBlockCase } from "../types/matchBlock.js";
 import { accessExpressionParser, indexAccessParser } from "./access.js";
 import { optionalSemicolon } from "./parserUtils.js";
@@ -58,6 +62,8 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
     capture(
       or(
         returnStatementParser,
+        streamingPromptLiteralParser,
+        llmPromptFunctionCallParser,
         agencyArrayParser,
         agencyObjectParser,
         accessExpressionParser,

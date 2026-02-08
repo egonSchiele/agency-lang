@@ -108,7 +108,7 @@ export type InterruptResponseReject = {
   type: "reject";
 };
 
-export async function respondToInterrupt(_interrupt: Interrupt, _interruptResponse: InterruptResponseType) {
+export async function respondToInterrupt(_interrupt: Interrupt, _interruptResponse: InterruptResponseType, metadata: Record<string, any> = {}) {
   const interrupt = structuredClone(_interrupt);
   const interruptResponse = structuredClone(_interruptResponse);
 
@@ -127,13 +127,17 @@ export async function respondToInterrupt(_interrupt: Interrupt, _interruptRespon
       ...__stateStack.interruptData.toolCall,
       arguments: { ...__stateStack.interruptData.toolCall.arguments, ...interruptResponse.newArguments },
     };
-    const lastMessage = __stateStack.interruptData.messages[__stateStack.interruptData.messages.length - 1];
-    if (lastMessage && lastMessage.role === "assistant") {
-      const toolCall = lastMessage.toolCalls?.[lastMessage.toolCalls.length - 1];
-      if (toolCall) {
-        toolCall.arguments = { ...toolCall.arguments, ...interruptResponse.newArguments };
-      }
-    }
+    // Error:
+    // TypeError: Cannot set property arguments of #<ToolCall> which has only a getter
+    //         toolCall.arguments = { ...toolCall.arguments, ...interruptResponse.newArguments };
+    //
+    // const lastMessage = __stateStack.interruptData.messages[__stateStack.interruptData.messages.length - 1];
+    // if (lastMessage && lastMessage.role === "assistant") {
+    //   const toolCall = lastMessage.toolCalls?.[lastMessage.toolCalls.length - 1];
+    //   if (toolCall) {
+    //     toolCall.arguments = { ...toolCall.arguments, ...interruptResponse.newArguments };
+    //   }
+    // }
   }
 
 
@@ -146,6 +150,7 @@ export async function respondToInterrupt(_interrupt: Interrupt, _interruptRespon
       graph: graph,
       statelogClient: __statelogClient,
       __stateStack: __stateStack,
+      __callbacks: metadata.callbacks,
     },
 
     // restore args from the state stack
@@ -154,12 +159,12 @@ export async function respondToInterrupt(_interrupt: Interrupt, _interruptRespon
   return result.data;
 }
 
-export async function approveInterrupt(interrupt: Interrupt, newArguments?: Record<string, any>) {
-  return await respondToInterrupt(interrupt, { type: "approve", newArguments });
+export async function approveInterrupt(interrupt: Interrupt, newArguments?: Record<string, any>, metadata: Record<string, any> = {}) {
+  return await respondToInterrupt(interrupt, { type: "approve", newArguments }, metadata);
 }
 
-export async function rejectInterrupt(interrupt: Interrupt) {
-  return await respondToInterrupt(interrupt, { type: "reject" });
+export async function rejectInterrupt(interrupt: Interrupt, metadata: Record<string, any> = {}) {
+  return await respondToInterrupt(interrupt, { type: "reject" }, metadata);
 }
 
 type StackFrame = {
@@ -238,6 +243,16 @@ class StateStack {
 }
 
 let __stateStack = new StateStack();
+
+function isGenerator(variable) {
+  const toString = Object.prototype.toString.call(variable);
+  return (
+    toString === "[object Generator]" ||
+    toString === "[object AsyncGenerator]"
+  );
+}
+
+let __callbacks: Record<string, any> = {};
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }

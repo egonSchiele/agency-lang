@@ -64,12 +64,7 @@ function _builtinInput(prompt: string): Promise<string> {
 }
 __stateStack.globals.message = await await _builtinInput(`Please enter a message: `);
 
-if (isInterrupt(__stateStack.globals.message)) {
-  
-   
-   return { data: __stateStack.globals.message };
-   
-}
+
 async function _sentiment(message: string, __metadata?: Record<string, any>): Promise<"happy" | "sad" | "neutral"> {
   const __prompt = `Categorize the sentiment in this message: \"${message}\"`;
   const startTime = performance.now();
@@ -100,9 +95,61 @@ async function _sentiment(message: string, __metadata?: Record<string, any>): Pr
       messages: __messages,
       tools: __tools,
       responseFormat: __responseFormat,
+      stream: false
     });
   
     const endTime = performance.now();
+
+    if (isGenerator(__completion)) {
+      if (!__callbacks.onStream) {
+        console.log("No onStream callback provided for streaming response, returning response synchronously");
+        statelogClient.debug(
+          "Got streaming response but no onStream callback provided, returning response synchronously",
+          {
+            prompt: __prompt,
+            callbacks: Object.keys(__callbacks),
+          },
+        );
+
+        let syncResult = "";
+        for await (const chunk of __completion) {
+          switch (chunk.type) {
+            case "tool_call":
+              __toolCalls.push(chunk.toolCall);
+              break;
+            case "done":
+              syncResult = chunk.result;
+              break;
+            case "error":
+              console.error(`Error in LLM response stream: ${chunk.error}`);
+              break;
+            default:
+              break;
+          }
+        }
+        __completion = { success: true, value: syncResult };
+      } else {
+        for await (const chunk of __completion) {
+          switch (chunk.type) {
+            case "text":
+              __callbacks.onStream({ type: "text", text: chunk.text });
+              break;
+            case "tool_call":
+              __toolCalls.push(chunk.toolCall);
+              __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
+              break;
+            case "done":
+              __callbacks.onStream({ type: "done", result: chunk.result });
+              __completion = { success: true, value: chunk.result };
+              break;
+            case "error":
+              __callbacks.onStream({ type: "error", error: chunk.error });
+              break;
+          }
+        }
+      }
+    }
+
     statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
@@ -157,9 +204,60 @@ async function _sentiment(message: string, __metadata?: Record<string, any>): Pr
       messages: __messages,
       tools: __tools,
       responseFormat: __responseFormat,
+      stream: false
     });
 
     const nextEndTime = performance.now();
+
+    if (isGenerator(__completion)) {
+      if (!__callbacks.onStream) {
+        console.log("No onStream callback provided for streaming response, returning response synchronously");
+        statelogClient.debug(
+          "Got streaming response but no onStream callback provided, returning response synchronously",
+          {
+            prompt: __prompt,
+            callbacks: Object.keys(__callbacks),
+          },
+        );
+
+        let syncResult = "";
+        for await (const chunk of __completion) {
+          switch (chunk.type) {
+            case "tool_call":
+              __toolCalls.push(chunk.toolCall);
+              break;
+            case "done":
+              syncResult = chunk.result;
+              break;
+            case "error":
+              console.error(`Error in LLM response stream: ${chunk.error}`);
+              break;
+            default:
+              break;
+          }
+        }
+        __completion = { success: true, value: syncResult };
+      } else {
+        for await (const chunk of __completion) {
+          switch (chunk.type) {
+            case "text":
+              __callbacks.onStream({ type: "text", text: chunk.text });
+              break;
+            case "tool_call":
+              __toolCalls.push(chunk.toolCall);
+              __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
+              break;
+            case "done":
+              __callbacks.onStream({ type: "done", result: chunk.result });
+              __completion = { success: true, value: chunk.result };
+              break;
+            case "error":
+              __callbacks.onStream({ type: "error", error: chunk.error });
+              break;
+          }
+        }
+      }
+    }
 
     statelogClient.promptCompletion({
       messages: __messages,

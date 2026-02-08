@@ -313,7 +313,23 @@ We check if the agent returned an interrupt. If so, we ask the user whether they
 
 That's it! Execution will pick up exactly where it left off, down to the statement. Nothing else for you to manage. You can have multiple interrupts, interrupts that are several layers deep in the call stack, etc. Agency will handle all of it for you. Magic!
 
+If you want to approve the interrupt but pass in new arguments, use the `modifyInterrupt` function.
+
+```ts
+const response = await modifyInterrupt(interruptResponse, newArguments);
+```
+
+
 > Note: currently you have to return an interrupt from an Agency file. You can't return an interrupt from a TypeScript file, because Agency can't jump to a specific line in TypeScript code, but it can with Agency code.
+
+> Note #2: if you have provided callbacks (for example, the onStream callback for streaming), you'll need to provide those as the last argument. We can serialize the state, but we can't serialize functions.
+
+
+```ts
+await approveInterrupt(response, { callbacks });
+await rejectInterrupt(response, { callbacks });
+await modifyInterrupt(interruptResponse, newArguments, { callbacks });
+```
 
 ## Streaming
 

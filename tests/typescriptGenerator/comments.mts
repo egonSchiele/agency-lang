@@ -110,12 +110,7 @@ __stateStack.globals.result = await greet([], {
         messages: __messages,
       });;
 
-if (isInterrupt(__stateStack.globals.result)) {
-  
-   
-   return { data: __stateStack.globals.result };
-   
-}await console.log(__stateStack.globals.result)//  Testing comments in different contexts
+await console.log(__stateStack.globals.result)//  Testing comments in different contexts
 //  1. Before type hints
 __stateStack.globals.age = 25;
 //  2. Before conditionals

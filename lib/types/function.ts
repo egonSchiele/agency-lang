@@ -33,6 +33,7 @@ export type FunctionCall = {
     | AccessExpression
     | FunctionCall
   )[];
+  async?: boolean;
 };
 
 export type DocString = {

@@ -36,7 +36,21 @@ import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
 
-type Scope = "global" | "function" | "node";
+type Scope = GlobalScope | FunctionScope | NodeScope;
+
+type GlobalScope = {
+  type: "global";
+};
+
+type FunctionScope = {
+  type: "function";
+  functionName: string;
+};
+
+type NodeScope = {
+  type: "node";
+  nodeName: string;
+};
 
 export class BaseGenerator {
   protected typeHints: TypeHintMap = {};
@@ -61,7 +75,7 @@ export class BaseGenerator {
   // collect function signatures so we can implement named args
   // TODO also save return types, check if used as a tool, return type cannot be null/void/undefined
   protected functionDefinitions: Record<string, FunctionDefinition> = {};
-  protected currentScope: Scope[] = ["global"];
+  protected currentScope: Scope[] = [{ type: "global" }];
 
   generate(program: AgencyProgram): {
     output: string;
@@ -369,8 +383,8 @@ export class BaseGenerator {
   should be assigned on local or global scope. There's a related function `generateScopedVariableName`,
   which is used when retrieving the value of a variable. */
   protected getScopeVar(): string {
-    const currentScope = this.currentScope[this.currentScope.length - 1];
-    switch (currentScope) {
+    const currentScope = this.getCurrentScope();
+    switch (currentScope.type) {
       case "global":
         return "__stateStack.globals";
       case "function":

@@ -26,6 +26,7 @@ import {
 import { optionalSpaces, optionalSpacesOrNewline } from "./utils.js";
 import { literalParser } from "./literals.js";
 import {
+  asyncFunctionCallParser,
   functionCallParser,
   llmPromptFunctionCallParser,
   streamingPromptLiteralParser,
@@ -63,6 +64,7 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
       or(
         returnStatementParser,
         streamingPromptLiteralParser,
+        asyncFunctionCallParser,
         llmPromptFunctionCallParser,
         agencyArrayParser,
         agencyObjectParser,

@@ -158,27 +158,14 @@ export class AgencyGenerator extends BaseGenerator {
         result += `\${${segment.variableName}}`;
       }
     }
+
     if (node.config) {
-      result += `", ${this.renderObjectLiteral(node.config)}`;
+      const objCode = this.processAgencyObject(node.config);
+      result += `", ${objCode})`;
+    } else {
+      result += `")`;
     }
-
-    result += `")`;
     return result;
-  }
-
-  private renderObjectLiteral(obj: Record<string, any>): string {
-    const entries = Object.entries(obj).map(([key, value]) => {
-      let valueStr: string;
-      if (typeof value === "string") {
-        valueStr = `"${value}"`;
-      } else if (typeof value === "object") {
-        valueStr = this.renderObjectLiteral(value);
-      } else {
-        valueStr = String(value);
-      }
-      return `${key}: ${valueStr}`;
-    });
-    return `{ ${entries.join(", ")} }`;
   }
 
   private generateStringLiteral(node: StringLiteral): string {
@@ -279,7 +266,8 @@ export class AgencyGenerator extends BaseGenerator {
     const args = node.arguments.map((arg) => {
       return this.processNode(arg).trim();
     });
-    return `${node.functionName}(${args.join(", ")})`;
+    const asyncPrefix = node.async ? "async " : "";
+    return `${asyncPrefix}${node.functionName}(${args.join(", ")})`;
   }
 
   // Data structures

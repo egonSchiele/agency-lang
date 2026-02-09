@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `{{{variableName:string}}}{{{typeAnnotation:string}}} = await {{{functionCode:string}}};
+export const template = `{{{variableName:string}}}{{{typeAnnotation:string}}} = {{{functionCode:string}}};
 
 {{^globalScope}}
 if (isInterrupt({{{variableName:string}}})) {

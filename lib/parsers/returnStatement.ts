@@ -2,6 +2,7 @@ import { ReturnStatement } from "../types/returnStatement.js";
 import { Parser, seqC, set, str, capture, or } from "tarsec";
 import { accessExpressionParser, indexAccessParser } from "./access.js";
 import {
+  asyncFunctionCallParser,
   functionCallParser,
   llmPromptFunctionCallParser,
   streamingPromptLiteralParser,
@@ -19,6 +20,7 @@ export const returnStatementParser: Parser<ReturnStatement> = seqC(
   capture(
     or(
       awaitParser,
+      asyncFunctionCallParser,
       streamingPromptLiteralParser,
       indexAccessParser,
       accessExpressionParser,

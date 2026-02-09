@@ -36,6 +36,7 @@ import { IfElse } from "../types/ifElse.js";
 import { accessExpressionParser, indexAccessParser } from "./access.js";
 import { commentParser } from "./comment.js";
 import {
+  asyncFunctionCallParser,
   functionCallParser,
   llmPromptFunctionCallParser,
   streamingPromptLiteralParser,
@@ -85,6 +86,7 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
         or(
           timeBlockParser,
           awaitParser,
+          asyncFunctionCallParser,
           promptParser,
           streamingPromptLiteralParser,
           llmPromptFunctionCallParser,
@@ -127,6 +129,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
         whileLoopParser,
         matchBlockParser,
         awaitParser,
+        asyncFunctionCallParser,
         streamingPromptLiteralParser,
         ifParser,
         functionParser,

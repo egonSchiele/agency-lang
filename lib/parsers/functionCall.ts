@@ -47,6 +47,22 @@ export const functionCallParser: Parser<FunctionCall> = (input: string) => {
   return parser(input);
 };
 
+export const asyncFunctionCallParser: Parser<FunctionCall> = (
+  input: string,
+) => {
+  const parser = seqC(
+    str("async"),
+    spaces,
+    capture(functionCallParser, "functionCall"),
+  );
+  const result = parser(input);
+  if (!result.success) {
+    return result;
+  }
+  const { functionCall } = result.result;
+  return success({ ...functionCall, async: true }, result.rest);
+};
+
 export const llmPromptFunctionCallParser: Parser<PromptLiteral> = (
   input: string,
 ) => {

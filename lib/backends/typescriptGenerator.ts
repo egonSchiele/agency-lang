@@ -61,6 +61,8 @@ import {
   mapTypeToZodSchema,
 } from "./typescriptGenerator/typeToZodSchema.js";
 
+const DEFAULT_PROMPT_NAME = "__promptVar";
+
 export class TypeScriptGenerator extends BaseGenerator {
   constructor() {
     super();
@@ -130,6 +132,8 @@ export class TypeScriptGenerator extends BaseGenerator {
       advance the step so that the next time we come here, we start at the part after this
       interrupt. */
       return `__stack.step++;\nreturn ${returnCode}\n`;
+    } else if (node.value.type === "prompt") {
+      return `${returnCode}\n__stateStack.pop();\nreturn __self.${DEFAULT_PROMPT_NAME};\n`;
     }
     /* Pop the state off the stack, we won't be coming back.
     Doesn't matter if we update the step or not, since we won't be coming back here. */
@@ -197,7 +201,7 @@ export class TypeScriptGenerator extends BaseGenerator {
   protected processAssignment(node: Assignment): string {
     const { variableName, typeHint, value } = node;
     const _currentScope = this.getCurrentScope();
-    if (_currentScope === "global") {
+    if (_currentScope.type === "global") {
       this.globalScopedVariables.push(variableName);
     } else {
       this.functionScopedVariables.push(variableName);
@@ -216,8 +220,8 @@ export class TypeScriptGenerator extends BaseGenerator {
         variableName: `${this.getScopeVar()}.${variableName}`,
         typeAnnotation,
         functionCode: code.trim(),
-        nodeContext: this.getCurrentScope() === "node",
-        globalScope: this.getCurrentScope() === "global",
+        nodeContext: this.getCurrentScope().type === "node",
+        globalScope: this.getCurrentScope().type === "global",
       });
     } else if (value.type === "timeBlock") {
       const timingVarName = variableName;
@@ -267,14 +271,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       functionArgs: interpolatedVars,
       prompt: node,
     });
-    //this.generatedStatements.push(functionCode);
-
-    //const argsStr = [...interpolatedVars, "__messages"].join(", ");
-    // Generate the function call
-    return functionCode; /* (
-      `${functionCode}\nconst __self.${variableName} = await _${variableName}(${argsStr});` +
-      "\n"
-    ); */
+    return functionCode;
   }
 
   protected processTool(node: FunctionDefinition): string {
@@ -321,7 +318,7 @@ export class TypeScriptGenerator extends BaseGenerator {
    * Process a function definition node
    */
   protected processFunctionDefinition(node: FunctionDefinition): string {
-    this.startScope("function");
+    this.startScope({ type: "function", functionName: node.functionName });
     const { functionName, body, parameters } = node;
     const args = parameters.map((p) => p.name);
     this.functionScopedVariables = [...parameters.map((p) => p.name)];
@@ -397,6 +394,7 @@ export class TypeScriptGenerator extends BaseGenerator {
         functionName,
         argsString,
         metadata,
+        awaitPrefix: node.async ? "" : "await ",
       });
     } else {
       // must be a builtin function or imported function
@@ -416,15 +414,35 @@ export class TypeScriptGenerator extends BaseGenerator {
       case "variableName":
         return this.generateScopedVariableName(literal.value);
       case "prompt":
-        //return this.processPromptLiteral("asd", literal).trim();
-        // Reconstruct text for comment from segments
-        const text = literal.segments
-          .map((s) => (s.type === "text" ? s.value : `#{${s.variableName}}`))
-          .join("");
-        return `/* prompt for: ${text} */`;
+        return this.processPromptLiteral(
+          DEFAULT_PROMPT_NAME,
+          this.getScopeReturnType(),
+          literal,
+        );
     }
   }
 
+  protected getScopeReturnType(): VariableType | undefined {
+    const currentScope = this.getCurrentScope();
+    switch (currentScope.type) {
+      case "global":
+        return undefined;
+      case "function":
+        const funcDef = this.functionDefinitions[currentScope.functionName];
+        if (funcDef && funcDef.returnType) {
+          return funcDef.returnType;
+        }
+        return undefined;
+      case "node":
+        const graphNode = this.graphNodes.find(
+          (n) => n.nodeName === currentScope.nodeName,
+        );
+        if (graphNode && graphNode.returnType) {
+          return graphNode.returnType;
+        }
+        return undefined;
+    }
+  }
   protected generateImports(): string {
     let arr = [renderImports.default({})];
     arr.push(builtinTools.default({}));
@@ -556,7 +574,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       tools,
       functionCalls,
       clientConfig,
-      nodeContext: this.getCurrentScope() === "node",
+      nodeContext: this.getCurrentScope().type === "node",
       isStreaming: prompt.isStreaming || false,
     });
   }

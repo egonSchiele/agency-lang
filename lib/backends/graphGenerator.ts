@@ -2,7 +2,7 @@ import {
   AgencyProgram,
   FunctionCall,
   TypeHintMap,
-  VariableType
+  VariableType,
 } from "../types.js";
 
 import * as builtinTools from "../templates/backends/graphGenerator/builtinTools.js";
@@ -51,7 +51,7 @@ export class GraphGenerator extends TypeScriptGenerator {
   }
 
   protected processGraphNode(node: GraphNodeDefinition): string {
-    this.startScope("node");
+    this.startScope({ type: "node", nodeName: node.nodeName });
     const { nodeName, body, parameters } = node;
     /* if (parameters.length > 1) {
       throw new Error(

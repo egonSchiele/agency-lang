@@ -155,6 +155,8 @@ async function _sentiment(message: string, __metadata?: Record<string, any>): Pr
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
+      tools: __tools,
+      responseFormat: __responseFormat
     });
   
     if (!__completion.success) {

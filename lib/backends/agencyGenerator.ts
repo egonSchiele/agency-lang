@@ -474,8 +474,8 @@ export class AgencyGenerator extends BaseGenerator {
 
   protected processUsesTool(node: UsesTool): string {
     // Track tool usage but don't generate code
-    this.toolsUsed.push(node.toolName);
-    return this.indentStr(`+${node.toolName}`);
+    this.toolsUsed.push(...node.toolNames);
+    return this.indentStr(`uses ${node.toolNames.join(", ")}`);
   }
 
   protected processSpecialVar(node: SpecialVar): string {

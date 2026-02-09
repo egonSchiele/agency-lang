@@ -1,4 +1,4 @@
 export type UsesTool = {
   type: "usesTool";
-  toolName: string;
+  toolNames: string[];
 };

@@ -9,7 +9,7 @@ let {{{timingVarName}}}_endTime = performance.now();
 let {{{timingVarName}}} = {{{timingVarName}}}_endTime - {{{timingVarName}}}_startTime;
 
 {{#printTime}}
-console.log("Time taken: ", {{{timingVarName}}}, "ms");
+console.log("Time taken:", {{{timingVarName}}}, "ms");
 {{/printTime}}`;
 
 export type TemplateType = {

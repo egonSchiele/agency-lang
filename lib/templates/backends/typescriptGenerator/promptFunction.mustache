@@ -91,6 +91,8 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
+      tools: __tools,
+      responseFormat: __responseFormat
     });
   
     if (!__completion.success) {

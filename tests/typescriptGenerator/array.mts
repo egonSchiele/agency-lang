@@ -140,6 +140,8 @@ async function _numbers(__metadata?: Record<string, any>): Promise<number[]> {
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
+      tools: __tools,
+      responseFormat: __responseFormat
     });
   
     if (!__completion.success) {
@@ -378,6 +380,8 @@ async function _greetings(__metadata?: Record<string, any>): Promise<string[]> {
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
+      tools: __tools,
+      responseFormat: __responseFormat
     });
   
     if (!__completion.success) {

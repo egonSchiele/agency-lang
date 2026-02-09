@@ -26,7 +26,7 @@ const getClientWithConfig = (config = {}) => {
     openAiApiKey: process.env.OPENAI_API_KEY || "",
     googleApiKey: process.env.GEMINI_API_KEY || "",
     model: __model,
-    logLevel: "warn",
+    logLevel: "debug",
   };
 
   return getClient({ ...defaultConfig, ...config });
@@ -398,6 +398,8 @@ async function _count(__metadata?: Record<string, any>): Promise<number> {
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
+      tools: __tools,
+      responseFormat: __responseFormat
     });
   
     if (!__completion.success) {
@@ -639,6 +641,8 @@ async function _message(__metadata?: Record<string, any>): Promise<string> {
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
+      tools: __tools,
+      responseFormat: __responseFormat
     });
   
     if (!__completion.success) {

@@ -140,6 +140,8 @@ async function _url(__metadata?: Record<string, any>): Promise<{ hostname: strin
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
+      tools: __tools,
+      responseFormat: __responseFormat
     });
   
     if (!__completion.success) {

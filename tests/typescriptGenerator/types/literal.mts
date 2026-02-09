@@ -140,6 +140,8 @@ async function _foo(__metadata?: Record<string, any>): Promise<"hi"> {
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
+      tools: __tools,
+      responseFormat: __responseFormat
     });
   
     if (!__completion.success) {
@@ -378,6 +380,8 @@ async function _bar(__metadata?: Record<string, any>): Promise<42> {
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
+      tools: __tools,
+      responseFormat: __responseFormat
     });
   
     if (!__completion.success) {
@@ -616,6 +620,8 @@ async function _baz(__metadata?: Record<string, any>): Promise<true> {
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
+      tools: __tools,
+      responseFormat: __responseFormat
     });
   
     if (!__completion.success) {

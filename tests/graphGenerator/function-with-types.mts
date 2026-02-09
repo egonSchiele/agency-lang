@@ -26,7 +26,7 @@ const getClientWithConfig = (config = {}) => {
     openAiApiKey: process.env.OPENAI_API_KEY || "",
     googleApiKey: process.env.GEMINI_API_KEY || "",
     model: __model,
-    logLevel: "warn",
+    logLevel: "debug",
   };
 
   return getClient({ ...defaultConfig, ...config });
@@ -404,6 +404,8 @@ async function _result(x: string, y: string, __metadata?: Record<string, any>): 
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
+      tools: __tools,
+      responseFormat: __responseFormat
     });
   
     if (!__completion.success) {
@@ -671,6 +673,8 @@ async function _message(name: string, __metadata?: Record<string, any>): Promise
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
+      tools: __tools,
+      responseFormat: __responseFormat
     });
   
     if (!__completion.success) {
@@ -938,6 +942,8 @@ async function _output(label: string, count: string, __metadata?: Record<string,
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
+      tools: __tools,
+      responseFormat: __responseFormat
     });
   
     if (!__completion.success) {
@@ -1205,6 +1211,8 @@ async function _result(items: string, __metadata?: Record<string, any>): Promise
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
+      tools: __tools,
+      responseFormat: __responseFormat
     });
   
     if (!__completion.success) {
@@ -1472,6 +1480,8 @@ async function _result(value: string, __metadata?: Record<string, any>): Promise
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
+      tools: __tools,
+      responseFormat: __responseFormat
     });
   
     if (!__completion.success) {

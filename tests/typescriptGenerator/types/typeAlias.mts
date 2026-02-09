@@ -141,6 +141,8 @@ async function _foo(__metadata?: Record<string, any>): Promise<Coords> {
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
+      tools: __tools,
+      responseFormat: __responseFormat
     });
   
     if (!__completion.success) {

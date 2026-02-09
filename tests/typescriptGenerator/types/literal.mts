@@ -53,7 +53,7 @@ const addTool = {
 async function _foo(__metadata?: Record<string, any>): Promise<"hi"> {
   const __prompt = `the string hi`;
   const startTime = performance.now();
-  const __messages: Message[] = __metadata?.messages || [];
+  let __messages: Message[] = __metadata?.messages || [];
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
@@ -291,7 +291,7 @@ if (isInterrupt(__self.foo)) {
 async function _bar(__metadata?: Record<string, any>): Promise<42> {
   const __prompt = `the number 42`;
   const startTime = performance.now();
-  const __messages: Message[] = __metadata?.messages || [];
+  let __messages: Message[] = __metadata?.messages || [];
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
@@ -529,7 +529,7 @@ if (isInterrupt(__self.bar)) {
 async function _baz(__metadata?: Record<string, any>): Promise<true> {
   const __prompt = `the boolean true`;
   const startTime = performance.now();
-  const __messages: Message[] = __metadata?.messages || [];
+  let __messages: Message[] = __metadata?.messages || [];
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.

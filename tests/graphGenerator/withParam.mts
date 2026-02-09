@@ -264,7 +264,7 @@ const addTool = {
 
 
 graph.node("main", async (state): Promise<any> => {
-    const __messages: Message[] = state.messages || [];
+    let __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
@@ -323,7 +323,7 @@ graph.node("main", async (state): Promise<any> => {
 async function _result(input: string, __metadata?: Record<string, any>): Promise<string> {
   const __prompt = `process this input: ${input}`;
   const startTime = performance.now();
-  const __messages: Message[] = __metadata?.messages || [];
+  let __messages: Message[] = __metadata?.messages || [];
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.

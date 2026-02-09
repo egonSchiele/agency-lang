@@ -54,7 +54,7 @@ __stateStack.globals.name = `Alice`;
 async function _greeting(name: string, __metadata?: Record<string, any>): Promise<string> {
   const __prompt = `say hi to ${name}`;
   const startTime = performance.now();
-  const __messages: Message[] = __metadata?.messages || [];
+  let __messages: Message[] = __metadata?.messages || [];
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.

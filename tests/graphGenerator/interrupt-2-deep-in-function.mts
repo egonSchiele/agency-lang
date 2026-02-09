@@ -274,7 +274,7 @@ export const __foo2Tool = {
 };
 
 export async function greet(args, __metadata={}) : Promise<string> {
-    const __messages: Message[] = __metadata?.messages || [];
+    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
@@ -315,7 +315,7 @@ return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} yea
       
 }
 export async function foo2(args, __metadata={}) : Promise<string> {
-    const __messages: Message[] = __metadata?.messages || [];
+    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
@@ -352,7 +352,7 @@ export async function foo2(args, __metadata={}) : Promise<string> {
 async function _response(name: string, age: string, __metadata?: Record<string, any>): Promise<string> {
   const __prompt = `Greet the user with their name: ${name} and age ${age} using the greet function.`;
   const startTime = performance.now();
-  const __messages: Message[] = __metadata?.messages || [];
+  let __messages: Message[] = __metadata?.messages || [];
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
@@ -638,7 +638,7 @@ return __stack.locals.response
       
 }
 graph.node("sayHi", async (state): Promise<any> => {
-    const __messages: Message[] = state.messages || [];
+    let __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     

@@ -277,7 +277,7 @@ function _builtinInput(prompt: string): Promise<string> {
 }
 
 graph.node("main", async (state): Promise<any> => {
-    const __messages: Message[] = state.messages || [];
+    let __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
@@ -344,7 +344,7 @@ if (isInterrupt(__stack.locals.msg)) {
 async function _response1(msg: string, __metadata?: Record<string, any>): Promise<string> {
   const __prompt = `${msg}`;
   const startTime = performance.now();
-  const __messages: Message[] = __metadata?.messages || [];
+  let __messages: Message[] = __metadata?.messages || [];
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
@@ -589,7 +589,7 @@ if (isInterrupt(__self.response1)) {
 async function _response2(msg: string, __metadata?: Record<string, any>): Promise<string> {
   const __prompt = `${msg}`;
   const startTime = performance.now();
-  const __messages: Message[] = __metadata?.messages || [];
+  let __messages: Message[] = __metadata?.messages || [];
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.

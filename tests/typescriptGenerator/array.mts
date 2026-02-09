@@ -53,7 +53,7 @@ const addTool = {
 async function _numbers(__metadata?: Record<string, any>): Promise<number[]> {
   const __prompt = `the first 5 prime numbers`;
   const startTime = performance.now();
-  const __messages: Message[] = __metadata?.messages || [];
+  let __messages: Message[] = __metadata?.messages || [];
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
@@ -291,7 +291,7 @@ if (isInterrupt(__self.numbers)) {
 async function _greetings(__metadata?: Record<string, any>): Promise<string[]> {
   const __prompt = `a list of 3 common greetings in different languages`;
   const startTime = performance.now();
-  const __messages: Message[] = __metadata?.messages || [];
+  let __messages: Message[] = __metadata?.messages || [];
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.

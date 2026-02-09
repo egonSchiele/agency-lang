@@ -53,7 +53,7 @@ const addTool = {
 async function _bar(__metadata?: Record<string, any>): Promise<number> {
   const __prompt = `the number 1`;
   const startTime = performance.now();
-  const __messages: Message[] = __metadata?.messages || [];
+  let __messages: Message[] = __metadata?.messages || [];
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.

@@ -264,7 +264,7 @@ const addTool = {
 
 
 graph.node("main", async (state): Promise<any> => {
-    const __messages: Message[] = state.messages || [];
+    let __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     

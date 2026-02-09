@@ -289,7 +289,7 @@ export const __flexibleTool = {
 };
 
 export async function add(args, __metadata={}) : Promise<number> {
-    const __messages: Message[] = __metadata?.messages || [];
+    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
@@ -320,7 +320,7 @@ export async function add(args, __metadata={}) : Promise<number> {
 async function _result(x: string, y: string, __metadata?: Record<string, any>): Promise<string> {
   const __prompt = `add ${x} and ${y}`;
   const startTime = performance.now();
-  const __messages: Message[] = __metadata?.messages || [];
+  let __messages: Message[] = __metadata?.messages || [];
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
@@ -556,7 +556,7 @@ return __stack.locals.result
       
 }
 export async function greet(args, __metadata={}) : Promise<any> {
-    const __messages: Message[] = __metadata?.messages || [];
+    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
@@ -587,7 +587,7 @@ export async function greet(args, __metadata={}) : Promise<any> {
 async function _message(name: string, __metadata?: Record<string, any>): Promise<string> {
   const __prompt = `Hello ${name}!`;
   const startTime = performance.now();
-  const __messages: Message[] = __metadata?.messages || [];
+  let __messages: Message[] = __metadata?.messages || [];
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
@@ -823,7 +823,7 @@ return __stack.locals.message
       
 }
 export async function mixed(args, __metadata={}) : Promise<any> {
-    const __messages: Message[] = __metadata?.messages || [];
+    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
@@ -854,7 +854,7 @@ export async function mixed(args, __metadata={}) : Promise<any> {
 async function _output(label: string, count: string, __metadata?: Record<string, any>): Promise<string> {
   const __prompt = `${label}: ${count}`;
   const startTime = performance.now();
-  const __messages: Message[] = __metadata?.messages || [];
+  let __messages: Message[] = __metadata?.messages || [];
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
@@ -1090,7 +1090,7 @@ return __stack.locals.output
       
 }
 export async function processArray(args, __metadata={}) : Promise<any> {
-    const __messages: Message[] = __metadata?.messages || [];
+    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
@@ -1121,7 +1121,7 @@ export async function processArray(args, __metadata={}) : Promise<any> {
 async function _result(items: string, __metadata?: Record<string, any>): Promise<string> {
   const __prompt = `Processing array with ${items} items`;
   const startTime = performance.now();
-  const __messages: Message[] = __metadata?.messages || [];
+  let __messages: Message[] = __metadata?.messages || [];
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
@@ -1357,7 +1357,7 @@ return __stack.locals.result
       
 }
 export async function flexible(args, __metadata={}) : Promise<any> {
-    const __messages: Message[] = __metadata?.messages || [];
+    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
@@ -1388,7 +1388,7 @@ export async function flexible(args, __metadata={}) : Promise<any> {
 async function _result(value: string, __metadata?: Record<string, any>): Promise<string> {
   const __prompt = `Received value: ${value}`;
   const startTime = performance.now();
-  const __messages: Message[] = __metadata?.messages || [];
+  let __messages: Message[] = __metadata?.messages || [];
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
@@ -1624,7 +1624,7 @@ return __stack.locals.result
       
 }
 graph.node("foo", async (state): Promise<any> => {
-    const __messages: Message[] = state.messages || [];
+    let __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     

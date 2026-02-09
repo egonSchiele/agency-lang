@@ -54,7 +54,7 @@ type Coords = { x: number; y: number };
 async function _foo(__metadata?: Record<string, any>): Promise<Coords> {
   const __prompt = `a set of coordinates`;
   const startTime = performance.now();
-  const __messages: Message[] = __metadata?.messages || [];
+  let __messages: Message[] = __metadata?.messages || [];
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.

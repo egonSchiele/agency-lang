@@ -79,7 +79,7 @@ export const __processDataTool = {
 //  Test docstrings in functions
 
 export async function add(args, __metadata={}) : Promise<any> {
-    const __messages: Message[] = __metadata?.messages || [];
+    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
@@ -106,7 +106,7 @@ export async function add(args, __metadata={}) : Promise<any> {
       
 }
 export async function greet(args, __metadata={}) : Promise<any> {
-    const __messages: Message[] = __metadata?.messages || [];
+    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
@@ -133,7 +133,7 @@ export async function greet(args, __metadata={}) : Promise<any> {
       
 }
 export async function calculateArea(args, __metadata={}) : Promise<any> {
-    const __messages: Message[] = __metadata?.messages || [];
+    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
@@ -160,7 +160,7 @@ export async function calculateArea(args, __metadata={}) : Promise<any> {
       
 }
 export async function processData(args, __metadata={}) : Promise<any> {
-    const __messages: Message[] = __metadata?.messages || [];
+    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;

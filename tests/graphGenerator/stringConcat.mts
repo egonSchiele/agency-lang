@@ -1,9 +1,6 @@
-// THIS FILE WAS AUTO-GENERATED
-// Source: lib/templates/backends/graphGenerator/imports.mustache
-// Any manual changes will be lost.
-import { apply } from "typestache";
+// @ts-nocheck
 
-export const template = `import { z } from "zod";
+import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
 import { PieMachine, goToNode } from "piemachine";
@@ -251,14 +248,115 @@ function isGenerator(variable) {
   );
 }
 
-let __callbacks: Record<string, any> = {};`;
-
-export type TemplateType = {
-};
-
-const render = (args: TemplateType) => {
-  return apply(template, args);
+let __callbacks: Record<string, any> = {};
+function add({a, b}: {a:number, b:number}):number {
+  return a + b;
 }
 
-export default render;
+const addTool = {
+  name: "add",
+  description: "Adds two numbers together and returns the result.",
+  schema: z.object({
+    a: z.number().describe("The first number to add"),
+    b: z.number().describe("The second number to add"),
+  }),
+};
+
+function _builtinInput(prompt: string): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  return new Promise((resolve) => {
+    rl.question(prompt, (answer: string) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
+
+graph.node("foo", async (state): Promise<any> => {
+    let __messages: Message[] = state.messages || [];
+    const __graph = state.__metadata?.graph || graph;
+    const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
+    // if `state.__metadata?.__stateStack` is set, that means we are resuming execution
+    // at this node after an interrupt. In that case, this is the line that restores the state.
+    if (state.__metadata?.__stateStack) {
+      __stateStack = state.__metadata.__stateStack;
+      
+      // restore global state
+      if (state.__metadata?.__stateStack?.global) {
+        __global = state.__metadata.__stateStack.global;
+      }
+
+      // clear the state stack from metadata so it doesn't propagate to other nodes.
+      state.__metadata.__stateStack = undefined;
+    }
+
+    if (state.__metadata?.callbacks) {
+      __callbacks = state.__metadata.callbacks;
+    }
+
+    // either creates a new stack for this node,
+    // or restores the stack if we're resuming after an interrupt,
+    // depending on the mode of the state stack (serialize or deserialize).
+    const __stack = __stateStack.getNewState();
+    
+    // We're going to modify __stack.step to keep track of what line we're on,
+    // but first we save this value. This will help us figure out if we should execute
+    // from the start of this node or from a specific line.
+    const __step = __stack.step;
+
+    const __self: Record<string, any> = __stack.locals;
+
+    
+    
+      if (__step <= 0) {
+        
+        __stack.step++;
+      }
+      
+
+      if (__step <= 1) {
+        await console.log(`What is your name?`)
+        __stack.step++;
+      }
+      
+
+      if (__step <= 2) {
+        __stack.locals.name = await _builtinInput(`> `);
+
+
+if (isInterrupt(__stack.locals.name)) {
+  
+  return { ...state, data: __stack.locals.name };
+  
+   
+}
+        __stack.step++;
+      }
+      
+
+      if (__step <= 3) {
+        await console.log(`Hello, ${__stack.locals.name}!`)
+        __stack.step++;
+      }
+      
+    
+    // this is just here to have a default return value from a node if the user doesn't specify one
+    return { ...state, data: undefined };
+});
+
+
+
+export async function foo({ messages, callbacks } = {}): Promise<any> {
+
+  const data = [  ];
+  __callbacks = callbacks || {};
+  const result = await graph.run("foo", { messages: messages || [], data });
+  return result.data;
+}
+
+export default graph;

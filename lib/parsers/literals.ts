@@ -4,6 +4,7 @@ import {
   commaWithNewline,
   optionalSpaces,
   optionalSpacesOrNewline,
+  plusSign,
   varNameChar,
 } from "./utils.js";
 import {
@@ -41,6 +42,9 @@ import {
   succeed,
   str,
   trace,
+  sepBy1,
+  failure,
+  success,
 } from "tarsec";
 import { indexAccessParser } from "./access.js";
 
@@ -173,7 +177,7 @@ export const numberParser: Parser<NumberLiteral> = seqC(
   set("type", "number"),
   capture(many1WithJoin(or(char("-"), char("."), digit)), "value"),
 );
-export const stringParser: Parser<StringLiteral> = seqC(
+export const _stringParser: Parser<StringLiteral> = seqC(
   set("type", "string"),
   char('"'),
   capture(
@@ -182,6 +186,39 @@ export const stringParser: Parser<StringLiteral> = seqC(
   ),
   char('"'),
 );
+
+export const stringParser: Parser<StringLiteral> = (input: string) => {
+  const parser = sepBy1(plusSign, or(_stringParser, variableNameParser));
+  const result = parser(input);
+  if (!result.success) {
+    return result;
+  }
+
+  const parsed = result.result;
+  if (parsed.length === 1 && parsed[0].type === "variableName") {
+    return failure("Expected string literal, got variable name", input);
+  }
+
+  const segments: (TextSegment | InterpolationSegment)[] = [];
+  parsed.forEach((part) => {
+    if (part.type === "string") {
+      segments.push(...part.segments);
+    } else if (part.type === "variableName") {
+      segments.push({
+        type: "interpolation",
+        variableName: part.value,
+      });
+    }
+  });
+  return success(
+    {
+      type: "string" as const,
+      segments,
+    },
+    result.rest,
+  );
+};
+
 export const multiLineStringParser: Parser<MultiLineStringLiteral> = seqC(
   set("type", "multiLineString"),
   str('"""'),
@@ -192,19 +229,25 @@ export const multiLineStringParser: Parser<MultiLineStringLiteral> = seqC(
   str('"""'),
 );
 
-export const variableNameParser: Parser<VariableNameLiteral> = seq(
-  [
-    set("type", "variableName"),
-    capture(letter, "init"),
-    capture(manyWithJoin(varNameChar), "value"),
-  ],
-  (_, captures) => {
-    return {
-      type: "variableName",
-      value: `${captures.init}${captures.value}`,
-    };
-  },
-);
+export const variableNameParser: Parser<VariableNameLiteral> = (
+  input: string,
+) => {
+  const parser = seq(
+    [
+      set("type", "variableName"),
+      capture(letter, "init"),
+      capture(manyWithJoin(varNameChar), "value"),
+    ],
+    (_, captures) => {
+      return {
+        type: "variableName" as const,
+        value: `${captures.init}${captures.value}`,
+      };
+    },
+  );
+
+  return parser(input);
+};
 
 export const literalParser: Parser<Literal> = or(
   promptParser,

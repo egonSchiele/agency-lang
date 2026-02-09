@@ -560,6 +560,379 @@ describe("literals parsers", () => {
     });
   });
 
+  describe("stringParser - string concatenation with + operator", () => {
+    const testCases = [
+      // String + Variable
+      {
+        input: '"Hello, " + name',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "text", value: "Hello, " },
+              { type: "interpolation", variableName: "name" },
+            ],
+          },
+        },
+      },
+      {
+        input: '"Value: " + x',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "text", value: "Value: " },
+              { type: "interpolation", variableName: "x" },
+            ],
+          },
+        },
+      },
+
+      // Variable + String
+      {
+        input: 'name + "!"',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "interpolation", variableName: "name" },
+              { type: "text", value: "!" },
+            ],
+          },
+        },
+      },
+      {
+        input: 'greeting + " world"',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "interpolation", variableName: "greeting" },
+              { type: "text", value: " world" },
+            ],
+          },
+        },
+      },
+
+      // String + Variable + String
+      {
+        input: '"Hello, " + name + "!"',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "text", value: "Hello, " },
+              { type: "interpolation", variableName: "name" },
+              { type: "text", value: "!" },
+            ],
+          },
+        },
+      },
+      {
+        input: '"[" + status + "]"',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "text", value: "[" },
+              { type: "interpolation", variableName: "status" },
+              { type: "text", value: "]" },
+            ],
+          },
+        },
+      },
+
+      // String + String
+      {
+        input: '"Hello, " + "world"',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "text", value: "Hello, " },
+              { type: "text", value: "world" },
+            ],
+          },
+        },
+      },
+      {
+        input: '"a" + "b"',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "text", value: "a" },
+              { type: "text", value: "b" },
+            ],
+          },
+        },
+      },
+
+      // Variable + Variable
+      {
+        input: "firstName + lastName",
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "interpolation", variableName: "firstName" },
+              { type: "interpolation", variableName: "lastName" },
+            ],
+          },
+        },
+      },
+      {
+        input: "x + y",
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "interpolation", variableName: "x" },
+              { type: "interpolation", variableName: "y" },
+            ],
+          },
+        },
+      },
+
+      // Multiple concatenations (3+ parts)
+      {
+        input: '"a" + "b" + "c"',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "text", value: "a" },
+              { type: "text", value: "b" },
+              { type: "text", value: "c" },
+            ],
+          },
+        },
+      },
+      {
+        input: 'firstName + " " + lastName',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "interpolation", variableName: "firstName" },
+              { type: "text", value: " " },
+              { type: "interpolation", variableName: "lastName" },
+            ],
+          },
+        },
+      },
+      {
+        input: '"[" + tag + "] " + message',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "text", value: "[" },
+              { type: "interpolation", variableName: "tag" },
+              { type: "text", value: "] " },
+              { type: "interpolation", variableName: "message" },
+            ],
+          },
+        },
+      },
+      {
+        input: 'a + b + c + d',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "interpolation", variableName: "a" },
+              { type: "interpolation", variableName: "b" },
+              { type: "interpolation", variableName: "c" },
+              { type: "interpolation", variableName: "d" },
+            ],
+          },
+        },
+      },
+
+      // Concatenation with string interpolation
+      {
+        input: '"Hello ${x}" + name',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "text", value: "Hello " },
+              { type: "interpolation", variableName: "x" },
+              { type: "interpolation", variableName: "name" },
+            ],
+          },
+        },
+      },
+      {
+        input: 'greeting + " ${name}!"',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "interpolation", variableName: "greeting" },
+              { type: "text", value: " " },
+              { type: "interpolation", variableName: "name" },
+              { type: "text", value: "!" },
+            ],
+          },
+        },
+      },
+      {
+        input: '"${a}" + "${b}"',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "interpolation", variableName: "a" },
+              { type: "interpolation", variableName: "b" },
+            ],
+          },
+        },
+      },
+
+      // Concatenation without spaces around +
+      {
+        input: '"hello"+"world"',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "text", value: "hello" },
+              { type: "text", value: "world" },
+            ],
+          },
+        },
+      },
+      {
+        input: 'name+"!"',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "interpolation", variableName: "name" },
+              { type: "text", value: "!" },
+            ],
+          },
+        },
+      },
+
+      // Empty strings in concatenation
+      {
+        input: '"" + name',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [{ type: "interpolation", variableName: "name" }],
+          },
+        },
+      },
+      {
+        input: 'name + ""',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [{ type: "interpolation", variableName: "name" }],
+          },
+        },
+      },
+      {
+        input: '"" + ""',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [],
+          },
+        },
+      },
+      {
+        input: '"hello" + "" + "world"',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "text", value: "hello" },
+              { type: "text", value: "world" },
+            ],
+          },
+        },
+      },
+
+      // Single character strings
+      {
+        input: '"a" + name',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "text", value: "a" },
+              { type: "interpolation", variableName: "name" },
+            ],
+          },
+        },
+      },
+      {
+        input: 'x + "y"',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [
+              { type: "interpolation", variableName: "x" },
+              { type: "text", value: "y" },
+            ],
+          },
+        },
+      },
+
+      // Failure cases
+      // Single variable name should fail (not a string concatenation)
+      { input: "name", expected: { success: false } },
+      { input: "variableName", expected: { success: false } },
+    ];
+
+    testCases.forEach(({ input, expected }) => {
+      if (expected.success) {
+        it(`should parse ${JSON.stringify(input)} successfully`, () => {
+          const result = stringParser(input);
+          expect(result.success).toBe(true);
+          if (result.success) {
+            expect(result.result).toEqual(expected.result);
+          }
+        });
+      } else {
+        it(`should fail to parse ${JSON.stringify(input)}`, () => {
+          const result = stringParser(input);
+          expect(result.success).toBe(false);
+        });
+      }
+    });
+  });
+
   describe("multiLineStringParser", () => {
     const testCases = [
       // Happy path - simple strings

@@ -132,6 +132,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
         asyncFunctionCallParser,
         streamingPromptLiteralParser,
         ifParser,
+        timeBlockParser,
         functionParser,
         accessExpressionParser,
         assignmentParser,
@@ -146,7 +147,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
   return parser(input);
 };
 
-export const timeBlockParser: Parser<TimeBlock> = trace(
+export const _timeBlockParser: Parser<TimeBlock> = trace(
   "timeBlockParser",
   seqC(
     set("type", "timeBlock"),
@@ -155,9 +156,33 @@ export const timeBlockParser: Parser<TimeBlock> = trace(
     char("{"),
     spaces,
     capture(bodyParser, "body"),
-    optionalSpaces,
+    optionalSpacesOrNewline,
     char("}"),
   ),
+);
+export const printTimeBlockParser: Parser<TimeBlock> = trace(
+  "timeBlockParser",
+  map(
+    seqC(
+      set("type", "timeBlock"),
+      str("printTime"),
+      optionalSpaces,
+      char("{"),
+      spaces,
+      capture(bodyParser, "body"),
+      optionalSpacesOrNewline,
+      char("}"),
+    ),
+    (result) => ({
+      ...result,
+      printTime: true,
+    }),
+  ),
+);
+
+export const timeBlockParser: Parser<TimeBlock> = or(
+  printTimeBlockParser,
+  _timeBlockParser,
 );
 
 /* const elseClauseParser: Parser<AgencyNode[]> = seqC(

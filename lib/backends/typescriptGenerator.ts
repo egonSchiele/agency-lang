@@ -651,6 +651,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     return renderTime.default({
       timingVarName,
       bodyCodeStr,
+      printTime: node.printTime || false,
     });
   }
 

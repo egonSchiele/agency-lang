@@ -125,7 +125,10 @@ export class AgencyGenerator extends BaseGenerator {
     }
     this.decreaseIndent();
     const bodyCodeStr = bodyCodes.join("");
-    return `time {\n${bodyCodeStr}${this.indentStr("}")}\n`;
+    const timeBlockName = node.printTime ? "printTime" : "time";
+    return this.indentStr(
+      `${timeBlockName} {\n${bodyCodeStr}${this.indentStr("}")}`,
+    );
   }
 
   protected generateLiteral(literal: Literal): string {

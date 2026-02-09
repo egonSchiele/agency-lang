@@ -224,9 +224,7 @@ export class BaseGenerator {
       case "indexAccess":
         return this.processIndexAccess(node);
       case "timeBlock":
-        throw new Error(
-          `Time block needs to be assigned to a variable: ${JSON.stringify(node as any)}`,
-        );
+        return this.processTimeBlock(node, `__defaultTimeblockName`);
       case "awaitStatement":
         return this.processAwaitStatement(node);
       case "newLine":

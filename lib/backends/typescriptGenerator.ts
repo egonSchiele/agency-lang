@@ -635,6 +635,8 @@ export class TypeScriptGenerator extends BaseGenerator {
           name: "model",
           value,
         });
+      case "messages":
+        return `__messages = ${value};\n`;
       default:
         throw new Error(`Unhandled SpecialVar name: ${node.name}`);
     }

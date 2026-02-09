@@ -12,8 +12,8 @@ importers:
         specifier: ^0.0.2
         version: 0.0.2
       piemachine:
-        specifier: ^0.0.7
-        version: 0.0.7
+        specifier: ^0.0.8
+        version: 0.0.8
       smoltalk:
         specifier: ^0.0.16
         version: 0.0.16(ws@8.19.0)(zod@4.3.5)
@@ -840,8 +840,8 @@ packages:
     resolution: {integrity: sha512-5gTmgEY/sqK6gFXLIsQNH19lWb4ebPDLA4SdLP7dsWkIXHWlG66oPuVvXSGFPppYZz8ZDZq0dYYrbHfBCVUb1Q==}
     engines: {node: '>=12'}
 
-  piemachine@0.0.7:
-    resolution: {integrity: sha512-NneIFcEpZoJlJRTVTZpXThrfqGHMwf2JMhQ3XtaKA5mVYlgPsVGIvSulwJjPgnw8I/cVeA84uvrux683KU1hCQ==}
+  piemachine@0.0.8:
+    resolution: {integrity: sha512-uB5NkjavJ67vwxDebahXeSErfGLCFOd2pNmCEtCbehRiPKKtxGJqFQ/AEBprQ/HbMwK5QZhGQVzTivsSQ40nWg==}
 
   plimit-lit@1.6.1:
     resolution: {integrity: sha512-B7+VDyb8Tl6oMJT9oSO2CW8XC/T4UcJGrwOVoNGwOQsQYhlpfajmrMj5xeejqaASq3V/EqThyOeATEOMuSEXiA==}
@@ -1795,7 +1795,7 @@ snapshots:
 
   picomatch@4.0.3: {}
 
-  piemachine@0.0.7:
+  piemachine@0.0.8:
     dependencies:
       nanoid: 5.1.6
       statelog-client: 0.0.35

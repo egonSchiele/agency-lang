@@ -1,7 +1,7 @@
 import { AgencyArray, AgencyObject } from "./dataStructures.js";
 import { Literal } from "./literals.js";
 
-export const specialVarNames = ["model"] as const;
+export const specialVarNames = ["model", "messages"] as const;
 export type SpecialVarName = (typeof specialVarNames)[number];
 
 export type SpecialVar = {

@@ -2,7 +2,7 @@
 async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{typeString:string}}}> {
   const __prompt = {{{promptCode:string}}};
   const startTime = performance.now();
-  const __messages: Message[] = __metadata?.messages || [];
+  let __messages: Message[] = __metadata?.messages || [];
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.

@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { functionCallParser } from "./functionCall.js";
+import {
+  functionCallParser,
+  asyncFunctionCallParser,
+  streamingPromptLiteralParser,
+} from "./functionCall.js";
 
 describe("functionCallParser", () => {
   const testCases = [
@@ -423,6 +427,386 @@ describe("functionCallParser", () => {
     } else {
       it(`should fail to parse "${input}"`, () => {
         const result = functionCallParser(input);
+        expect(result.success).toBe(false);
+      });
+    }
+  });
+});
+
+describe("asyncFunctionCallParser", () => {
+  const testCases = [
+    // Happy path - basic async function calls
+    {
+      input: "async test()",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "test",
+          arguments: [],
+          async: true,
+        },
+      },
+    },
+    {
+      input: "async greet(name)",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "greet",
+          arguments: [{ type: "variableName", value: "name" }],
+          async: true,
+        },
+      },
+    },
+    {
+      input: "async fetchData(url, options)",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "fetchData",
+          arguments: [
+            { type: "variableName", value: "url" },
+            { type: "variableName", value: "options" },
+          ],
+          async: true,
+        },
+      },
+    },
+
+    // Async with different argument types
+    {
+      input: "async calculate(42)",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "calculate",
+          arguments: [{ type: "number", value: "42" }],
+          async: true,
+        },
+      },
+    },
+    {
+      input: 'async processString("hello")',
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "processString",
+          arguments: [
+            { type: "string", segments: [{ type: "text", value: "hello" }] },
+          ],
+          async: true,
+        },
+      },
+    },
+    {
+      input: "async processArray([1, 2, 3])",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "processArray",
+          arguments: [
+            {
+              type: "agencyArray",
+              items: [
+                { type: "number", value: "1" },
+                { type: "number", value: "2" },
+                { type: "number", value: "3" },
+              ],
+            },
+          ],
+          async: true,
+        },
+      },
+    },
+    {
+      input: "async configure({key: \"value\"})",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "configure",
+          arguments: [
+            {
+              type: "agencyObject",
+              entries: [
+                {
+                  key: "key",
+                  value: {
+                    type: "string",
+                    segments: [{ type: "text", value: "value" }],
+                  },
+                },
+              ],
+            },
+          ],
+          async: true,
+        },
+      },
+    },
+
+    // Async with complex nested arguments
+    {
+      input: "async complexCall(x, [1, 2], {key: value})",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "complexCall",
+          arguments: [
+            { type: "variableName", value: "x" },
+            {
+              type: "agencyArray",
+              items: [
+                { type: "number", value: "1" },
+                { type: "number", value: "2" },
+              ],
+            },
+            {
+              type: "agencyObject",
+              entries: [
+                {
+                  key: "key",
+                  value: { type: "variableName", value: "value" },
+                },
+              ],
+            },
+          ],
+          async: true,
+        },
+      },
+    },
+
+    // Failure cases - missing async keyword
+    { input: "test()", expected: { success: false } },
+    { input: "greet(name)", expected: { success: false } },
+
+    // Failure cases - async without space
+    { input: "asynctest()", expected: { success: false } },
+
+    // Failure cases - async keyword alone
+    { input: "async", expected: { success: false } },
+    { input: "async ", expected: { success: false } },
+
+    // Failure cases - invalid function call syntax after async
+    { input: "async test", expected: { success: false } },
+    { input: "async test(", expected: { success: false } },
+
+    // Failure cases - empty input
+    { input: "", expected: { success: false } },
+  ];
+
+  testCases.forEach(({ input, expected }) => {
+    if (expected.success) {
+      it(`should parse "${input}" successfully`, () => {
+        const result = asyncFunctionCallParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result).toEqual(expected.result);
+        }
+      });
+    } else {
+      it(`should fail to parse "${input}"`, () => {
+        const result = asyncFunctionCallParser(input);
+        expect(result.success).toBe(false);
+      });
+    }
+  });
+});
+
+describe("streamingPromptLiteralParser", () => {
+  const testCases = [
+    // Happy path - streaming keyword with backtick prompts
+    {
+      input: "streaming `Hello world`",
+      expected: {
+        success: true,
+        result: {
+          type: "prompt",
+          segments: [{ type: "text", value: "Hello world" }],
+          isStreaming: true,
+        },
+      },
+    },
+    {
+      input: "stream `Generate a response`",
+      expected: {
+        success: true,
+        result: {
+          type: "prompt",
+          segments: [{ type: "text", value: "Generate a response" }],
+          isStreaming: true,
+        },
+      },
+    },
+
+    // Streaming with interpolation
+    {
+      input: "streaming `Hello ${name}`",
+      expected: {
+        success: true,
+        result: {
+          type: "prompt",
+          segments: [
+            { type: "text", value: "Hello " },
+            { type: "interpolation", variableName: "name" },
+          ],
+          isStreaming: true,
+        },
+      },
+    },
+    {
+      input: "stream `User ${userId} said: ${message}`",
+      expected: {
+        success: true,
+        result: {
+          type: "prompt",
+          segments: [
+            { type: "text", value: "User " },
+            { type: "interpolation", variableName: "userId" },
+            { type: "text", value: " said: " },
+            { type: "interpolation", variableName: "message" },
+          ],
+          isStreaming: true,
+        },
+      },
+    },
+
+    // Streaming with llm function call
+    {
+      input: "streaming llm(`What is 2+2?`)",
+      expected: {
+        success: true,
+        result: {
+          type: "prompt",
+          segments: [{ type: "text", value: "What is 2+2?" }],
+          isStreaming: true,
+        },
+      },
+    },
+    {
+      input: "stream llm(`Translate: ${text}`)",
+      expected: {
+        success: true,
+        result: {
+          type: "prompt",
+          segments: [
+            { type: "text", value: "Translate: " },
+            { type: "interpolation", variableName: "text" },
+          ],
+          isStreaming: true,
+        },
+      },
+    },
+
+    // Streaming with llm function call and config
+    {
+      input: 'streaming llm(`Hello`, {model: "gpt-4"})',
+      expected: {
+        success: true,
+        result: {
+          type: "prompt",
+          segments: [{ type: "text", value: "Hello" }],
+          config: {
+            type: "agencyObject",
+            entries: [
+              {
+                key: "model",
+                value: {
+                  type: "string",
+                  segments: [{ type: "text", value: "gpt-4" }],
+                },
+              },
+            ],
+          },
+          isStreaming: true,
+        },
+      },
+    },
+    {
+      input: 'stream llm(`Generate code`, {temperature: 0.7})',
+      expected: {
+        success: true,
+        result: {
+          type: "prompt",
+          segments: [{ type: "text", value: "Generate code" }],
+          config: {
+            type: "agencyObject",
+            entries: [
+              {
+                key: "temperature",
+                value: { type: "number", value: "0.7" },
+              },
+            ],
+          },
+          isStreaming: true,
+        },
+      },
+    },
+
+    // Edge cases - empty prompt
+    {
+      input: "streaming ``",
+      expected: {
+        success: true,
+        result: {
+          type: "prompt",
+          segments: [],
+          isStreaming: true,
+        },
+      },
+    },
+    {
+      input: "stream ``",
+      expected: {
+        success: true,
+        result: {
+          type: "prompt",
+          segments: [],
+          isStreaming: true,
+        },
+      },
+    },
+
+    // Failure cases - missing streaming/stream keyword
+    { input: "`Hello world`", expected: { success: false } },
+    { input: "llm(`Hello`)", expected: { success: false } },
+
+    // Failure cases - streaming without space
+    { input: "streaming`Hello`", expected: { success: false } },
+    { input: "stream`Hello`", expected: { success: false } },
+
+    // Failure cases - streaming keyword alone
+    { input: "streaming", expected: { success: false } },
+    { input: "stream", expected: { success: false } },
+    { input: "streaming ", expected: { success: false } },
+    { input: "stream ", expected: { success: false } },
+
+    // Failure cases - invalid prompt syntax
+    { input: "streaming Hello", expected: { success: false } },
+    { input: "stream test", expected: { success: false } },
+
+    // Failure cases - empty input
+    { input: "", expected: { success: false } },
+  ];
+
+  testCases.forEach(({ input, expected }) => {
+    if (expected.success) {
+      it(`should parse "${input}" successfully`, () => {
+        const result = streamingPromptLiteralParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result).toEqual(expected.result);
+        }
+      });
+    } else {
+      it(`should fail to parse "${input}"`, () => {
+        const result = streamingPromptLiteralParser(input);
         expect(result.success).toBe(false);
       });
     }

@@ -3,14 +3,14 @@ import { usesToolParser } from "./tools.js";
 
 describe("usesToolParser", () => {
   const testCases = [
-    // Happy path - basic tool usage
+    // Happy path - basic tool usage with + syntax
     {
       input: "+foo",
       expected: {
         success: true,
         result: {
           type: "usesTool",
-          toolName: "foo",
+          toolNames: ["foo"],
         },
       },
     },
@@ -20,7 +20,7 @@ describe("usesToolParser", () => {
         success: true,
         result: {
           type: "usesTool",
-          toolName: "bar",
+          toolNames: ["bar"],
         },
       },
     },
@@ -30,7 +30,103 @@ describe("usesToolParser", () => {
         success: true,
         result: {
           type: "usesTool",
-          toolName: "myTool",
+          toolNames: ["myTool"],
+        },
+      },
+    },
+
+    // Happy path - uses keyword syntax
+    {
+      input: "uses foo",
+      expected: {
+        success: true,
+        result: {
+          type: "usesTool",
+          toolNames: ["foo"],
+        },
+      },
+    },
+    {
+      input: "uses bar",
+      expected: {
+        success: true,
+        result: {
+          type: "usesTool",
+          toolNames: ["bar"],
+        },
+      },
+    },
+    {
+      input: "uses myTool",
+      expected: {
+        success: true,
+        result: {
+          type: "usesTool",
+          toolNames: ["myTool"],
+        },
+      },
+    },
+
+    // Multiple tools with + syntax
+    {
+      input: "+foo, bar",
+      expected: {
+        success: true,
+        result: {
+          type: "usesTool",
+          toolNames: ["foo", "bar"],
+        },
+      },
+    },
+    {
+      input: "+tool1, tool2, tool3",
+      expected: {
+        success: true,
+        result: {
+          type: "usesTool",
+          toolNames: ["tool1", "tool2", "tool3"],
+        },
+      },
+    },
+    {
+      input: "+readFile, writeFile",
+      expected: {
+        success: true,
+        result: {
+          type: "usesTool",
+          toolNames: ["readFile", "writeFile"],
+        },
+      },
+    },
+
+    // Multiple tools with uses keyword
+    {
+      input: "uses foo, bar",
+      expected: {
+        success: true,
+        result: {
+          type: "usesTool",
+          toolNames: ["foo", "bar"],
+        },
+      },
+    },
+    {
+      input: "uses tool1, tool2, tool3",
+      expected: {
+        success: true,
+        result: {
+          type: "usesTool",
+          toolNames: ["tool1", "tool2", "tool3"],
+        },
+      },
+    },
+    {
+      input: "uses readFile, writeFile, deleteFile",
+      expected: {
+        success: true,
+        result: {
+          type: "usesTool",
+          toolNames: ["readFile", "writeFile", "deleteFile"],
         },
       },
     },
@@ -42,17 +138,17 @@ describe("usesToolParser", () => {
         success: true,
         result: {
           type: "usesTool",
-          toolName: "tool123",
+          toolNames: ["tool123"],
         },
       },
     },
     {
-      input: "+test1",
+      input: "uses test1",
       expected: {
         success: true,
         result: {
           type: "usesTool",
-          toolName: "test1",
+          toolNames: ["test1"],
         },
       },
     },
@@ -62,7 +158,7 @@ describe("usesToolParser", () => {
         success: true,
         result: {
           type: "usesTool",
-          toolName: "123",
+          toolNames: ["123"],
         },
       },
     },
@@ -74,17 +170,17 @@ describe("usesToolParser", () => {
         success: true,
         result: {
           type: "usesTool",
-          toolName: "x",
+          toolNames: ["x"],
         },
       },
     },
     {
-      input: "+a",
+      input: "uses a",
       expected: {
         success: true,
         result: {
           type: "usesTool",
-          toolName: "a",
+          toolNames: ["a"],
         },
       },
     },
@@ -96,17 +192,17 @@ describe("usesToolParser", () => {
         success: true,
         result: {
           type: "usesTool",
-          toolName: "camelCaseTool",
+          toolNames: ["camelCaseTool"],
         },
       },
     },
     {
-      input: "+PascalCaseTool",
+      input: "uses PascalCaseTool",
       expected: {
         success: true,
         result: {
           type: "usesTool",
-          toolName: "PascalCaseTool",
+          toolNames: ["PascalCaseTool"],
         },
       },
     },
@@ -116,7 +212,7 @@ describe("usesToolParser", () => {
         success: true,
         result: {
           type: "usesTool",
-          toolName: "UPPERCASETOOL",
+          toolNames: ["UPPERCASETOOL"],
         },
       },
     },
@@ -128,28 +224,43 @@ describe("usesToolParser", () => {
         success: true,
         result: {
           type: "usesTool",
-          toolName: "my_tool",
+          toolNames: ["my_tool"],
         },
       },
     },
     {
-      input: "+tool_name_123",
+      input: "uses tool_name_123",
       expected: {
         success: true,
         result: {
           type: "usesTool",
-          toolName: "tool_name_123",
+          toolNames: ["tool_name_123"],
         },
       },
     },
 
-    // Failure cases - missing plus sign
+    // Multiple tools with mixed casing
+    {
+      input: "+camelCase, snake_case, PascalCase",
+      expected: {
+        success: true,
+        result: {
+          type: "usesTool",
+          toolNames: ["camelCase", "snake_case", "PascalCase"],
+        },
+      },
+    },
+
+    // Failure cases - missing plus sign or uses keyword
     { input: "foo", expected: { success: false } },
     { input: "bar", expected: { success: false } },
     { input: "tool123", expected: { success: false } },
 
     // Failure cases - plus sign without tool name
     { input: "+", expected: { success: false } },
+
+    // Failure cases - uses keyword without tool name
+    { input: "uses ", expected: { success: false } },
 
     // Failure cases - empty input
     { input: "", expected: { success: false } },

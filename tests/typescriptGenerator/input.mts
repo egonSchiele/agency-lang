@@ -62,7 +62,7 @@ function _builtinInput(prompt: string): Promise<string> {
     });
   });
 }
-__stateStack.globals.message = await await _builtinInput(`Please enter a message: `);
+__stateStack.globals.message = await _builtinInput(`Please enter a message: `);
 
 
 async function _sentiment(message: string, __metadata?: Record<string, any>): Promise<"happy" | "sad" | "neutral"> {

@@ -151,7 +151,11 @@ export async function respondToInterrupt(_interrupt: Interrupt, _interruptRespon
   return result.data;
 }
 
-export async function approveInterrupt(interrupt: Interrupt, newArguments?: Record<string, any>, metadata: Record<string, any> = {}) {
+export async function approveInterrupt(interrupt: Interrupt, metadata: Record<string, any> = {}) {
+  return await respondToInterrupt(interrupt, { type: "approve" }, metadata);
+}
+
+export async function modifyInterrupt(interrupt: Interrupt, newArguments?: Record<string, any>, metadata: Record<string, any> = {}) {
   return await respondToInterrupt(interrupt, { type: "approve", newArguments }, metadata);
 }
 
@@ -322,7 +326,7 @@ graph.node("main", async (state): Promise<any> => {
       
 
       if (__step <= 2) {
-        __stack.locals.msg = await await _builtinInput(`> `);
+        __stack.locals.msg = await _builtinInput(`> `);
 
 
 if (isInterrupt(__stack.locals.msg)) {

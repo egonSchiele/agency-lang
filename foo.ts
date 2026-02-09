@@ -35,9 +35,9 @@ const getClientWithConfig = (config = {}) => {
 
 let __client = getClientWithConfig();
 
-type State = {
+export type State<T> = {
   messages: string[];
-  data: any;
+  data: T;
 }
 
 // enable debug logging
@@ -49,7 +49,7 @@ const graphConfig = {
   statelog: statelogConfig,
 };
 
-const graph = new PieMachine<State>(graphConfig);
+const graph = new PieMachine<State<any>>(graphConfig);
 
 // builtins
 
@@ -91,42 +91,59 @@ function printJSON(obj: any) {
   console.log(JSON.stringify(obj, null, 2));
 }
 
-export type InterruptResponseType = InterruptResponseApprove | InterruptResponseReject | InterruptResponseModify;
+export type InterruptResponseType = InterruptResponseApprove | InterruptResponseReject;
+
 export type InterruptResponseApprove = {
   type: "approve";
+  newArguments?: Record<string, any>;
 };
 export type InterruptResponseReject = {
   type: "reject";
 };
-export type InterruptResponseModify = {
-  type: "modify";
-  newArguments: Record<string, any>;
-};
 
-
-export async function respondToInterrupt(_interrupt: Interrupt, _interruptResponse: InterruptResponseType) {
+export async function respondToInterrupt(_interrupt: Interrupt, _interruptResponse: InterruptResponseType, metadata: Record<string, any> = {}) {
   const interrupt = structuredClone(_interrupt);
   const interruptResponse = structuredClone(_interruptResponse);
 
   __stateStack = StateStack.fromJSON(interrupt.__state || {});
   __stateStack.deserializeMode();
   
-  const messages = (__stateStack.other.messages || []).map((json: any) => {
+  const messages = (__stateStack.interruptData.messages || []).map((json: any) => {
     // create message objects from JSON
     return messageFromJSON(json);
   });
+  __stateStack.interruptData.messages = messages;
+  __stateStack.interruptData.interruptResponse = interruptResponse;
+
+  if (interruptResponse.type === "approve" && interruptResponse.newArguments) {
+    __stateStack.interruptData.toolCall = {
+      ...__stateStack.interruptData.toolCall,
+      arguments: { ...__stateStack.interruptData.toolCall.arguments, ...interruptResponse.newArguments },
+    };
+    // Error:
+    // TypeError: Cannot set property arguments of #<ToolCall> which has only a getter
+    //         toolCall.arguments = { ...toolCall.arguments, ...interruptResponse.newArguments };
+    //
+    // const lastMessage = __stateStack.interruptData.messages[__stateStack.interruptData.messages.length - 1];
+    // if (lastMessage && lastMessage.role === "assistant") {
+    //   const toolCall = lastMessage.toolCalls?.[lastMessage.toolCalls.length - 1];
+    //   if (toolCall) {
+    //     toolCall.arguments = { ...toolCall.arguments, ...interruptResponse.newArguments };
+    //   }
+    // }
+  }
+
 
   // start at the last node we visited
-  const nodesTraversed = __stateStack.other.nodesTraversed || [];
+  const nodesTraversed = __stateStack.interruptData.nodesTraversed || [];
   const nodeName = nodesTraversed[nodesTraversed.length - 1];
   const result = await graph.run(nodeName, {
     messages: messages,
     __metadata: {
       graph: graph,
       statelogClient: __statelogClient,
-      interruptResponse: interruptResponse,
-      state: interrupt.__state,
       __stateStack: __stateStack,
+      __callbacks: metadata.callbacks,
     },
 
     // restore args from the state stack
@@ -135,12 +152,16 @@ export async function respondToInterrupt(_interrupt: Interrupt, _interruptRespon
   return result.data;
 }
 
-export async function approveInterrupt(interrupt: Interrupt) {
-  return await respondToInterrupt(interrupt, { type: "approve" });
+export async function approveInterrupt(interrupt: Interrupt, metadata: Record<string, any> = {}) {
+  return await respondToInterrupt(interrupt, { type: "approve" }, metadata);
 }
 
-export async function rejectInterrupt(interrupt: Interrupt) {
-  return await respondToInterrupt(interrupt, { type: "reject" });
+export async function modifyInterrupt(interrupt: Interrupt, newArguments?: Record<string, any>, metadata: Record<string, any> = {}) {
+  return await respondToInterrupt(interrupt, { type: "approve", newArguments }, metadata);
+}
+
+export async function rejectInterrupt(interrupt: Interrupt, metadata: Record<string, any> = {}) {
+  return await respondToInterrupt(interrupt, { type: "reject" }, metadata);
 }
 
 type StackFrame = {
@@ -155,6 +176,7 @@ class StateStack {
   private mode: "serialize" | "deserialize" = "serialize";
   public globals: Record<string, any> = {};
   public other: Record<string, any> = {};
+  public interruptData: Record<string, any> = {};
 
   private deserializeStackLength = 0;
 
@@ -199,6 +221,7 @@ class StateStack {
       stack: this.stack,
       globals: this.globals,
       other: this.other,
+      interruptData: this.interruptData,
       mode: this.mode,
       deserializeStackLength: this.deserializeStackLength,
     });
@@ -209,6 +232,7 @@ class StateStack {
     stateStack.stack = json.stack || [];
     stateStack.globals = json.globals || {};
     stateStack.other = json.other || {};
+    stateStack.interruptData = json.interruptData || {};
     stateStack.mode = json.mode || "serialize";
     stateStack.deserializeStackLength = json.deserializeStackLength || 0;
     return stateStack;
@@ -216,6 +240,16 @@ class StateStack {
 }
 
 let __stateStack = new StateStack();
+
+function isGenerator(variable) {
+  const toString = Object.prototype.toString.call(variable);
+  return (
+    toString === "[object Generator]" ||
+    toString === "[object AsyncGenerator]"
+  );
+}
+
+let __callbacks: Record<string, any> = {};
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -244,7 +278,7 @@ function _builtinInput(prompt: string): Promise<string> {
 }
 
 graph.node("foo", async (state): Promise<any> => {
-    const __messages: Message[] = state.messages || [];
+    let __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
@@ -253,8 +287,17 @@ graph.node("foo", async (state): Promise<any> => {
     if (state.__metadata?.__stateStack) {
       __stateStack = state.__metadata.__stateStack;
       
+      // restore global state
+      if (state.__metadata?.__stateStack?.global) {
+        __global = state.__metadata.__stateStack.global;
+      }
+
       // clear the state stack from metadata so it doesn't propagate to other nodes.
       state.__metadata.__stateStack = undefined;
+    }
+
+    if (state.__metadata?.callbacks) {
+      __callbacks = state.__metadata.callbacks;
     }
 
     // either creates a new stack for this node,
@@ -268,17 +311,6 @@ graph.node("foo", async (state): Promise<any> => {
     const __step = __stack.step;
 
     const __self: Record<string, any> = __stack.locals;
-
-    // If we're resuming after an interrupt, these will be set.
-    // There should be a cleaner way to handle this,
-    // instead of littering this scope with these variables
-    const __interruptResponse: InterruptResponseType | undefined = state.__metadata?.interruptResponse;
-    const __toolCall: Record<string, any>|undefined = __stateStack.other?.toolCall;
-
-    // TODO pretty sure this isn't needed, check and remove
-    if (state.__metadata?.state?.global) {
-      __global = state.__metadata.state.global;
-    }
 
     
     
@@ -295,18 +327,33 @@ graph.node("foo", async (state): Promise<any> => {
       
 
       if (__step <= 2) {
-        __stack.locals.name = await await _builtinInput(`> `);
+        __stack.locals.name = await _builtinInput(`> `);
+
+
+if (isInterrupt(__stack.locals.name)) {
+  
+  return { ...state, data: __stack.locals.name };
+  
+   
+}
         __stack.step++;
       }
       
 
       if (__step <= 3) {
+        await console.log(`Hello, ${__stack.locals.name}!`)
+        __stack.step++;
+      }
+      
+
+      if (__step <= 4) {
         return goToNode("sayHi",
   {
     messages: __messages,
     __metadata: {
       graph: __graph,
       statelogClient,
+      callbacks: __callbacks,
     },
     
     data: [__stack.locals.name]
@@ -327,11 +374,12 @@ graph.conditionalEdge("foo", ["sayHi"]);
 graph.merge(__graph___bar);
 
 
-export async function foo({ messages } = {}): Promise<any> {
+export async function foo({ messages, callbacks } = {}): Promise<State<any>> {
 
   const data = [  ];
+  __callbacks = callbacks || {};
   const result = await graph.run("foo", { messages: messages || [], data });
-  return result.data;
+  return result;
 }
 
 export default graph;

@@ -1,4 +1,9 @@
-import { foo, approveInterrupt, rejectInterrupt } from "./foo.ts";
+import {
+  foo,
+  approveInterrupt,
+  rejectInterrupt,
+  modifyInterrupt,
+} from "./foo.ts";
 import readline from "readline";
 import type { StreamChunk } from "smoltalk";
 import { color } from "termcolors";
@@ -41,22 +46,26 @@ const callbacks = {
 
 async function main() {
   let finalState = (await foo({ callbacks })) as any;
-  while (isInterrupt(finalState)) {
-    console.log("Execution interrupted with message:", finalState.data);
+  let result = finalState.data;
+  while (isInterrupt(result)) {
+    console.log("Execution interrupted with message:", result.data);
     const response = await input("Do you want to approve? (yes/no) ");
     if (response.toLowerCase() === "yes" || response.toLowerCase() === "y") {
-      finalState = await approveInterrupt(finalState, {}, { callbacks });
+      finalState = await approveInterrupt(result, { callbacks });
+      result = finalState.data;
     } else if (
       response.toLowerCase() === "no" ||
       response.toLowerCase() === "n"
     ) {
-      finalState = await rejectInterrupt(finalState, { callbacks });
+      finalState = await rejectInterrupt(result, { callbacks });
+      result = finalState.data;
     } else {
-      finalState = await approveInterrupt(
-        finalState,
+      finalState = await modifyInterrupt(
+        result,
         { name: response },
         { callbacks },
       );
+      result = finalState.data;
     }
   }
 }

@@ -34,9 +34,9 @@ const getClientWithConfig = (config = {}) => {
 
 let __client = getClientWithConfig();
 
-type State = {
+export type State<T> = {
   messages: string[];
-  data: any;
+  data: T;
 }
 
 // enable debug logging
@@ -48,7 +48,7 @@ const graphConfig = {
   statelog: statelogConfig,
 };
 
-const graph = new PieMachine<State>(graphConfig);
+const graph = new PieMachine<State<any>>(graphConfig);
 
 // builtins
 
@@ -90,42 +90,59 @@ function printJSON(obj: any) {
   console.log(JSON.stringify(obj, null, 2));
 }
 
-export type InterruptResponseType = InterruptResponseApprove | InterruptResponseReject | InterruptResponseModify;
+export type InterruptResponseType = InterruptResponseApprove | InterruptResponseReject;
+
 export type InterruptResponseApprove = {
   type: "approve";
+  newArguments?: Record<string, any>;
 };
 export type InterruptResponseReject = {
   type: "reject";
 };
-export type InterruptResponseModify = {
-  type: "modify";
-  newArguments: Record<string, any>;
-};
 
-
-export async function respondToInterrupt(_interrupt: Interrupt, _interruptResponse: InterruptResponseType) {
+export async function respondToInterrupt(_interrupt: Interrupt, _interruptResponse: InterruptResponseType, metadata: Record<string, any> = {}) {
   const interrupt = structuredClone(_interrupt);
   const interruptResponse = structuredClone(_interruptResponse);
 
   __stateStack = StateStack.fromJSON(interrupt.__state || {});
   __stateStack.deserializeMode();
   
-  const messages = (__stateStack.other.messages || []).map((json: any) => {
+  const messages = (__stateStack.interruptData.messages || []).map((json: any) => {
     // create message objects from JSON
     return messageFromJSON(json);
   });
+  __stateStack.interruptData.messages = messages;
+  __stateStack.interruptData.interruptResponse = interruptResponse;
+
+  if (interruptResponse.type === "approve" && interruptResponse.newArguments) {
+    __stateStack.interruptData.toolCall = {
+      ...__stateStack.interruptData.toolCall,
+      arguments: { ...__stateStack.interruptData.toolCall.arguments, ...interruptResponse.newArguments },
+    };
+    // Error:
+    // TypeError: Cannot set property arguments of #<ToolCall> which has only a getter
+    //         toolCall.arguments = { ...toolCall.arguments, ...interruptResponse.newArguments };
+    //
+    // const lastMessage = __stateStack.interruptData.messages[__stateStack.interruptData.messages.length - 1];
+    // if (lastMessage && lastMessage.role === "assistant") {
+    //   const toolCall = lastMessage.toolCalls?.[lastMessage.toolCalls.length - 1];
+    //   if (toolCall) {
+    //     toolCall.arguments = { ...toolCall.arguments, ...interruptResponse.newArguments };
+    //   }
+    // }
+  }
+
 
   // start at the last node we visited
-  const nodesTraversed = __stateStack.other.nodesTraversed || [];
+  const nodesTraversed = __stateStack.interruptData.nodesTraversed || [];
   const nodeName = nodesTraversed[nodesTraversed.length - 1];
   const result = await graph.run(nodeName, {
     messages: messages,
     __metadata: {
       graph: graph,
       statelogClient: __statelogClient,
-      interruptResponse: interruptResponse,
-      state: interrupt.__state,
       __stateStack: __stateStack,
+      __callbacks: metadata.callbacks,
     },
 
     // restore args from the state stack
@@ -134,12 +151,16 @@ export async function respondToInterrupt(_interrupt: Interrupt, _interruptRespon
   return result.data;
 }
 
-export async function approveInterrupt(interrupt: Interrupt) {
-  return await respondToInterrupt(interrupt, { type: "approve" });
+export async function approveInterrupt(interrupt: Interrupt, metadata: Record<string, any> = {}) {
+  return await respondToInterrupt(interrupt, { type: "approve" }, metadata);
 }
 
-export async function rejectInterrupt(interrupt: Interrupt) {
-  return await respondToInterrupt(interrupt, { type: "reject" });
+export async function modifyInterrupt(interrupt: Interrupt, newArguments?: Record<string, any>, metadata: Record<string, any> = {}) {
+  return await respondToInterrupt(interrupt, { type: "approve", newArguments }, metadata);
+}
+
+export async function rejectInterrupt(interrupt: Interrupt, metadata: Record<string, any> = {}) {
+  return await respondToInterrupt(interrupt, { type: "reject" }, metadata);
 }
 
 type StackFrame = {
@@ -154,6 +175,7 @@ class StateStack {
   private mode: "serialize" | "deserialize" = "serialize";
   public globals: Record<string, any> = {};
   public other: Record<string, any> = {};
+  public interruptData: Record<string, any> = {};
 
   private deserializeStackLength = 0;
 
@@ -198,6 +220,7 @@ class StateStack {
       stack: this.stack,
       globals: this.globals,
       other: this.other,
+      interruptData: this.interruptData,
       mode: this.mode,
       deserializeStackLength: this.deserializeStackLength,
     });
@@ -208,6 +231,7 @@ class StateStack {
     stateStack.stack = json.stack || [];
     stateStack.globals = json.globals || {};
     stateStack.other = json.other || {};
+    stateStack.interruptData = json.interruptData || {};
     stateStack.mode = json.mode || "serialize";
     stateStack.deserializeStackLength = json.deserializeStackLength || 0;
     return stateStack;
@@ -215,6 +239,16 @@ class StateStack {
 }
 
 let __stateStack = new StateStack();
+
+function isGenerator(variable) {
+  const toString = Object.prototype.toString.call(variable);
+  return (
+    toString === "[object Generator]" ||
+    toString === "[object AsyncGenerator]"
+  );
+}
+
+let __callbacks: Record<string, any> = {};
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -235,16 +269,19 @@ export const __greetTool = {
 };
 
 export async function greet(args, __metadata={}) : Promise<string> {
-    const __messages: Message[] = [];
+    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
+    const __graph = __metadata?.graph || graph;
+    const statelogClient = __metadata?.statelogClient || __statelogClient;
 
-    // TODO: Note that we don't need to use the same kind of restoration
-    // from state for arguments as we do for nodes,
-    // because the args are serialized in the tool call.
-    // But what about situations where it was a function call, not a tool call?
-    // In that case, we would want to deserialize the argument.
+    // args are always set whether we're restoring from state or not.
+    // If we're not restoring from state, args were obviously passed in through the code.
+    // If we are restoring from state, the node that called this function had to have passed 
+    // these arguments into this function call.
+    // if we're restoring state, this will override __stack.args (which will be set),
+    // but with the same values, so it doesn't matter that those values are being overwritten.
     const __params = ["name"];
     (args).forEach((item, index) => {
       __stack.args[__params[index]] = item;
@@ -273,7 +310,7 @@ return `Kya chal raha jai, ${__stack.args.name}!`
       
 }
 graph.node("sayHi", async (state): Promise<any> => {
-    const __messages: Message[] = state.messages || [];
+    let __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
@@ -282,8 +319,17 @@ graph.node("sayHi", async (state): Promise<any> => {
     if (state.__metadata?.__stateStack) {
       __stateStack = state.__metadata.__stateStack;
       
+      // restore global state
+      if (state.__metadata?.__stateStack?.global) {
+        __global = state.__metadata.__stateStack.global;
+      }
+
       // clear the state stack from metadata so it doesn't propagate to other nodes.
       state.__metadata.__stateStack = undefined;
+    }
+
+    if (state.__metadata?.callbacks) {
+      __callbacks = state.__metadata.callbacks;
     }
 
     // either creates a new stack for this node,
@@ -297,17 +343,6 @@ graph.node("sayHi", async (state): Promise<any> => {
     const __step = __stack.step;
 
     const __self: Record<string, any> = __stack.locals;
-
-    // If we're resuming after an interrupt, these will be set.
-    // There should be a cleaner way to handle this,
-    // instead of littering this scope with these variables
-    const __interruptResponse: InterruptResponseType | undefined = state.__metadata?.interruptResponse;
-    const __toolCall: Record<string, any>|undefined = __stateStack.other?.toolCall;
-
-    // TODO pretty sure this isn't needed, check and remove
-    if (state.__metadata?.state?.global) {
-      __global = state.__metadata.state.global;
-    }
 
     
     
@@ -340,12 +375,12 @@ graph.node("sayHi", async (state): Promise<any> => {
 async function _response(name: string, __metadata?: Record<string, any>): Promise<string> {
   const __prompt = `Greet the user with their name: ${name} using the greet function.`;
   const startTime = performance.now();
-  const __messages: Message[] = __metadata?.messages || [];
+  let __messages: Message[] = __metadata?.messages || [];
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
-  let __toolCalls = __metadata?.toolCall ? [__metadata.toolCall] : [];
-  const __interruptResponse:InterruptResponseType|undefined = __metadata?.interruptResponse;
+  let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
   const __tools = [__greetTool];
 
   
@@ -364,14 +399,68 @@ async function _response(name: string, __metadata?: Record<string, any>): Promis
       messages: __messages,
       tools: __tools,
       responseFormat: __responseFormat,
+      stream: false
     });
   
     const endTime = performance.now();
+
+    if (isGenerator(__completion)) {
+      if (!__callbacks.onStream) {
+        console.log("No onStream callback provided for streaming response, returning response synchronously");
+        statelogClient.debug(
+          "Got streaming response but no onStream callback provided, returning response synchronously",
+          {
+            prompt: __prompt,
+            callbacks: Object.keys(__callbacks),
+          },
+        );
+
+        let syncResult = "";
+        for await (const chunk of __completion) {
+          switch (chunk.type) {
+            case "tool_call":
+              __toolCalls.push(chunk.toolCall);
+              break;
+            case "done":
+              syncResult = chunk.result;
+              break;
+            case "error":
+              console.error(`Error in LLM response stream: ${chunk.error}`);
+              break;
+            default:
+              break;
+          }
+        }
+        __completion = { success: true, value: syncResult };
+      } else {
+        for await (const chunk of __completion) {
+          switch (chunk.type) {
+            case "text":
+              __callbacks.onStream({ type: "text", text: chunk.text });
+              break;
+            case "tool_call":
+              __toolCalls.push(chunk.toolCall);
+              __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
+              break;
+            case "done":
+              __callbacks.onStream({ type: "done", result: chunk.result });
+              __completion = { success: true, value: chunk.result };
+              break;
+            case "error":
+              __callbacks.onStream({ type: "error", error: chunk.error });
+              break;
+          }
+        }
+      }
+    }
+
     statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
+      tools: __tools,
+      responseFormat: __responseFormat
     });
   
     if (!__completion.success) {
@@ -451,7 +540,7 @@ async function _response(name: string, __metadata?: Record<string, any>): Promis
         model: __client.getModel(),
       });
 
-      __stateStack.other = {
+      __stateStack.interruptData = {
         messages: __messages.map((msg) => msg.toJSON()),
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
@@ -465,9 +554,60 @@ async function _response(name: string, __metadata?: Record<string, any>): Promis
       messages: __messages,
       tools: __tools,
       responseFormat: __responseFormat,
+      stream: false
     });
 
     const nextEndTime = performance.now();
+
+    if (isGenerator(__completion)) {
+      if (!__callbacks.onStream) {
+        console.log("No onStream callback provided for streaming response, returning response synchronously");
+        statelogClient.debug(
+          "Got streaming response but no onStream callback provided, returning response synchronously",
+          {
+            prompt: __prompt,
+            callbacks: Object.keys(__callbacks),
+          },
+        );
+
+        let syncResult = "";
+        for await (const chunk of __completion) {
+          switch (chunk.type) {
+            case "tool_call":
+              __toolCalls.push(chunk.toolCall);
+              break;
+            case "done":
+              syncResult = chunk.result;
+              break;
+            case "error":
+              console.error(`Error in LLM response stream: ${chunk.error}`);
+              break;
+            default:
+              break;
+          }
+        }
+        __completion = { success: true, value: syncResult };
+      } else {
+        for await (const chunk of __completion) {
+          switch (chunk.type) {
+            case "text":
+              __callbacks.onStream({ type: "text", text: chunk.text });
+              break;
+            case "tool_call":
+              __toolCalls.push(chunk.toolCall);
+              __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
+              break;
+            case "done":
+              __callbacks.onStream({ type: "done", result: chunk.result });
+              __completion = { success: true, value: chunk.result };
+              break;
+            case "error":
+              __callbacks.onStream({ type: "error", error: chunk.error });
+              break;
+          }
+        }
+      }
+    }
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -496,13 +636,14 @@ async function _response(name: string, __metadata?: Record<string, any>): Promis
 
 __self.response = await _response(__stack.args.name, {
       messages: __messages,
-      interruptResponse: __interruptResponse,
-      toolCall: __toolCall,
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.response)) {
+  
   return { ...state, data: __self.response };
+  
+   
 }
         __stack.step++;
       }
@@ -531,12 +672,13 @@ if (isInterrupt(__self.response)) {
 });
 
 
-export async function sayHi(name, { messages } = {}): Promise<any> {
+export async function sayHi(name, { messages, callbacks } = {}): Promise<State<any>> {
 
 
   const data = [ name ];
+  __callbacks = callbacks || {};
   const result = await graph.run("sayHi", { messages: messages || [], data });
-  return result.data;
+  return result;
 }
 
 export default graph;

@@ -34,7 +34,7 @@ const getClientWithConfig = (config = {}) => {
     openAiApiKey: process.env.OPENAI_API_KEY || "",
     googleApiKey: process.env.GEMINI_API_KEY || "",
     model: __model,
-    logLevel: "debug",
+    logLevel: "warn",
   };
 
   return getClient({ ...defaultConfig, ...config });

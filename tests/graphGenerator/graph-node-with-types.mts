@@ -34,9 +34,9 @@ const getClientWithConfig = (config = {}) => {
 
 let __client = getClientWithConfig();
 
-type State = {
+export type State<T> = {
   messages: string[];
-  data: any;
+  data: T;
 }
 
 // enable debug logging
@@ -48,7 +48,7 @@ const graphConfig = {
   statelog: statelogConfig,
 };
 
-const graph = new PieMachine<State>(graphConfig);
+const graph = new PieMachine<State<any>>(graphConfig);
 
 // builtins
 
@@ -559,13 +559,13 @@ if (isInterrupt(__self.greeting)) {
 });
 
 
-export async function greet(name, { messages, callbacks } = {}): Promise<string> {
+export async function greet(name, { messages, callbacks } = {}): Promise<State<string>> {
 
 
   const data = [ name ];
   __callbacks = callbacks || {};
   const result = await graph.run("greet", { messages: messages || [], data });
-  return result.data;
+  return result;
 }
 
 export default graph;

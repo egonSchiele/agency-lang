@@ -42,9 +42,9 @@ const getClientWithConfig = (config = {}) => {
 
 let __client = getClientWithConfig();
 
-type State = {
+export type State<T> = {
   messages: string[];
-  data: any;
+  data: T;
 }
 
 // enable debug logging
@@ -56,7 +56,7 @@ const graphConfig = {
   statelog: statelogConfig,
 };
 
-const graph = new PieMachine<State>(graphConfig);
+const graph = new PieMachine<State<any>>(graphConfig);
 
 // builtins
 

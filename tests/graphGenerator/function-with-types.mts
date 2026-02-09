@@ -34,9 +34,9 @@ const getClientWithConfig = (config = {}) => {
 
 let __client = getClientWithConfig();
 
-type State = {
+export type State<T> = {
   messages: string[];
-  data: any;
+  data: T;
 }
 
 // enable debug logging
@@ -48,7 +48,7 @@ const graphConfig = {
   statelog: statelogConfig,
 };
 
-const graph = new PieMachine<State>(graphConfig);
+const graph = new PieMachine<State<any>>(graphConfig);
 
 // builtins
 
@@ -1725,12 +1725,12 @@ __stateStack.globals.flexResult = await flexible([`test`], {
 
 
 
-export async function foo({ messages, callbacks } = {}): Promise<string> {
+export async function foo({ messages, callbacks } = {}): Promise<State<string>> {
 
   const data = [  ];
   __callbacks = callbacks || {};
   const result = await graph.run("foo", { messages: messages || [], data });
-  return result.data;
+  return result;
 }
 
 export default graph;

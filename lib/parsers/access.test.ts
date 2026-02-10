@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { indexAccessParser, accessExpressionParser } from "./access.js";
+import {
+  indexAccessParser,
+  accessExpressionParser,
+  syncAccessExpressionParser,
+  asyncAccessExpressionParser,
+} from "./access.js";
 
 describe("access expression parsers", () => {
   describe("indexAccessParser", () => {
@@ -487,6 +492,357 @@ describe("access expression parsers", () => {
         it(`should fail to parse "${input}"`, () => {
           const result = accessExpressionParser(input);
           expect(result.success).toBe(false);
+        });
+      }
+    });
+  });
+
+  describe("syncAccessExpressionParser", () => {
+    const testCases = [
+      // sync keyword - dot property
+      {
+        input: "sync obj.foo",
+        expected: {
+          success: true,
+          result: {
+            type: "accessExpression",
+            expression: {
+              type: "dotProperty",
+              object: { type: "variableName", value: "obj" },
+              propertyName: "foo",
+            },
+            async: false,
+          },
+        },
+      },
+
+      // await keyword - dot property
+      {
+        input: "await obj.foo",
+        expected: {
+          success: true,
+          result: {
+            type: "accessExpression",
+            expression: {
+              type: "dotProperty",
+              object: { type: "variableName", value: "obj" },
+              propertyName: "foo",
+            },
+            async: false,
+          },
+        },
+      },
+
+      // sync keyword - dot function call
+      {
+        input: "sync Promise.resolve()",
+        expected: {
+          success: true,
+          result: {
+            type: "accessExpression",
+            expression: {
+              type: "dotFunctionCall",
+              object: { type: "variableName", value: "Promise" },
+              functionCall: {
+                type: "functionCall",
+                functionName: "resolve",
+                arguments: [],
+              },
+            },
+            async: false,
+          },
+        },
+      },
+
+      // await keyword - dot function call
+      {
+        input: "await Promise.bar()",
+        expected: {
+          success: true,
+          result: {
+            type: "accessExpression",
+            expression: {
+              type: "dotFunctionCall",
+              object: { type: "variableName", value: "Promise" },
+              functionCall: {
+                type: "functionCall",
+                functionName: "bar",
+                arguments: [],
+              },
+            },
+            async: false,
+          },
+        },
+      },
+
+      // await keyword - dot function call with arguments
+      {
+        input: "await Promise.race(res1, res2)",
+        expected: {
+          success: true,
+          result: {
+            type: "accessExpression",
+            expression: {
+              type: "dotFunctionCall",
+              object: { type: "variableName", value: "Promise" },
+              functionCall: {
+                type: "functionCall",
+                functionName: "race",
+                arguments: [
+                  { type: "variableName", value: "res1" },
+                  { type: "variableName", value: "res2" },
+                ],
+              },
+            },
+            async: false,
+          },
+        },
+      },
+
+      // sync keyword - chained access
+      {
+        input: "sync response.data.items",
+        expected: {
+          success: true,
+          result: {
+            type: "accessExpression",
+            expression: {
+              type: "dotProperty",
+              object: {
+                type: "accessExpression",
+                expression: {
+                  type: "dotProperty",
+                  object: { type: "variableName", value: "response" },
+                  propertyName: "data",
+                },
+              },
+              propertyName: "items",
+            },
+            async: false,
+          },
+        },
+      },
+
+      // Failure cases
+      { input: "async obj.foo", expected: { success: false } },
+      { input: "obj.foo", expected: { success: false } },
+      { input: "syncobj.foo", expected: { success: false } },
+      { input: "awaitobj.foo", expected: { success: false } },
+      { input: "sync", expected: { success: false } },
+      { input: "await", expected: { success: false } },
+      { input: "sync ", expected: { success: false } },
+      { input: "await ", expected: { success: false } },
+      { input: "", expected: { success: false } },
+    ];
+
+    testCases.forEach(({ input, expected }) => {
+      if (expected.success) {
+        it(`should parse "${input}" successfully`, () => {
+          const result = syncAccessExpressionParser(input);
+          expect(result.success).toBe(true);
+          if (result.success) {
+            expect(result.result).toEqual(expected.result);
+          }
+        });
+      } else {
+        it(`should fail to parse "${input}"`, () => {
+          const result = syncAccessExpressionParser(input);
+          expect(result.success).toBe(false);
+        });
+      }
+    });
+  });
+
+  describe("asyncAccessExpressionParser", () => {
+    const testCases = [
+      // async keyword - dot property
+      {
+        input: "async obj.foo",
+        expected: {
+          success: true,
+          result: {
+            type: "accessExpression",
+            expression: {
+              type: "dotProperty",
+              object: { type: "variableName", value: "obj" },
+              propertyName: "foo",
+            },
+            async: true,
+          },
+        },
+      },
+
+      // async keyword - dot function call
+      {
+        input: "async Promise.sayHi()",
+        expected: {
+          success: true,
+          result: {
+            type: "accessExpression",
+            expression: {
+              type: "dotFunctionCall",
+              object: { type: "variableName", value: "Promise" },
+              functionCall: {
+                type: "functionCall",
+                functionName: "sayHi",
+                arguments: [],
+              },
+            },
+            async: true,
+          },
+        },
+      },
+
+      // async keyword - dot function call with arguments
+      {
+        input: "async obj.method(42)",
+        expected: {
+          success: true,
+          result: {
+            type: "accessExpression",
+            expression: {
+              type: "dotFunctionCall",
+              object: { type: "variableName", value: "obj" },
+              functionCall: {
+                type: "functionCall",
+                functionName: "method",
+                arguments: [{ type: "number", value: "42" }],
+              },
+            },
+            async: true,
+          },
+        },
+      },
+
+      // async keyword - chained access
+      {
+        input: "async fetch().json()",
+        expected: {
+          success: true,
+          result: {
+            type: "accessExpression",
+            expression: {
+              type: "dotFunctionCall",
+              object: {
+                type: "functionCall",
+                functionName: "fetch",
+                arguments: [],
+              },
+              functionCall: {
+                type: "functionCall",
+                functionName: "json",
+                arguments: [],
+              },
+            },
+            async: true,
+          },
+        },
+      },
+
+      // Failure cases
+      { input: "sync obj.foo", expected: { success: false } },
+      { input: "await obj.foo", expected: { success: false } },
+      { input: "obj.foo", expected: { success: false } },
+      { input: "asyncobj.foo", expected: { success: false } },
+      { input: "async", expected: { success: false } },
+      { input: "async ", expected: { success: false } },
+      { input: "", expected: { success: false } },
+    ];
+
+    testCases.forEach(({ input, expected }) => {
+      if (expected.success) {
+        it(`should parse "${input}" successfully`, () => {
+          const result = asyncAccessExpressionParser(input);
+          expect(result.success).toBe(true);
+          if (result.success) {
+            expect(result.result).toEqual(expected.result);
+          }
+        });
+      } else {
+        it(`should fail to parse "${input}"`, () => {
+          const result = asyncAccessExpressionParser(input);
+          expect(result.success).toBe(false);
+        });
+      }
+    });
+  });
+
+  describe("accessExpressionParser with async/sync/await keywords", () => {
+    it("should parse 'await' keyword and set async: false", () => {
+      const result = accessExpressionParser("await Promise.bar()");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "accessExpression",
+          expression: {
+            type: "dotFunctionCall",
+            object: { type: "variableName", value: "Promise" },
+            functionCall: {
+              type: "functionCall",
+              functionName: "bar",
+              arguments: [],
+            },
+          },
+          async: false,
+        });
+      }
+    });
+
+    it("should parse 'async' keyword and set async: true", () => {
+      const result = accessExpressionParser("async Promise.sayHi()");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "accessExpression",
+          expression: {
+            type: "dotFunctionCall",
+            object: { type: "variableName", value: "Promise" },
+            functionCall: {
+              type: "functionCall",
+              functionName: "sayHi",
+              arguments: [],
+            },
+          },
+          async: true,
+        });
+      }
+    });
+
+    it("should parse 'sync' keyword and set async: false", () => {
+      const result = accessExpressionParser("sync Promise.sayHi()");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "accessExpression",
+          expression: {
+            type: "dotFunctionCall",
+            object: { type: "variableName", value: "Promise" },
+            functionCall: {
+              type: "functionCall",
+              functionName: "sayHi",
+              arguments: [],
+            },
+          },
+          async: false,
+        });
+      }
+    });
+
+    it("should parse without keyword and not set async field", () => {
+      const result = accessExpressionParser("Promise.sayHi()");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "accessExpression",
+          expression: {
+            type: "dotFunctionCall",
+            object: { type: "variableName", value: "Promise" },
+            functionCall: {
+              type: "functionCall",
+              functionName: "sayHi",
+              arguments: [],
+            },
+          },
         });
       }
     });

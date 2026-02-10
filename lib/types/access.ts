@@ -22,11 +22,16 @@ export type DotFunctionCall = {
 export type AccessExpression = {
   type: "accessExpression";
   expression: DotProperty | IndexAccess | DotFunctionCall;
+  async?: boolean;
 };
 
-export function accessExpression(expression: DotProperty | IndexAccess | DotFunctionCall): AccessExpression {
+export function accessExpression(
+  expression: DotProperty | IndexAccess | DotFunctionCall,
+  async?: boolean,
+): AccessExpression {
   return {
     type: "accessExpression" as const,
-    expression
-  }
+    expression,
+    async,
+  };
 }

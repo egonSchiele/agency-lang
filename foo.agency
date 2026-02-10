@@ -1,8 +1,7 @@
 import node { sayHi } from "./bar.agency"
 
 node foo() {
-  print("What is your name?")
-  name = input("> ")
-  print("Hello, ${name}!")
-  return sayHi(name)
+  foo1 = await bar()
+  foo2 = async sayHi()
+  foo3 = sayHi()
 }

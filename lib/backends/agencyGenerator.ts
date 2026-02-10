@@ -305,26 +305,40 @@ export class AgencyGenerator extends BaseGenerator {
 
   // Access expressions
   protected processAccessExpression(node: AccessExpression): string {
+    let code = "";
     switch (node.expression.type) {
       case "dotProperty":
-        return this.processDotProperty(node.expression);
+        code = this.processDotProperty(node.expression);
+        break;
       case "indexAccess":
-        return this.processIndexAccess(node.expression);
+        code = this.processIndexAccess(node.expression);
+        break;
       case "dotFunctionCall":
-        return this.processDotFunctionCall(node.expression);
+        code = this.processDotFunctionCall(node.expression);
+        break;
     }
+    return this.indentStr(this.asyncAwaitPrefix(code, node.async));
+  }
+
+  protected asyncAwaitPrefix(code: string, async?: boolean): string {
+    if (async === true) {
+      return `async ${code}`;
+    } else if (async === false) {
+      return `await ${code}`;
+    }
+    return code;
   }
 
   protected processDotProperty(node: DotProperty): string {
     let objectCode = this.processNode(node.object);
     objectCode = objectCode.trim();
-    return this.indentStr(`${objectCode}.${node.propertyName}`);
+    return `${objectCode}.${node.propertyName}`;
   }
 
   protected processIndexAccess(node: IndexAccess): string {
     const arrayCode = this.processNode(node.array).trim();
     const indexCode = this.processNode(node.index).trim();
-    return this.indentStr(`${arrayCode}[${indexCode}]`);
+    return `${arrayCode}[${indexCode}]`;
   }
 
   protected processDotFunctionCall(node: DotFunctionCall): string {
@@ -332,7 +346,7 @@ export class AgencyGenerator extends BaseGenerator {
     const functionCallCode = this.generateFunctionCallExpression(
       node.functionCall,
     );
-    return this.indentStr(`${objectCode}.${functionCallCode}`);
+    return `${objectCode}.${functionCallCode}`;
   }
 
   // Control flow

@@ -1,6 +1,7 @@
 import { AgencyNode } from "@/types.js";
 import {
   capture,
+  captureCaptures,
   char,
   failure,
   or,
@@ -8,6 +9,8 @@ import {
   sepBy1,
   seqC,
   set,
+  spaces,
+  str,
   success,
 } from "tarsec";
 import {
@@ -26,7 +29,7 @@ function createAccessExpression(arr: AgencyNode[]): AccessExpression {
 function _createAccessExpression(arr: AgencyNode[]): AgencyNode {
   if (arr.length < 1) {
     throw new Error(
-      `Not enough items to create access expression: ${JSON.stringify(arr)}`
+      `Not enough items to create access expression: ${JSON.stringify(arr)}`,
     );
   }
   if (arr.length === 1) {
@@ -56,19 +59,19 @@ function _createAccessExpression(arr: AgencyNode[]): AgencyNode {
         });
       default:
         throw new Error(
-          `unknown type ${last && last.type} in createAccessExpression`
+          `unknown type ${last && last.type} in createAccessExpression`,
         );
     }
   }
   throw new Error(`we should NEVER get here: ${JSON.stringify(arr)} `);
 }
 
-export function accessExpressionParser(
-  input: string
+export function _accessExpressionParser(
+  input: string,
 ): ParserResult<AccessExpression> {
   const parser = sepBy1(
     char("."),
-    or(indexAccessParser, functionCallParser, variableNameParser)
+    or(indexAccessParser, functionCallParser, variableNameParser),
   );
   const result = parser(input);
   if (result.success === false) {
@@ -83,13 +86,51 @@ export function accessExpressionParser(
   return success(access, result.rest);
 }
 
+export const syncAccessExpressionParser = (
+  input: string,
+): ParserResult<AccessExpression> => {
+  const parser = seqC(
+    or(str("sync"), str("await")),
+    spaces,
+    captureCaptures(_accessExpressionParser),
+  );
+
+  const result = parser(input);
+  if (result.success === false) {
+    return result;
+  }
+  return success({ ...result.result, async: false }, result.rest);
+};
+
+export const asyncAccessExpressionParser = (
+  input: string,
+): ParserResult<AccessExpression> => {
+  const parser = seqC(
+    str("async"),
+    spaces,
+    captureCaptures(_accessExpressionParser),
+  );
+
+  const result = parser(input);
+  if (result.success === false) {
+    return result;
+  }
+  return success({ ...result.result, async: true }, result.rest);
+};
+
+export const accessExpressionParser = or(
+  asyncAccessExpressionParser,
+  syncAccessExpressionParser,
+  _accessExpressionParser,
+);
+
 export const indexAccessParser = (input: string): ParserResult<IndexAccess> => {
   const parser = seqC(
     set("type", "indexAccess"),
     capture(or(agencyArrayParser, functionCallParser, literalParser), "array"),
     char("["),
     capture(or(functionCallParser, literalParser), "index"),
-    char("]")
+    char("]"),
   );
 
   return parser(input);

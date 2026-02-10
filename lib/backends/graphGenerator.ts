@@ -52,6 +52,7 @@ export class GraphGenerator extends TypeScriptGenerator {
 
   protected processGraphNode(node: GraphNodeDefinition): string {
     this.startScope({ type: "node", nodeName: node.nodeName });
+    this.promiseVariables = [];
     const { nodeName, body, parameters } = node;
     /* if (parameters.length > 1) {
       throw new Error(

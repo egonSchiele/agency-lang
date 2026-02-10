@@ -35,6 +35,7 @@ import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
+import { uniq } from "@/utils.js";
 
 type Scope = GlobalScope | FunctionScope | NodeScope;
 
@@ -77,6 +78,7 @@ export class BaseGenerator {
   protected functionDefinitions: Record<string, FunctionDefinition> = {};
   protected currentScope: Scope[] = [{ type: "global" }];
 
+  protected promiseVariables: string[] = [];
   generate(program: AgencyProgram): {
     output: string;
   } {
@@ -169,7 +171,7 @@ export class BaseGenerator {
     this.functionDefinitions[node.functionName] = node;
   }
 
-  protected processGraphNodeName(node: GraphNodeDefinition): void {}
+  protected processGraphNodeName(node: GraphNodeDefinition): void { }
 
   protected processNode(node: AgencyNode): string {
     switch (node.type) {
@@ -418,5 +420,10 @@ export class BaseGenerator {
       !!this.functionDefinitions[functionName] ||
       this.isImportedTool(functionName)
     );
+  }
+
+  protected addPromiseVariable(variableName: string): void {
+    this.promiseVariables.push(variableName);
+    this.promiseVariables = uniq(this.promiseVariables);
   }
 }

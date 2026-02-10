@@ -15,6 +15,6 @@ import { comma, varNameChar } from "./utils.js";
 
 export const usesToolParser: Parser<UsesTool> = seqC(
   set("type", "usesTool"),
-  or(str("uses "), char("+")),
+  or(str("uses "), str("use "), char("+")),
   capture(sepBy1(comma, many1WithJoin(varNameChar)), "toolNames"),
 );

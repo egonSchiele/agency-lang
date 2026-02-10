@@ -1,0 +1,53 @@
+node example1() {
+  // both should run in parallel
+  fibs: number[] = llm("Get the first 10 Fibonacci numbers.")
+  story: string = llm("Write a short story about a cat and a dog.")
+  print(fibs)
+  print(story)
+}
+
+node example2() {
+  fibs: number[] = llm("Get the first 10 Fibonacci numbers.")
+
+  // story does not need to run at all since the value is never used
+  story: string = llm("Write a short story about a cat and a dog.")
+  print(fibs)
+}
+
+node example3() {
+  fibs: number[] = llm("Get the first 10 Fibonacci numbers.")
+  // sum can only run after fibs is done
+  sum: number = llm("Add up these numbers ${fibs}.")
+  print(sum)
+}
+
+node example4() {
+  fibs: number[] = llm("Get the first 10 Fibonacci numbers.")
+  // again sum doesn't need to run at all
+  sum: number = llm("Add up these numbers ${fibs}.")
+  print(fibs)
+}
+
+def readFile(name: string) {
+  return interrupt("Reading file ${name}")
+  return "file contents"
+}
+
+node example5() {
+  // both of these can run in parallel,
+  // but they both also will throw interrupts.
+  // What happens if one of them throws an interrupt while
+  // the user is already handling an interrupt from the other one?
+  uses readFile
+  todos = llm("Get a list of todos from todos.json.")
+
+  uses readFile
+  reminders = llm("Get a list of reminders from reminders.json.")
+}
+
+node example6() {
+  // unless they're doing IO, these two calls can probably
+  // run in parallel, UNLESS the user specifically doesn't want that.
+  foo()
+  bar()
+}

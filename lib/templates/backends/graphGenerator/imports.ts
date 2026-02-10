@@ -251,7 +251,12 @@ function isGenerator(variable) {
   );
 }
 
-let __callbacks: Record<string, any> = {};`;
+let __callbacks: Record<string, any> = {};
+
+function cloneArray<T>(arr?:T[]): T[] {
+  if (arr == undefined) return [];
+  return [...arr];
+}`;
 
 export type TemplateType = {
 };

@@ -1,0 +1,22 @@
+import node { sayHi } from "./bar.agency"
+
+def short() {
+  sleep(2)
+  print("before interrupt")
+  return interrupt("This is an interrupt!")
+  print("after interrupt")
+  return "short"
+}
+
+def long() {
+  print("good night!")
+  sleep(10)
+  print("good morning!")
+  return "long"
+}
+
+node foo() {
+  res = async long()
+  foo = async short()
+  return "asad"
+}

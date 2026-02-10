@@ -52,6 +52,9 @@ graph.node("{{{name}}}", async (state): Promise<any> => {
       });
     }
     {{/hasParam}}
+
+    __self.promises = [];
+
     {{{body}}}
     
     // this is just here to have a default return value from a node if the user doesn't specify one

@@ -357,10 +357,22 @@ export class TypeScriptGenerator extends BaseGenerator {
     const mappedName = mapFunctionName(node.functionName);
     const isBuiltinFunction = mappedName !== node.functionName;
 
+    const lines = [];
+    node.arguments.forEach((arg) => {
+      if (arg.type === "variableName") {
+        if (this.promiseVariables.includes(arg.value)) {
+          const varName = this.generateScopedVariableName(arg.value);
+          lines.push(`${varName} = await ${varName};`);
+        }
+      }
+    })
+
     if (isBuiltinFunction) {
-      return `await ${functionCallCode}`;
+      lines.push(`await ${functionCallCode}`);
+    } else {
+      lines.push(functionCallCode);
     }
-    return functionCallCode;
+    return lines.join("\n");
   }
 
   /**
@@ -506,12 +518,13 @@ export class TypeScriptGenerator extends BaseGenerator {
     functionArgs: string[];
     prompt: PromptLiteral;
   }): string {
+    this.addPromiseVariable(variableName);
     // Generate async function for prompt-based assignment
     const _variableType = variableType ||
       this.typeHints[variableName] || {
-        type: "primitiveType" as const,
-        value: "string",
-      };
+      type: "primitiveType" as const,
+      value: "string",
+    };
 
     const zodSchema = mapTypeToZodSchema(_variableType, this.typeAliases);
     //console.log("Generated Zod schema for variable", variableName, "Variable type:", variableType, ":", zodSchema, "aliases:", this.typeAliases, "hints:", this.typeHints);

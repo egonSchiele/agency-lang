@@ -2,7 +2,7 @@
 async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{typeString:string}}}> {
   const __prompt = {{{promptCode:string}}};
   const startTime = performance.now();
-  let __messages: Message[] = __metadata?.messages || [];
+  let __messages: Message[] = cloneArray(__metadata?.messages);
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
@@ -232,8 +232,8 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
   {{/hasResponseFormat}}
 }
 
-__self.{{{variableName:string}}} = await _{{{variableName:string}}}({{{funcCallParams:string}}});
-
+__self.{{{variableName:string}}} = _{{{variableName:string}}}({{{funcCallParams:string}}});
+__self.promises.push(__self.{{{variableName:string}}})
 // return early from node if this is an interrupt
 if (isInterrupt(__self.{{{variableName:string}}})) {
   {{#nodeContext}}

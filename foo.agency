@@ -1,8 +1,6 @@
-import node { sayHi } from "./bar.agency"
-
-node foo() {
-  print("What is your name?")
-  name = input("> ")
-  print("Hello, ${name}!")
-  return sayHi(name)
+node main() {
+  // both should run in parallel
+  story: string = llm("Write a 100 word story about a cat and a dog.")
+  fibs: number[] = llm("Get the first 10 Fibonacci numbers.")
+  print(fibs, story)
 }

@@ -1,6 +1,5 @@
 // @ts-nocheck
 
-import __graph___bar from "./bar.ts";
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
@@ -250,6 +249,11 @@ function isGenerator(variable) {
 }
 
 let __callbacks: Record<string, any> = {};
+
+function cloneArray<T>(arr?:T[]): T[] {
+  if (arr == undefined) return [];
+  return [...arr];
+}
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -263,21 +267,8 @@ const addTool = {
   }),
 };
 
-function _builtinInput(prompt: string): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
 
-  return new Promise((resolve) => {
-    rl.question(prompt, (answer: string) => {
-      rl.close();
-      resolve(answer);
-    });
-  });
-}
-
-graph.node("foo", async (state): Promise<any> => {
+graph.node("main", async (state): Promise<any> => {
     let __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
@@ -313,26 +304,490 @@ graph.node("foo", async (state): Promise<any> => {
     const __self: Record<string, any> = __stack.locals;
 
     
+
+    __self.promises = [];
+
     
       if (__step <= 0) {
-        
+        //  both should run in parallel
         __stack.step++;
       }
       
 
       if (__step <= 1) {
-        await console.log(`What is your name?`)
+        
+async function _story(__metadata?: Record<string, any>): Promise<string> {
+  const __prompt = `Write a 100 word story about a cat and a dog.`;
+  const startTime = performance.now();
+  let __messages: Message[] = cloneArray(__metadata?.messages);
+
+  // These are to restore state after interrupt.
+  // TODO I think this could be implemented in a cleaner way.
+  let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
+  const __tools = undefined;
+
+  
+  
+  const __responseFormat = undefined;
+  
+  
+  const __client = getClientWithConfig({});
+  let responseMessage:any;
+
+  if (__toolCalls.length === 0) {
+    __messages.push(userMessage(__prompt));
+  
+  
+    let __completion = await __client.text({
+      messages: __messages,
+      tools: __tools,
+      responseFormat: __responseFormat,
+      stream: false
+    });
+  
+    const endTime = performance.now();
+
+    if (isGenerator(__completion)) {
+      if (!__callbacks.onStream) {
+        console.log("No onStream callback provided for streaming response, returning response synchronously");
+        statelogClient.debug(
+          "Got streaming response but no onStream callback provided, returning response synchronously",
+          {
+            prompt: __prompt,
+            callbacks: Object.keys(__callbacks),
+          },
+        );
+
+        let syncResult = "";
+        for await (const chunk of __completion) {
+          switch (chunk.type) {
+            case "tool_call":
+              __toolCalls.push(chunk.toolCall);
+              break;
+            case "done":
+              syncResult = chunk.result;
+              break;
+            case "error":
+              console.error(`Error in LLM response stream: ${chunk.error}`);
+              break;
+            default:
+              break;
+          }
+        }
+        __completion = { success: true, value: syncResult };
+      } else {
+        for await (const chunk of __completion) {
+          switch (chunk.type) {
+            case "text":
+              __callbacks.onStream({ type: "text", text: chunk.text });
+              break;
+            case "tool_call":
+              __toolCalls.push(chunk.toolCall);
+              __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
+              break;
+            case "done":
+              __callbacks.onStream({ type: "done", result: chunk.result });
+              __completion = { success: true, value: chunk.result };
+              break;
+            case "error":
+              __callbacks.onStream({ type: "error", error: chunk.error });
+              break;
+          }
+        }
+      }
+    }
+
+    statelogClient.promptCompletion({
+      messages: __messages,
+      completion: __completion,
+      model: __client.getModel(),
+      timeTaken: endTime - startTime,
+      tools: __tools,
+      responseFormat: __responseFormat
+    });
+  
+    if (!__completion.success) {
+      throw new Error(
+        `Error getting response from ${__model}: ${__completion.error}`
+      );
+    }
+  
+    responseMessage = __completion.value;
+    __toolCalls = responseMessage.toolCalls || [];
+
+    if (__toolCalls.length > 0) {
+      // Add assistant's response with tool calls to message history
+      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+    }
+  }
+
+  // Handle function calls
+  if (__toolCalls.length > 0) {
+    let toolCallStartTime, toolCallEndTime;
+    let haltExecution = false;
+    let haltToolCall = {}
+    let haltInterrupt:any = null;
+
+    // Process each tool call
+    for (const toolCall of __toolCalls) {
+      
+    }
+
+    if (haltExecution) {
+      statelogClient.debug(`Tool call interrupted execution.`, {
+        messages: __messages,
+        model: __client.getModel(),
+      });
+
+      __stateStack.interruptData = {
+        messages: __messages.map((msg) => msg.toJSON()),
+        nodesTraversed: __graph.getNodesTraversed(),
+        toolCall: haltToolCall,
+      };
+      haltInterrupt.__state = __stateStack.toJSON();
+      return haltInterrupt;
+    }
+  
+    const nextStartTime = performance.now();
+    let __completion = await __client.text({
+      messages: __messages,
+      tools: __tools,
+      responseFormat: __responseFormat,
+      stream: false
+    });
+
+    const nextEndTime = performance.now();
+
+    if (isGenerator(__completion)) {
+      if (!__callbacks.onStream) {
+        console.log("No onStream callback provided for streaming response, returning response synchronously");
+        statelogClient.debug(
+          "Got streaming response but no onStream callback provided, returning response synchronously",
+          {
+            prompt: __prompt,
+            callbacks: Object.keys(__callbacks),
+          },
+        );
+
+        let syncResult = "";
+        for await (const chunk of __completion) {
+          switch (chunk.type) {
+            case "tool_call":
+              __toolCalls.push(chunk.toolCall);
+              break;
+            case "done":
+              syncResult = chunk.result;
+              break;
+            case "error":
+              console.error(`Error in LLM response stream: ${chunk.error}`);
+              break;
+            default:
+              break;
+          }
+        }
+        __completion = { success: true, value: syncResult };
+      } else {
+        for await (const chunk of __completion) {
+          switch (chunk.type) {
+            case "text":
+              __callbacks.onStream({ type: "text", text: chunk.text });
+              break;
+            case "tool_call":
+              __toolCalls.push(chunk.toolCall);
+              __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
+              break;
+            case "done":
+              __callbacks.onStream({ type: "done", result: chunk.result });
+              __completion = { success: true, value: chunk.result };
+              break;
+            case "error":
+              __callbacks.onStream({ type: "error", error: chunk.error });
+              break;
+          }
+        }
+      }
+    }
+
+    statelogClient.promptCompletion({
+      messages: __messages,
+      completion: __completion,
+      model: __client.getModel(),
+      timeTaken: nextEndTime - nextStartTime,
+    });
+
+    if (!__completion.success) {
+      throw new Error(
+        `Error getting response from ${__model}: ${__completion.error}`
+      );
+    }
+    responseMessage = __completion.value;
+  }
+
+  // Add final assistant response to history
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
+  
+
+  
+  return responseMessage.output;
+  
+}
+
+__self.story = _story({
+      messages: __messages,
+    });
+__self.promises.push(__self.story)
+// return early from node if this is an interrupt
+if (isInterrupt(__self.story)) {
+  
+  return { ...state, data: __self.story };
+  
+   
+}
         __stack.step++;
       }
       
 
       if (__step <= 2) {
-        __stack.locals.name = await _builtinInput(`> `);
+        
+async function _fibs(__metadata?: Record<string, any>): Promise<number[]> {
+  const __prompt = `Get the first 10 Fibonacci numbers.`;
+  const startTime = performance.now();
+  let __messages: Message[] = cloneArray(__metadata?.messages);
 
+  // These are to restore state after interrupt.
+  // TODO I think this could be implemented in a cleaner way.
+  let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
+  const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
+  const __tools = undefined;
 
-if (isInterrupt(__stack.locals.name)) {
   
-  return { ...state, data: __stack.locals.name };
+  // Need to make sure this is always an object
+  const __responseFormat = z.object({
+     response: z.array(z.number())
+  });
+  
+  
+  
+  const __client = getClientWithConfig({});
+  let responseMessage:any;
+
+  if (__toolCalls.length === 0) {
+    __messages.push(userMessage(__prompt));
+  
+  
+    let __completion = await __client.text({
+      messages: __messages,
+      tools: __tools,
+      responseFormat: __responseFormat,
+      stream: false
+    });
+  
+    const endTime = performance.now();
+
+    if (isGenerator(__completion)) {
+      if (!__callbacks.onStream) {
+        console.log("No onStream callback provided for streaming response, returning response synchronously");
+        statelogClient.debug(
+          "Got streaming response but no onStream callback provided, returning response synchronously",
+          {
+            prompt: __prompt,
+            callbacks: Object.keys(__callbacks),
+          },
+        );
+
+        let syncResult = "";
+        for await (const chunk of __completion) {
+          switch (chunk.type) {
+            case "tool_call":
+              __toolCalls.push(chunk.toolCall);
+              break;
+            case "done":
+              syncResult = chunk.result;
+              break;
+            case "error":
+              console.error(`Error in LLM response stream: ${chunk.error}`);
+              break;
+            default:
+              break;
+          }
+        }
+        __completion = { success: true, value: syncResult };
+      } else {
+        for await (const chunk of __completion) {
+          switch (chunk.type) {
+            case "text":
+              __callbacks.onStream({ type: "text", text: chunk.text });
+              break;
+            case "tool_call":
+              __toolCalls.push(chunk.toolCall);
+              __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
+              break;
+            case "done":
+              __callbacks.onStream({ type: "done", result: chunk.result });
+              __completion = { success: true, value: chunk.result };
+              break;
+            case "error":
+              __callbacks.onStream({ type: "error", error: chunk.error });
+              break;
+          }
+        }
+      }
+    }
+
+    statelogClient.promptCompletion({
+      messages: __messages,
+      completion: __completion,
+      model: __client.getModel(),
+      timeTaken: endTime - startTime,
+      tools: __tools,
+      responseFormat: __responseFormat
+    });
+  
+    if (!__completion.success) {
+      throw new Error(
+        `Error getting response from ${__model}: ${__completion.error}`
+      );
+    }
+  
+    responseMessage = __completion.value;
+    __toolCalls = responseMessage.toolCalls || [];
+
+    if (__toolCalls.length > 0) {
+      // Add assistant's response with tool calls to message history
+      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+    }
+  }
+
+  // Handle function calls
+  if (__toolCalls.length > 0) {
+    let toolCallStartTime, toolCallEndTime;
+    let haltExecution = false;
+    let haltToolCall = {}
+    let haltInterrupt:any = null;
+
+    // Process each tool call
+    for (const toolCall of __toolCalls) {
+      
+    }
+
+    if (haltExecution) {
+      statelogClient.debug(`Tool call interrupted execution.`, {
+        messages: __messages,
+        model: __client.getModel(),
+      });
+
+      __stateStack.interruptData = {
+        messages: __messages.map((msg) => msg.toJSON()),
+        nodesTraversed: __graph.getNodesTraversed(),
+        toolCall: haltToolCall,
+      };
+      haltInterrupt.__state = __stateStack.toJSON();
+      return haltInterrupt;
+    }
+  
+    const nextStartTime = performance.now();
+    let __completion = await __client.text({
+      messages: __messages,
+      tools: __tools,
+      responseFormat: __responseFormat,
+      stream: false
+    });
+
+    const nextEndTime = performance.now();
+
+    if (isGenerator(__completion)) {
+      if (!__callbacks.onStream) {
+        console.log("No onStream callback provided for streaming response, returning response synchronously");
+        statelogClient.debug(
+          "Got streaming response but no onStream callback provided, returning response synchronously",
+          {
+            prompt: __prompt,
+            callbacks: Object.keys(__callbacks),
+          },
+        );
+
+        let syncResult = "";
+        for await (const chunk of __completion) {
+          switch (chunk.type) {
+            case "tool_call":
+              __toolCalls.push(chunk.toolCall);
+              break;
+            case "done":
+              syncResult = chunk.result;
+              break;
+            case "error":
+              console.error(`Error in LLM response stream: ${chunk.error}`);
+              break;
+            default:
+              break;
+          }
+        }
+        __completion = { success: true, value: syncResult };
+      } else {
+        for await (const chunk of __completion) {
+          switch (chunk.type) {
+            case "text":
+              __callbacks.onStream({ type: "text", text: chunk.text });
+              break;
+            case "tool_call":
+              __toolCalls.push(chunk.toolCall);
+              __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
+              break;
+            case "done":
+              __callbacks.onStream({ type: "done", result: chunk.result });
+              __completion = { success: true, value: chunk.result };
+              break;
+            case "error":
+              __callbacks.onStream({ type: "error", error: chunk.error });
+              break;
+          }
+        }
+      }
+    }
+
+    statelogClient.promptCompletion({
+      messages: __messages,
+      completion: __completion,
+      model: __client.getModel(),
+      timeTaken: nextEndTime - nextStartTime,
+    });
+
+    if (!__completion.success) {
+      throw new Error(
+        `Error getting response from ${__model}: ${__completion.error}`
+      );
+    }
+    responseMessage = __completion.value;
+  }
+
+  // Add final assistant response to history
+  // not passing tool calls back this time
+  __messages.push(assistantMessage(responseMessage.output));
+  
+  try {
+  const result = JSON.parse(responseMessage.output || "");
+  return result.response;
+  } catch (e) {
+    return responseMessage.output;
+    // console.error("Error parsing response for variable 'fibs':", e);
+    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
+    // throw e;
+  }
+  
+
+  
+}
+
+__self.fibs = _fibs({
+      messages: __messages,
+    });
+__self.promises.push(__self.fibs)
+// return early from node if this is an interrupt
+if (isInterrupt(__self.fibs)) {
+  
+  return { ...state, data: __self.fibs };
   
    
 }
@@ -341,26 +796,9 @@ if (isInterrupt(__stack.locals.name)) {
       
 
       if (__step <= 3) {
-        await console.log(`Hello, ${__stack.locals.name}!`)
-        __stack.step++;
-      }
-      
-
-      if (__step <= 4) {
-        return goToNode("sayHi",
-  {
-    messages: __messages,
-    __metadata: {
-      graph: __graph,
-      statelogClient,
-      callbacks: __callbacks,
-    },
-    
-    data: [__stack.locals.name]
-    
-    
-  }
-);
+        __stack.locals.fibs = await __stack.locals.fibs;
+__stack.locals.story = await __stack.locals.story;
+await console.log(__stack.locals.fibs, __stack.locals.story)
         __stack.step++;
       }
       
@@ -369,16 +807,15 @@ if (isInterrupt(__stack.locals.name)) {
     return { ...state, data: undefined };
 });
 
-graph.conditionalEdge("foo", ["sayHi"]);
+const initialState: State = {messages: [], data: {}};
+const finalState = graph.run("main", initialState);
 
-graph.merge(__graph___bar);
 
-
-export async function foo({ messages, callbacks } = {}): Promise<State<any>> {
+export async function main({ messages, callbacks } = {}): Promise<State<any>> {
 
   const data = [  ];
   __callbacks = callbacks || {};
-  const result = await graph.run("foo", { messages: messages || [], data });
+  const result = await graph.run("main", { messages: messages || [], data });
   return result;
 }
 

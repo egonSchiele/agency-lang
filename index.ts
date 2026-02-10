@@ -68,6 +68,8 @@ async function main() {
       result = finalState.data;
     }
   }
+
+  console.log("Final result:", JSON.stringify(finalState, null, 2));
 }
 
 main();

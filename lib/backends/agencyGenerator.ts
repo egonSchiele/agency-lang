@@ -13,6 +13,8 @@ import {
   VariableType,
 } from "../types.js";
 
+import { AwaitStatement } from "@/types/await.js";
+import { TimeBlock } from "@/types/timeBlock.js";
 import {
   AccessExpression,
   DotFunctionCall,
@@ -22,6 +24,7 @@ import {
 import { AgencyArray, AgencyObject } from "../types/dataStructures.js";
 import { FunctionCall, FunctionDefinition } from "../types/function.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
+import { IfElse } from "../types/ifElse.js";
 import {
   ImportNodeStatement,
   ImportStatement,
@@ -31,11 +34,8 @@ import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
-import { IfElse } from "../types/ifElse.js";
 import { BaseGenerator } from "./baseGenerator.js";
 import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
-import { TimeBlock } from "@/types/timeBlock.js";
-import { AwaitStatement } from "@/types/await.js";
 
 export class AgencyGenerator extends BaseGenerator {
   private indentLevel: number = 0;
@@ -269,7 +269,13 @@ export class AgencyGenerator extends BaseGenerator {
     const args = node.arguments.map((arg) => {
       return this.processNode(arg).trim();
     });
-    const asyncPrefix = node.async ? "async " : "";
+    let asyncPrefix = "";
+    if (node.async === true) {
+      asyncPrefix = "async ";
+    } else if (node.async === false) {
+      asyncPrefix = "await ";
+    }
+
     return `${asyncPrefix}${node.functionName}(${args.join(", ")})`;
   }
 

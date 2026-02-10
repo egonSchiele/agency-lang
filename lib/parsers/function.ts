@@ -36,7 +36,6 @@ import { IfElse } from "../types/ifElse.js";
 import { accessExpressionParser, indexAccessParser } from "./access.js";
 import { commentParser } from "./comment.js";
 import {
-  asyncFunctionCallParser,
   functionCallParser,
   llmPromptFunctionCallParser,
   streamingPromptLiteralParser,
@@ -59,7 +58,6 @@ import {
   varNameChar,
 } from "./utils.js";
 import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
-import { awaitParser } from "./await.js";
 import { newLineParser } from "./newline.js";
 
 export const assignmentParser: Parser<Assignment> = (input: string) => {
@@ -85,8 +83,6 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
       capture(
         or(
           timeBlockParser,
-          awaitParser,
-          asyncFunctionCallParser,
           promptParser,
           streamingPromptLiteralParser,
           llmPromptFunctionCallParser,
@@ -128,8 +124,6 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
         returnStatementParser,
         whileLoopParser,
         matchBlockParser,
-        awaitParser,
-        asyncFunctionCallParser,
         streamingPromptLiteralParser,
         ifParser,
         timeBlockParser,
@@ -308,8 +302,8 @@ export const functionReturnTypeParser: Parser<VariableType> = trace(
   seqC(char(":"), optionalSpaces, captureCaptures(variableTypeParser)),
 );
 
-export const functionParser: Parser<FunctionDefinition> = trace(
-  "functionParser",
+export const _functionParser: Parser<FunctionDefinition> = trace(
+  "_functionParser",
   seqC(
     set("type", "function"),
     str("def"),
@@ -338,6 +332,40 @@ export const functionParser: Parser<FunctionDefinition> = trace(
     char("}"),
     optionalSemicolon,
   ),
+);
+
+export const asyncFunctionParser: Parser<FunctionDefinition> = (
+  input: string,
+) => {
+  const parser = trace(
+    "asyncFunctionParser",
+    seqC(str("async"), spaces, captureCaptures(_functionParser)),
+  );
+  const mappedParser = map(parser, (result) => ({
+    ...result,
+    async: true,
+  }));
+  return mappedParser(input);
+};
+
+export const syncFunctionParser: Parser<FunctionDefinition> = (
+  input: string,
+) => {
+  const parser = trace(
+    "syncFunctionParser",
+    seqC(str("sync"), spaces, captureCaptures(_functionParser)),
+  );
+  const mappedParser = map(parser, (result) => ({
+    ...result,
+    async: false,
+  }));
+  return mappedParser(input);
+};
+
+export const functionParser: Parser<FunctionDefinition> = or(
+  asyncFunctionParser,
+  syncFunctionParser,
+  _functionParser, // default to async if no keyword is provided
 );
 
 export const graphNodeParser: Parser<GraphNodeDefinition> = trace(

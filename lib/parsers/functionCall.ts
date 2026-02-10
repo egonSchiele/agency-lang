@@ -20,7 +20,7 @@ import { optionalSemicolon } from "./parserUtils.js";
 import { comma, optionalSpaces, varNameChar } from "./utils.js";
 import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
 
-export const functionCallParser: Parser<FunctionCall> = (input: string) => {
+export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
   const parser = seqC(
     set("type", "functionCall"),
     capture(many1WithJoin(varNameChar), "functionName"),
@@ -53,7 +53,7 @@ export const asyncFunctionCallParser: Parser<FunctionCall> = (
   const parser = seqC(
     str("async"),
     spaces,
-    capture(functionCallParser, "functionCall"),
+    capture(_functionCallParser, "functionCall"),
   );
   const result = parser(input);
   if (!result.success) {
@@ -62,6 +62,26 @@ export const asyncFunctionCallParser: Parser<FunctionCall> = (
   const { functionCall } = result.result;
   return success({ ...functionCall, async: true }, result.rest);
 };
+
+export const syncFunctionCallParser: Parser<FunctionCall> = (input: string) => {
+  const parser = seqC(
+    or(str("sync"), str("await")),
+    spaces,
+    capture(_functionCallParser, "functionCall"),
+  );
+  const result = parser(input);
+  if (!result.success) {
+    return result;
+  }
+  const { functionCall } = result.result;
+  return success({ ...functionCall, async: false }, result.rest);
+};
+
+export const functionCallParser: Parser<FunctionCall> = or(
+  asyncFunctionCallParser,
+  syncFunctionCallParser,
+  _functionCallParser, // default to async if no keyword is provided
+);
 
 export const llmPromptFunctionCallParser: Parser<PromptLiteral> = (
   input: string,

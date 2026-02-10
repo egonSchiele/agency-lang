@@ -20,6 +20,7 @@ export type FunctionDefinition = {
   body: AgencyNode[];
   returnType?: VariableType | null;
   docString?: DocString;
+  async?: boolean;
 };
 
 export type FunctionCall = {

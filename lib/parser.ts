@@ -1,5 +1,4 @@
-import { typeAliasParser, typeHintParser } from "./parsers/typeHints.js";
-import { AgencyNode, AgencyProgram, NewLine } from "./types.js";
+import { EgonLog } from "egonlog";
 import {
   anyChar,
   between,
@@ -10,10 +9,8 @@ import {
   Parser,
   ParserResult,
   search,
-  sepBy,
   seqC,
   set,
-  spaces,
   str,
   success,
   trace,
@@ -39,12 +36,12 @@ import {
   importToolStatmentParser,
 } from "./parsers/importStatement.js";
 import { matchBlockParser } from "./parsers/matchBlock.js";
-import { returnStatementParser } from "./parsers/returnStatement.js";
-import { usesToolParser } from "./parsers/tools.js";
-import { EgonLog } from "egonlog";
-import { specialVarParser } from "./parsers/specialVar.js";
-import { awaitParser } from "./parsers/await.js";
 import { newLineParser } from "./parsers/newline.js";
+import { returnStatementParser } from "./parsers/returnStatement.js";
+import { specialVarParser } from "./parsers/specialVar.js";
+import { usesToolParser } from "./parsers/tools.js";
+import { typeAliasParser, typeHintParser } from "./parsers/typeHints.js";
+import { AgencyNode, AgencyProgram } from "./types.js";
 
 export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
   const parser = many(
@@ -62,7 +59,6 @@ export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
         typeHintParser,
         matchBlockParser,
         timeBlockParser,
-        awaitParser,
         streamingPromptLiteralParser,
         functionParser,
         returnStatementParser,

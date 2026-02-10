@@ -27,7 +27,9 @@ import {
 } from "./functionCall.js";
 import { literalParser } from "./literals.js";
 
-export const awaitParser = (input: string): ParserResult<AwaitStatement> => {
+// This functionality has now been rolled into the function call type,
+// to make it easier to identify what functions can be parallelized.
+/* export const awaitParser = (input: string): ParserResult<AwaitStatement> => {
   const parser = seqC(
     set("type", "awaitStatement"),
     str("await"),
@@ -44,3 +46,4 @@ export const awaitParser = (input: string): ParserResult<AwaitStatement> => {
   );
   return parser(input);
 };
+ */

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   functionCallParser,
   asyncFunctionCallParser,
+  syncFunctionCallParser,
   streamingPromptLiteralParser,
 } from "./functionCall.js";
 
@@ -614,6 +615,320 @@ describe("asyncFunctionCallParser", () => {
       it(`should fail to parse "${input}"`, () => {
         const result = asyncFunctionCallParser(input);
         expect(result.success).toBe(false);
+      });
+    }
+  });
+});
+
+describe("syncFunctionCallParser", () => {
+  const testCases = [
+    // Happy path - sync keyword
+    {
+      input: "sync test()",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "test",
+          arguments: [],
+          async: false,
+        },
+      },
+    },
+    {
+      input: "sync greet(name)",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "greet",
+          arguments: [{ type: "variableName", value: "name" }],
+          async: false,
+        },
+      },
+    },
+    {
+      input: "sync fetchData(url, options)",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "fetchData",
+          arguments: [
+            { type: "variableName", value: "url" },
+            { type: "variableName", value: "options" },
+          ],
+          async: false,
+        },
+      },
+    },
+
+    // Happy path - await keyword
+    {
+      input: "await test()",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "test",
+          arguments: [],
+          async: false,
+        },
+      },
+    },
+    {
+      input: "await greet(name)",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "greet",
+          arguments: [{ type: "variableName", value: "name" }],
+          async: false,
+        },
+      },
+    },
+    {
+      input: "await fetchData(url, options)",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "fetchData",
+          arguments: [
+            { type: "variableName", value: "url" },
+            { type: "variableName", value: "options" },
+          ],
+          async: false,
+        },
+      },
+    },
+
+    // Sync/await with different argument types
+    {
+      input: "sync calculate(42)",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "calculate",
+          arguments: [{ type: "number", value: "42" }],
+          async: false,
+        },
+      },
+    },
+    {
+      input: 'await processString("hello")',
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "processString",
+          arguments: [
+            { type: "string", segments: [{ type: "text", value: "hello" }] },
+          ],
+          async: false,
+        },
+      },
+    },
+    {
+      input: "sync processArray([1, 2, 3])",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "processArray",
+          arguments: [
+            {
+              type: "agencyArray",
+              items: [
+                { type: "number", value: "1" },
+                { type: "number", value: "2" },
+                { type: "number", value: "3" },
+              ],
+            },
+          ],
+          async: false,
+        },
+      },
+    },
+    {
+      input: "await configure({key: \"value\"})",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "configure",
+          arguments: [
+            {
+              type: "agencyObject",
+              entries: [
+                {
+                  key: "key",
+                  value: {
+                    type: "string",
+                    segments: [{ type: "text", value: "value" }],
+                  },
+                },
+              ],
+            },
+          ],
+          async: false,
+        },
+      },
+    },
+
+    // Sync/await with complex nested arguments
+    {
+      input: "sync complexCall(x, [1, 2], {key: value})",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "complexCall",
+          arguments: [
+            { type: "variableName", value: "x" },
+            {
+              type: "agencyArray",
+              items: [
+                { type: "number", value: "1" },
+                { type: "number", value: "2" },
+              ],
+            },
+            {
+              type: "agencyObject",
+              entries: [
+                {
+                  key: "key",
+                  value: { type: "variableName", value: "value" },
+                },
+              ],
+            },
+          ],
+          async: false,
+        },
+      },
+    },
+
+    // Failure cases - missing sync/await keyword
+    { input: "test()", expected: { success: false } },
+    { input: "async test()", expected: { success: false } },
+
+    // Failure cases - sync/await without space
+    { input: "synctest()", expected: { success: false } },
+    { input: "awaittest()", expected: { success: false } },
+
+    // Failure cases - keyword alone
+    { input: "sync", expected: { success: false } },
+    { input: "await", expected: { success: false } },
+    { input: "sync ", expected: { success: false } },
+    { input: "await ", expected: { success: false } },
+
+    // Failure cases - invalid function call syntax after keyword
+    { input: "sync test", expected: { success: false } },
+    { input: "await test", expected: { success: false } },
+    { input: "sync test(", expected: { success: false } },
+    { input: "await test(", expected: { success: false } },
+
+    // Failure cases - empty input
+    { input: "", expected: { success: false } },
+  ];
+
+  testCases.forEach(({ input, expected }) => {
+    if (expected.success) {
+      it(`should parse "${input}" successfully`, () => {
+        const result = syncFunctionCallParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result).toEqual(expected.result);
+        }
+      });
+    } else {
+      it(`should fail to parse "${input}"`, () => {
+        const result = syncFunctionCallParser(input);
+        expect(result.success).toBe(false);
+      });
+    }
+  });
+});
+
+describe("functionCallParser with async/sync/await keywords", () => {
+  it("should parse 'async' keyword and set async: true", () => {
+    const result = functionCallParser("async bar()");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "functionCall",
+        functionName: "bar",
+        arguments: [],
+        async: true,
+      });
+    }
+  });
+
+  it("should parse 'sync' keyword and set async: false", () => {
+    const result = functionCallParser("sync bar()");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "functionCall",
+        functionName: "bar",
+        arguments: [],
+        async: false,
+      });
+    }
+  });
+
+  it("should parse 'await' keyword and set async: false", () => {
+    const result = functionCallParser("await bar()");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "functionCall",
+        functionName: "bar",
+        arguments: [],
+        async: false,
+      });
+    }
+  });
+
+  it("should parse without keyword and not set async field", () => {
+    const result = functionCallParser("bar()");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "functionCall",
+        functionName: "bar",
+        arguments: [],
+      });
+    }
+  });
+
+  it("should parse 'await' with arguments", () => {
+    const result = functionCallParser("await sayHi(name, age)");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "functionCall",
+        functionName: "sayHi",
+        arguments: [
+          { type: "variableName", value: "name" },
+          { type: "variableName", value: "age" },
+        ],
+        async: false,
+      });
+    }
+  });
+
+  it("should parse 'async' with arguments", () => {
+    const result = functionCallParser("async sayHi(name)");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "functionCall",
+        functionName: "sayHi",
+        arguments: [{ type: "variableName", value: "name" }],
+        async: true,
       });
     }
   });

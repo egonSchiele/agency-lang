@@ -227,9 +227,16 @@ export class AgencyGenerator extends BaseGenerator {
       ? ": " + variableTypeToString(node.returnType, this.typeAliases)
       : "";
 
+    let asyncPrefix = "";
+    if (node.async === true) {
+      asyncPrefix = "async ";
+    } else if (node.async === false) {
+      asyncPrefix = "sync ";
+    }
+
     // Start function definition
     let result = this.indentStr(
-      `def ${functionName}(${params})${returnTypeStr} {\n`,
+      `${asyncPrefix}def ${functionName}(${params})${returnTypeStr} {\n`,
     );
 
     // Process body with increased indentation

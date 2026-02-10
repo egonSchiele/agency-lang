@@ -1,5 +1,17 @@
 import node { sayHi } from "./bar.agency"
 
+def bar() {
+  return "Hello from bar!"
+}
+
+async def bar() {
+  return "Hello from bar!"
+}
+
+sync def bar() {
+  return "Hello from bar!"
+}
+
 node foo() {
   foo1 = await bar()
   foo2 = async sayHi()

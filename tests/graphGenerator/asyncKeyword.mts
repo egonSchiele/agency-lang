@@ -1218,7 +1218,7 @@ if (isInterrupt(__stack.locals.res1)) {
       
 
       if (__step <= 4) {
-        __stack.locals.results = await Promise.race([__stack.locals.res1, __stack.locals.res2]);
+        __stack.locals.results = Promise.race([__stack.locals.res1, __stack.locals.res2]);
         __stack.step++;
       }
       

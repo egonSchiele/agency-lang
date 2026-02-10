@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   functionParser,
+  asyncFunctionParser,
+  syncFunctionParser,
   docStringParser,
   graphNodeParser,
   timeBlockParser,
@@ -1651,6 +1653,439 @@ describe("functionParser", () => {
     {
       input: "def bad() : { x }",
       expected: { success: false },
+    },
+  ];
+
+  testCases.forEach(({ input, expected }) => {
+    if (expected.success) {
+      it(`should parse "${input.replace(/\n/g, "\\n")}" successfully`, () => {
+        const result = functionParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result).toEqual(expected.result);
+        }
+      });
+    } else {
+      it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
+        const result = functionParser(input);
+        expect(result.success).toBe(false);
+      });
+    }
+  });
+});
+
+describe("asyncFunctionParser", () => {
+  const testCases = [
+    // Basic async function
+    {
+      input: 'async def bar() {\n  return "Hello from bar!"\n}',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "bar",
+          parameters: [],
+          returnType: null,
+          docString: undefined,
+          body: [
+            {
+              type: "returnStatement",
+              value: {
+                type: "string",
+                segments: [{ type: "text", value: "Hello from bar!" }],
+              },
+            },
+            { type: "newLine" },
+          ],
+          async: true,
+        },
+      },
+    },
+    // Async function with parameters
+    {
+      input: "async def add(x: number, y: number) { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "add",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+            {
+              type: "functionParameter",
+              name: "y",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+          ],
+          returnType: null,
+          docString: undefined,
+          body: [{ type: "variableName", value: "x" }],
+          async: true,
+        },
+      },
+    },
+    // Async function with return type
+    {
+      input: "async def getNumber(): number { 42 }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "getNumber",
+          parameters: [],
+          returnType: { type: "primitiveType", value: "number" },
+          docString: undefined,
+          body: [{ type: "number", value: "42" }],
+          async: true,
+        },
+      },
+    },
+    // Async function with docstring
+    {
+      input:
+        'async def greet() {\n  """Greets the user"""\n  bar = `say hello`\n}',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "greet",
+          parameters: [],
+          returnType: null,
+          docString: {
+            type: "docString",
+            value: "Greets the user",
+          },
+          body: [
+            {
+              type: "assignment",
+              variableName: "bar",
+              value: {
+                type: "prompt",
+                segments: [{ type: "text", value: "say hello" }],
+              },
+            },
+            { type: "newLine" },
+          ],
+          async: true,
+        },
+      },
+    },
+    // Async function with empty body
+    {
+      input: "async def empty() {}",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "empty",
+          parameters: [],
+          returnType: null,
+          docString: undefined,
+          body: [],
+          async: true,
+        },
+      },
+    },
+    // Failure cases
+    { input: "def test() { x = 1 }", expected: { success: false } },
+    { input: "sync def test() { x = 1 }", expected: { success: false } },
+    { input: "async test() { x = 1 }", expected: { success: false } },
+    { input: "async { x = 1 }", expected: { success: false } },
+    { input: "", expected: { success: false } },
+  ];
+
+  testCases.forEach(({ input, expected }) => {
+    if (expected.success) {
+      it(`should parse "${input.replace(/\n/g, "\\n")}" successfully`, () => {
+        const result = asyncFunctionParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result).toEqual(expected.result);
+        }
+      });
+    } else {
+      it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
+        const result = asyncFunctionParser(input);
+        expect(result.success).toBe(false);
+      });
+    }
+  });
+});
+
+describe("syncFunctionParser", () => {
+  const testCases = [
+    // Basic sync function
+    {
+      input: 'sync def bar() {\n  return "Hello from bar!"\n}',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "bar",
+          parameters: [],
+          returnType: null,
+          docString: undefined,
+          body: [
+            {
+              type: "returnStatement",
+              value: {
+                type: "string",
+                segments: [{ type: "text", value: "Hello from bar!" }],
+              },
+            },
+            { type: "newLine" },
+          ],
+          async: false,
+        },
+      },
+    },
+    // Sync function with parameters
+    {
+      input: "sync def add(x: number, y: number) { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "add",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+            {
+              type: "functionParameter",
+              name: "y",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+          ],
+          returnType: null,
+          docString: undefined,
+          body: [{ type: "variableName", value: "x" }],
+          async: false,
+        },
+      },
+    },
+    // Sync function with return type
+    {
+      input: "sync def getNumber(): number { 42 }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "getNumber",
+          parameters: [],
+          returnType: { type: "primitiveType", value: "number" },
+          docString: undefined,
+          body: [{ type: "number", value: "42" }],
+          async: false,
+        },
+      },
+    },
+    // Sync function with docstring
+    {
+      input:
+        'sync def greet() {\n  """Greets the user"""\n  bar = `say hello`\n}',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "greet",
+          parameters: [],
+          returnType: null,
+          docString: {
+            type: "docString",
+            value: "Greets the user",
+          },
+          body: [
+            {
+              type: "assignment",
+              variableName: "bar",
+              value: {
+                type: "prompt",
+                segments: [{ type: "text", value: "say hello" }],
+              },
+            },
+            { type: "newLine" },
+          ],
+          async: false,
+        },
+      },
+    },
+    // Sync function with empty body
+    {
+      input: "sync def empty() {}",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "empty",
+          parameters: [],
+          returnType: null,
+          docString: undefined,
+          body: [],
+          async: false,
+        },
+      },
+    },
+    // Failure cases
+    { input: "def test() { x = 1 }", expected: { success: false } },
+    { input: "async def test() { x = 1 }", expected: { success: false } },
+    { input: "sync test() { x = 1 }", expected: { success: false } },
+    { input: "sync { x = 1 }", expected: { success: false } },
+    { input: "", expected: { success: false } },
+  ];
+
+  testCases.forEach(({ input, expected }) => {
+    if (expected.success) {
+      it(`should parse "${input.replace(/\n/g, "\\n")}" successfully`, () => {
+        const result = syncFunctionParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result).toEqual(expected.result);
+        }
+      });
+    } else {
+      it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
+        const result = syncFunctionParser(input);
+        expect(result.success).toBe(false);
+      });
+    }
+  });
+});
+
+describe("functionParser with async/sync keywords", () => {
+  const testCases = [
+    // async def goes through functionParser
+    {
+      input: "async def foo() { x = 1 }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "foo",
+          parameters: [],
+          returnType: null,
+          docString: undefined,
+          body: [
+            {
+              type: "assignment",
+              variableName: "x",
+              value: { type: "number", value: "1" },
+            },
+          ],
+          async: true,
+        },
+      },
+    },
+    // sync def goes through functionParser
+    {
+      input: "sync def foo() { x = 1 }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "foo",
+          parameters: [],
+          returnType: null,
+          docString: undefined,
+          body: [
+            {
+              type: "assignment",
+              variableName: "x",
+              value: { type: "number", value: "1" },
+            },
+          ],
+          async: false,
+        },
+      },
+    },
+    // plain def goes through functionParser (no async field)
+    {
+      input: "def foo() { x = 1 }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "foo",
+          parameters: [],
+          returnType: null,
+          docString: undefined,
+          body: [
+            {
+              type: "assignment",
+              variableName: "x",
+              value: { type: "number", value: "1" },
+            },
+          ],
+        },
+      },
+    },
+    // async with params, return type, and docstring
+    {
+      input:
+        'async def calculate(x: number, y: number): number {\n  """Calculates result"""\n  x\n}',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "calculate",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+            {
+              type: "functionParameter",
+              name: "y",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+          ],
+          returnType: { type: "primitiveType", value: "number" },
+          docString: {
+            type: "docString",
+            value: "Calculates result",
+          },
+          body: [{ type: "variableName", value: "x" }, { type: "newLine" }],
+          async: true,
+        },
+      },
+    },
+    // sync with params, return type, and docstring
+    {
+      input:
+        'sync def calculate(x: number, y: number): number {\n  """Calculates result"""\n  x\n}',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "calculate",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+            {
+              type: "functionParameter",
+              name: "y",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+          ],
+          returnType: { type: "primitiveType", value: "number" },
+          docString: {
+            type: "docString",
+            value: "Calculates result",
+          },
+          body: [{ type: "variableName", value: "x" }, { type: "newLine" }],
+          async: false,
+        },
+      },
     },
   ];
 

@@ -74,4 +74,4 @@ imported tools currently can't be used because to create the array that gets pas
 
 - todo in lib/templates/backends/typescriptGenerator/promptFunction.mustache
 
-Settings file so users can pick whether they want verbose output while building, what level of logging they want, and whether they want state log logging. If they don't, generate the code without the state log calls.
+Use https://www.npmjs.com/package/code-block-writer for writing ts code instead?

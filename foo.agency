@@ -1,20 +1,7 @@
-def bar() {
-  return "Hello from bar!"
-}
-
-def barWithInterrupt() {
-  return interrupt("asd")
-  return "Hello from bar!"
-}
-
-def foo() {
-  barWithInterrupt()
-  return "Hello from bar!"
-}
-
-node main() {
-  bar()
-  uses foo
-  llm("What is the output of foo?")
-  barWithInterrupt()
+node foo() {
+  // both should run in parallel
+  story: string = stream llm("Write a 100 word story about a cat and a dog.")
+  fibs: number[] = stream llm("Get the first 10 Fibonacci numbers.")
+  bar: string = stream llm("Define the word 'bar'.")
+  print(fibs, story)
 }

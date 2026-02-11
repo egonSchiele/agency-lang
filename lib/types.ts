@@ -8,7 +8,7 @@ import {
   ImportStatement,
   ImportToolStatement,
 } from "./types/importStatement.js";
-import { Literal } from "./types/literals.js";
+import { Literal, RawCode } from "./types/literals.js";
 import { MatchBlock } from "./types/matchBlock.js";
 import { ReturnStatement } from "./types/returnStatement.js";
 import { SpecialVar } from "./types/specialVar.js";
@@ -35,13 +35,13 @@ export type Assignment = {
   variableName: string;
   typeHint?: VariableType;
   value:
-    | AccessExpression
-    | Literal
-    | FunctionCall
-    | AgencyObject
-    | AgencyArray
-    | IndexAccess
-    | TimeBlock;
+  | AccessExpression
+  | Literal
+  | FunctionCall
+  | AgencyObject
+  | AgencyArray
+  | IndexAccess
+  | TimeBlock;
 };
 
 export type AgencyComment = {
@@ -77,7 +77,8 @@ export type AgencyNode =
   | IndexAccess
   | DotProperty
   | TimeBlock
-  | NewLine;
+  | NewLine
+  | RawCode;
 
 export type AgencyProgram = {
   type: "agencyProgram";

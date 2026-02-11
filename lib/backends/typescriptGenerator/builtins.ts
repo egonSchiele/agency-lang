@@ -54,10 +54,12 @@ export function generateBuiltinHelpers(functionsUsed: Set<string>): string {
     const readImageFunc = builtinFunctionsReadImage.default({});
     helpers.push(readImageFunc);
   }
-  if (functionsUsed.has("sleep")) {
-    const sleepFunc = builtinFunctionsSleep.default({});
-    helpers.push(sleepFunc);
-  }
-
+  /* 
+  already included by default
+    if (functionsUsed.has("sleep")) {
+      const sleepFunc = builtinFunctionsSleep.default({});
+      helpers.push(sleepFunc);
+    }
+   */
   return helpers.join("\n\n");
 }

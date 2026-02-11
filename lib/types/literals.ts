@@ -6,7 +6,7 @@ export type Literal =
   | MultiLineStringLiteral
   | StringLiteral
   | VariableNameLiteral
-  | PromptLiteral;
+  | PromptLiteral
 
 export type NumberLiteral = {
   type: "number";
@@ -48,4 +48,9 @@ export type PromptLiteral = {
   isStreaming?: boolean;
   async?: boolean;
   tools?: UsesTool;
+};
+
+export type RawCode = {
+  type: "rawCode";
+  value: string;
 };

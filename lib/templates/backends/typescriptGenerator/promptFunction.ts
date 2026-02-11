@@ -70,6 +70,18 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
         }
         __completion = { success: true, value: syncResult };
       } else {
+        // try to acquire lock
+        let count = 0;
+        // wait 60 seconds to acquire lock
+        while (onStreamLock && count < (10 * 60)) {
+          await _builtinSleep(0.1)
+          count++
+        }
+        if (onStreamLock) {
+          console.log(\`Couldn't acquire lock, \${count}\`);
+        }
+        onStreamLock = true;
+
         for await (const chunk of __completion) {
           switch (chunk.type) {
             case "text":
@@ -88,6 +100,8 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
               break;
           }
         }
+
+        onStreamLock = false
       }
     }
 
@@ -237,6 +251,11 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
   {{/hasResponseFormat}}
 }
 
+{{#isAsync}}
+__self.{{{variableName:string}}} = _{{{variableName:string}}}({{{funcCallParams:string}}});
+{{/isAsync}}
+
+{{^isAsync}}
 __self.{{{variableName:string}}} = await _{{{variableName:string}}}({{{funcCallParams:string}}});
 
 // return early from node if this is an interrupt
@@ -247,7 +266,9 @@ if (isInterrupt(__self.{{{variableName:string}}})) {
    {{^nodeContext}}
    return  __self.{{{variableName:string}}};
    {{/nodeContext}}
-}`;
+}
+{{/isAsync}}
+`;
 
 export type TemplateType = {
   variableName: string;
@@ -260,6 +281,7 @@ export type TemplateType = {
   clientConfig: string;
   isStreaming: boolean;
   functionCalls: string;
+  isAsync: boolean;
   funcCallParams: string;
   nodeContext: boolean;
 };

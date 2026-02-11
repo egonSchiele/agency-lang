@@ -374,18 +374,12 @@ export class TypeScriptGenerator extends BaseGenerator {
       if (arg.type === "functionCall") {
         this.functionsUsed.add(arg.functionName);
         return this.generateFunctionCallExpression(arg);
-        /*       } else if (arg.type === "accessExpression") {
-        return this.processAccessExpression(arg);
-      } else if (arg.type === "indexAccess") {
-        return this.processIndexAccess(arg);
- */
       } else {
-        //        return this.generateLiteral(arg);
         return this.processNode(arg);
       }
     });
     let argsString = "";
-    if (this.isInternalFunction(node.functionName)) {
+    if (this.isAgencyFunction(node.functionName)) {
       argsString = parts.join(", ");
       const metadata = `{
         statelogClient,
@@ -396,12 +390,13 @@ export class TypeScriptGenerator extends BaseGenerator {
         functionName,
         argsString,
         metadata,
-        awaitPrefix: node.async ? "" : "await ",
+        awaitPrefix: node.async ? "" : "await "
       });
     } else {
       // must be a builtin function or imported function
       argsString = parts.join(", ");
-      return `${functionName}(${argsString})`;
+      const awaitStr = node.async ? "await " : "";
+      return `${awaitStr}${functionName}(${argsString})`;
     }
   }
 
@@ -510,9 +505,9 @@ export class TypeScriptGenerator extends BaseGenerator {
     // Generate async function for prompt-based assignment
     const _variableType = variableType ||
       this.typeHints[variableName] || {
-        type: "primitiveType" as const,
-        value: "string",
-      };
+      type: "primitiveType" as const,
+      value: "string",
+    };
 
     const zodSchema = mapTypeToZodSchema(_variableType, this.typeAliases);
     //console.log("Generated Zod schema for variable", variableName, "Variable type:", variableType, ":", zodSchema, "aliases:", this.typeAliases, "hints:", this.typeHints);
@@ -578,6 +573,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       clientConfig,
       nodeContext: this.getCurrentScope().type === "node",
       isStreaming: prompt.isStreaming || false,
+      isAsync: prompt.async || false,
     });
   }
 

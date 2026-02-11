@@ -251,7 +251,20 @@ function isGenerator(variable) {
   );
 }
 
-let __callbacks: Record<string, any> = {};`;
+let __callbacks: Record<string, any> = {};
+
+let onStreamLock = false;
+
+function cloneArray<T>(arr?:T[]): T[] {
+  if (arr == undefined) return [];
+  return [...arr];
+}
+
+function _builtinSleep(seconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, seconds * 1000);
+  });
+}`;
 
 export type TemplateType = {
 };

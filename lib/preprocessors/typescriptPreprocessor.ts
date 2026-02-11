@@ -4,6 +4,7 @@ import {
   FunctionCall,
   FunctionDefinition,
   PromptLiteral,
+  RawCode,
 } from "@/types.js";
 
 export class TypescriptPreprocessor {
@@ -21,6 +22,7 @@ export class TypescriptPreprocessor {
     this.markFunctionsAsync();
     this.markFunctionCallsAsync();
     this.removeUnusedLlmCalls();
+    this.addPromiseAllCalls();
     return this.program;
   }
 
@@ -46,8 +48,8 @@ export class TypescriptPreprocessor {
         // console.log(JSON.stringify(this.functionNameToAsync));
         const hasSyncTools = node.tools
           ? node.tools.toolNames.some(
-              (t) => this.functionNameToAsync[t] === false,
-            )
+            (t) => this.functionNameToAsync[t] === false,
+          )
           : false;
         // console.log({ hasSyncTools });
         if (!hasSyncTools) {
@@ -55,7 +57,7 @@ export class TypescriptPreprocessor {
           isn't being assigned to a variable, and isn't being returned. */
           newBody.push({
             type: "comment",
-            content: `Removed unused LLM call: ${this.promptLiteralToString(node)}`,
+            content: `Removed unused LLM call: "${this.promptLiteralToString(node)}"`,
           });
           continue;
         }
@@ -65,8 +67,8 @@ export class TypescriptPreprocessor {
       if (node.type === "assignment" && node.value.type === "prompt") {
         const hasSyncTools = node.value.tools
           ? node.value.tools.toolNames.some(
-              (t) => this.functionNameToAsync[t] === false,
-            )
+            (t) => this.functionNameToAsync[t] === false,
+          )
           : false;
         if (hasSyncTools) {
           // has sync tools, which means they have a side effect,
@@ -79,7 +81,7 @@ export class TypescriptPreprocessor {
           } else {
             newBody.push({
               type: "comment",
-              content: `Removed unused LLM call ${this.promptLiteralToString(node.value)}, was assigned to variable '${node.variableName}' but variable was never used.`,
+              content: `Removed unused LLM call "${this.promptLiteralToString(node.value)}", was assigned to variable '${node.variableName}' but variable was never used.`,
             });
             continue;
           }
@@ -273,9 +275,9 @@ export class TypescriptPreprocessor {
         }
         // streaming prompts are always async for now.
         // later we'll make them async but with a lock around the stream callback.
-        if (node.isStreaming) {
-          continue;
-        }
+        // if (node.isStreaming) {
+        //   continue;
+        // }
         // check if any of its tools will throw an interrupt
         node.async =
           node.tools?.toolNames.some((toolName) => {
@@ -551,5 +553,96 @@ export class TypescriptPreprocessor {
       visit(funcName);
     }
     return sorted.reverse();
+  }
+
+  protected addPromiseAllCalls(): void {
+    for (const node of this.program.nodes) {
+      if (node.type === "function" || node.type === "graphNode") {
+        node.body = this._addPromiseAllCalls(node.body);
+      }
+    }
+  }
+
+  protected _addPromiseAllCalls(body: AgencyNode[]): AgencyNode[] {
+    // Find all variables assigned to async function calls or LLM calls
+    const asyncVarToAssignment: Record<string, AgencyNode> = {};
+
+    for (const node of body) {
+      if (node.type === "assignment") {
+        const isAsyncCall =
+          (node.value.type === "functionCall" && node.value.async) ||
+          (node.value.type === "prompt" && node.value.async);
+
+        if (isAsyncCall) {
+          asyncVarToAssignment[node.variableName] = node;
+        }
+      }
+    }
+
+    const asyncVars = Object.keys(asyncVarToAssignment);
+
+    // Find the first usage of each async variable
+    const varToFirstUsageIndex: Record<string, number> = {};
+
+    for (const varName of asyncVars) {
+      const assignmentNode = asyncVarToAssignment[varName];
+
+      for (let i = 0; i < body.length; i++) {
+        const node = body[i];
+
+        // Skip the assignment itself
+        if (node === assignmentNode) {
+          continue;
+        }
+
+        // Check if this node uses the variable
+        if (this._nodeUsesVariable(node, varName)) {
+          varToFirstUsageIndex[varName] = i;
+          break;
+        }
+      }
+    }
+
+    // Group variables by their first usage index
+    const indexToVars: Record<number, string[]> = {};
+
+    for (const varName of Object.keys(varToFirstUsageIndex)) {
+      const index = varToFirstUsageIndex[varName];
+      if (!indexToVars[index]) {
+        indexToVars[index] = [];
+      }
+      indexToVars[index].push(varName);
+    }
+
+    // Insert Promise.all calls before first usage
+    const newBody: AgencyNode[] = [];
+
+    for (let i = 0; i < body.length; i++) {
+      // Check if we need to insert Promise.all before this node
+      if (indexToVars[i]) {
+        const vars = indexToVars[i];
+
+        const varArray = `[${vars.map(v => `__self.${v}`).join(", ")}]`;
+        const promiseAllCode: RawCode = {
+          type: "rawCode",
+          value: `${varArray} = await Promise.allSettled(${varArray});`,
+        };
+        newBody.push(promiseAllCode);
+      }
+
+      newBody.push(body[i]);
+    }
+
+    return newBody;
+  }
+
+  protected _nodeUsesVariable(node: AgencyNode, varName: string): boolean {
+    // Check if the node or any of its children use the variable
+    for (const { name } of this.getAllVariablesInBody([node])) {
+      if (name === varName) {
+        return true;
+      }
+    }
+    return false;
   }
 }

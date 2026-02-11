@@ -181,7 +181,7 @@ export class BaseGenerator {
     this.functionDefinitions[node.functionName] = node;
   }
 
-  protected processGraphNodeName(node: GraphNodeDefinition): void {}
+  protected processGraphNodeName(node: GraphNodeDefinition): void { }
 
   protected processNode(node: AgencyNode): string {
     switch (node.type) {
@@ -239,6 +239,8 @@ export class BaseGenerator {
         return this.processTimeBlock(node, `__defaultTimeblockName`);
       case "newLine":
         return this.processNewLine(node);
+      case "rawCode":
+        return node.value;
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
@@ -420,10 +422,10 @@ export class BaseGenerator {
       .includes(functionName);
   }
 
-  /* Internal function means the user defined this function in an Agency file,
+  /* Agency function means the user defined this function in an Agency file,
     as opposed to an external function, which was defined in an external TypeScript file
     and imported into Agency. */
-  protected isInternalFunction(functionName: string): boolean {
+  protected isAgencyFunction(functionName: string): boolean {
     return (
       !!this.functionDefinitions[functionName] ||
       this.isImportedTool(functionName)

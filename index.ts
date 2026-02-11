@@ -46,6 +46,7 @@ const callbacks = {
 
 async function main() {
   let finalState = (await foo({ callbacks })) as any;
+  // console.log("\nFinal result:", JSON.stringify(finalState, null, 2));
   let result = finalState.data;
   while (isInterrupt(result)) {
     console.log("Execution interrupted with message:", result.data);

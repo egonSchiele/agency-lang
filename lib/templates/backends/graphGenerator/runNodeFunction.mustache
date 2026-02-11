@@ -7,5 +7,6 @@ export async function {{{nodeName:string}}}({ messages, callbacks } = {}): Promi
   const data = [ {{{argsStr:string}}} ];
   __callbacks = callbacks || {};
   const result = await graph.run("{{{nodeName:string}}}", { messages: messages || [], data });
-  return result;
+  result.tokens = __stateStack.globals.__tokenStats;
+  return structuredClone(result)
 }

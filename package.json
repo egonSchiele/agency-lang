@@ -11,7 +11,9 @@
     "templates": "typestache ./lib/templates",
     "typecheck": "tsc --noEmit",
     "agency": "node ./dist/scripts/agency.js",
-    "compile": "node ./dist/scripts/agency.js compile"
+    "compile": "node ./dist/scripts/agency.js compile",
+    "ast": "node ./dist/scripts/agency.js ast",
+    "graph": "node ./dist/scripts/agency.js graph"
   },
   "bin": {
     "agency": "./dist/scripts/agency.js"

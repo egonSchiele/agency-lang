@@ -1,19 +1,20 @@
-import node { sayHi } from "./bar.agency"
-
 def bar() {
   return "Hello from bar!"
 }
 
-async def bar() {
+def barWithInterrupt() {
+  return interrupt("asd")
   return "Hello from bar!"
 }
 
-sync def bar() {
+def foo() {
+  barWithInterrupt()
   return "Hello from bar!"
 }
 
-node foo() {
-  foo1 = await bar()
-  foo2 = async sayHi()
-  foo3 = sayHi()
+node main() {
+  bar()
+  uses foo
+  llm("What is the output of foo?")
+  barWithInterrupt()
 }

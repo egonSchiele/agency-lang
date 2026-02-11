@@ -104,7 +104,7 @@ return __stack.locals.message
       }
       
 }//  Comment before function call
-__stateStack.globals.result = await greet([], {
+__stateStack.globals.result = greet([], {
         statelogClient,
         graph: __graph,
         messages: __messages,

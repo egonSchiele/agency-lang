@@ -381,7 +381,7 @@ async function _response(name: string, age: string, __metadata?: Record<string, 
   // TODO I think this could be implemented in a cleaner way.
   let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
   const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
-  const __tools = [__greetTool];
+  const __tools = undefined;
 
   
   
@@ -487,51 +487,7 @@ async function _response(name: string, age: string, __metadata?: Record<string, 
 
     // Process each tool call
     for (const toolCall of __toolCalls) {
-      if (
-  toolCall.name === "greet"
-) {
-  const args = toolCall.arguments;
-
-  const params = [ args["name"], args["age"] ];
-
-  toolCallStartTime = performance.now();
-  
-  let result: any;
-  if (__interruptResponse && __interruptResponse.type === "reject") {
-        __messages.push(toolMessage("tool call rejected", {
-        tool_call_id: toolCall.id,
-        name: toolCall.name,
-     }));
-  } else {
-    result = await greet(params);
-  }
-  toolCallEndTime = performance.now();
-
-  statelogClient.toolCall({
-    toolName: "greet",
-    params,
-    output: result,
-    model: __client.getModel(),
-    timeTaken: toolCallEndTime - toolCallStartTime,
-  });
-
-  if (isInterrupt(result)) {
-    haltInterrupt = result;
-    haltToolCall = {
-      id: toolCall.id,
-      name: toolCall.name,
-      arguments: toolCall.arguments,
-    }
-    haltExecution = true;
-    break;
-  }
-
-    // Add function result to messages
-  __messages.push(toolMessage(result, {
-        tool_call_id: toolCall.id,
-        name: toolCall.name,
-  }));
-}
+      
     }
 
     if (haltExecution) {

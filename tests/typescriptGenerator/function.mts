@@ -98,7 +98,7 @@ export async function test(args, __metadata={}) : Promise<any> {
         __stack.step++;
       }
       
-}await console.log(await test([], {
+}await console.log(test([], {
         statelogClient,
         graph: __graph,
         messages: __messages,

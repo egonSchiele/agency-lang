@@ -10,6 +10,8 @@ import {
   ImportNodeStatement,
   ImportStatement,
 } from "@/types/importStatement.js";
+import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
+import { renderMermaidAscii } from "beautiful-mermaid";
 
 function help(): void {
   console.log(`
@@ -21,6 +23,7 @@ Usage:
   agency run <input> [output]           Compile and run .agency file
   agency format [input]                 Format .agency file (reads from stdin if no input)
   agency parse [input]                  Parse .agency file and show AST (reads from stdin if no input)
+  agency graph [input]                  Render Mermaid graph from .agency file (reads from stdin if no input)
   agency <input>                        Compile and run .agency file (shorthand)
 
 Arguments:
@@ -88,6 +91,18 @@ function readFile(inputFile: string): string {
   return contents;
 }
 
+function renderGraph(contents: string, verbose: boolean = false): void {
+  const parsedProgram = parse(contents, verbose);
+  const preprocessor = new TypescriptPreprocessor(parsedProgram);
+  preprocessor.preprocess();
+  const mermaid = preprocessor.renderMermaid();
+  console.log("Program Mermaid Diagram:\n");
+  mermaid.forEach((subgraph) => {
+    const ascii = renderMermaidAscii(subgraph);
+    console.log(ascii);
+  });
+}
+
 function getImports(program: AgencyProgram): string[] {
   const toolAndNodeImports = program.nodes
     .filter(
@@ -98,7 +113,10 @@ function getImports(program: AgencyProgram): string[] {
     .map((node) => node.agencyFile.trim());
   // this makes compile() try to parse non-agency files
   const importStatements = program.nodes
-    .filter((node) => node.type === "importStatement" && node.modulePath.endsWith(".agency"))
+    .filter(
+      (node) =>
+        node.type === "importStatement" && node.modulePath.endsWith(".agency"),
+    )
     .map((node) => (node as ImportStatement).modulePath.trim());
 
   return [...toolAndNodeImports, ...importStatements];
@@ -250,7 +268,7 @@ async function main(): Promise<void> {
     case "-h":
       help();
       break;
-
+    case "build":
     case "compile":
       if (filteredArgs.length < 2) {
         console.error(
@@ -292,6 +310,17 @@ async function main(): Promise<void> {
       }
       const result = parse(contents, verbose);
       console.log(JSON.stringify(result, null, 2));
+      break;
+
+    case "mermaid":
+    case "graph":
+      let graphContents;
+      if (filteredArgs.length < 2) {
+        graphContents = await readStdin();
+      } else {
+        graphContents = readFile(filteredArgs[1]);
+      }
+      renderGraph(graphContents, verbose);
       break;
 
     default:

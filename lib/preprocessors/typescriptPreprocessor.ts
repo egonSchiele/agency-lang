@@ -5,7 +5,6 @@ import {
   FunctionDefinition,
   PromptLiteral,
 } from "@/types.js";
-import { renderMermaidAscii } from "beautiful-mermaid";
 
 export class TypescriptPreprocessor {
   public program: AgencyProgram;
@@ -21,12 +20,6 @@ export class TypescriptPreprocessor {
     this.collectTools();
     this.markFunctionsAsync();
     this.markFunctionCallsAsync();
-    const mermaid = this.renderMermaid();
-    console.log("Program Mermaid Diagram:\n");
-    mermaid.forEach((subgraph) => {
-      const ascii = renderMermaidAscii(subgraph);
-      console.log(ascii);
-    });
     return this.program;
   }
 

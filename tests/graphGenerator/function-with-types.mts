@@ -1692,31 +1692,31 @@ graph.node("foo", async (state): Promise<any> => {
     return { ...state, data: undefined };
 });
 //  Call the functions
-__stateStack.globals.sum = await add([5, 10], {
+__stateStack.globals.sum = add([5, 10], {
         statelogClient,
         graph: __graph,
         messages: __messages,
       });;
 
-__stateStack.globals.greeting = await greet([`Alice`], {
+__stateStack.globals.greeting = greet([`Alice`], {
         statelogClient,
         graph: __graph,
         messages: __messages,
       });;
 
-__stateStack.globals.labeled = await mixed([42, `Answer`], {
+__stateStack.globals.labeled = mixed([42, `Answer`], {
         statelogClient,
         graph: __graph,
         messages: __messages,
       });;
 
-__stateStack.globals.processed = await processArray([[1, 2, 3, 4, 5]], {
+__stateStack.globals.processed = processArray([[1, 2, 3, 4, 5]], {
         statelogClient,
         graph: __graph,
         messages: __messages,
       });;
 
-__stateStack.globals.flexResult = await flexible([`test`], {
+__stateStack.globals.flexResult = flexible([`test`], {
         statelogClient,
         graph: __graph,
         messages: __messages,

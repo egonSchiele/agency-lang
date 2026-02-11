@@ -35,8 +35,10 @@ export function generateBuiltinHelpers(functionsUsed: Set<string>): string {
   const inputFunc = builtinFunctionsInput.default({});
   const readFunc = builtinFunctionsRead.default({});
   const fetchJSONFunc = builtinFunctionsFetchJSON.default({});
-
   const helpers: string[] = [];
+  // all included by default, since we don't want to have conditional imports in the generated code
+
+  /*
   if (functionsUsed.has("input")) {
     helpers.push(inputFunc);
   }
@@ -53,7 +55,7 @@ export function generateBuiltinHelpers(functionsUsed: Set<string>): string {
   if (functionsUsed.has("readImage")) {
     const readImageFunc = builtinFunctionsReadImage.default({});
     helpers.push(readImageFunc);
-  }
+  } */
   /* 
   already included by default
     if (functionsUsed.has("sleep")) {

@@ -48,8 +48,8 @@ export class TypescriptPreprocessor {
         // console.log(JSON.stringify(this.functionNameToAsync));
         const hasSyncTools = node.tools
           ? node.tools.toolNames.some(
-            (t) => this.functionNameToAsync[t] === false,
-          )
+              (t) => this.functionNameToAsync[t] === false,
+            )
           : false;
         // console.log({ hasSyncTools });
         if (!hasSyncTools) {
@@ -67,8 +67,8 @@ export class TypescriptPreprocessor {
       if (node.type === "assignment" && node.value.type === "prompt") {
         const hasSyncTools = node.value.tools
           ? node.value.tools.toolNames.some(
-            (t) => this.functionNameToAsync[t] === false,
-          )
+              (t) => this.functionNameToAsync[t] === false,
+            )
           : false;
         if (hasSyncTools) {
           // has sync tools, which means they have a side effect,
@@ -622,10 +622,10 @@ export class TypescriptPreprocessor {
       if (indexToVars[i]) {
         const vars = indexToVars[i];
 
-        const varArray = `[${vars.map(v => `__self.${v}`).join(", ")}]`;
+        const varArray = `[${vars.map((v) => `__self.${v}`).join(", ")}]`;
         const promiseAllCode: RawCode = {
           type: "rawCode",
-          value: `${varArray} = await Promise.allSettled(${varArray});`,
+          value: `${varArray} = await Promise.all(${varArray});`,
         };
         newBody.push(promiseAllCode);
       }

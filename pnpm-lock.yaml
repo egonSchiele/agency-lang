@@ -18,8 +18,8 @@ importers:
         specifier: ^0.0.8
         version: 0.0.8
       smoltalk:
-        specifier: ^0.0.16
-        version: 0.0.16(ws@8.19.0)(zod@4.3.5)
+        specifier: ^0.0.18
+        version: 0.0.18(ws@8.19.0)(zod@4.3.5)
       statelog-client:
         specifier: ^0.0.35
         version: 0.0.35
@@ -803,8 +803,8 @@ packages:
   ollama@0.6.3:
     resolution: {integrity: sha512-KEWEhIqE5wtfzEIZbDCLH51VFZ6Z3ZSa6sIOg/E/tBV8S51flyqBOXi+bRxlOYKDf8i327zG9eSTb8IJxvm3Zg==}
 
-  openai@6.18.0:
-    resolution: {integrity: sha512-odLRYyz9rlzz6g8gKn61RM2oP5UUm428sE2zOxZqS9MzVfD5/XW8UoEjpnRkzTuScXP7ZbP/m7fC+bl8jCOZZw==}
+  openai@6.21.0:
+    resolution: {integrity: sha512-26dQFi76dB8IiN/WKGQOV+yKKTTlRCxQjoi2WLt0kMcH8pvxVyvfdBDkld5GTl7W1qvBpwVOtFcsqktj3fBRpA==}
     hasBin: true
     peerDependencies:
       ws: ^8.18.0
@@ -924,8 +924,8 @@ packages:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}
     engines: {node: '>=8'}
 
-  smoltalk@0.0.16:
-    resolution: {integrity: sha512-4/bcg7Vj88mpLCg6YF0WzEx9NVQZMeffzvisu3/jM45n+2QwE+Btjz28iHx+uwPjuaaqT1j7g6aJu5S7LeFuLw==}
+  smoltalk@0.0.18:
+    resolution: {integrity: sha512-kJVfbXpzgPXlE+Tziq6SbYLnxUxX51B+IbUG7iV3wo8ys9fRzQHX+tBtjJVgcDOPRj6XMmWEflImiQwn6iwPQA==}
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -1786,7 +1786,7 @@ snapshots:
     dependencies:
       whatwg-fetch: 3.6.20
 
-  openai@6.18.0(ws@8.19.0)(zod@4.3.5):
+  openai@6.21.0(ws@8.19.0)(zod@4.3.5):
     optionalDependencies:
       ws: 8.19.0
       zod: 4.3.5
@@ -1916,12 +1916,12 @@ snapshots:
 
   slash@3.0.0: {}
 
-  smoltalk@0.0.16(ws@8.19.0)(zod@4.3.5):
+  smoltalk@0.0.18(ws@8.19.0)(zod@4.3.5):
     dependencies:
       '@google/genai': 1.40.0
       egonlog: 0.0.2
       ollama: 0.6.3
-      openai: 6.18.0(ws@8.19.0)(zod@4.3.5)
+      openai: 6.21.0(ws@8.19.0)(zod@4.3.5)
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
       - bufferutil

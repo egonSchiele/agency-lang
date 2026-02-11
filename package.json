@@ -13,7 +13,8 @@
     "agency": "node ./dist/scripts/agency.js",
     "compile": "node ./dist/scripts/agency.js compile",
     "ast": "node ./dist/scripts/agency.js ast",
-    "graph": "node ./dist/scripts/agency.js graph"
+    "graph": "node ./dist/scripts/agency.js graph",
+    "preprocess": "node ./dist/scripts/agency.js preprocess"
   },
   "bin": {
     "agency": "./dist/scripts/agency.js"

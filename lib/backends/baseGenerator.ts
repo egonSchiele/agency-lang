@@ -237,8 +237,6 @@ export class BaseGenerator {
         return this.processIndexAccess(node);
       case "timeBlock":
         return this.processTimeBlock(node, `__defaultTimeblockName`);
-      case "awaitStatement":
-        return this.processAwaitStatement(node);
       case "newLine":
         return this.processNewLine(node);
       default:

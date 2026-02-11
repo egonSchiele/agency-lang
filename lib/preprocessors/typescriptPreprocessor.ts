@@ -20,7 +20,202 @@ export class TypescriptPreprocessor {
     this.collectTools();
     this.markFunctionsAsync();
     this.markFunctionCallsAsync();
+    this.removeUnusedLlmCalls();
     return this.program;
+  }
+
+  protected removeUnusedLlmCalls(): void {
+    for (const node of this.program.nodes) {
+      if (node.type === "function" || node.type === "graphNode") {
+        node.body = this._removeUnusedLlmCalls(node.body);
+      }
+    }
+  }
+
+  protected promptLiteralToString(prompt: PromptLiteral): string {
+    return prompt.segments
+      .map((seg) => (seg.type === "text" ? seg.value : `{${seg.variableName}}`))
+      .join("");
+  }
+
+  protected _removeUnusedLlmCalls(body: AgencyNode[]): AgencyNode[] {
+    const newBody: AgencyNode[] = [];
+    for (const node of body) {
+      if (node.type === "prompt") {
+        // console.log(JSON.stringify(node));
+        // console.log(JSON.stringify(this.functionNameToAsync));
+        const hasSyncTools = node.tools
+          ? node.tools.toolNames.some(
+              (t) => this.functionNameToAsync[t] === false,
+            )
+          : false;
+        // console.log({ hasSyncTools });
+        if (!hasSyncTools) {
+          /* skip this LLM call since it isn't using any tools that have side effects,
+          isn't being assigned to a variable, and isn't being returned. */
+          newBody.push({
+            type: "comment",
+            content: `Removed unused LLM call: ${this.promptLiteralToString(node)}`,
+          });
+          continue;
+        }
+      }
+
+      // if it is being assigned to a variable, check if that variable is used anywhere else in the body.
+      if (node.type === "assignment" && node.value.type === "prompt") {
+        const hasSyncTools = node.value.tools
+          ? node.value.tools.toolNames.some(
+              (t) => this.functionNameToAsync[t] === false,
+            )
+          : false;
+        if (hasSyncTools) {
+          // has sync tools, which means they have a side effect,
+          // so we need to keep this llm call.
+          newBody.push(node);
+        } else {
+          const isUsed = this.isVarUsedInBody(node.variableName, node, body);
+          if (isUsed) {
+            newBody.push(node);
+          } else {
+            newBody.push({
+              type: "comment",
+              content: `Removed unused LLM call ${this.promptLiteralToString(node.value)}, was assigned to variable '${node.variableName}' but variable was never used.`,
+            });
+            continue;
+          }
+        }
+      } else if (
+        node.type === "returnStatement" &&
+        node.value.type === "prompt"
+      ) {
+        // returning an llm call, keep it.
+        // future improvement: check if the return value is used anywhere.
+        newBody.push(node);
+      } else {
+        newBody.push(node);
+      }
+    }
+    return newBody;
+  }
+
+  protected isVarUsedInBody(
+    variableName: string,
+    nodeToExclude: AgencyNode,
+    body: AgencyNode[],
+  ): boolean {
+    for (const { name, node } of this.getAllVariablesInBody(body)) {
+      if (node === nodeToExclude) {
+        continue; // skip the variable declaration/assignment itself
+      }
+      if (name === variableName) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  protected *getAllVariablesInBody(
+    body: AgencyNode[],
+  ): Generator<{ name: string; node: AgencyNode }> {
+    for (const node of this.walkNodes(body)) {
+      if (node.type === "assignment") {
+        yield { name: node.variableName, node };
+        yield* this.getAllVariablesInBody([node.value as AgencyNode]);
+      } else if (node.type === "function") {
+        yield { name: node.functionName, node };
+        for (const param of node.parameters) {
+          yield { name: param.name, node };
+        }
+        yield* this.getAllVariablesInBody(node.body);
+      } else if (node.type === "graphNode") {
+        yield { name: node.nodeName, node };
+        for (const param of node.parameters) {
+          yield { name: param.name, node };
+        }
+        yield* this.getAllVariablesInBody(node.body);
+      } else if (node.type === "ifElse") {
+        yield* this.getAllVariablesInBody(node.thenBody);
+        if (node.elseBody) {
+          yield* this.getAllVariablesInBody(node.elseBody);
+        }
+      } else if (node.type === "functionCall") {
+        for (const arg of node.arguments) {
+          yield* this.getAllVariablesInBody([arg]);
+        }
+        yield { name: node.functionName, node };
+      } else if (node.type === "specialVar") {
+        yield { name: node.name, node };
+      } else if (node.type === "importStatement") {
+        yield { name: node.importedNames, node };
+      } else if (node.type === "importNodeStatement") {
+        for (const name of node.importedNodes) {
+          yield { name, node };
+        }
+      } else if (node.type === "importToolStatement") {
+        for (const name of node.importedTools) {
+          yield { name, node };
+        }
+      } else if (node.type === "matchBlock") {
+        for (const caseItem of node.cases) {
+          if (caseItem.type === "comment") continue;
+          if (caseItem.caseValue === "_") continue;
+          yield* this.getAllVariablesInBody([caseItem.caseValue]);
+        }
+      } else if (node.type === "variableName") {
+        yield { name: node.value, node };
+      } else if (node.type === "indexAccess") {
+        if (node.array.type === "variableName") {
+          yield { name: node.array.value, node: node.array };
+        }
+        if (node.index.type === "variableName") {
+          yield { name: node.index.value, node: node.index };
+        }
+      } else if (node.type === "dotProperty") {
+        if (node.object.type === "variableName") {
+          yield { name: node.object.value, node: node.object };
+        }
+      } else if (node.type === "accessExpression") {
+        if (node.expression.type === "dotFunctionCall") {
+          if (node.expression.object.type === "variableName") {
+            yield {
+              name: node.expression.object.value,
+              node: node.expression.object,
+            };
+          }
+        } else if (node.expression.type === "dotProperty") {
+          yield* this.getAllVariablesInBody([node.expression.object]);
+        }
+      } else if (node.type === "agencyArray") {
+        for (const item of node.items) {
+          yield* this.getAllVariablesInBody([item]);
+        }
+      } else if (node.type === "agencyObject") {
+        for (const entry of node.entries) {
+          yield* this.getAllVariablesInBody([entry.value]);
+        }
+      } else if (
+        node.type === "prompt" ||
+        node.type === "string" ||
+        node.type === "multiLineString"
+      ) {
+        for (const seg of node.segments) {
+          if (seg.type === "interpolation") {
+            yield { name: seg.variableName, node };
+          }
+        }
+        if (node.type === "prompt") {
+          for (const toolName of node.tools?.toolNames ?? []) {
+            yield { name: toolName, node };
+          }
+        }
+      } else if (node.type === "returnStatement") {
+        yield* this.getAllVariablesInBody([node.value]);
+      } else if (node.type === "whileLoop") {
+        yield* this.getAllVariablesInBody(node.body);
+      } else if (node.type === "timeBlock") {
+        yield* this.getAllVariablesInBody(node.body);
+      }
+    }
   }
 
   protected getFunctionDefinitions() {
@@ -188,8 +383,6 @@ export class TypescriptPreprocessor {
         yield* this.walkNodes(node.items);
       } else if (node.type === "agencyObject") {
         yield* this.walkNodes(node.entries.map((e) => e.value));
-      } else if (node.type === "awaitStatement") {
-        yield* this.walkNodes([node.expression]);
       } else if (node.type === "specialVar") {
         yield* this.walkNodes([node.value]);
       }

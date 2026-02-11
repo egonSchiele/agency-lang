@@ -41,8 +41,7 @@ export type Assignment = {
     | AgencyObject
     | AgencyArray
     | IndexAccess
-    | TimeBlock
-    | AwaitStatement;
+    | TimeBlock;
 };
 
 export type AgencyComment = {
@@ -78,7 +77,6 @@ export type AgencyNode =
   | IndexAccess
   | DotProperty
   | TimeBlock
-  | AwaitStatement
   | NewLine;
 
 export type AgencyProgram = {

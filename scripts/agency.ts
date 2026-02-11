@@ -22,7 +22,8 @@ Usage:
   agency compile <input> [output]       Compile .agency file or directory to TypeScript
   agency run <input> [output]           Compile and run .agency file
   agency format [input]                 Format .agency file (reads from stdin if no input)
-  agency parse [input]                  Parse .agency file and show AST (reads from stdin if no input)
+  agency ast [input]                    Parse .agency file and show AST (reads from stdin if no input)
+  agency preprocess [input]             Parse .agency file and show AST after preprocessing (reads from stdin if no input)
   agency graph [input]                  Render Mermaid graph from .agency file (reads from stdin if no input)
   agency <input>                        Compile and run .agency file (shorthand)
 
@@ -321,6 +322,18 @@ async function main(): Promise<void> {
         graphContents = readFile(filteredArgs[1]);
       }
       renderGraph(graphContents, verbose);
+      break;
+    case "preprocess":
+      let preContents;
+      if (filteredArgs.length < 2) {
+        preContents = await readStdin();
+      } else {
+        preContents = readFile(filteredArgs[1]);
+      }
+      const parsedProgram = parse(preContents, verbose);
+      const preprocessor = new TypescriptPreprocessor(parsedProgram);
+      preprocessor.preprocess();
+      console.log(JSON.stringify(preprocessor.program, null, 2));
       break;
 
     default:

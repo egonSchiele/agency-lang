@@ -1023,7 +1023,8 @@ export async function greet({ messages, callbacks } = {}): Promise<State<any>> {
   const data = [  ];
   __callbacks = callbacks || {};
   const result = await graph.run("greet", { messages: messages || [], data });
-  return result;
+  result.tokens = __stateStack.globals.__tokenStats;
+  return structuredClone(result)
 }
 
 
@@ -1033,7 +1034,8 @@ export async function processGreeting(msg, { messages, callbacks } = {}): Promis
   const data = [ msg ];
   __callbacks = callbacks || {};
   const result = await graph.run("processGreeting", { messages: messages || [], data });
-  return result;
+  result.tokens = __stateStack.globals.__tokenStats;
+  return structuredClone(result)
 }
 
 
@@ -1043,7 +1045,8 @@ export async function main({ messages, callbacks } = {}): Promise<State<any>> {
   const data = [  ];
   __callbacks = callbacks || {};
   const result = await graph.run("main", { messages: messages || [], data });
-  return result;
+  result.tokens = __stateStack.globals.__tokenStats;
+  return structuredClone(result)
 }
 
 export default graph;

@@ -29,6 +29,9 @@ export * from "./types/returnStatement.js";
 export * from "./types/tools.js";
 export * from "./types/typeHints.js";
 export * from "./types/whileLoop.js";
+export * from "./types/timeBlock.js";
+export * from "./types/specialVar.js";
+export * from "./types/ifElse.js";
 
 export type Assignment = {
   type: "assignment";

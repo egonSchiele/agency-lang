@@ -822,7 +822,8 @@ export async function sayHi(name, { messages, callbacks } = {}): Promise<State<a
   const data = [ name ];
   __callbacks = callbacks || {};
   const result = await graph.run("sayHi", { messages: messages || [], data });
-  return result;
+  result.tokens = __stateStack.globals.__tokenStats;
+  return structuredClone(result)
 }
 
 export default graph;

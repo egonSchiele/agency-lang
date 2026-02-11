@@ -678,7 +678,8 @@ export async function greet(name, { messages, callbacks } = {}): Promise<State<s
   const data = [ name ];
   __callbacks = callbacks || {};
   const result = await graph.run("greet", { messages: messages || [], data });
-  return result;
+  result.tokens = __stateStack.globals.__tokenStats;
+  return structuredClone(result)
 }
 
 export default graph;

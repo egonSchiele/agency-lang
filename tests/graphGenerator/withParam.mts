@@ -679,7 +679,8 @@ export async function main(input, { messages, callbacks } = {}): Promise<State<a
   const data = [ input ];
   __callbacks = callbacks || {};
   const result = await graph.run("main", { messages: messages || [], data });
-  return result;
+  result.tokens = __stateStack.globals.__tokenStats;
+  return structuredClone(result)
 }
 
 export default graph;

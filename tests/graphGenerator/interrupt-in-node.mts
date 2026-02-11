@@ -827,7 +827,8 @@ export async function foo2(name, age, { messages, callbacks } = {}): Promise<Sta
   const data = [ name, age ];
   __callbacks = callbacks || {};
   const result = await graph.run("foo2", { messages: messages || [], data });
-  return result;
+  result.tokens = __stateStack.globals.__tokenStats;
+  return structuredClone(result)
 }
 
 
@@ -837,7 +838,8 @@ export async function sayHi(name, { messages, callbacks } = {}): Promise<State<a
   const data = [ name ];
   __callbacks = callbacks || {};
   const result = await graph.run("sayHi", { messages: messages || [], data });
-  return result;
+  result.tokens = __stateStack.globals.__tokenStats;
+  return structuredClone(result)
 }
 
 export default graph;

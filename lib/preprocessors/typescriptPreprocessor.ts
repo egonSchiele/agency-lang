@@ -5,6 +5,9 @@ import {
   FunctionDefinition,
   PromptLiteral,
   RawCode,
+  IfElse,
+  WhileLoop,
+  TimeBlock,
 } from "@/types.js";
 
 export class TypescriptPreprocessor {
@@ -48,8 +51,8 @@ export class TypescriptPreprocessor {
         // console.log(JSON.stringify(this.functionNameToAsync));
         const hasSyncTools = node.tools
           ? node.tools.toolNames.some(
-              (t) => this.functionNameToAsync[t] === false,
-            )
+            (t) => this.functionNameToAsync[t] === false,
+          )
           : false;
         // console.log({ hasSyncTools });
         if (!hasSyncTools) {
@@ -67,8 +70,8 @@ export class TypescriptPreprocessor {
       if (node.type === "assignment" && node.value.type === "prompt") {
         const hasSyncTools = node.value.tools
           ? node.value.tools.toolNames.some(
-              (t) => this.functionNameToAsync[t] === false,
-            )
+            (t) => this.functionNameToAsync[t] === false,
+          )
           : false;
         if (hasSyncTools) {
           // has sync tools, which means they have a side effect,
@@ -568,6 +571,12 @@ export class TypescriptPreprocessor {
     const asyncVarToAssignment: Record<string, AgencyNode> = {};
 
     for (const node of body) {
+      if (this.nodeHasBody(node)) {
+        // recursively process nested bodies first
+        // @ts-ignore
+        node.body = this._addPromiseAllCalls(node.body);
+      }
+
       if (node.type === "assignment") {
         const isAsyncCall =
           (node.value.type === "functionCall" && node.value.async) ||
@@ -580,7 +589,6 @@ export class TypescriptPreprocessor {
     }
 
     const asyncVars = Object.keys(asyncVarToAssignment);
-
     // Find the first usage of each async variable
     const varToFirstUsageIndex: Record<string, number> = {};
 
@@ -634,6 +642,16 @@ export class TypescriptPreprocessor {
     }
 
     return newBody;
+  }
+
+  protected nodeHasBody(node: AgencyNode): node is (FunctionDefinition | AgencyNode | IfElse | WhileLoop | TimeBlock) {
+    return (
+      node.type === "function" ||
+      node.type === "graphNode" ||
+      node.type === "ifElse" ||
+      node.type === "whileLoop" ||
+      node.type === "timeBlock"
+    );
   }
 
   protected _nodeUsesVariable(node: AgencyNode, varName: string): boolean {

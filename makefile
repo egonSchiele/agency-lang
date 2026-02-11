@@ -16,5 +16,6 @@ publish:
 	npm publish
 
 fixtures:
+	pnpm run templates && pnpm run build
 	node dist/scripts/regenerate-fixtures.js
 	node dist/scripts/regenerate-graph-fixtures.js

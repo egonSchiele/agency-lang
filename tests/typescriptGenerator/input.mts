@@ -49,19 +49,6 @@ const addTool = {
       },
     },
   };
-function _builtinInput(prompt: string): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-
-  return new Promise((resolve) => {
-    rl.question(prompt, (answer: string) => {
-      rl.close();
-      resolve(answer);
-    });
-  });
-}
 __stateStack.globals.message = await _builtinInput(`Please enter a message: `);
 
 
@@ -100,69 +87,73 @@ async function _sentiment(message: string, __metadata?: Record<string, any>): Pr
   
     const endTime = performance.now();
 
-    if (isGenerator(__completion)) {
-      if (!__callbacks.onStream) {
-        console.log("No onStream callback provided for streaming response, returning response synchronously");
-        statelogClient.debug(
-          "Got streaming response but no onStream callback provided, returning response synchronously",
-          {
-            prompt: __prompt,
-            callbacks: Object.keys(__callbacks),
-          },
-        );
+    const handleStreamingResponse = async () => {
+      if (isGenerator(__completion)) {
+        if (!__callbacks.onStream) {
+          console.log("No onStream callback provided for streaming response, returning response synchronously");
+          statelogClient.debug(
+            "Got streaming response but no onStream callback provided, returning response synchronously",
+            {
+              prompt: __prompt,
+              callbacks: Object.keys(__callbacks),
+            },
+          );
 
-        let syncResult = "";
-        for await (const chunk of __completion) {
-          switch (chunk.type) {
-            case "tool_call":
-              __toolCalls.push(chunk.toolCall);
-              break;
-            case "done":
-              syncResult = chunk.result;
-              break;
-            case "error":
-              console.error(`Error in LLM response stream: ${chunk.error}`);
-              break;
-            default:
-              break;
+          let syncResult = "";
+          for await (const chunk of __completion) {
+            switch (chunk.type) {
+              case "tool_call":
+                __toolCalls.push(chunk.toolCall);
+                break;
+              case "done":
+                syncResult = chunk.result;
+                break;
+              case "error":
+                console.error(`Error in LLM response stream: ${chunk.error}`);
+                break;
+              default:
+                break;
+            }
           }
-        }
-        __completion = { success: true, value: syncResult };
-      } else {
-        // try to acquire lock
-        let count = 0;
-        // wait 60 seconds to acquire lock
-        while (onStreamLock && count < (10 * 60)) {
-          await _builtinSleep(0.1)
-          count++
-        }
-        if (onStreamLock) {
-          console.log(`Couldn't acquire lock, ${count}`);
-        }
-        onStreamLock = true;
-
-        for await (const chunk of __completion) {
-          switch (chunk.type) {
-            case "text":
-              __callbacks.onStream({ type: "text", text: chunk.text });
-              break;
-            case "tool_call":
-              __toolCalls.push(chunk.toolCall);
-              __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
-              break;
-            case "done":
-              __callbacks.onStream({ type: "done", result: chunk.result });
-              __completion = { success: true, value: chunk.result };
-              break;
-            case "error":
-              __callbacks.onStream({ type: "error", error: chunk.error });
-              break;
+          __completion = { success: true, value: syncResult };
+        } else {
+          // try to acquire lock
+          let count = 0;
+          // wait 60 seconds to acquire lock
+          while (onStreamLock && count < (10 * 60)) {
+            await _builtinSleep(0.1)
+            count++
           }
-        }
+          if (onStreamLock) {
+            console.log(`Couldn't acquire lock, ${count}`);
+          }
+          onStreamLock = true;
 
-        onStreamLock = false
+          for await (const chunk of __completion) {
+            switch (chunk.type) {
+              case "text":
+                __callbacks.onStream({ type: "text", text: chunk.text });
+                break;
+              case "tool_call":
+                __toolCalls.push(chunk.toolCall);
+                __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
+                break;
+              case "done":
+                __callbacks.onStream({ type: "done", result: chunk.result });
+                __completion = { success: true, value: chunk.result };
+                break;
+              case "error":
+                __callbacks.onStream({ type: "error", error: chunk.error });
+                break;
+            }
+          }
+
+          onStreamLock = false
+        }
       }
     }
+
+    await handleStreamingResponse();
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -186,6 +177,9 @@ async function _sentiment(message: string, __metadata?: Record<string, any>): Pr
       // Add assistant's response with tool calls to message history
       __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
     }
+
+    __updateTokenStats(responseMessage.usage, responseMessage.cost);
+
   }
 
   // Handle function calls
@@ -225,55 +219,7 @@ async function _sentiment(message: string, __metadata?: Record<string, any>): Pr
 
     const nextEndTime = performance.now();
 
-    if (isGenerator(__completion)) {
-      if (!__callbacks.onStream) {
-        console.log("No onStream callback provided for streaming response, returning response synchronously");
-        statelogClient.debug(
-          "Got streaming response but no onStream callback provided, returning response synchronously",
-          {
-            prompt: __prompt,
-            callbacks: Object.keys(__callbacks),
-          },
-        );
-
-        let syncResult = "";
-        for await (const chunk of __completion) {
-          switch (chunk.type) {
-            case "tool_call":
-              __toolCalls.push(chunk.toolCall);
-              break;
-            case "done":
-              syncResult = chunk.result;
-              break;
-            case "error":
-              console.error(`Error in LLM response stream: ${chunk.error}`);
-              break;
-            default:
-              break;
-          }
-        }
-        __completion = { success: true, value: syncResult };
-      } else {
-        for await (const chunk of __completion) {
-          switch (chunk.type) {
-            case "text":
-              __callbacks.onStream({ type: "text", text: chunk.text });
-              break;
-            case "tool_call":
-              __toolCalls.push(chunk.toolCall);
-              __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
-              break;
-            case "done":
-              __callbacks.onStream({ type: "done", result: chunk.result });
-              __completion = { success: true, value: chunk.result };
-              break;
-            case "error":
-              __callbacks.onStream({ type: "error", error: chunk.error });
-              break;
-          }
-        }
-      }
-    }
+    await handleStreamingResponse();
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -288,6 +234,7 @@ async function _sentiment(message: string, __metadata?: Record<string, any>): Pr
       );
     }
     responseMessage = __completion.value;
+    __updateTokenStats(responseMessage.usage, responseMessage.cost);
   }
 
   // Add final assistant response to history
@@ -312,7 +259,6 @@ async function _sentiment(message: string, __metadata?: Record<string, any>): Pr
 __self.sentiment = _sentiment(__stateStack.globals.message, {
       messages: __messages,
     });
-
 
 
 await console.log(__stateStack.globals.sentiment)

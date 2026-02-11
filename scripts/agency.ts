@@ -12,12 +12,7 @@ import {
 } from "@/types/importStatement.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { renderMermaidAscii } from "beautiful-mermaid";
-
-// Configuration interface
-interface AgencyConfig {
-  verbose?: boolean;
-  outDir?: string;
-}
+import { AgencyConfig } from "@/config.js";
 
 let config: AgencyConfig = {};
 
@@ -72,7 +67,11 @@ Flags:
 Config File (agency.json):
   {
     "verbose": false,                   Enable verbose logging by default
-    "outDir": "./dist"               Default output directory for compiled files
+    "outDir": "./dist",                 Default output directory for compiled files
+    "excludeNodeTypes": ["comment"],    Node types to exclude from code generation
+    "excludeBuiltinFunctions": ["write"], Builtin functions to exclude
+    "allowedFetchDomains": ["api.example.com"], Whitelist for fetch domains
+    "disallowedFetchDomains": ["blocked.com"]   Blacklist for fetch domains
   }
 
 Examples:
@@ -138,7 +137,7 @@ function readFile(inputFile: string): string {
 
 function renderGraph(contents: string, verbose: boolean = false): void {
   const parsedProgram = parse(contents, verbose);
-  const preprocessor = new TypescriptPreprocessor(parsedProgram);
+  const preprocessor = new TypescriptPreprocessor(parsedProgram, config);
   preprocessor.preprocess();
   const mermaid = preprocessor.renderMermaid();
   console.log("Program Mermaid Diagram:\n");
@@ -241,7 +240,7 @@ function compile(
     }
   });
 
-  const generatedCode = generateGraph(parsedProgram);
+  const generatedCode = generateGraph(parsedProgram, config);
   fs.writeFileSync(outputFile, generatedCode, "utf-8");
 
   console.log(`${inputFile} → ${outputFile}`);
@@ -460,7 +459,7 @@ async function main(): Promise<void> {
         preContents = readFile(filteredArgs[1]);
       }
       const parsedProgram = parse(preContents, verbose);
-      const preprocessor = new TypescriptPreprocessor(parsedProgram);
+      const preprocessor = new TypescriptPreprocessor(parsedProgram, config);
       preprocessor.preprocess();
       console.log(JSON.stringify(preprocessor.program, null, 2));
       break;

@@ -234,8 +234,8 @@ export class GraphGenerator extends TypeScriptGenerator {
   }
 }
 
-export function generateGraph(program: AgencyProgram): string {
-  const preprocessor = new TypescriptPreprocessor(program);
+export function generateGraph(program: AgencyProgram, config?: import("@/config.js").AgencyConfig): string {
+  const preprocessor = new TypescriptPreprocessor(program, config);
   const preprocessedProgram = preprocessor.preprocess();
 
   const generator = new GraphGenerator();

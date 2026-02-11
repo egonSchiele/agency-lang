@@ -1,4 +1,16 @@
 {
   "verbose": false,
-  "outDir": "./adist"
+  "outDir": "./dist",
+
+  "excludeNodeTypes": [
+    "importStatement",
+    "importNodeStatement",
+    "importToolStatement"
+  ],
+
+  "excludeBuiltinFunctions": ["write"],
+
+  "allowedFetchDomains": ["adit.io"]
+
+  // "disallowedFetchDomains": ["malicious.com", "blocked.site.com"]
 }

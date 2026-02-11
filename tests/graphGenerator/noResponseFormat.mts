@@ -540,6 +540,12 @@ if (isInterrupt(__self.response1)) {
         __stack.step++;
       }
       
+
+      if (__step <= 2) {
+        await console.log(__stack.locals.response1)
+        __stack.step++;
+      }
+      
     
     // this is just here to have a default return value from a node if the user doesn't specify one
     return { ...state, data: undefined };

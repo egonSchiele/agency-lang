@@ -1,3 +1,4 @@
 node main() {
-  response1 = `say hello`
+  response1 = llm("say hello")
+  print(response1)
 }

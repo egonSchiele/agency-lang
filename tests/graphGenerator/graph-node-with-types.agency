@@ -1,5 +1,6 @@
 // Test graph nodes with typed parameters
 
 node greet(name: string): string {
-  greeting = `Say hello to ${name}`
+  greeting = llm("Say hello to ${name}")
+  print(greeting)
 }

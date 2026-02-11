@@ -249,6 +249,19 @@ function isGenerator(variable) {
 }
 
 let __callbacks: Record<string, any> = {};
+
+let onStreamLock = false;
+
+function cloneArray<T>(arr?:T[]): T[] {
+  if (arr == undefined) return [];
+  return [...arr];
+}
+
+function _builtinSleep(seconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, seconds * 1000);
+  });
+}
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -381,6 +394,18 @@ async function _result(input: string, __metadata?: Record<string, any>): Promise
         }
         __completion = { success: true, value: syncResult };
       } else {
+        // try to acquire lock
+        let count = 0;
+        // wait 60 seconds to acquire lock
+        while (onStreamLock && count < (10 * 60)) {
+          await _builtinSleep(0.1)
+          count++
+        }
+        if (onStreamLock) {
+          console.log(`Couldn't acquire lock, ${count}`);
+        }
+        onStreamLock = true;
+
         for await (const chunk of __completion) {
           switch (chunk.type) {
             case "text":
@@ -399,6 +424,8 @@ async function _result(input: string, __metadata?: Record<string, any>): Promise
               break;
           }
         }
+
+        onStreamLock = false
       }
     }
 
@@ -538,22 +565,21 @@ async function _result(input: string, __metadata?: Record<string, any>): Promise
   
 }
 
-__self.result = await _result(__stack.args.input, {
+
+__self.result = _result(__stack.args.input, {
       messages: __messages,
     });
-
-// return early from node if this is an interrupt
-if (isInterrupt(__self.result)) {
-  
-  return { ...state, data: __self.result };
-  
-   
-}
         __stack.step++;
       }
       
 
       if (__step <= 2) {
+        [__self.result] = await Promise.allSettled([__self.result]);
+        __stack.step++;
+      }
+      
+
+      if (__step <= 3) {
         await console.log(__stack.locals.result)
         __stack.step++;
       }

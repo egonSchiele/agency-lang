@@ -129,6 +129,18 @@ async function _sentiment(message: string, __metadata?: Record<string, any>): Pr
         }
         __completion = { success: true, value: syncResult };
       } else {
+        // try to acquire lock
+        let count = 0;
+        // wait 60 seconds to acquire lock
+        while (onStreamLock && count < (10 * 60)) {
+          await _builtinSleep(0.1)
+          count++
+        }
+        if (onStreamLock) {
+          console.log(`Couldn't acquire lock, ${count}`);
+        }
+        onStreamLock = true;
+
         for await (const chunk of __completion) {
           switch (chunk.type) {
             case "text":
@@ -147,6 +159,8 @@ async function _sentiment(message: string, __metadata?: Record<string, any>): Pr
               break;
           }
         }
+
+        onStreamLock = false
       }
     }
 
@@ -294,14 +308,11 @@ async function _sentiment(message: string, __metadata?: Record<string, any>): Pr
   
 }
 
-__self.sentiment = await _sentiment(__stateStack.globals.message, {
+
+__self.sentiment = _sentiment(__stateStack.globals.message, {
       messages: __messages,
     });
 
-// return early from node if this is an interrupt
-if (isInterrupt(__self.sentiment)) {
-  
-   
-   return  __self.sentiment;
-   
-}await console.log(__stateStack.globals.sentiment)
+
+
+await console.log(__stateStack.globals.sentiment)

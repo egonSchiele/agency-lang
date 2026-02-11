@@ -114,6 +114,18 @@ async function _foo(__metadata?: Record<string, any>): Promise<"hi"> {
         }
         __completion = { success: true, value: syncResult };
       } else {
+        // try to acquire lock
+        let count = 0;
+        // wait 60 seconds to acquire lock
+        while (onStreamLock && count < (10 * 60)) {
+          await _builtinSleep(0.1)
+          count++
+        }
+        if (onStreamLock) {
+          console.log(`Couldn't acquire lock, ${count}`);
+        }
+        onStreamLock = true;
+
         for await (const chunk of __completion) {
           switch (chunk.type) {
             case "text":
@@ -132,6 +144,8 @@ async function _foo(__metadata?: Record<string, any>): Promise<"hi"> {
               break;
           }
         }
+
+        onStreamLock = false
       }
     }
 
@@ -279,17 +293,14 @@ async function _foo(__metadata?: Record<string, any>): Promise<"hi"> {
   
 }
 
-__self.foo = await _foo({
+
+__self.foo = _foo({
       messages: __messages,
     });
 
-// return early from node if this is an interrupt
-if (isInterrupt(__self.foo)) {
-  
-   
-   return  __self.foo;
-   
-}
+
+
+
 async function _bar(__metadata?: Record<string, any>): Promise<42> {
   const __prompt = `the number 42`;
   const startTime = performance.now();
@@ -354,6 +365,18 @@ async function _bar(__metadata?: Record<string, any>): Promise<42> {
         }
         __completion = { success: true, value: syncResult };
       } else {
+        // try to acquire lock
+        let count = 0;
+        // wait 60 seconds to acquire lock
+        while (onStreamLock && count < (10 * 60)) {
+          await _builtinSleep(0.1)
+          count++
+        }
+        if (onStreamLock) {
+          console.log(`Couldn't acquire lock, ${count}`);
+        }
+        onStreamLock = true;
+
         for await (const chunk of __completion) {
           switch (chunk.type) {
             case "text":
@@ -372,6 +395,8 @@ async function _bar(__metadata?: Record<string, any>): Promise<42> {
               break;
           }
         }
+
+        onStreamLock = false
       }
     }
 
@@ -519,17 +544,14 @@ async function _bar(__metadata?: Record<string, any>): Promise<42> {
   
 }
 
-__self.bar = await _bar({
+
+__self.bar = _bar({
       messages: __messages,
     });
 
-// return early from node if this is an interrupt
-if (isInterrupt(__self.bar)) {
-  
-   
-   return  __self.bar;
-   
-}
+
+
+
 async function _baz(__metadata?: Record<string, any>): Promise<true> {
   const __prompt = `the boolean true`;
   const startTime = performance.now();
@@ -594,6 +616,18 @@ async function _baz(__metadata?: Record<string, any>): Promise<true> {
         }
         __completion = { success: true, value: syncResult };
       } else {
+        // try to acquire lock
+        let count = 0;
+        // wait 60 seconds to acquire lock
+        while (onStreamLock && count < (10 * 60)) {
+          await _builtinSleep(0.1)
+          count++
+        }
+        if (onStreamLock) {
+          console.log(`Couldn't acquire lock, ${count}`);
+        }
+        onStreamLock = true;
+
         for await (const chunk of __completion) {
           switch (chunk.type) {
             case "text":
@@ -612,6 +646,8 @@ async function _baz(__metadata?: Record<string, any>): Promise<true> {
               break;
           }
         }
+
+        onStreamLock = false
       }
     }
 
@@ -759,14 +795,10 @@ async function _baz(__metadata?: Record<string, any>): Promise<true> {
   
 }
 
-__self.baz = await _baz({
+
+__self.baz = _baz({
       messages: __messages,
     });
 
-// return early from node if this is an interrupt
-if (isInterrupt(__self.baz)) {
-  
-   
-   return  __self.baz;
-   
-}
+
+

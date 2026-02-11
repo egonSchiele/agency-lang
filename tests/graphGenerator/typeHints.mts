@@ -249,6 +249,19 @@ function isGenerator(variable) {
 }
 
 let __callbacks: Record<string, any> = {};
+
+let onStreamLock = false;
+
+function cloneArray<T>(arr?:T[]): T[] {
+  if (arr == undefined) return [];
+  return [...arr];
+}
+
+function _builtinSleep(seconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, seconds * 1000);
+  });
+}
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -372,6 +385,18 @@ async function _count(__metadata?: Record<string, any>): Promise<number> {
         }
         __completion = { success: true, value: syncResult };
       } else {
+        // try to acquire lock
+        let count = 0;
+        // wait 60 seconds to acquire lock
+        while (onStreamLock && count < (10 * 60)) {
+          await _builtinSleep(0.1)
+          count++
+        }
+        if (onStreamLock) {
+          console.log(`Couldn't acquire lock, ${count}`);
+        }
+        onStreamLock = true;
+
         for await (const chunk of __completion) {
           switch (chunk.type) {
             case "text":
@@ -390,6 +415,8 @@ async function _count(__metadata?: Record<string, any>): Promise<number> {
               break;
           }
         }
+
+        onStreamLock = false
       }
     }
 
@@ -537,17 +564,10 @@ async function _count(__metadata?: Record<string, any>): Promise<number> {
   
 }
 
-__self.count = await _count({
+
+__self.count = _count({
       messages: __messages,
     });
-
-// return early from node if this is an interrupt
-if (isInterrupt(__self.count)) {
-  
-  return { ...state, data: __self.count };
-  
-   
-}
         __stack.step++;
       }
       
@@ -615,6 +635,18 @@ async function _message(__metadata?: Record<string, any>): Promise<string> {
         }
         __completion = { success: true, value: syncResult };
       } else {
+        // try to acquire lock
+        let count = 0;
+        // wait 60 seconds to acquire lock
+        while (onStreamLock && count < (10 * 60)) {
+          await _builtinSleep(0.1)
+          count++
+        }
+        if (onStreamLock) {
+          console.log(`Couldn't acquire lock, ${count}`);
+        }
+        onStreamLock = true;
+
         for await (const chunk of __completion) {
           switch (chunk.type) {
             case "text":
@@ -633,6 +665,8 @@ async function _message(__metadata?: Record<string, any>): Promise<string> {
               break;
           }
         }
+
+        onStreamLock = false
       }
     }
 
@@ -772,28 +806,33 @@ async function _message(__metadata?: Record<string, any>): Promise<string> {
   
 }
 
-__self.message = await _message({
+
+__self.message = _message({
       messages: __messages,
     });
-
-// return early from node if this is an interrupt
-if (isInterrupt(__self.message)) {
-  
-  return { ...state, data: __self.message };
-  
-   
-}
         __stack.step++;
       }
       
 
       if (__step <= 3) {
-        await console.log(__stack.locals.count)
+        [__self.count] = await Promise.allSettled([__self.count]);
         __stack.step++;
       }
       
 
       if (__step <= 4) {
+        await console.log(__stack.locals.count)
+        __stack.step++;
+      }
+      
+
+      if (__step <= 5) {
+        [__self.message] = await Promise.allSettled([__self.message]);
+        __stack.step++;
+      }
+      
+
+      if (__step <= 6) {
         await console.log(__stack.locals.message)
         __stack.step++;
       }

@@ -249,6 +249,19 @@ function isGenerator(variable) {
 }
 
 let __callbacks: Record<string, any> = {};
+
+let onStreamLock = false;
+
+function cloneArray<T>(arr?:T[]): T[] {
+  if (arr == undefined) return [];
+  return [...arr];
+}
+
+function _builtinSleep(seconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, seconds * 1000);
+  });
+}
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -369,6 +382,18 @@ async function _response1(__metadata?: Record<string, any>): Promise<string> {
         }
         __completion = { success: true, value: syncResult };
       } else {
+        // try to acquire lock
+        let count = 0;
+        // wait 60 seconds to acquire lock
+        while (onStreamLock && count < (10 * 60)) {
+          await _builtinSleep(0.1)
+          count++
+        }
+        if (onStreamLock) {
+          console.log(`Couldn't acquire lock, ${count}`);
+        }
+        onStreamLock = true;
+
         for await (const chunk of __completion) {
           switch (chunk.type) {
             case "text":
@@ -387,6 +412,8 @@ async function _response1(__metadata?: Record<string, any>): Promise<string> {
               break;
           }
         }
+
+        onStreamLock = false
       }
     }
 
@@ -526,22 +553,21 @@ async function _response1(__metadata?: Record<string, any>): Promise<string> {
   
 }
 
-__self.response1 = await _response1({
+
+__self.response1 = _response1({
       messages: __messages,
     });
-
-// return early from node if this is an interrupt
-if (isInterrupt(__self.response1)) {
-  
-  return { ...state, data: __self.response1 };
-  
-   
-}
         __stack.step++;
       }
       
 
       if (__step <= 2) {
+        [__self.response1] = await Promise.allSettled([__self.response1]);
+        __stack.step++;
+      }
+      
+
+      if (__step <= 3) {
         await console.log(__stack.locals.response1)
         __stack.step++;
       }

@@ -249,6 +249,19 @@ function isGenerator(variable) {
 }
 
 let __callbacks: Record<string, any> = {};
+
+let onStreamLock = false;
+
+function cloneArray<T>(arr?:T[]): T[] {
+  if (arr == undefined) return [];
+  return [...arr];
+}
+
+function _builtinSleep(seconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, seconds * 1000);
+  });
+}
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -402,6 +415,18 @@ async function _response1(msg: string, __metadata?: Record<string, any>): Promis
         }
         __completion = { success: true, value: syncResult };
       } else {
+        // try to acquire lock
+        let count = 0;
+        // wait 60 seconds to acquire lock
+        while (onStreamLock && count < (10 * 60)) {
+          await _builtinSleep(0.1)
+          count++
+        }
+        if (onStreamLock) {
+          console.log(`Couldn't acquire lock, ${count}`);
+        }
+        onStreamLock = true;
+
         for await (const chunk of __completion) {
           switch (chunk.type) {
             case "text":
@@ -420,6 +445,8 @@ async function _response1(msg: string, __metadata?: Record<string, any>): Promis
               break;
           }
         }
+
+        onStreamLock = false
       }
     }
 
@@ -559,34 +586,33 @@ async function _response1(msg: string, __metadata?: Record<string, any>): Promis
   
 }
 
-__self.response1 = await _response1(__stack.locals.msg, {
+
+__self.response1 = _response1(__stack.locals.msg, {
       messages: __messages,
     });
-
-// return early from node if this is an interrupt
-if (isInterrupt(__self.response1)) {
-  
-  return { ...state, data: __self.response1 };
-  
-   
-}
         __stack.step++;
       }
       
 
       if (__step <= 4) {
-        await console.log(__stack.locals.response1)
+        [__self.response1] = await Promise.allSettled([__self.response1]);
         __stack.step++;
       }
       
 
       if (__step <= 5) {
-        __client = getClientWithConfig({ model: `gemini-2.5-flash-lite` });
+        await console.log(__stack.locals.response1)
         __stack.step++;
       }
       
 
       if (__step <= 6) {
+        __client = getClientWithConfig({ model: `gemini-2.5-flash-lite` });
+        __stack.step++;
+      }
+      
+
+      if (__step <= 7) {
         
 async function _response2(msg: string, __metadata?: Record<string, any>): Promise<string> {
   const __prompt = `${msg}`;
@@ -649,6 +675,18 @@ async function _response2(msg: string, __metadata?: Record<string, any>): Promis
         }
         __completion = { success: true, value: syncResult };
       } else {
+        // try to acquire lock
+        let count = 0;
+        // wait 60 seconds to acquire lock
+        while (onStreamLock && count < (10 * 60)) {
+          await _builtinSleep(0.1)
+          count++
+        }
+        if (onStreamLock) {
+          console.log(`Couldn't acquire lock, ${count}`);
+        }
+        onStreamLock = true;
+
         for await (const chunk of __completion) {
           switch (chunk.type) {
             case "text":
@@ -667,6 +705,8 @@ async function _response2(msg: string, __metadata?: Record<string, any>): Promis
               break;
           }
         }
+
+        onStreamLock = false
       }
     }
 
@@ -806,28 +846,27 @@ async function _response2(msg: string, __metadata?: Record<string, any>): Promis
   
 }
 
-__self.response2 = await _response2(__stack.locals.msg, {
+
+__self.response2 = _response2(__stack.locals.msg, {
       messages: __messages,
     });
-
-// return early from node if this is an interrupt
-if (isInterrupt(__self.response2)) {
-  
-  return { ...state, data: __self.response2 };
-  
-   
-}
-        __stack.step++;
-      }
-      
-
-      if (__step <= 7) {
-        await console.log(__stack.locals.response2)
         __stack.step++;
       }
       
 
       if (__step <= 8) {
+        [__self.response2] = await Promise.allSettled([__self.response2]);
+        __stack.step++;
+      }
+      
+
+      if (__step <= 9) {
+        await console.log(__stack.locals.response2)
+        __stack.step++;
+      }
+      
+
+      if (__step <= 10) {
         return { ...state, data: [__stack.locals.response1, __stack.locals.response2]}
         __stack.step++;
       }

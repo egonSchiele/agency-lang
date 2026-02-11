@@ -114,6 +114,18 @@ async function _numbers(__metadata?: Record<string, any>): Promise<number[]> {
         }
         __completion = { success: true, value: syncResult };
       } else {
+        // try to acquire lock
+        let count = 0;
+        // wait 60 seconds to acquire lock
+        while (onStreamLock && count < (10 * 60)) {
+          await _builtinSleep(0.1)
+          count++
+        }
+        if (onStreamLock) {
+          console.log(`Couldn't acquire lock, ${count}`);
+        }
+        onStreamLock = true;
+
         for await (const chunk of __completion) {
           switch (chunk.type) {
             case "text":
@@ -132,6 +144,8 @@ async function _numbers(__metadata?: Record<string, any>): Promise<number[]> {
               break;
           }
         }
+
+        onStreamLock = false
       }
     }
 
@@ -279,17 +293,14 @@ async function _numbers(__metadata?: Record<string, any>): Promise<number[]> {
   
 }
 
-__self.numbers = await _numbers({
+
+__self.numbers = _numbers({
       messages: __messages,
     });
 
-// return early from node if this is an interrupt
-if (isInterrupt(__self.numbers)) {
-  
-   
-   return  __self.numbers;
-   
-}await console.log(__stateStack.globals.numbers)
+
+
+await console.log(__stateStack.globals.numbers)
 async function _greetings(__metadata?: Record<string, any>): Promise<string[]> {
   const __prompt = `a list of 3 common greetings in different languages`;
   const startTime = performance.now();
@@ -354,6 +365,18 @@ async function _greetings(__metadata?: Record<string, any>): Promise<string[]> {
         }
         __completion = { success: true, value: syncResult };
       } else {
+        // try to acquire lock
+        let count = 0;
+        // wait 60 seconds to acquire lock
+        while (onStreamLock && count < (10 * 60)) {
+          await _builtinSleep(0.1)
+          count++
+        }
+        if (onStreamLock) {
+          console.log(`Couldn't acquire lock, ${count}`);
+        }
+        onStreamLock = true;
+
         for await (const chunk of __completion) {
           switch (chunk.type) {
             case "text":
@@ -372,6 +395,8 @@ async function _greetings(__metadata?: Record<string, any>): Promise<string[]> {
               break;
           }
         }
+
+        onStreamLock = false
       }
     }
 
@@ -519,14 +544,11 @@ async function _greetings(__metadata?: Record<string, any>): Promise<string[]> {
   
 }
 
-__self.greetings = await _greetings({
+
+__self.greetings = _greetings({
       messages: __messages,
     });
 
-// return early from node if this is an interrupt
-if (isInterrupt(__self.greetings)) {
-  
-   
-   return  __self.greetings;
-   
-}await console.log(__stateStack.globals.greetings)
+
+
+await console.log(__stateStack.globals.greetings)

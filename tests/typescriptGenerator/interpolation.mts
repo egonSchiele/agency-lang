@@ -112,6 +112,18 @@ async function _greeting(name: string, __metadata?: Record<string, any>): Promis
         }
         __completion = { success: true, value: syncResult };
       } else {
+        // try to acquire lock
+        let count = 0;
+        // wait 60 seconds to acquire lock
+        while (onStreamLock && count < (10 * 60)) {
+          await _builtinSleep(0.1)
+          count++
+        }
+        if (onStreamLock) {
+          console.log(`Couldn't acquire lock, ${count}`);
+        }
+        onStreamLock = true;
+
         for await (const chunk of __completion) {
           switch (chunk.type) {
             case "text":
@@ -130,6 +142,8 @@ async function _greeting(name: string, __metadata?: Record<string, any>): Promis
               break;
           }
         }
+
+        onStreamLock = false
       }
     }
 
@@ -269,14 +283,11 @@ async function _greeting(name: string, __metadata?: Record<string, any>): Promis
   
 }
 
-__self.greeting = await _greeting(__stateStack.globals.name, {
+
+__self.greeting = _greeting(__stateStack.globals.name, {
       messages: __messages,
     });
 
-// return early from node if this is an interrupt
-if (isInterrupt(__self.greeting)) {
-  
-   
-   return  __self.greeting;
-   
-}await console.log(__stateStack.globals.greeting)
+
+
+await console.log(__stateStack.globals.greeting)

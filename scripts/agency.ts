@@ -13,6 +13,37 @@ import {
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { renderMermaidAscii } from "beautiful-mermaid";
 
+// Configuration interface
+interface AgencyConfig {
+  verbose?: boolean;
+  outDir?: string;
+}
+
+let config: AgencyConfig = {};
+
+// Load configuration from agency.json
+function loadConfig(configPath?: string): AgencyConfig {
+  let config: AgencyConfig = {};
+
+  // Determine config file path
+  const defaultConfigPath = path.join(process.cwd(), "agency.json");
+  const finalConfigPath = configPath || defaultConfigPath;
+
+  // Check if config file exists
+  if (fs.existsSync(finalConfigPath)) {
+    try {
+      const configContent = fs.readFileSync(finalConfigPath, "utf-8");
+      config = JSON.parse(configContent);
+      console.log(`Loaded config from ${finalConfigPath}`);
+    } catch (error) {
+      console.error(`Error loading config from ${finalConfigPath}:`, error);
+      process.exit(1);
+    }
+  }
+
+  return config;
+}
+
 function help(): void {
   console.log(`
 Agency Language CLI
@@ -36,6 +67,13 @@ Arguments:
 Flags:
   -v, --verbose                         Enable verbose logging during parsing
   -i, --in-place                        Format file(s) in-place (use with format command)
+  -c, --config <path>                   Path to agency.json config file (default: ./agency.json)
+
+Config File (agency.json):
+  {
+    "verbose": false,                   Enable verbose logging by default
+    "outDir": "./dist"               Default output directory for compiled files
+  }
 
 Examples:
   agency help                           Show help
@@ -44,6 +82,7 @@ Examples:
   agency compile ./scripts              Compile all .agency files in directory
   agency run script.agency              Compile and run script.agency
   agency -v parse script.agency         Parse with verbose logging
+  agency -c config.json compile script  Use custom config file
   agency format script.agency           Format and print to stdout
   agency format -i script.agency        Format file in-place
   agency format -i ./scripts            Format all .agency files in directory in-place
@@ -167,7 +206,16 @@ function compile(
 
   // Resolve the absolute path of the input file to avoid duplicates
   const absoluteInputFile = path.resolve(inputFile);
-  const outputFile = _outputFile || inputFile.replace(".agency", ".ts");
+  let outputFile = _outputFile || inputFile.replace(".agency", ".ts");
+  if (config.outDir && !_outputFile) {
+    const outputDir = path.resolve(config.outDir);
+
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    outputFile = path.join(outputDir, outputFile);
+  }
   // Skip if already compiled
   if (compiledFiles.has(absoluteInputFile)) {
     return outputFile;
@@ -176,7 +224,6 @@ function compile(
   compiledFiles.add(absoluteInputFile);
 
   const contents = readFile(inputFile);
-  console.log(`Compiling ${inputFile}...`);
   const parsedProgram = parse(contents, verbose);
 
   const imports = getImports(parsedProgram);
@@ -197,7 +244,7 @@ function compile(
   const generatedCode = generateGraph(parsedProgram);
   fs.writeFileSync(outputFile, generatedCode, "utf-8");
 
-  console.log(`Generated ${outputFile} from ${inputFile}`);
+  console.log(`${inputFile} → ${outputFile}`);
 
   return outputFile;
 }
@@ -297,15 +344,37 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Extract config flag
+  const configIndex = args.findIndex(
+    (arg) => arg === "-c" || arg === "--config",
+  );
+  let configPath: string | undefined;
+  if (configIndex !== -1 && args[configIndex + 1]) {
+    configPath = args[configIndex + 1];
+  }
+
+  // Load configuration
+  config = loadConfig(configPath);
+
   // Extract verbose flag
   const verboseIndex = args.findIndex(
     (arg) => arg === "-v" || arg === "--verbose",
   );
-  const verbose = verboseIndex !== -1;
+  // CLI flag overrides config file
+  const verbose = verboseIndex !== -1 || (config.verbose ?? false);
 
-  // Remove verbose flag from args
-  const filteredArgs = args.filter(
-    (arg) => arg !== "-v" && arg !== "--verbose",
+  // Remove flags from args
+  let filteredArgs = args.filter(
+    (arg, index) =>
+      arg !== "-v" &&
+      arg !== "--verbose" &&
+      arg !== "-c" &&
+      arg !== "--config" &&
+      // Remove the config path value if it follows the -c flag
+      !(
+        (args[index - 1] === "-c" || args[index - 1] === "--config") &&
+        index === configIndex + 1
+      ),
   );
 
   const command = filteredArgs[0];

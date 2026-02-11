@@ -14,6 +14,7 @@
     "compile": "node ./dist/scripts/agency.js compile",
     "ast": "node ./dist/scripts/agency.js ast",
     "graph": "node ./dist/scripts/agency.js graph",
+    "fmt": "node ./dist/scripts/agency.js fmt",
     "preprocess": "node ./dist/scripts/agency.js preprocess"
   },
   "bin": {

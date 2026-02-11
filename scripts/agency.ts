@@ -21,7 +21,8 @@ Usage:
   agency help                           Show this help message
   agency compile <input> [output]       Compile .agency file or directory to TypeScript
   agency run <input> [output]           Compile and run .agency file
-  agency format [input]                 Format .agency file (reads from stdin if no input)
+  agency format [input]                 Format .agency file or directory (reads from stdin if no input)
+  agency format -i <input>              Format .agency file or directory in-place
   agency ast [input]                    Parse .agency file and show AST (reads from stdin if no input)
   agency preprocess [input]             Parse .agency file and show AST after preprocessing (reads from stdin if no input)
   agency graph [input]                  Render Mermaid graph from .agency file (reads from stdin if no input)
@@ -34,6 +35,7 @@ Arguments:
 
 Flags:
   -v, --verbose                         Enable verbose logging during parsing
+  -i, --in-place                        Format file(s) in-place (use with format command)
 
 Examples:
   agency help                           Show help
@@ -42,6 +44,9 @@ Examples:
   agency compile ./scripts              Compile all .agency files in directory
   agency run script.agency              Compile and run script.agency
   agency -v parse script.agency         Parse with verbose logging
+  agency format script.agency           Format and print to stdout
+  agency format -i script.agency        Format file in-place
+  agency format -i ./scripts            Format all .agency files in directory in-place
   cat script.agency | agency format     Format from stdin
   echo "x = 5" | agency parse           Parse from stdin
   agency script.agency                  Compile and run (shorthand)
@@ -236,8 +241,50 @@ async function format(
 ): Promise<string> {
   const parsedProgram = parse(contents, verbose);
   const generatedCode = generateAgency(parsedProgram);
-  console.log(generatedCode);
   return generatedCode;
+}
+
+function formatFile(
+  inputPath: string,
+  inPlace: boolean,
+  verbose: boolean = false,
+): void {
+  const stats = fs.statSync(inputPath);
+
+  if (stats.isDirectory()) {
+    // Format all .agency files in directory
+    const files = fs.readdirSync(inputPath);
+    const agencyFiles = files.filter((file) => file.endsWith(".agency"));
+
+    for (const file of agencyFiles) {
+      const fullPath = path.join(inputPath, file);
+      formatFile(fullPath, inPlace, verbose);
+    }
+
+    // Recursively format subdirectories
+    const subdirs = files.filter((file) => {
+      const fullPath = path.join(inputPath, file);
+      return fs.statSync(fullPath).isDirectory();
+    });
+
+    for (const subdir of subdirs) {
+      const fullSubdirPath = path.join(inputPath, subdir);
+      formatFile(fullSubdirPath, inPlace, verbose);
+    }
+    return;
+  }
+
+  // Format single file
+  const contents = readFile(inputPath);
+  const parsedProgram = parse(contents, verbose);
+  const generatedCode = generateAgency(parsedProgram);
+
+  if (inPlace) {
+    fs.writeFileSync(inputPath, generatedCode, "utf-8");
+    console.log(`Formatted ${inputPath}`);
+  } else {
+    console.log(generatedCode);
+  }
 }
 
 // Main CLI logic
@@ -292,13 +339,26 @@ async function main(): Promise<void> {
 
     case "fmt":
     case "format":
-      let fmtContents;
-      if (filteredArgs.length < 2) {
-        fmtContents = await readStdin();
+      // Extract -i flag
+      const inPlaceIndex = filteredArgs.findIndex(
+        (arg) => arg === "-i" || arg === "--in-place",
+      );
+      const inPlace = inPlaceIndex !== -1;
+
+      // Remove -i flag from args
+      const formatArgs = filteredArgs.filter(
+        (arg) => arg !== "-i" && arg !== "--in-place",
+      );
+
+      if (formatArgs.length < 2) {
+        // Read from stdin
+        const fmtContents = await readStdin();
+        const formatted = await format(fmtContents, verbose);
+        console.log(formatted);
       } else {
-        fmtContents = readFile(filteredArgs[1]);
+        // Read from file or directory
+        formatFile(formatArgs[1], inPlace, verbose);
       }
-      format(fmtContents, verbose);
       break;
 
     case "ast":

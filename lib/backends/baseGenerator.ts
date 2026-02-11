@@ -76,10 +76,11 @@ export class BaseGenerator {
   // TODO also save return types, check if used as a tool, return type cannot be null/void/undefined
   protected functionDefinitions: Record<string, FunctionDefinition> = {};
   protected currentScope: Scope[] = [{ type: "global" }];
-
+  protected program: AgencyProgram | null = null;
   generate(program: AgencyProgram): {
     output: string;
   } {
+    this.program = program;
     // Pass 1: Collect all type aliases
     for (const node of program.nodes) {
       if (node.type === "typeAlias") {
@@ -125,6 +126,13 @@ export class BaseGenerator {
       }
     }
 
+    /* For each function, mark whether it is async or not.
+       A function has to be run synchronously if
+       - it or any of its child functions could throw an interrupt
+       - it or any of its child functions performs IO.
+    */
+    this.preprocessAST();
+
     // Pass 7: Process all nodes and generate code
     for (const node of program.nodes) {
       const result = this.processNode(node);
@@ -149,6 +157,10 @@ export class BaseGenerator {
     if (str.trim() !== "") {
       lines.push(str);
     }
+  }
+
+  protected preprocessAST(): void {
+    // subclasses can implement this if their target language has async functions
   }
 
   protected generateBuiltins(): string {

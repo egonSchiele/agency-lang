@@ -17,6 +17,7 @@ import { ReturnStatement } from "../types/returnStatement.js";
 import { TypeScriptGenerator } from "./typescriptGenerator.js";
 import { mapFunctionName } from "./typescriptGenerator/builtins.js";
 import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
+import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 
 export class GraphGenerator extends TypeScriptGenerator {
   protected typeHints: TypeHintMap = {};
@@ -234,6 +235,9 @@ export class GraphGenerator extends TypeScriptGenerator {
 }
 
 export function generateGraph(program: AgencyProgram): string {
+  const preprocessor = new TypescriptPreprocessor(program);
+  const preprocessedProgram = preprocessor.preprocess();
+
   const generator = new GraphGenerator();
-  return generator.generate(program).output;
+  return generator.generate(preprocessedProgram).output;
 }

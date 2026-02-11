@@ -60,6 +60,7 @@ import {
   DEFAULT_SCHEMA,
   mapTypeToZodSchema,
 } from "./typescriptGenerator/typeToZodSchema.js";
+import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
@@ -696,6 +697,8 @@ export class TypeScriptGenerator extends BaseGenerator {
 }
 
 export function generateTypeScript(program: AgencyProgram): string {
+  const preprocessor = new TypescriptPreprocessor(program);
+  const preprocessedProgram = preprocessor.preprocess();
   const generator = new TypeScriptGenerator();
-  return generator.generate(program).output;
+  return generator.generate(preprocessedProgram).output;
 }

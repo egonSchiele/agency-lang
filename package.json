@@ -40,6 +40,7 @@
   },
   "homepage": "https://github.com/egonSchiele/agency-lang#readme",
   "dependencies": {
+    "beautiful-mermaid": "^0.1.3",
     "egonlog": "^0.0.2",
     "piemachine": "^0.0.8",
     "smoltalk": "^0.0.16",

@@ -1,4 +1,5 @@
 import { AgencyObject } from "./dataStructures.js";
+import { UsesTool } from "./tools.js";
 
 export type Literal =
   | NumberLiteral
@@ -45,4 +46,6 @@ export type PromptLiteral = {
   segments: PromptSegment[];
   config?: AgencyObject;
   isStreaming?: boolean;
+  async?: boolean;
+  tools?: UsesTool;
 };

@@ -391,6 +391,176 @@ export type StreamChunk = {
 };
 ```
 
+## Parallel calls
+Where possible, Agency will try to run your code async, which often means llm calls will happen in parallel when possible. Let's look at some examples.
+
+Both of these LLM calls can be run in parallel because they don't depend on each other.
+
+```ts
+node example() {
+  // both should run in parallel
+  fibs: number[] = llm("Get the first 10 Fibonacci numbers.")
+  story: string = llm("Write a short story about a cat and a dog.")
+  print(fibs)
+  print(story)
+}
+```
+
+story does not need to run at all since the value is never used.
+
+```ts
+node example() {
+  fibs: number[] = llm("Get the first 10 Fibonacci numbers.")
+
+  story: string = llm("Write a short story about a cat and a dog.")
+  print(fibs)
+}
+```
+
+`sum` can only run after `fibs` is done, since it depends on the value of `fibs`.
+```ts
+node example() {
+  fibs: number[] = llm("Get the first 10 Fibonacci numbers.")
+  // 
+  sum: number = llm("Add up these numbers ${fibs}.")
+  print(sum)
+}
+```
+
+These two calls can't run in parallel because they might throw interrupts, and we can only handle one interrupt at a time.
+```ts
+def readFile(name: string) {
+  return interrupt("Reading file ${name}")
+  return "file contents"
+}
+
+node example() {
+  uses readFile
+  todos = llm("Get a list of todos from todos.json.")
+
+  uses readFile
+  reminders = llm("Get a list of reminders from reminders.json.")
+}
+```
+
+```ts
+def foo() {
+  return llm("Say hi")
+}
+
+def bar() {
+  return llm("Write a joke")
+}
+
+node example() {
+  // These two calls can run in parallel:
+  foo()
+  bar()
+}
+```
+
+```ts
+sync def foo() {
+  return llm("Say hi")
+}
+
+sync def bar() {
+  return llm("Write a joke")
+}
+
+node example() {
+  // These two calls WON'T run in parallel,
+  // because the user specifically marked them as sync functions.
+  foo()
+  bar()
+}
+```
+
+LLM calls inside `thread`s never run in parallel, because the message history accumulates. See below.
+```ts
+node example() {
+  thread {
+    fibs: number[] = llm("Get the first 10 Fibonacci numbers.")
+    story: string = llm("Write a short story about a cat and a dog.")
+  }
+  print(fibs)
+  print(story)
+}
+```
+
+When calls run async, their value is `await`ed right before it is actually used.
+```ts
+node example() {
+  fibs: number[] = llm("Get the first 10 Fibonacci numbers.")
+  story: string = llm("Write a short story about a cat and a dog.")
+  // Agency will add an await call here,
+  // so that it waits for both fibs and story to be done before printing:
+  print(fibs, story)
+}
+```
+
+To see which calls will run in parallel, you can use the `graph` command in the Agency CLI.
+
+Save this as `foo.agency`:
+```ts
+node main() {
+  bar: string = stream llm("Define the word 'bar'.")
+  thread {
+    story: string = stream llm("Write a 100 word story about a cat and a dog.")
+    fibs: number[] = stream llm("Get the first 10 Fibonacci numbers.")
+  }
+  print(bar)
+  print(fibs, story)
+}
+```
+
+Run:
+
+```bash
+agency graph foo.agency
+```
+
+Now move the llm calls outside of the thread and run the graph command again to see the difference!
+
+## Message threads
+Agency gives you a few ways to manage message history. By default, every LLM call will be isolated. That means these two calls won't share any history:
+
+```ts
+node main() {
+  res1: number[] = llm("What are the first 5 prime numbers?")
+  res2: number = llm("And what is the sum of those numbers?")
+  print(res1, res2)
+}
+```
+
+In fact, as you have just learned, Agency will run both of these calls in parallel, so the second one might actually finish before the first!
+I ran it and got this output:
+
+```
+[ 2, 3, 5, 7, 11 ] 0
+```
+
+In this case, though, it makes sense that you would want to share history between them. How can you accomplish this? A simple way is to use a message thread:
+
+```ts
+node main() {
+  thread {
+    res1: number[] = llm("What are the first 5 prime numbers?")
+    res2: number = llm("And what is the sum of those numbers?")
+  }
+  print(res1, res2)
+}
+```
+
+The only change is that both calls are now in a `thread` block, but it now means they will run synchronously and share message history. Now when I run this code, I get this output
+
+```
+[ 2, 3, 5, 7, 11 ] 28
+```
+
+### Nested threads
+You can also nest threads inside of each other. Each thread creates a new message history, but that message history also includes the history of any parent threads. This means that if you have two sibling threads, they won't share history with each other, but they will both share history with their parent thread.
+
 ## A few notes on agent design
 
 As you build more complex agents, a good way to design them is with a decision tree-style approach. Instead of having one big prompt, use several smaller prompts to categorize a user's message and then use the appropriate prompt. This should make your agent faster and more reliable. For example, suppose you are building an agent that a user can use to either report their mood or add an item to their to-do list.

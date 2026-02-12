@@ -383,6 +383,54 @@ function __cloneArray<T>(arr?: T[]): T[] {
   return [...arr];
 }
 
+/**** Message thread handling ****/
+
+type MessageThreadJSON = { messages: any[]; children: MessageThreadJSON[] };
+
+class MessageThread {
+  private messages: any[] = [];
+  public children: MessageThread[] = [];
+
+  constructor(messages: any[] = []) {
+    this.messages = messages;
+    this.children = [];
+  }
+
+  addMessage(message: any) {
+    this.messages.push(message);
+  }
+
+  cloneMessages(): any[] {
+    return this.messages.map(m => m.toJSON()).map(m => messageFromJSON(m));
+  }
+
+  getMessages(): any[] {
+    return this.messages;
+  }
+
+  setMessages(messages: any[]) {
+    this.messages = messages;
+  }
+
+  newChild(): MessageThread {
+    const child = new MessageThread();
+    this.children.push(child);
+    return child;
+  }
+
+  newSubthreadChild(): MessageThread {
+    const child = new MessageThread(this.cloneMessages());
+    this.children.push(child);
+    return child;
+  }
+
+  toJSON(): MessageThreadJSON {
+    return {
+      messages: this.messages.map(m => m.toJSON()),
+      children: this.children.map((child) => child.toJSON()),
+    };
+  }
+}
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -635,7 +683,7 @@ async function _response(msg: string, __metadata?: Record<string, any>): Promise
 
 
 __self.response = _response(__stack.args.msg, {
-      messages: __self.messages,
+      messages: __self.messages_0.getMessages(),
     });
 
 
@@ -690,7 +738,7 @@ export async function google(args, __metadata={}) : Promise<string> {
       
 
       if (__step <= 1) {
-        __self.messages = [];
+        __self.messages_0.setMessages([]);
         __stack.step++;
       }
       
@@ -892,7 +940,7 @@ async function _response(msg: string, __metadata?: Record<string, any>): Promise
 
 
 __self.response = _response(__stack.args.msg, {
-      messages: __self.messages,
+      messages: __self.messages_0.getMessages(),
     });
 
 
@@ -1153,7 +1201,7 @@ async function ___promptVar(__metadata?: Record<string, any>): Promise<number[]>
 
 
 __self.__promptVar = ___promptVar({
-      messages: __self.messages,
+      messages: __self.messages_0.getMessages(),
     });
 
 
@@ -1197,6 +1245,7 @@ graph.node("main", async (state): Promise<any> => {
     const __step = __stack.step;
 
     const __self: Record<string, any> = __stack.locals;
+    __self.messages_0 = new MessageThread();
 
     
     
@@ -1224,7 +1273,7 @@ if (isInterrupt(__stack.locals.msg)) {
         __stack.locals.res2 = google([__stack.locals.msg], {
         statelogClient,
         graph: __graph,
-        messages: __self.messages,
+        messages: __self.messages_0.getMessages(),
       });;
 
 
@@ -1242,7 +1291,7 @@ if (isInterrupt(__stack.locals.res2)) {
         __stack.locals.res1 = openai([__stack.locals.msg], {
         statelogClient,
         graph: __graph,
-        messages: __self.messages,
+        messages: __self.messages_0.getMessages(),
       });;
 
 

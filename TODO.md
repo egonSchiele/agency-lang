@@ -75,3 +75,5 @@ imported tools currently can't be used because to create the array that gets pas
 - todo in lib/templates/backends/typescriptGenerator/promptFunction.mustache
 
 Use https://www.npmjs.com/package/code-block-writer for writing ts code instead?
+
+Future optimization: Currently, all LLM calls inside threads are awaited. However,  the LLM calls inside two sibling threads could be running in parallel.

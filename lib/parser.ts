@@ -88,6 +88,13 @@ export const _multilineCommentParser = between(str("/*"), str("*/"), anyChar);
 
 export const multilineCommentParser = search(_multilineCommentParser);
 
+export const normalizeCode = (s: string) => {
+  return s
+    .split("\n")
+    .map((line) => line.trim())
+    .join("\n");
+};
+
 export function parseAgency(
   input: string,
   verbose: boolean = false,
@@ -103,12 +110,7 @@ export function parseAgency(
   logger.debug("================================");
 
   // get rid of all multiline comments
-  normalized = comments.rest
-    .split("\n")
-    .map((line: string) => {
-      return line.trim();
-    })
-    .join("\n");
+  normalized = normalizeCode(comments.rest);
   if (normalized.trim().length === 0) {
     return success(
       {

@@ -100,7 +100,7 @@ export async function test(args, __metadata={}) : Promise<any> {
 }await console.log(test([], {
         statelogClient,
         graph: __graph,
-        messages: __self.messages,
+        messages: __self.messages_0.getMessages(),
       });)
 export async function add(args, __metadata={}) : Promise<any> {
     const __stack = __stateStack.getNewState();

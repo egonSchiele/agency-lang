@@ -255,7 +255,7 @@ async function _url(__metadata?: Record<string, any>): Promise<{ hostname: strin
 
 
 __self.url = _url({
-      messages: __self.messages,
+      messages: __self.messages_0.getMessages(),
     });
 
 

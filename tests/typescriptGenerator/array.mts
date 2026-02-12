@@ -255,7 +255,7 @@ async function _numbers(__metadata?: Record<string, any>): Promise<number[]> {
 
 
 __self.numbers = _numbers({
-      messages: __self.messages,
+      messages: __self.messages_0.getMessages(),
     });
 
 
@@ -465,7 +465,7 @@ async function _greetings(__metadata?: Record<string, any>): Promise<string[]> {
 
 
 __self.greetings = _greetings({
-      messages: __self.messages,
+      messages: __self.messages_0.getMessages(),
     });
 
 

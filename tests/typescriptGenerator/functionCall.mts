@@ -255,7 +255,7 @@ async function _bar(__metadata?: Record<string, any>): Promise<number> {
 
 
 __self.bar = _bar({
-      messages: __self.messages,
+      messages: __self.messages_0.getMessages(),
     });
 
 

@@ -383,6 +383,54 @@ function __cloneArray<T>(arr?: T[]): T[] {
   return [...arr];
 }
 
+/**** Message thread handling ****/
+
+type MessageThreadJSON = { messages: any[]; children: MessageThreadJSON[] };
+
+class MessageThread {
+  private messages: any[] = [];
+  public children: MessageThread[] = [];
+
+  constructor(messages: any[] = []) {
+    this.messages = messages;
+    this.children = [];
+  }
+
+  addMessage(message: any) {
+    this.messages.push(message);
+  }
+
+  cloneMessages(): any[] {
+    return this.messages.map(m => m.toJSON()).map(m => messageFromJSON(m));
+  }
+
+  getMessages(): any[] {
+    return this.messages;
+  }
+
+  setMessages(messages: any[]) {
+    this.messages = messages;
+  }
+
+  newChild(): MessageThread {
+    const child = new MessageThread();
+    this.children.push(child);
+    return child;
+  }
+
+  newSubthreadChild(): MessageThread {
+    const child = new MessageThread(this.cloneMessages());
+    this.children.push(child);
+    return child;
+  }
+
+  toJSON(): MessageThreadJSON {
+    return {
+      messages: this.messages.map(m => m.toJSON()),
+      children: this.children.map((child) => child.toJSON()),
+    };
+  }
+}
 function add({a, b}: {a:number, b:number}):number {
   return a + b;
 }
@@ -475,6 +523,7 @@ graph.node("foo2", async (state): Promise<any> => {
     const __step = __stack.step;
 
     const __self: Record<string, any> = __stack.locals;
+    __self.messages_0 = new MessageThread();
 
     
     
@@ -698,7 +747,7 @@ async function _response(name: string, age: string, __metadata?: Record<string, 
 
 
 __self.response = _response(__stack.args.name, __stack.args.age, {
-      messages: __self.messages,
+      messages: __self.messages_0.getMessages(),
     });
         __stack.step++;
       }
@@ -759,6 +808,7 @@ graph.node("sayHi", async (state): Promise<any> => {
     const __step = __stack.step;
 
     const __self: Record<string, any> = __stack.locals;
+    __self.messages_0 = new MessageThread();
 
     
     

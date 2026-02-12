@@ -245,7 +245,7 @@ async function _greeting(name: string, __metadata?: Record<string, any>): Promis
 
 
 __self.greeting = _greeting(__stateStack.globals.name, {
-      messages: __self.messages,
+      messages: __self.messages_0.getMessages(),
     });
 
 

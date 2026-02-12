@@ -6,7 +6,11 @@ import {
   docStringParser,
   graphNodeParser,
   timeBlockParser,
+  messageThreadParser,
+  _messageThreadParser,
+  _submessageThreadParser,
 } from "./function.js";
+import { normalizeCode } from "@/parser.js";
 
 describe("docStringParser", () => {
   const testCases = [
@@ -2783,5 +2787,786 @@ describe("graphNodeParser", () => {
         expect(result.success).toBe(false);
       });
     }
+  });
+});
+
+describe("messageThreadParser", () => {
+  describe("thread blocks", () => {
+    const threadTestCases = [
+      // Happy path - basic thread
+      {
+        input: "thread {\n}",
+        expected: {
+          success: true,
+          result: {
+            type: "messageThread",
+            subthread: false,
+            body: [],
+          },
+        },
+      },
+      // Thread with minimal spacing
+      {
+        input: "thread{ }",
+        expected: {
+          success: true,
+          result: {
+            type: "messageThread",
+            subthread: false,
+            body: [],
+          },
+        },
+      },
+      // Thread with extra spaces
+      {
+        input: "thread   {   \n   }",
+        expected: {
+          success: true,
+          result: {
+            type: "messageThread",
+            subthread: false,
+            body: [],
+          },
+        },
+      },
+      // Thread with newlines
+      {
+        input: "thread {\n\n\n}",
+        expected: {
+          success: true,
+          result: {
+            type: "messageThread",
+            subthread: false,
+            body: [],
+          },
+        },
+      },
+    ];
+
+    threadTestCases.forEach(({ input, expected }) => {
+      if (expected.success) {
+        it(`should parse "${input.replace(/\n/g, "\\n")}" successfully`, () => {
+          const result = messageThreadParser(normalizeCode(input));
+          expect(result.success).toBe(true);
+          if (result.success) {
+            expect(result.result.type).toBe(expected.result.type);
+            expect(result.result.subthread).toBe(expected.result.subthread);
+            expect(result.result.body).toBeDefined();
+          }
+        });
+      } else {
+        it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
+          const result = messageThreadParser(normalizeCode(input));
+          expect(result.success).toBe(false);
+        });
+      }
+    });
+  });
+
+  describe("subthread blocks", () => {
+    const subthreadTestCases = [
+      // Happy path - basic subthread
+      {
+        input: "subthread {\n}",
+        expected: {
+          success: true,
+          result: {
+            type: "messageThread",
+            subthread: true,
+            body: [],
+          },
+        },
+      },
+      // Subthread with minimal spacing
+      {
+        input: "subthread{ }",
+        expected: {
+          success: true,
+          result: {
+            type: "messageThread",
+            subthread: true,
+            body: [],
+          },
+        },
+      },
+      // Subthread with extra spaces
+      {
+        input: "subthread   {   \n   }",
+        expected: {
+          success: true,
+          result: {
+            type: "messageThread",
+            subthread: true,
+            body: [],
+          },
+        },
+      },
+      // Subthread with newlines
+      {
+        input: "subthread {\n\n\n}",
+        expected: {
+          success: true,
+          result: {
+            type: "messageThread",
+            subthread: true,
+            body: [],
+          },
+        },
+      },
+    ];
+
+    subthreadTestCases.forEach(({ input, expected }) => {
+      if (expected.success) {
+        it(`should parse "${input.replace(/\n/g, "\\n")}" successfully`, () => {
+          const result = messageThreadParser(normalizeCode(input));
+          expect(result.success).toBe(true);
+          if (result.success) {
+            expect(result.result.type).toBe(expected.result.type);
+            expect(result.result.subthread).toBe(expected.result.subthread);
+            expect(result.result.body).toBeDefined();
+          }
+        });
+      } else {
+        it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
+          const result = messageThreadParser(normalizeCode(input));
+          expect(result.success).toBe(false);
+        });
+      }
+    });
+  });
+
+  describe("thread vs subthread distinction", () => {
+    it("should correctly distinguish thread from subthread", () => {
+      const threadResult = messageThreadParser("thread { }");
+      const subthreadResult = messageThreadParser("subthread { }");
+
+      expect(threadResult.success).toBe(true);
+      expect(subthreadResult.success).toBe(true);
+
+      if (threadResult.success && subthreadResult.success) {
+        expect(threadResult.result.subthread).toBe(false);
+        expect(subthreadResult.result.subthread).toBe(true);
+      }
+    });
+
+    it("_messageThreadParser should only parse thread", () => {
+      const threadResult = _messageThreadParser("thread { }");
+      const subthreadResult = _messageThreadParser("subthread { }");
+
+      expect(threadResult.success).toBe(true);
+      expect(subthreadResult.success).toBe(false);
+    });
+
+    it("_submessageThreadParser should only parse subthread", () => {
+      const threadResult = _submessageThreadParser("thread { }");
+      const subthreadResult = _submessageThreadParser("subthread { }");
+
+      expect(threadResult.success).toBe(false);
+      expect(subthreadResult.success).toBe(true);
+    });
+  });
+
+  describe("thread/subthread with body content", () => {
+    it("should parse thread with assignment", () => {
+      const input = "thread {\n  x = 5\n}";
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("messageThread");
+        expect(result.result.subthread).toBe(false);
+        expect(result.result.body.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("should parse subthread with assignment", () => {
+      const input = "subthread {\n  x = 5\n}";
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("messageThread");
+        expect(result.result.subthread).toBe(true);
+        expect(result.result.body.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("should parse thread with multiple statements", () => {
+      const input = `thread {
+  x = 5
+  y = 10
+  z = 15
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.body.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("should parse thread with comment", () => {
+      const input = `thread {
+  // this is a comment
+  x = 5
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.body.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("should parse thread with prompt assignment", () => {
+      const input = `thread {
+  result: number[] = llm(\`What are the first 5 prime numbers?\`)
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("messageThread");
+        expect(result.result.subthread).toBe(false);
+        expect(result.result.body.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("should parse subthread with prompt assignment", () => {
+      const input = `subthread {
+  result: number = llm(\`Calculate the sum\`)
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("messageThread");
+        expect(result.result.subthread).toBe(true);
+        expect(result.result.body.length).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  describe("failure cases", () => {
+    const failureCases = [
+      { input: "", description: "empty string" },
+      { input: "thread", description: "missing braces" },
+      { input: "subthread", description: "subthread missing braces" },
+      { input: "thread {", description: "missing closing brace" },
+      { input: "subthread {", description: "subthread missing closing brace" },
+      { input: "thread }", description: "missing opening brace" },
+      { input: "subthread }", description: "subthread missing opening brace" },
+      { input: "threads { }", description: "wrong keyword (threads)" },
+      { input: "Thread { }", description: "wrong capitalization (Thread)" },
+      {
+        input: "Subthread { }",
+        description: "wrong capitalization (Subthread)",
+      },
+      { input: "sub thread { }", description: "space in keyword" },
+      { input: "THREAD { }", description: "uppercase keyword" },
+      { input: "message_thread { }", description: "wrong keyword format" },
+      { input: "def thread() { }", description: "function-like syntax" },
+      { input: "{ }", description: "braces only" },
+      { input: "// thread { }", description: "commented out" },
+    ];
+
+    failureCases.forEach(({ input, description }) => {
+      it(`should fail to parse ${description}: "${input.replace(/\n/g, "\\n")}"`, () => {
+        const result = messageThreadParser(normalizeCode(input));
+        expect(result.success).toBe(false);
+      });
+    });
+  });
+
+  describe("whitespace edge cases", () => {
+    it("should handle thread with tabs", () => {
+      const input = "thread\t{\t\n\t}";
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.subthread).toBe(false);
+      }
+    });
+
+    it("should handle thread with mixed whitespace", () => {
+      const input = "thread \t {\n\t \n}";
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.subthread).toBe(false);
+      }
+    });
+
+    it("should handle subthread with tabs", () => {
+      const input = "subthread\t{\t\n\t}";
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.subthread).toBe(true);
+      }
+    });
+  });
+
+  describe("rest of input handling", () => {
+    it("should consume only the thread block and leave rest", () => {
+      const input = "thread { }\nx = 5";
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.rest).toContain("x = 5");
+      }
+    });
+
+    it("should consume only the subthread block and leave rest", () => {
+      const input = "subthread { }\ny = 10";
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.rest).toContain("y = 10");
+      }
+    });
+  });
+
+  describe("nested content scenarios", () => {
+    it("should parse thread with function call", () => {
+      const input = `thread {
+  result = doSomething()
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("messageThread");
+        expect(result.result.body.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("should parse subthread with typed assignment", () => {
+      const input = `subthread {
+  x: number = 5
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("messageThread");
+        expect(result.result.subthread).toBe(true);
+        expect(result.result.body.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("should parse thread with multiple assignments", () => {
+      const input = `thread {
+  count = 1
+  name = "test"
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("messageThread");
+        expect(result.result.body.length).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  describe("nested threads and subthreads", () => {
+    it("should parse thread containing a single subthread", () => {
+      const input = `thread {
+  res1 = 1
+  subthread {
+    res2 = 2
+  }
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("messageThread");
+        expect(result.result.subthread).toBe(false);
+        expect(result.result.body.length).toBeGreaterThan(0);
+
+        // Find the nested subthread in the body
+        const nestedSubthread = result.result.body.find(
+          (node: any) =>
+            node.type === "messageThread" && node.subthread === true,
+        );
+        expect(nestedSubthread).toBeDefined();
+      }
+    });
+
+    it("should parse thread containing multiple subthreads", () => {
+      const input = `thread {
+  res1 = 1
+  subthread {
+    res2 = 2
+  }
+  subthread {
+    res3 = 3
+  }
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("messageThread");
+        expect(result.result.subthread).toBe(false);
+
+        // Count subthreads in the body
+        const subthreads = result.result.body.filter(
+          (node: any) =>
+            node.type === "messageThread" && node.subthread === true,
+        );
+        expect(subthreads.length).toBe(2);
+      }
+    });
+
+    it("should parse subthread containing a thread", () => {
+      const input = `subthread {
+  res1 = 1
+  thread {
+    res2 = 2
+  }
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("messageThread");
+        expect(result.result.subthread).toBe(true);
+
+        // Find the nested thread in the body
+        const nestedThread = result.result.body.find(
+          (node: any) =>
+            node.type === "messageThread" && node.subthread === false,
+        );
+        expect(nestedThread).toBeDefined();
+      }
+    });
+
+    it("should parse deeply nested subthreads (3 levels)", () => {
+      const input = `thread {
+  res1 = 1
+  subthread {
+    res2 = 2
+    subthread {
+      res3 = 3
+    }
+  }
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("messageThread");
+        expect(result.result.subthread).toBe(false);
+
+        // Find the first level subthread
+        const firstSubthread = result.result.body.find(
+          (node: any) =>
+            node.type === "messageThread" && node.subthread === true,
+        );
+        expect(firstSubthread).toBeDefined();
+
+        if (firstSubthread) {
+          // Find the second level subthread
+          const secondSubthread = (firstSubthread as any).body.find(
+            (node: any) =>
+              node.type === "messageThread" && node.subthread === true,
+          );
+          expect(secondSubthread).toBeDefined();
+        }
+      }
+    });
+
+    it("should parse thread with nested subthread and thread", () => {
+      const input = `thread {
+  res1 = 1
+  subthread {
+    res2 = 2
+    thread {
+      res3 = 3
+    }
+  }
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("messageThread");
+        expect(result.result.subthread).toBe(false);
+
+        const firstSubthread = result.result.body.find(
+          (node: any) =>
+            node.type === "messageThread" && node.subthread === true,
+        );
+        expect(firstSubthread).toBeDefined();
+
+        if (firstSubthread) {
+          const nestedThread = (firstSubthread as any).body.find(
+            (node: any) =>
+              node.type === "messageThread" && node.subthread === false,
+          );
+          expect(nestedThread).toBeDefined();
+        }
+      }
+    });
+
+    it("should parse complex nested structure from foo.agency example", () => {
+      const input = `thread {
+  res1: number[] = llm(\`What are the first 5 prime numbers?\`)
+  subthread {
+    res2: number[] = llm(\`What are the next 2 prime numbers after those?\`)
+    subthread {
+      res3: number = llm(\`And what is the sum of all those numbers combined?\`)
+    }
+    thread {
+      res5: number = llm(\`And what is the sum of all those numbers combined?\`)
+    }
+  }
+  subthread {
+    res4: number = llm(\`And what is the sum of all those numbers combined?\`)
+  }
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("messageThread");
+        expect(result.result.subthread).toBe(false);
+
+        // Should have 2 top-level subthreads
+        const topLevelSubthreads = result.result.body.filter(
+          (node: any) =>
+            node.type === "messageThread" && node.subthread === true,
+        );
+        expect(topLevelSubthreads.length).toBe(2);
+      }
+    });
+
+    it("should parse thread with nested empty subthread", () => {
+      const input = `thread {
+  x = 1
+  subthread {
+  }
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("messageThread");
+
+        const nestedSubthread = result.result.body.find(
+          (node: any) =>
+            node.type === "messageThread" && node.subthread === true,
+        );
+        expect(nestedSubthread).toBeDefined();
+        if (nestedSubthread) {
+          expect((nestedSubthread as any).body).toEqual([]);
+        }
+      }
+    });
+
+    it("should parse subthread with nested empty thread", () => {
+      const input = `subthread {
+  x = 1
+  thread {
+  }
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("messageThread");
+        expect(result.result.subthread).toBe(true);
+
+        const nestedThread = result.result.body.find(
+          (node: any) =>
+            node.type === "messageThread" && node.subthread === false,
+        );
+        expect(nestedThread).toBeDefined();
+        if (nestedThread) {
+          expect((nestedThread as any).body).toEqual([]);
+        }
+      }
+    });
+
+    it("should parse thread with interleaved assignments and subthreads", () => {
+      const input = `thread {
+  a = 1
+  subthread {
+    b = 2
+  }
+  c = 3
+  subthread {
+    d = 4
+  }
+  e = 5
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("messageThread");
+        expect(result.result.body.length).toBeGreaterThan(4);
+
+        const subthreads = result.result.body.filter(
+          (node: any) => node.type === "messageThread",
+        );
+        expect(subthreads.length).toBe(2);
+      }
+    });
+
+    it("should parse deeply nested structure (4 levels)", () => {
+      const input = `thread {
+  level1 = 1
+  subthread {
+    level2 = 2
+    thread {
+      level3 = 3
+      subthread {
+        level4 = 4
+      }
+    }
+  }
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("messageThread");
+        expect(result.result.subthread).toBe(false);
+
+        // Verify first level nesting exists
+        const level1Subthread = result.result.body.find(
+          (node: any) => node.type === "messageThread",
+        );
+        expect(level1Subthread).toBeDefined();
+      }
+    });
+
+    it("should parse thread with multiple nested subthreads at same level", () => {
+      const input = `thread {
+  subthread {
+    a = 1
+  }
+  subthread {
+    b = 2
+  }
+  subthread {
+    c = 3
+  }
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        const subthreads = result.result.body.filter(
+          (node: any) =>
+            node.type === "messageThread" && node.subthread === true,
+        );
+        expect(subthreads.length).toBe(3);
+      }
+    });
+
+    it("should handle whitespace variations in nested structures", () => {
+      const input = `thread{
+subthread{
+x=1
+}
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("messageThread");
+
+        const nestedSubthread = result.result.body.find(
+          (node: any) => node.type === "messageThread",
+        );
+        expect(nestedSubthread).toBeDefined();
+      }
+    });
+
+    it("should parse nested threads with comments", () => {
+      const input = `thread {
+  // outer thread
+  x = 1
+  subthread {
+    // inner subthread
+    y = 2
+  }
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("messageThread");
+        expect(result.result.body.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("should parse nested structure with mixed content types", () => {
+      const input = `thread {
+  x: number = 5
+  y = \`prompt\`
+  subthread {
+    z = doSomething()
+    thread {
+      result = 42
+    }
+  }
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("messageThread");
+        expect(result.result.body.length).toBeGreaterThan(0);
+
+        const nestedSubthread = result.result.body.find(
+          (node: any) =>
+            node.type === "messageThread" && node.subthread === true,
+        );
+        expect(nestedSubthread).toBeDefined();
+      }
+    });
+
+    it("should parse alternating thread and subthread nesting", () => {
+      const input = `thread {
+  a = 1
+  subthread {
+    b = 2
+    thread {
+      c = 3
+      subthread {
+        d = 4
+        thread {
+          e = 5
+        }
+      }
+    }
+  }
+}`;
+      const result = messageThreadParser(normalizeCode(input));
+      console.log(JSON.stringify(result, null, 2));
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("messageThread");
+        expect(result.result.subthread).toBe(false);
+      } else {
+        console.log(
+          "Parsing failed for input:",
+          input,
+          "with error:",
+          result.message,
+        );
+      }
+    });
   });
 });

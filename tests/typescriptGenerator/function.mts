@@ -61,7 +61,6 @@ export const __addTool = {
 };
 
 export async function test(args, __metadata={}) : Promise<any> {
-    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
@@ -101,10 +100,9 @@ export async function test(args, __metadata={}) : Promise<any> {
 }await console.log(test([], {
         statelogClient,
         graph: __graph,
-        messages: __messages,
+        messages: __self.messages,
       });)
 export async function add(args, __metadata={}) : Promise<any> {
-    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;

@@ -256,7 +256,7 @@ async function _foo(__metadata?: Record<string, any>): Promise<Coords> {
 
 
 __self.foo = _foo({
-      messages: __messages,
+      messages: __self.messages,
     });
 
 

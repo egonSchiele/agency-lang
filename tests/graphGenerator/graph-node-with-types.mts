@@ -399,7 +399,6 @@ const addTool = {
 //  Test graph nodes with typed parameters
 
 graph.node("greet", async (state): Promise<any> => {
-    let __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
@@ -649,7 +648,7 @@ async function _greeting(name: string, __metadata?: Record<string, any>): Promis
 
 
 __self.greeting = _greeting(__stack.args.name, {
-      messages: __messages,
+      messages: __self.messages,
     });
         __stack.step++;
       }

@@ -257,7 +257,7 @@ async function _sentiment(message: string, __metadata?: Record<string, any>): Pr
 
 
 __self.sentiment = _sentiment(__stateStack.globals.message, {
-      messages: __messages,
+      messages: __self.messages,
     });
 
 

@@ -398,7 +398,6 @@ const addTool = {
 
 
 graph.node("greet", async (state): Promise<any> => {
-    let __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
@@ -636,7 +635,7 @@ async function _greeting(__metadata?: Record<string, any>): Promise<string> {
 
 
 __self.greeting = _greeting({
-      messages: __messages,
+      messages: __self.messages,
     });
         __stack.step++;
       }
@@ -651,7 +650,7 @@ __self.greeting = _greeting({
       if (__step <= 3) {
         return goToNode("processGreeting",
   {
-    messages: __messages,
+    messages: __self.messages,
     __metadata: {
       graph: __graph,
       statelogClient,
@@ -672,7 +671,6 @@ __self.greeting = _greeting({
 });
 
 graph.node("processGreeting", async (state): Promise<any> => {
-    let __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
@@ -922,7 +920,7 @@ async function _result(msg: string, __metadata?: Record<string, any>): Promise<s
 
 
 __self.result = _result(__stack.args.msg, {
-      messages: __messages,
+      messages: __self.messages,
     });
         __stack.step++;
       }
@@ -945,7 +943,6 @@ __self.result = _result(__stack.args.msg, {
 });
 
 graph.node("main", async (state): Promise<any> => {
-    let __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
@@ -990,7 +987,7 @@ graph.node("main", async (state): Promise<any> => {
       if (__step <= 1) {
         return goToNode("greet",
   {
-    messages: __messages,
+    messages: __self.messages,
     __metadata: {
       graph: __graph,
       statelogClient,

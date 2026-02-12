@@ -423,7 +423,6 @@ export const __flexibleTool = {
 };
 
 export async function add(args, __metadata={}) : Promise<number> {
-    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
@@ -645,7 +644,7 @@ async function _result(x: string, y: string, __metadata?: Record<string, any>): 
 
 
 __self.result = _result(__stack.args.x, __stack.args.y, {
-      messages: __messages,
+      messages: __self.messages,
     });
         __stack.step++;
       }
@@ -665,7 +664,6 @@ return __stack.locals.result
       
 }
 export async function greet(args, __metadata={}) : Promise<any> {
-    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
@@ -887,7 +885,7 @@ async function _message(name: string, __metadata?: Record<string, any>): Promise
 
 
 __self.message = _message(__stack.args.name, {
-      messages: __messages,
+      messages: __self.messages,
     });
         __stack.step++;
       }
@@ -907,7 +905,6 @@ return __stack.locals.message
       
 }
 export async function mixed(args, __metadata={}) : Promise<any> {
-    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
@@ -1129,7 +1126,7 @@ async function _output(label: string, count: string, __metadata?: Record<string,
 
 
 __self.output = _output(__stack.args.label, __stack.args.count, {
-      messages: __messages,
+      messages: __self.messages,
     });
         __stack.step++;
       }
@@ -1149,7 +1146,6 @@ return __stack.locals.output
       
 }
 export async function processArray(args, __metadata={}) : Promise<any> {
-    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
@@ -1371,7 +1367,7 @@ async function _result(items: string, __metadata?: Record<string, any>): Promise
 
 
 __self.result = _result(__stack.args.items, {
-      messages: __messages,
+      messages: __self.messages,
     });
         __stack.step++;
       }
@@ -1391,7 +1387,6 @@ return __stack.locals.result
       
 }
 export async function flexible(args, __metadata={}) : Promise<any> {
-    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
@@ -1613,7 +1608,7 @@ async function _result(value: string, __metadata?: Record<string, any>): Promise
 
 
 __self.result = _result(__stack.args.value, {
-      messages: __messages,
+      messages: __self.messages,
     });
         __stack.step++;
       }
@@ -1633,7 +1628,6 @@ return __stack.locals.result
       
 }
 graph.node("foo", async (state): Promise<any> => {
-    let __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
@@ -1694,31 +1688,31 @@ graph.node("foo", async (state): Promise<any> => {
 __stateStack.globals.sum = add([5, 10], {
         statelogClient,
         graph: __graph,
-        messages: __messages,
+        messages: __self.messages,
       });;
 
 __stateStack.globals.greeting = greet([`Alice`], {
         statelogClient,
         graph: __graph,
-        messages: __messages,
+        messages: __self.messages,
       });;
 
 __stateStack.globals.labeled = mixed([42, `Answer`], {
         statelogClient,
         graph: __graph,
-        messages: __messages,
+        messages: __self.messages,
       });;
 
 __stateStack.globals.processed = processArray([[1, 2, 3, 4, 5]], {
         statelogClient,
         graph: __graph,
-        messages: __messages,
+        messages: __self.messages,
       });;
 
 __stateStack.globals.flexResult = flexible([`test`], {
         statelogClient,
         graph: __graph,
-        messages: __messages,
+        messages: __self.messages,
       });;
 
 

@@ -15,7 +15,7 @@ import {
   BUILTIN_FUNCTIONS_TO_ASYNC,
 } from "@/config.js";
 import { MessageThread } from "@/types/messageThread.js";
-import { is } from "zod/locales";
+import { is, no } from "zod/locales";
 
 export class TypescriptPreprocessor {
   public program: AgencyProgram;
@@ -306,9 +306,13 @@ export class TypescriptPreprocessor {
 
         const func = this.functionDefinitions[node.functionName];
         if (!func) {
-          throw new Error(
-            `Function ${node.functionName} not found for function call.`,
-          );
+          // see if it is explicitly marked async,
+          // otherwise mark it sync since we don't know what it is.
+          node.async = this.functionNameToAsync[node.functionName] || false;
+          continue;
+          // throw new Error(
+          //   `Function ${node.functionName} not found for function call: ${JSON.stringify(node)}`,
+          // );
         }
 
         const children = this.findChildren(func.body, "prompt");

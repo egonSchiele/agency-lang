@@ -403,7 +403,6 @@ export const __greetTool = {
 };
 
 export async function greet(args, __metadata={}) : Promise<string> {
-    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
@@ -444,7 +443,6 @@ return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} yea
       
 }
 graph.node("foo2", async (state): Promise<any> => {
-    let __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
@@ -700,7 +698,7 @@ async function _response(name: string, age: string, __metadata?: Record<string, 
 
 
 __self.response = _response(__stack.args.name, __stack.args.age, {
-      messages: __messages,
+      messages: __self.messages,
     });
         __stack.step++;
       }
@@ -729,7 +727,6 @@ __self.response = _response(__stack.args.name, __stack.args.age, {
 });
 
 graph.node("sayHi", async (state): Promise<any> => {
-    let __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
@@ -798,7 +795,7 @@ graph.node("sayHi", async (state): Promise<any> => {
       if (__step <= 3) {
         return goToNode("foo2",
   {
-    messages: __messages,
+    messages: __self.messages,
     __metadata: {
       graph: __graph,
       statelogClient,

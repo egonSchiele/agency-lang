@@ -398,7 +398,6 @@ const addTool = {
 
 
 graph.node("main", async (state): Promise<any> => {
-    let __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
@@ -647,7 +646,7 @@ async function _count(__metadata?: Record<string, any>): Promise<number> {
 
 
 __self.count = _count({
-      messages: __messages,
+      messages: __self.messages,
     });
         __stack.step++;
       }
@@ -849,7 +848,7 @@ async function _message(__metadata?: Record<string, any>): Promise<string> {
 
 
 __self.message = _message({
-      messages: __messages,
+      messages: __self.messages,
     });
         __stack.step++;
       }

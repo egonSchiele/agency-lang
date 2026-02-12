@@ -413,7 +413,6 @@ export const __fibsTool = {
 };
 
 export async function openai(args, __metadata={}) : Promise<string> {
-    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
@@ -636,7 +635,7 @@ async function _response(msg: string, __metadata?: Record<string, any>): Promise
 
 
 __self.response = _response(__stack.args.msg, {
-      messages: __messages,
+      messages: __self.messages,
     });
 
 
@@ -652,6 +651,12 @@ console.log("Time taken:", __defaultTimeblockName, "ms");
       
 
       if (__step <= 2) {
+        [__self.response] = await Promise.all([__self.response]);
+        __stack.step++;
+      }
+      
+
+      if (__step <= 3) {
         __stateStack.pop();
 return `OpenAI response: ${__stack.locals.response}`
         __stack.step++;
@@ -659,7 +664,6 @@ return `OpenAI response: ${__stack.locals.response}`
       
 }
 export async function google(args, __metadata={}) : Promise<string> {
-    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
@@ -686,7 +690,7 @@ export async function google(args, __metadata={}) : Promise<string> {
       
 
       if (__step <= 1) {
-        __messages = [];
+        __self.messages = [];
         __stack.step++;
       }
       
@@ -888,7 +892,7 @@ async function _response(msg: string, __metadata?: Record<string, any>): Promise
 
 
 __self.response = _response(__stack.args.msg, {
-      messages: __messages,
+      messages: __self.messages,
     });
 
 
@@ -904,6 +908,12 @@ console.log("Time taken:", __defaultTimeblockName, "ms");
       
 
       if (__step <= 3) {
+        [__self.response] = await Promise.all([__self.response]);
+        __stack.step++;
+      }
+      
+
+      if (__step <= 4) {
         __stateStack.pop();
 return `Google response: ${__stack.locals.response}`
         __stack.step++;
@@ -911,7 +921,6 @@ return `Google response: ${__stack.locals.response}`
       
 }
 export async function fibs(args, __metadata={}) : Promise<number[]> {
-    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
@@ -1144,7 +1153,7 @@ async function ___promptVar(__metadata?: Record<string, any>): Promise<number[]>
 
 
 __self.__promptVar = ___promptVar({
-      messages: __messages,
+      messages: __self.messages,
     });
 
 
@@ -1156,7 +1165,6 @@ return __self.__promptVar;
       
 }
 graph.node("main", async (state): Promise<any> => {
-    let __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
@@ -1216,7 +1224,7 @@ if (isInterrupt(__stack.locals.msg)) {
         __stack.locals.res2 = google([__stack.locals.msg], {
         statelogClient,
         graph: __graph,
-        messages: __messages,
+        messages: __self.messages,
       });;
 
 
@@ -1234,7 +1242,7 @@ if (isInterrupt(__stack.locals.res2)) {
         __stack.locals.res1 = openai([__stack.locals.msg], {
         statelogClient,
         graph: __graph,
-        messages: __messages,
+        messages: __self.messages,
       });;
 
 

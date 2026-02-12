@@ -255,7 +255,7 @@ async function _foo(__metadata?: Record<string, any>): Promise<"hi"> {
 
 
 __self.foo = _foo({
-      messages: __messages,
+      messages: __self.messages,
     });
 
 
@@ -465,7 +465,7 @@ async function _bar(__metadata?: Record<string, any>): Promise<42> {
 
 
 __self.bar = _bar({
-      messages: __messages,
+      messages: __self.messages,
     });
 
 
@@ -675,7 +675,7 @@ async function _baz(__metadata?: Record<string, any>): Promise<true> {
 
 
 __self.baz = _baz({
-      messages: __messages,
+      messages: __self.messages,
     });
 
 

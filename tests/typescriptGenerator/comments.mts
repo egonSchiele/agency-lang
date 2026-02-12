@@ -64,7 +64,6 @@ __stateStack.globals.y = `hello`;
 //  Comment before function definition
 
 export async function greet(args, __metadata={}) : Promise<any> {
-    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;
@@ -107,7 +106,7 @@ return __stack.locals.message
 __stateStack.globals.result = greet([], {
         statelogClient,
         graph: __graph,
-        messages: __messages,
+        messages: __self.messages,
       });;
 
 await console.log(__stateStack.globals.result)//  Testing comments in different contexts

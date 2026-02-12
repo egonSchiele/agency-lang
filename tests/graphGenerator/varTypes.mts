@@ -398,7 +398,6 @@ const addTool = {
 
 
 graph.node("main", async (state): Promise<any> => {
-    let __messages: Message[] = state.messages || [];
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
@@ -653,7 +652,7 @@ async function _response(person_name: string, person_age: string, __metadata?: R
 
 
 __self.response = _response(person.name, person.age, {
-      messages: __messages,
+      messages: __self.messages,
     });
         __stack.step++;
       }

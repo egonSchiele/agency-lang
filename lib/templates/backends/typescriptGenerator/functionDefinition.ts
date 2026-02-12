@@ -5,7 +5,6 @@ import { apply } from "typestache";
 
 export const template = `
 export async function {{{functionName:string}}}(args, __metadata={}) : Promise<{{{returnType}}}> {
-    let __messages: Message[] = __metadata?.messages || [];
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self: Record<string, any> = __stack.locals;

@@ -1014,7 +1014,9 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       };
 
       const preprocessor = new TypescriptPreprocessor(program);
-      const nodes = Array.from(preprocessor["walkNodes"](program.nodes));
+      const nodes = Array.from(
+        preprocessor["walkNodes"](program.nodes).map((n) => n.node),
+      );
 
       expect(nodes.length).toBeGreaterThan(2);
 
@@ -1055,7 +1057,9 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       };
 
       const preprocessor = new TypescriptPreprocessor(program);
-      const nodes = Array.from(preprocessor["walkNodes"](program.nodes));
+      const nodes = Array.from(
+        preprocessor["walkNodes"](program.nodes).map((n) => n.node),
+      );
 
       const ifNode = nodes.find((n) => n.type === "ifElse");
       const whileNode = nodes.find((n) => n.type === "whileLoop");

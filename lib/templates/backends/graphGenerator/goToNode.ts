@@ -5,7 +5,7 @@ import { apply } from "typestache";
 
 export const template = `goToNode("{{{nodeName:string}}}",
   {
-    messages: __messages,
+    messages: __self.messages,
     __metadata: {
       graph: __graph,
       statelogClient,

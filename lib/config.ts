@@ -12,6 +12,33 @@ export const TYPES_THAT_DONT_TRIGGER_NEW_PART: AgencyNode["type"][] = [
 ];
 
 /**
+ * Maps Agency built-in function names to TypeScript equivalents
+ */
+export const BUILTIN_FUNCTIONS: Record<string, string> = {
+  print: "console.log",
+  input: "_builtinInput",
+  read: "_builtinRead",
+  readImage: "_builtinReadImage",
+  write: "fs.writeFileSync",
+  fetch: "_builtinFetch",
+  fetchJSON: "_builtinFetchJSON",
+  fetchJson: "_builtinFetchJSON",
+  sleep: "_builtinSleep",
+};
+
+export const BUILTIN_FUNCTIONS_TO_ASYNC: Record<string, boolean> = {
+  print: false,
+  input: false,
+  read: true,
+  readImage: true,
+  write: false,
+  fetch: true,
+  fetchJSON: true,
+  fetchJson: true,
+  sleep: false,
+};
+
+/**
  * Configuration options for the Agency compiler
  */
 export interface AgencyConfig {

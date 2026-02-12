@@ -37,6 +37,7 @@ import { WhileLoop } from "../types/whileLoop.js";
 import { BaseGenerator } from "./baseGenerator.js";
 import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
 import { AgencyConfig } from "@/config.js";
+import { MessageThread } from "@/types/messageThread.js";
 
 export class AgencyGenerator extends BaseGenerator {
   private indentLevel: number = 0;
@@ -522,6 +523,17 @@ export class AgencyGenerator extends BaseGenerator {
 
   protected processNewLine(_node: NewLine): string {
     return "\n";
+  }
+
+  protected processMessageThread(node: MessageThread): string {
+    this.increaseIndent();
+    const bodyCodes: string[] = [];
+    for (const stmt of node.body) {
+      bodyCodes.push(this.processNode(stmt));
+    }
+    this.decreaseIndent();
+    const bodyCodeStr = bodyCodes.join("");
+    return this.indentStr(`thread {\n${bodyCodeStr}${this.indentStr("}")}`);
   }
 }
 

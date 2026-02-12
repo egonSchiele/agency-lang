@@ -59,6 +59,7 @@ import {
 } from "./utils.js";
 import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
 import { newLineParser } from "./newline.js";
+import { MessageThread } from "@/types/messageThread.js";
 
 export const assignmentParser: Parser<Assignment> = (input: string) => {
   const parser = trace(
@@ -83,6 +84,7 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
       capture(
         or(
           timeBlockParser,
+          messageThreadParser,
           promptParser,
           streamingPromptLiteralParser,
           llmPromptFunctionCallParser,
@@ -127,6 +129,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
         streamingPromptLiteralParser,
         ifParser,
         timeBlockParser,
+        messageThreadParser,
         functionParser,
         accessExpressionParser,
         assignmentParser,
@@ -146,6 +149,19 @@ export const _timeBlockParser: Parser<TimeBlock> = trace(
   seqC(
     set("type", "timeBlock"),
     str("time"),
+    optionalSpaces,
+    char("{"),
+    spaces,
+    capture(bodyParser, "body"),
+    optionalSpacesOrNewline,
+    char("}"),
+  ),
+);
+export const messageThreadParser: Parser<MessageThread> = trace(
+  "messageThreadParser",
+  seqC(
+    set("type", "messageThread"),
+    str("thread"),
     optionalSpaces,
     char("{"),
     spaces,

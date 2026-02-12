@@ -4,21 +4,7 @@ import * as builtinFunctionsReadImage from "../../templates/backends/typescriptG
 import * as builtinFunctionsFetchJSON from "../../templates/backends/typescriptGenerator/builtinFunctions/fetchJSON.js";
 import * as builtinFunctionsFetch from "../../templates/backends/typescriptGenerator/builtinFunctions/fetch.js";
 import * as builtinFunctionsSleep from "../../templates/backends/typescriptGenerator/builtinFunctions/sleep.js";
-
-/**
- * Maps Agency built-in function names to TypeScript equivalents
- */
-export const BUILTIN_FUNCTIONS: Record<string, string> = {
-  print: "console.log",
-  input: "_builtinInput",
-  read: "_builtinRead",
-  readImage: "_builtinReadImage",
-  write: "fs.writeFileSync",
-  fetch: "_builtinFetch",
-  fetchJSON: "_builtinFetchJSON",
-  fetchJson: "_builtinFetchJSON",
-  sleep: "_builtinSleep",
-};
+import { BUILTIN_FUNCTIONS } from "@/config.js";
 
 /**
  * Maps an Agency function name to its TypeScript equivalent

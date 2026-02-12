@@ -9,7 +9,13 @@ import {
   WhileLoop,
   TimeBlock,
 } from "@/types.js";
-import { AgencyConfig } from "@/config.js";
+import {
+  AgencyConfig,
+  BUILTIN_FUNCTIONS,
+  BUILTIN_FUNCTIONS_TO_ASYNC,
+} from "@/config.js";
+import { MessageThread } from "@/types/messageThread.js";
+import { is } from "zod/locales";
 
 export class TypescriptPreprocessor {
   public program: AgencyProgram;
@@ -128,7 +134,7 @@ export class TypescriptPreprocessor {
   protected *getAllVariablesInBody(
     body: AgencyNode[],
   ): Generator<{ name: string; node: AgencyNode }> {
-    for (const node of this.walkNodes(body)) {
+    for (const { node } of this.walkNodes(body)) {
       if (node.type === "assignment") {
         yield { name: node.variableName, node };
         yield* this.getAllVariablesInBody([node.value as AgencyNode]);
@@ -225,6 +231,8 @@ export class TypescriptPreprocessor {
         yield* this.getAllVariablesInBody(node.body);
       } else if (node.type === "timeBlock") {
         yield* this.getAllVariablesInBody(node.body);
+      } else if (node.type === "messageThread") {
+        yield* this.getAllVariablesInBody(node.body);
       }
     }
   }
@@ -268,25 +276,67 @@ export class TypescriptPreprocessor {
     }
   }
 
+  protected findChildren(body: AgencyNode[], type: string): AgencyNode[] {
+    const children: AgencyNode[] = [];
+    for (const { node } of this.walkNodes(body)) {
+      if (node.type === type) {
+        children.push(node);
+      }
+    }
+    return children;
+  }
+
+  protected isBuiltinFunction(functionName: string): boolean {
+    return BUILTIN_FUNCTIONS[functionName] !== undefined;
+  }
+
   protected markFunctionCallsAsync(): void {
     if (this.program === null) {
       throw new Error("Program is not set in generator.");
     }
-    for (const node of this.walkNodes(this.program.nodes)) {
+    for (const { node, ancestors } of this.walkNodes(this.program.nodes)) {
+      const isInMessageThread = ancestors.some(
+        (a) => a.type === "messageThread",
+      );
       if (node.type === "functionCall") {
+        if (this.isBuiltinFunction(node.functionName)) {
+          node.async = BUILTIN_FUNCTIONS_TO_ASYNC[node.functionName] ?? false;
+          continue;
+        }
+
+        const func = this.functionDefinitions[node.functionName];
+        if (!func) {
+          throw new Error(
+            `Function ${node.functionName} not found for function call.`,
+          );
+        }
+
+        const children = this.findChildren(func.body, "prompt");
+        const containsPrompt = children.length > 0;
+
+        // all prompts need to run synchronously within a message thread
+        // to ensure correct ordering of messages, so if this function
+        // calls any prompts and is being called within a message thread,
+        // it also needs to be synchronous.
+        if (isInMessageThread && containsPrompt) {
+          node.async = false;
+          continue;
+        }
+
         const isAsync = this.functionNameToAsync[node.functionName];
         if (isAsync) {
           node.async = true;
         }
       } else if (node.type === "prompt") {
+        // prompts in message threads are sync to preserve message order
+        if (isInMessageThread) {
+          node.async = false;
+          continue;
+        }
         if (node.async !== undefined) {
           continue; // already marked as async or sync
         }
-        // streaming prompts are always async for now.
-        // later we'll make them async but with a lock around the stream callback.
-        // if (node.isStreaming) {
-        //   continue;
-        // }
+
         // check if any of its tools will throw an interrupt
         node.async =
           node.tools?.toolNames.some((toolName) => {
@@ -319,7 +369,7 @@ export class TypescriptPreprocessor {
       return this.functionNameToUsesInterrupt[node.functionName];
     }
 
-    for (const subnode of this.walkNodes(node.body)) {
+    for (const { node: subnode } of this.walkNodes(node.body)) {
       if (subnode.type === "functionCall") {
         if (subnode.functionName === "interrupt") {
           this.functionNameToUsesInterrupt[node.functionName] = true;
@@ -344,58 +394,66 @@ export class TypescriptPreprocessor {
     return false;
   }
 
-  protected *walkNodes(nodes: AgencyNode[]): Generator<AgencyNode> {
+  protected *walkNodes(
+    nodes: AgencyNode[],
+    ancestors: AgencyNode[] = [],
+  ): Generator<{ node: AgencyNode; ancestors: AgencyNode[] }> {
     for (const node of nodes) {
-      yield node;
+      yield { node, ancestors };
       if (node.type === "function") {
-        yield* this.walkNodes(node.body);
+        yield* this.walkNodes(node.body, [...ancestors, node]);
       } else if (node.type === "graphNode") {
-        yield* this.walkNodes(node.body);
+        yield* this.walkNodes(node.body, [...ancestors, node]);
       } else if (node.type === "ifElse") {
-        yield* this.walkNodes(node.thenBody);
+        yield* this.walkNodes(node.thenBody, [...ancestors, node]);
         if (node.elseBody) {
-          yield* this.walkNodes(node.elseBody);
+          yield* this.walkNodes(node.elseBody, [...ancestors, node]);
         }
       } else if (node.type === "whileLoop") {
-        yield* this.walkNodes(node.body);
+        yield* this.walkNodes(node.body, [...ancestors, node]);
       } else if (node.type === "timeBlock") {
-        yield* this.walkNodes(node.body);
+        yield* this.walkNodes(node.body, [...ancestors, node]);
+      } else if (node.type === "messageThread") {
+        yield* this.walkNodes(node.body, [...ancestors, node]);
       } else if (node.type === "returnStatement") {
-        yield* this.walkNodes([node.value]);
+        yield* this.walkNodes([node.value], [...ancestors, node]);
       } else if (node.type === "assignment") {
-        yield* this.walkNodes([node.value]);
+        yield* this.walkNodes([node.value], [...ancestors, node]);
       } else if (node.type === "functionCall") {
-        yield* this.walkNodes(node.arguments);
+        yield* this.walkNodes(node.arguments, [...ancestors, node]);
       } else if (node.type === "matchBlock") {
         for (const caseItem of node.cases) {
           if (caseItem.type === "comment") continue;
           if (caseItem.caseValue !== "_") {
-            yield* this.walkNodes([caseItem.caseValue]);
+            yield* this.walkNodes([caseItem.caseValue], [...ancestors, node]);
           }
-          yield* this.walkNodes([caseItem.body]);
+          yield* this.walkNodes([caseItem.body], [...ancestors, node]);
         }
       } else if (node.type === "accessExpression") {
         const expr = node.expression;
         if (expr.type === "dotProperty") {
-          yield* this.walkNodes([expr.object]);
+          yield* this.walkNodes([expr.object], [...ancestors, node]);
         } else if (expr.type === "indexAccess") {
-          yield* this.walkNodes([expr.array]);
-          yield* this.walkNodes([expr.index]);
+          yield* this.walkNodes([expr.array], [...ancestors, node]);
+          yield* this.walkNodes([expr.index], [...ancestors, node]);
         } else if (expr.type === "dotFunctionCall") {
-          yield* this.walkNodes([expr.object]);
-          yield* this.walkNodes([expr.functionCall]);
+          yield* this.walkNodes([expr.object], [...ancestors, node]);
+          yield* this.walkNodes([expr.functionCall], [...ancestors, node]);
         }
       } else if (node.type === "dotProperty") {
-        yield* this.walkNodes([node.object]);
+        yield* this.walkNodes([node.object], [...ancestors, node]);
       } else if (node.type === "indexAccess") {
-        yield* this.walkNodes([node.array]);
-        yield* this.walkNodes([node.index]);
+        yield* this.walkNodes([node.array], [...ancestors, node]);
+        yield* this.walkNodes([node.index], [...ancestors, node]);
       } else if (node.type === "agencyArray") {
-        yield* this.walkNodes(node.items);
+        yield* this.walkNodes(node.items, [...ancestors, node]);
       } else if (node.type === "agencyObject") {
-        yield* this.walkNodes(node.entries.map((e) => e.value));
+        yield* this.walkNodes(
+          node.entries.map((e) => e.value),
+          [...ancestors, node],
+        );
       } else if (node.type === "specialVar") {
-        yield* this.walkNodes([node.value]);
+        yield* this.walkNodes([node.value], [...ancestors, node]);
       }
     }
   }
@@ -501,7 +559,7 @@ export class TypescriptPreprocessor {
     body: AgencyNode[],
   ): (FunctionCall | PromptLiteral)[] {
     const calls: (FunctionCall | PromptLiteral)[] = [];
-    for (const node of this.walkNodes(body)) {
+    for (const { node } of this.walkNodes(body)) {
       if (node.type === "functionCall") {
         calls.push(node);
       } else if (node.type === "prompt") {
@@ -573,16 +631,78 @@ export class TypescriptPreprocessor {
   }
 
   protected _addPromiseAllCalls(body: AgencyNode[]): AgencyNode[] {
-    // Find all variables assigned to async function calls or LLM calls
-    const asyncVarToAssignment: Record<string, AgencyNode> = {};
-
+    /*     // First, recursively process nested function/node bodies
+    // (functions and nodes create their own scope, so process them separately)
     for (const node of body) {
-      if (this.nodeHasBody(node)) {
-        // recursively process nested bodies first
-        // @ts-ignore
+      if (node.type === "function" || node.type === "graphNode") {
         node.body = this._addPromiseAllCalls(node.body);
+      } else if (node.type === "ifElse") {
+        node.thenBody = this._addPromiseAllCalls(node.thenBody);
+        if (node.elseBody) {
+          node.elseBody = this._addPromiseAllCalls(node.elseBody);
+        }
+      }
+    }
+ */
+    // Pass 1: Collect all async variables defined in this body and nested non-function bodies
+    // Variables in MessageThread, TimeBlock, WhileLoop, IfElse are scoped to the containing function/node
+    const asyncVarToAssignment: Record<string, AgencyNode> = {};
+    this._collectAsyncVariablesInScope(body, asyncVarToAssignment);
+
+    const asyncVars = Object.keys(asyncVarToAssignment);
+    if (asyncVars.length === 0) {
+      return body;
+    }
+
+    // Pass 2: Find the first usage of each async variable across all bodies in this scope
+    const varToFirstUsageLocation: Record<
+      string,
+      { bodyPath: number[]; indexInBody: number }
+    > = {};
+
+    for (const varName of asyncVars) {
+      const location = this._findFirstUsageInScope(
+        body,
+        varName,
+        asyncVarToAssignment[varName],
+      );
+      if (location) {
+        varToFirstUsageLocation[varName] = location;
+      }
+    }
+
+    // Group variables by their first usage location
+    const locationToVars: Record<string, string[]> = {};
+
+    for (const varName of Object.keys(varToFirstUsageLocation)) {
+      const location = varToFirstUsageLocation[varName];
+      const locationKey =
+        location.bodyPath.join(",") + ":" + location.indexInBody;
+      if (!locationToVars[locationKey]) {
+        locationToVars[locationKey] = [];
+      }
+      locationToVars[locationKey].push(varName);
+    }
+
+    // Insert Promise.all calls before first usage
+    return this._insertPromiseAllCalls(body, locationToVars);
+  }
+
+  /**
+   * Recursively collect all async variables defined in this body and nested non-function bodies.
+   * Does not descend into function or graphNode bodies as they have their own scope.
+   */
+  protected _collectAsyncVariablesInScope(
+    body: AgencyNode[],
+    asyncVarToAssignment: Record<string, AgencyNode>,
+  ): void {
+    for (const node of body) {
+      // Don't descend into functions or graph nodes - they have their own scope
+      if (node.type === "function" || node.type === "graphNode") {
+        continue;
       }
 
+      // Process assignments in this body
       if (node.type === "assignment") {
         const isAsyncCall =
           (node.value.type === "functionCall" && node.value.async) ||
@@ -592,50 +712,147 @@ export class TypescriptPreprocessor {
           asyncVarToAssignment[node.variableName] = node;
         }
       }
-    }
 
-    const asyncVars = Object.keys(asyncVarToAssignment);
-    // Find the first usage of each async variable
-    const varToFirstUsageIndex: Record<string, number> = {};
-
-    for (const varName of asyncVars) {
-      const assignmentNode = asyncVarToAssignment[varName];
-
-      for (let i = 0; i < body.length; i++) {
-        const node = body[i];
-
-        // Skip the assignment itself
-        if (node === assignmentNode) {
-          continue;
+      // Recursively collect from nested bodies that share the same scope
+      if (node.type === "messageThread") {
+        this._collectAsyncVariablesInScope(node.body, asyncVarToAssignment);
+      } else if (node.type === "timeBlock") {
+        this._collectAsyncVariablesInScope(node.body, asyncVarToAssignment);
+      } else if (node.type === "whileLoop") {
+        this._collectAsyncVariablesInScope(node.body, asyncVarToAssignment);
+      } else if (node.type === "ifElse") {
+        this._collectAsyncVariablesInScope(node.thenBody, asyncVarToAssignment);
+        if (node.elseBody) {
+          this._collectAsyncVariablesInScope(
+            node.elseBody,
+            asyncVarToAssignment,
+          );
         }
+      }
+    }
+  }
 
-        // Check if this node uses the variable
-        if (this._nodeUsesVariable(node, varName)) {
-          varToFirstUsageIndex[varName] = i;
-          break;
+  /**
+   * Find the first usage of a variable in this scope (across all bodies).
+   * Returns the path to the body and the index within that body.
+   */
+  protected _findFirstUsageInScope(
+    body: AgencyNode[],
+    varName: string,
+    assignmentNode: AgencyNode,
+    bodyPath: number[] = [],
+  ): { bodyPath: number[]; indexInBody: number } | null {
+    for (let i = 0; i < body.length; i++) {
+      const node = body[i];
+
+      // Don't descend into functions or graph nodes - they have their own scope
+      if (node.type === "function" || node.type === "graphNode") {
+        continue;
+      }
+
+      // Skip the assignment itself
+      if (node === assignmentNode) {
+        continue;
+      }
+
+      // Check if this node uses the variable (excluding nested bodies)
+      if (this._nodeUsesVariableDirectly(node, varName)) {
+        return { bodyPath, indexInBody: i };
+      }
+
+      // Check nested bodies
+      if (node.type === "messageThread") {
+        const found = this._findFirstUsageInScope(
+          node.body,
+          varName,
+          assignmentNode,
+          [...bodyPath, i],
+        );
+        if (found) return found;
+      } else if (node.type === "timeBlock") {
+        const found = this._findFirstUsageInScope(
+          node.body,
+          varName,
+          assignmentNode,
+          [...bodyPath, i],
+        );
+        if (found) return found;
+      } else if (node.type === "whileLoop") {
+        const found = this._findFirstUsageInScope(
+          node.body,
+          varName,
+          assignmentNode,
+          [...bodyPath, i],
+        );
+        if (found) return found;
+      } else if (node.type === "ifElse") {
+        const foundInThen = this._findFirstUsageInScope(
+          node.thenBody,
+          varName,
+          assignmentNode,
+          [...bodyPath, i, 0],
+        );
+        if (foundInThen) return foundInThen;
+        if (node.elseBody) {
+          const foundInElse = this._findFirstUsageInScope(
+            node.elseBody,
+            varName,
+            assignmentNode,
+            [...bodyPath, i, 1],
+          );
+          if (foundInElse) return foundInElse;
         }
       }
     }
 
-    // Group variables by their first usage index
-    const indexToVars: Record<number, string[]> = {};
+    return null;
+  }
 
-    for (const varName of Object.keys(varToFirstUsageIndex)) {
-      const index = varToFirstUsageIndex[varName];
-      if (!indexToVars[index]) {
-        indexToVars[index] = [];
-      }
-      indexToVars[index].push(varName);
+  /**
+   * Check if a node uses a variable directly (not in nested bodies).
+   */
+  protected _nodeUsesVariableDirectly(
+    node: AgencyNode,
+    varName: string,
+  ): boolean {
+    // For nodes with bodies, we don't check inside the body here
+    // (that's done separately in _findFirstUsageInScope)
+    if (
+      node.type === "messageThread" ||
+      node.type === "timeBlock" ||
+      node.type === "whileLoop" ||
+      node.type === "function" ||
+      node.type === "graphNode"
+    ) {
+      return false;
     }
 
-    // Insert Promise.all calls before first usage
+    // For ifElse, check the condition but not the bodies
+    if (node.type === "ifElse") {
+      return this._nodeUsesVariable(node.condition, varName);
+    }
+
+    // For all other nodes, use the full check
+    return this._nodeUsesVariable(node, varName);
+  }
+
+  /**
+   * Insert Promise.all calls at the appropriate locations in the body.
+   */
+  protected _insertPromiseAllCalls(
+    body: AgencyNode[],
+    locationToVars: Record<string, string[]>,
+    currentPath: number[] = [],
+  ): AgencyNode[] {
     const newBody: AgencyNode[] = [];
 
     for (let i = 0; i < body.length; i++) {
-      // Check if we need to insert Promise.all before this node
-      if (indexToVars[i]) {
-        const vars = indexToVars[i];
+      const node = body[i];
+      const locationKey = currentPath.join(",") + ":" + i;
 
+      // Check if we need to insert Promise.all before this node
+      if (locationToVars[locationKey]) {
+        const vars = locationToVars[locationKey];
         const varArray = `[${vars.map((v) => `__self.${v}`).join(", ")}]`;
         const promiseAllCode: RawCode = {
           type: "rawCode",
@@ -644,7 +861,38 @@ export class TypescriptPreprocessor {
         newBody.push(promiseAllCode);
       }
 
-      newBody.push(body[i]);
+      // Recursively process nested bodies
+      if (node.type === "messageThread") {
+        node.body = this._insertPromiseAllCalls(node.body, locationToVars, [
+          ...currentPath,
+          i,
+        ]);
+      } else if (node.type === "timeBlock") {
+        node.body = this._insertPromiseAllCalls(node.body, locationToVars, [
+          ...currentPath,
+          i,
+        ]);
+      } else if (node.type === "whileLoop") {
+        node.body = this._insertPromiseAllCalls(node.body, locationToVars, [
+          ...currentPath,
+          i,
+        ]);
+      } else if (node.type === "ifElse") {
+        node.thenBody = this._insertPromiseAllCalls(
+          node.thenBody,
+          locationToVars,
+          [...currentPath, i, 0],
+        );
+        if (node.elseBody) {
+          node.elseBody = this._insertPromiseAllCalls(
+            node.elseBody,
+            locationToVars,
+            [...currentPath, i, 1],
+          );
+        }
+      }
+
+      newBody.push(node);
     }
 
     return newBody;
@@ -652,13 +900,20 @@ export class TypescriptPreprocessor {
 
   protected nodeHasBody(
     node: AgencyNode,
-  ): node is FunctionDefinition | AgencyNode | IfElse | WhileLoop | TimeBlock {
+  ): node is
+    | FunctionDefinition
+    | AgencyNode
+    | IfElse
+    | WhileLoop
+    | TimeBlock
+    | MessageThread {
     return (
       node.type === "function" ||
       node.type === "graphNode" ||
       node.type === "ifElse" ||
       node.type === "whileLoop" ||
-      node.type === "timeBlock"
+      node.type === "timeBlock" ||
+      node.type === "messageThread"
     );
   }
 
@@ -713,6 +968,8 @@ export class TypescriptPreprocessor {
       } else if (node.type === "whileLoop") {
         node.body = this.filterNodesByType(node.body, excludeSet);
       } else if (node.type === "timeBlock") {
+        node.body = this.filterNodesByType(node.body, excludeSet);
+      } else if (node.type === "messageThread") {
         node.body = this.filterNodesByType(node.body, excludeSet);
       } else if (node.type === "matchBlock") {
         // Filter case bodies - Note: match block bodies are single nodes, not arrays
@@ -808,6 +1065,8 @@ export class TypescriptPreprocessor {
         node.body = this.filterBuiltinFunctionCalls(node.body, excludeSet);
       } else if (node.type === "timeBlock") {
         node.body = this.filterBuiltinFunctionCalls(node.body, excludeSet);
+      } else if (node.type === "messageThread") {
+        node.body = this.filterBuiltinFunctionCalls(node.body, excludeSet);
       } else if (node.type === "matchBlock") {
         node.cases = node.cases.map((caseItem) => {
           if (caseItem.type === "comment") {
@@ -885,7 +1144,7 @@ export class TypescriptPreprocessor {
       : new Set<string>();
 
     // Walk through all nodes and validate fetch calls
-    for (const node of this.walkNodes(this.program.nodes)) {
+    for (const { node } of this.walkNodes(this.program.nodes)) {
       if (
         node.type === "functionCall" &&
         (node.functionName === "fetch" ||

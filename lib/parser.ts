@@ -22,6 +22,7 @@ import {
   functionParser,
   graphNodeParser,
   ifParser,
+  messageThreadParser,
   timeBlockParser,
   whileLoopParser,
 } from "./parsers/function.js";
@@ -59,6 +60,7 @@ export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
         typeHintParser,
         matchBlockParser,
         timeBlockParser,
+        messageThreadParser,
         streamingPromptLiteralParser,
         functionParser,
         returnStatementParser,

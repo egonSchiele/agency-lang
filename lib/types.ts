@@ -17,6 +17,7 @@ import { UsesTool } from "./types/tools.js";
 import { TypeAlias, TypeHint, VariableType } from "./types/typeHints.js";
 import { WhileLoop } from "./types/whileLoop.js";
 import { IfElse } from "./types/ifElse.js";
+import { MessageThread } from "./types/messageThread.js";
 export * from "./types/access.js";
 export * from "./types/dataStructures.js";
 export * from "./types/function.js";
@@ -38,13 +39,14 @@ export type Assignment = {
   variableName: string;
   typeHint?: VariableType;
   value:
-  | AccessExpression
-  | Literal
-  | FunctionCall
-  | AgencyObject
-  | AgencyArray
-  | IndexAccess
-  | TimeBlock;
+    | AccessExpression
+    | Literal
+    | FunctionCall
+    | AgencyObject
+    | AgencyArray
+    | IndexAccess
+    | TimeBlock
+    | MessageThread;
 };
 
 export type AgencyComment = {
@@ -81,7 +83,8 @@ export type AgencyNode =
   | DotProperty
   | TimeBlock
   | NewLine
-  | RawCode;
+  | RawCode
+  | MessageThread;
 
 export type AgencyProgram = {
   type: "agencyProgram";

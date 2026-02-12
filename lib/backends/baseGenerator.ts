@@ -37,6 +37,7 @@ import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { AgencyConfig } from "@/config.js";
 import { mergeDeep } from "@/utils.js";
+import { MessageThread } from "@/types/messageThread.js";
 
 type Scope = GlobalScope | FunctionScope | NodeScope;
 
@@ -253,9 +254,15 @@ export class BaseGenerator {
         return this.processNewLine(node);
       case "rawCode":
         return node.value;
+      case "messageThread":
+        return this.processMessageThread(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
+  }
+
+  protected processMessageThread(node: MessageThread): string {
+    return "processMessageThread not implemented";
   }
 
   protected processNewLine(_node: NewLine): string {

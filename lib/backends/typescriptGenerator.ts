@@ -24,6 +24,7 @@ import * as renderFunctionDefinition from "../templates/backends/typescriptGener
 import * as renderInternalFunctionCall from "../templates/backends/typescriptGenerator/internalFunctionCall.js";
 import * as renderFunctionCallAssignment from "../templates/backends/typescriptGenerator/functionCallAssignment.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
+import * as renderMessageThread from "../templates/backends/typescriptGenerator/messageThread.js";
 import * as promptFunction from "../templates/backends/typescriptGenerator/promptFunction.js";
 import * as renderTool from "../templates/backends/typescriptGenerator/tool.js";
 import * as renderToolCall from "../templates/backends/typescriptGenerator/toolCall.js";
@@ -62,6 +63,7 @@ import {
 } from "./typescriptGenerator/typeToZodSchema.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { AgencyConfig } from "@/config.js";
+import { MessageThread } from "@/types/messageThread.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
@@ -229,6 +231,9 @@ export class TypeScriptGenerator extends BaseGenerator {
       const timingVarName = variableName;
       const code = this.processTimeBlock(value, timingVarName);
       return code;
+    } else if (value.type === "messageThread") {
+      const varName = `${this.getScopeVar()}.${variableName}`;
+      return this.processMessageThread(value, varName);
     } else {
       // Direct assignment for other literal types
       const code = this.processNode(value);
@@ -385,7 +390,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       const metadata = `{
         statelogClient,
         graph: __graph,
-        messages: __messages,
+        messages: __self.messages,
       }`;
       return renderInternalFunctionCall.default({
         functionName,
@@ -552,7 +557,7 @@ export class TypeScriptGenerator extends BaseGenerator {
 
     const clientConfig = prompt.config ? this.processNode(prompt.config) : "{}";
     const metadataObj = `{
-      messages: __messages,
+      messages: __self.messages,
     }`;
     this.toolsUsed = []; // reset after use
 
@@ -634,7 +639,7 @@ export class TypeScriptGenerator extends BaseGenerator {
           value,
         });
       case "messages":
-        return `__messages = ${value};\n`;
+        return `__self.messages = ${value};\n`;
       default:
         throw new Error(`Unhandled SpecialVar name: ${node.name}`);
     }
@@ -656,6 +661,22 @@ export class TypeScriptGenerator extends BaseGenerator {
   protected processAwaitStatement(node: AwaitStatement): string {
     const code = this.processNode(node.expression);
     return `await ${code}`;
+  }
+
+  protected processMessageThread(
+    node: MessageThread,
+    varName?: string,
+  ): string {
+    const bodyCodes: string[] = [];
+    for (const stmt of node.body) {
+      bodyCodes.push(this.processNode(stmt));
+    }
+    const bodyCodeStr = bodyCodes.join("\n");
+    return renderMessageThread.default({
+      bodyCode: bodyCodeStr,
+      hasVar: !!varName,
+      varName,
+    });
   }
 
   /* This generates the body of a node or function separated into multiple parts.

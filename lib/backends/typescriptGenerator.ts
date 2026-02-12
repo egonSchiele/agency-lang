@@ -68,6 +68,7 @@ import { MessageThread } from "@/types/messageThread.js";
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
 export class TypeScriptGenerator extends BaseGenerator {
+  protected currentMessageThreadNodeId = ["0"];
   constructor(args: { config?: AgencyConfig } = {}) {
     super(args);
   }
@@ -390,7 +391,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       const metadata = `{
         statelogClient,
         graph: __graph,
-        messages: __self.messages,
+        messages: __self.messages_${this.currentMessageThreadNodeId.at(-1)}.getMessages(),
       }`;
       return renderInternalFunctionCall.default({
         functionName,
@@ -511,9 +512,9 @@ export class TypeScriptGenerator extends BaseGenerator {
     // Generate async function for prompt-based assignment
     const _variableType = variableType ||
       this.typeHints[variableName] || {
-      type: "primitiveType" as const,
-      value: "string",
-    };
+        type: "primitiveType" as const,
+        value: "string",
+      };
 
     const zodSchema = mapTypeToZodSchema(_variableType, this.typeAliases);
     const typeString = variableTypeToString(_variableType, this.typeAliases);
@@ -557,7 +558,7 @@ export class TypeScriptGenerator extends BaseGenerator {
 
     const clientConfig = prompt.config ? this.processNode(prompt.config) : "{}";
     const metadataObj = `{
-      messages: __self.messages,
+      messages: __self.messages_${this.currentMessageThreadNodeId.at(-1)}.getMessages(),
     }`;
     this.toolsUsed = []; // reset after use
 
@@ -639,7 +640,7 @@ export class TypeScriptGenerator extends BaseGenerator {
           value,
         });
       case "messages":
-        return `__self.messages = ${value};\n`;
+        return `__self.messages_${this.currentMessageThreadNodeId.at(-1)}.setMessages(${value});\n`;
       default:
         throw new Error(`Unhandled SpecialVar name: ${node.name}`);
     }
@@ -667,16 +668,20 @@ export class TypeScriptGenerator extends BaseGenerator {
     node: MessageThread,
     varName?: string,
   ): string {
+    this.currentMessageThreadNodeId.push(node.nodeId || "0");
     const bodyCodes: string[] = [];
     for (const stmt of node.body) {
       bodyCodes.push(this.processNode(stmt));
     }
     const bodyCodeStr = bodyCodes.join("\n");
+    this.currentMessageThreadNodeId.pop();
     return renderMessageThread.default({
       bodyCode: bodyCodeStr,
       hasVar: !!varName,
       varName,
-      isSubthread: node.subthread
+      isSubthread: node.subthread,
+      nodeId: node.nodeId || "0",
+      parentNodeId: node.parentNodeId || "0",
     });
   }
 

@@ -3,23 +3,25 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `__self.prevMessages = __cloneArray(__self.messages || []);
+export const template = `
 {{#isSubthread}}
-__self.messages = __cloneArray(__self.messages || []);
+__self.messages_{{{nodeId}}} = __self.messages_{{{parentNodeId}}}.newSubthreadChild();
 {{/isSubthread}}
 {{^isSubthread}}
-__self.messages = [];
+__self.messages_{{{nodeId}}} = __self.messages_{{{parentNodeId}}}.newChild();
 {{/isSubthread}}
 
 {{{bodyCode:string}}}
 {{#hasVar}}
-{{{varName?}}} = __cloneArray(__self.messages);
+{{{varName?}}} = __self.messages_{{{nodeId}}}.cloneMessages()
 {{/hasVar}}
 
-__self.messages = __self.prevMessages;`;
+// __self.messages = __self.prevMessages;`;
 
 export type TemplateType = {
   isSubthread: boolean;
+  nodeId: string | boolean | number;
+  parentNodeId: string | boolean | number;
   bodyCode: string;
   hasVar: boolean;
   varName?: string | boolean | number;

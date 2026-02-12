@@ -385,7 +385,55 @@ function __cloneArray<T>(arr?: T[]): T[] {
   if (arr == undefined) return [];
   return [...arr];
 }
-`;
+
+/**** Message thread handling ****/
+
+type MessageThreadJSON = { messages: any[]; children: MessageThreadJSON[] };
+
+class MessageThread {
+  private messages: any[] = [];
+  public children: MessageThread[] = [];
+
+  constructor(messages: any[] = []) {
+    this.messages = messages;
+    this.children = [];
+  }
+
+  addMessage(message: any) {
+    this.messages.push(message);
+  }
+
+  cloneMessages(): any[] {
+    return this.messages.map(m => m.toJSON()).map(m => messageFromJSON(m));
+  }
+
+  getMessages(): any[] {
+    return this.messages;
+  }
+
+  setMessages(messages: any[]) {
+    this.messages = messages;
+  }
+
+  newChild(): MessageThread {
+    const child = new MessageThread();
+    this.children.push(child);
+    return child;
+  }
+
+  newSubthreadChild(): MessageThread {
+    const child = new MessageThread(this.cloneMessages());
+    this.children.push(child);
+    return child;
+  }
+
+  toJSON(): MessageThreadJSON {
+    return {
+      messages: this.messages.map(m => m.toJSON()),
+      children: this.children.map((child) => child.toJSON()),
+    };
+  }
+}`;
 
 export type TemplateType = {
   logHost: string;

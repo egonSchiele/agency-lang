@@ -23,6 +23,7 @@ export class TypescriptPreprocessor {
   protected functionNameToAsync: Record<string, boolean> = {};
   protected functionNameToUsesInterrupt: Record<string, boolean> = {};
   protected functionDefinitions: Record<string, FunctionDefinition> = {};
+  protected threadIdCounter: number = 0;
   constructor(program: AgencyProgram, config: AgencyConfig = {}) {
     this.program = structuredClone(program);
     this.config = config;
@@ -38,7 +39,39 @@ export class TypescriptPreprocessor {
     this.filterExcludedNodeTypes();
     this.filterExcludedBuiltinFunctions();
     this.validateFetchDomains();
+    this.addNodeIDsToMessageThreads();
     return this.program;
+  }
+
+  protected addNodeIDsToMessageThreads(): void {
+    for (const node of this.program.nodes) {
+      if (node.type === "function" || node.type === "graphNode") {
+        this._addNodeIDsToMessageThreads(node.body);
+      }
+    }
+  }
+  protected _addNodeIDsToMessageThreads(
+    body: AgencyNode[],
+    parentId = 0,
+  ): void {
+    for (const node of body) {
+      let messageThreadNode: MessageThread | null = null;
+
+      if (node.type === "messageThread")
+        messageThreadNode = node as MessageThread;
+
+      if (node.type === "assignment" && node.value.type === "messageThread")
+        messageThreadNode = node.value as MessageThread;
+      if (messageThreadNode) {
+        this.threadIdCounter++;
+        messageThreadNode.nodeId = this.threadIdCounter.toString();
+        messageThreadNode.parentNodeId = parentId.toString();
+        this._addNodeIDsToMessageThreads(
+          messageThreadNode.body,
+          this.threadIdCounter,
+        );
+      }
+    }
   }
 
   protected removeUnusedLlmCalls(): void {

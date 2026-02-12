@@ -37,6 +37,7 @@ graph.node("{{{name}}}", async (state): Promise<any> => {
     const __step = __stack.step;
 
     const __self: Record<string, any> = __stack.locals;
+    __self.messages_0 = new MessageThread();
 
     {{#hasParam}}
     

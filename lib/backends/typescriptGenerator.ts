@@ -511,9 +511,9 @@ export class TypeScriptGenerator extends BaseGenerator {
     // Generate async function for prompt-based assignment
     const _variableType = variableType ||
       this.typeHints[variableName] || {
-        type: "primitiveType" as const,
-        value: "string",
-      };
+      type: "primitiveType" as const,
+      value: "string",
+    };
 
     const zodSchema = mapTypeToZodSchema(_variableType, this.typeAliases);
     const typeString = variableTypeToString(_variableType, this.typeAliases);
@@ -676,6 +676,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       bodyCode: bodyCodeStr,
       hasVar: !!varName,
       varName,
+      isSubthread: node.subthread
     });
   }
 

@@ -2,19 +2,24 @@ node main() {
   thread {
     res1: number[] = llm("What are the first 5 prime numbers?")
     res2: number = llm("And what is the sum of those numbers?")
-    res3: number[] = llm("What are the next 2 prime numbers after those?")
-    res4: number = llm("And what is the sum of all those numbers combined?")
-    thread {
-      res5: number[] = llm("What are the next 2 prime numbers after those?")
+    subthread {
+      res3: number[] = llm("What are the next 2 prime numbers after those?")
+      res4: number = llm("And what is the sum of all those numbers combined?")
+    }
+    subthread {
+      res5: number[] = llm("What are the next 2 integers after that?")
       res6: number = llm("And what is the sum of all those numbers combined?")
     }
     res7: number = llm("What was that last number again?")
   }
   print("res1", res1)
   print("res2", res2)
+  print("==========")
   print("res3", res3)
   print("res4", res4)
+  print("==========")
   print("res5", res5)
   print("res6", res6)
+  print("==========")
   print("res7", res7)
 }

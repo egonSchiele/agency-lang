@@ -1,5 +1,11 @@
-__self.prevMessages = __self.messages || [];
+__self.prevMessages = __cloneArray(__self.messages || []);
+{{#isSubthread}}
+__self.messages = __cloneArray(__self.messages || []);
+{{/isSubthread}}
+{{^isSubthread}}
 __self.messages = [];
+{{/isSubthread}}
+
 {{{bodyCode:string}}}
 {{#hasVar}}
 {{{varName?}}} = __cloneArray(__self.messages);

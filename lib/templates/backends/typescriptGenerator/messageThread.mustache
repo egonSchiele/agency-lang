@@ -1,0 +1,8 @@
+__self.prevMessages = __self.messages || [];
+__self.messages = [];
+{{{bodyCode:string}}}
+{{#hasVar}}
+{{{varName?}}} = __cloneArray(__self.messages);
+{{/hasVar}}
+
+__self.messages = __self.prevMessages;

@@ -147,6 +147,10 @@ function renderGraph(contents: string, verbose: boolean = false): void {
     const ascii = renderMermaidAscii(subgraph);
     console.log(ascii);
   });
+  console.log("==========");
+  mermaid.forEach((subgraph) => {
+    console.log(subgraph);
+  });
 }
 
 function getImports(program: AgencyProgram): string[] {

@@ -559,7 +559,156 @@ The only change is that both calls are now in a `thread` block, but it now means
 ```
 
 ### Nested threads
-You can also nest threads inside of each other. Each thread creates a new message history, but that message history also includes the history of any parent threads. This means that if you have two sibling threads, they won't share history with each other, but they will both share history with their parent thread.
+You can also nest threads inside of each other. There are two ways to nest threads. Let's look at them both. To start, let's look at some code with a single thread block.
+
+```ts
+node main() {
+  thread {
+    res1: number[] = llm("What are the first 5 prime numbers?")
+    res2: number = llm("And what is the sum of those numbers?")
+    res3: number[] = llm("What are the next 2 prime numbers after those?")
+    res4: number = llm("And what is the sum of all those numbers combined?")
+    res5: number[] = llm("What are the next 2 integers after that?")
+    res6: number = llm("And what is the sum of all those numbers combined?")
+    res7: number = llm("What was that last number again?")
+  }
+  print("res1", res1)
+  print("res2", res2)
+  print("res3", res3)
+  print("res4", res4)
+  print("res5", res5)
+  print("res6", res6)
+  print("res7", res7)
+}
+```
+
+This asks the LLM to get the first five prime numbers, and then repeatedly asks follow-up questions. In this case, all of these messages are part of a single message thread. Run this code, and you should see the following (comments by me):
+
+```
+res1 [ 2, 3, 5, 7, 11 ] // first 5 primes
+res2 28 // summed
+res3 [ 13, 17 ] // next 2 primes
+res4 58 // summed
+res5 [ 59, 60 ] // next 2 integers
+res6 118 // summed (not correct, but close)
+res7 118 // repeated
+```
+
+Even though the LLM got one of the answers wrong, it's clear that it is treating all of those messages as a single thread. Now, let's see what happens when we nest threads.
+
+```ts
+node main() {
+  thread {
+    res1: number[] = llm("What are the first 5 prime numbers?")
+    res2: number = llm("And what is the sum of those numbers?")
+    thread {
+      res3: number[] = llm("What are the next 2 prime numbers after those?")
+      res4: number = llm("And what is the sum of all those numbers combined?")
+    }
+    thread {
+      res5: number[] = llm("What are the next 2 integers after that?")
+      res6: number = llm("And what is the sum of all those numbers combined?")
+    }
+    res7: number = llm("What was that last number again?")
+  }
+  print("res1", res1)
+  print("res2", res2)
+  print("==========") // added for readability
+  print("res3", res3)
+  print("res4", res4)
+  print("==========")
+  print("res5", res5)
+  print("res6", res6)
+  print("==========")
+  print("res7", res7)
+}
+```
+
+Note that I'm printing some dividers so you can see exactly where the threads are being nested.
+When you run this code, you should see output similar to this:
+
+```
+// same as before
+res1 [ 2, 3, 5, 7, 11 ]
+res2 28
+==========
+// not correct!
+res3 [ 29, 31 ]
+res4 160
+==========
+// not correct!
+res5 [ 9, 10 ]
+res6 36
+==========
+// this is the sum from the first thread
+res7 28
+```
+Each thread creates a new message history. So the two nested threads have their own history, completely unconnected to the parent's history. When Agency executes this call, there is no previous message history:
+
+```ts
+res3: number[] = llm("What are the next 2 prime numbers after those?")
+```
+
+The LLM doesn't know what you mean by "next 2" because it doesn't know what prime numbers you've already seen. Similarly, when you ask for the sum of all those numbers, it doesn't know what came before the two prime numbers it's sent in this current thread, so the number it returns is completely made up.
+
+After the two nested threads, there is a final call in the main thread.
+
+```ts
+res7: number = llm("What was that last number again?")
+```
+
+You can see it returns 28 because that was the last number in the main thread.
+
+### subthreads
+
+The other way to nest threads is with subthreads, using the `subthread` keyword. Here's what the code for that looks like.
+
+```ts
+node main() {
+  thread {
+    res1: number[] = llm("What are the first 5 prime numbers?")
+    res2: number = llm("And what is the sum of those numbers?")
+    subthread {
+      res3: number[] = llm("What are the next 2 prime numbers after those?")
+      res4: number = llm("And what is the sum of all those numbers combined?")
+    }
+    subthread {
+      res5: number[] = llm("What are the next 2 integers after that?")
+      res6: number = llm("And what is the sum of all those numbers combined?")
+    }
+    res7: number = llm("What was that last number again?")
+  }
+  print("res1", res1)
+  print("res2", res2)
+  print("==========")
+  print("res3", res3)
+  print("res4", res4)
+  print("==========")
+  print("res5", res5)
+  print("res6", res6)
+  print("==========")
+  print("res7", res7)
+}
+```
+
+When you run this code, you should see output similar to this:
+
+```
+res1 [ 2, 3, 5, 7, 11 ]
+res2 28
+==========
+// next primes in the sequence
+res3 [ 13, 17 ]
+res4 58
+==========
+// next integers in the sequence
+res5 [ 12, 13 ]
+res6 41
+==========
+res7 28
+```
+
+Each subthread forks the message history of its parent thread. This means that if you have two sibling threads, they won't share history with each other, but they will both share history with their parent thread. You can see that the first subthread is correctly getting the next two prime numbers in the sequence, and the second subthread is correctly getting the next two integers in the sequence.
 
 ## A few notes on agent design
 

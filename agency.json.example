@@ -1,6 +1,5 @@
 {
   "verbose": false,
-  "outDir": "./dist",
 
   "excludeNodeTypes": [
     "importStatement",
@@ -10,7 +9,13 @@
 
   "excludeBuiltinFunctions": ["write"],
 
-  "allowedFetchDomains": ["adit.io"]
-
-  // "disallowedFetchDomains": ["malicious.com", "blocked.site.com"]
+  "allowedFetchDomains": ["adit.io"],
+  "log": {
+    "host": "stdout",
+    "debugMode": false
+  },
+  "client": {
+    "logLevel": "debug",
+    "defaultModel": "gpt-4o-mini"
+  }
 }

@@ -36,13 +36,14 @@ import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { BaseGenerator } from "./baseGenerator.js";
 import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
+import { AgencyConfig } from "@/config.js";
 
 export class AgencyGenerator extends BaseGenerator {
   private indentLevel: number = 0;
   private indentSize: number = 2;
 
-  constructor() {
-    super();
+  constructor(args: { config?: AgencyConfig } = {}) {
+    super(args);
   }
 
   private indent(level = this.indentLevel): string {

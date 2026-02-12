@@ -19,26 +19,26 @@ import {
 import type { Message } from "smoltalk";
 
 /* Code to log to statelog */
-const statelogHost = "https://statelog.adit.io";
+const statelogHost = "{{{logHost:string}}}";
 const traceId = nanoid();
 const statelogConfig = {
   host: statelogHost,
   traceId: traceId,
   apiKey: process.env.STATELOG_API_KEY || "",
-  projectId: "agency-lang",
-  debugMode: false,
+  projectId: "{{{logProjectId:string}}}",
+  debugMode: {{{logDebugMode:boolean}}},
 };
 const __statelogClient = new StatelogClient(statelogConfig);
 
 /* Code for Smoltalk client */
-const __model: ModelName = "gpt-4o-mini";
+const __model: ModelName = "{{{clientDefaultModel:string}}}";
 
 const getClientWithConfig = (config = {}) => {
   const defaultConfig = {
     openAiApiKey: process.env.OPENAI_API_KEY || "",
     googleApiKey: process.env.GEMINI_API_KEY || "",
     model: __model,
-    logLevel: "warn",
+    logLevel: "{{{clientLogLevel:string}}}",
   };
 
   return getClient({ ...defaultConfig, ...config });
@@ -388,6 +388,11 @@ function __cloneArray<T>(arr?: T[]): T[] {
 `;
 
 export type TemplateType = {
+  logHost: string;
+  logProjectId: string;
+  logDebugMode: boolean;
+  clientDefaultModel: string;
+  clientLogLevel: string;
 };
 
 const render = (args: TemplateType) => {

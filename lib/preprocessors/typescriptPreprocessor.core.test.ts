@@ -17,7 +17,13 @@ describe("TypescriptPreprocessor Core Functionality", () => {
           {
             type: "function",
             functionName: "anotherFunc",
-            parameters: [{ name: "x", typeHint: { type: "primitiveType", value: "string" } }],
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "x",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
+            ],
             body: [],
           },
         ],
@@ -29,8 +35,12 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       // Check that function definitions are collected
       expect(preprocessor["functionDefinitions"]).toHaveProperty("testFunc");
       expect(preprocessor["functionDefinitions"]).toHaveProperty("anotherFunc");
-      expect(preprocessor["functionDefinitions"]["testFunc"].functionName).toBe("testFunc");
-      expect(preprocessor["functionDefinitions"]["anotherFunc"].parameters.length).toBe(1);
+      expect(preprocessor["functionDefinitions"]["testFunc"].functionName).toBe(
+        "testFunc",
+      );
+      expect(
+        preprocessor["functionDefinitions"]["anotherFunc"].parameters.length,
+      ).toBe(1);
     });
   });
 
@@ -181,7 +191,8 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       const preprocessor = new TypescriptPreprocessor(program);
       preprocessor.preprocess();
 
-      const usesInterrupt = preprocessor["functionNameToUsesInterrupt"]["testFunc"];
+      const usesInterrupt =
+        preprocessor["functionNameToUsesInterrupt"]["testFunc"];
       expect(usesInterrupt).toBe(true);
     });
 
@@ -219,8 +230,12 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       const preprocessor = new TypescriptPreprocessor(program);
       preprocessor.preprocess();
 
-      expect(preprocessor["functionNameToUsesInterrupt"]["helperFunc"]).toBe(true);
-      expect(preprocessor["functionNameToUsesInterrupt"]["mainFunc"]).toBe(true);
+      expect(preprocessor["functionNameToUsesInterrupt"]["helperFunc"]).toBe(
+        true,
+      );
+      expect(preprocessor["functionNameToUsesInterrupt"]["mainFunc"]).toBe(
+        true,
+      );
     });
 
     it("should detect interrupt through tool usage", () => {
@@ -254,7 +269,7 @@ describe("TypescriptPreprocessor Core Functionality", () => {
                 value: {
                   type: "prompt",
                   segments: [{ type: "text", value: "Test" }],
-                }
+                },
               },
             ],
           },
@@ -264,7 +279,9 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       const preprocessor = new TypescriptPreprocessor(program);
       preprocessor.preprocess();
 
-      expect(preprocessor["functionNameToUsesInterrupt"]["toolFunc"]).toBe(true);
+      expect(preprocessor["functionNameToUsesInterrupt"]["toolFunc"]).toBe(
+        true,
+      );
       // mainNode won't be checked for interrupt because it's a graph node, not in the containsInterrupt map
     });
   });
@@ -420,7 +437,7 @@ describe("TypescriptPreprocessor Core Functionality", () => {
                 value: {
                   type: "prompt",
                   segments: [{ type: "text", value: "Test" }],
-                }
+                },
               },
             ],
           },
@@ -433,7 +450,11 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       const mainNode = preprocessor.program.nodes[1];
       if (mainNode.type === "function") {
         const assignment = mainNode.body.find((n) => n.type === "assignment");
-        if (assignment && assignment.type === "assignment" && assignment.value.type === "prompt") {
+        if (
+          assignment &&
+          assignment.type === "assignment" &&
+          assignment.value.type === "prompt"
+        ) {
           expect(assignment.value.async).toBe(false);
         }
       }
@@ -557,7 +578,9 @@ describe("TypescriptPreprocessor Core Functionality", () => {
 
       const funcNode = preprocessor.program.nodes[0];
       if (funcNode.type === "function") {
-        const assignments = funcNode.body.filter((n) => n.type === "assignment");
+        const assignments = funcNode.body.filter(
+          (n) => n.type === "assignment",
+        );
         expect(assignments.length).toBe(1);
         if (assignments[0].type === "assignment") {
           expect(assignments[0].variableName).toBe("x");
@@ -631,7 +654,9 @@ describe("TypescriptPreprocessor Core Functionality", () => {
 
       const funcNode = preprocessor.program.nodes[0];
       if (funcNode.type === "function") {
-        const returnNode = funcNode.body.find((n) => n.type === "returnStatement");
+        const returnNode = funcNode.body.find(
+          (n) => n.type === "returnStatement",
+        );
         expect(returnNode).toBeDefined();
         if (returnNode && returnNode.type === "returnStatement") {
           expect(returnNode.value.type).toBe("prompt");
@@ -677,9 +702,7 @@ describe("TypescriptPreprocessor Core Functionality", () => {
               {
                 type: "functionCall",
                 functionName: "print",
-                arguments: [
-                  { type: "variableName", value: "a" },
-                ],
+                arguments: [{ type: "variableName", value: "a" }],
               },
             ],
           },
@@ -862,7 +885,9 @@ describe("TypescriptPreprocessor Core Functionality", () => {
         expect(whileNode).toBeDefined();
         if (whileNode && whileNode.type === "whileLoop") {
           // Promise.all should be injected inside the while loop
-          const rawCodeNodes = whileNode.body.filter((n) => n.type === "rawCode");
+          const rawCodeNodes = whileNode.body.filter(
+            (n) => n.type === "rawCode",
+          );
           expect(rawCodeNodes.length).toBeGreaterThan(0);
         }
       }
@@ -905,8 +930,8 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       expect(sorted.length).toBe(2);
       // Helper should come before caller since caller depends on helper
       // (actually the algorithm reverses, so caller comes first in the sorted array)
-      const helperIndex = sorted.findIndex(f => f.functionName === "helper");
-      const callerIndex = sorted.findIndex(f => f.functionName === "caller");
+      const helperIndex = sorted.findIndex((f) => f.functionName === "helper");
+      const callerIndex = sorted.findIndex((f) => f.functionName === "caller");
       expect(helperIndex).toBeGreaterThan(-1);
       expect(callerIndex).toBeGreaterThan(-1);
     });
@@ -956,7 +981,7 @@ describe("TypescriptPreprocessor Core Functionality", () => {
 
       expect(sorted.length).toBe(3);
       // Verify all functions are present
-      const names = sorted.map(f => f.functionName);
+      const names = sorted.map((f) => f.functionName);
       expect(names).toContain("a");
       expect(names).toContain("b");
       expect(names).toContain("c");
@@ -1071,7 +1096,11 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       const funcNode = program.nodes[0];
       if (funcNode.type === "function") {
         const assignmentNode = funcNode.body[0];
-        const isUsed = preprocessor["isVarUsedInBody"]("x", assignmentNode, funcNode.body);
+        const isUsed = preprocessor["isVarUsedInBody"](
+          "x",
+          assignmentNode,
+          funcNode.body,
+        );
         expect(isUsed).toBe(true);
       }
     });
@@ -1104,7 +1133,11 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       const funcNode = program.nodes[0];
       if (funcNode.type === "function") {
         const assignmentNode = funcNode.body[0];
-        const isUsed = preprocessor["isVarUsedInBody"]("x", assignmentNode, funcNode.body);
+        const isUsed = preprocessor["isVarUsedInBody"](
+          "x",
+          assignmentNode,
+          funcNode.body,
+        );
         expect(isUsed).toBe(false);
       }
     });

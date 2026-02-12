@@ -66,8 +66,8 @@ import { AgencyConfig } from "@/config.js";
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
 export class TypeScriptGenerator extends BaseGenerator {
-  constructor() {
-    super();
+  constructor(args: { config?: AgencyConfig } = {}) {
+    super(args);
   }
 
   protected generateBuiltins(): string {
@@ -391,7 +391,7 @@ export class TypeScriptGenerator extends BaseGenerator {
         functionName,
         argsString,
         metadata,
-        awaitPrefix: node.async ? "" : "await "
+        awaitPrefix: node.async ? "" : "await ",
       });
     } else {
       // must be a builtin function or imported function
@@ -506,12 +506,11 @@ export class TypeScriptGenerator extends BaseGenerator {
     // Generate async function for prompt-based assignment
     const _variableType = variableType ||
       this.typeHints[variableName] || {
-      type: "primitiveType" as const,
-      value: "string",
-    };
+        type: "primitiveType" as const,
+        value: "string",
+      };
 
     const zodSchema = mapTypeToZodSchema(_variableType, this.typeAliases);
-    //console.log("Generated Zod schema for variable", variableName, "Variable type:", variableType, ":", zodSchema, "aliases:", this.typeAliases, "hints:", this.typeHints);
     const typeString = variableTypeToString(_variableType, this.typeAliases);
 
     // Build prompt construction code
@@ -693,9 +692,12 @@ export class TypeScriptGenerator extends BaseGenerator {
   }
 }
 
-export function generateTypeScript(program: AgencyProgram, config?: AgencyConfig): string {
+export function generateTypeScript(
+  program: AgencyProgram,
+  config?: AgencyConfig,
+): string {
   const preprocessor = new TypescriptPreprocessor(program, config);
   const preprocessedProgram = preprocessor.preprocess();
-  const generator = new TypeScriptGenerator();
+  const generator = new TypeScriptGenerator({ config });
   return generator.generate(preprocessedProgram).output;
 }

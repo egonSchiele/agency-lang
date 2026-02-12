@@ -45,4 +45,16 @@ export interface AgencyConfig {
    * Example: ["malicious.com", "blocked.site.com"]
    */
   disallowedFetchDomains?: string[];
+
+  /** Statelog config */
+  log?: Partial<{
+    host: string;
+    projectId: string;
+    debugMode: boolean;
+  }>;
+
+  client?: Partial<{
+    logLevel: "error" | "warn" | "info" | "debug";
+    defaultModel: string;
+  }>;
 }

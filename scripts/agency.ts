@@ -29,7 +29,9 @@ function loadConfig(configPath?: string): AgencyConfig {
     try {
       const configContent = fs.readFileSync(finalConfigPath, "utf-8");
       config = JSON.parse(configContent);
-      console.log(`Loaded config from ${finalConfigPath}`);
+      if (config.verbose) {
+        console.log(`Loaded config from ${finalConfigPath}`);
+      }
     } catch (error) {
       console.error(`Error loading config from ${finalConfigPath}:`, error);
       process.exit(1);

@@ -57,8 +57,8 @@ export class TypescriptPreprocessor {
         // console.log(JSON.stringify(this.functionNameToAsync));
         const hasSyncTools = node.tools
           ? node.tools.toolNames.some(
-            (t) => this.functionNameToAsync[t] === false,
-          )
+              (t) => this.functionNameToAsync[t] === false,
+            )
           : false;
         // console.log({ hasSyncTools });
         if (!hasSyncTools) {
@@ -76,8 +76,8 @@ export class TypescriptPreprocessor {
       if (node.type === "assignment" && node.value.type === "prompt") {
         const hasSyncTools = node.value.tools
           ? node.value.tools.toolNames.some(
-            (t) => this.functionNameToAsync[t] === false,
-          )
+              (t) => this.functionNameToAsync[t] === false,
+            )
           : false;
         if (hasSyncTools) {
           // has sync tools, which means they have a side effect,
@@ -650,7 +650,9 @@ export class TypescriptPreprocessor {
     return newBody;
   }
 
-  protected nodeHasBody(node: AgencyNode): node is (FunctionDefinition | AgencyNode | IfElse | WhileLoop | TimeBlock) {
+  protected nodeHasBody(
+    node: AgencyNode,
+  ): node is FunctionDefinition | AgencyNode | IfElse | WhileLoop | TimeBlock {
     return (
       node.type === "function" ||
       node.type === "graphNode" ||
@@ -674,7 +676,10 @@ export class TypescriptPreprocessor {
    * Filter out nodes based on excludeNodeTypes config
    */
   protected filterExcludedNodeTypes(): void {
-    if (!this.config.excludeNodeTypes || this.config.excludeNodeTypes.length === 0) {
+    if (
+      !this.config.excludeNodeTypes ||
+      this.config.excludeNodeTypes.length === 0
+    ) {
       return;
     }
 
@@ -685,7 +690,10 @@ export class TypescriptPreprocessor {
   /**
    * Recursively filter nodes by type, handling all node structures
    */
-  protected filterNodesByType(nodes: AgencyNode[], excludeSet: Set<string>): AgencyNode[] {
+  protected filterNodesByType(
+    nodes: AgencyNode[],
+    excludeSet: Set<string>,
+  ): AgencyNode[] {
     const filteredNodes: AgencyNode[] = [];
 
     for (const node of nodes) {
@@ -710,25 +718,27 @@ export class TypescriptPreprocessor {
         // Filter case bodies - Note: match block bodies are single nodes, not arrays
         // We don't filter them here as they're of a specific type
       } else if (node.type === "assignment") {
-        // Recursively handle assignment values
-        if (node.value.type === "functionCall") {
-          node.value.arguments = this.filterNodesByType(node.value.arguments as AgencyNode[], excludeSet) as any[];
-        } else if (node.value.type === "agencyArray") {
-          node.value.items = this.filterNodesByType(node.value.items as AgencyNode[], excludeSet) as any[];
-        } else if (node.value.type === "agencyObject") {
-          node.value.entries = node.value.entries.map(entry => ({
-            ...entry,
-            value: this.filterNodesByType([entry.value as AgencyNode], excludeSet)[0] || entry.value
-          }));
-        }
+        node.value = (this.filterNodesByType(
+          [node.value as AgencyNode],
+          excludeSet,
+        )[0] || node.value) as any;
       } else if (node.type === "functionCall") {
-        node.arguments = this.filterNodesByType(node.arguments as AgencyNode[], excludeSet) as any[];
+        node.arguments = this.filterNodesByType(
+          node.arguments as AgencyNode[],
+          excludeSet,
+        ) as any[];
       } else if (node.type === "agencyArray") {
-        node.items = this.filterNodesByType(node.items as AgencyNode[], excludeSet) as any[];
+        node.items = this.filterNodesByType(
+          node.items as AgencyNode[],
+          excludeSet,
+        ) as any[];
       } else if (node.type === "agencyObject") {
-        node.entries = node.entries.map(entry => ({
+        node.entries = node.entries.map((entry) => ({
           ...entry,
-          value: this.filterNodesByType([entry.value as AgencyNode], excludeSet)[0] || entry.value
+          value: (this.filterNodesByType(
+            [entry.value as AgencyNode],
+            excludeSet,
+          )[0] || entry.value) as any,
         }));
       }
 
@@ -742,18 +752,27 @@ export class TypescriptPreprocessor {
    * Filter out builtin function calls based on excludeBuiltinFunctions config
    */
   protected filterExcludedBuiltinFunctions(): void {
-    if (!this.config.excludeBuiltinFunctions || this.config.excludeBuiltinFunctions.length === 0) {
+    if (
+      !this.config.excludeBuiltinFunctions ||
+      this.config.excludeBuiltinFunctions.length === 0
+    ) {
       return;
     }
 
     const excludeSet = new Set(this.config.excludeBuiltinFunctions);
-    this.program.nodes = this.filterBuiltinFunctionCalls(this.program.nodes, excludeSet);
+    this.program.nodes = this.filterBuiltinFunctionCalls(
+      this.program.nodes,
+      excludeSet,
+    );
   }
 
   /**
    * Recursively filter builtin function calls
    */
-  protected filterBuiltinFunctionCalls(nodes: AgencyNode[], excludeSet: Set<string>): AgencyNode[] {
+  protected filterBuiltinFunctionCalls(
+    nodes: AgencyNode[],
+    excludeSet: Set<string>,
+  ): AgencyNode[] {
     const filteredNodes: AgencyNode[] = [];
 
     for (const node of nodes) {
@@ -763,7 +782,11 @@ export class TypescriptPreprocessor {
       }
 
       // Skip assignments to excluded builtin function calls
-      if (node.type === "assignment" && node.value.type === "functionCall" && excludeSet.has(node.value.functionName)) {
+      if (
+        node.type === "assignment" &&
+        node.value.type === "functionCall" &&
+        excludeSet.has(node.value.functionName)
+      ) {
         continue;
       }
 
@@ -771,37 +794,54 @@ export class TypescriptPreprocessor {
       if (node.type === "function" || node.type === "graphNode") {
         node.body = this.filterBuiltinFunctionCalls(node.body, excludeSet);
       } else if (node.type === "ifElse") {
-        node.thenBody = this.filterBuiltinFunctionCalls(node.thenBody, excludeSet);
+        node.thenBody = this.filterBuiltinFunctionCalls(
+          node.thenBody,
+          excludeSet,
+        );
         if (node.elseBody) {
-          node.elseBody = this.filterBuiltinFunctionCalls(node.elseBody, excludeSet);
+          node.elseBody = this.filterBuiltinFunctionCalls(
+            node.elseBody,
+            excludeSet,
+          );
         }
       } else if (node.type === "whileLoop") {
         node.body = this.filterBuiltinFunctionCalls(node.body, excludeSet);
       } else if (node.type === "timeBlock") {
         node.body = this.filterBuiltinFunctionCalls(node.body, excludeSet);
       } else if (node.type === "matchBlock") {
-        node.cases = node.cases.map(caseItem => {
+        node.cases = node.cases.map((caseItem) => {
           if (caseItem.type === "comment") {
             return caseItem;
           }
-          const filteredBody = this.filterBuiltinFunctionCalls([caseItem.body], excludeSet);
           return {
             ...caseItem,
-            body: filteredBody[0] || caseItem.body
-          };
+            body: this.filterBuiltinFunctionCalls(
+              [caseItem.body],
+              excludeSet,
+            )[0],
+          } as any;
         });
       } else if (node.type === "functionCall") {
         // Filter arguments that are function calls
-        node.arguments = this.filterBuiltinFunctionCalls(node.arguments as AgencyNode[], excludeSet) as any[];
+        node.arguments = this.filterBuiltinFunctionCalls(
+          node.arguments as AgencyNode[],
+          excludeSet,
+        ) as any[];
       } else if (node.type === "agencyArray") {
-        node.items = this.filterBuiltinFunctionCalls(node.items as AgencyNode[], excludeSet) as any[];
+        node.items = this.filterBuiltinFunctionCalls(
+          node.items as AgencyNode[],
+          excludeSet,
+        ) as any[];
       } else if (node.type === "agencyObject") {
-        node.entries = node.entries.map(entry => {
-          const filteredValues = this.filterBuiltinFunctionCalls([entry.value as AgencyNode], excludeSet);
+        node.entries = node.entries.map((entry) => {
+          const filteredValues = this.filterBuiltinFunctionCalls(
+            [entry.value as AgencyNode],
+            excludeSet,
+          );
           return {
             ...entry,
-            value: filteredValues[0] || entry.value
-          };
+            value: filteredValues[0] || entry.value,
+          } as any;
         });
       }
 
@@ -815,8 +855,12 @@ export class TypescriptPreprocessor {
    * Validate fetch calls against allowed/disallowed domains
    */
   protected validateFetchDomains(): void {
-    const hasAllowed = this.config.allowedFetchDomains && this.config.allowedFetchDomains.length > 0;
-    const hasDisallowed = this.config.disallowedFetchDomains && this.config.disallowedFetchDomains.length > 0;
+    const hasAllowed =
+      this.config.allowedFetchDomains &&
+      this.config.allowedFetchDomains.length > 0;
+    const hasDisallowed =
+      this.config.disallowedFetchDomains &&
+      this.config.disallowedFetchDomains.length > 0;
 
     if (!hasAllowed && !hasDisallowed) {
       return; // No domain restrictions
@@ -836,11 +880,18 @@ export class TypescriptPreprocessor {
       }
     }
 
-    const disallowedSet = hasDisallowed ? new Set(this.config.disallowedFetchDomains) : new Set<string>();
+    const disallowedSet = hasDisallowed
+      ? new Set(this.config.disallowedFetchDomains)
+      : new Set<string>();
 
     // Walk through all nodes and validate fetch calls
     for (const node of this.walkNodes(this.program.nodes)) {
-      if (node.type === "functionCall" && (node.functionName === "fetch" || node.functionName === "fetchJSON" || node.functionName === "fetchJson")) {
+      if (
+        node.type === "functionCall" &&
+        (node.functionName === "fetch" ||
+          node.functionName === "fetchJSON" ||
+          node.functionName === "fetchJson")
+      ) {
         this._validateFetchCall(node, effectiveAllowed, disallowedSet);
       }
     }
@@ -852,7 +903,7 @@ export class TypescriptPreprocessor {
   protected _validateFetchCall(
     node: FunctionCall,
     effectiveAllowed: Set<string> | null,
-    disallowedSet: Set<string>
+    disallowedSet: Set<string>,
   ): void {
     // Get the URL argument (first argument to fetch)
     if (node.arguments.length === 0) {
@@ -866,7 +917,7 @@ export class TypescriptPreprocessor {
     if (urlArg.type === "string") {
       // Reconstruct the URL from segments
       url = urlArg.segments
-        .map(seg => seg.type === "text" ? seg.value : "")
+        .map((seg) => (seg.type === "text" ? seg.value : ""))
         .join("");
     }
 
@@ -883,15 +934,13 @@ export class TypescriptPreprocessor {
     // Check if domain is allowed
     if (effectiveAllowed !== null && !effectiveAllowed.has(domain)) {
       throw new Error(
-        `Fetch to domain "${domain}" is not allowed. Allowed domains: ${Array.from(effectiveAllowed).join(", ")}`
+        `Fetch to domain "${domain}" is not allowed. Allowed domains: ${Array.from(effectiveAllowed).join(", ")}`,
       );
     }
 
     // Check if domain is disallowed
     if (disallowedSet.has(domain)) {
-      throw new Error(
-        `Fetch to domain "${domain}" is explicitly disallowed.`
-      );
+      throw new Error(`Fetch to domain "${domain}" is explicitly disallowed.`);
     }
   }
 

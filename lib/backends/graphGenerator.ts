@@ -18,6 +18,7 @@ import { TypeScriptGenerator } from "./typescriptGenerator.js";
 import { mapFunctionName } from "./typescriptGenerator/builtins.js";
 import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
+import { AgencyConfig } from "@/config.js";
 
 export class GraphGenerator extends TypeScriptGenerator {
   protected typeHints: TypeHintMap = {};
@@ -28,8 +29,22 @@ export class GraphGenerator extends TypeScriptGenerator {
   protected adjacentNodes: Record<string, string[]> = {};
   protected currentAdjacentNodes: string[] = [];
   protected isInsideGraphNode: boolean = false;
-  constructor() {
-    super();
+  constructor(args: { config?: AgencyConfig } = {}) {
+    super(args);
+  }
+
+  configDefaults(): Partial<AgencyConfig> {
+    return {
+      log: {
+        host: "https://statelog.adit.io",
+        projectId: "agency-lang",
+        debugMode: false,
+      },
+      client: {
+        logLevel: "warn",
+        defaultModel: "gpt-4o-mini",
+      },
+    };
   }
 
   protected processReturnStatement(node: ReturnStatement): string {
@@ -155,9 +170,14 @@ export class GraphGenerator extends TypeScriptGenerator {
   } */
 
   protected generateImports(): string {
-    let arr = [
+    const arr = [
       renderImports.default({
-        nodes: JSON.stringify(this.graphNodes.map((n) => n.nodeName)),
+        logHost: this.agencyConfig.log?.host || "",
+        logProjectId: this.agencyConfig.log?.projectId || "",
+        logDebugMode: this.agencyConfig.log?.debugMode || false,
+        clientLogLevel: this.agencyConfig.client?.logLevel || "warn",
+        clientDefaultModel:
+          this.agencyConfig.client?.defaultModel || "gpt-4o-mini",
       }),
     ];
     arr.push(builtinTools.default({}));
@@ -234,10 +254,13 @@ export class GraphGenerator extends TypeScriptGenerator {
   }
 }
 
-export function generateGraph(program: AgencyProgram, config?: import("@/config.js").AgencyConfig): string {
+export function generateGraph(
+  program: AgencyProgram,
+  config?: AgencyConfig,
+): string {
   const preprocessor = new TypescriptPreprocessor(program, config);
   const preprocessedProgram = preprocessor.preprocess();
 
-  const generator = new GraphGenerator();
+  const generator = new GraphGenerator({ config });
   return generator.generate(preprocessedProgram).output;
 }

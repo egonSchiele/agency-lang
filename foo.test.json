@@ -1,0 +1,14 @@
+{
+  "sourceFile": "foo.agency",
+  "tests": [
+    {
+      "input": "",
+      "expectedOutput": "[2,3,5,7,11]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

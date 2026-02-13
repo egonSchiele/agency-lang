@@ -4,16 +4,68 @@ import path from "path";
 import { execSync } from "child_process";
 import { agencyParser, parseAgency } from "@/parser.js";
 import { getNodesOfType } from "@/utils/node.js";
-import { GraphNodeDefinition } from "@/types.js";
+import { GraphNodeDefinition, VariableType } from "@/types.js";
 import { compile } from "./commands.js";
 import renderEvaluate from "@/templates/cli/evaluate.js";
 import { exit } from "process";
-import { improve } from "../../agents/improve.js";
+
+type Exact = { type: "exact" };
+type LLMJudge = { type: "llmJudge"; judgePrompt: string; desiredAccuracy: number };
+type Criteria = Exact | LLMJudge;
+type TestCase = { input: string; expectedOutput: string; evaluationCriteria: Criteria[] };
+type Tests = { sourceFile: string; tests: TestCase[] };
+
 function readFile(filename: string): string {
   console.log("Trying to read file", filename, "...");
   const data = fs.readFileSync(filename);
   const contents = data.toString("utf8");
   return contents;
+}
+
+function formatTypeHint(vt: VariableType): string {
+  switch (vt.type) {
+    case "primitiveType":
+      return vt.value;
+    case "arrayType":
+      return `${formatTypeHint(vt.elementType)}[]`;
+    case "stringLiteralType":
+      return `"${vt.value}"`;
+    case "numberLiteralType":
+      return vt.value;
+    case "booleanLiteralType":
+      return vt.value;
+    case "unionType":
+      return vt.types.map(formatTypeHint).join(" | ");
+    case "objectType":
+      return `{ ${vt.properties.map((p) => `${p.key}: ${formatTypeHint(p.value)}`).join(", ")} }`;
+    case "typeAliasVariable":
+      return vt.aliasName;
+  }
+}
+
+function serializeArgValue(value: string): string {
+  const num = Number(value);
+  if (!isNaN(num) && value.trim() !== "") return value;
+  if (value === "true" || value === "false") return value;
+  return JSON.stringify(value);
+}
+
+function writeTestCase(
+  agencyFilename: string,
+  input: string,
+  expectedOutput: string,
+  evaluationCriteria: Criteria[],
+) {
+  const testFilePath = agencyFilename.replace(".agency", ".test.json");
+  let tests: Tests;
+  if (fs.existsSync(testFilePath)) {
+    tests = JSON.parse(fs.readFileSync(testFilePath, "utf-8"));
+  } else {
+    tests = { sourceFile: agencyFilename, tests: [] };
+  }
+  tests.tests.push({ input, expectedOutput, evaluationCriteria });
+  fs.writeFileSync(testFilePath, JSON.stringify(tests, null, 2));
+  return testFilePath;
 }
 
 export async function evaluate() {
@@ -81,6 +133,40 @@ export async function evaluate() {
     })),
   });
 
+  // Find the selected node and prompt for args
+  const selectedNode = nodes.find((n) => n.nodeName === response2.node)!;
+  let hasArgs = false;
+  let argsString = "";
+
+  if (selectedNode.parameters.length > 0) {
+    const paramNames = selectedNode.parameters
+      .map((p) => p.name)
+      .join(", ");
+    const confirmArgs = await prompts({
+      type: "confirm",
+      name: "provideArgs",
+      message: `This node has parameters (${paramNames}). Provide arguments?`,
+      initial: true,
+    });
+
+    if (confirmArgs.provideArgs) {
+      const argValues: string[] = [];
+      for (const param of selectedNode.parameters) {
+        const typeLabel = param.typeHint
+          ? ` (${formatTypeHint(param.typeHint)})`
+          : "";
+        const argResponse = await prompts({
+          type: "text",
+          name: "value",
+          message: `Value for ${param.name}${typeLabel}:`,
+        });
+        argValues.push(serializeArgValue(argResponse.value));
+      }
+      argsString = argValues.join(", ");
+      hasArgs = true;
+    }
+  }
+
   console.log("Running program from entrypoint", response2.node);
   const outFile = filename.replace(".agency", ".ts");
   compile({}, filename, outFile);
@@ -88,6 +174,8 @@ export async function evaluate() {
   const evaluateScript = renderEvaluate({
     filename: outFile,
     nodeName: response2.node,
+    hasArgs,
+    args: argsString,
   });
 
   const evaluateFile = "__evaluate.ts";
@@ -99,43 +187,66 @@ export async function evaluate() {
 
   const results = readFileSync("__evaluate.json", "utf-8");
   const json = JSON.parse(results);
-  console.log("Evaluation results:", json);
 
-  const rating = await prompts({
+  console.log("\nOutput:");
+  console.log(JSON.stringify(json.data, null, 2));
+
+  const correctResponse = await prompts({
+    type: "confirm",
+    name: "correct",
+    message: "Does this output look correct?",
+    initial: true,
+  });
+
+  let expectedOutput: string;
+  if (correctResponse.correct) {
+    expectedOutput = JSON.stringify(json.data);
+  } else {
+    const expectedResponse = await prompts({
+      type: "text",
+      name: "expected",
+      message: "What should the correct output look like?",
+    });
+    expectedOutput = expectedResponse.expected;
+  }
+
+  const criteriaResponse = await prompts({
     type: "select",
-    name: "rating",
-    message: "How would you rate the result?",
+    name: "criteria",
+    message: "Select evaluation criteria:",
     choices: [
-      { title: "Good", value: "good" },
-      { title: "Needs Improvement", value: "needs_improvement" },
+      { title: "Exact match", value: "exact" },
+      { title: "LLM Judge", value: "llmJudge" },
     ],
   });
 
-  if (rating.rating === "good") {
-    console.log("Great! Glad it worked well.");
-    exit(0);
+  let criteria: Criteria[];
+  if (criteriaResponse.criteria === "exact") {
+    criteria = [{ type: "exact" }];
+  } else {
+    const judgeResponse = await prompts([
+      {
+        type: "text",
+        name: "judgePrompt",
+        message: "Enter the judge prompt (what should the LLM evaluate?):",
+      },
+      {
+        type: "number",
+        name: "desiredAccuracy",
+        message: "Desired accuracy (0-100):",
+        initial: 80,
+      },
+    ]);
+    criteria = [
+      {
+        type: "llmJudge",
+        judgePrompt: judgeResponse.judgePrompt,
+        desiredAccuracy: judgeResponse.desiredAccuracy,
+      },
+    ];
   }
 
-  console.log("How would you improve the result? Please provide feedback:");
-  const feedbackResponse = await prompts({
-    type: "text",
-    name: "feedback",
-    message: "Your feedback:",
-  });
-
-  printMessages(json.messages.messages);
-  console.log("Your feedback:", feedbackResponse.feedback);
-
-  const response3 = await improve(
-    JSON.stringify(json.messages.messages),
-    feedbackResponse.feedback,
-    json.data,
-  );
-  console.log("Improvement suggestions:", JSON.stringify(response3, null, 2));
-}
-
-function printMessages(messages: any[]) {
-  for (const message of messages) {
-    console.log(`${message.role}: ${message.content}`);
-  }
+  const inputStr = hasArgs ? argsString : "";
+  const testFilePath = writeTestCase(filename, inputStr, expectedOutput, criteria);
+  console.log(`Test case saved to ${testFilePath}`);
 }

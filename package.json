@@ -15,6 +15,7 @@
     "ast": "node ./dist/scripts/agency.js ast",
     "graph": "node ./dist/scripts/agency.js graph",
     "fmt": "node ./dist/scripts/agency.js fmt",
+    "evaluate": "node ./dist/scripts/agency.js evaluate",
     "preprocess": "node ./dist/scripts/agency.js preprocess"
   },
   "bin": {
@@ -47,6 +48,7 @@
     "beautiful-mermaid": "^0.1.3",
     "egonlog": "^0.0.2",
     "piemachine": "^0.0.8",
+    "prompts": "^2.4.2",
     "smoltalk": "^0.0.18",
     "statelog-client": "^0.0.35",
     "tarsec": "^0.1.1",
@@ -55,6 +57,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.0.3",
+    "@types/prompts": "^2.4.9",
     "cli-highlight": "^2.1.11",
     "nanoid": "^5.1.6",
     "termcolors": "github:egonSchiele/termcolors",

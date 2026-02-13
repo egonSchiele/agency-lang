@@ -10,7 +10,8 @@ import {
   renderGraph,
   run,
 } from "@/cli/commands.js";
-import { evaluate, test } from "@/cli/evaluate.js";
+import { evaluate } from "@/cli/evaluate.js";
+import { fixtures, test } from "@/cli/test.js";
 import { AgencyConfig } from "@/config.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { Command } from "commander";
@@ -56,7 +57,9 @@ program
 program
   .command("format")
   .alias("fmt")
-  .description("Format .agency file or directory (reads from stdin if no input)")
+  .description(
+    "Format .agency file or directory (reads from stdin if no input)",
+  )
   .argument("[input]", "Path to .agency input file or directory")
   .option("-i, --in-place", "Format file(s) in-place")
   .action(async (input: string | undefined, opts: { inPlace?: boolean }) => {
@@ -90,7 +93,9 @@ program
 program
   .command("graph")
   .alias("mermaid")
-  .description("Render Mermaid graph from .agency file (reads from stdin if no input)")
+  .description(
+    "Render Mermaid graph from .agency file (reads from stdin if no input)",
+  )
   .argument("[input]", "Path to .agency input file")
   .action(async (input: string | undefined) => {
     const config = getConfig();
@@ -130,6 +135,15 @@ program
   .argument("[target]", "Target in file.agency:nodeName format")
   .action(async (target: string | undefined) => {
     await evaluate(target);
+  });
+
+program
+  .command("gen-fixtures")
+  .alias("fixtures")
+  .description("Generate test fixtures")
+  .argument("[target]", "Target in file.agency:nodeName format")
+  .action(async (target: string | undefined) => {
+    await fixtures(target);
   });
 
 program

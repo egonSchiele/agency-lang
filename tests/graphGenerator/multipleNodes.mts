@@ -479,6 +479,9 @@ graph.node("greet", async (state): Promise<any> => {
 
     const __self: Record<string, any> = __stack.locals;
     __self.messages_0 = new MessageThread();
+    if (state.messages) {
+      __self.messages_0.setMessages(state.messages);
+    }
 
     
     
@@ -716,7 +719,7 @@ __self.greeting = _greeting({
       
     
     // this is just here to have a default return value from a node if the user doesn't specify one
-    return { ...state, data: undefined };
+    return { ...state, messages: __self.messages_0.toJSON(), data: undefined };
 });
 
 graph.node("processGreeting", async (state): Promise<any> => {
@@ -753,6 +756,9 @@ graph.node("processGreeting", async (state): Promise<any> => {
 
     const __self: Record<string, any> = __stack.locals;
     __self.messages_0 = new MessageThread();
+    if (state.messages) {
+      __self.messages_0.setMessages(state.messages);
+    }
 
     
     
@@ -989,7 +995,7 @@ __self.result = _result(__stack.args.msg, {
       
     
     // this is just here to have a default return value from a node if the user doesn't specify one
-    return { ...state, data: undefined };
+    return { ...state, messages: __self.messages_0.toJSON(), data: undefined };
 });
 
 graph.node("main", async (state): Promise<any> => {
@@ -1026,6 +1032,9 @@ graph.node("main", async (state): Promise<any> => {
 
     const __self: Record<string, any> = __stack.locals;
     __self.messages_0 = new MessageThread();
+    if (state.messages) {
+      __self.messages_0.setMessages(state.messages);
+    }
 
     
     
@@ -1055,7 +1064,7 @@ graph.node("main", async (state): Promise<any> => {
       
     
     // this is just here to have a default return value from a node if the user doesn't specify one
-    return { ...state, data: undefined };
+    return { ...state, messages: __self.messages_0.toJSON(), data: undefined };
 });
 
 graph.conditionalEdge("greet", ["processGreeting"]);
@@ -1068,33 +1077,33 @@ const finalState = graph.run("main", initialState);
 
 export async function greet({ messages, callbacks } = {}): Promise<State<any>> {
 
-  const data = [  ];
+  const __data = [  ];
   __callbacks = callbacks || {};
-  const result = await graph.run("greet", { messages: messages || [], data });
-  result.tokens = __stateStack.globals.__tokenStats;
-  return structuredClone(result)
+  const __result = await graph.run("greet", { messages: messages || [], data: __data });
+  __result.tokens = __stateStack.globals.__tokenStats;
+  return structuredClone(__result)
 }
 
 
 export async function processGreeting(msg, { messages, callbacks } = {}): Promise<State<any>> {
 
 
-  const data = [ msg ];
+  const __data = [ msg ];
   __callbacks = callbacks || {};
-  const result = await graph.run("processGreeting", { messages: messages || [], data });
-  result.tokens = __stateStack.globals.__tokenStats;
-  return structuredClone(result)
+  const __result = await graph.run("processGreeting", { messages: messages || [], data: __data });
+  __result.tokens = __stateStack.globals.__tokenStats;
+  return structuredClone(__result)
 }
 
 
 
 export async function main({ messages, callbacks } = {}): Promise<State<any>> {
 
-  const data = [  ];
+  const __data = [  ];
   __callbacks = callbacks || {};
-  const result = await graph.run("main", { messages: messages || [], data });
-  result.tokens = __stateStack.globals.__tokenStats;
-  return structuredClone(result)
+  const __result = await graph.run("main", { messages: messages || [], data: __data });
+  __result.tokens = __stateStack.globals.__tokenStats;
+  return structuredClone(__result)
 }
 
 export default graph;

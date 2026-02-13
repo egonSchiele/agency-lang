@@ -524,6 +524,9 @@ graph.node("foo2", async (state): Promise<any> => {
 
     const __self: Record<string, any> = __stack.locals;
     __self.messages_0 = new MessageThread();
+    if (state.messages) {
+      __self.messages_0.setMessages(state.messages);
+    }
 
     
     
@@ -766,13 +769,13 @@ __self.response = _response(__stack.args.name, __stack.args.age, {
       
 
       if (__step <= 5) {
-        return { ...state, data: __stack.locals.response}
+        return { ...state, messages: __self.messages_0.toJSON(), data: __stack.locals.response}
         __stack.step++;
       }
       
     
     // this is just here to have a default return value from a node if the user doesn't specify one
-    return { ...state, data: undefined };
+    return { ...state, messages: __self.messages_0.toJSON(), data: undefined };
 });
 
 graph.node("sayHi", async (state): Promise<any> => {
@@ -809,6 +812,9 @@ graph.node("sayHi", async (state): Promise<any> => {
 
     const __self: Record<string, any> = __stack.locals;
     __self.messages_0 = new MessageThread();
+    if (state.messages) {
+      __self.messages_0.setMessages(state.messages);
+    }
 
     
     
@@ -862,7 +868,7 @@ graph.node("sayHi", async (state): Promise<any> => {
       
     
     // this is just here to have a default return value from a node if the user doesn't specify one
-    return { ...state, data: undefined };
+    return { ...state, messages: __self.messages_0.toJSON(), data: undefined };
 });
 
 graph.conditionalEdge("sayHi", ["foo2"]);
@@ -871,22 +877,22 @@ graph.conditionalEdge("sayHi", ["foo2"]);
 export async function foo2(name, age, { messages, callbacks } = {}): Promise<State<string>> {
 
 
-  const data = [ name, age ];
+  const __data = [ name, age ];
   __callbacks = callbacks || {};
-  const result = await graph.run("foo2", { messages: messages || [], data });
-  result.tokens = __stateStack.globals.__tokenStats;
-  return structuredClone(result)
+  const __result = await graph.run("foo2", { messages: messages || [], data: __data });
+  __result.tokens = __stateStack.globals.__tokenStats;
+  return structuredClone(__result)
 }
 
 
 export async function sayHi(name, { messages, callbacks } = {}): Promise<State<any>> {
 
 
-  const data = [ name ];
+  const __data = [ name ];
   __callbacks = callbacks || {};
-  const result = await graph.run("sayHi", { messages: messages || [], data });
-  result.tokens = __stateStack.globals.__tokenStats;
-  return structuredClone(result)
+  const __result = await graph.run("sayHi", { messages: messages || [], data: __data });
+  __result.tokens = __stateStack.globals.__tokenStats;
+  return structuredClone(__result)
 }
 
 export default graph;

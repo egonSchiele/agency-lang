@@ -480,6 +480,9 @@ graph.node("greet", async (state): Promise<any> => {
 
     const __self: Record<string, any> = __stack.locals;
     __self.messages_0 = new MessageThread();
+    if (state.messages) {
+      __self.messages_0.setMessages(state.messages);
+    }
 
     
     
@@ -716,18 +719,18 @@ __self.greeting = _greeting(__stack.args.name, {
       
     
     // this is just here to have a default return value from a node if the user doesn't specify one
-    return { ...state, data: undefined };
+    return { ...state, messages: __self.messages_0.toJSON(), data: undefined };
 });
 
 
 export async function greet(name, { messages, callbacks } = {}): Promise<State<string>> {
 
 
-  const data = [ name ];
+  const __data = [ name ];
   __callbacks = callbacks || {};
-  const result = await graph.run("greet", { messages: messages || [], data });
-  result.tokens = __stateStack.globals.__tokenStats;
-  return structuredClone(result)
+  const __result = await graph.run("greet", { messages: messages || [], data: __data });
+  __result.tokens = __stateStack.globals.__tokenStats;
+  return structuredClone(__result)
 }
 
 export default graph;

@@ -782,6 +782,9 @@ graph.node("sayHi", async (state): Promise<any> => {
 
     const __self: Record<string, any> = __stack.locals;
     __self.messages_0 = new MessageThread();
+    if (state.messages) {
+      __self.messages_0.setMessages(state.messages);
+    }
 
     
     
@@ -852,24 +855,24 @@ if (isInterrupt(__stack.locals.response)) {
       
 
       if (__step <= 7) {
-        return { ...state, data: __stack.locals.response}
+        return { ...state, messages: __self.messages_0.toJSON(), data: __stack.locals.response}
         __stack.step++;
       }
       
     
     // this is just here to have a default return value from a node if the user doesn't specify one
-    return { ...state, data: undefined };
+    return { ...state, messages: __self.messages_0.toJSON(), data: undefined };
 });
 
 
 export async function sayHi(name, { messages, callbacks } = {}): Promise<State<any>> {
 
 
-  const data = [ name ];
+  const __data = [ name ];
   __callbacks = callbacks || {};
-  const result = await graph.run("sayHi", { messages: messages || [], data });
-  result.tokens = __stateStack.globals.__tokenStats;
-  return structuredClone(result)
+  const __result = await graph.run("sayHi", { messages: messages || [], data: __data });
+  __result.tokens = __stateStack.globals.__tokenStats;
+  return structuredClone(__result)
 }
 
 export default graph;

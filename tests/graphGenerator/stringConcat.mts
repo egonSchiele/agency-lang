@@ -479,6 +479,9 @@ graph.node("foo", async (state): Promise<any> => {
 
     const __self: Record<string, any> = __stack.locals;
     __self.messages_0 = new MessageThread();
+    if (state.messages) {
+      __self.messages_0.setMessages(state.messages);
+    }
 
     
     
@@ -515,18 +518,18 @@ if (isInterrupt(__stack.locals.name)) {
       
     
     // this is just here to have a default return value from a node if the user doesn't specify one
-    return { ...state, data: undefined };
+    return { ...state, messages: __self.messages_0.toJSON(), data: undefined };
 });
 
 
 
 export async function foo({ messages, callbacks } = {}): Promise<State<any>> {
 
-  const data = [  ];
+  const __data = [  ];
   __callbacks = callbacks || {};
-  const result = await graph.run("foo", { messages: messages || [], data });
-  result.tokens = __stateStack.globals.__tokenStats;
-  return structuredClone(result)
+  const __result = await graph.run("foo", { messages: messages || [], data: __data });
+  __result.tokens = __stateStack.globals.__tokenStats;
+  return structuredClone(__result)
 }
 
 export default graph;

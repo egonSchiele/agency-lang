@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { TypescriptPreprocessor } from "./typescriptPreprocessor.js";
 import { AgencyProgram } from "../types.js";
+import { walkNodes } from "@/utils/node.js";
 
 describe("TypescriptPreprocessor Core Functionality", () => {
   describe("getFunctionDefinitions", () => {
@@ -1014,9 +1015,7 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       };
 
       const preprocessor = new TypescriptPreprocessor(program);
-      const nodes = Array.from(
-        preprocessor["walkNodes"](program.nodes).map((n) => n.node),
-      );
+      const nodes = Array.from(walkNodes(program.nodes).map((n) => n.node));
 
       expect(nodes.length).toBeGreaterThan(2);
 
@@ -1057,9 +1056,7 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       };
 
       const preprocessor = new TypescriptPreprocessor(program);
-      const nodes = Array.from(
-        preprocessor["walkNodes"](program.nodes).map((n) => n.node),
-      );
+      const nodes = Array.from(walkNodes(program.nodes).map((n) => n.node));
 
       const ifNode = nodes.find((n) => n.type === "ifElse");
       const whileNode = nodes.find((n) => n.type === "whileLoop");

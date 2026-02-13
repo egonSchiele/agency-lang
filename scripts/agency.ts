@@ -1,18 +1,15 @@
 #!/usr/bin/env node
+import { generateAgency } from "@/backends/agencyGenerator.js";
+import { AgencyConfig } from "@/config.js";
+import { AgencyProgram, generateGraph } from "@/index.js";
+import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
+import { ImportStatement } from "@/types/importStatement.js";
+import { renderMermaidAscii } from "beautiful-mermaid";
 import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import { parseAgency } from "../lib/parser.js";
-import { AgencyProgram, generateGraph } from "@/index.js";
-import { generateAgency } from "@/backends/agencyGenerator.js";
-import { ParserResult } from "tarsec";
-import {
-  ImportNodeStatement,
-  ImportStatement,
-} from "@/types/importStatement.js";
-import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
-import { renderMermaidAscii } from "beautiful-mermaid";
-import { AgencyConfig } from "@/config.js";
+import { evaluate } from "@/cli/evaluate.js";
 
 let config: AgencyConfig = {};
 
@@ -468,6 +465,9 @@ async function main(): Promise<void> {
       const preprocessor = new TypescriptPreprocessor(parsedProgram, config);
       preprocessor.preprocess();
       console.log(JSON.stringify(preprocessor.program, null, 2));
+      break;
+    case "evaluate":
+      await evaluate();
       break;
 
     default:

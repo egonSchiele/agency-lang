@@ -16,6 +16,7 @@ import {
 } from "@/config.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { is, no } from "zod/locales";
+import { getAllVariablesInBody, walkNodes } from "@/utils/node.js";
 
 export class TypescriptPreprocessor {
   public program: AgencyProgram;
@@ -153,7 +154,7 @@ export class TypescriptPreprocessor {
     nodeToExclude: AgencyNode,
     body: AgencyNode[],
   ): boolean {
-    for (const { name, node } of this.getAllVariablesInBody(body)) {
+    for (const { name, node } of getAllVariablesInBody(body)) {
       if (node === nodeToExclude) {
         continue; // skip the variable declaration/assignment itself
       }
@@ -162,112 +163,6 @@ export class TypescriptPreprocessor {
       }
     }
     return false;
-  }
-
-  protected *getAllVariablesInBody(
-    body: AgencyNode[],
-  ): Generator<{ name: string; node: AgencyNode }> {
-    for (const { node } of this.walkNodes(body)) {
-      if (node.type === "assignment") {
-        yield { name: node.variableName, node };
-        yield* this.getAllVariablesInBody([node.value as AgencyNode]);
-      } else if (node.type === "function") {
-        yield { name: node.functionName, node };
-        for (const param of node.parameters) {
-          yield { name: param.name, node };
-        }
-        yield* this.getAllVariablesInBody(node.body);
-      } else if (node.type === "graphNode") {
-        yield { name: node.nodeName, node };
-        for (const param of node.parameters) {
-          yield { name: param.name, node };
-        }
-        yield* this.getAllVariablesInBody(node.body);
-      } else if (node.type === "ifElse") {
-        yield* this.getAllVariablesInBody(node.thenBody);
-        if (node.elseBody) {
-          yield* this.getAllVariablesInBody(node.elseBody);
-        }
-      } else if (node.type === "functionCall") {
-        for (const arg of node.arguments) {
-          yield* this.getAllVariablesInBody([arg]);
-        }
-        yield { name: node.functionName, node };
-      } else if (node.type === "specialVar") {
-        yield { name: node.name, node };
-      } else if (node.type === "importStatement") {
-        yield { name: node.importedNames, node };
-      } else if (node.type === "importNodeStatement") {
-        for (const name of node.importedNodes) {
-          yield { name, node };
-        }
-      } else if (node.type === "importToolStatement") {
-        for (const name of node.importedTools) {
-          yield { name, node };
-        }
-      } else if (node.type === "matchBlock") {
-        for (const caseItem of node.cases) {
-          if (caseItem.type === "comment") continue;
-          if (caseItem.caseValue === "_") continue;
-          yield* this.getAllVariablesInBody([caseItem.caseValue]);
-        }
-      } else if (node.type === "variableName") {
-        yield { name: node.value, node };
-      } else if (node.type === "indexAccess") {
-        if (node.array.type === "variableName") {
-          yield { name: node.array.value, node: node.array };
-        }
-        if (node.index.type === "variableName") {
-          yield { name: node.index.value, node: node.index };
-        }
-      } else if (node.type === "dotProperty") {
-        if (node.object.type === "variableName") {
-          yield { name: node.object.value, node: node.object };
-        }
-      } else if (node.type === "accessExpression") {
-        if (node.expression.type === "dotFunctionCall") {
-          if (node.expression.object.type === "variableName") {
-            yield {
-              name: node.expression.object.value,
-              node: node.expression.object,
-            };
-          }
-        } else if (node.expression.type === "dotProperty") {
-          yield* this.getAllVariablesInBody([node.expression.object]);
-        }
-      } else if (node.type === "agencyArray") {
-        for (const item of node.items) {
-          yield* this.getAllVariablesInBody([item]);
-        }
-      } else if (node.type === "agencyObject") {
-        for (const entry of node.entries) {
-          yield* this.getAllVariablesInBody([entry.value]);
-        }
-      } else if (
-        node.type === "prompt" ||
-        node.type === "string" ||
-        node.type === "multiLineString"
-      ) {
-        for (const seg of node.segments) {
-          if (seg.type === "interpolation") {
-            yield { name: seg.variableName, node };
-          }
-        }
-        if (node.type === "prompt") {
-          for (const toolName of node.tools?.toolNames ?? []) {
-            yield { name: toolName, node };
-          }
-        }
-      } else if (node.type === "returnStatement") {
-        yield* this.getAllVariablesInBody([node.value]);
-      } else if (node.type === "whileLoop") {
-        yield* this.getAllVariablesInBody(node.body);
-      } else if (node.type === "timeBlock") {
-        yield* this.getAllVariablesInBody(node.body);
-      } else if (node.type === "messageThread") {
-        yield* this.getAllVariablesInBody(node.body);
-      }
-    }
   }
 
   protected getFunctionDefinitions() {
@@ -311,7 +206,7 @@ export class TypescriptPreprocessor {
 
   protected findChildren(body: AgencyNode[], type: string): AgencyNode[] {
     const children: AgencyNode[] = [];
-    for (const { node } of this.walkNodes(body)) {
+    for (const { node } of walkNodes(body)) {
       if (node.type === type) {
         children.push(node);
       }
@@ -327,7 +222,7 @@ export class TypescriptPreprocessor {
     if (this.program === null) {
       throw new Error("Program is not set in generator.");
     }
-    for (const { node, ancestors } of this.walkNodes(this.program.nodes)) {
+    for (const { node, ancestors } of walkNodes(this.program.nodes)) {
       const isInMessageThread = ancestors.some(
         (a) => a.type === "messageThread",
       );
@@ -406,7 +301,7 @@ export class TypescriptPreprocessor {
       return this.functionNameToUsesInterrupt[node.functionName];
     }
 
-    for (const { node: subnode } of this.walkNodes(node.body)) {
+    for (const { node: subnode } of walkNodes(node.body)) {
       if (subnode.type === "functionCall") {
         if (subnode.functionName === "interrupt") {
           this.functionNameToUsesInterrupt[node.functionName] = true;
@@ -429,70 +324,6 @@ export class TypescriptPreprocessor {
     }
 
     return false;
-  }
-
-  protected *walkNodes(
-    nodes: AgencyNode[],
-    ancestors: AgencyNode[] = [],
-  ): Generator<{ node: AgencyNode; ancestors: AgencyNode[] }> {
-    for (const node of nodes) {
-      yield { node, ancestors };
-      if (node.type === "function") {
-        yield* this.walkNodes(node.body, [...ancestors, node]);
-      } else if (node.type === "graphNode") {
-        yield* this.walkNodes(node.body, [...ancestors, node]);
-      } else if (node.type === "ifElse") {
-        yield* this.walkNodes(node.thenBody, [...ancestors, node]);
-        if (node.elseBody) {
-          yield* this.walkNodes(node.elseBody, [...ancestors, node]);
-        }
-      } else if (node.type === "whileLoop") {
-        yield* this.walkNodes(node.body, [...ancestors, node]);
-      } else if (node.type === "timeBlock") {
-        yield* this.walkNodes(node.body, [...ancestors, node]);
-      } else if (node.type === "messageThread") {
-        yield* this.walkNodes(node.body, [...ancestors, node]);
-      } else if (node.type === "returnStatement") {
-        yield* this.walkNodes([node.value], [...ancestors, node]);
-      } else if (node.type === "assignment") {
-        yield* this.walkNodes([node.value], [...ancestors, node]);
-      } else if (node.type === "functionCall") {
-        yield* this.walkNodes(node.arguments, [...ancestors, node]);
-      } else if (node.type === "matchBlock") {
-        for (const caseItem of node.cases) {
-          if (caseItem.type === "comment") continue;
-          if (caseItem.caseValue !== "_") {
-            yield* this.walkNodes([caseItem.caseValue], [...ancestors, node]);
-          }
-          yield* this.walkNodes([caseItem.body], [...ancestors, node]);
-        }
-      } else if (node.type === "accessExpression") {
-        const expr = node.expression;
-        if (expr.type === "dotProperty") {
-          yield* this.walkNodes([expr.object], [...ancestors, node]);
-        } else if (expr.type === "indexAccess") {
-          yield* this.walkNodes([expr.array], [...ancestors, node]);
-          yield* this.walkNodes([expr.index], [...ancestors, node]);
-        } else if (expr.type === "dotFunctionCall") {
-          yield* this.walkNodes([expr.object], [...ancestors, node]);
-          yield* this.walkNodes([expr.functionCall], [...ancestors, node]);
-        }
-      } else if (node.type === "dotProperty") {
-        yield* this.walkNodes([node.object], [...ancestors, node]);
-      } else if (node.type === "indexAccess") {
-        yield* this.walkNodes([node.array], [...ancestors, node]);
-        yield* this.walkNodes([node.index], [...ancestors, node]);
-      } else if (node.type === "agencyArray") {
-        yield* this.walkNodes(node.items, [...ancestors, node]);
-      } else if (node.type === "agencyObject") {
-        yield* this.walkNodes(
-          node.entries.map((e) => e.value),
-          [...ancestors, node],
-        );
-      } else if (node.type === "specialVar") {
-        yield* this.walkNodes([node.value], [...ancestors, node]);
-      }
-    }
   }
 
   private prettifyName(call: FunctionCall | PromptLiteral): string {
@@ -596,7 +427,7 @@ export class TypescriptPreprocessor {
     body: AgencyNode[],
   ): (FunctionCall | PromptLiteral)[] {
     const calls: (FunctionCall | PromptLiteral)[] = [];
-    for (const { node } of this.walkNodes(body)) {
+    for (const { node } of walkNodes(body)) {
       if (node.type === "functionCall") {
         calls.push(node);
       } else if (node.type === "prompt") {
@@ -956,7 +787,7 @@ export class TypescriptPreprocessor {
 
   protected _nodeUsesVariable(node: AgencyNode, varName: string): boolean {
     // Check if the node or any of its children use the variable
-    for (const { name } of this.getAllVariablesInBody([node])) {
+    for (const { name } of getAllVariablesInBody([node])) {
       if (name === varName) {
         return true;
       }
@@ -1181,7 +1012,7 @@ export class TypescriptPreprocessor {
       : new Set<string>();
 
     // Walk through all nodes and validate fetch calls
-    for (const { node } of this.walkNodes(this.program.nodes)) {
+    for (const { node } of walkNodes(this.program.nodes)) {
       if (
         node.type === "functionCall" &&
         (node.functionName === "fetch" ||

@@ -58,7 +58,7 @@ export class GraphGenerator extends TypeScriptGenerator {
           return `return ${returnCode}\n`;
         }
       }
-      return `return { ...state, data: ${returnCode}}\n`;
+      return `return { ...state, messages: __self.messages_0.toJSON(), data: ${returnCode}}\n`;
     }
   }
 

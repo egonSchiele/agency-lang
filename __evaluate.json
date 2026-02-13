@@ -1,0 +1,36 @@
+{
+  "messages": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "What are the first 5 prime numbers?"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"response\":[2,3,5,7,11]}"
+      }
+    ],
+    "children": []
+  },
+  "data": [
+    2,
+    3,
+    5,
+    7,
+    11
+  ],
+  "tokens": {
+    "usage": {
+      "inputTokens": 50,
+      "outputTokens": 13,
+      "cachedInputTokens": 0,
+      "totalTokens": 63
+    },
+    "cost": {
+      "inputCost": 0,
+      "outputCost": 0,
+      "totalCost": 0,
+      "currency": "USD"
+    }
+  }
+}

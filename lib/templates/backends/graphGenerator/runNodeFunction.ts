@@ -9,11 +9,11 @@ export async function {{{nodeName:string}}}({{{argsStr:string}}}, { messages, ca
 {{^hasArgs}}
 export async function {{{nodeName:string}}}({ messages, callbacks } = {}): Promise<State<{{{returnType:string}}}>> {
 {{/hasArgs}}
-  const data = [ {{{argsStr:string}}} ];
+  const __data = [ {{{argsStr:string}}} ];
   __callbacks = callbacks || {};
-  const result = await graph.run("{{{nodeName:string}}}", { messages: messages || [], data });
-  result.tokens = __stateStack.globals.__tokenStats;
-  return structuredClone(result)
+  const __result = await graph.run("{{{nodeName:string}}}", { messages: messages || [], data: __data });
+  __result.tokens = __stateStack.globals.__tokenStats;
+  return structuredClone(__result)
 }
 `;
 

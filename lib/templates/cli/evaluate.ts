@@ -4,13 +4,16 @@
 import { apply } from "typestache";
 
 export const template = `import { {{{nodeName:string}}} } from "./{{{filename:string}}}";
+import { writeFileSync } from "fs";
 
-async function main() {
+export async function runEvaluation() {
   const result = await {{{nodeName:string}}}();
   console.log("Evaluation result:", result.data);
+  writeFileSync("__evaluate.json", JSON.stringify(result, null, 2));
+  return result;
 }
 
-main();`;
+runEvaluation();`;
 
 export type TemplateType = {
   nodeName: string;

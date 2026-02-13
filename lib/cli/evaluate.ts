@@ -1,5 +1,5 @@
 import prompts from "prompts";
-import fs from "fs";
+import fs, { readFileSync } from "fs";
 import path from "path";
 import { execSync } from "child_process";
 import { agencyParser, parseAgency } from "@/parser.js";
@@ -7,7 +7,8 @@ import { getNodesOfType } from "@/utils/node.js";
 import { GraphNodeDefinition } from "@/types.js";
 import { compile } from "./commands.js";
 import renderEvaluate from "@/templates/cli/evaluate.js";
-
+import { exit } from "process";
+import { improve } from "../../agents/improve.js";
 function readFile(filename: string): string {
   console.log("Trying to read file", filename, "...");
   const data = fs.readFileSync(filename);
@@ -96,16 +97,45 @@ export async function evaluate() {
   console.log("Running evaluation script...");
   execSync(`npx tsx ${evaluateFile}`, { stdio: "inherit" });
 
+  const results = readFileSync("__evaluate.json", "utf-8");
+  const json = JSON.parse(results);
+  console.log("Evaluation results:", json);
+
   const rating = await prompts({
     type: "select",
     name: "rating",
     message: "How would you rate the result?",
     choices: [
-      { title: "Poor", value: "poor" },
       { title: "Good", value: "good" },
-      { title: "Great", value: "great" },
+      { title: "Needs Improvement", value: "needs_improvement" },
     ],
   });
 
-  console.log("Rating:", rating.rating);
+  if (rating.rating === "good") {
+    console.log("Great! Glad it worked well.");
+    exit(0);
+  }
+
+  console.log("How would you improve the result? Please provide feedback:");
+  const feedbackResponse = await prompts({
+    type: "text",
+    name: "feedback",
+    message: "Your feedback:",
+  });
+
+  printMessages(json.messages.messages);
+  console.log("Your feedback:", feedbackResponse.feedback);
+
+  const response3 = await improve(
+    JSON.stringify(json.messages.messages),
+    feedbackResponse.feedback,
+    json.data,
+  );
+  console.log("Improvement suggestions:", JSON.stringify(response3, null, 2));
+}
+
+function printMessages(messages: any[]) {
+  for (const message of messages) {
+    console.log(`${message.role}: ${message.content}`);
+  }
 }

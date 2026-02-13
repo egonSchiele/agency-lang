@@ -1,0 +1,23 @@
+type Message = {
+  role: "user" | "assistant" | "system";
+  content: string
+}
+
+type Response = {
+  newMessages: Message[];
+  rationale: string
+}
+
+node improve(messageHistory: Message[], userFeedback: string, output: string) {
+  prompt = """
+Based on this user feedback, how would you change the user messages in the message history to change the output?
+
+User Feedback: ${userFeedback}
+Message History:${messageHistory}
+output: ${output}
+
+"""
+
+  response: Response = llm("${prompt}")
+  return response
+}

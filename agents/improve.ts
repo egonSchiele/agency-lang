@@ -401,7 +401,7 @@ class MessageThread {
   }
 
   cloneMessages(): any[] {
-    return this.messages.map(m => m.toJSON()).map(m => messageFromJSON(m));
+    return this.messages.map((m) => m.toJSON()).map((m) => messageFromJSON(m));
   }
 
   getMessages(): any[] {
@@ -426,12 +426,12 @@ class MessageThread {
 
   toJSON(): MessageThreadJSON {
     return {
-      messages: this.messages.map(m => m.toJSON()),
+      messages: this.messages.map((m) => m.toJSON()),
       children: this.children.map((child) => child.toJSON()),
     };
   }
 }
-function add({a, b}: {a:number, b:number}):number {
+function add({ a, b }: { a: number; b: number }): number {
   return a + b;
 }
 
@@ -444,297 +444,339 @@ const addTool = {
   }),
 };
 
+type Message = { role: "user" | "assistant" | "system"; content: string };
+type Response = { newMessages: Message[]; rationale: string };
 
-graph.node("foo", async (state): Promise<any> => {
-    const __graph = state.__metadata?.graph || graph;
-    const statelogClient = state.__metadata?.statelogClient || __statelogClient;
-    
-    // if `state.__metadata?.__stateStack` is set, that means we are resuming execution
-    // at this node after an interrupt. In that case, this is the line that restores the state.
-    if (state.__metadata?.__stateStack) {
-      __stateStack = state.__metadata.__stateStack;
-      
-      // restore global state
-      if (state.__metadata?.__stateStack?.global) {
-        __global = state.__metadata.__stateStack.global;
-      }
+graph.node("improve", async (state): Promise<any> => {
+  const __graph = state.__metadata?.graph || graph;
+  const statelogClient = state.__metadata?.statelogClient || __statelogClient;
 
-      // clear the state stack from metadata so it doesn't propagate to other nodes.
-      state.__metadata.__stateStack = undefined;
+  // if `state.__metadata?.__stateStack` is set, that means we are resuming execution
+  // at this node after an interrupt. In that case, this is the line that restores the state.
+  if (state.__metadata?.__stateStack) {
+    __stateStack = state.__metadata.__stateStack;
+
+    // restore global state
+    if (state.__metadata?.__stateStack?.global) {
+      __global = state.__metadata.__stateStack.global;
     }
 
-    if (state.__metadata?.callbacks) {
-      __callbacks = state.__metadata.callbacks;
-    }
-
-    // either creates a new stack for this node,
-    // or restores the stack if we're resuming after an interrupt,
-    // depending on the mode of the state stack (serialize or deserialize).
-    const __stack = __stateStack.getNewState();
-    
-    // We're going to modify __stack.step to keep track of what line we're on,
-    // but first we save this value. This will help us figure out if we should execute
-    // from the start of this node or from a specific line.
-    const __step = __stack.step;
-
-    const __self: Record<string, any> = __stack.locals;
-    __self.messages_0 = new MessageThread();
-    if (state.messages) {
-      __self.messages_0.setMessages(state.messages);
-    }
-
-    
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
-
-      if (__step <= 1) {
-        
-async function _res1(__metadata?: Record<string, any>): Promise<number[]> {
-  const __prompt = `What are the first 5 prime numbers?`;
-  const startTime = performance.now();
-  let __messages: Message[] = __metadata?.messages || [];
-
-  // These are to restore state after interrupt.
-  // TODO I think this could be implemented in a cleaner way.
-  let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
-  const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
-  const __tools = undefined;
-
-  
-  // Need to make sure this is always an object
-  const __responseFormat = z.object({
-     response: z.array(z.number())
-  });
-  
-  
-  
-  const __client = getClientWithConfig({});
-  let responseMessage:any;
-
-  if (__toolCalls.length === 0) {
-    __messages.push(userMessage(__prompt));
-  
-  
-    let __completion = await __client.text({
-      messages: __messages,
-      tools: __tools,
-      responseFormat: __responseFormat,
-      stream: false
-    });
-  
-    const endTime = performance.now();
-
-    const handleStreamingResponse = async () => {
-      if (isGenerator(__completion)) {
-        if (!__callbacks.onStream) {
-          console.log("No onStream callback provided for streaming response, returning response synchronously");
-          statelogClient.debug(
-            "Got streaming response but no onStream callback provided, returning response synchronously",
-            {
-              prompt: __prompt,
-              callbacks: Object.keys(__callbacks),
-            },
-          );
-
-          let syncResult = "";
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                break;
-              case "done":
-                syncResult = chunk.result;
-                break;
-              case "error":
-                console.error(`Error in LLM response stream: ${chunk.error}`);
-                break;
-              default:
-                break;
-            }
-          }
-          __completion = { success: true, value: syncResult };
-        } else {
-          // try to acquire lock
-          let count = 0;
-          // wait 60 seconds to acquire lock
-          while (onStreamLock && count < (10 * 60)) {
-            await _builtinSleep(0.1)
-            count++
-          }
-          if (onStreamLock) {
-            console.log(`Couldn't acquire lock, ${count}`);
-          }
-          onStreamLock = true;
-
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "text":
-                __callbacks.onStream({ type: "text", text: chunk.text });
-                break;
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
-                break;
-              case "done":
-                __callbacks.onStream({ type: "done", result: chunk.result });
-                __completion = { success: true, value: chunk.result };
-                break;
-              case "error":
-                __callbacks.onStream({ type: "error", error: chunk.error });
-                break;
-            }
-          }
-
-          onStreamLock = false
-        }
-      }
-    }
-
-    await handleStreamingResponse();
-
-    statelogClient.promptCompletion({
-      messages: __messages,
-      completion: __completion,
-      model: __client.getModel(),
-      timeTaken: endTime - startTime,
-      tools: __tools,
-      responseFormat: __responseFormat
-    });
-  
-    if (!__completion.success) {
-      throw new Error(
-        `Error getting response from ${__model}: ${__completion.error}`
-      );
-    }
-  
-    responseMessage = __completion.value;
-    __toolCalls = responseMessage.toolCalls || [];
-
-    if (__toolCalls.length > 0) {
-      // Add assistant's response with tool calls to message history
-      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
-    }
-
-    __updateTokenStats(responseMessage.usage, responseMessage.cost);
-
+    // clear the state stack from metadata so it doesn't propagate to other nodes.
+    state.__metadata.__stateStack = undefined;
   }
 
-  // Handle function calls
-  if (__toolCalls.length > 0) {
-    let toolCallStartTime, toolCallEndTime;
-    let haltExecution = false;
-    let haltToolCall = {}
-    let haltInterrupt:any = null;
+  if (state.__metadata?.callbacks) {
+    __callbacks = state.__metadata.callbacks;
+  }
 
-    // Process each tool call
-    for (const toolCall of __toolCalls) {
-      
-    }
+  // either creates a new stack for this node,
+  // or restores the stack if we're resuming after an interrupt,
+  // depending on the mode of the state stack (serialize or deserialize).
+  const __stack = __stateStack.getNewState();
 
-    if (haltExecution) {
-      statelogClient.debug(`Tool call interrupted execution.`, {
-        messages: __messages,
-        model: __client.getModel(),
+  // We're going to modify __stack.step to keep track of what line we're on,
+  // but first we save this value. This will help us figure out if we should execute
+  // from the start of this node or from a specific line.
+  const __step = __stack.step;
+
+  const __self: Record<string, any> = __stack.locals;
+  __self.messages_0 = new MessageThread();
+  if (state.messages) {
+    __self.messages_0.setMessages(state.messages);
+  }
+
+  const __params = ["messageHistory", "userFeedback", "output"];
+
+  // Any arguments that were passed into this node,
+  // save them onto the stack, unless we are restoring the stack after an interrupt,
+  // in which case leave as is
+  if (state.data !== "<from-stack>") {
+    state.data.forEach((item, index) => {
+      __stack.args[__params[index]] = item;
+    });
+  }
+
+  if (__step <= 0) {
+    __stack.step++;
+  }
+
+  if (__step <= 1) {
+    __stack.locals.prompt = `
+Based on this user feedback, how would you change the user messages in the message history to change the output?
+
+User Feedback: ${__stack.args.userFeedback}
+Message History:${__stack.args.messageHistory}
+output: ${__stack.args.output}
+
+`;
+    __stack.step++;
+  }
+
+  if (__step <= 2) {
+    async function _response(
+      prompt: string,
+      __metadata?: Record<string, any>,
+    ): Promise<Response> {
+      const __prompt = `${prompt}`;
+      const startTime = performance.now();
+      let __messages: Message[] = __metadata?.messages || [];
+
+      // These are to restore state after interrupt.
+      // TODO I think this could be implemented in a cleaner way.
+      let __toolCalls = __stateStack.interruptData?.toolCall
+        ? [__stateStack.interruptData.toolCall]
+        : [];
+      const __interruptResponse: InterruptResponseType | null =
+        __stateStack.interruptData?.interruptResponse || null;
+      const __tools = undefined;
+
+      // Need to make sure this is always an object
+      const __responseFormat = z.object({
+        response: z.object({
+          newMessages: z.array(
+            z.object({
+              role: z.union([
+                z.literal("user"),
+                z.literal("assistant"),
+                z.literal("system"),
+              ]),
+              content: z.string(),
+            }),
+          ),
+          rationale: z.string(),
+        }),
       });
 
-      __stateStack.interruptData = {
-        messages: __messages.map((msg) => msg.toJSON()),
-        nodesTraversed: __graph.getNodesTraversed(),
-        toolCall: haltToolCall,
-      };
-      haltInterrupt.__state = __stateStack.toJSON();
-      return haltInterrupt;
+      const __client = getClientWithConfig({});
+      let responseMessage: any;
+
+      if (__toolCalls.length === 0) {
+        __messages.push(userMessage(__prompt));
+
+        let __completion = await __client.text({
+          messages: __messages,
+          tools: __tools,
+          responseFormat: __responseFormat,
+          stream: false,
+        });
+
+        const endTime = performance.now();
+
+        const handleStreamingResponse = async () => {
+          if (isGenerator(__completion)) {
+            if (!__callbacks.onStream) {
+              console.log(
+                "No onStream callback provided for streaming response, returning response synchronously",
+              );
+              statelogClient.debug(
+                "Got streaming response but no onStream callback provided, returning response synchronously",
+                {
+                  prompt: __prompt,
+                  callbacks: Object.keys(__callbacks),
+                },
+              );
+
+              let syncResult = "";
+              for await (const chunk of __completion) {
+                switch (chunk.type) {
+                  case "tool_call":
+                    __toolCalls.push(chunk.toolCall);
+                    break;
+                  case "done":
+                    syncResult = chunk.result;
+                    break;
+                  case "error":
+                    console.error(
+                      `Error in LLM response stream: ${chunk.error}`,
+                    );
+                    break;
+                  default:
+                    break;
+                }
+              }
+              __completion = { success: true, value: syncResult };
+            } else {
+              // try to acquire lock
+              let count = 0;
+              // wait 60 seconds to acquire lock
+              while (onStreamLock && count < 10 * 60) {
+                await _builtinSleep(0.1);
+                count++;
+              }
+              if (onStreamLock) {
+                console.log(`Couldn't acquire lock, ${count}`);
+              }
+              onStreamLock = true;
+
+              for await (const chunk of __completion) {
+                switch (chunk.type) {
+                  case "text":
+                    __callbacks.onStream({ type: "text", text: chunk.text });
+                    break;
+                  case "tool_call":
+                    __toolCalls.push(chunk.toolCall);
+                    __callbacks.onStream({
+                      type: "tool_call",
+                      toolCall: chunk.toolCall,
+                    });
+                    break;
+                  case "done":
+                    __callbacks.onStream({
+                      type: "done",
+                      result: chunk.result,
+                    });
+                    __completion = { success: true, value: chunk.result };
+                    break;
+                  case "error":
+                    __callbacks.onStream({ type: "error", error: chunk.error });
+                    break;
+                }
+              }
+
+              onStreamLock = false;
+            }
+          }
+        };
+
+        await handleStreamingResponse();
+
+        statelogClient.promptCompletion({
+          messages: __messages,
+          completion: __completion,
+          model: __client.getModel(),
+          timeTaken: endTime - startTime,
+          tools: __tools,
+          responseFormat: __responseFormat,
+        });
+
+        if (!__completion.success) {
+          throw new Error(
+            `Error getting response from ${__model}: ${__completion.error}`,
+          );
+        }
+
+        responseMessage = __completion.value;
+        __toolCalls = responseMessage.toolCalls || [];
+
+        if (__toolCalls.length > 0) {
+          // Add assistant's response with tool calls to message history
+          __messages.push(
+            assistantMessage(responseMessage.output, {
+              toolCalls: __toolCalls,
+            }),
+          );
+        }
+
+        __updateTokenStats(responseMessage.usage, responseMessage.cost);
+      }
+
+      // Handle function calls
+      if (__toolCalls.length > 0) {
+        let toolCallStartTime, toolCallEndTime;
+        let haltExecution = false;
+        let haltToolCall = {};
+        let haltInterrupt: any = null;
+
+        // Process each tool call
+        for (const toolCall of __toolCalls) {
+        }
+
+        if (haltExecution) {
+          statelogClient.debug(`Tool call interrupted execution.`, {
+            messages: __messages,
+            model: __client.getModel(),
+          });
+
+          __stateStack.interruptData = {
+            messages: __messages.map((msg) => msg.toJSON()),
+            nodesTraversed: __graph.getNodesTraversed(),
+            toolCall: haltToolCall,
+          };
+          haltInterrupt.__state = __stateStack.toJSON();
+          return haltInterrupt;
+        }
+
+        const nextStartTime = performance.now();
+        let __completion = await __client.text({
+          messages: __messages,
+          tools: __tools,
+          responseFormat: __responseFormat,
+          stream: false,
+        });
+
+        const nextEndTime = performance.now();
+
+        await handleStreamingResponse();
+
+        statelogClient.promptCompletion({
+          messages: __messages,
+          completion: __completion,
+          model: __client.getModel(),
+          timeTaken: nextEndTime - nextStartTime,
+        });
+
+        if (!__completion.success) {
+          throw new Error(
+            `Error getting response from ${__model}: ${__completion.error}`,
+          );
+        }
+        responseMessage = __completion.value;
+        __updateTokenStats(responseMessage.usage, responseMessage.cost);
+      }
+
+      // Add final assistant response to history
+      // not passing tool calls back this time
+      __messages.push(assistantMessage(responseMessage.output));
+
+      try {
+        const result = JSON.parse(responseMessage.output || "");
+        return result.response;
+      } catch (e) {
+        return responseMessage.output;
+        // console.error("Error parsing response for variable 'response':", e);
+        // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
+        // throw e;
+      }
     }
-  
-    const nextStartTime = performance.now();
-    let __completion = await __client.text({
-      messages: __messages,
-      tools: __tools,
-      responseFormat: __responseFormat,
-      stream: false
-    });
 
-    const nextEndTime = performance.now();
-
-    await handleStreamingResponse();
-
-    statelogClient.promptCompletion({
-      messages: __messages,
-      completion: __completion,
-      model: __client.getModel(),
-      timeTaken: nextEndTime - nextStartTime,
-    });
-
-    if (!__completion.success) {
-      throw new Error(
-        `Error getting response from ${__model}: ${__completion.error}`
-      );
-    }
-    responseMessage = __completion.value;
-    __updateTokenStats(responseMessage.usage, responseMessage.cost);
-  }
-
-  // Add final assistant response to history
-  // not passing tool calls back this time
-  __messages.push(assistantMessage(responseMessage.output));
-  
-  try {
-  const result = JSON.parse(responseMessage.output || "");
-  return result.response;
-  } catch (e) {
-    return responseMessage.output;
-    // console.error("Error parsing response for variable 'res1':", e);
-    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
-    // throw e;
-  }
-  
-
-  
-}
-
-
-__self.res1 = _res1({
+    __self.response = _response(__stack.locals.prompt, {
       messages: __self.messages_0.getMessages(),
     });
-        __stack.step++;
-      }
-      
+    __stack.step++;
+  }
 
-      if (__step <= 2) {
-        [__self.res1] = await Promise.all([__self.res1]);
-        __stack.step++;
-      }
-      
+  if (__step <= 3) {
+    [__self.response] = await Promise.all([__self.response]);
+    __stack.step++;
+  }
 
-      if (__step <= 3) {
-        await console.log(`res1`, __stack.locals.res1)
-        __stack.step++;
-      }
-      
+  if (__step <= 4) {
+    return {
+      ...state,
+      messages: __self.messages_0.toJSON(),
+      data: __stack.locals.response,
+    };
+    __stack.step++;
+  }
 
-      if (__step <= 4) {
-        return { ...state, messages: __self.messages_0.toJSON(), data: __stack.locals.res1}
-        __stack.step++;
-      }
-      
-    
-    // this is just here to have a default return value from a node if the user doesn't specify one
-    return { ...state, messages: __self.messages_0.toJSON(), data: undefined };
+  // this is just here to have a default return value from a node if the user doesn't specify one
+  return { ...state, messages: __self.messages_0.toJSON(), data: undefined };
 });
 
-
-
-export async function foo({ messages, callbacks } = {}): Promise<State<any>> {
-
-  const __data = [  ];
+export async function improve(
+  messageHistory,
+  userFeedback,
+  output,
+  { messages, callbacks } = {},
+): Promise<State<any>> {
+  const __data = [messageHistory, userFeedback, output];
   __callbacks = callbacks || {};
-  const __result = await graph.run("foo", { messages: messages || [], data: __data });
+  const __result = await graph.run("improve", {
+    messages: messages || [],
+    data: __data,
+  });
   __result.tokens = __stateStack.globals.__tokenStats;
-  return structuredClone(__result)
+  return structuredClone(__result);
 }
 
 export default graph;

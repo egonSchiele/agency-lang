@@ -1,9 +1,12 @@
 import prompts from "prompts";
 import fs from "fs";
 import path from "path";
+import { execSync } from "child_process";
 import { agencyParser, parseAgency } from "@/parser.js";
 import { getNodesOfType } from "@/utils/node.js";
 import { GraphNodeDefinition } from "@/types.js";
+import { compile } from "./commands.js";
+import renderEvaluate from "@/templates/cli/evaluate.js";
 
 function readFile(filename: string): string {
   console.log("Trying to read file", filename, "...");
@@ -78,4 +81,31 @@ export async function evaluate() {
   });
 
   console.log("Running program from entrypoint", response2.node);
+  const outFile = filename.replace(".agency", ".ts");
+  compile({}, filename, outFile);
+  console.log("Compiled TypeScript output written to", outFile);
+  const evaluateScript = renderEvaluate({
+    filename: outFile,
+    nodeName: response2.node,
+  });
+
+  const evaluateFile = "__evaluate.ts";
+  fs.writeFileSync(evaluateFile, evaluateScript);
+  console.log("Evaluation script written to", evaluateFile);
+
+  console.log("Running evaluation script...");
+  execSync(`npx tsx ${evaluateFile}`, { stdio: "inherit" });
+
+  const rating = await prompts({
+    type: "select",
+    name: "rating",
+    message: "How would you rate the result?",
+    choices: [
+      { title: "Poor", value: "poor" },
+      { title: "Good", value: "good" },
+      { title: "Great", value: "great" },
+    ],
+  });
+
+  console.log("Rating:", rating.rating);
 }

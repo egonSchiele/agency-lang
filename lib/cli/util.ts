@@ -1,13 +1,16 @@
 import prompts from "prompts";
-import fs from "fs";
+import fs, { readFileSync } from "fs";
+import { execSync } from "child_process";
 import { GraphNodeDefinition, VariableType } from "@/types.js";
+import renderEvaluate from "@/templates/cli/evaluate.js";
+import { compile } from "./commands.js";
 export function parseTarget(target: string): {
   filename: string;
   nodeName: string;
 } {
   const colonIndex = target.lastIndexOf(":");
   if (colonIndex === -1) {
-    throw new Error("Target must be in the format file.agency:nodeName");
+    return { filename: target, nodeName: "" };
   }
   const filename = target.slice(0, colonIndex);
   const nodeName = target.slice(colonIndex + 1);
@@ -108,7 +111,28 @@ export async function promptForArgs(
   return { hasArgs, argsString };
 }
 
-function formatTypeHint(vt: VariableType): string {
+export function executeNode(
+  agencyFile: string,
+  nodeName: string,
+  hasArgs: boolean,
+  argsString: string,
+): { data: any; [key: string]: any } {
+  const outFile = agencyFile.replace(".agency", ".ts");
+  compile({}, agencyFile, outFile);
+  const evaluateScript = renderEvaluate({
+    filename: outFile,
+    nodeName,
+    hasArgs,
+    args: argsString,
+  });
+  const evaluateFile = "__evaluate.ts";
+  fs.writeFileSync(evaluateFile, evaluateScript);
+  execSync(`npx tsx ${evaluateFile}`, { stdio: "inherit" });
+  const results = readFileSync("__evaluate.json", "utf-8");
+  return JSON.parse(results);
+}
+
+export function formatTypeHint(vt: VariableType): string {
   switch (vt.type) {
     case "primitiveType":
       return vt.value;

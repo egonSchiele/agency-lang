@@ -133,8 +133,10 @@ program
   .alias("eval")
   .description("Run evaluation")
   .argument("[target]", "Target in file.agency:nodeName format")
-  .action(async (target: string | undefined) => {
-    await evaluate(target);
+  .option("--args <path>", "Path to eval args JSON file")
+  .option("--results <path>", "Path to existing results file (to resume)")
+  .action(async (target: string | undefined, opts: { args?: string; results?: string }) => {
+    await evaluate(target, opts.args, opts.results);
   });
 
 program

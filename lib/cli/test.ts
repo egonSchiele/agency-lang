@@ -1,12 +1,10 @@
 import { parseAgency } from "@/parser.js";
-import renderEvaluate from "@/templates/cli/evaluate.js";
-import { GraphNodeDefinition, VariableType } from "@/types.js";
+import { GraphNodeDefinition } from "@/types.js";
 import { getNodesOfType } from "@/utils/node.js";
-import { execSync } from "child_process";
-import fs, { readFileSync } from "fs";
+import fs from "fs";
 import prompts from "prompts";
-import { compile } from "./commands.js";
 import {
+  executeNode,
   parseTarget,
   pickANode,
   promptForArgs,
@@ -54,27 +52,6 @@ function writeTestCase(
   return testFilePath;
 }
 
-function executeNode(
-  agencyFile: string,
-  nodeName: string,
-  hasArgs: boolean,
-  argsString: string,
-): { data: any; [key: string]: any } {
-  const outFile = agencyFile.replace(".agency", ".ts");
-  compile({}, agencyFile, outFile);
-  const evaluateScript = renderEvaluate({
-    filename: outFile,
-    nodeName,
-    hasArgs,
-    args: argsString,
-  });
-  const evaluateFile = "__evaluate.ts";
-  fs.writeFileSync(evaluateFile, evaluateScript);
-  execSync(`npx tsx ${evaluateFile}`, { stdio: "inherit" });
-  const results = readFileSync("__evaluate.json", "utf-8");
-  return JSON.parse(results);
-}
-
 export async function fixtures(target?: string) {
   let { filename, nodeName } = target
     ? parseTarget(target)
@@ -102,7 +79,7 @@ export async function fixtures(target?: string) {
     return;
   }
 
-  if (!target) {
+  if (!nodeName) {
     nodeName = await pickANode(nodes);
   }
 

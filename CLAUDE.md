@@ -1,347 +1,118 @@
-# Agency Language - Project Documentation
+# Agency Language
 
 ## Overview
 
-Agency is a domain-specific language for defining AI agent workflows. It compiles Agency code to executable TypeScript that calls OpenAI's structured output API.
+Agency is a domain-specific language for defining AI agent workflows. It compiles Agency code to executable TypeScript that calls OpenAI's structured output API. See `DOCS.md` for the full language reference.
 
-## Project Structure
+## Directory Structure
 
 ```
 agency-lang/
-├── lib/                           # Core implementation
-│   ├── agencyParser.ts              # Parser using tarsec combinators
-│   ├── types.ts                  # AST type definitions
-│   ├── generate-ts-file.ts       # CLI tool to generate TS from agency
-│   └── backends/                 # Code generation backends
-│       └── typescript.ts         # TypeScript code generator
-├── tests/                        # Example agency programs
-│   ├── assignment.agency           # Type hints and prompt assignments
-│   └── function.agency             # Function definitions
-├── dist/                        # Compiled JavaScript output
-├── scripts/agency.ts            # Shell script to run Agency programs
-├── index.ts                     # File for testing parser
-├── test-generator.ts            # Generator unit test
-└── test-full-pipeline.ts        # Full pipeline integration test
+├── lib/
+│   ├── types.ts                   # Re-exports all AST node types
+│   ├── types/                     # AST node type definitions (one file per node type)
+│   ├── parsers/                   # Parsers for Agency code (uses tarsec library)
+│   ├── parser.ts                  # Main parser entry point (parseAgency)
+│   ├── backends/
+│   │   ├── baseGenerator.ts       # Base class with processNode switch
+│   │   ├── typescriptGenerator.ts # TypeScript code generation (extends BaseGenerator)
+│   │   ├── graphGenerator.ts      # Graph code generation (extends TypeScriptGenerator)
+│   │   └── agencyGenerator.ts     # Agency code formatter (extends BaseGenerator)
+│   ├── cli/                       # CLI command implementations
+│   │   ├── commands.ts            # Core commands (compile, run, parse, format, etc.)
+│   │   ├── evaluate.ts            # Evaluate command
+│   │   ├── test.ts                # Test and fixtures commands
+│   │   └── util.ts                # Shared CLI utilities (parseTarget, executeNode, etc.)
+│   ├── templates/                 # Mustache templates compiled to TypeScript via typestache
+│   │   ├── backends/              # Templates used by code generators
+│   │   └── cli/                   # Templates used by CLI commands
+│   └── preprocessors/             # AST preprocessors (run before code generation)
+├── scripts/
+│   ├── agency.ts                  # CLI entry point (uses commander)
+│   ├── regenerate-fixtures.ts     # Regenerate TypeScript generator fixtures
+│   └── regenerate-graph-fixtures.ts # Regenerate graph generator fixtures
+├── tests/
+│   ├── typescriptGenerator/       # Integration test fixtures (.agency + .mts pairs)
+│   └── graphGenerator/            # Integration test fixtures (.agency + .mts pairs)
+├── examples/                      # Example Agency programs
+└── dist/                          # Compiled JavaScript output
 ```
 
-## Language Features
+## Key Commands
 
-See DOCS.md for a full language reference.
-
-## Parser Architecture
-
-The parser uses **tarsec** parser combinators. See docs for tarsec here: https://egonschiele.github.io/tarsec/.
-
-### Tarsec Parser Structure
-
-Tarsec is a parser combinator library that provides composable building blocks for creating parsers.
-
-#### How Tarsec Parsers Work
-
-**Parser Type:**
-- A parser has type `Parser<T>` where `T` is the type of value it parses
-- Parsers are functions that take a string input and return a `ParserResult<T>`
-
-**Calling Parsers:**
-```typescript
-const result = numberParser("42");
-// Parser is called directly as a function
+```bash
+pnpm run build          # Compile TypeScript to dist/ (rm -rf dist/ && tsc && tsc-alias)
+pnpm run templates      # Compile mustache templates to TypeScript via typestache
+pnpm test               # Run vitest in watch mode
+pnpm test:run           # Run vitest once
+pnpm run agency <file>  # Compile and run an .agency file
+pnpm run compile <file> # Compile .agency to .ts
+pnpm run ast <file>     # Parse .agency and print AST as JSON
+pnpm run fmt <file>     # Format .agency file
+pnpm run eval           # Run evaluation on a node
+make all                # Run templates + build
+make fixtures           # Rebuild all integration test fixtures
 ```
 
-**ParserResult Structure:**
+## Templates (typestache)
 
-Success case:
-```typescript
-{
-  success: true,
-  result: T,      // The parsed value (e.g., { type: "number", value: "42" })
-  rest: string    // Remaining unparsed input
-}
-```
+Mustache templates in `lib/templates/` are compiled to TypeScript files using [typestache](https://www.npmjs.com/package/typestache). Run `pnpm run templates` to recompile them. The generated `.ts` files export a default render function you can import and call to produce a string from template data. If you create or modify a `.mustache` file, you must run `pnpm run templates` before building.
 
-Failure case:
-```typescript
-{
-  success: false,
-  rest: string,   // The input that couldn't be parsed
-  message: string // Error message (e.g., "expected at least one match")
-}
-```
+## Parsers
 
-#### Common Tarsec Combinators
+Parsers use the **tarsec** parser combinator library. Parser files live in `lib/parsers/` with co-located `.test.ts` files for unit tests.
 
-**Basic Parsers:**
-- `char(c)` - Matches a single character
-- `str(s)` - Matches a string
-- `digit` - Matches a digit (0-9)
-- `alphanum` - Matches alphanumeric characters
-- `space` - Matches a single space
-
-**Combinators:**
-- `or(p1, p2, ...)` - Tries parsers in order, returns first success
-- `many(p)` - Matches parser zero or more times, returns array
-- `many1(p)` - Matches parser one or more times
-- `many1Till(terminator)` - Matches characters until terminator is found
-- `manyTill(terminator)` - Matches zero or more characters until terminator
-- `sepBy(separator, parser)` - Matches parser separated by separator
-
-**Sequence Combinators:**
-- `seqC(...)` - Sequence parser that **captures** specific parts
-- `seqR(...)` - Sequence parser that returns the **rightmost** result
-
-**Capture and Set:**
-- `capture(parser, fieldName)` - Captures parser result into a field
-- `set(fieldName, value)` - Sets a field to a constant value
-
-**Transformers:**
-- `map(parser, fn)` - Transforms parser result with a function
-
-#### Example Parser Patterns
-
-**Simple Value Parser:**
-```typescript
-// Parses a number and returns { type: "number", value: "123" }
-export const numberParser: Parser<NumberLiteral> = seqC(
-  set("type", "number"),                              // Set type field
-  capture(many1WithJoin(or(char("-"), char("."), digit)), "value") // Capture digits
-);
-```
-
-**Choice Parser:**
-```typescript
-// Try multiple parsers in order
-export const literalParser: Parser<Literal> = or(
-  promptParser,      // Try prompt first
-  numberParser,      // Then number
-  stringParser,      // Then string
-  variableNameParser // Finally variable name (catch-all)
-);
-```
-
-**Complex Sequence Parser:**
-```typescript
-// Parses `${variableName}` interpolations
-export const interpolationSegmentParser: Parser<InterpolationSegment> = seqC(
-  set("type", "interpolation"),           // Set type field
-  char("$"),                               // Match $
-  char("{"),                               // Match {
-  capture(many1Till(char("}")), "variableName"), // Capture until }
-  char("}")                                // Match }
-);
-```
-
-**Parser with Transformation:**
-```typescript
-// Parses text and transforms into object
-export const textSegmentParser: Parser<TextSegment> = map(
-  many1Till(or(backtick, char("$"))),    // Parse until backtick or $
-  (text) => ({
-    type: "text",
-    value: text,
-  })
-);
-```
-
-#### Key Patterns in lib/parsers/literals.ts
-
-1. **Use `seqC` for building objects:** When you need to parse multiple things and build an object with specific fields
-2. **Use `set()` for discriminated unions:** Set the `type` field for AST node types
-3. **Use `capture()` to extract values:** Capture parsed values into named fields
-4. **Use `or()` for alternatives:** Try different parsers in precedence order
-5. **Use `map()` for transformations:** Transform parsed text into structured objects
-
-### AST Types
-
-All types defined in `lib/types.ts`.
+**IMPORTANT:** If there is a bug in a parser, do NOT attempt to fix it. Instead, prompt the user to fix it.
 
 ## Code Generation
 
-### TypeScript Backend (`lib/backends/typescript.ts`)
+The generator class hierarchy is:
 
-The TypeScript generator converts agency to runnable TypeScript code:
-
-### Generator Implementation Details
-
-1. **Two-Pass Processing**
-   - Pass 1: Collect all type hints
-   - Pass 2: Generate code for all nodes
-
-2. **Type Mapping**
-   - `number` → `z.number()`
-   - `string` → `z.string()`
-   - `boolean` → `z.boolean()`
-
-3. **Node Processing**
-   - **TypeHint**: Store type mapping (no code generated)
-   - **Assignment (prompt)**: Generate async function + call
-   - **Assignment (literal)**: Generate const declaration
-   - **FunctionDefinition**: Generate TypeScript function
-   - **Literals**: Generate expression statements
-
-## Build & Run
-
-### Building the Project
-```bash
-pnpm run build  # Compiles TypeScript to dist/
+```
+BaseGenerator
+  └── TypeScriptGenerator
+        └── GraphGenerator
 ```
 
-### Running agency Programs
-
-**Using the agency script:**
-```bash
-pnpm run agency tests/assignment.agency
-```
-This will:
-1. Parse `assignment.agency` to AST
-2. Generate `assignment.ts`
-3. Execute `assignment.ts` with Node.js
-
-**Manual pipeline:**
-```bash
-# 1. Parse to AST
-pnpm run agency ast tests/assignment.agency
-
-# 2. Generate TypeScript (programmatically)
-pnpm run agency compile input.agency output.ts
-
-# 3. Run Agency file directly (compiles and runs)
-pnpm run agency tests/assignment.agency
-```
+- **BaseGenerator** (`lib/backends/baseGenerator.ts`): Contains the `processNode` switch that dispatches to handler methods for each AST node type.
+- **TypeScriptGenerator** (`lib/backends/typescriptGenerator.ts`): Implements most code generation logic for producing TypeScript output.
+- **GraphGenerator** (`lib/backends/graphGenerator.ts`): Extends TypeScriptGenerator with graph-specific code generation (e.g., graph nodes, edges, state machines). This is the backend used in practice.
 
 ## Testing
 
-### Automated Tests with Vitest
+### Unit Tests
 
-The project uses **vitest** for automated testing.
+Parser and generator unit tests live alongside source files as `.test.ts` files (e.g., `lib/parsers/literals.test.ts`). Run with `pnpm test` or `pnpm test:run`.
 
-#### Running Tests
+### Integration Tests
 
-```bash
-pnpm test         # Run tests in watch mode
-pnpm test:run     # Run tests once
-```
+Integration tests use fixture pairs in the `tests/` directory. Each fixture is a `.agency` file paired with a `.mts` file containing the expected generated output.
 
-#### Writing Tests for Parsers
+- `tests/typescriptGenerator/` — fixtures for the TypeScript generator
+- `tests/graphGenerator/` — fixtures for the graph generator
 
-Test files are placed alongside source files with `.test.ts` extension:
-- Source: `lib/parsers/literals.ts`
-- Tests: `lib/parsers/literals.test.ts`
+The integration test runners are:
+- `lib/backends/typescriptGenerator.integration.test.ts`
+- `lib/backends/graphGenerator.integration.test.ts`
 
-**Test Structure Pattern:**
-```typescript
-import { describe, it, expect } from 'vitest';
-import { numberParser } from './literals';
-
-describe('numberParser', () => {
-  const testCases = [
-    {
-      input: "42",
-      expected: {
-        success: true,
-        result: { type: "number", value: "42" }
-      }
-    },
-    {
-      input: "abc",
-      expected: { success: false }
-    }
-  ];
-
-  testCases.forEach(({ input, expected }) => {
-    if (expected.success) {
-      it(`should parse "${input}" successfully`, () => {
-        const result = numberParser(input);
-        expect(result.success).toBe(true);
-        if (result.success) {
-          expect(result.result).toEqual(expected.result);
-        }
-      });
-    } else {
-      it(`should fail to parse "${input}"`, () => {
-        const result = numberParser(input);
-        expect(result.success).toBe(false);
-      });
-    }
-  });
-});
-```
-
-**Key Testing Patterns:**
-
-1. **Test Case Arrays:** Define test cases as arrays with `input` and `expected` fields
-2. **Success Cases:** Check both `success: true` and the parsed `result` value
-3. **Failure Cases:** Only check `success: false`
-4. **Type Guards:** Use `if (result.success)` before accessing `result.result` for type safety
-5. **Comprehensive Coverage:** Test happy paths, edge cases, and failure cases
-
-**What to Test for Parsers:**
-
-- **Happy path:** Valid inputs that should parse successfully
-- **Edge cases:** Empty strings, single characters, boundary values
-- **Special characters:** Whitespace, tabs, newlines, punctuation
-- **Failure cases:** Invalid syntax, missing delimiters, wrong types
-- **Precedence:** For choice parsers like `or()`, verify correct ordering
-
-## Key Files
-
-### `lib/agencyParser.ts`
-Main parser implementation. Exports:
-- `parseAgency(input: string)` - Parses agency source code
-- Individual parsers: `typeHintParser`, `assignmentParser`, etc.
-
-### `lib/types.ts`
-TypeScript type definitions for the AST. All node types implement a discriminated union based on the `type` field.
-
-### `lib/backends/typescript.ts`
-TypeScript code generator. Exports:
-- `generateTypeScript(program: AgencyProgram): string`
-- `TypeScriptGenerator` class
-
-### `lib/generate-ts-file.ts`
-CLI tool that reads an agency file and writes generated TypeScript to a file.
-
-### `agency` (shell script)
-Convenience script to run agency programs end-to-end.
-
-## Extension Points
-
-### Adding New Backends
-Create `lib/backends/<language>.ts` with:
-```typescript
-export function generate<Language>(program: AgencyProgram): string {
-  // Implementation
-}
-```
-
-### Adding New Type Mappings
-Edit `mapTypeToZodSchema()` in `lib/backends/typescript.ts`:
-```typescript
-case "array":
-  return "z.array(z.any())";
-case "object":
-  return "z.object({})";
-```
-
-### Adding New Language Features
-1. Add AST node type to `lib/types.ts`
-2. Add parser in `lib/agencyParser.ts`
-3. Add code generation in backend generator
+To add a new integration test, create a `.agency` file and its expected `.mts` output in the appropriate `tests/` subdirectory. Run `make fixtures` to regenerate all `.mts` fixture files from their `.agency` sources.
 
 ## Common Tasks
 
-### Adding a new agency language feature
-1. Define the AST node type in `lib/types.ts`
-2. Create parser combinator in `lib/agencyParser.ts`
-3. Add to main `agencyParser` parser
-4. Add code generation case in `lib/backends/typescript.ts`
-5. Test with a new test file in `tests/`
+### Adding a new AST node type
 
-### Debugging parser issues
-1. Use `test-full-pipeline.ts` to see parsed JSON
-2. Check parser combinator return values
-3. Verify `type` field is set correctly on all nodes
+1. **Define the type** in `lib/types/` (create a new file or add to an existing one). Export it from `lib/types.ts`. Add the new type to the `AgencyNode` union type in `lib/types.ts`.
+2. **Add a parser** in `lib/parsers/`. Wire it into the main parser in `lib/parser.ts`. Add unit tests in a co-located `.test.ts` file.
+3. **Add code generation** by adding a case to `processNode` in `lib/backends/baseGenerator.ts` that calls a new handler method. Implement the handler in `TypeScriptGenerator` (for general TypeScript output) or `GraphGenerator` (for graph-specific behavior). You may also need to create new `.mustache` template files in `lib/templates/backends/` and run `pnpm run templates`.
+4. **Add integration test fixtures** — create `.agency` and `.mts` files in the appropriate `tests/` subdirectory.
 
-### Debugging generator issues
-1. Use `test-generator.ts` with hardcoded JSON
-2. Check type hints are collected in first pass
-3. Verify node type switches match correctly
+### Adding a CLI command
+
+1. Add the command definition in `scripts/agency.ts` using commander (`.command()`, `.argument()`, `.option()`, `.action()`).
+2. Implement the command logic in `lib/cli/` (create a new file or add to an existing one). Shared utilities like `parseTarget`, `pickANode`, `executeNode` live in `lib/cli/util.ts`.
+3. Optionally add a shortcut script in `package.json` under `"scripts"`.
+
+## Code Guidelines
+- NEVER use dynamic imports
+- Use objects instead of maps.
+- Use arrays instead of sets.

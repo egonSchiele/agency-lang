@@ -11,161 +11,150 @@ import {
   run,
 } from "@/cli/commands.js";
 import { evaluate, test } from "@/cli/evaluate.js";
-import { help } from "@/cli/help.js";
 import { AgencyConfig } from "@/config.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
+import { Command } from "commander";
 import * as fs from "fs";
 
-let config: AgencyConfig = {};
+const program = new Command();
 
-// Main CLI logic
-async function main(): Promise<void> {
-  const args = process.argv.slice(2);
+program
+  .name("agency")
+  .description("Agency Language CLI")
+  .version("0.0.52")
+  .option("-v, --verbose", "Enable verbose logging during parsing")
+  .option("-c, --config <path>", "Path to agency.json config file");
 
-  // No arguments - show help
-  if (args.length === 0) {
-    help();
-    return;
+function getConfig(): AgencyConfig {
+  const opts = program.opts();
+  const config = loadConfig(opts.config);
+  if (opts.verbose) {
+    config.verbose = true;
   }
-
-  // Extract config flag
-  const configIndex = args.findIndex(
-    (arg) => arg === "-c" || arg === "--config",
-  );
-  let configPath: string | undefined;
-  if (configIndex !== -1 && args[configIndex + 1]) {
-    configPath = args[configIndex + 1];
-  }
-
-  // Load configuration
-  config = loadConfig(configPath);
-
-  // Extract verbose flag
-  const verboseIndex = args.findIndex(
-    (arg) => arg === "-v" || arg === "--verbose",
-  );
-  // CLI flag overrides config file
-  const verbose = verboseIndex !== -1 || (config.verbose ?? false);
-  config.verbose = verbose;
-  // Remove flags from args
-  let filteredArgs = args.filter(
-    (arg, index) =>
-      arg !== "-v" &&
-      arg !== "--verbose" &&
-      arg !== "-c" &&
-      arg !== "--config" &&
-      // Remove the config path value if it follows the -c flag
-      !(
-        (args[index - 1] === "-c" || args[index - 1] === "--config") &&
-        index === configIndex + 1
-      ),
-  );
-
-  const command = filteredArgs[0];
-
-  switch (command) {
-    case "help":
-    case "--help":
-    case "-h":
-      help();
-      break;
-    case "build":
-    case "compile":
-      if (filteredArgs.length < 2) {
-        console.error(
-          "Error: 'compile' command requires an input file or directory",
-        );
-        console.error("Usage: agency compile <input> [output]");
-        process.exit(1);
-      }
-      compile(config, filteredArgs[1], filteredArgs[2]);
-      break;
-
-    case "run":
-      if (filteredArgs.length < 2) {
-        console.error("Error: 'run' command requires an input file");
-        console.error("Usage: agency run <input> [output]");
-        process.exit(1);
-      }
-      run(config, filteredArgs[1], filteredArgs[2]);
-      break;
-
-    case "fmt":
-    case "format":
-      // Extract -i flag
-      const inPlaceIndex = filteredArgs.findIndex(
-        (arg) => arg === "-i" || arg === "--in-place",
-      );
-      const inPlace = inPlaceIndex !== -1;
-
-      // Remove -i flag from args
-      const formatArgs = filteredArgs.filter(
-        (arg) => arg !== "-i" && arg !== "--in-place",
-      );
-
-      if (formatArgs.length < 2) {
-        // Read from stdin
-        const fmtContents = await readStdin();
-        const formatted = await format(fmtContents, config);
-        console.log(formatted);
-      } else {
-        // Read from file or directory
-        formatFile(formatArgs[1], inPlace, config);
-      }
-      break;
-
-    case "ast":
-    case "parse":
-      let contents;
-      if (filteredArgs.length < 2) {
-        contents = await readStdin();
-      } else {
-        contents = readFile(filteredArgs[1]);
-      }
-      const result = parse(contents, config);
-      console.log(JSON.stringify(result, null, 2));
-      break;
-
-    case "mermaid":
-    case "graph":
-      let graphContents;
-      if (filteredArgs.length < 2) {
-        graphContents = await readStdin();
-      } else {
-        graphContents = readFile(filteredArgs[1]);
-      }
-      renderGraph(graphContents, config);
-      break;
-    case "preprocess":
-      let preContents;
-      if (filteredArgs.length < 2) {
-        preContents = await readStdin();
-      } else {
-        preContents = readFile(filteredArgs[1]);
-      }
-      const parsedProgram = parse(preContents, config);
-      const preprocessor = new TypescriptPreprocessor(parsedProgram, config);
-      preprocessor.preprocess();
-      console.log(JSON.stringify(preprocessor.program, null, 2));
-      break;
-    case "evaluate":
-      await evaluate();
-      break;
-    case "test":
-      await test();
-      break;
-
-    default:
-      // If first arg is not a recognized command, treat it as a file to run
-      if (command.endsWith(".agency") || fs.existsSync(command)) {
-        run(config, command, filteredArgs[1]);
-      } else {
-        console.error(`Error: Unknown command '${command}'`);
-        console.error("Run 'agency help' for usage information");
-        process.exit(1);
-      }
-      break;
-  }
+  return config;
 }
 
-main();
+program
+  .command("compile")
+  .alias("build")
+  .description("Compile .agency file or directory to TypeScript")
+  .argument("<input>", "Path to .agency input file or directory")
+  .argument("[output]", "Path to output .ts file (optional)")
+  .action((input: string, output: string | undefined) => {
+    compile(getConfig(), input, output);
+  });
+
+program
+  .command("run")
+  .description("Compile and run .agency file")
+  .argument("<input>", "Path to .agency input file")
+  .argument("[output]", "Path to output .ts file (optional)")
+  .action((input: string, output: string | undefined) => {
+    run(getConfig(), input, output);
+  });
+
+program
+  .command("format")
+  .alias("fmt")
+  .description("Format .agency file or directory (reads from stdin if no input)")
+  .argument("[input]", "Path to .agency input file or directory")
+  .option("-i, --in-place", "Format file(s) in-place")
+  .action(async (input: string | undefined, opts: { inPlace?: boolean }) => {
+    const config = getConfig();
+    if (!input) {
+      const contents = await readStdin();
+      const formatted = await format(contents, config);
+      console.log(formatted);
+    } else {
+      formatFile(input, opts.inPlace ?? false, config);
+    }
+  });
+
+program
+  .command("ast")
+  .alias("parse")
+  .description("Parse .agency file and show AST (reads from stdin if no input)")
+  .argument("[input]", "Path to .agency input file")
+  .action(async (input: string | undefined) => {
+    const config = getConfig();
+    let contents;
+    if (!input) {
+      contents = await readStdin();
+    } else {
+      contents = readFile(input);
+    }
+    const result = parse(contents, config);
+    console.log(JSON.stringify(result, null, 2));
+  });
+
+program
+  .command("graph")
+  .alias("mermaid")
+  .description("Render Mermaid graph from .agency file (reads from stdin if no input)")
+  .argument("[input]", "Path to .agency input file")
+  .action(async (input: string | undefined) => {
+    const config = getConfig();
+    let contents;
+    if (!input) {
+      contents = await readStdin();
+    } else {
+      contents = readFile(input);
+    }
+    renderGraph(contents, config);
+  });
+
+program
+  .command("preprocess")
+  .description(
+    "Parse .agency file and show AST after preprocessing (reads from stdin if no input)",
+  )
+  .argument("[input]", "Path to .agency input file")
+  .action(async (input: string | undefined) => {
+    const config = getConfig();
+    let contents;
+    if (!input) {
+      contents = await readStdin();
+    } else {
+      contents = readFile(input);
+    }
+    const parsedProgram = parse(contents, config);
+    const preprocessor = new TypescriptPreprocessor(parsedProgram, config);
+    preprocessor.preprocess();
+    console.log(JSON.stringify(preprocessor.program, null, 2));
+  });
+
+program
+  .command("evaluate")
+  .alias("eval")
+  .description("Run evaluation")
+  .argument("[target]", "Target in file.agency:nodeName format")
+  .action(async (target: string | undefined) => {
+    await evaluate(target);
+  });
+
+program
+  .command("test")
+  .description("Run tests")
+  .argument("[testFile]", "Path to .test.json file")
+  .action(async (testFile: string | undefined) => {
+    await test(testFile);
+  });
+
+// Default: treat unknown args as a file to run
+program.arguments("[file]").action((file: string | undefined) => {
+  if (!file) {
+    program.help();
+    return;
+  }
+  if (file.endsWith(".agency") || fs.existsSync(file)) {
+    const args = program.args;
+    const output = args.length > 1 ? args[1] : undefined;
+    run(getConfig(), file, output);
+  } else {
+    console.error(`Error: Unknown command '${file}'`);
+    console.error("Run 'agency help' for usage information");
+    process.exit(1);
+  }
+});
+
+program.parse();

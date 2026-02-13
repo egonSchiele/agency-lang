@@ -90,39 +90,54 @@ function executeNode(
   return JSON.parse(results);
 }
 
-export async function evaluate() {
-  // Find all .agency files in the current directory
-  const agencyFiles = fs
-    .readdirSync(process.cwd())
-    .filter((file) => file.endsWith(".agency"))
-    .map((file) => ({
-      title: file,
-      value: file,
-    }));
+export async function evaluate(target?: string) {
+  let filename: string;
+  let nodeName: string = "";
 
-  const choices = [
-    { title: "📝 Enter custom filename...", value: "__custom__" },
-    ...agencyFiles,
-  ];
+  if (target) {
+    // Parse "file.agency:nodeName" format
+    const colonIndex = target.lastIndexOf(":");
+    if (colonIndex === -1) {
+      console.error("Error: target must be in the format file.agency:nodeName");
+      return;
+    }
+    filename = target.slice(0, colonIndex);
+    nodeName = target.slice(colonIndex + 1);
+  } else {
+    // Find all .agency files in the current directory
+    const agencyFiles = fs
+      .readdirSync(process.cwd())
+      .filter((file) => file.endsWith(".agency"))
+      .map((file) => ({
+        title: file,
+        value: file,
+      }));
 
-  const response = await prompts({
-    type: "select",
-    name: "filename",
-    message: "Select an Agency file to read:",
-    choices: choices,
-  });
+    const choices = [
+      { title: "📝 Enter custom filename...", value: "__custom__" },
+      ...agencyFiles,
+    ];
 
-  let filename = response.filename;
-
-  // If user chose custom option, prompt for filename
-  if (filename === "__custom__") {
-    const customResponse = await prompts({
-      type: "text",
+    const response = await prompts({
+      type: "select",
       name: "filename",
-      message: "Enter the filename to read:",
+      message: "Select an Agency file to read:",
+      choices: choices,
     });
-    filename = customResponse.filename;
+
+    filename = response.filename;
+
+    // If user chose custom option, prompt for filename
+    if (filename === "__custom__") {
+      const customResponse = await prompts({
+        type: "text",
+        name: "filename",
+        message: "Enter the filename to read:",
+      });
+      filename = customResponse.filename;
+    }
   }
+
   const contents = readFile(filename);
   const parsed = parseAgency(contents);
   if (!parsed.success) {
@@ -145,18 +160,21 @@ export async function evaluate() {
     return;
   }
 
-  const response2 = await prompts({
-    type: "select",
-    name: "node",
-    message: "Pick a node:",
-    choices: nodes.map((node) => ({
-      title: node.nodeName,
-      value: node.nodeName,
-    })),
-  });
+  if (!target) {
+    const response2 = await prompts({
+      type: "select",
+      name: "node",
+      message: "Pick a node:",
+      choices: nodes.map((node) => ({
+        title: node.nodeName,
+        value: node.nodeName,
+      })),
+    });
+    nodeName = response2.node;
+  }
 
   // Find the selected node and prompt for args
-  const selectedNode = nodes.find((n) => n.nodeName === response2.node)!;
+  const selectedNode = nodes.find((n) => n.nodeName === nodeName)!;
   let hasArgs = false;
   let argsString = "";
 
@@ -189,8 +207,8 @@ export async function evaluate() {
     }
   }
 
-  console.log("Running program from entrypoint", response2.node);
-  const json = executeNode(filename, response2.node, hasArgs, argsString);
+  console.log("Running program from entrypoint", nodeName);
+  const json = executeNode(filename, nodeName, hasArgs, argsString);
 
   console.log("\nOutput:");
   console.log(JSON.stringify(json.data, null, 2));
@@ -251,34 +269,41 @@ export async function evaluate() {
   }
 
   const inputStr = hasArgs ? argsString : "";
-  const testFilePath = writeTestCase(filename, response2.node, inputStr, expectedOutput, criteria);
+  const testFilePath = writeTestCase(filename, nodeName, inputStr, expectedOutput, criteria);
   console.log(`Test case saved to ${testFilePath}`);
 }
 
-export async function test() {
-  const testFiles = fs
-    .readdirSync(process.cwd())
-    .filter((file) => file.endsWith(".test.json"))
-    .map((file) => ({
-      title: file,
-      value: file,
-    }));
+export async function test(testFile?: string) {
+  let selectedFile: string;
 
-  if (testFiles.length === 0) {
-    console.log("No .test.json files found in the current directory.");
-    return;
+  if (testFile) {
+    selectedFile = testFile;
+  } else {
+    const testFiles = fs
+      .readdirSync(process.cwd())
+      .filter((file) => file.endsWith(".test.json"))
+      .map((file) => ({
+        title: file,
+        value: file,
+      }));
+
+    if (testFiles.length === 0) {
+      console.log("No .test.json files found in the current directory.");
+      return;
+    }
+
+    const response = await prompts({
+      type: "select",
+      name: "filename",
+      message: "Select a test file to run:",
+      choices: testFiles,
+    });
+
+    if (!response.filename) return;
+    selectedFile = response.filename;
   }
 
-  const response = await prompts({
-    type: "select",
-    name: "filename",
-    message: "Select a test file to run:",
-    choices: testFiles,
-  });
-
-  if (!response.filename) return;
-
-  const tests: Tests = JSON.parse(fs.readFileSync(response.filename, "utf-8"));
+  const tests: Tests = JSON.parse(fs.readFileSync(selectedFile, "utf-8"));
   let passed = 0;
   const total = tests.tests.length;
 

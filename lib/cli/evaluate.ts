@@ -12,7 +12,7 @@ import { exit } from "process";
 type Exact = { type: "exact" };
 type LLMJudge = { type: "llmJudge"; judgePrompt: string; desiredAccuracy: number };
 type Criteria = Exact | LLMJudge;
-type TestCase = { input: string; expectedOutput: string; evaluationCriteria: Criteria[] };
+type TestCase = { nodeName: string; input: string; expectedOutput: string; evaluationCriteria: Criteria[] };
 type Tests = { sourceFile: string; tests: TestCase[] };
 
 function readFile(filename: string): string {
@@ -52,6 +52,7 @@ function serializeArgValue(value: string): string {
 
 function writeTestCase(
   agencyFilename: string,
+  nodeName: string,
   input: string,
   expectedOutput: string,
   evaluationCriteria: Criteria[],
@@ -63,9 +64,30 @@ function writeTestCase(
   } else {
     tests = { sourceFile: agencyFilename, tests: [] };
   }
-  tests.tests.push({ input, expectedOutput, evaluationCriteria });
+  tests.tests.push({ nodeName, input, expectedOutput, evaluationCriteria });
   fs.writeFileSync(testFilePath, JSON.stringify(tests, null, 2));
   return testFilePath;
+}
+
+function executeNode(
+  agencyFile: string,
+  nodeName: string,
+  hasArgs: boolean,
+  argsString: string,
+): { data: any; [key: string]: any } {
+  const outFile = agencyFile.replace(".agency", ".ts");
+  compile({}, agencyFile, outFile);
+  const evaluateScript = renderEvaluate({
+    filename: outFile,
+    nodeName,
+    hasArgs,
+    args: argsString,
+  });
+  const evaluateFile = "__evaluate.ts";
+  fs.writeFileSync(evaluateFile, evaluateScript);
+  execSync(`npx tsx ${evaluateFile}`, { stdio: "inherit" });
+  const results = readFileSync("__evaluate.json", "utf-8");
+  return JSON.parse(results);
 }
 
 export async function evaluate() {
@@ -168,25 +190,7 @@ export async function evaluate() {
   }
 
   console.log("Running program from entrypoint", response2.node);
-  const outFile = filename.replace(".agency", ".ts");
-  compile({}, filename, outFile);
-  console.log("Compiled TypeScript output written to", outFile);
-  const evaluateScript = renderEvaluate({
-    filename: outFile,
-    nodeName: response2.node,
-    hasArgs,
-    args: argsString,
-  });
-
-  const evaluateFile = "__evaluate.ts";
-  fs.writeFileSync(evaluateFile, evaluateScript);
-  console.log("Evaluation script written to", evaluateFile);
-
-  console.log("Running evaluation script...");
-  execSync(`npx tsx ${evaluateFile}`, { stdio: "inherit" });
-
-  const results = readFileSync("__evaluate.json", "utf-8");
-  const json = JSON.parse(results);
+  const json = executeNode(filename, response2.node, hasArgs, argsString);
 
   console.log("\nOutput:");
   console.log(JSON.stringify(json.data, null, 2));
@@ -247,6 +251,63 @@ export async function evaluate() {
   }
 
   const inputStr = hasArgs ? argsString : "";
-  const testFilePath = writeTestCase(filename, inputStr, expectedOutput, criteria);
+  const testFilePath = writeTestCase(filename, response2.node, inputStr, expectedOutput, criteria);
   console.log(`Test case saved to ${testFilePath}`);
+}
+
+export async function test() {
+  const testFiles = fs
+    .readdirSync(process.cwd())
+    .filter((file) => file.endsWith(".test.json"))
+    .map((file) => ({
+      title: file,
+      value: file,
+    }));
+
+  if (testFiles.length === 0) {
+    console.log("No .test.json files found in the current directory.");
+    return;
+  }
+
+  const response = await prompts({
+    type: "select",
+    name: "filename",
+    message: "Select a test file to run:",
+    choices: testFiles,
+  });
+
+  if (!response.filename) return;
+
+  const tests: Tests = JSON.parse(fs.readFileSync(response.filename, "utf-8"));
+  let passed = 0;
+  const total = tests.tests.length;
+
+  for (let i = 0; i < total; i++) {
+    const testCase = tests.tests[i];
+    const hasArgs = testCase.input !== "";
+    console.log(`\nTest ${i + 1}/${total}: node=${testCase.nodeName} input=${testCase.input || "(none)"}`);
+
+    const result = executeNode(tests.sourceFile, testCase.nodeName, hasArgs, testCase.input);
+
+    let testPassed = true;
+    for (const criterion of testCase.evaluationCriteria) {
+      if (criterion.type === "exact") {
+        const actual = JSON.stringify(result.data);
+        if (actual === testCase.expectedOutput) {
+          console.log("  ✓ Exact match passed");
+        } else {
+          console.log("  ✗ Exact match failed");
+          console.log("    Expected:", testCase.expectedOutput);
+          console.log("    Actual:  ", actual);
+          testPassed = false;
+        }
+      } else if (criterion.type === "llmJudge") {
+        console.log("  ⚠ LLM Judge evaluation not yet supported, skipping");
+      }
+    }
+
+    if (testPassed) passed++;
+  }
+
+  console.log(`\n${passed}/${total} tests passed`);
 }

@@ -10,7 +10,7 @@ import {
   renderGraph,
   run,
 } from "@/cli/commands.js";
-import { evaluate } from "@/cli/evaluate.js";
+import { evaluate, test } from "@/cli/evaluate.js";
 import { help } from "@/cli/help.js";
 import { AgencyConfig } from "@/config.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
@@ -150,6 +150,9 @@ async function main(): Promise<void> {
       break;
     case "evaluate":
       await evaluate();
+      break;
+    case "test":
+      await test();
       break;
 
     default:

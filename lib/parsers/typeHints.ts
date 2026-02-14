@@ -157,10 +157,13 @@ export const objectPropertyParser: Parser<ObjectProperty> = trace(
 );
 
 export const objectPropertyDescriptionParser: Parser<{ description: string }> =
-  seqC(
-    char("#"),
-    optionalSpaces,
-    capture(many1Till(oneOf(",;\n")), "description"),
+  trace(
+    "objectPropertyDescriptionParser",
+    seqC(
+      char("#"),
+      optionalSpaces,
+      capture(many1Till(oneOf(",;\n")), "description"),
+    ),
   );
 
 export const objectPropertyWithDescriptionParser: Parser<ObjectProperty> =
@@ -188,7 +191,10 @@ export const objectTypeParser: Parser<ObjectType> = trace(
         "properties",
       ),
       optionalSpacesOrNewline,
-      char("}"),
+      parseError(
+        "Expected `}`. Did you forget to add a comma between object properties?",
+        char("}"),
+      ),
     );
     return parser(input);
   },
@@ -269,10 +275,10 @@ export const typeAliasParser: Parser<TypeAlias> = trace(
   seqC(
     set("type", "typeAlias"),
     str("type"),
+    spaces,
     captureCaptures(
       parseError(
         "expected a statement of the form `type Foo = X' where X can be a union, array, object, type alias, or primitive type`",
-        spaces,
         capture(many1WithJoin(varNameChar), "aliasName"),
         optionalSpaces,
         str("="),

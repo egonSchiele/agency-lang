@@ -1,12 +1,12 @@
 {
   "name": "agency-lang",
-  "version": "0.0.54",
+  "version": "0.0.55",
   "description": "The Agency language",
   "main": "lib/index.js",
   "scripts": {
     "test": "vitest",
     "test:run": "vitest run",
-    "build": "rm -rf dist/ && tsc && tsc-alias",
+    "build": "rm -rf dist/ && tsc && tsc-alias && cp -r lib/agents dist/lib/agents",
     "start": "node dist/index.js",
     "templates": "typestache ./lib/templates",
     "typecheck": "tsc --noEmit",
@@ -17,6 +17,7 @@
     "fmt": "node ./dist/scripts/agency.js fmt",
     "eval": "node ./dist/scripts/agency.js eval",
     "fixtures": "node ./dist/scripts/agency.js fixtures",
+    "diagnostics": "node ./dist/scripts/agency.js diagnostics",
     "preprocess": "node ./dist/scripts/agency.js preprocess"
   },
   "bin": {

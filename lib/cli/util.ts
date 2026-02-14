@@ -1,8 +1,10 @@
 import prompts from "prompts";
 import fs, { readFileSync } from "fs";
+import path from "path";
 import { execSync } from "child_process";
 import { GraphNodeDefinition, VariableType } from "@/types.js";
 import renderEvaluate from "@/templates/cli/evaluate.js";
+import renderJudgeEvaluate from "@/templates/cli/judgeEvaluate.js";
 import { compile } from "./commands.js";
 export function parseTarget(target: string): {
   filename: string;
@@ -167,4 +169,30 @@ function serializeArgValue(value: string): string {
   if (!isNaN(num) && value.trim() !== "") return value;
   if (value === "true" || value === "false") return value;
   return JSON.stringify(value);
+}
+
+export function executeJudge(
+  actualOutput: string,
+  expectedOutput: string,
+  judgePrompt: string,
+): { score: number; reasoning: string } {
+  // Resolve the judge.agency file bundled in dist/lib/agents/
+  const currentDir = path.dirname(new URL(import.meta.url).pathname);
+  const judgeAgencyFile = path.resolve(currentDir, "../agents/judge.agency");
+
+  const judgeOutFile = "__judge.ts";
+  compile({}, judgeAgencyFile, judgeOutFile);
+
+  const judgeScript = renderJudgeEvaluate({
+    judgeFilename: judgeOutFile,
+    actualOutput: JSON.stringify(actualOutput),
+    expectedOutput: JSON.stringify(expectedOutput),
+    judgePrompt: JSON.stringify(judgePrompt),
+  });
+
+  const judgeEvaluateFile = "__judge_evaluate.ts";
+  fs.writeFileSync(judgeEvaluateFile, judgeScript);
+  execSync(`npx tsx ${judgeEvaluateFile}`, { stdio: "inherit" });
+  const results = readFileSync("__judge_evaluate.json", "utf-8");
+  return JSON.parse(results).data;
 }

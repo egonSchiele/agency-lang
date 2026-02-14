@@ -8,3 +8,8 @@ node foo() {
   res = llm("Call the greet function with name: Adit")
   return res
 }
+
+node bar() {
+  result = llm("What is 2 + 2?")
+  return result
+}

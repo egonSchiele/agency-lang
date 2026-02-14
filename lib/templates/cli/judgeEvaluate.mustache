@@ -1,0 +1,13 @@
+import { judge } from "./{{{judgeFilename:string}}}";
+import { writeFileSync } from "fs";
+
+async function runJudge() {
+  const actualOutput = {{{actualOutput:string}}};
+  const expectedOutput = {{{expectedOutput:string}}};
+  const judgePrompt = {{{judgePrompt:string}}};
+
+  const result = await judge(actualOutput, expectedOutput, judgePrompt);
+  writeFileSync("__judge_evaluate.json", JSON.stringify(result, null, 2));
+}
+
+runJudge();

@@ -1,0 +1,18 @@
+type JudgeResult = {
+  score: number # a score from 0 to 100 where 100 means perfect match;
+  reasoning: string # brief explanation for the score
+}
+
+node judge(actualOutput: string, expectedOutput: string, judgePrompt: string): JudgeResult {
+  result: JudgeResult = llm("You are an evaluation judge. Score how well the actual output matches what was expected.
+
+Judge prompt (evaluation criteria): ${judgePrompt}
+
+Expected output: ${expectedOutput}
+
+Actual output: ${actualOutput}
+
+Provide a score from 0 to 100 where 100 means perfect match and 0 means completely wrong. Also provide brief reasoning.")
+
+  return result
+}

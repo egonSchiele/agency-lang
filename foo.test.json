@@ -16,6 +16,18 @@
           "expectedMessage": "Agent wants to call the greet function with name: Adit"
         }
       ]
+    },
+    {
+      "nodeName": "bar",
+      "input": "",
+      "expectedOutput": "\"2 + 2 equals 4.\"",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "Make sure the math in the string looks correct.",
+          "desiredAccuracy": 90
+        }
+      ]
     }
   ]
 }

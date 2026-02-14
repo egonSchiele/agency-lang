@@ -4,6 +4,7 @@ import { getNodesOfType } from "@/utils/node.js";
 import fs from "fs";
 import prompts from "prompts";
 import {
+  executeJudge,
   executeNode,
   parseTarget,
   pickANode,
@@ -292,7 +293,29 @@ export async function test(testFile?: string) {
           testPassed = false;
         }
       } else if (criterion.type === "llmJudge") {
-        console.log("  ⚠ LLM Judge evaluation not yet supported, skipping");
+        const actual = JSON.stringify(result.data);
+        try {
+          const judgeResult = executeJudge(
+            actual,
+            testCase.expectedOutput,
+            criterion.judgePrompt,
+          );
+          if (judgeResult.score >= criterion.desiredAccuracy) {
+            console.log(
+              `  ✓ LLM Judge passed (score: ${judgeResult.score}/${criterion.desiredAccuracy})`,
+            );
+            console.log(`    Reasoning: ${judgeResult.reasoning}`);
+          } else {
+            console.log(
+              `  ✗ LLM Judge failed (score: ${judgeResult.score}/${criterion.desiredAccuracy})`,
+            );
+            console.log(`    Reasoning: ${judgeResult.reasoning}`);
+            testPassed = false;
+          }
+        } catch (e) {
+          console.log(`  ✗ LLM Judge error: ${e}`);
+          testPassed = false;
+        }
       }
     }
 

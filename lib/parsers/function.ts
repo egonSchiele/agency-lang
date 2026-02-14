@@ -4,6 +4,7 @@ import {
   captureCaptures,
   char,
   debug,
+  fail,
   many,
   many1,
   many1Till,
@@ -11,6 +12,7 @@ import {
   map,
   optional,
   or,
+  parseError,
   Parser,
   ParserResult,
   sepBy,
@@ -338,7 +340,13 @@ export const functionParameterParser: Parser<FunctionParameter> = trace(
 
 export const functionReturnTypeParser: Parser<VariableType> = trace(
   "functionReturnTypeParser",
-  seqC(char(":"), optionalSpaces, captureCaptures(variableTypeParser)),
+  seqC(
+    char(":"),
+    optionalSpaces,
+    captureCaptures(
+      or(variableTypeParser, parseError("Invalid return type", fail("error"))),
+    ),
+  ),
 );
 
 export const _functionParser: Parser<FunctionDefinition> = trace(
@@ -361,15 +369,20 @@ export const _functionParser: Parser<FunctionDefinition> = trace(
     char(")"),
     optionalSpaces,
     capture(optional(functionReturnTypeParser), "returnType"),
-    optionalSpaces,
-    char("{"),
-    optionalSpacesOrNewline,
-    capture(or(docStringParser, succeed(undefined)), "docString"),
-    optionalSpacesOrNewline,
-    capture(bodyParser, "body"),
-    optionalSpaces,
-    char("}"),
-    optionalSemicolon,
+    captureCaptures(
+      parseError(
+        "Expected function body",
+        optionalSpaces,
+        char("{"),
+        optionalSpacesOrNewline,
+        capture(or(docStringParser, succeed(undefined)), "docString"),
+        optionalSpacesOrNewline,
+        capture(bodyParser, "body"),
+        optionalSpaces,
+        char("}"),
+        optionalSemicolon,
+      ),
+    ),
   ),
 );
 

@@ -125,9 +125,9 @@ describe("docStringParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-          const result = docStringParser(input);
-          expect(result.success).toBe(false);
-        });
+        const result = docStringParser(input);
+        expect(result.success).toBe(false);
+      });
     }
   });
 });
@@ -1663,7 +1663,7 @@ describe("functionParser", () => {
   testCases.forEach(({ input, expected }) => {
     if (expected.success) {
       it(`should parse "${input.replace(/\n/g, "\\n")}" successfully`, () => {
-        const result = functionParser(input);
+        const result = functionParser(normalizeCode(input));
         expect(result.success).toBe(true);
         if (result.success) {
           expect(result.result).toEqual(expected.result);
@@ -1671,7 +1671,7 @@ describe("functionParser", () => {
       });
     } else {
       it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
-        const result = functionParser(input);
+        const result = functionParser(normalizeCode(input));
         expect(result.success).toBe(false);
       });
     }

@@ -3,13 +3,13 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `function add({a, b}: {a:number, b:number}):number {
+export const template = `function add({a, b}) {
   return a + b;
 }
 
 // Define the function tool for OpenAI
 const addTool = {
-    type: "function" as const,
+    type: "function",
     function: {
       name: "add",
       description:

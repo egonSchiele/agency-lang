@@ -4,10 +4,10 @@
 import { apply } from "typestache";
 
 export const template = `{{#hasArgs}}
-export async function {{{nodeName:string}}}({{{argsStr:string}}}, { messages, callbacks } = {}): Promise<__State<{{{returnType:string}}}>> {
+export async function {{{nodeName:string}}}({{{argsStr:string}}}, { messages, callbacks } = {}) {
 {{/hasArgs}}
 {{^hasArgs}}
-export async function {{{nodeName:string}}}({ messages, callbacks } = {}): Promise<__State<{{{returnType:string}}}>> {
+export async function {{{nodeName:string}}}({ messages, callbacks } = {}) {
 {{/hasArgs}}
   const __data = [ {{{argsStr:string}}} ];
   __callbacks = callbacks || {};
@@ -20,7 +20,6 @@ export type TemplateType = {
   hasArgs: boolean;
   nodeName: string;
   argsStr: string;
-  returnType: string;
 };
 
 const render = (args: TemplateType) => {

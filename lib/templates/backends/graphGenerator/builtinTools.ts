@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `function add({a, b}: {a:number, b:number}):number {
+export const template = `function add({a, b}) {
   return a + b;
 }
 

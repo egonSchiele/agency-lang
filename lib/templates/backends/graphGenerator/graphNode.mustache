@@ -1,5 +1,5 @@
 
-graph.node("{{{name}}}", async (state): Promise<any> => {
+graph.node("{{{name}}}", async (state) => {
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
@@ -31,7 +31,7 @@ graph.node("{{{name}}}", async (state): Promise<any> => {
     // from the start of this node or from a specific line.
     const __step = __stack.step;
 
-    const __self: Record<string, any> = __stack.locals;
+    const __self = __stack.locals;
     __self.messages_0 = new MessageThread();
     if (state.messages) {
       __self.messages_0.setMessages(state.messages);

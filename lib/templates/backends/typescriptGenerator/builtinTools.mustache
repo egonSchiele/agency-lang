@@ -1,10 +1,10 @@
-function add({a, b}: {a:number, b:number}):number {
+function add({a, b}) {
   return a + b;
 }
 
 // Define the function tool for OpenAI
 const addTool = {
-    type: "function" as const,
+    type: "function",
     function: {
       name: "add",
       description:

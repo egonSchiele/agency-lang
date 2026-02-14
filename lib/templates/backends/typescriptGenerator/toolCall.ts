@@ -14,7 +14,7 @@ export const template = `if (
 
   toolCallStartTime = performance.now();
   
-  let result: any;
+  let result;
   if (__interruptResponse && __interruptResponse.type === "reject") {
         __messages.push(smoltalk.toolMessage("tool call rejected", {
         tool_call_id: toolCall.id,

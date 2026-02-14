@@ -1,4 +1,4 @@
-async function _builtinFetchJSON(url: string, args: any = {}): any {
+async function _builtinFetchJSON(url, args = {}) {
   const result = await fetch(url, args);
   try {
     const json = await result.json();

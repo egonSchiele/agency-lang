@@ -3,14 +3,14 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `function _builtinInput(prompt: string): Promise<string> {
+export const template = `function _builtinInput(prompt) {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
   });
 
   return new Promise((resolve) => {
-    rl.question(prompt, (answer: string) => {
+    rl.question(prompt, (answer) => {
       rl.close();
       resolve(answer);
     });

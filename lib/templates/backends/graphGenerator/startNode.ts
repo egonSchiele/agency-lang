@@ -4,7 +4,7 @@
 import { apply } from "typestache";
 
 export const template = `if (process.argv[1] === fileURLToPath(import.meta.url)) {
-    const initialState: __State = {messages: [], data: {}};
+    const initialState = {messages: [], data: {}};
     const finalState = graph.run("{{{startNode}}}", initialState);
 }`;
 

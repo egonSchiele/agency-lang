@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `function _builtinSleep(seconds: number): Promise<void> {
+export const template = `function _builtinSleep(seconds) {
   return new Promise((resolve) => {
     setTimeout(resolve, seconds * 1000);
   });

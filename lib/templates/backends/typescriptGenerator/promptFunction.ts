@@ -4,15 +4,15 @@
 import { apply } from "typestache";
 
 export const template = `
-async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{typeString:string}}}> {
+async function _{{{variableName:string}}}({{{argsStr:string}}}) {
   const __prompt = {{{promptCode:string}}};
   const startTime = performance.now();
-  let __messages: Message[] = __metadata?.messages || [];
+  let __messages = __metadata?.messages || [];
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
   let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
-  const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
+  const __interruptResponse = __stateStack.interruptData?.interruptResponse || null;
   const __tools = {{{tools}}};
 
   {{#hasResponseFormat}}
@@ -26,7 +26,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
   {{/hasResponseFormat}}
   
   const __client = __getClientWithConfig({{{clientConfig:string}}});
-  let responseMessage:any;
+  let responseMessage;
 
   if (__toolCalls.length === 0) {
     __messages.push(smoltalk.userMessage(__prompt));
@@ -75,7 +75,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<{{{type
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
     let haltToolCall = {}
-    let haltInterrupt:any = null;
+    let haltInterrupt = null;
 
     // Process each tool call
     for (const toolCall of __toolCalls) {
@@ -168,7 +168,6 @@ if (isInterrupt(__self.{{{variableName:string}}})) {
 export type TemplateType = {
   variableName: string;
   argsStr: string;
-  typeString: string;
   promptCode: string;
   tools: string | boolean | number;
   hasResponseFormat: boolean;

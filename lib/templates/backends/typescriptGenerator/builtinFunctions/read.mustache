@@ -1,4 +1,4 @@
-function _builtinRead(filename: string): string {
+function _builtinRead(filename) {
   const data = fs.readFileSync(filename);
   const contents = data.toString('utf8');
   return contents;

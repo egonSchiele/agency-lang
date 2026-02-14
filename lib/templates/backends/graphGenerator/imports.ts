@@ -12,7 +12,6 @@ import { PieMachine, goToNode } from "piemachine";
 import { StatelogClient } from "statelog-client";
 import { nanoid } from "nanoid";
 import * as smoltalk from "smoltalk";
-import type { Message } from "smoltalk";
 
 /* Code to log to statelog */
 const statelogHost = "{{{logHost:string}}}";
@@ -27,7 +26,7 @@ const statelogConfig = {
 const __statelogClient = new StatelogClient(statelogConfig);
 
 /* Code for Smoltalk client */
-const __model: ModelName = "{{{clientDefaultModel:string}}}";
+const __model = "{{{clientDefaultModel:string}}}";
 
 const __getClientWithConfig = (config = {}) => {
   const defaultConfig = {
@@ -43,10 +42,6 @@ const __getClientWithConfig = (config = {}) => {
 let __client = __getClientWithConfig();
 
 /* Code for PieMachine graph */
-export type __State<T> = {
-  messages: string[];
-  data: T;
-};
 
 // enable debug logging
 const graphConfig = {
@@ -57,24 +52,24 @@ const graphConfig = {
   statelog: statelogConfig,
 };
 
-const graph = new PieMachine<__State<any>>(graphConfig);
+const graph = new PieMachine(graphConfig);
 
 /******** builtins ********/
 
-const not = (val: any): boolean => !val;
-const eq = (a: any, b: any): boolean => a === b;
-const neq = (a: any, b: any): boolean => a !== b;
-const lt = (a: any, b: any): boolean => a < b;
-const lte = (a: any, b: any): boolean => a <= b;
-const gt = (a: any, b: any): boolean => a > b;
-const gte = (a: any, b: any): boolean => a >= b;
-const and = (a: any, b: any): boolean => a && b;
-const or = (a: any, b: any): boolean => a || b;
-const head = <T>(arr: T[]): T | undefined => arr[0];
-const tail = <T>(arr: T[]): T[] => arr.slice(1);
-const empty = <T>(arr: T[]): boolean => arr.length === 0;
+const not = (val) => !val;
+const eq = (a, b) => a === b;
+const neq = (a, b) => a !== b;
+const lt = (a, b) => a < b;
+const lte = (a, b) => a <= b;
+const gt = (a, b) => a > b;
+const gte = (a, b) => a >= b;
+const and = (a, b) => a && b;
+const or = (a, b) => a || b;
+const head = (arr) => arr[0];
+const tail = (arr) => arr.slice(1);
+const empty = (arr) => arr.length === 0;
 
-async function _builtinFetch(url: string, args: any = {}): any {
+async function _builtinFetch(url, args = {}) {
   const result = await fetch(url, args);
   try {
     const text = await result.text();
@@ -84,7 +79,7 @@ async function _builtinFetch(url: string, args: any = {}): any {
   }
 }
 
-async function _builtinFetchJSON(url: string, args: any = {}): any {
+async function _builtinFetchJSON(url, args = {}) {
   const result = await fetch(url, args);
   try {
     const json = await result.json();
@@ -94,21 +89,21 @@ async function _builtinFetchJSON(url: string, args: any = {}): any {
   }
 }
 
-function _builtinInput(prompt: string): Promise<string> {
+function _builtinInput(prompt) {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
   });
 
   return new Promise((resolve) => {
-    rl.question(prompt, (answer: string) => {
+    rl.question(prompt, (answer) => {
       rl.close();
       resolve(answer);
     });
   });
 }
 
-function _builtinRead(filename: string): string {
+function _builtinRead(filename) {
   const data = fs.readFileSync(filename);
   const contents = data.toString("utf8");
   return contents;
@@ -118,19 +113,19 @@ function _builtinRead(filename: string): string {
  * @param filePath The absolute or relative path to the image file.
  * @returns The Base64 string, or null if an error occurs.
  */
-function _builtinReadImage(filePath: string): string {
+function _builtinReadImage(filePath) {
   const data = fs.readFileSync(filePath); // Synchronous file reading
   const base64String = data.toString("base64");
   return base64String;
 }
 
-function _builtinSleep(seconds: number): Promise<void> {
+function _builtinSleep(seconds) {
   return new Promise((resolve) => {
     setTimeout(resolve, seconds * 1000);
   });
 }
 
-function printJSON(obj: any) {
+function printJSON(obj) {
   console.log(JSON.stringify(obj, null, 2));
 }
 
@@ -149,7 +144,7 @@ Returns:
   schema: z.object({"filepath": z.string(), })
 };
 
-export function readSkill({filepath}: {filepath: string}) : Promise<string> {
+export function readSkill({filepath}) {
   return _builtinRead(filepath);
 }
 
@@ -167,41 +162,21 @@ function __createReturnObject(result) {
 
 /******** interrupts ********/
 
-export type Interrupt<T> = {
-  type: "interrupt";
-  data: T;
-
-  // JSONified StateStack, i.e. serialized execution state
-  __state?: Record<string, any>;
-};
-
-export function interrupt<T>(data: T): Interrupt<T> {
+export function interrupt(data) {
   return {
     type: "interrupt",
     data,
   };
 }
 
-export function isInterrupt<T>(obj: any): obj is Interrupt<T> {
+export function isInterrupt(obj) {
   return obj && obj.type === "interrupt";
 }
 
-export type InterruptResponseType =
-  | InterruptResponseApprove
-  | InterruptResponseReject;
-
-export type InterruptResponseApprove = {
-  type: "approve";
-  newArguments?: Record<string, any>;
-};
-export type InterruptResponseReject = {
-  type: "reject";
-};
-
 export async function respondToInterrupt(
-  _interrupt: Interrupt,
-  _interruptResponse: InterruptResponseType,
-  metadata: Record<string, any> = {},
+  _interrupt,
+  _interruptResponse,
+  metadata = {},
 ) {
   const interrupt = structuredClone(_interrupt);
   const interruptResponse = structuredClone(_interruptResponse);
@@ -210,7 +185,7 @@ export async function respondToInterrupt(
   __stateStack.deserializeMode();
 
   const messages = (__stateStack.interruptData.messages || []).map(
-    (json: any) => {
+    (json) => {
       // create message objects from JSON
       return smoltalk.messageFromJSON(json);
     },
@@ -258,16 +233,16 @@ export async function respondToInterrupt(
 }
 
 export async function approveInterrupt(
-  interrupt: Interrupt,
-  metadata: Record<string, any> = {},
+  interrupt,
+  metadata = {},
 ) {
   return await respondToInterrupt(interrupt, { type: "approve" }, metadata);
 }
 
 export async function modifyInterrupt(
-  interrupt: Interrupt,
-  newArguments?: Record<string, any>,
-  metadata: Record<string, any> = {},
+  interrupt,
+  newArguments,
+  metadata = {},
 ) {
   return await respondToInterrupt(
     interrupt,
@@ -277,45 +252,39 @@ export async function modifyInterrupt(
 }
 
 export async function rejectInterrupt(
-  interrupt: Interrupt,
-  metadata: Record<string, any> = {},
+  interrupt,
+  metadata = {},
 ) {
   return await respondToInterrupt(interrupt, { type: "reject" }, metadata);
 }
 
 /****** StateStack and related functions for serializing/deserializing execution state during interrupts ********/
 
-type StackFrame = {
-  args: Record<string, any>;
-  locals: Record<string, any>;
-  step: number;
-};
-
 // See docs for notes on how this works.
 class StateStack {
-  public stack: StackFrame[] = [];
-  private mode: "serialize" | "deserialize" = "serialize";
-  public globals: Record<string, any> = {};
-  public other: Record<string, any> = {};
-  public interruptData: Record<string, any> = {};
+  stack = [];
+  mode = "serialize";
+  globals = {};
+  other = {};
+  interruptData = {};
 
-  private deserializeStackLength = 0;
+  deserializeStackLength = 0;
 
   constructor(
-    stack: StackFrame[] = [],
-    mode: "serialize" | "deserialize" = "serialize",
+    stack = [],
+    mode = "serialize",
   ) {
     this.stack = stack;
     this.mode = mode;
   }
 
-  getNewState(): StackFrame | null {
+  getNewState() {
     if (this.mode === "deserialize" && this.deserializeStackLength <= 0) {
       console.log("Forcing mode to serialize, nothing left to deserialize");
       this.mode = "serialize";
     }
     if (this.mode === "serialize") {
-      const newState: StackFrame = {
+      const newState = {
         args: {},
         locals: {},
         step: 0,
@@ -336,7 +305,7 @@ class StateStack {
     this.deserializeStackLength = this.stack.length;
   }
 
-  pop(): StackFrame | undefined {
+  pop() {
     return this.stack.pop();
   }
 
@@ -351,7 +320,7 @@ class StateStack {
     });
   }
 
-  static fromJSON(json: any): StateStack {
+  static fromJSON(json) {
     const stateStack = new StateStack([], "serialize");
     stateStack.stack = json.stack || [];
     stateStack.globals = json.globals || {};
@@ -381,8 +350,8 @@ __stateStack.globals.__tokenStats = {
 };
 
 function __updateTokenStats(
-  usage: Record<string, any>,
-  cost: Record<string, any>,
+  usage,
+  cost,
 ) {
   if (!usage || !cost) return;
   const tokenStats = __stateStack.globals.__tokenStats;
@@ -404,11 +373,11 @@ function isGenerator(variable) {
   );
 }
 
-let __callbacks: Record<string, any> = {};
+let __callbacks = {};
 
 let onStreamLock = false;
 
-function __cloneArray<T>(arr?: T[]): T[] {
+function __cloneArray(arr) {
   if (arr == undefined) return [];
   return [...arr];
 }
@@ -486,46 +455,44 @@ const handleStreamingResponse = async (__completion) => {
 
 /**** Message thread handling ****/
 
-type MessageThreadJSON = { messages: any[]; children: MessageThreadJSON[] };
-
 class MessageThread {
-  private messages: any[] = [];
-  public children: MessageThread[] = [];
+  messages = [];
+  children = [];
 
-  constructor(messages: any[] = []) {
+  constructor(messages = []) {
     this.messages = messages;
     this.children = [];
   }
 
-  addMessage(message: any) {
+  addMessage(message) {
     this.messages.push(message);
   }
 
-  cloneMessages(): any[] {
+  cloneMessages() {
     return this.messages.map(m => m.toJSON()).map(m => smoltalk.messageFromJSON(m));
   }
 
-  getMessages(): any[] {
+  getMessages() {
     return this.messages;
   }
 
-  setMessages(messages: any[]) {
+  setMessages(messages) {
     this.messages = messages;
   }
 
-  newChild(): MessageThread {
+  newChild() {
     const child = new MessageThread();
     this.children.push(child);
     return child;
   }
 
-  newSubthreadChild(): MessageThread {
+  newSubthreadChild() {
     const child = new MessageThread(this.cloneMessages());
     this.children.push(child);
     return child;
   }
 
-  toJSON(): MessageThreadJSON {
+  toJSON() {
     return {
       messages: this.messages.map(m => m.toJSON()),
       children: this.children.map((child) => child.toJSON()),

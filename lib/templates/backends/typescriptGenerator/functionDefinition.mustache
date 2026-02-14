@@ -1,14 +1,14 @@
 
-export async function {{{functionName:string}}}(args, __metadata={}) : Promise<{{{returnType}}}> {
+export async function {{{functionName:string}}}(args, __metadata={}) {
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
-    const __self: Record<string, any> = __stack.locals;
+    const __self = __stack.locals;
     const __graph = __metadata?.graph || graph;
     const statelogClient = __metadata?.statelogClient || __statelogClient;
 
     // args are always set whether we're restoring from state or not.
     // If we're not restoring from state, args were obviously passed in through the code.
-    // If we are restoring from state, the node that called this function had to have passed 
+    // If we are restoring from state, the node that called this function had to have passed
     // these arguments into this function call.
     // if we're restoring state, this will override __stack.args (which will be set),
     // but with the same values, so it doesn't matter that those values are being overwritten.

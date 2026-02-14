@@ -1,6 +1,10 @@
-import!;
+def greet(name: string): string {
+  return interrupt("Agent wants to call the greet function with name: ${name}")
+  return "Kya chal raha jai, ${name}!"
+}
+
 node foo() {
-  res1: number[] = llm("What are the first 5 prime numbers?")
-  print("res1", res1)
-  return res1
+  uses greet
+  res = llm("Call the greet function with name: Adit")
+  return res
 }

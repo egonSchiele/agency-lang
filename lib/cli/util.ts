@@ -116,6 +116,11 @@ export function executeNode(
   nodeName: string,
   hasArgs: boolean,
   argsString: string,
+  interruptHandlers?: Array<{
+    action: "approve" | "reject" | "modify";
+    modifiedArgs?: Record<string, any>;
+    expectedMessage?: string;
+  }>,
 ): { data: any; [key: string]: any } {
   const outFile = agencyFile.replace(".agency", ".ts");
   compile({}, agencyFile, outFile);
@@ -124,6 +129,10 @@ export function executeNode(
     nodeName,
     hasArgs,
     args: argsString,
+    hasInterruptHandlers: !!interruptHandlers,
+    interruptHandlersJSON: interruptHandlers
+      ? JSON.stringify(interruptHandlers)
+      : undefined,
   });
   const evaluateFile = "__evaluate.ts";
   fs.writeFileSync(evaluateFile, evaluateScript);

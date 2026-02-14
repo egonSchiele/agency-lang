@@ -3,16 +3,60 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `import { {{{nodeName:string}}} } from "./{{{filename:string}}}";
+export const template = `import { {{{nodeName:string}}}, isInterrupt, approveInterrupt, rejectInterrupt, modifyInterrupt } from "./{{{filename:string}}}";
 import { writeFileSync } from "fs";
 
 export async function runEvaluation() {
   {{#hasArgs}}
-  const result = await {{{nodeName:string}}}({{{args?:string}}});
+  let result = await {{{nodeName:string}}}({{{args?:string}}});
   {{/hasArgs}}
   {{^hasArgs}}
-  const result = await {{{nodeName:string}}}();
+  let result = await {{{nodeName:string}}}();
   {{/hasArgs}}
+
+  {{#hasInterruptHandlers}}
+  const interruptHandlers = {{{interruptHandlersJSON?:string}}};
+  let handlerIndex = 0;
+
+  while (isInterrupt(result.data)) {
+    if (handlerIndex >= interruptHandlers.length) {
+      throw new Error("Unexpected interrupt #" + (handlerIndex + 1) + ": \\"" + result.data.data + "\\". No handler provided.");
+    }
+
+    const handler = interruptHandlers[handlerIndex];
+    const interruptData = result.data;
+
+    // Validate expected message if provided
+    if (handler.expectedMessage !== undefined && interruptData.data !== handler.expectedMessage) {
+      throw new Error(
+        "Interrupt #" + (handlerIndex + 1) + " message mismatch.\\n" +
+        "  Expected: \\"" + handler.expectedMessage + "\\"\\n" +
+        "  Actual: \\"" + interruptData.data + "\\""
+      );
+    }
+
+    // Handle interrupt based on action
+    if (handler.action === "approve") {
+      result = await approveInterrupt(interruptData);
+    } else if (handler.action === "reject") {
+      result = await rejectInterrupt(interruptData);
+    } else if (handler.action === "modify") {
+      result = await modifyInterrupt(interruptData, handler.modifiedArgs);
+    } else {
+      throw new Error("Unknown interrupt action: " + handler.action);
+    }
+
+    handlerIndex++;
+  }
+
+  // Check if we provided more handlers than interrupts that occurred
+  if (handlerIndex < interruptHandlers.length) {
+    throw new Error(
+      "Expected " + interruptHandlers.length + " interrupts but only " + handlerIndex + " occurred."
+    );
+  }
+  {{/hasInterruptHandlers}}
+
   console.log("Evaluation result:", result.data);
   writeFileSync("__evaluate.json", JSON.stringify(result, null, 2));
   return result;
@@ -25,6 +69,8 @@ export type TemplateType = {
   filename: string;
   hasArgs: boolean;
   args?: string;
+  hasInterruptHandlers: boolean;
+  interruptHandlersJSON?: string;
 };
 
 const render = (args: TemplateType) => {

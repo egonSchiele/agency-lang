@@ -116,3 +116,7 @@ To add a new integration test, create a `.agency` file and its expected `.mts` o
 - NEVER use dynamic imports
 - Use objects instead of maps.
 - Use arrays instead of sets.
+
+## Other docs and resources:
+- `DOCS.md` — language reference and design docs
+- `docs/INTERRUPT_TESTING.md` — documentation on the new interrupt testing framework

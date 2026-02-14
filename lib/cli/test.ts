@@ -18,11 +18,17 @@ type LLMJudge = {
   desiredAccuracy: number;
 };
 type Criteria = Exact | LLMJudge;
+type InterruptHandler = {
+  action: "approve" | "reject" | "modify";
+  modifiedArgs?: Record<string, any>;
+  expectedMessage?: string;
+};
 type TestCase = {
   nodeName: string;
   input: string;
   expectedOutput: string;
   evaluationCriteria: Criteria[];
+  interruptHandlers?: InterruptHandler[];
 };
 type Tests = { sourceFile: string; tests: TestCase[] };
 
@@ -39,6 +45,7 @@ function writeTestCase(
   input: string,
   expectedOutput: string,
   evaluationCriteria: Criteria[],
+  interruptHandlers?: InterruptHandler[],
 ) {
   const testFilePath = agencyFilename.replace(".agency", ".test.json");
   let tests: Tests;
@@ -47,7 +54,16 @@ function writeTestCase(
   } else {
     tests = { sourceFile: agencyFilename, tests: [] };
   }
-  tests.tests.push({ nodeName, input, expectedOutput, evaluationCriteria });
+  const testCase: TestCase = {
+    nodeName,
+    input,
+    expectedOutput,
+    evaluationCriteria,
+  };
+  if (interruptHandlers && interruptHandlers.length > 0) {
+    testCase.interruptHandlers = interruptHandlers;
+  }
+  tests.tests.push(testCase);
   fs.writeFileSync(testFilePath, JSON.stringify(tests, null, 2));
   return testFilePath;
 }
@@ -88,9 +104,60 @@ export async function fixtures(target?: string) {
   let { hasArgs, argsString } = await promptForArgs(selectedNode);
 
   console.log("Running program from entrypoint", nodeName);
-  const json = executeNode(filename, nodeName, hasArgs, argsString);
+  let json = executeNode(filename, nodeName, hasArgs, argsString);
 
-  console.log("\nOutput:");
+  // Handle interrupt discovery
+  const interruptHandlers: InterruptHandler[] = [];
+
+  while (json.data && typeof json.data === "object" && json.data.type === "interrupt") {
+    console.log(`\n⚠️  Interrupt detected: "${json.data.data}"`);
+
+    const actionResponse = await prompts({
+      type: "select",
+      name: "action",
+      message: "How should the test handle this interrupt?",
+      choices: [
+        { title: "Approve", value: "approve" },
+        { title: "Reject", value: "reject" },
+        { title: "Modify arguments", value: "modify" },
+      ],
+    });
+
+    if (!actionResponse.action) {
+      console.log("Interrupt handling cancelled.");
+      return;
+    }
+
+    const handler: InterruptHandler = {
+      action: actionResponse.action,
+      expectedMessage: json.data.data, // Capture the actual message
+    };
+
+    if (actionResponse.action === "modify") {
+      const modifyResponse = await prompts({
+        type: "text",
+        name: "args",
+        message: "Enter modified arguments as JSON object:",
+      });
+      if (!modifyResponse.args) {
+        console.log("Interrupt handling cancelled.");
+        return;
+      }
+      try {
+        handler.modifiedArgs = JSON.parse(modifyResponse.args);
+      } catch (e) {
+        console.error("Invalid JSON:", e);
+        return;
+      }
+    }
+
+    interruptHandlers.push(handler);
+
+    // Continue execution with this handler to see if there are more interrupts
+    json = executeNode(filename, nodeName, hasArgs, argsString, interruptHandlers);
+  }
+
+  console.log("\nFinal Output:");
   console.log(JSON.stringify(json.data, null, 2));
 
   const correctResponse = await prompts({
@@ -155,6 +222,7 @@ export async function fixtures(target?: string) {
     inputStr,
     expectedOutput,
     criteria,
+    interruptHandlers.length > 0 ? interruptHandlers : undefined,
   );
   console.log(`Test case saved to ${testFilePath}`);
 }
@@ -196,8 +264,11 @@ export async function test(testFile?: string) {
   for (let i = 0; i < total; i++) {
     const testCase = tests.tests[i];
     const hasArgs = testCase.input !== "";
+    const interruptInfo = testCase.interruptHandlers
+      ? ` interrupts=${testCase.interruptHandlers.length}`
+      : "";
     console.log(
-      `\nTest ${i + 1}/${total}: node=${testCase.nodeName} input=${testCase.input || "(none)"}`,
+      `\nTest ${i + 1}/${total}: node=${testCase.nodeName} input=${testCase.input || "(none)"}${interruptInfo}`,
     );
 
     const result = executeNode(
@@ -205,6 +276,7 @@ export async function test(testFile?: string) {
       testCase.nodeName,
       hasArgs,
       testCase.input,
+      testCase.interruptHandlers,
     );
 
     let testPassed = true;

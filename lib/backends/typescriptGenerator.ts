@@ -603,7 +603,7 @@ I'll probably need to do that for supporting type checking anyway.
     const functionCalls = (
       prompt.tools || { type: "usesTool", toolNames: [] }
     ).toolNames
-      .filter((t) => BUILTIN_TOOLS.includes(t))
+      .filter((t) => !BUILTIN_TOOLS.includes(t))
       .map((toolName) => {
         if (
           !this.functionDefinitions[toolName] &&

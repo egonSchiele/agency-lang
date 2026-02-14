@@ -1,6 +1,6 @@
 {
   "name": "agency-lang",
-  "version": "0.0.53",
+  "version": "0.0.54",
   "description": "The Agency language",
   "main": "lib/index.js",
   "scripts": {
@@ -16,6 +16,7 @@
     "graph": "node ./dist/scripts/agency.js graph",
     "fmt": "node ./dist/scripts/agency.js fmt",
     "eval": "node ./dist/scripts/agency.js eval",
+    "fixtures": "node ./dist/scripts/agency.js fixtures",
     "preprocess": "node ./dist/scripts/agency.js preprocess"
   },
   "bin": {
@@ -52,7 +53,7 @@
     "prompts": "^2.4.2",
     "smoltalk": "^0.0.18",
     "statelog-client": "^0.0.36",
-    "tarsec": "^0.1.4",
+    "tarsec": "^0.1.5",
     "typestache": "^0.4.4",
     "zod": "^4.3.5"
   },

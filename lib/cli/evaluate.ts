@@ -241,7 +241,7 @@ export async function evaluate(
       ? argsRecordToString(c.args, selectedNode.parameters)
       : "";
 
-    const json = executeNode(filename, nodeName, hasArgs, argsString);
+    const json = executeNode(filename, nodeName, hasArgs, argsString, undefined);
 
     console.log("\nOutput:");
     console.log(JSON.stringify(json.data, null, 2));

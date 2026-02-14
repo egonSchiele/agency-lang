@@ -12,6 +12,7 @@ import {
   quotedString,
   map,
   trace,
+  failure,
 } from "tarsec";
 import { comma, optionalSpaces } from "./utils.js";
 
@@ -36,7 +37,14 @@ export function _skillParser(input: string): ParserResult<Skill> {
     ),
   );
 
-  return parser(input);
+  const result = parser(input);
+  if (!result.success) {
+    return result;
+  }
+  if (result.result.filepath.length === 0) {
+    return failure("Filepath cannot be empty", input);
+  }
+  return result;
 }
 
 export function _skillParserWithDescription(
@@ -54,7 +62,17 @@ export function _skillParserWithDescription(
     ),
   );
 
-  return parser(input);
+  const result = parser(input);
+  if (!result.success) {
+    return result;
+  }
+  if (result.result.filepath.length === 0) {
+    return failure("Filepath cannot be empty", input);
+  }
+  if (result.result.description.length === 0) {
+    return failure("Description cannot be empty", input);
+  }
+  return result;
 }
 
 export const skillParser = (input: string) => {

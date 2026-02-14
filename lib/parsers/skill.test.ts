@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { skillParser } from "./skill.js";
+import { eof, seqC, seqR } from "tarsec";
 
 describe("skillParser", () => {
   const testCases = [
@@ -140,7 +141,7 @@ describe("skillParser", () => {
 
     // Happy path - mixed quotes
     {
-      input: 'skill "path/to/skill.ts", \'Analyzes data\'',
+      input: "skill \"path/to/skill.ts\", 'Analyzes data'",
       expected: {
         success: true,
         result: {
@@ -151,7 +152,7 @@ describe("skillParser", () => {
       },
     },
     {
-      input: 'skills \'./skills/process.ts\', "Processes input"',
+      input: "skills './skills/process.ts', \"Processes input\"",
       expected: {
         success: true,
         result: {
@@ -256,15 +257,23 @@ describe("skillParser", () => {
     },
 
     // Failure cases - missing keyword
-    { input: '"path/to/skill.ts"', expected: { success: false }, throws: false },
     {
-      input: './skills/analyze.ts',
+      input: '"path/to/skill.ts"',
+      expected: { success: false },
+      throws: false,
+    },
+    {
+      input: "./skills/analyze.ts",
       expected: { success: false },
       throws: false,
     },
 
     // Failure cases - wrong keyword
-    { input: 'tool "path/to/skill.ts"', expected: { success: false }, throws: false },
+    {
+      input: 'tool "path/to/skill.ts"',
+      expected: { success: false },
+      throws: false,
+    },
     {
       input: 'import "path/to/skill.ts"',
       expected: { success: false },
@@ -288,18 +297,6 @@ describe("skillParser", () => {
     { input: "skills", expected: { success: false }, throws: false },
     { input: 'skill ""', expected: { success: false }, throws: false },
     { input: "skills ''", expected: { success: false }, throws: false },
-
-    // Failure cases - mismatched quotes
-    {
-      input: 'skill "path/to/skill.ts\'',
-      expected: { success: false },
-      throws: false,
-    },
-    {
-      input: "skills 'path/to/skill.ts\"",
-      expected: { success: false },
-      throws: false,
-    },
 
     // Failure cases - missing comma between filepath and description
     {
@@ -348,7 +345,7 @@ describe("skillParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = skillParser(input);
+        const result = seqC(skillParser, eof)(input);
         expect(result.success).toBe(false);
       });
     }

@@ -10,12 +10,19 @@ import * as path from "path";
 import { parseAgency } from "../parser.js";
 
 // Load configuration from agency.json
-export function loadConfig(configPath?: string): AgencyConfig {
+export function loadConfig(
+  configPath?: string,
+  verbose: boolean = false,
+): AgencyConfig {
   let config: AgencyConfig = {};
 
   // Determine config file path
   const defaultConfigPath = path.join(process.cwd(), "agency.json");
   const finalConfigPath = configPath || defaultConfigPath;
+
+  if (verbose) {
+    console.log(`Looking for config at: ${finalConfigPath}`);
+  }
 
   // Check if config file exists
   if (fs.existsSync(finalConfigPath)) {

@@ -11,37 +11,41 @@ if (
   
   let result: any;
   if (__interruptResponse && __interruptResponse.type === "reject") {
-        __messages.push(smoltalk.smoltalk.toolMessage("tool call rejected", {
+        __messages.push(smoltalk.toolMessage("tool call rejected", {
         tool_call_id: toolCall.id,
         name: toolCall.name,
      }));
-  } else {
-    result = await {{{name}}}(params);
-  }
-  toolCallEndTime = performance.now();
-
-  statelogClient.toolCall({
-    toolName: "{{{name:string}}}",
-    params,
-    output: result,
-    model: __client.getModel(),
-    timeTaken: toolCallEndTime - toolCallStartTime,
-  });
-
-  if (isInterrupt(result)) {
-    haltInterrupt = result;
-    haltToolCall = {
-      id: toolCall.id,
-      name: toolCall.name,
-      arguments: toolCall.arguments,
-    }
-    haltExecution = true;
-    break;
-  }
-
-    // Add function result to messages
-  __messages.push(smoltalk.toolMessage(result, {
+     statelogClient.debug(`Tool call rejected`, {
         tool_call_id: toolCall.id,
         name: toolCall.name,
-  }));
+      });
+  } else {
+    result = await {{{name}}}(params);
+    toolCallEndTime = performance.now();
+  
+    statelogClient.toolCall({
+      toolName: "{{{name:string}}}",
+      params,
+      output: result,
+      model: __client.getModel(),
+      timeTaken: toolCallEndTime - toolCallStartTime,
+    });
+
+    if (isInterrupt(result)) {
+      haltInterrupt = result;
+      haltToolCall = {
+        id: toolCall.id,
+        name: toolCall.name,
+        arguments: toolCall.arguments,
+      }
+      haltExecution = true;
+      break;
+    }
+  
+      // Add function result to messages
+    __messages.push(smoltalk.toolMessage(result, {
+          tool_call_id: toolCall.id,
+          name: toolCall.name,
+    }));
+  }
 }

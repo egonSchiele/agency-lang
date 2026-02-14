@@ -175,6 +175,11 @@ export function executeJudge(
   actualOutput: string,
   expectedOutput: string,
   judgePrompt: string,
+  interruptHandlers?: Array<{
+    action: "approve" | "reject" | "modify";
+    modifiedArgs?: Record<string, any>;
+    expectedMessage?: string;
+  }>,
 ): { score: number; reasoning: string } {
   // Resolve the judge.agency file bundled in dist/lib/agents/
   const currentDir = path.dirname(new URL(import.meta.url).pathname);
@@ -188,6 +193,10 @@ export function executeJudge(
     actualOutput: JSON.stringify(actualOutput),
     expectedOutput: JSON.stringify(expectedOutput),
     judgePrompt: JSON.stringify(judgePrompt),
+    hasInterruptHandlers: !!interruptHandlers,
+    interruptHandlersJSON: interruptHandlers
+      ? JSON.stringify(interruptHandlers)
+      : undefined,
   });
 
   const judgeEvaluateFile = "__judge_evaluate.ts";

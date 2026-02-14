@@ -83,6 +83,9 @@ export class BaseGenerator {
 
   constructor({ config }: { config?: AgencyConfig }) {
     this.agencyConfig = mergeDeep(this.configDefaults(), config || {});
+    if (this.agencyConfig.verbose) {
+      console.log("Generator config:", this.agencyConfig);
+    }
   }
 
   configDefaults(): Partial<AgencyConfig> {

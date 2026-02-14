@@ -30,7 +30,7 @@ program
 
 function getConfig(): AgencyConfig {
   const opts = program.opts();
-  const config = loadConfig(opts.config);
+  const config = loadConfig(opts.config, opts.verbose);
   if (opts.verbose) {
     config.verbose = true;
   }

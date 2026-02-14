@@ -170,16 +170,16 @@ export class GraphGenerator extends TypeScriptGenerator {
   } */
 
   protected generateImports(): string {
-    const arr = [
-      renderImports.default({
-        logHost: this.agencyConfig.log?.host || "",
-        logProjectId: this.agencyConfig.log?.projectId || "",
-        logDebugMode: this.agencyConfig.log?.debugMode || false,
-        clientLogLevel: this.agencyConfig.client?.logLevel || "warn",
-        clientDefaultModel:
-          this.agencyConfig.client?.defaultModel || "gpt-4o-mini",
-      }),
-    ];
+    const args = {
+      logHost: this.agencyConfig.log?.host || "",
+      logProjectId: this.agencyConfig.log?.projectId || "",
+      logDebugMode: this.agencyConfig.log?.debugMode || false,
+      clientLogLevel: this.agencyConfig.client?.logLevel || "warn",
+      clientDefaultModel:
+        this.agencyConfig.client?.defaultModel || "gpt-4o-mini",
+    };
+
+    const arr = [renderImports.default(args)];
     arr.push(builtinTools.default({}));
     return arr.join("\n");
   }

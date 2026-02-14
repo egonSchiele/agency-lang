@@ -1,0 +1,10 @@
+skill "./skills/analyze.ts"
+skills "../utils/helper.ts", "Helper utilities"
+
+node analyzeData(input: string) {
+  skill "./skills/data-processor.ts", "Process and analyze data"
+
+  result = `Analyzing: ${input}`
+
+  result
+}

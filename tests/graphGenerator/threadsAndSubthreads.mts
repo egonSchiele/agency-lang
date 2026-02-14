@@ -1,26 +1,22 @@
 // @ts-nocheck
 
+import { fileURLToPath } from "url";
+import process from "process";
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
 import { PieMachine, goToNode } from "piemachine";
 import { StatelogClient } from "statelog-client";
 import { nanoid } from "nanoid";
-import {
-  assistantMessage,
-  getClient,
-  userMessage,
-  toolMessage,
-  messageFromJSON,
-} from "smoltalk";
+import * as smoltalk from "smoltalk";
 import type { Message } from "smoltalk";
 
 /* Code to log to statelog */
 const statelogHost = "https://statelog.adit.io";
-const traceId = nanoid();
+const __traceId = nanoid();
 const statelogConfig = {
   host: statelogHost,
-  traceId: traceId,
+  traceId: __traceId,
   apiKey: process.env.STATELOG_API_KEY || "",
   projectId: "agency-lang",
   debugMode: false,
@@ -30,7 +26,7 @@ const __statelogClient = new StatelogClient(statelogConfig);
 /* Code for Smoltalk client */
 const __model: ModelName = "gpt-4o-mini";
 
-const getClientWithConfig = (config = {}) => {
+const __getClientWithConfig = (config = {}) => {
   const defaultConfig = {
     openAiApiKey: process.env.OPENAI_API_KEY || "",
     googleApiKey: process.env.GEMINI_API_KEY || "",
@@ -38,13 +34,13 @@ const getClientWithConfig = (config = {}) => {
     logLevel: "warn",
   };
 
-  return getClient({ ...defaultConfig, ...config });
+  return smoltalk.getClient({ ...defaultConfig, ...config });
 };
 
-let __client = getClientWithConfig();
+let __client = __getClientWithConfig();
 
 /* Code for PieMachine graph */
-export type State<T> = {
+export type __State<T> = {
   messages: string[];
   data: T;
 };
@@ -58,7 +54,7 @@ const graphConfig = {
   statelog: statelogConfig,
 };
 
-const graph = new PieMachine<State<any>>(graphConfig);
+const graph = new PieMachine<__State<any>>(graphConfig);
 
 /******** builtins ********/
 
@@ -135,6 +131,37 @@ function printJSON(obj: any) {
   console.log(JSON.stringify(obj, null, 2));
 }
 
+export const __readSkillTool = {
+  name: "readSkill",
+  description: `Skills provide specialized knowledge and instructions for particular scenarios.
+Use this tool when you need enhanced guidance for a specific type of task.
+
+Args:
+    filepath: The name of the skill to read.
+
+Returns:
+    The skill content with specialized instructions, or an error message
+    if the skill is not found.
+`,
+  schema: z.object({"filepath": z.string(), })
+};
+
+export function readSkill({filepath}: {filepath: string}) : Promise<string> {
+  return _builtinRead(filepath);
+}
+
+/******** for internal agency use only ********/
+
+function __createReturnObject(result) {
+  return structuredClone({
+    messages: result.messages.toJSON(),
+    data: result.data,
+    tokens: __stateStack.globals.__tokenStats
+  });
+}
+
+
+
 /******** interrupts ********/
 
 export type Interrupt<T> = {
@@ -182,7 +209,7 @@ export async function respondToInterrupt(
   const messages = (__stateStack.interruptData.messages || []).map(
     (json: any) => {
       // create message objects from JSON
-      return messageFromJSON(json);
+      return smoltalk.messageFromJSON(json);
     },
   );
   __stateStack.interruptData.messages = messages;
@@ -212,7 +239,7 @@ export async function respondToInterrupt(
   // start at the last node we visited
   const nodesTraversed = __stateStack.interruptData.nodesTraversed || [];
   const nodeName = nodesTraversed[nodesTraversed.length - 1];
-  const result = await graph.run(nodeName, {
+  const __result = await graph.run(nodeName, {
     messages: messages,
     __metadata: {
       graph: graph,
@@ -224,7 +251,7 @@ export async function respondToInterrupt(
     // restore args from the state stack
     data: "<from-stack>",
   });
-  return result.data;
+  return __createReturnObject(__result);
 }
 
 export async function approveInterrupt(
@@ -383,6 +410,77 @@ function __cloneArray<T>(arr?: T[]): T[] {
   return [...arr];
 }
 
+const handleStreamingResponse = async (__completion) => {
+  if (isGenerator(__completion)) {
+    if (!__callbacks.onStream) {
+      console.log(
+        "No onStream callback provided for streaming response, returning response synchronously",
+      );
+      statelogClient.debug(
+        "Got streaming response but no onStream callback provided, returning response synchronously",
+        {
+          prompt: __prompt,
+          callbacks: Object.keys(__callbacks),
+        },
+      );
+      let syncResult = "";
+      for await (const chunk of __completion) {
+        switch (chunk.type) {
+          case "tool_call":
+            __toolCalls.push(chunk.toolCall);
+            break;
+          case "done":
+            syncResult = chunk.result;
+            break;
+          case "error":
+            console.error(`Error in LLM response stream: ${chunk.error}`);
+            break;
+          default:
+            break;
+        }
+      }
+      __completion = { success: true, value: syncResult };
+    } else {
+      // try to acquire lock
+      let count = 0;
+      // wait 60 seconds to acquire lock
+      while (onStreamLock && count < 10 * 60) {
+        await _builtinSleep(0.1);
+        count++;
+      }
+      if (onStreamLock) {
+        console.log(`Couldn't acquire lock, ${count}`);
+      }
+      onStreamLock = true;
+
+      for await (const chunk of __completion) {
+        switch (chunk.type) {
+          case "text":
+            __callbacks.onStream({ type: "text", text: chunk.text });
+            break;
+          case "tool_call":
+            __toolCalls.push(chunk.toolCall);
+            __callbacks.onStream({
+              type: "tool_call",
+              toolCall: chunk.toolCall,
+            });
+            break;
+          case "done":
+            __callbacks.onStream({ type: "done", result: chunk.result });
+            __completion = { success: true, value: chunk.result };
+            break;
+          case "error":
+            __callbacks.onStream({ type: "error", error: chunk.error });
+            break;
+        }
+      }
+
+      onStreamLock = false;
+    }
+  }
+};
+
+
 /**** Message thread handling ****/
 
 type MessageThreadJSON = { messages: any[]; children: MessageThreadJSON[] };
@@ -401,7 +499,7 @@ class MessageThread {
   }
 
   cloneMessages(): any[] {
-    return this.messages.map(m => m.toJSON()).map(m => messageFromJSON(m));
+    return this.messages.map(m => m.toJSON()).map(m => smoltalk.messageFromJSON(m));
   }
 
   getMessages(): any[] {
@@ -450,6 +548,7 @@ export const __fooTool = {
   schema: z.object({})
 };
 
+export const __fooToolParams = [];
 export async function foo(args, __metadata={}) : Promise<any> {
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
@@ -503,11 +602,11 @@ async function _res1(__metadata?: Record<string, any>): Promise<number[]> {
   
   
   
-  const __client = getClientWithConfig({});
+  const __client = __getClientWithConfig({});
   let responseMessage:any;
 
   if (__toolCalls.length === 0) {
-    __messages.push(userMessage(__prompt));
+    __messages.push(smoltalk.userMessage(__prompt));
   
   
     let __completion = await __client.text({
@@ -519,73 +618,7 @@ async function _res1(__metadata?: Record<string, any>): Promise<number[]> {
   
     const endTime = performance.now();
 
-    const handleStreamingResponse = async () => {
-      if (isGenerator(__completion)) {
-        if (!__callbacks.onStream) {
-          console.log("No onStream callback provided for streaming response, returning response synchronously");
-          statelogClient.debug(
-            "Got streaming response but no onStream callback provided, returning response synchronously",
-            {
-              prompt: __prompt,
-              callbacks: Object.keys(__callbacks),
-            },
-          );
-
-          let syncResult = "";
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                break;
-              case "done":
-                syncResult = chunk.result;
-                break;
-              case "error":
-                console.error(`Error in LLM response stream: ${chunk.error}`);
-                break;
-              default:
-                break;
-            }
-          }
-          __completion = { success: true, value: syncResult };
-        } else {
-          // try to acquire lock
-          let count = 0;
-          // wait 60 seconds to acquire lock
-          while (onStreamLock && count < (10 * 60)) {
-            await _builtinSleep(0.1)
-            count++
-          }
-          if (onStreamLock) {
-            console.log(`Couldn't acquire lock, ${count}`);
-          }
-          onStreamLock = true;
-
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "text":
-                __callbacks.onStream({ type: "text", text: chunk.text });
-                break;
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
-                break;
-              case "done":
-                __callbacks.onStream({ type: "done", result: chunk.result });
-                __completion = { success: true, value: chunk.result };
-                break;
-              case "error":
-                __callbacks.onStream({ type: "error", error: chunk.error });
-                break;
-            }
-          }
-
-          onStreamLock = false
-        }
-      }
-    }
-
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -607,7 +640,7 @@ async function _res1(__metadata?: Record<string, any>): Promise<number[]> {
 
     if (__toolCalls.length > 0) {
       // Add assistant's response with tool calls to message history
-      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+      __messages.push(smoltalk.assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
     }
 
     __updateTokenStats(responseMessage.usage, responseMessage.cost);
@@ -651,13 +684,15 @@ async function _res1(__metadata?: Record<string, any>): Promise<number[]> {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
+      tools: __tools,
+      responseFormat: __responseFormat,
     });
 
     if (!__completion.success) {
@@ -671,7 +706,7 @@ async function _res1(__metadata?: Record<string, any>): Promise<number[]> {
 
   // Add final assistant response to history
   // not passing tool calls back this time
-  __messages.push(assistantMessage(responseMessage.output));
+  __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -729,11 +764,11 @@ async function _res2(__metadata?: Record<string, any>): Promise<number[]> {
   
   
   
-  const __client = getClientWithConfig({});
+  const __client = __getClientWithConfig({});
   let responseMessage:any;
 
   if (__toolCalls.length === 0) {
-    __messages.push(userMessage(__prompt));
+    __messages.push(smoltalk.userMessage(__prompt));
   
   
     let __completion = await __client.text({
@@ -745,73 +780,7 @@ async function _res2(__metadata?: Record<string, any>): Promise<number[]> {
   
     const endTime = performance.now();
 
-    const handleStreamingResponse = async () => {
-      if (isGenerator(__completion)) {
-        if (!__callbacks.onStream) {
-          console.log("No onStream callback provided for streaming response, returning response synchronously");
-          statelogClient.debug(
-            "Got streaming response but no onStream callback provided, returning response synchronously",
-            {
-              prompt: __prompt,
-              callbacks: Object.keys(__callbacks),
-            },
-          );
-
-          let syncResult = "";
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                break;
-              case "done":
-                syncResult = chunk.result;
-                break;
-              case "error":
-                console.error(`Error in LLM response stream: ${chunk.error}`);
-                break;
-              default:
-                break;
-            }
-          }
-          __completion = { success: true, value: syncResult };
-        } else {
-          // try to acquire lock
-          let count = 0;
-          // wait 60 seconds to acquire lock
-          while (onStreamLock && count < (10 * 60)) {
-            await _builtinSleep(0.1)
-            count++
-          }
-          if (onStreamLock) {
-            console.log(`Couldn't acquire lock, ${count}`);
-          }
-          onStreamLock = true;
-
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "text":
-                __callbacks.onStream({ type: "text", text: chunk.text });
-                break;
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
-                break;
-              case "done":
-                __callbacks.onStream({ type: "done", result: chunk.result });
-                __completion = { success: true, value: chunk.result };
-                break;
-              case "error":
-                __callbacks.onStream({ type: "error", error: chunk.error });
-                break;
-            }
-          }
-
-          onStreamLock = false
-        }
-      }
-    }
-
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -833,7 +802,7 @@ async function _res2(__metadata?: Record<string, any>): Promise<number[]> {
 
     if (__toolCalls.length > 0) {
       // Add assistant's response with tool calls to message history
-      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+      __messages.push(smoltalk.assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
     }
 
     __updateTokenStats(responseMessage.usage, responseMessage.cost);
@@ -877,13 +846,15 @@ async function _res2(__metadata?: Record<string, any>): Promise<number[]> {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
+      tools: __tools,
+      responseFormat: __responseFormat,
     });
 
     if (!__completion.success) {
@@ -897,7 +868,7 @@ async function _res2(__metadata?: Record<string, any>): Promise<number[]> {
 
   // Add final assistant response to history
   // not passing tool calls back this time
-  __messages.push(assistantMessage(responseMessage.output));
+  __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -955,11 +926,11 @@ async function _res3(__metadata?: Record<string, any>): Promise<number> {
   
   
   
-  const __client = getClientWithConfig({});
+  const __client = __getClientWithConfig({});
   let responseMessage:any;
 
   if (__toolCalls.length === 0) {
-    __messages.push(userMessage(__prompt));
+    __messages.push(smoltalk.userMessage(__prompt));
   
   
     let __completion = await __client.text({
@@ -971,73 +942,7 @@ async function _res3(__metadata?: Record<string, any>): Promise<number> {
   
     const endTime = performance.now();
 
-    const handleStreamingResponse = async () => {
-      if (isGenerator(__completion)) {
-        if (!__callbacks.onStream) {
-          console.log("No onStream callback provided for streaming response, returning response synchronously");
-          statelogClient.debug(
-            "Got streaming response but no onStream callback provided, returning response synchronously",
-            {
-              prompt: __prompt,
-              callbacks: Object.keys(__callbacks),
-            },
-          );
-
-          let syncResult = "";
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                break;
-              case "done":
-                syncResult = chunk.result;
-                break;
-              case "error":
-                console.error(`Error in LLM response stream: ${chunk.error}`);
-                break;
-              default:
-                break;
-            }
-          }
-          __completion = { success: true, value: syncResult };
-        } else {
-          // try to acquire lock
-          let count = 0;
-          // wait 60 seconds to acquire lock
-          while (onStreamLock && count < (10 * 60)) {
-            await _builtinSleep(0.1)
-            count++
-          }
-          if (onStreamLock) {
-            console.log(`Couldn't acquire lock, ${count}`);
-          }
-          onStreamLock = true;
-
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "text":
-                __callbacks.onStream({ type: "text", text: chunk.text });
-                break;
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
-                break;
-              case "done":
-                __callbacks.onStream({ type: "done", result: chunk.result });
-                __completion = { success: true, value: chunk.result };
-                break;
-              case "error":
-                __callbacks.onStream({ type: "error", error: chunk.error });
-                break;
-            }
-          }
-
-          onStreamLock = false
-        }
-      }
-    }
-
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -1059,7 +964,7 @@ async function _res3(__metadata?: Record<string, any>): Promise<number> {
 
     if (__toolCalls.length > 0) {
       // Add assistant's response with tool calls to message history
-      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+      __messages.push(smoltalk.assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
     }
 
     __updateTokenStats(responseMessage.usage, responseMessage.cost);
@@ -1103,13 +1008,15 @@ async function _res3(__metadata?: Record<string, any>): Promise<number> {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
+      tools: __tools,
+      responseFormat: __responseFormat,
     });
 
     if (!__completion.success) {
@@ -1123,7 +1030,7 @@ async function _res3(__metadata?: Record<string, any>): Promise<number> {
 
   // Add final assistant response to history
   // not passing tool calls back this time
-  __messages.push(assistantMessage(responseMessage.output));
+  __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -1185,11 +1092,11 @@ async function _res5(__metadata?: Record<string, any>): Promise<number> {
   
   
   
-  const __client = getClientWithConfig({});
+  const __client = __getClientWithConfig({});
   let responseMessage:any;
 
   if (__toolCalls.length === 0) {
-    __messages.push(userMessage(__prompt));
+    __messages.push(smoltalk.userMessage(__prompt));
   
   
     let __completion = await __client.text({
@@ -1201,73 +1108,7 @@ async function _res5(__metadata?: Record<string, any>): Promise<number> {
   
     const endTime = performance.now();
 
-    const handleStreamingResponse = async () => {
-      if (isGenerator(__completion)) {
-        if (!__callbacks.onStream) {
-          console.log("No onStream callback provided for streaming response, returning response synchronously");
-          statelogClient.debug(
-            "Got streaming response but no onStream callback provided, returning response synchronously",
-            {
-              prompt: __prompt,
-              callbacks: Object.keys(__callbacks),
-            },
-          );
-
-          let syncResult = "";
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                break;
-              case "done":
-                syncResult = chunk.result;
-                break;
-              case "error":
-                console.error(`Error in LLM response stream: ${chunk.error}`);
-                break;
-              default:
-                break;
-            }
-          }
-          __completion = { success: true, value: syncResult };
-        } else {
-          // try to acquire lock
-          let count = 0;
-          // wait 60 seconds to acquire lock
-          while (onStreamLock && count < (10 * 60)) {
-            await _builtinSleep(0.1)
-            count++
-          }
-          if (onStreamLock) {
-            console.log(`Couldn't acquire lock, ${count}`);
-          }
-          onStreamLock = true;
-
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "text":
-                __callbacks.onStream({ type: "text", text: chunk.text });
-                break;
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
-                break;
-              case "done":
-                __callbacks.onStream({ type: "done", result: chunk.result });
-                __completion = { success: true, value: chunk.result };
-                break;
-              case "error":
-                __callbacks.onStream({ type: "error", error: chunk.error });
-                break;
-            }
-          }
-
-          onStreamLock = false
-        }
-      }
-    }
-
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -1289,7 +1130,7 @@ async function _res5(__metadata?: Record<string, any>): Promise<number> {
 
     if (__toolCalls.length > 0) {
       // Add assistant's response with tool calls to message history
-      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+      __messages.push(smoltalk.assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
     }
 
     __updateTokenStats(responseMessage.usage, responseMessage.cost);
@@ -1333,13 +1174,15 @@ async function _res5(__metadata?: Record<string, any>): Promise<number> {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
+      tools: __tools,
+      responseFormat: __responseFormat,
     });
 
     if (!__completion.success) {
@@ -1353,7 +1196,7 @@ async function _res5(__metadata?: Record<string, any>): Promise<number> {
 
   // Add final assistant response to history
   // not passing tool calls back this time
-  __messages.push(assistantMessage(responseMessage.output));
+  __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -1419,11 +1262,11 @@ async function _res4(__metadata?: Record<string, any>): Promise<number> {
   
   
   
-  const __client = getClientWithConfig({});
+  const __client = __getClientWithConfig({});
   let responseMessage:any;
 
   if (__toolCalls.length === 0) {
-    __messages.push(userMessage(__prompt));
+    __messages.push(smoltalk.userMessage(__prompt));
   
   
     let __completion = await __client.text({
@@ -1435,73 +1278,7 @@ async function _res4(__metadata?: Record<string, any>): Promise<number> {
   
     const endTime = performance.now();
 
-    const handleStreamingResponse = async () => {
-      if (isGenerator(__completion)) {
-        if (!__callbacks.onStream) {
-          console.log("No onStream callback provided for streaming response, returning response synchronously");
-          statelogClient.debug(
-            "Got streaming response but no onStream callback provided, returning response synchronously",
-            {
-              prompt: __prompt,
-              callbacks: Object.keys(__callbacks),
-            },
-          );
-
-          let syncResult = "";
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                break;
-              case "done":
-                syncResult = chunk.result;
-                break;
-              case "error":
-                console.error(`Error in LLM response stream: ${chunk.error}`);
-                break;
-              default:
-                break;
-            }
-          }
-          __completion = { success: true, value: syncResult };
-        } else {
-          // try to acquire lock
-          let count = 0;
-          // wait 60 seconds to acquire lock
-          while (onStreamLock && count < (10 * 60)) {
-            await _builtinSleep(0.1)
-            count++
-          }
-          if (onStreamLock) {
-            console.log(`Couldn't acquire lock, ${count}`);
-          }
-          onStreamLock = true;
-
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "text":
-                __callbacks.onStream({ type: "text", text: chunk.text });
-                break;
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
-                break;
-              case "done":
-                __callbacks.onStream({ type: "done", result: chunk.result });
-                __completion = { success: true, value: chunk.result };
-                break;
-              case "error":
-                __callbacks.onStream({ type: "error", error: chunk.error });
-                break;
-            }
-          }
-
-          onStreamLock = false
-        }
-      }
-    }
-
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -1523,7 +1300,7 @@ async function _res4(__metadata?: Record<string, any>): Promise<number> {
 
     if (__toolCalls.length > 0) {
       // Add assistant's response with tool calls to message history
-      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+      __messages.push(smoltalk.assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
     }
 
     __updateTokenStats(responseMessage.usage, responseMessage.cost);
@@ -1567,13 +1344,15 @@ async function _res4(__metadata?: Record<string, any>): Promise<number> {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
+      tools: __tools,
+      responseFormat: __responseFormat,
     });
 
     if (!__completion.success) {
@@ -1587,7 +1366,7 @@ async function _res4(__metadata?: Record<string, any>): Promise<number> {
 
   // Add final assistant response to history
   // not passing tool calls back this time
-  __messages.push(assistantMessage(responseMessage.output));
+  __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -1733,11 +1512,11 @@ async function _res1(__metadata?: Record<string, any>): Promise<number[]> {
   
   
   
-  const __client = getClientWithConfig({});
+  const __client = __getClientWithConfig({});
   let responseMessage:any;
 
   if (__toolCalls.length === 0) {
-    __messages.push(userMessage(__prompt));
+    __messages.push(smoltalk.userMessage(__prompt));
   
   
     let __completion = await __client.text({
@@ -1749,73 +1528,7 @@ async function _res1(__metadata?: Record<string, any>): Promise<number[]> {
   
     const endTime = performance.now();
 
-    const handleStreamingResponse = async () => {
-      if (isGenerator(__completion)) {
-        if (!__callbacks.onStream) {
-          console.log("No onStream callback provided for streaming response, returning response synchronously");
-          statelogClient.debug(
-            "Got streaming response but no onStream callback provided, returning response synchronously",
-            {
-              prompt: __prompt,
-              callbacks: Object.keys(__callbacks),
-            },
-          );
-
-          let syncResult = "";
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                break;
-              case "done":
-                syncResult = chunk.result;
-                break;
-              case "error":
-                console.error(`Error in LLM response stream: ${chunk.error}`);
-                break;
-              default:
-                break;
-            }
-          }
-          __completion = { success: true, value: syncResult };
-        } else {
-          // try to acquire lock
-          let count = 0;
-          // wait 60 seconds to acquire lock
-          while (onStreamLock && count < (10 * 60)) {
-            await _builtinSleep(0.1)
-            count++
-          }
-          if (onStreamLock) {
-            console.log(`Couldn't acquire lock, ${count}`);
-          }
-          onStreamLock = true;
-
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "text":
-                __callbacks.onStream({ type: "text", text: chunk.text });
-                break;
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
-                break;
-              case "done":
-                __callbacks.onStream({ type: "done", result: chunk.result });
-                __completion = { success: true, value: chunk.result };
-                break;
-              case "error":
-                __callbacks.onStream({ type: "error", error: chunk.error });
-                break;
-            }
-          }
-
-          onStreamLock = false
-        }
-      }
-    }
-
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -1837,7 +1550,7 @@ async function _res1(__metadata?: Record<string, any>): Promise<number[]> {
 
     if (__toolCalls.length > 0) {
       // Add assistant's response with tool calls to message history
-      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+      __messages.push(smoltalk.assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
     }
 
     __updateTokenStats(responseMessage.usage, responseMessage.cost);
@@ -1881,13 +1594,15 @@ async function _res1(__metadata?: Record<string, any>): Promise<number[]> {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
+      tools: __tools,
+      responseFormat: __responseFormat,
     });
 
     if (!__completion.success) {
@@ -1901,7 +1616,7 @@ async function _res1(__metadata?: Record<string, any>): Promise<number[]> {
 
   // Add final assistant response to history
   // not passing tool calls back this time
-  __messages.push(assistantMessage(responseMessage.output));
+  __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -1927,7 +1642,7 @@ __self.res1 = await _res1({
 // return early from node if this is an interrupt
 if (isInterrupt(__self.res1)) {
   
-  return { ...state, data: __self.res1 };
+  return { messages: __self.messages_6 , data: __self.res1 };
   
    
 }
@@ -1959,11 +1674,11 @@ async function _res2(__metadata?: Record<string, any>): Promise<number[]> {
   
   
   
-  const __client = getClientWithConfig({});
+  const __client = __getClientWithConfig({});
   let responseMessage:any;
 
   if (__toolCalls.length === 0) {
-    __messages.push(userMessage(__prompt));
+    __messages.push(smoltalk.userMessage(__prompt));
   
   
     let __completion = await __client.text({
@@ -1975,73 +1690,7 @@ async function _res2(__metadata?: Record<string, any>): Promise<number[]> {
   
     const endTime = performance.now();
 
-    const handleStreamingResponse = async () => {
-      if (isGenerator(__completion)) {
-        if (!__callbacks.onStream) {
-          console.log("No onStream callback provided for streaming response, returning response synchronously");
-          statelogClient.debug(
-            "Got streaming response but no onStream callback provided, returning response synchronously",
-            {
-              prompt: __prompt,
-              callbacks: Object.keys(__callbacks),
-            },
-          );
-
-          let syncResult = "";
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                break;
-              case "done":
-                syncResult = chunk.result;
-                break;
-              case "error":
-                console.error(`Error in LLM response stream: ${chunk.error}`);
-                break;
-              default:
-                break;
-            }
-          }
-          __completion = { success: true, value: syncResult };
-        } else {
-          // try to acquire lock
-          let count = 0;
-          // wait 60 seconds to acquire lock
-          while (onStreamLock && count < (10 * 60)) {
-            await _builtinSleep(0.1)
-            count++
-          }
-          if (onStreamLock) {
-            console.log(`Couldn't acquire lock, ${count}`);
-          }
-          onStreamLock = true;
-
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "text":
-                __callbacks.onStream({ type: "text", text: chunk.text });
-                break;
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
-                break;
-              case "done":
-                __callbacks.onStream({ type: "done", result: chunk.result });
-                __completion = { success: true, value: chunk.result };
-                break;
-              case "error":
-                __callbacks.onStream({ type: "error", error: chunk.error });
-                break;
-            }
-          }
-
-          onStreamLock = false
-        }
-      }
-    }
-
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -2063,7 +1712,7 @@ async function _res2(__metadata?: Record<string, any>): Promise<number[]> {
 
     if (__toolCalls.length > 0) {
       // Add assistant's response with tool calls to message history
-      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+      __messages.push(smoltalk.assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
     }
 
     __updateTokenStats(responseMessage.usage, responseMessage.cost);
@@ -2107,13 +1756,15 @@ async function _res2(__metadata?: Record<string, any>): Promise<number[]> {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
+      tools: __tools,
+      responseFormat: __responseFormat,
     });
 
     if (!__completion.success) {
@@ -2127,7 +1778,7 @@ async function _res2(__metadata?: Record<string, any>): Promise<number[]> {
 
   // Add final assistant response to history
   // not passing tool calls back this time
-  __messages.push(assistantMessage(responseMessage.output));
+  __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -2153,7 +1804,7 @@ __self.res2 = await _res2({
 // return early from node if this is an interrupt
 if (isInterrupt(__self.res2)) {
   
-  return { ...state, data: __self.res2 };
+  return { messages: __self.messages_7 , data: __self.res2 };
   
    
 }
@@ -2185,11 +1836,11 @@ async function _res3(__metadata?: Record<string, any>): Promise<number> {
   
   
   
-  const __client = getClientWithConfig({});
+  const __client = __getClientWithConfig({});
   let responseMessage:any;
 
   if (__toolCalls.length === 0) {
-    __messages.push(userMessage(__prompt));
+    __messages.push(smoltalk.userMessage(__prompt));
   
   
     let __completion = await __client.text({
@@ -2201,73 +1852,7 @@ async function _res3(__metadata?: Record<string, any>): Promise<number> {
   
     const endTime = performance.now();
 
-    const handleStreamingResponse = async () => {
-      if (isGenerator(__completion)) {
-        if (!__callbacks.onStream) {
-          console.log("No onStream callback provided for streaming response, returning response synchronously");
-          statelogClient.debug(
-            "Got streaming response but no onStream callback provided, returning response synchronously",
-            {
-              prompt: __prompt,
-              callbacks: Object.keys(__callbacks),
-            },
-          );
-
-          let syncResult = "";
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                break;
-              case "done":
-                syncResult = chunk.result;
-                break;
-              case "error":
-                console.error(`Error in LLM response stream: ${chunk.error}`);
-                break;
-              default:
-                break;
-            }
-          }
-          __completion = { success: true, value: syncResult };
-        } else {
-          // try to acquire lock
-          let count = 0;
-          // wait 60 seconds to acquire lock
-          while (onStreamLock && count < (10 * 60)) {
-            await _builtinSleep(0.1)
-            count++
-          }
-          if (onStreamLock) {
-            console.log(`Couldn't acquire lock, ${count}`);
-          }
-          onStreamLock = true;
-
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "text":
-                __callbacks.onStream({ type: "text", text: chunk.text });
-                break;
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
-                break;
-              case "done":
-                __callbacks.onStream({ type: "done", result: chunk.result });
-                __completion = { success: true, value: chunk.result };
-                break;
-              case "error":
-                __callbacks.onStream({ type: "error", error: chunk.error });
-                break;
-            }
-          }
-
-          onStreamLock = false
-        }
-      }
-    }
-
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -2289,7 +1874,7 @@ async function _res3(__metadata?: Record<string, any>): Promise<number> {
 
     if (__toolCalls.length > 0) {
       // Add assistant's response with tool calls to message history
-      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+      __messages.push(smoltalk.assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
     }
 
     __updateTokenStats(responseMessage.usage, responseMessage.cost);
@@ -2333,13 +1918,15 @@ async function _res3(__metadata?: Record<string, any>): Promise<number> {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
+      tools: __tools,
+      responseFormat: __responseFormat,
     });
 
     if (!__completion.success) {
@@ -2353,7 +1940,7 @@ async function _res3(__metadata?: Record<string, any>): Promise<number> {
 
   // Add final assistant response to history
   // not passing tool calls back this time
-  __messages.push(assistantMessage(responseMessage.output));
+  __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -2379,7 +1966,7 @@ __self.res3 = await _res3({
 // return early from node if this is an interrupt
 if (isInterrupt(__self.res3)) {
   
-  return { ...state, data: __self.res3 };
+  return { messages: __self.messages_8 , data: __self.res3 };
   
    
 }
@@ -2415,11 +2002,11 @@ async function _res5(__metadata?: Record<string, any>): Promise<number> {
   
   
   
-  const __client = getClientWithConfig({});
+  const __client = __getClientWithConfig({});
   let responseMessage:any;
 
   if (__toolCalls.length === 0) {
-    __messages.push(userMessage(__prompt));
+    __messages.push(smoltalk.userMessage(__prompt));
   
   
     let __completion = await __client.text({
@@ -2431,73 +2018,7 @@ async function _res5(__metadata?: Record<string, any>): Promise<number> {
   
     const endTime = performance.now();
 
-    const handleStreamingResponse = async () => {
-      if (isGenerator(__completion)) {
-        if (!__callbacks.onStream) {
-          console.log("No onStream callback provided for streaming response, returning response synchronously");
-          statelogClient.debug(
-            "Got streaming response but no onStream callback provided, returning response synchronously",
-            {
-              prompt: __prompt,
-              callbacks: Object.keys(__callbacks),
-            },
-          );
-
-          let syncResult = "";
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                break;
-              case "done":
-                syncResult = chunk.result;
-                break;
-              case "error":
-                console.error(`Error in LLM response stream: ${chunk.error}`);
-                break;
-              default:
-                break;
-            }
-          }
-          __completion = { success: true, value: syncResult };
-        } else {
-          // try to acquire lock
-          let count = 0;
-          // wait 60 seconds to acquire lock
-          while (onStreamLock && count < (10 * 60)) {
-            await _builtinSleep(0.1)
-            count++
-          }
-          if (onStreamLock) {
-            console.log(`Couldn't acquire lock, ${count}`);
-          }
-          onStreamLock = true;
-
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "text":
-                __callbacks.onStream({ type: "text", text: chunk.text });
-                break;
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
-                break;
-              case "done":
-                __callbacks.onStream({ type: "done", result: chunk.result });
-                __completion = { success: true, value: chunk.result };
-                break;
-              case "error":
-                __callbacks.onStream({ type: "error", error: chunk.error });
-                break;
-            }
-          }
-
-          onStreamLock = false
-        }
-      }
-    }
-
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -2519,7 +2040,7 @@ async function _res5(__metadata?: Record<string, any>): Promise<number> {
 
     if (__toolCalls.length > 0) {
       // Add assistant's response with tool calls to message history
-      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+      __messages.push(smoltalk.assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
     }
 
     __updateTokenStats(responseMessage.usage, responseMessage.cost);
@@ -2563,13 +2084,15 @@ async function _res5(__metadata?: Record<string, any>): Promise<number> {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
+      tools: __tools,
+      responseFormat: __responseFormat,
     });
 
     if (!__completion.success) {
@@ -2583,7 +2106,7 @@ async function _res5(__metadata?: Record<string, any>): Promise<number> {
 
   // Add final assistant response to history
   // not passing tool calls back this time
-  __messages.push(assistantMessage(responseMessage.output));
+  __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -2609,7 +2132,7 @@ __self.res5 = await _res5({
 // return early from node if this is an interrupt
 if (isInterrupt(__self.res5)) {
   
-  return { ...state, data: __self.res5 };
+  return { messages: __self.messages_9 , data: __self.res5 };
   
    
 }
@@ -2649,11 +2172,11 @@ async function _res4(__metadata?: Record<string, any>): Promise<number> {
   
   
   
-  const __client = getClientWithConfig({});
+  const __client = __getClientWithConfig({});
   let responseMessage:any;
 
   if (__toolCalls.length === 0) {
-    __messages.push(userMessage(__prompt));
+    __messages.push(smoltalk.userMessage(__prompt));
   
   
     let __completion = await __client.text({
@@ -2665,73 +2188,7 @@ async function _res4(__metadata?: Record<string, any>): Promise<number> {
   
     const endTime = performance.now();
 
-    const handleStreamingResponse = async () => {
-      if (isGenerator(__completion)) {
-        if (!__callbacks.onStream) {
-          console.log("No onStream callback provided for streaming response, returning response synchronously");
-          statelogClient.debug(
-            "Got streaming response but no onStream callback provided, returning response synchronously",
-            {
-              prompt: __prompt,
-              callbacks: Object.keys(__callbacks),
-            },
-          );
-
-          let syncResult = "";
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                break;
-              case "done":
-                syncResult = chunk.result;
-                break;
-              case "error":
-                console.error(`Error in LLM response stream: ${chunk.error}`);
-                break;
-              default:
-                break;
-            }
-          }
-          __completion = { success: true, value: syncResult };
-        } else {
-          // try to acquire lock
-          let count = 0;
-          // wait 60 seconds to acquire lock
-          while (onStreamLock && count < (10 * 60)) {
-            await _builtinSleep(0.1)
-            count++
-          }
-          if (onStreamLock) {
-            console.log(`Couldn't acquire lock, ${count}`);
-          }
-          onStreamLock = true;
-
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "text":
-                __callbacks.onStream({ type: "text", text: chunk.text });
-                break;
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
-                break;
-              case "done":
-                __callbacks.onStream({ type: "done", result: chunk.result });
-                __completion = { success: true, value: chunk.result };
-                break;
-              case "error":
-                __callbacks.onStream({ type: "error", error: chunk.error });
-                break;
-            }
-          }
-
-          onStreamLock = false
-        }
-      }
-    }
-
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -2753,7 +2210,7 @@ async function _res4(__metadata?: Record<string, any>): Promise<number> {
 
     if (__toolCalls.length > 0) {
       // Add assistant's response with tool calls to message history
-      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+      __messages.push(smoltalk.assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
     }
 
     __updateTokenStats(responseMessage.usage, responseMessage.cost);
@@ -2797,13 +2254,15 @@ async function _res4(__metadata?: Record<string, any>): Promise<number> {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
+      tools: __tools,
+      responseFormat: __responseFormat,
     });
 
     if (!__completion.success) {
@@ -2817,7 +2276,7 @@ async function _res4(__metadata?: Record<string, any>): Promise<number> {
 
   // Add final assistant response to history
   // not passing tool calls back this time
-  __messages.push(assistantMessage(responseMessage.output));
+  __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
   try {
   const result = JSON.parse(responseMessage.output || "");
@@ -2843,7 +2302,7 @@ __self.res4 = await _res4({
 // return early from node if this is an interrupt
 if (isInterrupt(__self.res4)) {
   
-  return { ...state, data: __self.res4 };
+  return { messages: __self.messages_10 , data: __self.res4 };
   
    
 }
@@ -2891,20 +2350,21 @@ if (isInterrupt(__self.res4)) {
       
     
     // this is just here to have a default return value from a node if the user doesn't specify one
-    return { ...state, messages: __self.messages_0.toJSON(), data: undefined };
+    return { messages: __self.messages_0, data: undefined };
 });
 
-const initialState: State = {messages: [], data: {}};
-const finalState = graph.run("main", initialState);
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+    const initialState: __State = {messages: [], data: {}};
+    const finalState = graph.run("main", initialState);
+}
 
 
-export async function main({ messages, callbacks } = {}): Promise<State<any>> {
+export async function main({ messages, callbacks } = {}): Promise<__State<any>> {
 
   const __data = [  ];
   __callbacks = callbacks || {};
   const __result = await graph.run("main", { messages: messages || [], data: __data });
-  __result.tokens = __stateStack.globals.__tokenStats;
-  return structuredClone(__result)
+  return __createReturnObject(__result);
 }
 
 export default graph;

@@ -441,9 +441,9 @@ describe("assignmentParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = assignmentParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = assignmentParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });

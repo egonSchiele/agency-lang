@@ -7,10 +7,10 @@ import { StatelogClient } from "statelog-client";
 import { nanoid } from "nanoid";
 
 const statelogHost = "http://localhost:1065";
-const traceId = nanoid();
+const __traceId = nanoid();
 const __statelogClient = new StatelogClient({
     host: statelogHost,
-    traceId: traceId,
+    traceId: __traceId,
     apiKey: process.env.STATELOG_API_KEY || "",
     projectId: "agency-lang",
     debugMode: true,
@@ -55,12 +55,14 @@ export const __addTool = {
 This is a simple addition function.`,
   schema: z.object({"a": z.string(), "b": z.string(), })
 };
-export const __greetTool = {
+
+export const __addToolParams = ["a","b"];export const __greetTool = {
   name: "greet",
   description: `Generate a greeting message for the given name.`,
   schema: z.object({"name": z.string(), })
 };
-export const __calculateAreaTool = {
+
+export const __greetToolParams = ["name"];export const __calculateAreaTool = {
   name: "calculateArea",
   description: `Calculate the area of a rectangle.
 
@@ -71,12 +73,14 @@ Parameters:
 Returns: the area as a number`,
   schema: z.object({"width": z.string(), "height": z.string(), })
 };
-export const __processDataTool = {
+
+export const __calculateAreaToolParams = ["width","height"];export const __processDataTool = {
   name: "processData",
   description: `Single line docstring`,
   schema: z.object({})
 };
-//  Test docstrings in functions
+
+export const __processDataToolParams = [];//  Test docstrings in functions
 
 export async function add(args, __metadata={}) : Promise<any> {
     const __stack = __stateStack.getNewState();

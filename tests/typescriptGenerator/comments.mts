@@ -7,10 +7,10 @@ import { StatelogClient } from "statelog-client";
 import { nanoid } from "nanoid";
 
 const statelogHost = "http://localhost:1065";
-const traceId = nanoid();
+const __traceId = nanoid();
 const __statelogClient = new StatelogClient({
     host: statelogHost,
-    traceId: traceId,
+    traceId: __traceId,
     apiKey: process.env.STATELOG_API_KEY || "",
     projectId: "agency-lang",
     debugMode: true,
@@ -54,7 +54,8 @@ export const __greetTool = {
   description: `No description provided.`,
   schema: z.object({})
 };
-//  This is a single line comment at the top of the file
+
+export const __greetToolParams = [];//  This is a single line comment at the top of the file
 //  Variable assignment with comment above
 __stateStack.globals.x = 42;
 //  Multiple comments

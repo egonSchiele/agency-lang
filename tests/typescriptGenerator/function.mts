@@ -7,10 +7,10 @@ import { StatelogClient } from "statelog-client";
 import { nanoid } from "nanoid";
 
 const statelogHost = "http://localhost:1065";
-const traceId = nanoid();
+const __traceId = nanoid();
 const __statelogClient = new StatelogClient({
     host: statelogHost,
-    traceId: traceId,
+    traceId: __traceId,
     apiKey: process.env.STATELOG_API_KEY || "",
     projectId: "agency-lang",
     debugMode: true,
@@ -54,12 +54,14 @@ export const __testTool = {
   description: `No description provided.`,
   schema: z.object({})
 };
-export const __addTool = {
+
+export const __testToolParams = [];export const __addTool = {
   name: "add",
   description: `No description provided.`,
   schema: z.object({"a": z.string(), "b": z.string(), })
 };
 
+export const __addToolParams = ["a","b"];
 export async function test(args, __metadata={}) : Promise<any> {
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;

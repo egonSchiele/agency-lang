@@ -7,14 +7,16 @@ import {
 
 describe("importStatmentParser", () => {
   const testCases = [
-    // Unquoted module paths are no longer supported
+    // Unquoted module paths are no longer supported (start with "import" -> throw)
     {
       input: "import foo from bar;",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "import myModule from path/to/module;",
       expected: { success: false },
+      throws: true,
     },
 
     // Module paths with double quotes
@@ -87,14 +89,16 @@ describe("importStatmentParser", () => {
       },
     },
 
-    // Without semicolon - unquoted paths no longer supported
+    // Without semicolon - unquoted paths no longer supported (start with "import" -> throw)
     {
       input: "import foo from bar\n",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "import test from module",
       expected: { success: false },
+      throws: true,
     },
     {
       input: 'import foo from "bar"\n',
@@ -108,10 +112,11 @@ describe("importStatmentParser", () => {
       },
     },
 
-    // Multiple imported names (destructured imports) - unquoted paths no longer supported
+    // Multiple imported names (destructured imports) - unquoted paths no longer supported (start with "import" -> throw)
     {
       input: "import { foo, bar } from module;",
       expected: { success: false },
+      throws: true,
     },
     {
       input: 'import { foo, bar, baz } from "myModule";',
@@ -164,16 +169,18 @@ describe("importStatmentParser", () => {
       },
     },
 
-    // Spaces around keywords - unquoted paths no longer supported
+    // Spaces around keywords - unquoted paths no longer supported (start with "import" -> throw)
     {
       input: "import   foo   from   bar;",
       expected: { success: false },
+      throws: true,
     },
 
-    // Edge cases - single character names with unquoted path
+    // Edge cases - single character names with unquoted path (start with "import" -> throw)
     {
       input: "import x from y;",
       expected: { success: false },
+      throws: true,
     },
     {
       input: 'import x from "y";',
@@ -187,10 +194,11 @@ describe("importStatmentParser", () => {
       },
     },
 
-    // Complex paths - unquoted paths no longer supported
+    // Complex paths - unquoted paths no longer supported (start with "import" -> throw)
     {
       input: "import foo from ../../../utils/helpers;",
       expected: { success: false },
+      throws: true,
     },
     {
       input: 'import foo from "../../../utils/helpers.js";',
@@ -217,25 +225,25 @@ describe("importStatmentParser", () => {
       },
     },
 
-    // Failure cases - missing keywords
-    { input: "foo from bar;", expected: { success: false } },
-    { input: "from bar;", expected: { success: false } },
-    { input: "import foo bar;", expected: { success: false } },
+    // Failure cases - missing keywords (don't start with "import" -> don't throw)
+    { input: "foo from bar;", expected: { success: false }, throws: false },
+    { input: "from bar;", expected: { success: false }, throws: false },
+    { input: "import foo bar;", expected: { success: false }, throws: true },
 
-    // Failure cases - missing parts
-    { input: "import from bar;", expected: { success: false } },
-    { input: "import foo from;", expected: { success: false } },
-    { input: "import;", expected: { success: false } },
+    // Failure cases - missing parts (start with "import" -> throw)
+    { input: "import from bar;", expected: { success: false }, throws: true },
+    { input: "import foo from;", expected: { success: false }, throws: true },
+    { input: "import;", expected: { success: false }, throws: true },
 
-    // Failure cases - empty input
-    { input: "", expected: { success: false } },
+    // Failure cases - empty input (doesn't start with "import" -> don't throw)
+    { input: "", expected: { success: false }, throws: false },
 
     // Failure cases - just keyword
-    { input: "import", expected: { success: false } },
-    { input: "from", expected: { success: false } },
+    { input: "import", expected: { success: false }, throws: true },
+    { input: "from", expected: { success: false }, throws: false },
   ];
 
-  testCases.forEach(({ input, expected }) => {
+  testCases.forEach(({ input, expected, throws }) => {
     if (expected.success) {
       it(`should parse "${input}" successfully`, () => {
         const result = importStatmentParser(input);
@@ -243,6 +251,10 @@ describe("importStatmentParser", () => {
         if (result.success) {
           expect(result.result).toEqual(expected.result);
         }
+      });
+    } else if (throws) {
+      it(`should fail to parse "${input}"`, () => {
+        expect(() => importStatmentParser(input)).toThrow();
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
@@ -427,70 +439,82 @@ describe("importNodeStatmentParser", () => {
       },
     },
 
-    // Failure cases - wrong keyword
+    // Failure cases - wrong keyword (doesn't match "import nodes/node" -> don't throw)
     {
       input: 'import tools { myNode } from "file.agency";',
       expected: { success: false },
+      throws: false,
     },
     {
       input: 'import { myNode } from "file.agency";',
       expected: { success: false },
+      throws: false,
     },
 
-    // Failure cases - missing parts
+    // Failure cases - missing parts (matches "import nodes/node" -> throws)
     {
       input: 'import nodes from "file.agency";',
       expected: { success: false },
+      throws: true,
     },
     {
       input: 'import nodes { myNode } from;',
       expected: { success: false },
+      throws: true,
     },
     {
       input: 'import nodes { myNode };',
       expected: { success: false },
+      throws: true,
     },
     {
       input: 'nodes { myNode } from "file.agency";',
       expected: { success: false },
+      throws: false,
     },
 
-    // Failure cases - empty braces
+    // Failure cases - empty braces (matches "import nodes/node {" -> throws)
     {
       input: 'import nodes {} from "file.agency";',
       expected: { success: false },
+      throws: true,
     },
     {
       input: 'import nodes { } from "file.agency";',
       expected: { success: false },
+      throws: true,
     },
 
-    // Failure cases - missing quotes
+    // Failure cases - missing quotes (matches "import nodes/node { ... }" -> throws)
     {
       input: "import nodes { myNode } from file.agency;",
       expected: { success: false },
+      throws: true,
     },
 
-    // Failure cases - mismatched quotes
+    // Failure cases - mismatched quotes (matches "import nodes/node { ... }" -> throws)
     {
       input: 'import nodes { myNode } from "file.agency\';',
       expected: { success: false },
+      throws: true,
     },
 
-    // Failure cases - missing braces
+    // Failure cases - missing braces (matches "import nodes/node" -> throws)
     {
       input: 'import nodes myNode from "file.agency";',
       expected: { success: false },
+      throws: true,
     },
 
-    // Failure cases - empty input
+    // Failure cases - empty input (doesn't match "import" -> doesn't throw)
     {
       input: "",
       expected: { success: false },
+      throws: false,
     },
   ];
 
-  testCases.forEach(({ input, expected }) => {
+  testCases.forEach(({ input, expected, throws }) => {
     if (expected.success) {
       it(`should parse "${input}" successfully`, () => {
         const result = importNodeStatmentParser(input);
@@ -498,6 +522,10 @@ describe("importNodeStatmentParser", () => {
         if (result.success) {
           expect(result.result).toEqual(expected.result);
         }
+      });
+    } else if (throws) {
+      it(`should fail to parse "${input}"`, () => {
+        expect(() => importNodeStatmentParser(input)).toThrow();
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
@@ -682,70 +710,82 @@ describe("importToolStatmentParser", () => {
       },
     },
 
-    // Failure cases - wrong keyword
+    // Failure cases - wrong keyword (doesn't match "import tools/tool" -> don't throw)
     {
       input: 'import nodes { myTool } from "file.agency";',
       expected: { success: false },
+      throws: false,
     },
     {
       input: 'import { myTool } from "file.agency";',
       expected: { success: false },
+      throws: false,
     },
 
-    // Failure cases - missing parts
+    // Failure cases - missing parts (matches "import tools/tool" -> throws)
     {
       input: 'import tools from "file.agency";',
       expected: { success: false },
+      throws: true,
     },
     {
       input: 'import tools { myTool } from;',
       expected: { success: false },
+      throws: true,
     },
     {
       input: 'import tools { myTool };',
       expected: { success: false },
+      throws: true,
     },
     {
       input: 'tools { myTool } from "file.agency";',
       expected: { success: false },
+      throws: false,
     },
 
-    // Failure cases - empty braces
+    // Failure cases - empty braces (matches "import tools/tool {" -> throws)
     {
       input: 'import tools {} from "file.agency";',
       expected: { success: false },
+      throws: true,
     },
     {
       input: 'import tools { } from "file.agency";',
       expected: { success: false },
+      throws: true,
     },
 
-    // Failure cases - missing quotes
+    // Failure cases - missing quotes (matches "import tools/tool { ... }" -> throws)
     {
       input: "import tools { myTool } from file.agency;",
       expected: { success: false },
+      throws: true,
     },
 
-    // Failure cases - mismatched quotes
+    // Failure cases - mismatched quotes (matches "import tools/tool { ... }" -> throws)
     {
       input: 'import tools { myTool } from "file.agency\';',
       expected: { success: false },
+      throws: true,
     },
 
-    // Failure cases - missing braces
+    // Failure cases - missing braces (matches "import tools/tool" -> throws)
     {
       input: 'import tools myTool from "file.agency";',
       expected: { success: false },
+      throws: true,
     },
 
-    // Failure cases - empty input
+    // Failure cases - empty input (doesn't match "import" -> doesn't throw)
     {
       input: "",
       expected: { success: false },
+      throws: false,
     },
   ];
 
-  testCases.forEach(({ input, expected }) => {
+  testCases.forEach(({ input, expected, throws }) => {
     if (expected.success) {
       it(`should parse "${input}" successfully`, () => {
         const result = importToolStatmentParser(input);
@@ -753,6 +793,10 @@ describe("importToolStatmentParser", () => {
         if (result.success) {
           expect(result.result).toEqual(expected.result);
         }
+      });
+    } else if (throws) {
+      it(`should fail to parse "${input}"`, () => {
+        expect(() => importToolStatmentParser(input)).toThrow();
       });
     } else {
       it(`should fail to parse "${input}"`, () => {

@@ -35,9 +35,9 @@ describe("defaultCaseParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = defaultCaseParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = defaultCaseParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });
@@ -154,9 +154,9 @@ describe("matchBlockParserCase", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = matchBlockParserCase(input);
-        expect(result.success).toBe(false);
-      });
+          const result = matchBlockParserCase(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });

@@ -271,9 +271,9 @@ describe("returnStatementParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = returnStatementParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = returnStatementParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });

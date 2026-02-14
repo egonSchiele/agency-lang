@@ -427,9 +427,9 @@ describe("functionCallParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = functionCallParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = functionCallParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });
@@ -613,9 +613,9 @@ describe("asyncFunctionCallParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = asyncFunctionCallParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = asyncFunctionCallParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });
@@ -845,9 +845,9 @@ describe("syncFunctionCallParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = syncFunctionCallParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = syncFunctionCallParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });
@@ -1121,9 +1121,9 @@ describe("streamingPromptLiteralParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = streamingPromptLiteralParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = streamingPromptLiteralParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });

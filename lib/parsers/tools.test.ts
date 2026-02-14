@@ -252,26 +252,26 @@ describe("usesToolParser", () => {
     },
 
     // Failure cases - missing plus sign or uses keyword
-    { input: "foo", expected: { success: false } },
-    { input: "bar", expected: { success: false } },
-    { input: "tool123", expected: { success: false } },
+    { input: "foo", expected: { success: false }, throws: false },
+    { input: "bar", expected: { success: false }, throws: false },
+    { input: "tool123", expected: { success: false }, throws: false },
 
-    // Failure cases - plus sign without tool name
-    { input: "+", expected: { success: false } },
+    // Failure cases - plus sign without tool name (throws because it matches prefix)
+    { input: "+", expected: { success: false }, throws: true },
 
-    // Failure cases - uses keyword without tool name
-    { input: "uses ", expected: { success: false } },
+    // Failure cases - uses keyword without tool name (throws because it matches prefix)
+    { input: "uses ", expected: { success: false }, throws: true },
 
     // Failure cases - empty input
-    { input: "", expected: { success: false } },
+    { input: "", expected: { success: false }, throws: false },
 
     // Failure cases - incorrect symbols
-    { input: "-tool", expected: { success: false } },
-    { input: "*tool", expected: { success: false } },
-    { input: "/tool", expected: { success: false } },
+    { input: "-tool", expected: { success: false }, throws: false },
+    { input: "*tool", expected: { success: false }, throws: false },
+    { input: "/tool", expected: { success: false }, throws: false },
   ];
 
-  testCases.forEach(({ input, expected }) => {
+  testCases.forEach(({ input, expected, throws }) => {
     if (expected.success) {
       it(`should parse "${input}" successfully`, () => {
         const result = usesToolParser(input);
@@ -279,6 +279,10 @@ describe("usesToolParser", () => {
         if (result.success) {
           expect(result.result).toEqual(expected.result);
         }
+      });
+    } else if (throws) {
+      it(`should fail to parse "${input}"`, () => {
+        expect(() => usesToolParser(input)).toThrow();
       });
     } else {
       it(`should fail to parse "${input}"`, () => {

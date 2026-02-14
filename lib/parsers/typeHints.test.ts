@@ -61,9 +61,9 @@ describe("primitiveTypeParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = primitiveTypeParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = primitiveTypeParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });
@@ -158,9 +158,9 @@ describe("arrayTypeParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = arrayTypeParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = arrayTypeParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });
@@ -214,9 +214,9 @@ describe("angleBracketsArrayTypeParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = angleBracketsArrayTypeParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = angleBracketsArrayTypeParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });
@@ -332,9 +332,9 @@ describe("numberLiteralTypeParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = numberLiteralTypeParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = numberLiteralTypeParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });
@@ -384,9 +384,9 @@ describe("booleanLiteralTypeParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = booleanLiteralTypeParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = booleanLiteralTypeParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });
@@ -737,34 +737,41 @@ describe("typeAliasParser", () => {
     {
       input: "type",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "type A",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "type A =",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "type = number",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "A = number",
       expected: { success: false },
+      throws: false,
     },
     {
       input: "type A number",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "",
       expected: { success: false },
+      throws: false,
     },
   ];
 
-  testCases.forEach(({ input, expected }) => {
+  testCases.forEach(({ input, expected, throws }) => {
     if (expected.success) {
       it(`should parse "${input}" successfully`, () => {
         const result = typeAliasParser(input);
@@ -773,11 +780,15 @@ describe("typeAliasParser", () => {
           expect(result.result).toEqual(expected.result);
         }
       });
+    } else if (throws) {
+      it(`should fail to parse "${input}"`, () => {
+          expect(() => typeAliasParser(input)).toThrow();
+        });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = typeAliasParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = typeAliasParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });
@@ -874,9 +885,9 @@ describe("typeAliasVariableParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = typeAliasVariableParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = typeAliasVariableParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });
@@ -995,9 +1006,9 @@ describe("objectPropertyParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = objectPropertyParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = objectPropertyParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });
@@ -1102,9 +1113,9 @@ describe("objectPropertyDescriptionParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = objectPropertyDescriptionParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = objectPropertyDescriptionParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });
@@ -1214,9 +1225,9 @@ describe("objectPropertyWithDescriptionParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = objectPropertyWithDescriptionParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = objectPropertyWithDescriptionParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });
@@ -1749,9 +1760,9 @@ describe("objectTypeParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = objectTypeParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = objectTypeParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });
@@ -2301,9 +2312,9 @@ describe("unionTypeParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = unionTypeParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = unionTypeParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });
@@ -2420,9 +2431,9 @@ describe("variableTypeParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = variableTypeParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = variableTypeParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });
@@ -2790,9 +2801,9 @@ describe("typeHintParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = typeHintParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = typeHintParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });

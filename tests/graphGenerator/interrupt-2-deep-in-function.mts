@@ -1,26 +1,22 @@
 // @ts-nocheck
 
+import { fileURLToPath } from "url";
+import process from "process";
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
 import { PieMachine, goToNode } from "piemachine";
 import { StatelogClient } from "statelog-client";
 import { nanoid } from "nanoid";
-import {
-  assistantMessage,
-  getClient,
-  userMessage,
-  toolMessage,
-  messageFromJSON,
-} from "smoltalk";
+import * as smoltalk from "smoltalk";
 import type { Message } from "smoltalk";
 
 /* Code to log to statelog */
 const statelogHost = "https://statelog.adit.io";
-const traceId = nanoid();
+const __traceId = nanoid();
 const statelogConfig = {
   host: statelogHost,
-  traceId: traceId,
+  traceId: __traceId,
   apiKey: process.env.STATELOG_API_KEY || "",
   projectId: "agency-lang",
   debugMode: false,
@@ -30,7 +26,7 @@ const __statelogClient = new StatelogClient(statelogConfig);
 /* Code for Smoltalk client */
 const __model: ModelName = "gpt-4o-mini";
 
-const getClientWithConfig = (config = {}) => {
+const __getClientWithConfig = (config = {}) => {
   const defaultConfig = {
     openAiApiKey: process.env.OPENAI_API_KEY || "",
     googleApiKey: process.env.GEMINI_API_KEY || "",
@@ -38,13 +34,13 @@ const getClientWithConfig = (config = {}) => {
     logLevel: "warn",
   };
 
-  return getClient({ ...defaultConfig, ...config });
+  return smoltalk.getClient({ ...defaultConfig, ...config });
 };
 
-let __client = getClientWithConfig();
+let __client = __getClientWithConfig();
 
 /* Code for PieMachine graph */
-export type State<T> = {
+export type __State<T> = {
   messages: string[];
   data: T;
 };
@@ -58,7 +54,7 @@ const graphConfig = {
   statelog: statelogConfig,
 };
 
-const graph = new PieMachine<State<any>>(graphConfig);
+const graph = new PieMachine<__State<any>>(graphConfig);
 
 /******** builtins ********/
 
@@ -135,6 +131,37 @@ function printJSON(obj: any) {
   console.log(JSON.stringify(obj, null, 2));
 }
 
+export const __readSkillTool = {
+  name: "readSkill",
+  description: `Skills provide specialized knowledge and instructions for particular scenarios.
+Use this tool when you need enhanced guidance for a specific type of task.
+
+Args:
+    filepath: The name of the skill to read.
+
+Returns:
+    The skill content with specialized instructions, or an error message
+    if the skill is not found.
+`,
+  schema: z.object({"filepath": z.string(), })
+};
+
+export function readSkill({filepath}: {filepath: string}) : Promise<string> {
+  return _builtinRead(filepath);
+}
+
+/******** for internal agency use only ********/
+
+function __createReturnObject(result) {
+  return structuredClone({
+    messages: result.messages.toJSON(),
+    data: result.data,
+    tokens: __stateStack.globals.__tokenStats
+  });
+}
+
+
+
 /******** interrupts ********/
 
 export type Interrupt<T> = {
@@ -182,7 +209,7 @@ export async function respondToInterrupt(
   const messages = (__stateStack.interruptData.messages || []).map(
     (json: any) => {
       // create message objects from JSON
-      return messageFromJSON(json);
+      return smoltalk.messageFromJSON(json);
     },
   );
   __stateStack.interruptData.messages = messages;
@@ -212,7 +239,7 @@ export async function respondToInterrupt(
   // start at the last node we visited
   const nodesTraversed = __stateStack.interruptData.nodesTraversed || [];
   const nodeName = nodesTraversed[nodesTraversed.length - 1];
-  const result = await graph.run(nodeName, {
+  const __result = await graph.run(nodeName, {
     messages: messages,
     __metadata: {
       graph: graph,
@@ -224,7 +251,7 @@ export async function respondToInterrupt(
     // restore args from the state stack
     data: "<from-stack>",
   });
-  return result.data;
+  return __createReturnObject(__result);
 }
 
 export async function approveInterrupt(
@@ -383,6 +410,77 @@ function __cloneArray<T>(arr?: T[]): T[] {
   return [...arr];
 }
 
+const handleStreamingResponse = async (__completion) => {
+  if (isGenerator(__completion)) {
+    if (!__callbacks.onStream) {
+      console.log(
+        "No onStream callback provided for streaming response, returning response synchronously",
+      );
+      statelogClient.debug(
+        "Got streaming response but no onStream callback provided, returning response synchronously",
+        {
+          prompt: __prompt,
+          callbacks: Object.keys(__callbacks),
+        },
+      );
+      let syncResult = "";
+      for await (const chunk of __completion) {
+        switch (chunk.type) {
+          case "tool_call":
+            __toolCalls.push(chunk.toolCall);
+            break;
+          case "done":
+            syncResult = chunk.result;
+            break;
+          case "error":
+            console.error(`Error in LLM response stream: ${chunk.error}`);
+            break;
+          default:
+            break;
+        }
+      }
+      __completion = { success: true, value: syncResult };
+    } else {
+      // try to acquire lock
+      let count = 0;
+      // wait 60 seconds to acquire lock
+      while (onStreamLock && count < 10 * 60) {
+        await _builtinSleep(0.1);
+        count++;
+      }
+      if (onStreamLock) {
+        console.log(`Couldn't acquire lock, ${count}`);
+      }
+      onStreamLock = true;
+
+      for await (const chunk of __completion) {
+        switch (chunk.type) {
+          case "text":
+            __callbacks.onStream({ type: "text", text: chunk.text });
+            break;
+          case "tool_call":
+            __toolCalls.push(chunk.toolCall);
+            __callbacks.onStream({
+              type: "tool_call",
+              toolCall: chunk.toolCall,
+            });
+            break;
+          case "done":
+            __callbacks.onStream({ type: "done", result: chunk.result });
+            __completion = { success: true, value: chunk.result };
+            break;
+          case "error":
+            __callbacks.onStream({ type: "error", error: chunk.error });
+            break;
+        }
+      }
+
+      onStreamLock = false;
+    }
+  }
+};
+
+
 /**** Message thread handling ****/
 
 type MessageThreadJSON = { messages: any[]; children: MessageThreadJSON[] };
@@ -401,7 +499,7 @@ class MessageThread {
   }
 
   cloneMessages(): any[] {
-    return this.messages.map(m => m.toJSON()).map(m => messageFromJSON(m));
+    return this.messages.map(m => m.toJSON()).map(m => smoltalk.messageFromJSON(m));
   }
 
   getMessages(): any[] {
@@ -449,12 +547,14 @@ export const __greetTool = {
   description: `No description provided.`,
   schema: z.object({"name": z.string(), "age": z.number(), })
 };
-export const __foo2Tool = {
+
+export const __greetToolParams = ["name","age"];export const __foo2Tool = {
   name: "foo2",
   description: `No description provided.`,
   schema: z.object({"name": z.string(), "age": z.number(), })
 };
 
+export const __foo2ToolParams = ["name","age"];
 export async function greet(args, __metadata={}) : Promise<string> {
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
@@ -538,18 +638,18 @@ async function _response(name: string, age: string, __metadata?: Record<string, 
   // TODO I think this could be implemented in a cleaner way.
   let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
   const __interruptResponse:InterruptResponseType|null = __stateStack.interruptData?.interruptResponse || null;
-  const __tools = undefined;
+  const __tools = [__greetTool];
 
   
   
   const __responseFormat = undefined;
   
   
-  const __client = getClientWithConfig({});
+  const __client = __getClientWithConfig({});
   let responseMessage:any;
 
   if (__toolCalls.length === 0) {
-    __messages.push(userMessage(__prompt));
+    __messages.push(smoltalk.userMessage(__prompt));
   
   
     let __completion = await __client.text({
@@ -561,73 +661,7 @@ async function _response(name: string, age: string, __metadata?: Record<string, 
   
     const endTime = performance.now();
 
-    const handleStreamingResponse = async () => {
-      if (isGenerator(__completion)) {
-        if (!__callbacks.onStream) {
-          console.log("No onStream callback provided for streaming response, returning response synchronously");
-          statelogClient.debug(
-            "Got streaming response but no onStream callback provided, returning response synchronously",
-            {
-              prompt: __prompt,
-              callbacks: Object.keys(__callbacks),
-            },
-          );
-
-          let syncResult = "";
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                break;
-              case "done":
-                syncResult = chunk.result;
-                break;
-              case "error":
-                console.error(`Error in LLM response stream: ${chunk.error}`);
-                break;
-              default:
-                break;
-            }
-          }
-          __completion = { success: true, value: syncResult };
-        } else {
-          // try to acquire lock
-          let count = 0;
-          // wait 60 seconds to acquire lock
-          while (onStreamLock && count < (10 * 60)) {
-            await _builtinSleep(0.1)
-            count++
-          }
-          if (onStreamLock) {
-            console.log(`Couldn't acquire lock, ${count}`);
-          }
-          onStreamLock = true;
-
-          for await (const chunk of __completion) {
-            switch (chunk.type) {
-              case "text":
-                __callbacks.onStream({ type: "text", text: chunk.text });
-                break;
-              case "tool_call":
-                __toolCalls.push(chunk.toolCall);
-                __callbacks.onStream({ type: "tool_call", toolCall: chunk.toolCall });
-                break;
-              case "done":
-                __callbacks.onStream({ type: "done", result: chunk.result });
-                __completion = { success: true, value: chunk.result };
-                break;
-              case "error":
-                __callbacks.onStream({ type: "error", error: chunk.error });
-                break;
-            }
-          }
-
-          onStreamLock = false
-        }
-      }
-    }
-
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -649,7 +683,7 @@ async function _response(name: string, age: string, __metadata?: Record<string, 
 
     if (__toolCalls.length > 0) {
       // Add assistant's response with tool calls to message history
-      __messages.push(assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+      __messages.push(smoltalk.assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
     }
 
     __updateTokenStats(responseMessage.usage, responseMessage.cost);
@@ -665,7 +699,53 @@ async function _response(name: string, age: string, __metadata?: Record<string, 
 
     // Process each tool call
     for (const toolCall of __toolCalls) {
-      
+      if (
+  toolCall.name === "greet"
+) {
+  const args = toolCall.arguments;
+
+  const params = __greetToolParams.map((param, index) => {
+            return args[param];
+          })
+
+  toolCallStartTime = performance.now();
+  
+  let result: any;
+  if (__interruptResponse && __interruptResponse.type === "reject") {
+        __messages.push(smoltalk.smoltalk.toolMessage("tool call rejected", {
+        tool_call_id: toolCall.id,
+        name: toolCall.name,
+     }));
+  } else {
+    result = await greet(params);
+  }
+  toolCallEndTime = performance.now();
+
+  statelogClient.toolCall({
+    toolName: "greet",
+    params,
+    output: result,
+    model: __client.getModel(),
+    timeTaken: toolCallEndTime - toolCallStartTime,
+  });
+
+  if (isInterrupt(result)) {
+    haltInterrupt = result;
+    haltToolCall = {
+      id: toolCall.id,
+      name: toolCall.name,
+      arguments: toolCall.arguments,
+    }
+    haltExecution = true;
+    break;
+  }
+
+    // Add function result to messages
+  __messages.push(smoltalk.toolMessage(result, {
+        tool_call_id: toolCall.id,
+        name: toolCall.name,
+  }));
+}
     }
 
     if (haltExecution) {
@@ -693,13 +773,15 @@ async function _response(name: string, age: string, __metadata?: Record<string, 
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse();
+    await handleStreamingResponse(__completion);
 
     statelogClient.promptCompletion({
       messages: __messages,
       completion: __completion,
       model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
+      tools: __tools,
+      responseFormat: __responseFormat,
     });
 
     if (!__completion.success) {
@@ -713,7 +795,7 @@ async function _response(name: string, age: string, __metadata?: Record<string, 
 
   // Add final assistant response to history
   // not passing tool calls back this time
-  __messages.push(assistantMessage(responseMessage.output));
+  __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
 
   
@@ -722,9 +804,19 @@ async function _response(name: string, age: string, __metadata?: Record<string, 
 }
 
 
-__self.response = _response(__stack.args.name, __stack.args.age, {
+
+
+__self.response = await _response(__stack.args.name, __stack.args.age, {
       messages: __self.messages_0.getMessages(),
     });
+
+// return early from node if this is an interrupt
+if (isInterrupt(__self.response)) {
+  
+   
+   return  __self.response;
+   
+}
         __stack.step++;
       }
       
@@ -736,12 +828,6 @@ __self.response = _response(__stack.args.name, __stack.args.age, {
       
 
       if (__step <= 4) {
-        [__self.response] = await Promise.all([__self.response]);
-        __stack.step++;
-      }
-      
-
-      if (__step <= 5) {
         __stateStack.pop();
 return __stack.locals.response
         __stack.step++;
@@ -855,24 +941,23 @@ if (isInterrupt(__stack.locals.response)) {
       
 
       if (__step <= 7) {
-        return { ...state, messages: __self.messages_0.toJSON(), data: __stack.locals.response}
+        return { messages: __self.messages_0, data: __stack.locals.response}
         __stack.step++;
       }
       
     
     // this is just here to have a default return value from a node if the user doesn't specify one
-    return { ...state, messages: __self.messages_0.toJSON(), data: undefined };
+    return { messages: __self.messages_0, data: undefined };
 });
 
 
-export async function sayHi(name, { messages, callbacks } = {}): Promise<State<any>> {
+export async function sayHi(name, { messages, callbacks } = {}): Promise<__State<any>> {
 
 
   const __data = [ name ];
   __callbacks = callbacks || {};
   const __result = await graph.run("sayHi", { messages: messages || [], data: __data });
-  __result.tokens = __stateStack.globals.__tokenStats;
-  return structuredClone(__result)
+  return __createReturnObject(__result);
 }
 
 export default graph;

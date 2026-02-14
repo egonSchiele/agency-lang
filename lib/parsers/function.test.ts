@@ -125,9 +125,9 @@ describe("docStringParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-        const result = docStringParser(input);
-        expect(result.success).toBe(false);
-      });
+          const result = docStringParser(input);
+          expect(result.success).toBe(false);
+        });
     }
   });
 });

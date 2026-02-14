@@ -124,7 +124,7 @@ export function executeNode(
     expectedMessage?: string;
   }>,
 ): { data: any; [key: string]: any } {
-  const outFile = agencyFile.replace(".agency", ".ts");
+  const outFile = agencyFile.replace(".agency", ".js");
   compile({}, agencyFile, outFile);
   const evaluateScript = renderEvaluate({
     filename: outFile,
@@ -136,9 +136,9 @@ export function executeNode(
       ? JSON.stringify(interruptHandlers)
       : undefined,
   });
-  const evaluateFile = "__evaluate.ts";
+  const evaluateFile = "__evaluate.js";
   fs.writeFileSync(evaluateFile, evaluateScript);
-  execSync(`npx tsx ${evaluateFile}`, { stdio: "inherit" });
+  execSync(`node ${evaluateFile}`, { stdio: "inherit" });
   const results = readFileSync("__evaluate.json", "utf-8");
   return JSON.parse(results);
 }
@@ -185,7 +185,7 @@ export function executeJudge(
   const currentDir = path.dirname(new URL(import.meta.url).pathname);
   const judgeAgencyFile = path.resolve(currentDir, "../agents/judge.agency");
 
-  const judgeOutFile = "__judge.ts";
+  const judgeOutFile = "__judge.js";
   compile({}, judgeAgencyFile, judgeOutFile);
 
   const judgeScript = renderJudgeEvaluate({
@@ -199,9 +199,9 @@ export function executeJudge(
       : undefined,
   });
 
-  const judgeEvaluateFile = "__judge_evaluate.ts";
+  const judgeEvaluateFile = "__judge_evaluate.js";
   fs.writeFileSync(judgeEvaluateFile, judgeScript);
-  execSync(`npx tsx ${judgeEvaluateFile}`, { stdio: "inherit" });
+  execSync(`node ${judgeEvaluateFile}`, { stdio: "inherit" });
   const results = readFileSync("__judge_evaluate.json", "utf-8");
   return JSON.parse(results).data;
 }

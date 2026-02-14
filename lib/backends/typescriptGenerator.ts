@@ -95,7 +95,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       node.aliasedType,
       this.typeAliases,
     );
-    return `type ${node.aliasName} = ${aliasedTypeStr};`;
+    return "";
   }
 
   protected processTypeHint(node: TypeHint): string {
@@ -216,9 +216,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       this.functionScopedVariables.push(variableName);
     }
 
-    const typeAnnotation = typeHint
-      ? `: ${variableTypeToString(typeHint, this.typeAliases)}`
-      : "";
+    const typeAnnotation = "";
 
     if (value.type === "prompt") {
       return this.processPromptLiteral(variableName, typeHint, value);
@@ -227,7 +225,6 @@ export class TypeScriptGenerator extends BaseGenerator {
       const code = this.processNode(value);
       return renderFunctionCallAssignment.default({
         variableName: `${this.getScopeVar()}.${variableName}`,
-        typeAnnotation,
         functionCode: code.trim(),
         nodeContext: this.getCurrentScope().type === "node",
         globalScope: this.getCurrentScope().type === "global",
@@ -350,9 +347,6 @@ export class TypeScriptGenerator extends BaseGenerator {
     return renderFunctionDefinition.default({
       functionName,
       argsStr,
-      returnType: node.returnType
-        ? variableTypeToString(node.returnType, this.typeAliases)
-        : "any",
       functionBody: bodyCode.join("\n"),
     });
   }
@@ -554,7 +548,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       };
 
     const zodSchema = mapTypeToZodSchema(_variableType, this.typeAliases);
-    const typeString = variableTypeToString(_variableType, this.typeAliases);
+
 
     // Build prompt construction code
     const promptCode = this.buildPromptString({
@@ -563,13 +557,9 @@ export class TypeScriptGenerator extends BaseGenerator {
       skills: prompt.skills || [],
     });
     const parts = functionArgs.map(
-      (arg) =>
-        `${arg.replace(".", "_")}: ${variableTypeToString(
-          this.typeHints[arg] || { type: "primitiveType", value: "string" },
-          this.typeAliases,
-        )}`,
+      (arg) => arg.replace(".", "_"),
     );
-    parts.push("__metadata?: Record<string, any>");
+    parts.push("__metadata");
     const argsStr = parts.join(", ");
     let _tools = "";
     if (prompt.tools) {
@@ -633,7 +623,6 @@ I'll probably need to do that for supporting type checking anyway.
       variableName,
       argsStr,
       funcCallParams: [...scopedFunctionArgs, metadataObj].join(", "),
-      typeString,
       promptCode,
       hasResponseFormat: zodSchema !== DEFAULT_SCHEMA,
       zodSchema,
@@ -648,7 +637,7 @@ I'll probably need to do that for supporting type checking anyway.
   }
 
   protected processImportStatement(node: ImportStatement): string {
-    return `import ${node.importedNames} from "${node.modulePath.replace(/\.agency$/, ".ts")}";`;
+    return `import ${node.importedNames} from "${node.modulePath.replace(/\.agency$/, ".js")}";`;
   }
 
   protected processImportNodeStatement(node: ImportNodeStatement): string {
@@ -663,7 +652,7 @@ I'll probably need to do that for supporting type checking anyway.
         `__${toolName}ToolParams`,
       ])
       .flat();
-    return `import { ${importNames.join(", ")} } from "${node.agencyFile.replace(/\.agency$/, ".ts")}";`;
+    return `import { ${importNames.join(", ")} } from "${node.agencyFile.replace(/\.agency$/, ".js")}";`;
   }
 
   protected processWhileLoop(node: WhileLoop): string {

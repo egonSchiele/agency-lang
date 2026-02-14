@@ -186,13 +186,12 @@ export class GraphGenerator extends TypeScriptGenerator {
 
   protected preprocess(): string {
     const lines: string[] = [];
-    lines.push("// @ts-nocheck\n");
     this.importedNodes.forEach((importNode) => {
       const defaultImportName = this.agencyFileToDefaultImportName(
         importNode.agencyFile,
       );
       lines.push(
-        `import ${defaultImportName} from "${importNode.agencyFile.replace(".agency", ".ts")}";`,
+        `import ${defaultImportName} from "${importNode.agencyFile.replace(".agency", ".js")}";`,
       );
     });
 
@@ -241,9 +240,6 @@ export class GraphGenerator extends TypeScriptGenerator {
           nodeName: node.nodeName,
           hasArgs: args.length > 0,
           argsStr,
-          returnType: node.returnType
-            ? variableTypeToString(node.returnType, this.typeAliases)
-            : "any",
         }),
       );
     }

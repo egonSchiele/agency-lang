@@ -5,18 +5,18 @@ import fs from "fs";
 import path from "path";
 
 /**
- * Interface representing a test fixture pair (.agency and .mts files)
+ * Interface representing a test fixture pair (.agency and .mjs files)
  */
 interface FixturePair {
   name: string; // e.g., "simple", "multipleNodes"
   agencyPath: string; // absolute path to .agency file
-  mtsPath: string; // absolute path to .mts file
+  mtsPath: string; // absolute path to .mjs file
   agencyContent: string; // pre-read Agency source
   expectedGraph: string; // pre-read expected graph code
 }
 
 /**
- * Recursively discovers all .agency/.mts fixture pairs in a directory
+ * Recursively discovers all .agency/.mjs fixture pairs in a directory
  */
 function discoverFixtures(fixtureDir: string): FixturePair[] {
   const fixtures: FixturePair[] = [];
@@ -34,9 +34,9 @@ function discoverFixtures(fixtureDir: string): FixturePair[] {
         // Recursively scan subdirectories
         scanDirectory(fullPath, relPath);
       } else if (entry.isFile() && entry.name.endsWith(".agency")) {
-        // Found an Agency file - look for corresponding .mts
+        // Found an Agency file - look for corresponding .mjs
         const baseName = entry.name.replace(".agency", "");
-        const mtsPath = path.join(dir, `${baseName}.mts`);
+        const mtsPath = path.join(dir, `${baseName}.mjs`);
 
         if (fs.existsSync(mtsPath)) {
           const nameWithoutExt = relativePath
@@ -59,7 +59,7 @@ function discoverFixtures(fixtureDir: string): FixturePair[] {
             );
           }
         } else {
-          console.warn(`Warning: No corresponding .mts file for ${fullPath}`);
+          console.warn(`Warning: No corresponding .mjs file for ${fullPath}`);
         }
       }
     }

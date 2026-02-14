@@ -3,7 +3,7 @@ import {
   approveInterrupt,
   rejectInterrupt,
   modifyInterrupt,
-} from "./foo.ts";
+} from "./foo.js";
 import readline from "readline";
 import type { StreamChunk } from "smoltalk";
 import { color } from "termcolors";

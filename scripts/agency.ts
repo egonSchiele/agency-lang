@@ -40,9 +40,9 @@ function getConfig(): AgencyConfig {
 program
   .command("compile")
   .alias("build")
-  .description("Compile .agency file or directory to TypeScript")
+  .description("Compile .agency file or directory to JavaScript")
   .argument("<input>", "Path to .agency input file or directory")
-  .argument("[output]", "Path to output .ts file (optional)")
+  .argument("[output]", "Path to output .js file (optional)")
   .action((input: string, output: string | undefined) => {
     compile(getConfig(), input, output);
   });
@@ -51,7 +51,7 @@ program
   .command("run")
   .description("Compile and run .agency file")
   .argument("<input>", "Path to .agency input file")
-  .argument("[output]", "Path to output .ts file (optional)")
+  .argument("[output]", "Path to output .js file (optional)")
   .action((input: string, output: string | undefined) => {
     run(getConfig(), input, output);
   });

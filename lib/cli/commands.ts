@@ -160,7 +160,7 @@ export function compile(
 
   // Resolve the absolute path of the input file to avoid duplicates
   const absoluteInputFile = path.resolve(inputFile);
-  let outputFile = _outputFile || inputFile.replace(".agency", ".ts");
+  let outputFile = _outputFile || inputFile.replace(".agency", ".js");
   if (config.outDir && !_outputFile) {
     const outputDir = path.resolve(config.outDir);
 
@@ -191,7 +191,7 @@ export function compile(
   // Update the import path in the AST to reference the new .ts file
   parsedProgram.nodes.forEach((node) => {
     if (node.type === "importStatement") {
-      node.modulePath = node.modulePath.replace(".agency", ".ts");
+      node.modulePath = node.modulePath.replace(".agency", ".js");
     }
   });
 

@@ -8,13 +8,15 @@ export const template = `if (
 ) {
   const args = toolCall.arguments;
 
-  const params = [ {{{paramsStr:string}}} ];
+  const params = __{{{name:string}}}ToolParams.map((param, index) => {
+            return args[param];
+          })
 
   toolCallStartTime = performance.now();
   
   let result: any;
   if (__interruptResponse && __interruptResponse.type === "reject") {
-        __messages.push(toolMessage("tool call rejected", {
+        __messages.push(smoltalk.smoltalk.toolMessage("tool call rejected", {
         tool_call_id: toolCall.id,
         name: toolCall.name,
      }));
@@ -43,7 +45,7 @@ export const template = `if (
   }
 
     // Add function result to messages
-  __messages.push(toolMessage(result, {
+  __messages.push(smoltalk.toolMessage(result, {
         tool_call_id: toolCall.id,
         name: toolCall.name,
   }));
@@ -51,7 +53,6 @@ export const template = `if (
 
 export type TemplateType = {
   name: string;
-  paramsStr: string;
 };
 
 const render = (args: TemplateType) => {

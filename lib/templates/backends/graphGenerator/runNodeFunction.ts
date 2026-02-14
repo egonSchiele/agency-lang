@@ -4,16 +4,15 @@
 import { apply } from "typestache";
 
 export const template = `{{#hasArgs}}
-export async function {{{nodeName:string}}}({{{argsStr:string}}}, { messages, callbacks } = {}): Promise<State<{{{returnType:string}}}>> {
+export async function {{{nodeName:string}}}({{{argsStr:string}}}, { messages, callbacks } = {}): Promise<__State<{{{returnType:string}}}>> {
 {{/hasArgs}}
 {{^hasArgs}}
-export async function {{{nodeName:string}}}({ messages, callbacks } = {}): Promise<State<{{{returnType:string}}}>> {
+export async function {{{nodeName:string}}}({ messages, callbacks } = {}): Promise<__State<{{{returnType:string}}}>> {
 {{/hasArgs}}
   const __data = [ {{{argsStr:string}}} ];
   __callbacks = callbacks || {};
   const __result = await graph.run("{{{nodeName:string}}}", { messages: messages || [], data: __data });
-  __result.tokens = __stateStack.globals.__tokenStats;
-  return structuredClone(__result)
+  return __createReturnObject(__result);
 }
 `;
 

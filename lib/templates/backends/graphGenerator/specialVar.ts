@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `__client = getClientWithConfig({ {{{name}}}: {{{value}}} });`;
+export const template = `__client = __getClientWithConfig({ {{{name}}}: {{{value}}} });`;
 
 export type TemplateType = {
   name: string | boolean | number;

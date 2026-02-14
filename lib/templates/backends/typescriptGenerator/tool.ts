@@ -8,12 +8,14 @@ export const template = `export const __{{{name:string}}}Tool = {
   description: \`{{{description:string}}}\`,
   schema: z.object({{{schema:string}}})
 };
-`;
+
+export const __{{{name:string}}}ToolParams = {{{parameters:string}}};`;
 
 export type TemplateType = {
   name: string;
   description: string;
   schema: string;
+  parameters: string;
 };
 
 const render = (args: TemplateType) => {

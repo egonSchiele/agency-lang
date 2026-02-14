@@ -58,7 +58,7 @@ graph.node("{{{name}}}", async (state): Promise<any> => {
     {{{body}}}
     
     // this is just here to have a default return value from a node if the user doesn't specify one
-    return { ...state, messages: __self.messages_0.toJSON(), data: undefined };
+    return { messages: __self.messages_0, data: undefined };
 });
 `;
 

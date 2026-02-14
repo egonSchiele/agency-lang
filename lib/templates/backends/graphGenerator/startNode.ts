@@ -3,8 +3,10 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `const initialState: State = {messages: [], data: {}};
-const finalState = graph.run("{{{startNode}}}", initialState);`;
+export const template = `if (process.argv[1] === fileURLToPath(import.meta.url)) {
+    const initialState: __State = {messages: [], data: {}};
+    const finalState = graph.run("{{{startNode}}}", initialState);
+}`;
 
 export type TemplateType = {
   startNode: string | boolean | number;

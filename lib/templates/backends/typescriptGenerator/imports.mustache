@@ -7,10 +7,10 @@ import { StatelogClient } from "statelog-client";
 import { nanoid } from "nanoid";
 
 const statelogHost = "http://localhost:1065";
-const traceId = nanoid();
+const __traceId = nanoid();
 const __statelogClient = new StatelogClient({
     host: statelogHost,
-    traceId: traceId,
+    traceId: __traceId,
     apiKey: process.env.STATELOG_API_KEY || "",
     projectId: "agency-lang",
     debugMode: true,

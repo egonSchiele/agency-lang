@@ -38,6 +38,7 @@ import { WhileLoop } from "../types/whileLoop.js";
 import { AgencyConfig } from "@/config.js";
 import { mergeDeep } from "@/utils.js";
 import { MessageThread } from "@/types/messageThread.js";
+import { Skill } from "@/types/skill.js";
 
 type Scope = GlobalScope | FunctionScope | NodeScope;
 
@@ -64,8 +65,6 @@ export class BaseGenerator {
   protected globalScopedVariables: string[] = [];
   protected functionParameters: string[] = [];
 
-  // collect tools for a prompt
-  protected toolsUsed: string[] = [];
   protected typeAliases: Record<string, VariableType> = {};
 
   // collect functions used to see what builtin helpers to include
@@ -256,9 +255,15 @@ export class BaseGenerator {
         return node.value;
       case "messageThread":
         return this.processMessageThread(node);
+      case "skill":
+        return this.processSkill(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
+  }
+
+  protected processSkill(node: Skill): string {
+    return "processSkill not implemented";
   }
 
   protected processMessageThread(node: MessageThread): string {

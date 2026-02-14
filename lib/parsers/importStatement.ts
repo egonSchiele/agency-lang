@@ -7,6 +7,7 @@ import {
   alphanum,
   between,
   capture,
+  captureCaptures,
   char,
   many1Till,
   many1WithJoin,
@@ -24,7 +25,7 @@ import {
   str,
   trace,
 } from "tarsec";
-import { optionalSemicolon } from "./parserUtils.js";
+import { optionalSemicolon, throwErrorUnless } from "./parserUtils.js";
 import { comma, optionalSpaces } from "./utils.js";
 
 // Helper parser for quoted file paths - supports both single and double quotes
@@ -52,18 +53,23 @@ export const importNodeStatmentParser: Parser<ImportNodeStatement> = trace(
     str("import"),
     spaces,
     or(str("nodes"), str("node")),
-    spaces,
-    char("{"),
-    optionalSpaces,
-    capture(sepBy1(comma, many1WithJoin(alphanum)), "importedNodes"),
-    optionalSpaces,
-    char("}"),
-    spaces,
-    str("from"),
-    spaces,
-    capture(quotedPath, "agencyFile"),
-    optionalSemicolon,
-    optional(newline),
+    captureCaptures(
+      throwErrorUnless(
+        "expected a statement of the form `import nodes { x, y } from 'filename.agency'`",
+        spaces,
+        char("{"),
+        optionalSpaces,
+        capture(sepBy1(comma, many1WithJoin(alphanum)), "importedNodes"),
+        optionalSpaces,
+        char("}"),
+        spaces,
+        str("from"),
+        spaces,
+        capture(quotedPath, "agencyFile"),
+        optionalSemicolon,
+        optional(newline),
+      ),
+    ),
   ),
 );
 export const importToolStatmentParser: Parser<ImportToolStatement> = trace(
@@ -73,18 +79,23 @@ export const importToolStatmentParser: Parser<ImportToolStatement> = trace(
     str("import"),
     spaces,
     or(str("tools"), str("tool")),
-    spaces,
-    char("{"),
-    optionalSpaces,
-    capture(sepBy1(comma, many1WithJoin(alphanum)), "importedTools"),
-    optionalSpaces,
-    char("}"),
-    spaces,
-    str("from"),
-    spaces,
-    capture(quotedPath, "agencyFile"),
-    optionalSemicolon,
-    optional(newline),
+    captureCaptures(
+      throwErrorUnless(
+        "expected a statement of the form `import tools { x, y } from 'filename.agency'`",
+        spaces,
+        char("{"),
+        optionalSpaces,
+        capture(sepBy1(comma, many1WithJoin(alphanum)), "importedTools"),
+        optionalSpaces,
+        char("}"),
+        spaces,
+        str("from"),
+        spaces,
+        capture(quotedPath, "agencyFile"),
+        optionalSemicolon,
+        optional(newline),
+      ),
+    ),
   ),
 );
 export const importStatmentParser: Parser<ImportStatement> = trace(
@@ -92,14 +103,19 @@ export const importStatmentParser: Parser<ImportStatement> = trace(
   seqC(
     set("type", "importStatement"),
     str("import"),
-    spaces,
-    capture(many1Till(str("from")), "importedNames"),
-    str("from"),
-    spaces,
-    oneOf(`'"`),
-    capture(many1Till(oneOf(`'"`)), "modulePath"),
-    oneOf(`'"`),
-    optionalSemicolon,
-    optional(newline),
+    captureCaptures(
+      throwErrorUnless(
+        "expected a statement of the form `import { x, y } from 'filename'`",
+        spaces,
+        capture(many1Till(str("from")), "importedNames"),
+        str("from"),
+        spaces,
+        oneOf(`'"`),
+        capture(many1Till(oneOf(`'"`)), "modulePath"),
+        oneOf(`'"`),
+        optionalSemicolon,
+        optional(newline),
+      ),
+    ),
   ),
 );

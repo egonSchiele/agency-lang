@@ -77,3 +77,12 @@ imported tools currently can't be used because to create the array that gets pas
 Use https://www.npmjs.com/package/code-block-writer for writing ts code instead?
 
 Future optimization: Currently, all LLM calls inside threads are awaited. However,  the LLM calls inside two sibling threads could be running in parallel.
+
+
+Importing tools still doesn't work perfectly, because I can't introspect imported functions to see if they throw an interrupt,
+so I have to always assume they do, which reduces some opportunity for parallelism. Maybe I just need to bite the bullet
+and commit to having a preprocessed step where all the files get read.
+I'll probably need to do that for supporting type checking anyway.
+
+
+lib/templates/backends/typescriptGenerator/promptFunction.mustache is bloated and complex. Needs help

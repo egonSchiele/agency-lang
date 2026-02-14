@@ -43,6 +43,7 @@ import { specialVarParser } from "./parsers/specialVar.js";
 import { usesToolParser } from "./parsers/tools.js";
 import { typeAliasParser, typeHintParser } from "./parsers/typeHints.js";
 import { AgencyNode, AgencyProgram } from "./types.js";
+import { skillParser } from "./parsers/skill.js";
 
 export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
   const parser = many(
@@ -61,6 +62,7 @@ export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
         matchBlockParser,
         timeBlockParser,
         messageThreadParser,
+        skillParser,
         streamingPromptLiteralParser,
         functionParser,
         returnStatementParser,

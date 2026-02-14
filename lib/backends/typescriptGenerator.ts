@@ -28,6 +28,8 @@ import * as renderMessageThread from "../templates/backends/typescriptGenerator/
 import * as promptFunction from "../templates/backends/typescriptGenerator/promptFunction.js";
 import * as renderTool from "../templates/backends/typescriptGenerator/tool.js";
 import * as renderToolCall from "../templates/backends/typescriptGenerator/toolCall.js";
+import * as renderSkillPrompt from "@/templates/prompts/skill.js";
+
 import {
   AccessExpression,
   DotFunctionCall,
@@ -64,6 +66,8 @@ import {
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { AgencyConfig } from "@/config.js";
 import { MessageThread } from "@/types/messageThread.js";
+import { Skill } from "@/types/skill.js";
+import path from "path";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
@@ -308,18 +312,21 @@ export class TypeScriptGenerator extends BaseGenerator {
       name: functionName,
       description: node.docString?.value || "No description provided.",
       schema: Object.keys(properties).length > 0 ? `{${schema}}` : "{}",
+      parameters: JSON.stringify(parameters.map((p) => p.name)),
     });
   }
 
   protected processUsesTool(node: UsesTool): string {
     node.toolNames.forEach((toolName) => {
-      if (!this.functionDefinitions[toolName]) {
+      if (
+        !this.functionDefinitions[toolName] &&
+        !this.isImportedTool(toolName)
+      ) {
         throw new Error(
           `Tool '${toolName}' is being used but no function definition found for it. Make sure to define a function for this tool.`,
         );
       }
     });
-    this.toolsUsed.push(...node.toolNames);
     return "";
   }
 
@@ -453,7 +460,15 @@ export class TypeScriptGenerator extends BaseGenerator {
     return arr.join("\n");
   }
 
-  buildPromptString(segments: PromptSegment[], typeHints: TypeHintMap): string {
+  buildPromptString({
+    segments,
+    typeHints,
+    skills,
+  }: {
+    segments: PromptSegment[];
+    typeHints: TypeHintMap;
+    skills: Skill[];
+  }): string {
     const promptParts: string[] = [];
 
     for (const segment of segments) {
@@ -472,6 +487,27 @@ export class TypeScriptGenerator extends BaseGenerator {
           promptParts.push(`\${${varName}}`);
         }
       }
+    }
+
+    if (skills.length > 0) {
+      const skillsArr = skills.map((skill) => {
+        // strip the directory and extension from the filepath to get the skill name
+        const skillName = path.basename(
+          skill.filepath,
+          path.extname(skill.filepath),
+        );
+        if (skill.description) {
+          return `- ${skillName} (filepath: ${skill.filepath}): ${skill.description}`;
+        } else {
+          return `- ${skillName} (filepath: ${skill.filepath})`;
+        }
+      });
+
+      promptParts.push(
+        renderSkillPrompt.default({
+          skills: skillsArr.join("\n"),
+        }),
+      );
     }
 
     return "`" + promptParts.join("") + "`";
@@ -520,7 +556,11 @@ export class TypeScriptGenerator extends BaseGenerator {
     const typeString = variableTypeToString(_variableType, this.typeAliases);
 
     // Build prompt construction code
-    const promptCode = this.buildPromptString(prompt.segments, this.typeHints);
+    const promptCode = this.buildPromptString({
+      segments: prompt.segments,
+      typeHints: this.typeHints,
+      skills: prompt.skills || [],
+    });
     const parts = functionArgs.map(
       (arg) =>
         `${arg.replace(".", "_")}: ${variableTypeToString(
@@ -530,28 +570,50 @@ export class TypeScriptGenerator extends BaseGenerator {
     );
     parts.push("__metadata?: Record<string, any>");
     const argsStr = parts.join(", ");
-    const _tools = this.toolsUsed
-      .map((toolName) => `__${toolName}Tool`)
-      .join(", ");
-
+    let _tools = "";
+    if (prompt.tools) {
+      _tools = prompt.tools.toolNames.map((name) => `__${name}Tool`).join(", ");
+    }
     const tools = _tools.length > 0 ? `[${_tools}]` : "undefined";
 
-    const functionCalls = this.toolsUsed
+    /* What's going on here? This is a nine. We change all agency functions to take an array of arguments.
+So, for example, `function add(a, b)` would get turned into `function add(arr)`.
+Earlier, the arguments were getting converted into an object like `function add({a, b})` because LLMs
+pass back an object of parameters for the function calls, so that made it easy to pass those arguments
+straight to a function.
+
+But that meant if a function was defined in another file, we would need to parse the contents of the file
+to understand the names of the function parameters, hence the idea of an array. Unfortunately, the array
+still doesn't solve the problem completely, because if what we get back from a tool call is an object
+like `{a:1, b:2}`, we need to know how to convert it into an array. We need to know the order of the parameters.
+
+So now, every function call generates a related tool definition, but it also generats an array of parameter names.
+So if the user defines `add`, we'll generate `export const __addTool`, which is the tool definition,
+and `export const __addToolParams`, which is an array of param names.
+
+It's a mess and needs rethinking 🤮
+
+This still doesn't work perfectly, because I can't introspect imported functions to see if they throw an interrupt,
+so I have to always assume they do, which reduces some opportunity for parallelism. Maybe I just need to bite the bullet
+and commit to having a preprocessed step where all the files get read.
+I'll probably need to do that for supporting type checking anyway.
+*/
+
+    const functionCalls = (
+      prompt.tools || { type: "usesTool", toolNames: [] }
+    ).toolNames
       .map((toolName) => {
-        const func = this.functionDefinitions[toolName];
-        if (!func) {
+        if (
+          !this.functionDefinitions[toolName] &&
+          !this.isImportedTool(toolName)
+        ) {
           throw new Error(
             `Tool '${toolName}' is being used but no function definition found for it. Make sure to define a function for this tool.`,
           );
         }
-        const paramsStr = func.parameters
-          .map((param, index) => {
-            return `args["${param.name}"]`;
-          })
-          .join(", ");
+
         return renderToolCall.default({
           name: toolName,
-          paramsStr,
         });
       })
       .join("\n");
@@ -560,7 +622,6 @@ export class TypeScriptGenerator extends BaseGenerator {
     const metadataObj = `{
       messages: __self.messages_${this.currentMessageThreadNodeId.at(-1)}.getMessages(),
     }`;
-    this.toolsUsed = []; // reset after use
 
     const scopedFunctionArgs = functionArgs.map((arg) =>
       this.generateScopedVariableName(arg),
@@ -580,6 +641,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       nodeContext: this.getCurrentScope().type === "node",
       isStreaming: prompt.isStreaming || false,
       isAsync: prompt.async || false,
+      messagesVar: `__self.messages_${this.currentMessageThreadNodeId.at(-1)}`,
     });
   }
 
@@ -593,7 +655,11 @@ export class TypeScriptGenerator extends BaseGenerator {
 
   protected processImportToolStatement(node: ImportToolStatement): string {
     const importNames = node.importedTools
-      .map((toolName) => [toolName, `__${toolName}Tool`])
+      .map((toolName) => [
+        toolName,
+        `__${toolName}Tool`,
+        `__${toolName}ToolParams`,
+      ])
       .flat();
     return `import { ${importNames.join(", ")} } from "${node.agencyFile.replace(/\.agency$/, ".ts")}";`;
   }
@@ -683,6 +749,10 @@ export class TypeScriptGenerator extends BaseGenerator {
       nodeId: node.nodeId || "0",
       parentNodeId: node.parentNodeId || "0",
     });
+  }
+
+  protected processSkill(node: Skill): string {
+    return "";
   }
 
   /* This generates the body of a node or function separated into multiple parts.

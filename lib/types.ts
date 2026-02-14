@@ -18,6 +18,7 @@ import { TypeAlias, TypeHint, VariableType } from "./types/typeHints.js";
 import { WhileLoop } from "./types/whileLoop.js";
 import { IfElse } from "./types/ifElse.js";
 import { MessageThread } from "./types/messageThread.js";
+import { Skill } from "./types/skill.js";
 export * from "./types/access.js";
 export * from "./types/dataStructures.js";
 export * from "./types/function.js";
@@ -84,7 +85,8 @@ export type AgencyNode =
   | TimeBlock
   | NewLine
   | RawCode
-  | MessageThread;
+  | MessageThread
+  | Skill;
 
 export type AgencyProgram = {
   type: "agencyProgram";

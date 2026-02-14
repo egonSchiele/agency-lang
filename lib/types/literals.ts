@@ -1,4 +1,5 @@
 import { AgencyObject } from "./dataStructures.js";
+import { Skill } from "./skill.js";
 import { UsesTool } from "./tools.js";
 
 export type Literal =
@@ -6,7 +7,7 @@ export type Literal =
   | MultiLineStringLiteral
   | StringLiteral
   | VariableNameLiteral
-  | PromptLiteral
+  | PromptLiteral;
 
 export type NumberLiteral = {
   type: "number";
@@ -48,6 +49,7 @@ export type PromptLiteral = {
   isStreaming?: boolean;
   async?: boolean;
   tools?: UsesTool;
+  skills?: Skill[];
 };
 
 export type RawCode = {

@@ -60,6 +60,7 @@ import {
 import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
 import { newLineParser } from "./newline.js";
 import { MessageThread } from "@/types/messageThread.js";
+import { skillParser } from "./skill.js";
 
 export const assignmentParser: Parser<Assignment> = (input: string) => {
   const parser = trace(
@@ -130,6 +131,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
         ifParser,
         timeBlockParser,
         messageThreadParser,
+        skillParser,
         functionParser,
         accessExpressionParser,
         assignmentParser,

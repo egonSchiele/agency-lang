@@ -1,21 +1,21 @@
 import {
-  AgencyNode,
-  AgencyProgram,
-  FunctionCall,
-  FunctionDefinition,
-  PromptLiteral,
-  RawCode,
-  IfElse,
-  WhileLoop,
-  TimeBlock,
-} from "@/types.js";
-import {
   AgencyConfig,
   BUILTIN_FUNCTIONS,
   BUILTIN_FUNCTIONS_TO_ASYNC,
 } from "@/config.js";
+import {
+  AgencyNode,
+  AgencyProgram,
+  FunctionCall,
+  FunctionDefinition,
+  IfElse,
+  PromptLiteral,
+  RawCode,
+  TimeBlock,
+  WhileLoop,
+} from "@/types.js";
 import { MessageThread } from "@/types/messageThread.js";
-import { is, no } from "zod/locales";
+import { Skill } from "@/types/skill.js";
 import { getAllVariablesInBody, walkNodes } from "@/utils/node.js";
 
 export class TypescriptPreprocessor {
@@ -25,6 +25,7 @@ export class TypescriptPreprocessor {
   protected functionNameToUsesInterrupt: Record<string, boolean> = {};
   protected functionDefinitions: Record<string, FunctionDefinition> = {};
   protected threadIdCounter: number = 0;
+  protected importedTools: string[] = [];
   constructor(program: AgencyProgram, config: AgencyConfig = {}) {
     this.program = structuredClone(program);
     this.config = config;
@@ -32,7 +33,9 @@ export class TypescriptPreprocessor {
 
   preprocess(): AgencyProgram {
     this.getFunctionDefinitions();
+    this.getImportedTools();
     this.collectTools();
+    this.collectSkills();
     this.markFunctionsAsync();
     this.markFunctionCallsAsync();
     this.removeUnusedLlmCalls();
@@ -93,14 +96,11 @@ export class TypescriptPreprocessor {
     const newBody: AgencyNode[] = [];
     for (const node of body) {
       if (node.type === "prompt") {
-        // console.log(JSON.stringify(node));
-        // console.log(JSON.stringify(this.functionNameToAsync));
         const hasSyncTools = node.tools
           ? node.tools.toolNames.some(
               (t) => this.functionNameToAsync[t] === false,
             )
           : false;
-        // console.log({ hasSyncTools });
         if (!hasSyncTools) {
           /* skip this LLM call since it isn't using any tools that have side effects,
           isn't being assigned to a variable, and isn't being returned. */
@@ -173,6 +173,14 @@ export class TypescriptPreprocessor {
     }
   }
 
+  protected getImportedTools() {
+    for (const node of this.program.nodes) {
+      if (node.type === "importToolStatement") {
+        this.importedTools.push(...node.importedTools);
+      }
+    }
+  }
+
   protected collectTools(): void {
     for (const node of this.program.nodes) {
       if (node.type === "function" || node.type === "graphNode") {
@@ -190,6 +198,51 @@ export class TypescriptPreprocessor {
       } else if (node.type === "prompt") {
         node.tools = { type: "usesTool", toolNames: toolsUsed };
         toolsUsed = [];
+      } else if (node.type === "assignment" && node.value.type === "prompt") {
+        node.value.tools = { type: "usesTool", toolNames: toolsUsed };
+        toolsUsed = [];
+      }
+    });
+  }
+
+  protected collectSkills(): void {
+    for (const node of this.program.nodes) {
+      if (node.type === "function" || node.type === "graphNode") {
+        this.collectSkillsInFunction(node.body);
+        node.body = node.body.filter((n) => n.type !== "skill");
+      }
+    }
+  }
+
+  protected collectSkillsInFunction(body: AgencyNode[]): void {
+    let skillsUsed: Skill[] = [];
+
+    const setSkillsForPrompt = (promptNode: PromptLiteral) => {
+      promptNode.skills = skillsUsed;
+
+      if (skillsUsed.length > 0) {
+        const hasReadSkillTool = promptNode.tools?.toolNames.some(
+          (t) => t === "readSkill",
+        );
+        if (!hasReadSkillTool) {
+          promptNode.tools = promptNode.tools || {
+            type: "usesTool",
+            toolNames: [],
+          };
+          promptNode.tools.toolNames.push("readSkill");
+        }
+      }
+
+      skillsUsed = [];
+    };
+
+    body.forEach((node) => {
+      if (node.type === "skill") {
+        skillsUsed.push(node);
+      } else if (node.type === "prompt") {
+        setSkillsForPrompt(node);
+      } else if (node.type === "assignment" && node.value.type === "prompt") {
+        setSkillsForPrompt(node.value);
       }
     });
   }
@@ -270,12 +323,18 @@ export class TypescriptPreprocessor {
         }
 
         // check if any of its tools will throw an interrupt
-        node.async =
-          node.tools?.toolNames.some((toolName) => {
-            const usesInterrupt =
-              this.functionNameToUsesInterrupt[toolName] ?? false;
-            return usesInterrupt;
-          }) || true;
+        const toolThrowsInterrupt = node.tools
+          ? node.tools?.toolNames.some((toolName) => {
+              /*
+            If we don't know whether this function uses an interrupt,
+            that's probably because it was imported and we don't have this information.
+            We need to assume it throws an interrupt. */
+              const usesInterrupt =
+                this.functionNameToUsesInterrupt[toolName] ?? true;
+              return usesInterrupt;
+            })
+          : false;
+        node.async = !toolThrowsInterrupt;
       }
     }
   }

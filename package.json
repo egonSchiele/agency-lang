@@ -51,8 +51,8 @@
     "piemachine": "^0.0.8",
     "prompts": "^2.4.2",
     "smoltalk": "^0.0.18",
-    "statelog-client": "^0.0.35",
-    "tarsec": "^0.1.1",
+    "statelog-client": "^0.0.36",
+    "tarsec": "^0.1.2",
     "typestache": "^0.4.4",
     "zod": "^4.3.5"
   },

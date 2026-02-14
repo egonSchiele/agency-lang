@@ -38,6 +38,7 @@ import { BaseGenerator } from "./baseGenerator.js";
 import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
 import { AgencyConfig } from "@/config.js";
 import { MessageThread } from "@/types/messageThread.js";
+import { Skill } from "@/types/skill.js";
 
 export class AgencyGenerator extends BaseGenerator {
   private indentLevel: number = 0;
@@ -196,7 +197,10 @@ export class AgencyGenerator extends BaseGenerator {
       }
     }
     result += '"""';
-    return result;
+    return result
+      .split("\n")
+      .map((line) => this.indentStr(line))
+      .join("\n");
   }
 
   protected processPromptLiteral(
@@ -502,8 +506,6 @@ export class AgencyGenerator extends BaseGenerator {
   }
 
   protected processUsesTool(node: UsesTool): string {
-    // Track tool usage but don't generate code
-    this.toolsUsed.push(...node.toolNames);
     return this.indentStr(`uses ${node.toolNames.join(", ")}`);
   }
 
@@ -534,7 +536,13 @@ export class AgencyGenerator extends BaseGenerator {
     this.decreaseIndent();
     const bodyCodeStr = bodyCodes.join("");
     const threadType = node.subthread ? "subthread" : "thread";
-    return this.indentStr(`${threadType} {\n${bodyCodeStr}${this.indentStr("}")}`);
+    return this.indentStr(
+      `${threadType} {\n${bodyCodeStr}${this.indentStr("}")}`,
+    );
+  }
+
+  protected processSkill(node: Skill): string {
+    return this.indentStr(`skill "${node.filepath}"`);
   }
 }
 

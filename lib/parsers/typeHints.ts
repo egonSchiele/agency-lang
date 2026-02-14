@@ -40,7 +40,7 @@ import {
   str,
   trace,
 } from "tarsec";
-import { optionalSemicolon } from "./parserUtils.js";
+import { optionalSemicolon, throwErrorUnless } from "./parserUtils.js";
 
 export const primitiveTypeParser: Parser<PrimitiveType> = trace(
   "primitiveTypeParser",
@@ -268,12 +268,17 @@ export const typeAliasParser: Parser<TypeAlias> = trace(
   seqC(
     set("type", "typeAlias"),
     str("type"),
-    spaces,
-    capture(many1WithJoin(varNameChar), "aliasName"),
-    optionalSpaces,
-    str("="),
-    optionalSpaces,
-    capture(variableTypeParser, "aliasedType"),
-    optionalSemicolon,
+    captureCaptures(
+      throwErrorUnless(
+        "expected a statement of the form `type Foo = X' where X can be a union, array, object, type alias, or primitive type`",
+        spaces,
+        capture(many1WithJoin(varNameChar), "aliasName"),
+        optionalSpaces,
+        str("="),
+        optionalSpaces,
+        capture(variableTypeParser, "aliasedType"),
+        optionalSemicolon,
+      ),
+    ),
   ),
 );

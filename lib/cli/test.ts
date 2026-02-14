@@ -11,6 +11,7 @@ import {
   promptForArgs,
   promptForTarget,
 } from "./util.js";
+import { color } from "termcolors";
 
 type Exact = { type: "exact" };
 type LLMJudge = {
@@ -30,6 +31,7 @@ type TestCase = {
   expectedOutput: string;
   evaluationCriteria: Criteria[];
   interruptHandlers?: InterruptHandler[];
+  description?: string;
 };
 type Tests = { sourceFile: string; tests: TestCase[] };
 
@@ -110,7 +112,11 @@ export async function fixtures(target?: string) {
   // Handle interrupt discovery
   const interruptHandlers: InterruptHandler[] = [];
 
-  while (json.data && typeof json.data === "object" && json.data.type === "interrupt") {
+  while (
+    json.data &&
+    typeof json.data === "object" &&
+    json.data.type === "interrupt"
+  ) {
     console.log(`\n⚠️  Interrupt detected: "${json.data.data}"`);
 
     const actionResponse = await prompts({
@@ -135,27 +141,37 @@ export async function fixtures(target?: string) {
     };
 
     if (actionResponse.action === "modify") {
-      const modifyResponse = await prompts({
-        type: "text",
-        name: "args",
-        message: "Enter modified arguments as JSON object:",
-      });
-      if (!modifyResponse.args) {
-        console.log("Interrupt handling cancelled.");
-        return;
-      }
-      try {
-        handler.modifiedArgs = JSON.parse(modifyResponse.args);
-      } catch (e) {
-        console.error("Invalid JSON:", e);
-        return;
+      let invalidJSON = true;
+      while (invalidJSON) {
+        const modifyResponse = await prompts({
+          type: "text",
+          name: "args",
+          message: "Enter modified arguments as JSON object:",
+        });
+        if (!modifyResponse.args) {
+          console.log("Interrupt handling cancelled.");
+          return;
+        }
+        try {
+          handler.modifiedArgs = JSON.parse(modifyResponse.args);
+          invalidJSON = false;
+        } catch (e) {
+          console.error("Invalid JSON:", e);
+          return;
+        }
       }
     }
 
     interruptHandlers.push(handler);
 
     // Continue execution with this handler to see if there are more interrupts
-    json = executeNode(filename, nodeName, hasArgs, argsString, interruptHandlers);
+    json = executeNode(
+      filename,
+      nodeName,
+      hasArgs,
+      argsString,
+      interruptHandlers,
+    );
   }
 
   console.log("\nFinal Output:");
@@ -268,9 +284,13 @@ export async function test(testFile?: string) {
     const interruptInfo = testCase.interruptHandlers
       ? ` interrupts=${testCase.interruptHandlers.length}`
       : "";
+    const testNum = color.cyan(`Test ${i + 1}/${total}:`);
     console.log(
-      `\nTest ${i + 1}/${total}: node=${testCase.nodeName} input=${testCase.input || "(none)"}${interruptInfo}`,
+      `\n${testNum} node=${testCase.nodeName} input=${testCase.input || "(none)"}${interruptInfo}`,
     );
+    if (testCase.description) {
+      console.log(color.cyan("Description:", testCase.description), "\n");
+    }
 
     const result = executeNode(
       tests.sourceFile,
@@ -285,9 +305,9 @@ export async function test(testFile?: string) {
       if (criterion.type === "exact") {
         const actual = JSON.stringify(result.data);
         if (actual === testCase.expectedOutput) {
-          console.log("  ✓ Exact match passed");
+          console.log(color.green("  ✓ Exact match passed"));
         } else {
-          console.log("  ✗ Exact match failed");
+          console.log(color.red("  ✗ Exact match failed"));
           console.log("    Expected:", testCase.expectedOutput);
           console.log("    Actual:  ", actual);
           testPassed = false;
@@ -302,18 +322,22 @@ export async function test(testFile?: string) {
           );
           if (judgeResult.score >= criterion.desiredAccuracy) {
             console.log(
-              `  ✓ LLM Judge passed (score: ${judgeResult.score}/${criterion.desiredAccuracy})`,
+              color.green(
+                `  ✓ LLM Judge passed (score: ${judgeResult.score}/${criterion.desiredAccuracy})`,
+              ),
             );
             console.log(`    Reasoning: ${judgeResult.reasoning}`);
           } else {
             console.log(
-              `  ✗ LLM Judge failed (score: ${judgeResult.score}/${criterion.desiredAccuracy})`,
+              color.red(
+                `  ✗ LLM Judge failed (score: ${judgeResult.score}/${criterion.desiredAccuracy})`,
+              ),
             );
             console.log(`    Reasoning: ${judgeResult.reasoning}`);
             testPassed = false;
           }
         } catch (e) {
-          console.log(`  ✗ LLM Judge error: ${e}`);
+          console.log(color.red(`  ✗ LLM Judge error: ${e}`));
           testPassed = false;
         }
       }

@@ -3,6 +3,7 @@
   "tests": [
     {
       "nodeName": "foo",
+      "description": "Test the greet function with name Adit and approve the interrupt",
       "input": "",
       "expectedOutput": "\"Kya chal raha jai, Adit!\"",
       "evaluationCriteria": [
@@ -19,6 +20,7 @@
     },
     {
       "nodeName": "bar",
+      "description": "Test the math function with 2 + 2",
       "input": "",
       "expectedOutput": "\"2 + 2 equals 4.\"",
       "evaluationCriteria": [
@@ -26,6 +28,43 @@
           "type": "llmJudge",
           "judgePrompt": "Make sure the math in the string looks correct.",
           "desiredAccuracy": 90
+        }
+      ]
+    },
+    {
+      "nodeName": "foo",
+      "description": "Test the greet function with name Adit and reject the interrupt",
+      "input": "",
+      "expectedOutput": "null",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Agent wants to call the greet function with name: Adit"
+        }
+      ]
+    },
+    {
+      "nodeName": "foo",
+      "description": "Test the greet function with name Adit and modify the interrupt to use name Steve",
+      "input": "",
+      "expectedOutput": "\"Kya chal raha jai, Steve!\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "modify",
+          "expectedMessage": "Agent wants to call the greet function with name: Adit",
+          "modifiedArgs": {
+            "name": "Steve"
+          }
         }
       ]
     }

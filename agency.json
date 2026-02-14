@@ -1,7 +1,7 @@
 {
   "verbose": false,
   "client": {
-    "logLevel": "warn",
+    "logLevel": "debug",
     "defaultModel": "gpt-4o-mini"
   }
 }

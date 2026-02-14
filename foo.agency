@@ -5,7 +5,7 @@ def greet(name: string): string {
 
 node foo() {
   uses greet
-  res = llm("Call the greet function with name: Adit")
+  res = llm("Call the greet function with name: Adit. Return JUST the result of the function call, no explanation.")
   return res
 }
 

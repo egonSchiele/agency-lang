@@ -38,6 +38,8 @@ export const BUILTIN_FUNCTIONS_TO_ASYNC: Record<string, boolean> = {
   sleep: false,
 };
 
+export const BUILTIN_TOOLS = ["readSkill"];
+
 /**
  * Configuration options for the Agency compiler
  */

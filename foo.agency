@@ -1,3 +1,4 @@
+import!;
 node foo() {
   res1: number[] = llm("What are the first 5 prime numbers?")
   print("res1", res1)

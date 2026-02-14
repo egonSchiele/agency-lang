@@ -14,7 +14,11 @@ import {
   str,
   success,
   trace,
+  setInputStr,
+  TarsecError,
+  failure,
 } from "tarsec";
+
 import { accessExpressionParser } from "./parsers/access.js";
 import { commentParser } from "./parsers/comment.js";
 import {
@@ -90,29 +94,25 @@ export const _multilineCommentParser = between(str("/*"), str("*/"), anyChar);
 
 export const multilineCommentParser = search(_multilineCommentParser);
 
-export const normalizeCode = (s: string) => {
-  return s
+export const normalizeCode = (code: string) => {
+  const comments = multilineCommentParser(code);
+
+  if (!comments.success) {
+    throw new Error(comments.message);
+  }
+
+  return comments.rest
     .split("\n")
     .map((line) => line.trim())
     .join("\n");
 };
 
-export function parseAgency(
+export function _parseAgency(
   input: string,
   verbose: boolean = false,
 ): ParserResult<AgencyProgram> {
-  const logger = new EgonLog({ level: verbose ? "debug" : "warn" });
-
-  let normalized = input;
-  logger.debug("Starting to parse agency program");
-  logger.debug(`Input: ${input}`);
-  logger.debug("================================");
-  const comments = multilineCommentParser(normalized);
-  logger.debug(`Multiline comments: ${JSON.stringify(comments)}`);
-  logger.debug("================================");
-
   // get rid of all multiline comments
-  normalized = normalizeCode(comments.rest);
+  const normalized = normalizeCode(input);
   if (normalized.trim().length === 0) {
     return success(
       {
@@ -122,10 +122,23 @@ export function parseAgency(
       "",
     );
   }
-
-  logger.debug(`Normalized input: ${normalized}`);
-  logger.debug("================================");
-
+  setInputStr(normalized);
   const result = agencyParser(normalized);
   return result;
+}
+
+export function parseAgency(
+  input: string,
+  verbose: boolean = false,
+): ParserResult<AgencyProgram> {
+  try {
+    return _parseAgency(input, verbose);
+  } catch (error) {
+    if (error instanceof TarsecError) {
+      console.log(error.data.prettyMessage);
+      return failure(error.message, input);
+    } else {
+      throw error;
+    }
+  }
 }

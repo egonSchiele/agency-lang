@@ -13,7 +13,7 @@ import {
   VariableType,
 } from "../types.js";
 
-import { TYPES_THAT_DONT_TRIGGER_NEW_PART } from "@/config.js";
+import { BUILTIN_TOOLS, TYPES_THAT_DONT_TRIGGER_NEW_PART } from "@/config.js";
 import { AwaitStatement } from "@/types/await.js";
 import { SpecialVar } from "@/types/specialVar.js";
 import { TimeBlock } from "@/types/timeBlock.js";
@@ -318,6 +318,7 @@ export class TypeScriptGenerator extends BaseGenerator {
 
   protected processUsesTool(node: UsesTool): string {
     node.toolNames.forEach((toolName) => {
+      if (BUILTIN_TOOLS.includes(toolName)) return;
       if (
         !this.functionDefinitions[toolName] &&
         !this.isImportedTool(toolName)
@@ -602,6 +603,7 @@ I'll probably need to do that for supporting type checking anyway.
     const functionCalls = (
       prompt.tools || { type: "usesTool", toolNames: [] }
     ).toolNames
+      .filter((t) => BUILTIN_TOOLS.includes(t))
       .map((toolName) => {
         if (
           !this.functionDefinitions[toolName] &&

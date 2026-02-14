@@ -16,6 +16,7 @@ import {
   oneOf,
   optional,
   or,
+  parseError,
   Parser,
   sepBy,
   sepBy1,
@@ -25,7 +26,7 @@ import {
   str,
   trace,
 } from "tarsec";
-import { optionalSemicolon, throwErrorUnless } from "./parserUtils.js";
+import { optionalSemicolon } from "./parserUtils.js";
 import { comma, optionalSpaces } from "./utils.js";
 
 // Helper parser for quoted file paths - supports both single and double quotes
@@ -54,7 +55,7 @@ export const importNodeStatmentParser: Parser<ImportNodeStatement> = trace(
     spaces,
     or(str("nodes"), str("node")),
     captureCaptures(
-      throwErrorUnless(
+      parseError(
         "expected a statement of the form `import nodes { x, y } from 'filename.agency'`",
         spaces,
         char("{"),
@@ -80,7 +81,7 @@ export const importToolStatmentParser: Parser<ImportToolStatement> = trace(
     spaces,
     or(str("tools"), str("tool")),
     captureCaptures(
-      throwErrorUnless(
+      parseError(
         "expected a statement of the form `import tools { x, y } from 'filename.agency'`",
         spaces,
         char("{"),
@@ -104,7 +105,7 @@ export const importStatmentParser: Parser<ImportStatement> = trace(
     set("type", "importStatement"),
     str("import"),
     captureCaptures(
-      throwErrorUnless(
+      parseError(
         "expected a statement of the form `import { x, y } from 'filename'`",
         spaces,
         capture(many1Till(str("from")), "importedNames"),

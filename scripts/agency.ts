@@ -13,9 +13,11 @@ import {
 import { evaluate } from "@/cli/evaluate.js";
 import { fixtures, test } from "@/cli/test.js";
 import { AgencyConfig } from "@/config.js";
+import { _parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { Command } from "commander";
 import * as fs from "fs";
+import { failure, TarsecError } from "tarsec";
 
 const program = new Command();
 
@@ -135,9 +137,14 @@ program
   .argument("[target]", "Target in file.agency:nodeName format")
   .option("--args <path>", "Path to eval args JSON file")
   .option("--results <path>", "Path to existing results file (to resume)")
-  .action(async (target: string | undefined, opts: { args?: string; results?: string }) => {
-    await evaluate(target, opts.args, opts.results);
-  });
+  .action(
+    async (
+      target: string | undefined,
+      opts: { args?: string; results?: string },
+    ) => {
+      await evaluate(target, opts.args, opts.results);
+    },
+  );
 
 program
   .command("gen-fixtures")
@@ -154,6 +161,24 @@ program
   .argument("[testFile]", "Path to .test.json file")
   .action(async (testFile: string | undefined) => {
     await test(testFile);
+  });
+
+program
+  .command("diagnostics")
+  .description("Run diagnostics for VSCode")
+  .argument("[testFile]", "Path to .test.json file")
+  .action(async (testFile: string | undefined) => {
+    const contents = testFile ? readFile(testFile) : await readStdin();
+
+    try {
+      _parseAgency(contents);
+    } catch (error) {
+      if (error instanceof TarsecError) {
+        console.log(JSON.stringify(error.data, null, 2));
+      } else {
+        throw error;
+      }
+    }
   });
 
 // Default: treat unknown args as a file to run

@@ -1,4 +1,10 @@
-import { AgencyNode } from "@/types.js";
+import {
+  AgencyNode,
+  functionScope,
+  globalScope,
+  nodeScope,
+  Scope,
+} from "@/types.js";
 
 export function* getAllVariablesInBody(
   body: AgencyNode[],
@@ -123,66 +129,79 @@ export function getNodesOfType<T extends AgencyNode["type"]>(
 export function* walkNodes(
   nodes: AgencyNode[],
   ancestors: AgencyNode[] = [],
-): Generator<{ node: AgencyNode; ancestors: AgencyNode[] }> {
+  scopes: Scope[] = [],
+): Generator<{ node: AgencyNode; ancestors: AgencyNode[]; scopes: Scope[] }> {
+  if (scopes.length === 0) {
+    scopes.push(globalScope());
+  }
   for (const node of nodes) {
-    yield { node, ancestors };
+    yield { node, ancestors, scopes };
     if (node.type === "function") {
-      yield* walkNodes(node.body, [...ancestors, node]);
+      yield* walkNodes(
+        node.body,
+        [...ancestors, node],
+        [...scopes, functionScope(node.functionName)],
+      );
     } else if (node.type === "graphNode") {
-      yield* walkNodes(node.body, [...ancestors, node]);
+      yield* walkNodes(
+        node.body,
+        [...ancestors, node],
+        [...scopes, nodeScope(node.nodeName)],
+      );
     } else if (node.type === "ifElse") {
-
-      yield* walkNodes([node.condition], [...ancestors, node]);
-      yield* walkNodes(node.thenBody, [...ancestors, node]);
+      yield* walkNodes([node.condition], [...ancestors, node], scopes);
+      yield* walkNodes(node.thenBody, [...ancestors, node], scopes);
       if (node.elseBody) {
-        yield* walkNodes(node.elseBody, [...ancestors, node]);
+        yield* walkNodes(node.elseBody, [...ancestors, node], scopes);
       }
     } else if (node.type === "whileLoop") {
-      yield* walkNodes([node.condition], [...ancestors, node]);
-      yield* walkNodes(node.body, [...ancestors, node]);
+      yield* walkNodes([node.condition], [...ancestors, node], scopes);
+      yield* walkNodes(node.body, [...ancestors, node], scopes);
     } else if (node.type === "timeBlock") {
-      yield* walkNodes(node.body, [...ancestors, node]);
+      yield* walkNodes(node.body, [...ancestors, node], scopes);
     } else if (node.type === "messageThread") {
-      yield* walkNodes(node.body, [...ancestors, node]);
+      yield* walkNodes(node.body, [...ancestors, node], scopes);
     } else if (node.type === "returnStatement") {
-      yield* walkNodes([node.value], [...ancestors, node]);
+      yield* walkNodes([node.value], [...ancestors, node], scopes);
     } else if (node.type === "assignment") {
-      yield* walkNodes([node.value], [...ancestors, node]);
+      yield* walkNodes([node.value], [...ancestors, node], scopes);
     } else if (node.type === "functionCall") {
-      yield* walkNodes(node.arguments, [...ancestors, node]);
+      yield* walkNodes(node.arguments, [...ancestors, node], scopes);
     } else if (node.type === "matchBlock") {
+      yield* walkNodes([node.expression], [...ancestors, node], scopes);
       for (const caseItem of node.cases) {
         if (caseItem.type === "comment") continue;
         if (caseItem.caseValue !== "_") {
-          yield* walkNodes([caseItem.caseValue], [...ancestors, node]);
+          yield* walkNodes([caseItem.caseValue], [...ancestors, node], scopes);
         }
-        yield* walkNodes([caseItem.body], [...ancestors, node]);
+        yield* walkNodes([caseItem.body], [...ancestors, node], scopes);
       }
     } else if (node.type === "accessExpression") {
       const expr = node.expression;
       if (expr.type === "dotProperty") {
-        yield* walkNodes([expr.object], [...ancestors, node]);
+        yield* walkNodes([expr.object], [...ancestors, node], scopes);
       } else if (expr.type === "indexAccess") {
-        yield* walkNodes([expr.array], [...ancestors, node]);
-        yield* walkNodes([expr.index], [...ancestors, node]);
+        yield* walkNodes([expr.array], [...ancestors, node], scopes);
+        yield* walkNodes([expr.index], [...ancestors, node], scopes);
       } else if (expr.type === "dotFunctionCall") {
-        yield* walkNodes([expr.object], [...ancestors, node]);
-        yield* walkNodes([expr.functionCall], [...ancestors, node]);
+        yield* walkNodes([expr.object], [...ancestors, node], scopes);
+        yield* walkNodes([expr.functionCall], [...ancestors, node], scopes);
       }
     } else if (node.type === "dotProperty") {
-      yield* walkNodes([node.object], [...ancestors, node]);
+      yield* walkNodes([node.object], [...ancestors, node], scopes);
     } else if (node.type === "indexAccess") {
-      yield* walkNodes([node.array], [...ancestors, node]);
-      yield* walkNodes([node.index], [...ancestors, node]);
+      yield* walkNodes([node.array], [...ancestors, node], scopes);
+      yield* walkNodes([node.index], [...ancestors, node], scopes);
     } else if (node.type === "agencyArray") {
-      yield* walkNodes(node.items, [...ancestors, node]);
+      yield* walkNodes(node.items, [...ancestors, node], scopes);
     } else if (node.type === "agencyObject") {
       yield* walkNodes(
         node.entries.map((e) => e.value),
         [...ancestors, node],
+        scopes,
       );
     } else if (node.type === "specialVar") {
-      yield* walkNodes([node.value], [...ancestors, node]);
+      yield* walkNodes([node.value], [...ancestors, node], scopes);
     }
   }
 }

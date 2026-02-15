@@ -255,8 +255,6 @@ export class AgencyGenerator extends BaseGenerator {
       result += `${docLines}\n`;
     }
 
-    this.functionScopedVariables = [...parameters.map((p) => p.name)];
-
     const lines: string[] = [];
     for (const stmt of body) {
       lines.push(this.processNode(stmt));
@@ -264,7 +262,6 @@ export class AgencyGenerator extends BaseGenerator {
     const bodyCode = lines.join("").trimEnd() + "\n";
     result += bodyCode;
 
-    this.functionScopedVariables = [];
     this.decreaseIndent();
 
     // Close function
@@ -483,7 +480,6 @@ export class AgencyGenerator extends BaseGenerator {
     );
 
     this.increaseIndent();
-    this.functionScopedVariables = parameters.map((p) => p.name);
 
     const lines: string[] = [];
     for (const stmt of body) {
@@ -492,7 +488,6 @@ export class AgencyGenerator extends BaseGenerator {
     const bodyCode = lines.join("").trimEnd() + "\n";
     result += bodyCode;
 
-    this.functionScopedVariables = [];
     this.decreaseIndent();
 
     result += this.indentStr(`}`);

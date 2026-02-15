@@ -399,30 +399,48 @@ export class TypeChecker {
     }
 
     // Same kind matching
-    if (resolvedSource.type === "primitiveType" && resolvedTarget.type === "primitiveType") {
+    if (
+      resolvedSource.type === "primitiveType" &&
+      resolvedTarget.type === "primitiveType"
+    ) {
       return resolvedSource.value === resolvedTarget.value;
     }
 
-    if (resolvedSource.type === "stringLiteralType" && resolvedTarget.type === "stringLiteralType") {
+    if (
+      resolvedSource.type === "stringLiteralType" &&
+      resolvedTarget.type === "stringLiteralType"
+    ) {
       return resolvedSource.value === resolvedTarget.value;
     }
 
-    if (resolvedSource.type === "numberLiteralType" && resolvedTarget.type === "numberLiteralType") {
+    if (
+      resolvedSource.type === "numberLiteralType" &&
+      resolvedTarget.type === "numberLiteralType"
+    ) {
       return resolvedSource.value === resolvedTarget.value;
     }
 
-    if (resolvedSource.type === "booleanLiteralType" && resolvedTarget.type === "booleanLiteralType") {
+    if (
+      resolvedSource.type === "booleanLiteralType" &&
+      resolvedTarget.type === "booleanLiteralType"
+    ) {
       return resolvedSource.value === resolvedTarget.value;
     }
 
-    if (resolvedSource.type === "arrayType" && resolvedTarget.type === "arrayType") {
+    if (
+      resolvedSource.type === "arrayType" &&
+      resolvedTarget.type === "arrayType"
+    ) {
       return this.isAssignable(
         resolvedSource.elementType,
         resolvedTarget.elementType,
       );
     }
 
-    if (resolvedSource.type === "objectType" && resolvedTarget.type === "objectType") {
+    if (
+      resolvedSource.type === "objectType" &&
+      resolvedTarget.type === "objectType"
+    ) {
       // Structural: source must have all properties of target with compatible types
       for (const targetProp of resolvedTarget.properties) {
         const sourceProp = resolvedSource.properties.find(

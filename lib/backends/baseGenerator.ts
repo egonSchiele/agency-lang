@@ -8,6 +8,8 @@ import {
   Literal,
   NewLine,
   PromptLiteral,
+  Scope,
+  ScopeType,
   TypeAlias,
   TypeHint,
   TypeHintMap,
@@ -40,30 +42,11 @@ import { mergeDeep } from "@/utils.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
 
-type Scope = GlobalScope | FunctionScope | NodeScope;
-
-type GlobalScope = {
-  type: "global";
-};
-
-type FunctionScope = {
-  type: "function";
-  functionName: string;
-};
-
-type NodeScope = {
-  type: "node";
-  nodeName: string;
-};
-
 export class BaseGenerator {
   protected typeHints: TypeHintMap = {};
   protected graphNodes: GraphNodeDefinition[] = [];
   protected generatedStatements: string[] = [];
   protected generatedTypeAliases: string[] = [];
-  protected functionScopedVariables: string[] = [];
-  protected globalScopedVariables: string[] = [];
-  protected functionParameters: string[] = [];
 
   protected typeAliases: Record<string, VariableType> = {};
 
@@ -131,13 +114,6 @@ export class BaseGenerator {
       if (node.type === "function") {
         this.generatedStatements.push(this.processTool(node));
         this.collectFunctionSignature(node);
-      }
-    }
-
-    // Pass 6: Collect global scoped variables
-    for (const node of program.nodes) {
-      if (node.type === "assignment") {
-        this.globalScopedVariables.push(node.variableName);
       }
     }
 
@@ -416,30 +392,18 @@ export class BaseGenerator {
     return this.currentScope[this.currentScope.length - 1];
   }
 
-  /* This function is used during assignment, so we can figure out whether this variable
-  should be assigned on local or global scope. There's a related function `generateScopedVariableName`,
-  which is used when retrieving the value of a variable. */
-  protected getScopeVar(): string {
-    const currentScope = this.getCurrentScope();
-    switch (currentScope.type) {
+  protected scopetoString(scope: ScopeType): string {
+    switch (scope) {
       case "global":
         return "__stateStack.globals";
       case "function":
       case "node":
         return "__stack.locals";
+      case "args":
+        return "__stack.args";
+      default:
+        throw new Error(`Unknown scope type: ${scope}`);
     }
-  }
-
-  protected generateScopedVariableName(variableName: string): string {
-    if (this.functionParameters.includes(variableName)) {
-      return `__stack.args.${variableName}`;
-    }
-    if (this.functionScopedVariables.includes(variableName)) {
-      return `__stack.locals.${variableName}`;
-    } else if (this.globalScopedVariables.includes(variableName)) {
-      return `__stateStack.globals.${variableName}`;
-    }
-    return variableName;
   }
 
   protected isImportedTool(functionName: string): boolean {

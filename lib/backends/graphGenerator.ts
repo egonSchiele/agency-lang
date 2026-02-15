@@ -76,11 +76,7 @@ export class GraphGenerator extends TypeScriptGenerator {
     } */
     this.adjacentNodes[nodeName] = [];
     this.currentAdjacentNodes = [];
-    this.functionParameters = [];
     this.isInsideGraphNode = true;
-    for (const param of parameters) {
-      this.functionParameters.push(param.name);
-    }
 
     for (const stmt of body) {
       if (stmt.type === "functionCall" && this.isGraphNode(stmt.functionName)) {
@@ -92,7 +88,6 @@ export class GraphGenerator extends TypeScriptGenerator {
 
     const bodyCode = this.processBodyAsParts(body);
 
-    this.functionParameters = [];
     this.adjacentNodes[nodeName] = [...this.currentAdjacentNodes];
     this.isInsideGraphNode = false;
     this.endScope();

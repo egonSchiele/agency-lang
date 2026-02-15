@@ -6,12 +6,18 @@ import {
 import {
   AgencyNode,
   AgencyProgram,
+  Assignment,
   FunctionCall,
   FunctionDefinition,
+  globalScope,
   IfElse,
+  InterpolationSegment,
   PromptLiteral,
   RawCode,
+  Scope,
+  ScopeType,
   TimeBlock,
+  VariableNameLiteral,
   WhileLoop,
 } from "@/types.js";
 import { MessageThread } from "@/types/messageThread.js";
@@ -44,6 +50,7 @@ export class TypescriptPreprocessor {
     this.filterExcludedBuiltinFunctions();
     this.validateFetchDomains();
     this.addNodeIDsToMessageThreads();
+    this.resolveVariableScopes();
     return this.program;
   }
 
@@ -1139,6 +1146,72 @@ export class TypescriptPreprocessor {
       return urlObj.hostname;
     } catch {
       return null; // Invalid URL
+    }
+  }
+
+  /**
+   * Resolve variable scopes by annotating AST nodes with their scope.
+   * After this pass, every VariableNameLiteral, InterpolationSegment, and Assignment
+   * will have a `scope` property indicating whether the variable is global, local, or args.
+   */
+  protected resolveVariableScopes(): void {
+    const varNameToScope: Record<string, ScopeType> = {};
+
+    // First, for each variable name, we try to collect its scope.
+    for (const { node, scopes } of walkNodes(this.program.nodes)) {
+      if (scopes.length === 0) {
+        throw new Error(
+          `Top-level nodes should have at least the global scope in their scopes array. Node: ${JSON.stringify({ node })}, scopes: ${JSON.stringify({ scopes })}`,
+        );
+      }
+      if (node.type === "assignment") {
+        varNameToScope[node.variableName] = scopes.at(-1)?.type || "global";
+      } else if (node.type === "function" || node.type === "graphNode") {
+        // Parameters are in the function's scope
+        for (const param of node.parameters) {
+          varNameToScope[param.name] = "args";
+        }
+      } else if (node.type === "importStatement") {
+        // todo imported names need to get parsed better,
+        // into an array
+      } else if (node.type === "importNodeStatement") {
+        node.importedNodes.forEach((n) => {
+          varNameToScope[n] = "global";
+        });
+      } else if (node.type === "importToolStatement") {
+        node.importedTools.forEach((t) => {
+          varNameToScope[t] = "global";
+        });
+      }
+    }
+
+    const lookupScope = (varName: string): Scope["type"] | "args" => {
+      if (varName in varNameToScope) {
+        return varNameToScope[varName];
+      }
+      throw new Error(
+        `Variable "${varName}" is referenced but not defined in any scope.`,
+      );
+    };
+
+    // Then, whenever we see a variable being referenced,
+    // we try to look up its scope and set it on that variable.
+    for (const { node, scopes } of walkNodes(this.program.nodes)) {
+      if (node.type === "assignment") {
+        node.scope = lookupScope(node.variableName);
+      } else if (node.type === "variableName") {
+        node.scope = lookupScope(node.value);
+      } else if (
+        node.type === "prompt" ||
+        node.type === "string" ||
+        node.type === "multiLineString"
+      ) {
+        node.segments.forEach((seg) => {
+          if (seg.type === "interpolation") {
+            seg.scope = lookupScope(seg.variableName);
+          }
+        });
+      }
     }
   }
 }

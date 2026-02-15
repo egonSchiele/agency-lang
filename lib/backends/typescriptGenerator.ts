@@ -209,12 +209,7 @@ export class TypeScriptGenerator extends BaseGenerator {
 
   protected processAssignment(node: Assignment): string {
     const { variableName, typeHint, value } = node;
-    const _currentScope = this.getCurrentScope();
-    if (_currentScope.type === "global") {
-      this.globalScopedVariables.push(variableName);
-    } else {
-      this.functionScopedVariables.push(variableName);
-    }
+    const scopeVar = this.scopetoString(node.scope!);
 
     const typeAnnotation = "";
 
@@ -224,7 +219,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       // Direct assignment for other literal types
       const code = this.processNode(value);
       return renderFunctionCallAssignment.default({
-        variableName: `${this.getScopeVar()}.${variableName}`,
+        variableName: `${scopeVar}.${variableName}`,
         functionCode: code.trim(),
         nodeContext: this.getCurrentScope().type === "node",
         globalScope: this.getCurrentScope().type === "global",
@@ -234,14 +229,13 @@ export class TypeScriptGenerator extends BaseGenerator {
       const code = this.processTimeBlock(value, timingVarName);
       return code;
     } else if (value.type === "messageThread") {
-      const varName = `${this.getScopeVar()}.${variableName}`;
+      const varName = `${scopeVar}.${variableName}`;
       return this.processMessageThread(value, varName);
     } else {
       // Direct assignment for other literal types
       const code = this.processNode(value);
       return (
-        `${this.getScopeVar()}.${variableName}${typeAnnotation} = ${code.trim()};` +
-        "\n"
+        `${scopeVar}.${variableName}${typeAnnotation} = ${code.trim()};` + "\n"
       );
     }
   }
@@ -335,13 +329,9 @@ export class TypeScriptGenerator extends BaseGenerator {
     this.startScope({ type: "function", functionName: node.functionName });
     const { functionName, body, parameters } = node;
     const args = parameters.map((p) => p.name);
-    this.functionScopedVariables = [...parameters.map((p) => p.name)];
-    this.functionParameters = args;
 
     const bodyCode = this.processBodyAsParts(body);
 
-    this.functionScopedVariables = [];
-    this.functionParameters = [];
     this.endScope();
     const argsStr = args.map((arg) => `"${arg}"`).join(", ") || "";
     return renderFunctionDefinition.default({
@@ -418,7 +408,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       case "multiLineString":
         return this.generateStringLiteral(literal.segments);
       case "variableName":
-        return this.generateScopedVariableName(literal.value);
+        return `${this.scopetoString(literal.scope!)}.${literal.value}`;
       case "prompt":
         return this.processPromptLiteral(
           DEFAULT_PROMPT_NAME,
@@ -518,7 +508,11 @@ export class TypeScriptGenerator extends BaseGenerator {
       } else {
         // Interpolation segment
         stringParts.push(
-          "${" + this.generateScopedVariableName(segment.variableName) + "}",
+          "${" +
+            this.scopetoString(segment.scope!) +
+            "." +
+            segment.variableName +
+            "}",
         );
       }
     }
@@ -549,16 +543,13 @@ export class TypeScriptGenerator extends BaseGenerator {
 
     const zodSchema = mapTypeToZodSchema(_variableType, this.typeAliases);
 
-
     // Build prompt construction code
     const promptCode = this.buildPromptString({
       segments: prompt.segments,
       typeHints: this.typeHints,
       skills: prompt.skills || [],
     });
-    const parts = functionArgs.map(
-      (arg) => arg.replace(".", "_"),
-    );
+    const parts = functionArgs.map((arg) => arg.replace(".", "_"));
     parts.push("__metadata");
     const argsStr = parts.join(", ");
     let _tools = "";
@@ -615,9 +606,17 @@ I'll probably need to do that for supporting type checking anyway.
       messages: __self.messages_${this.currentMessageThreadNodeId.at(-1)}.getMessages(),
     }`;
 
-    const scopedFunctionArgs = functionArgs.map((arg) =>
-      this.generateScopedVariableName(arg),
-    );
+    const scopedFunctionArgs = functionArgs.map((arg) => {
+      // Find the scope for this interpolated variable from the prompt segments
+      const interpSegment = prompt.segments.find(
+        (s) => s.type === "interpolation" && s.variableName === arg,
+      );
+      const scope =
+        interpSegment?.type === "interpolation"
+          ? interpSegment.scope
+          : undefined;
+      return `${this.scopetoString(scope!)}.${arg}`;
+    });
 
     return promptFunction.default({
       variableName,

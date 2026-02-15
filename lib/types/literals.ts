@@ -1,3 +1,4 @@
+import { ScopeType } from "@/types.js";
 import { AgencyObject } from "./dataStructures.js";
 import { Skill } from "./skill.js";
 import { UsesTool } from "./tools.js";
@@ -27,6 +28,7 @@ export type MultiLineStringLiteral = {
 export type VariableNameLiteral = {
   type: "variableName";
   value: string;
+  scope?: ScopeType;
 };
 
 // New types for prompt segments
@@ -40,6 +42,7 @@ export type TextSegment = {
 export type InterpolationSegment = {
   type: "interpolation";
   variableName: string;
+  scope?: ScopeType;
 };
 
 export type PromptLiteral = {

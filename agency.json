@@ -1,6 +1,5 @@
 {
   "verbose": false,
-  "tarsecTraceHost": "http://localhost:1465",
   "client": {
     "logLevel": "debug",
     "defaultModel": "gpt-4o-mini"

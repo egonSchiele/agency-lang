@@ -11,6 +11,7 @@ import {
   pickANode,
   promptForTarget,
 } from "./util.js";
+import { AgencyConfig } from "@/config.js";
 
 type Case = {
   id: string;
@@ -128,6 +129,7 @@ async function createArgsFileInteractively(
 }
 
 export async function evaluate(
+  config: AgencyConfig,
   target?: string,
   argsFilePath?: string,
   resultsFilePath?: string,
@@ -227,9 +229,7 @@ export async function evaluate(
     }
 
     if (ratedIds.has(c.id)) {
-      console.log(
-        `\nCase ${i + 1}/${totalCases}: skipped (already rated)`,
-      );
+      console.log(`\nCase ${i + 1}/${totalCases}: skipped (already rated)`);
       continue;
     }
 
@@ -241,7 +241,13 @@ export async function evaluate(
       ? argsRecordToString(c.args, selectedNode.parameters)
       : "";
 
-    const json = executeNode(filename, nodeName, hasArgs, argsString, undefined);
+    const json = executeNode({
+      config,
+      agencyFile: filename,
+      nodeName,
+      hasArgs,
+      argsString,
+    });
 
     console.log("\nOutput:");
     console.log(JSON.stringify(json.data, null, 2));

@@ -14,7 +14,7 @@ import {
 } from "./util.js";
 import { color } from "termcolors";
 import { AgencyConfig } from "@/config.js";
-
+import path from "path";
 type Exact = { type: "exact" };
 type LLMJudge = {
   type: "llmJudge";
@@ -73,7 +73,7 @@ function writeTestCase(
   return testFilePath;
 }
 
-export async function fixtures(target?: string) {
+export async function fixtures(config: AgencyConfig, target?: string) {
   let { filename, nodeName } = target
     ? parseTarget(target)
     : await promptForTarget();
@@ -109,7 +109,13 @@ export async function fixtures(target?: string) {
   let { hasArgs, argsString } = await promptForArgs(selectedNode);
 
   console.log("Running program from entrypoint", nodeName);
-  let json = executeNode(filename, nodeName, hasArgs, argsString);
+  let json = executeNode({
+    config,
+    agencyFile: filename,
+    nodeName,
+    hasArgs,
+    argsString,
+  });
 
   // Handle interrupt discovery
   const interruptHandlers: InterruptHandler[] = [];
@@ -167,13 +173,14 @@ export async function fixtures(target?: string) {
     interruptHandlers.push(handler);
 
     // Continue execution with this handler to see if there are more interrupts
-    json = executeNode(
-      filename,
+    json = executeNode({
+      config,
+      agencyFile: filename,
       nodeName,
       hasArgs,
       argsString,
       interruptHandlers,
-    );
+    });
   }
 
   console.log("\nFinal Output:");
@@ -275,13 +282,18 @@ export async function test(config: AgencyConfig, testFile: string) {
       console.log(color.cyan("Description:", testCase.description), "\n");
     }
 
-    const result = executeNode(
+    const relativeSourceFilePath = path.join(
+      path.dirname(testFile),
       tests.sourceFile,
-      testCase.nodeName,
-      hasArgs,
-      testCase.input,
-      testCase.interruptHandlers,
     );
+    const result = executeNode({
+      config,
+      agencyFile: relativeSourceFilePath,
+      nodeName: testCase.nodeName,
+      hasArgs,
+      argsString: testCase.input,
+      interruptHandlers: testCase.interruptHandlers,
+    });
 
     let testPassed = true;
     for (const criterion of testCase.evaluationCriteria) {

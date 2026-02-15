@@ -27,8 +27,8 @@ importers:
         specifier: ^0.0.18
         version: 0.0.18(ws@8.19.0)(zod@4.3.5)
       statelog-client:
-        specifier: ^0.0.36
-        version: 0.0.36
+        specifier: ^0.0.37
+        version: 0.0.37
       tarsec:
         specifier: ^0.1.8
         version: 0.1.8
@@ -960,8 +960,8 @@ packages:
   statelog-client@0.0.35:
     resolution: {integrity: sha512-oumIKJZxj1AzPSBtUrLn6Fu4ditAbSFozKbQr7IspY5nW1//vmBn8aOqqjEM2D8W4DlbAFxR04Tec0kKm2Ajpg==}
 
-  statelog-client@0.0.36:
-    resolution: {integrity: sha512-urcJ11W0zje+y8HA6xJbFjgHkzAFDO4fr4DUAO+lno4oBnFs5pQI0jSIuYaekIhgztQ7x3lBD7ZTeRDpPc5L7w==}
+  statelog-client@0.0.37:
+    resolution: {integrity: sha512-IA/tGNeCKKDS85CdEyWhnlyi4MkTdu4iOUN76Bwzhrwo6lpIiZteWlIHl6io8g6ayKVn/CnmkKwzJt7gRH6zxA==}
 
   std-env@3.10.0:
     resolution: {integrity: sha512-5GS12FdOZNliM5mAOxFRg7Ir0pWz8MdpYm6AY6VPkGpbA7ZzmbzNcBJQ0GPvvyWgcY7QAhCgf9Uy89I03faLkg==}
@@ -1978,7 +1978,7 @@ snapshots:
     dependencies:
       nanoid: 5.1.6
 
-  statelog-client@0.0.36:
+  statelog-client@0.0.37:
     dependencies:
       nanoid: 5.1.6
 

@@ -162,7 +162,7 @@ program
       target: string | undefined,
       opts: { args?: string; results?: string },
     ) => {
-      await evaluate(target, opts.args, opts.results);
+      await evaluate(getConfig(), target, opts.args, opts.results);
     },
   );
 
@@ -172,7 +172,7 @@ program
   .description("Generate test fixtures")
   .argument("[target]", "Target in file.agency:nodeName format")
   .action(async (target: string | undefined) => {
-    await fixtures(target);
+    await fixtures(getConfig(), target);
   });
 
 program

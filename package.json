@@ -6,6 +6,7 @@
   "scripts": {
     "test": "vitest",
     "test:run": "vitest run",
+    "test:agency": "node ./dist/scripts/agency.js test -v tests/agency",
     "build": "rm -rf dist/ && tsc && tsc-alias && cp -r lib/agents dist/lib/agents",
     "start": "node dist/index.js",
     "templates": "typestache ./lib/templates",
@@ -54,7 +55,7 @@
     "piemachine": "^0.0.8",
     "prompts": "^2.4.2",
     "smoltalk": "^0.0.18",
-    "statelog-client": "^0.0.36",
+    "statelog-client": "^0.0.37",
     "tarsec": "^0.1.8",
     "typestache": "^0.4.4",
     "zod": "^4.3.5"

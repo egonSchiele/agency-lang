@@ -6,6 +6,7 @@ import { GraphNodeDefinition, VariableType } from "@/types.js";
 import renderEvaluate from "@/templates/cli/evaluate.js";
 import renderJudgeEvaluate from "@/templates/cli/judgeEvaluate.js";
 import { compile } from "./commands.js";
+import { AgencyConfig } from "@/config.js";
 export function parseTarget(target: string): {
   filename: string;
   nodeName: string;
@@ -113,19 +114,27 @@ export async function promptForArgs(
   return { hasArgs, argsString };
 }
 
-export function executeNode(
-  agencyFile: string,
-  nodeName: string,
-  hasArgs: boolean,
-  argsString: string,
+export function executeNode({
+  config,
+  agencyFile,
+  nodeName,
+  hasArgs,
+  argsString,
+  interruptHandlers,
+}: {
+  config: AgencyConfig;
+  agencyFile: string;
+  nodeName: string;
+  hasArgs: boolean;
+  argsString: string;
   interruptHandlers?: Array<{
     action: "approve" | "reject" | "modify";
     modifiedArgs?: Record<string, any>;
     expectedMessage?: string;
-  }>,
-): { data: any; [key: string]: any } {
+  }>;
+}): { data: any; [key: string]: any } {
   const outFile = agencyFile.replace(".agency", ".js");
-  compile({}, agencyFile, outFile);
+  compile(config, agencyFile);
   const evaluateScript = renderEvaluate({
     filename: outFile,
     nodeName,

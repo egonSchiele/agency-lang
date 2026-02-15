@@ -30,8 +30,8 @@ importers:
         specifier: ^0.0.36
         version: 0.0.36
       tarsec:
-        specifier: ^0.1.5
-        version: 0.1.5
+        specifier: ^0.1.8
+        version: 0.1.8
       typestache:
         specifier: ^0.4.4
         version: 0.4.4
@@ -989,8 +989,8 @@ packages:
   tarsec@0.0.18:
     resolution: {integrity: sha512-g1OZ7VyyaIjHT1KXI6o8tdebJT1WrC3801+RGw2mEEWc6S2gVC5aBDUZZRbxeUPkekMR5R/+ba6s8UfsJv8n8w==}
 
-  tarsec@0.1.5:
-    resolution: {integrity: sha512-9srSgnBGjwDDxrBExY3/fuQvNWj4ud+tSnqjGK5p5ZkLAUjySrkENJD57MhuexGnXoGEqhl72emKw+MF1xOTkg==}
+  tarsec@0.1.8:
+    resolution: {integrity: sha512-EOS9JemsNHJqiLx3LIW0mTUYzlObFIHsyXzmpivj9E9QiFkmFjOymV5CCo0fnUvOg76tfacATgi00n6chd2Cig==}
 
   termcolors@https://codeload.github.com/egonSchiele/termcolors/tar.gz/d5c1f497618398ce1440d2383d2aad2642e4051f:
     resolution: {tarball: https://codeload.github.com/egonSchiele/termcolors/tar.gz/d5c1f497618398ce1440d2383d2aad2642e4051f}
@@ -2010,7 +2010,7 @@ snapshots:
 
   tarsec@0.0.18: {}
 
-  tarsec@0.1.5: {}
+  tarsec@0.1.8: {}
 
   termcolors@https://codeload.github.com/egonSchiele/termcolors/tar.gz/d5c1f497618398ce1440d2383d2aad2642e4051f: {}
 

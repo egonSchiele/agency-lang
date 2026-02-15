@@ -37,13 +37,17 @@ function getConfig(): AgencyConfig {
   return config;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms * 1000));
+}
+
 program
   .command("compile")
   .alias("build")
   .description("Compile .agency file or directory to JavaScript")
   .argument("<input>", "Path to .agency input file or directory")
   .argument("[output]", "Path to output .js file (optional)")
-  .action((input: string, output: string | undefined) => {
+  .action(async (input: string, output: string | undefined) => {
     compile(getConfig(), input, output);
   });
 

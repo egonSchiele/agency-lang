@@ -62,7 +62,7 @@ export function readStdin(): Promise<string> {
 
 export function parse(contents: string, config: AgencyConfig): AgencyProgram {
   const verbose = config.verbose ?? false;
-  const parseResult = parseAgency(contents, verbose);
+  const parseResult = parseAgency(contents, config);
 
   // Check if parsing was successful
   if (!parseResult.success) {

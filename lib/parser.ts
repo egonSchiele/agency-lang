@@ -17,6 +17,8 @@ import {
   setInputStr,
   TarsecError,
   failure,
+  setTraceHost,
+  setTraceId,
 } from "tarsec";
 
 import { accessExpressionParser } from "./parsers/access.js";
@@ -48,6 +50,8 @@ import { usesToolParser } from "./parsers/tools.js";
 import { typeAliasParser, typeHintParser } from "./parsers/typeHints.js";
 import { AgencyNode, AgencyProgram } from "./types.js";
 import { skillParser } from "./parsers/skill.js";
+import { AgencyConfig } from "./config.js";
+import { nanoid } from "nanoid";
 
 export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
   const parser = many(
@@ -109,7 +113,7 @@ export const normalizeCode = (code: string) => {
 
 export function _parseAgency(
   input: string,
-  verbose: boolean = false,
+  config: AgencyConfig = {},
 ): ParserResult<AgencyProgram> {
   // get rid of all multiline comments
   const normalized = normalizeCode(input);
@@ -123,16 +127,20 @@ export function _parseAgency(
     );
   }
   setInputStr(normalized);
+  if (config.tarsecTraceHost) {
+    setTraceHost("http://localhost:1465");
+    setTraceId(nanoid());
+  }
   const result = agencyParser(normalized);
   return result;
 }
 
 export function parseAgency(
   input: string,
-  verbose: boolean = false,
+  config: AgencyConfig = {},
 ): ParserResult<AgencyProgram> {
   try {
-    return _parseAgency(input, verbose);
+    return _parseAgency(input, config);
   } catch (error) {
     if (error instanceof TarsecError) {
       console.log(error.data.prettyMessage);

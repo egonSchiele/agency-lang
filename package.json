@@ -18,7 +18,8 @@
     "eval": "node ./dist/scripts/agency.js eval",
     "fixtures": "node ./dist/scripts/agency.js fixtures",
     "diagnostics": "node ./dist/scripts/agency.js diagnostics",
-    "preprocess": "node ./dist/scripts/agency.js preprocess"
+    "preprocess": "node ./dist/scripts/agency.js preprocess",
+    "circular-deps": "npx dpdm --circular lib/parser.ts"
   },
   "bin": {
     "agency": "./dist/scripts/agency.js"
@@ -54,7 +55,7 @@
     "prompts": "^2.4.2",
     "smoltalk": "^0.0.18",
     "statelog-client": "^0.0.36",
-    "tarsec": "^0.1.5",
+    "tarsec": "^0.1.8",
     "typestache": "^0.4.4",
     "zod": "^4.3.5"
   },

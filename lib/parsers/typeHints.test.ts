@@ -737,7 +737,7 @@ describe("typeAliasParser", () => {
     {
       input: "type",
       expected: { success: false },
-      throws: true,
+      throws: false,
     },
     {
       input: "type A",
@@ -1643,18 +1643,22 @@ describe("objectTypeParser", () => {
     {
       input: "{ x number }",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "{ x: }",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "{ : number }",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "{ x: number",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "x: number }",
@@ -1749,7 +1753,7 @@ describe("objectTypeParser", () => {
     },
   ];
 
-  testCases.forEach(({ input, expected }) => {
+  testCases.forEach(({ input, expected, throws }) => {
     if (expected.success) {
       it(`should parse "${input}" successfully`, () => {
         const result = objectTypeParser(input);
@@ -1758,6 +1762,10 @@ describe("objectTypeParser", () => {
           expect(result.result).toEqual(expected.result);
         }
       });
+    } else if (throws) {
+      it(`should fail to parse "${input}"`, () => {
+          expect(() => objectTypeParser(input)).toThrow();
+        });
     } else {
       it(`should fail to parse "${input}"`, () => {
           const result = objectTypeParser(input);

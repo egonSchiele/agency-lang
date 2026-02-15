@@ -75,6 +75,11 @@ export interface AgencyConfig {
    */
   disallowedFetchDomains?: string[];
 
+  /**
+   * Optionally specify a custom host for tarsec trace collection
+   */
+  tarsecTraceHost?: string;
+
   /** Statelog config */
   log?: Partial<{
     host: string;

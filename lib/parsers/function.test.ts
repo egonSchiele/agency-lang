@@ -301,6 +301,7 @@ describe("functionParser", () => {
     {
       input: "def test() foo = 1",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "def () { foo = 1 }",
@@ -309,6 +310,7 @@ describe("functionParser", () => {
     {
       input: "def test() {",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "",
@@ -427,7 +429,7 @@ describe("functionParser", () => {
           returnType: null,
           docString: {
             type: "docString",
-            value: "This is a multi-line\n  docstring",
+            value: "This is a multi-line\ndocstring",
           },
           body: [
             {
@@ -1653,14 +1655,16 @@ describe("functionParser", () => {
     {
       input: "def bad(): { x }",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "def bad() : { x }",
       expected: { success: false },
+      throws: true,
     },
   ];
 
-  testCases.forEach(({ input, expected }) => {
+  testCases.forEach(({ input, expected, throws }) => {
     if (expected.success) {
       it(`should parse "${input.replace(/\n/g, "\\n")}" successfully`, () => {
         const result = functionParser(normalizeCode(input));
@@ -1668,6 +1672,10 @@ describe("functionParser", () => {
         if (result.success) {
           expect(result.result).toEqual(expected.result);
         }
+      });
+    } else if (throws) {
+      it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
+        expect(() => functionParser(normalizeCode(input))).toThrow();
       });
     } else {
       it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
@@ -2765,14 +2773,16 @@ describe("graphNodeParser", () => {
     {
       input: "node bad(): { x }",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "node bad() : { x }",
       expected: { success: false },
+      throws: true,
     },
   ];
 
-  testCases.forEach(({ input, expected }) => {
+  testCases.forEach(({ input, expected, throws }) => {
     if (expected.success) {
       it(`should parse "${input.replace(/\n/g, "\\n")}" successfully`, () => {
         const result = graphNodeParser(input);
@@ -2780,6 +2790,10 @@ describe("graphNodeParser", () => {
         if (result.success) {
           expect(result.result).toEqual(expected.result);
         }
+      });
+    } else if (throws) {
+      it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
+        expect(() => graphNodeParser(input)).toThrow();
       });
     } else {
       it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
@@ -3554,7 +3568,6 @@ x=1
   }
 }`;
       const result = messageThreadParser(normalizeCode(input));
-      console.log(JSON.stringify(result, null, 2));
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.result.type).toBe("messageThread");

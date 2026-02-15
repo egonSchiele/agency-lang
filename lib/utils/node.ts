@@ -20,6 +20,7 @@ export function* getAllVariablesInBody(
       }
       yield* getAllVariablesInBody(node.body);
     } else if (node.type === "ifElse") {
+      yield* getAllVariablesInBody([node.condition]);
       yield* getAllVariablesInBody(node.thenBody);
       if (node.elseBody) {
         yield* getAllVariablesInBody(node.elseBody);
@@ -130,11 +131,14 @@ export function* walkNodes(
     } else if (node.type === "graphNode") {
       yield* walkNodes(node.body, [...ancestors, node]);
     } else if (node.type === "ifElse") {
+
+      yield* walkNodes([node.condition], [...ancestors, node]);
       yield* walkNodes(node.thenBody, [...ancestors, node]);
       if (node.elseBody) {
         yield* walkNodes(node.elseBody, [...ancestors, node]);
       }
     } else if (node.type === "whileLoop") {
+      yield* walkNodes([node.condition], [...ancestors, node]);
       yield* walkNodes(node.body, [...ancestors, node]);
     } else if (node.type === "timeBlock") {
       yield* walkNodes(node.body, [...ancestors, node]);

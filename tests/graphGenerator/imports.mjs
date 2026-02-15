@@ -17,13 +17,13 @@ import { nanoid } from "nanoid";
 import * as smoltalk from "smoltalk";
 
 /* Code to log to statelog */
-const statelogHost = "https://statelog.adit.io";
+const statelogHost = "";
 const __traceId = nanoid();
 const statelogConfig = {
   host: statelogHost,
   traceId: __traceId,
   apiKey: process.env.STATELOG_API_KEY || "",
-  projectId: "agency-lang",
+  projectId: "",
   debugMode: false,
 };
 const __statelogClient = new StatelogClient(statelogConfig);

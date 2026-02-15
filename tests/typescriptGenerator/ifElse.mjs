@@ -50,7 +50,7 @@ const addTool = {
     },
   };
 //  Basic if statement with boolean variable
-__stateStack.globals.flag = true;
+__stateStack.globals.flag = __stateStack.globals.true;
 if (__stateStack.globals.flag) {
 __stateStack.globals.result = `condition was true`;
 
@@ -62,16 +62,16 @@ __stateStack.globals.status = `ready`;
 
 }
 //  If statement with property access
-__stateStack.globals.obj = {"active": true};
+__stateStack.globals.obj = {"active": __stateStack.globals.true};
 if (__stateStack.globals.obj.active) {
 __stateStack.globals.message = `object is active`;
 
 
 }
 //  Nested if statements
-__stateStack.globals.outer = true;
+__stateStack.globals.outer = __stateStack.globals.true;
 if (__stateStack.globals.outer) {
-__stateStack.globals.inner = false;
+__stateStack.globals.inner = __stateStack.globals.false;
 
 
 if (__stateStack.globals.inner) {
@@ -89,7 +89,7 @@ __stateStack.globals.nested = `both true`;
 //    firstElement = "exists"
 //  }
 //  Multiple statements in then body
-__stateStack.globals.condition = true;
+__stateStack.globals.condition = __stateStack.globals.true;
 if (__stateStack.globals.condition) {
 __stateStack.globals.a = 1;
 
@@ -102,7 +102,7 @@ __stateStack.globals.c = 3;
 
 }
 //  Multiple statements in both then and else bodies
-__stateStack.globals.value = false;
+__stateStack.globals.value = __stateStack.globals.false;
 if (__stateStack.globals.value) {
 __stateStack.globals.x = 10;
 

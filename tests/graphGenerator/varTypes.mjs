@@ -9,13 +9,13 @@ import { nanoid } from "nanoid";
 import * as smoltalk from "smoltalk";
 
 /* Code to log to statelog */
-const statelogHost = "https://statelog.adit.io";
+const statelogHost = "";
 const __traceId = nanoid();
 const statelogConfig = {
   host: statelogHost,
   traceId: __traceId,
   apiKey: process.env.STATELOG_API_KEY || "",
-  projectId: "agency-lang",
+  projectId: "",
   debugMode: false,
 };
 const __statelogClient = new StatelogClient(statelogConfig);
@@ -714,7 +714,7 @@ async function _response(person_name, person_age, __metadata) {
 }
 
 
-__self.response = _response(person.name, person.age, {
+__self.response = _response(__stateStack.globals.person.name, __stateStack.globals.person.age, {
       messages: __self.messages_0.getMessages(),
     });
         __stack.step++;

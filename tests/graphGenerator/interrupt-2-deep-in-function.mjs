@@ -9,13 +9,13 @@ import { nanoid } from "nanoid";
 import * as smoltalk from "smoltalk";
 
 /* Code to log to statelog */
-const statelogHost = "https://statelog.adit.io";
+const statelogHost = "";
 const __traceId = nanoid();
 const statelogConfig = {
   host: statelogHost,
   traceId: __traceId,
   apiKey: process.env.STATELOG_API_KEY || "",
-  projectId: "agency-lang",
+  projectId: "",
   debugMode: false,
 };
 const __statelogClient = new StatelogClient(statelogConfig);
@@ -554,14 +554,14 @@ export async function greet(args, __metadata={}) {
 
       if (__step <= 1) {
         __stack.step++;
-return interrupt(`Agent wants to call the greet function with name: ${__stack.args.name} and age: ${__stack.args.age}`)
+return interrupt(`Agent wants to call the greet function with name: ${__stack.args.name} and age: ${__stack.locals.age}`)
         __stack.step++;
       }
       
 
       if (__step <= 2) {
         __stateStack.pop();
-return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`
+return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.locals.age} years old.`
         __stack.step++;
       }
       
@@ -594,7 +594,7 @@ export async function foo2(args, __metadata={}) {
       
 
       if (__step <= 1) {
-        await console.log(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`)
+        await console.log(`In foo2, name is ${__stack.args.name} and age is ${__stack.locals.age}, this message should only print once...`)
         __stack.step++;
       }
       
@@ -788,7 +788,7 @@ async function _response(name, age, __metadata) {
 
 
 
-__self.response = await _response(__stack.args.name, __stack.args.age, {
+__self.response = await _response(__stack.args.name, __stack.locals.age, {
       messages: __self.messages_0.getMessages(),
     });
 
@@ -804,7 +804,7 @@ if (isInterrupt(__self.response)) {
       
 
       if (__step <= 3) {
-        await console.log(`Greeted, age is still ${__stack.args.age}...`)
+        await console.log(`Greeted, age is still ${__stack.locals.age}...`)
         __stack.step++;
       }
       

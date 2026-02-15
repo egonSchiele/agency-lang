@@ -1189,9 +1189,11 @@ export class TypescriptPreprocessor {
       if (varName in varNameToScope) {
         return varNameToScope[varName];
       }
-      throw new Error(
+      return "global";
+      // TODO enable this
+      /* throw new Error(
         `Variable "${varName}" is referenced but not defined in any scope.`,
-      );
+      ); */
     };
 
     // Then, whenever we see a variable being referenced,

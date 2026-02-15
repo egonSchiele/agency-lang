@@ -26,6 +26,8 @@ graph.node("{{{name}}}", async (state) => {
       __callbacks = state.__metadata.callbacks;
     }
 
+    await __callHook("onNodeStart", { nodeName: "{{{name}}}" });
+
     // either creates a new stack for this node,
     // or restores the stack if we're resuming after an interrupt,
     // depending on the mode of the state stack (serialize or deserialize).
@@ -58,6 +60,7 @@ graph.node("{{{name}}}", async (state) => {
     {{{body}}}
     
     // this is just here to have a default return value from a node if the user doesn't specify one
+    await __callHook("onNodeEnd", { nodeName: "{{{name}}}", data: undefined });
     return { messages: __self.messages_0, data: undefined };
 });
 `;

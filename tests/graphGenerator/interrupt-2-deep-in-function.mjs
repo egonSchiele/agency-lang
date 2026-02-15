@@ -370,6 +370,12 @@ function isGenerator(variable) {
 
 let __callbacks = {};
 
+async function __callHook(name, data) {
+  if (__callbacks[name]) {
+    await __callbacks[name](data);
+  }
+}
+
 let onStreamLock = false;
 
 function __cloneArray(arr) {
@@ -618,13 +624,14 @@ async function _response(name, age, __metadata) {
     __messages.push(smoltalk.userMessage(__prompt));
   
   
+    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
     let __completion = await __client.text({
       messages: __messages,
       tools: __tools,
       responseFormat: __responseFormat,
       stream: false
     });
-  
+
     const endTime = performance.now();
 
     await handleStreamingResponse(__completion);
@@ -637,13 +644,13 @@ async function _response(name, age, __metadata) {
       tools: __tools,
       responseFormat: __responseFormat
     });
-  
+
     if (!__completion.success) {
       throw new Error(
         `Error getting response from ${__model}: ${__completion.error}`
       );
     }
-  
+
     responseMessage = __completion.value;
     __toolCalls = responseMessage.toolCalls || [];
 
@@ -653,6 +660,7 @@ async function _response(name, age, __metadata) {
     }
 
     __updateTokenStats(responseMessage.usage, responseMessage.cost);
+    await __callHook("onLLMCallEnd", { result: responseMessage, usage: responseMessage.usage, cost: responseMessage.cost, timeTaken: endTime - startTime });
 
   }
 
@@ -687,8 +695,10 @@ async function _response(name, age, __metadata) {
         name: toolCall.name,
       });
   } else {
+    await __callHook("onToolCallStart", { toolName: "greet", args: params });
     result = await greet(params);
     toolCallEndTime = performance.now();
+    await __callHook("onToolCallEnd", { toolName: "greet", result, timeTaken: toolCallEndTime - toolCallStartTime });
   
     statelogClient.toolCall({
       toolName: "greet",
@@ -734,6 +744,7 @@ async function _response(name, age, __metadata) {
     }
   
     const nextStartTime = performance.now();
+    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
     let __completion = await __client.text({
       messages: __messages,
       tools: __tools,
@@ -761,6 +772,7 @@ async function _response(name, age, __metadata) {
     }
     responseMessage = __completion.value;
     __updateTokenStats(responseMessage.usage, responseMessage.cost);
+    await __callHook("onLLMCallEnd", { result: responseMessage, usage: responseMessage.usage, cost: responseMessage.cost, timeTaken: nextEndTime - nextStartTime });
   }
 
   // Add final assistant response to history
@@ -826,6 +838,8 @@ graph.node("sayHi", async (state) => {
     if (state.__metadata?.callbacks) {
       __callbacks = state.__metadata.callbacks;
     }
+
+    await __callHook("onNodeStart", { nodeName: "sayHi" });
 
     // either creates a new stack for this node,
     // or restores the stack if we're resuming after an interrupt,
@@ -918,6 +932,7 @@ if (isInterrupt(__stack.locals.response)) {
       
     
     // this is just here to have a default return value from a node if the user doesn't specify one
+    await __callHook("onNodeEnd", { nodeName: "sayHi", data: undefined });
     return { messages: __self.messages_0, data: undefined };
 });
 
@@ -927,8 +942,11 @@ export async function sayHi(name, { messages, callbacks } = {}) {
 
   const __data = [ name ];
   __callbacks = callbacks || {};
+  await __callHook("onAgentStart", { nodeName: "sayHi", args: __data, messages: messages || [] });
   const __result = await graph.run("sayHi", { messages: messages || [], data: __data });
-  return __createReturnObject(__result);
+  const __returnObject = __createReturnObject(__result);
+  await __callHook("onAgentEnd", { nodeName: "sayHi", result: __returnObject });
+  return __returnObject;
 }
 
 export default graph;

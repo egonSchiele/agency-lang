@@ -78,13 +78,14 @@ async function _sentiment(message, __metadata) {
     __messages.push(smoltalk.userMessage(__prompt));
   
   
+    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
     let __completion = await __client.text({
       messages: __messages,
       tools: __tools,
       responseFormat: __responseFormat,
       stream: false
     });
-  
+
     const endTime = performance.now();
 
     await handleStreamingResponse(__completion);
@@ -97,13 +98,13 @@ async function _sentiment(message, __metadata) {
       tools: __tools,
       responseFormat: __responseFormat
     });
-  
+
     if (!__completion.success) {
       throw new Error(
         `Error getting response from ${__model}: ${__completion.error}`
       );
     }
-  
+
     responseMessage = __completion.value;
     __toolCalls = responseMessage.toolCalls || [];
 
@@ -113,6 +114,7 @@ async function _sentiment(message, __metadata) {
     }
 
     __updateTokenStats(responseMessage.usage, responseMessage.cost);
+    await __callHook("onLLMCallEnd", { result: responseMessage, usage: responseMessage.usage, cost: responseMessage.cost, timeTaken: endTime - startTime });
 
   }
 
@@ -144,6 +146,7 @@ async function _sentiment(message, __metadata) {
     }
   
     const nextStartTime = performance.now();
+    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
     let __completion = await __client.text({
       messages: __messages,
       tools: __tools,
@@ -171,6 +174,7 @@ async function _sentiment(message, __metadata) {
     }
     responseMessage = __completion.value;
     __updateTokenStats(responseMessage.usage, responseMessage.cost);
+    await __callHook("onLLMCallEnd", { result: responseMessage, usage: responseMessage.usage, cost: responseMessage.cost, timeTaken: nextEndTime - nextStartTime });
   }
 
   // Add final assistant response to history

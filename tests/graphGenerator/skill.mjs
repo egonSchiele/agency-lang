@@ -370,6 +370,12 @@ function isGenerator(variable) {
 
 let __callbacks = {};
 
+async function __callHook(name, data) {
+  if (__callbacks[name]) {
+    await __callbacks[name](data);
+  }
+}
+
 let onStreamLock = false;
 
 function __cloneArray(arr) {
@@ -530,6 +536,8 @@ graph.node("analyzeData", async (state) => {
       __callbacks = state.__metadata.callbacks;
     }
 
+    await __callHook("onNodeStart", { nodeName: "analyzeData" });
+
     // either creates a new stack for this node,
     // or restores the stack if we're resuming after an interrupt,
     // depending on the mode of the state stack (serialize or deserialize).
@@ -596,13 +604,14 @@ Available skills:
     __messages.push(smoltalk.userMessage(__prompt));
   
   
+    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
     let __completion = await __client.text({
       messages: __messages,
       tools: __tools,
       responseFormat: __responseFormat,
       stream: false
     });
-  
+
     const endTime = performance.now();
 
     await handleStreamingResponse(__completion);
@@ -615,13 +624,13 @@ Available skills:
       tools: __tools,
       responseFormat: __responseFormat
     });
-  
+
     if (!__completion.success) {
       throw new Error(
         `Error getting response from ${__model}: ${__completion.error}`
       );
     }
-  
+
     responseMessage = __completion.value;
     __toolCalls = responseMessage.toolCalls || [];
 
@@ -631,6 +640,7 @@ Available skills:
     }
 
     __updateTokenStats(responseMessage.usage, responseMessage.cost);
+    await __callHook("onLLMCallEnd", { result: responseMessage, usage: responseMessage.usage, cost: responseMessage.cost, timeTaken: endTime - startTime });
 
   }
 
@@ -662,6 +672,7 @@ Available skills:
     }
   
     const nextStartTime = performance.now();
+    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
     let __completion = await __client.text({
       messages: __messages,
       tools: __tools,
@@ -689,6 +700,7 @@ Available skills:
     }
     responseMessage = __completion.value;
     __updateTokenStats(responseMessage.usage, responseMessage.cost);
+    await __callHook("onLLMCallEnd", { result: responseMessage, usage: responseMessage.usage, cost: responseMessage.cost, timeTaken: nextEndTime - nextStartTime });
   }
 
   // Add final assistant response to history
@@ -726,6 +738,7 @@ if (isInterrupt(__self.result)) {
       
     
     // this is just here to have a default return value from a node if the user doesn't specify one
+    await __callHook("onNodeEnd", { nodeName: "analyzeData", data: undefined });
     return { messages: __self.messages_0, data: undefined };
 });
 
@@ -735,8 +748,11 @@ export async function analyzeData(input, { messages, callbacks } = {}) {
 
   const __data = [ input ];
   __callbacks = callbacks || {};
+  await __callHook("onAgentStart", { nodeName: "analyzeData", args: __data, messages: messages || [] });
   const __result = await graph.run("analyzeData", { messages: messages || [], data: __data });
-  return __createReturnObject(__result);
+  const __returnObject = __createReturnObject(__result);
+  await __callHook("onAgentEnd", { nodeName: "analyzeData", result: __returnObject });
+  return __returnObject;
 }
 
 export default graph;

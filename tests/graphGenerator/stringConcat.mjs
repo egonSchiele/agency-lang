@@ -370,6 +370,12 @@ function isGenerator(variable) {
 
 let __callbacks = {};
 
+async function __callHook(name, data) {
+  if (__callbacks[name]) {
+    await __callbacks[name](data);
+  }
+}
+
 let onStreamLock = false;
 
 function __cloneArray(arr) {
@@ -530,6 +536,8 @@ graph.node("foo", async (state) => {
       __callbacks = state.__metadata.callbacks;
     }
 
+    await __callHook("onNodeStart", { nodeName: "foo" });
+
     // either creates a new stack for this node,
     // or restores the stack if we're resuming after an interrupt,
     // depending on the mode of the state stack (serialize or deserialize).
@@ -581,6 +589,7 @@ if (isInterrupt(__stack.locals.name)) {
       
     
     // this is just here to have a default return value from a node if the user doesn't specify one
+    await __callHook("onNodeEnd", { nodeName: "foo", data: undefined });
     return { messages: __self.messages_0, data: undefined };
 });
 
@@ -590,8 +599,11 @@ export async function foo({ messages, callbacks } = {}) {
 
   const __data = [  ];
   __callbacks = callbacks || {};
+  await __callHook("onAgentStart", { nodeName: "foo", args: __data, messages: messages || [] });
   const __result = await graph.run("foo", { messages: messages || [], data: __data });
-  return __createReturnObject(__result);
+  const __returnObject = __createReturnObject(__result);
+  await __callHook("onAgentEnd", { nodeName: "foo", result: __returnObject });
+  return __returnObject;
 }
 
 export default graph;

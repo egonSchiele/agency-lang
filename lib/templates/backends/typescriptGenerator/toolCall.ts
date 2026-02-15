@@ -25,8 +25,10 @@ export const template = `if (
         name: toolCall.name,
       });
   } else {
+    await __callHook("onToolCallStart", { toolName: "{{{name}}}", args: params });
     result = await {{{name}}}(params);
     toolCallEndTime = performance.now();
+    await __callHook("onToolCallEnd", { toolName: "{{{name}}}", result, timeTaken: toolCallEndTime - toolCallStartTime });
   
     statelogClient.toolCall({
       toolName: "{{{name:string}}}",

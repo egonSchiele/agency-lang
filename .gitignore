@@ -4,3 +4,4 @@ node_modules/*
 index.mts
 index.adl
 __evaluate.*
+__judge*

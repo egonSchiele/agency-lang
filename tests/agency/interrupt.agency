@@ -1,0 +1,16 @@
+def greet(name: string): string {
+  return interrupt("Agent wants to call the greet function with name: ${name}")
+  return "Kya chal raha jai, ${name}!"
+}
+
+node foo() {
+  uses greet
+  res = llm("Call the greet function with name: Adit. Return JUST the result of the function call, no explanation.")
+  print(res)
+  return res
+}
+
+node bar() {
+  result = llm("What is 2 + 2?")
+  return result
+}

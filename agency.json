@@ -1,7 +1,12 @@
 {
   "verbose": false,
+  "log": {
+    "host": "https://statelog.adit.io",
+    "projectId": "agency-lang",
+    "debugMode": false
+  },
   "client": {
-    "logLevel": "debug",
+    "logLevel": "warn",
     "defaultModel": "gpt-4o-mini"
   }
 }

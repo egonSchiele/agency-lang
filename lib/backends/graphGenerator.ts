@@ -35,11 +35,6 @@ export class GraphGenerator extends TypeScriptGenerator {
 
   configDefaults(): Partial<AgencyConfig> {
     return {
-      log: {
-        host: "https://statelog.adit.io",
-        projectId: "agency-lang",
-        debugMode: false,
-      },
       client: {
         logLevel: "warn",
         defaultModel: "gpt-4o-mini",

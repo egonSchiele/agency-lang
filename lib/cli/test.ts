@@ -57,7 +57,7 @@ function writeTestCase(
   if (fs.existsSync(testFilePath)) {
     tests = JSON.parse(fs.readFileSync(testFilePath, "utf-8"));
   } else {
-    tests = { sourceFile: agencyFilename, tests: [] };
+    tests = { sourceFile: path.basename(agencyFilename), tests: [] };
   }
   const testCase: TestCase = {
     nodeName,

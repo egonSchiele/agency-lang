@@ -1,0 +1,4 @@
+import node { foo } from "./foo.agency"
+node main() {
+  return foo()
+}

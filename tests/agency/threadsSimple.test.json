@@ -1,0 +1,15 @@
+{
+  "sourceFile": "threadsSimple.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"res1\":[2,3,5,7,11],\"res2\":28}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

@@ -15,6 +15,7 @@ import { fixtures, test } from "@/cli/test.js";
 import { AgencyConfig } from "@/config.js";
 import { _parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
+import { typeCheck, formatErrors } from "@/typeChecker.js";
 import { Command } from "commander";
 import * as fs from "fs";
 import { failure, TarsecError } from "tarsec";
@@ -182,6 +183,33 @@ program
       } else {
         throw error;
       }
+    }
+  });
+
+program
+  .command("typecheck")
+  .alias("tc")
+  .description(
+    "Type check .agency file (reads from stdin if no input)",
+  )
+  .argument("[input]", "Path to .agency input file")
+  .option("--strict", "Enable strict types (untyped variables are errors)")
+  .action(async (input: string | undefined, opts: { strict?: boolean }) => {
+    const config = getConfig();
+    if (opts.strict) config.strictTypes = true;
+    let contents;
+    if (!input) {
+      contents = await readStdin();
+    } else {
+      contents = readFile(input);
+    }
+    const parsedProgram = parse(contents, config);
+    const { errors } = typeCheck(parsedProgram, config);
+    if (errors.length > 0) {
+      console.error(formatErrors(errors));
+      process.exit(1);
+    } else {
+      console.log("No type errors found.");
     }
   });
 

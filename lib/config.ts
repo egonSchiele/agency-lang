@@ -91,4 +91,10 @@ export interface AgencyConfig {
     logLevel: "error" | "warn" | "info" | "debug";
     defaultModel: string;
   }>;
+
+  /**
+   * If true, untyped variables are errors.
+   * If false (default), untyped variables are implicitly `any`.
+   */
+  strictTypes?: boolean;
 }

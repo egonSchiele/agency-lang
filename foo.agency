@@ -1,1 +1,7 @@
-skill "path/to/skill.ts" "description"
+def greet(name: string) {
+  print("Hello, ${name}!")
+}
+
+node main() {
+  res1: string = greet(1)
+}

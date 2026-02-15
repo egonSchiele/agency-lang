@@ -1,0 +1,19 @@
+prompt = "
+Please categorize this user message.
+If the message is about remembering something, or about the user's reminders, return 'reminder'.
+If the message is about a to-do, return 'todo'.
+If the user wants to quit, return 'quit'.
+Otherwise, return 'general'.
+"
+
+type Category = "reminder" | "todo" | "general" | "quit"
+
+node categorize(message: string) {
+  category: Category = llm("${prompt}. Here's the user message: '${message}'")
+  return category
+}
+
+node main() {
+  userMessage = "Remind me to buy milk tomorrow"
+  return categorize(userMessage)
+}

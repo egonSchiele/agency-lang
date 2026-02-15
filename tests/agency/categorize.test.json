@@ -1,0 +1,45 @@
+{
+  "sourceFile": "./categorize.agency",
+  "tests": [
+    {
+      "nodeName": "categorize",
+      "input": "\"Remind me to buy milk tomorrow\"",
+      "expectedOutput": "\"reminder\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "categorize",
+      "input": "\"Todo: be awesome\"",
+      "expectedOutput": "\"todo\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "categorize",
+      "input": "\"what are some good iphone apps?\"",
+      "expectedOutput": "\"general\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "categorize",
+      "input": "\"exit\"",
+      "expectedOutput": "\"quit\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

@@ -205,3 +205,31 @@ export function executeJudge(
   const results = readFileSync("__judge_evaluate.json", "utf-8");
   return JSON.parse(results).data;
 }
+
+export function* findRecursively(
+  dirName: string,
+  ext: string = ".agency",
+  searched: string[] = [],
+): Generator<{ path: string }> {
+  searched.push(path.resolve(dirName));
+  // Find all .agency files in the directory
+  const files = fs.readdirSync(dirName);
+  const filesToProcess = files.filter((file) => {
+    return (
+      (file.endsWith(ext) ||
+        fs.statSync(path.join(dirName, file)).isDirectory()) &&
+      !file.startsWith(".")
+    );
+  });
+
+  for (const file of filesToProcess) {
+    const fullPath = path.join(dirName, file);
+    if (fs.statSync(fullPath).isDirectory()) {
+      if (!searched.includes(path.resolve(fullPath))) {
+        yield* findRecursively(fullPath, ext, searched);
+      }
+    } else {
+      yield { path: fullPath };
+    }
+  }
+}

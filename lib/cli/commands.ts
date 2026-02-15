@@ -8,6 +8,7 @@ import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import { parseAgency } from "../parser.js";
+import { findRecursively } from "./util.js";
 
 // Load configuration from agency.json
 export function loadConfig(
@@ -122,7 +123,6 @@ export function getImports(program: AgencyProgram): string[] {
 }
 
 const compiledFiles: Set<string> = new Set();
-const dirSearched: Set<string> = new Set();
 export function compile(
   config: AgencyConfig,
   inputFile: string,
@@ -132,28 +132,8 @@ export function compile(
   const stats = fs.statSync(inputFile);
   const verbose = config.verbose ?? false;
   if (stats.isDirectory()) {
-    dirSearched.add(path.resolve(inputFile));
-    // Find all .agency files in the directory
-    const files = fs.readdirSync(inputFile);
-    const agencyFiles = files.filter((file) => file.endsWith(".agency"));
-
-    for (const file of agencyFiles) {
-      const fullPath = path.join(inputFile, file);
-      compile(config, fullPath, undefined);
-    }
-
-    // Find all subdirectories and compile their .agency files
-    const subdirs = files.filter((file) => {
-      const fullPath = path.join(inputFile, file);
-      return fs.statSync(fullPath).isDirectory();
-    });
-
-    for (const subdir of subdirs) {
-      const fullSubdirPath = path.join(inputFile, subdir);
-      const resolvedSubdirPath = path.resolve(fullSubdirPath);
-      if (!dirSearched.has(resolvedSubdirPath)) {
-        compile(config, fullSubdirPath, undefined);
-      }
+    for (const { path } of findRecursively(inputFile)) {
+      compile(config, path, undefined);
     }
     return null;
   }
@@ -253,24 +233,8 @@ export function formatFile(
   const stats = fs.statSync(inputPath);
 
   if (stats.isDirectory()) {
-    // Format all .agency files in directory
-    const files = fs.readdirSync(inputPath);
-    const agencyFiles = files.filter((file) => file.endsWith(".agency"));
-
-    for (const file of agencyFiles) {
-      const fullPath = path.join(inputPath, file);
-      formatFile(fullPath, inPlace, config);
-    }
-
-    // Recursively format subdirectories
-    const subdirs = files.filter((file) => {
-      const fullPath = path.join(inputPath, file);
-      return fs.statSync(fullPath).isDirectory();
-    });
-
-    for (const subdir of subdirs) {
-      const fullSubdirPath = path.join(inputPath, subdir);
-      formatFile(fullSubdirPath, inPlace, config);
+    for (const { path } of findRecursively(inputPath)) {
+      formatFile(path, inPlace, config);
     }
     return;
   }

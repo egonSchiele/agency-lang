@@ -15,10 +15,11 @@ import { fixtures, test } from "@/cli/test.js";
 import { AgencyConfig } from "@/config.js";
 import { _parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
-import { typeCheck, formatErrors } from "@/typeChecker.js";
+import { formatErrors, typeCheck } from "@/typeChecker.js";
 import { Command } from "commander";
 import * as fs from "fs";
-import { failure, TarsecError } from "tarsec";
+import { TarsecError } from "tarsec";
+import process from "process";
 
 const program = new Command();
 
@@ -38,101 +39,115 @@ function getConfig(): AgencyConfig {
   return config;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms * 1000));
-}
-
 program
   .command("compile")
   .alias("build")
-  .description("Compile .agency file or directory to JavaScript")
-  .argument("<input>", "Path to .agency input file or directory")
-  .argument("[output]", "Path to output .js file (optional)")
-  .action(async (input: string, output: string | undefined) => {
-    compile(getConfig(), input, output);
+  .description("Compile .agency file(s) or directory(s) to JavaScript")
+  .argument("<inputs...>", "Paths to .agency input files or directories")
+  .action(async (inputs: string[]) => {
+    const config = getConfig();
+    for (const input of inputs) {
+      compile(config, input);
+    }
   });
 
 program
   .command("run")
-  .description("Compile and run .agency file")
-  .argument("<input>", "Path to .agency input file")
-  .argument("[output]", "Path to output .js file (optional)")
-  .action((input: string, output: string | undefined) => {
-    run(getConfig(), input, output);
+  .description("Compile and run .agency file(s)")
+  .argument("[input]", "Paths to .agency input file")
+  .action((input: string) => {
+    const config = getConfig();
+    run(config, input);
   });
 
 program
   .command("format")
   .alias("fmt")
   .description(
-    "Format .agency file or directory (reads from stdin if no input)",
+    "Format .agency file(s) or directory(s) (reads from stdin if no input)",
   )
-  .argument("[input]", "Path to .agency input file or directory")
+  .argument("[inputs...]", "Paths to .agency input files or directories")
   .option("-i, --in-place", "Format file(s) in-place")
-  .action(async (input: string | undefined, opts: { inPlace?: boolean }) => {
+  .action(async (inputs: string[], opts: { inPlace?: boolean }) => {
     const config = getConfig();
-    if (!input) {
+    if (inputs.length === 0) {
       const contents = await readStdin();
       const formatted = await format(contents, config);
       console.log(formatted);
     } else {
-      formatFile(input, opts.inPlace ?? false, config);
+      for (const input of inputs) {
+        formatFile(input, opts.inPlace ?? false, config);
+      }
     }
   });
 
 program
   .command("ast")
   .alias("parse")
-  .description("Parse .agency file and show AST (reads from stdin if no input)")
-  .argument("[input]", "Path to .agency input file")
-  .action(async (input: string | undefined) => {
+  .description(
+    "Parse .agency file(s) and show AST (reads from stdin if no input)",
+  )
+  .argument("[inputs...]", "Paths to .agency input files")
+  .action(async (inputs: string[]) => {
     const config = getConfig();
-    let contents;
-    if (!input) {
-      contents = await readStdin();
+    if (inputs.length === 0) {
+      const contents = await readStdin();
+      const result = parse(contents, config);
+      console.log(JSON.stringify(result, null, 2));
     } else {
-      contents = readFile(input);
+      for (const input of inputs) {
+        const contents = readFile(input);
+        const result = parse(contents, config);
+        console.log(JSON.stringify(result, null, 2));
+      }
     }
-    const result = parse(contents, config);
-    console.log(JSON.stringify(result, null, 2));
   });
 
 program
   .command("graph")
   .alias("mermaid")
   .description(
-    "Render Mermaid graph from .agency file (reads from stdin if no input)",
+    "Render Mermaid graph from .agency file(s) (reads from stdin if no input)",
   )
-  .argument("[input]", "Path to .agency input file")
-  .action(async (input: string | undefined) => {
+  .argument("[inputs...]", "Paths to .agency input files")
+  .action(async (inputs: string[]) => {
     const config = getConfig();
-    let contents;
-    if (!input) {
-      contents = await readStdin();
+    if (inputs.length === 0) {
+      const contents = await readStdin();
+      renderGraph(contents, config);
     } else {
-      contents = readFile(input);
+      for (const input of inputs) {
+        const contents = readFile(input);
+        renderGraph(contents, config);
+      }
     }
-    renderGraph(contents, config);
   });
 
 program
   .command("preprocess")
   .description(
-    "Parse .agency file and show AST after preprocessing (reads from stdin if no input)",
+    "Parse .agency file(s) and show AST after preprocessing (reads from stdin if no input)",
   )
-  .argument("[input]", "Path to .agency input file")
-  .action(async (input: string | undefined) => {
+  .argument("[inputs...]", "Paths to .agency input files")
+  .action(async (inputs: string[]) => {
     const config = getConfig();
-    let contents;
-    if (!input) {
-      contents = await readStdin();
+
+    const process = (contents: string) => {
+      const parsedProgram = parse(contents, config);
+      const preprocessor = new TypescriptPreprocessor(parsedProgram, config);
+      preprocessor.preprocess();
+      console.log(JSON.stringify(preprocessor.program, null, 2));
+    };
+
+    if (inputs.length === 0) {
+      const contents = await readStdin();
+      process(contents);
     } else {
-      contents = readFile(input);
+      for (const input of inputs) {
+        const contents = readFile(input);
+        process(contents);
+      }
     }
-    const parsedProgram = parse(contents, config);
-    const preprocessor = new TypescriptPreprocessor(parsedProgram, config);
-    preprocessor.preprocess();
-    console.log(JSON.stringify(preprocessor.program, null, 2));
   });
 
 program
@@ -163,25 +178,41 @@ program
 program
   .command("test")
   .description("Run tests")
-  .argument("[testFile]", "Path to .test.json file")
-  .action(async (testFile: string | undefined) => {
-    await test(testFile);
+  .argument("[inputs...]", "Paths to .test.json files or directories")
+  .action(async (testFile: string[]) => {
+    for (const file of testFile) {
+      await test(getConfig(), file);
+    }
   });
 
 program
   .command("diagnostics")
   .description("Run diagnostics for VSCode")
-  .argument("[testFile]", "Path to .test.json file")
-  .action(async (testFile: string | undefined) => {
-    const contents = testFile ? readFile(testFile) : await readStdin();
-
-    try {
-      _parseAgency(contents);
-    } catch (error) {
-      if (error instanceof TarsecError) {
-        console.log(JSON.stringify(error.data, null, 2));
-      } else {
-        throw error;
+  .argument("[inputs...]", "Paths to .agency input files")
+  .action(async (inputs: string[]) => {
+    if (inputs.length === 0) {
+      const contents = await readStdin();
+      try {
+        _parseAgency(contents);
+      } catch (error) {
+        if (error instanceof TarsecError) {
+          console.log(JSON.stringify(error.data, null, 2));
+        } else {
+          throw error;
+        }
+      }
+    } else {
+      for (const input of inputs) {
+        const contents = readFile(input);
+        try {
+          _parseAgency(contents);
+        } catch (error) {
+          if (error instanceof TarsecError) {
+            console.log(JSON.stringify(error.data, null, 2));
+          } else {
+            throw error;
+          }
+        }
       }
     }
   });
@@ -189,28 +220,34 @@ program
 program
   .command("typecheck")
   .alias("tc")
-  .description(
-    "Type check .agency file (reads from stdin if no input)",
-  )
-  .argument("[input]", "Path to .agency input file")
+  .description("Type check .agency file(s) (reads from stdin if no input)")
+  .argument("[inputs...]", "Paths to .agency input files")
   .option("--strict", "Enable strict types (untyped variables are errors)")
-  .action(async (input: string | undefined, opts: { strict?: boolean }) => {
+  .action(async (inputs: string[], opts: { strict?: boolean }) => {
     const config = getConfig();
+
+    let hasErrors = false;
+    const runTypeCheck = (contents: string) => {
+      const parsedProgram = parse(contents, config);
+      const { errors } = typeCheck(parsedProgram, config);
+      if (errors.length > 0) {
+        console.error(formatErrors(errors));
+        hasErrors = true;
+      } else {
+        console.log("No type errors found.");
+      }
+    };
     if (opts.strict) config.strictTypes = true;
-    let contents;
-    if (!input) {
-      contents = await readStdin();
+    if (inputs.length === 0) {
+      const contents = await readStdin();
+      runTypeCheck(contents);
     } else {
-      contents = readFile(input);
+      for (const input of inputs) {
+        const contents = readFile(input);
+        runTypeCheck(contents);
+      }
     }
-    const parsedProgram = parse(contents, config);
-    const { errors } = typeCheck(parsedProgram, config);
-    if (errors.length > 0) {
-      console.error(formatErrors(errors));
-      process.exit(1);
-    } else {
-      console.log("No type errors found.");
-    }
+    if (hasErrors) process.exit(1);
   });
 
 // Default: treat unknown args as a file to run

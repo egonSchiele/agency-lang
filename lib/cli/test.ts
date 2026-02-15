@@ -6,12 +6,14 @@ import prompts from "prompts";
 import {
   executeJudge,
   executeNode,
+  findRecursively,
   parseTarget,
   pickANode,
   promptForArgs,
   promptForTarget,
 } from "./util.js";
 import { color } from "termcolors";
+import { AgencyConfig } from "@/config.js";
 
 type Exact = { type: "exact" };
 type LLMJudge = {
@@ -244,37 +246,18 @@ export async function fixtures(target?: string) {
   console.log(`Test case saved to ${testFilePath}`);
 }
 
-export async function test(testFile?: string) {
-  let selectedFile: string;
-
-  if (testFile) {
-    selectedFile = testFile;
-  } else {
-    const testFiles = fs
-      .readdirSync(process.cwd())
-      .filter((file) => file.endsWith(".test.json"))
-      .map((file) => ({
-        title: file,
-        value: file,
-      }));
-
-    if (testFiles.length === 0) {
-      console.log("No .test.json files found in the current directory.");
-      return;
+export async function test(config: AgencyConfig, testFile: string) {
+  const stats = fs.statSync(testFile);
+  if (stats.isDirectory()) {
+    for (const { path } of findRecursively(testFile, ".test.json")) {
+      await test(config, path);
     }
-
-    const response = await prompts({
-      type: "select",
-      name: "filename",
-      message: "Select a test file to run:",
-      choices: testFiles,
-    });
-
-    if (!response.filename) return;
-    selectedFile = response.filename;
+    return;
   }
 
-  const tests: Tests = JSON.parse(fs.readFileSync(selectedFile, "utf-8"));
+  console.log(color.yellow(`Running tests for ${testFile}...`));
+
+  const tests: Tests = JSON.parse(fs.readFileSync(testFile, "utf-8"));
   let passed = 0;
   const total = tests.tests.length;
 

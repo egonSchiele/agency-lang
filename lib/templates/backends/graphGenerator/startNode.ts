@@ -4,12 +4,11 @@
 import { apply } from "typestache";
 
 export const template = `if (process.argv[1] === fileURLToPath(import.meta.url)) {
-    const initialState = {messages: [], data: {}};
-    const finalState = graph.run("{{{startNode}}}", initialState);
+    const initialState = { messages: [], data: {} };
+    await main(initialState);
 }`;
 
 export type TemplateType = {
-  startNode: string | boolean | number;
 };
 
 const render = (args: TemplateType) => {

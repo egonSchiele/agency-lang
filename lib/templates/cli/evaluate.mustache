@@ -52,7 +52,6 @@ export async function runEvaluation() {
   }
   {{/hasInterruptHandlers}}
 
-  console.log("Evaluation result:", result.data);
   writeFileSync("__evaluate.json", JSON.stringify(result, null, 2));
   return result;
 }

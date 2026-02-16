@@ -164,11 +164,13 @@ export function readSkill({filepath}) {
 /******** for internal agency use only ********/
 
 function __createReturnObject(result) {
-  return structuredClone({
-    messages: result.messages.toJSON(),
+  // Note: we're *not* using structuredClone here because structuredClone
+  // doesn't call \`toJSON\`, so it's not cloning our message objects correctly.
+  return JSON.parse(JSON.stringify({
+    messages: result.messages,
     data: result.data,
     tokens: __stateStack.globals.__tokenStats
-  });
+  }));
 }
 
 

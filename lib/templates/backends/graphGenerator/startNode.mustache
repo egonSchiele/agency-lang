@@ -1,4 +1,4 @@
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-    const initialState = {messages: [], data: {}};
-    const finalState = graph.run("{{{startNode}}}", initialState);
+    const initialState = { messages: [], data: {} };
+    await main(initialState);
 }

@@ -176,11 +176,9 @@ export class GraphGenerator extends TypeScriptGenerator {
       clientDefaultModel:
         this.agencyConfig.client?.defaultModel || "gpt-4o-mini",
       hasOpenAiApiKey: !!this.agencyConfig.client?.openAiApiKey,
-      clientOpenAiApiKey:
-        this.agencyConfig.client?.openAiApiKey || undefined,
+      clientOpenAiApiKey: this.agencyConfig.client?.openAiApiKey || undefined,
       hasGoogleApiKey: !!this.agencyConfig.client?.googleApiKey,
-      clientGoogleApiKey:
-        this.agencyConfig.client?.googleApiKey || undefined,
+      clientGoogleApiKey: this.agencyConfig.client?.googleApiKey || undefined,
     };
 
     const arr = [renderImports.default(args)];
@@ -228,14 +226,6 @@ export class GraphGenerator extends TypeScriptGenerator {
       lines.push(`graph.merge(${defaultImportName});`);
     });
 
-    if (this.graphNodes.map((n) => n.nodeName).includes("main")) {
-      lines.push(
-        renderStartNode.default({
-          startNode: "main",
-        }),
-      );
-    }
-
     for (const node of this.graphNodes) {
       const args = node.parameters;
       const argsStr = args.map((arg) => arg.name).join(", ");
@@ -244,6 +234,14 @@ export class GraphGenerator extends TypeScriptGenerator {
           nodeName: node.nodeName,
           hasArgs: args.length > 0,
           argsStr,
+        }),
+      );
+    }
+
+    if (this.graphNodes.map((n) => n.nodeName).includes("main")) {
+      lines.push(
+        renderStartNode.default({
+          startNode: "main",
         }),
       );
     }

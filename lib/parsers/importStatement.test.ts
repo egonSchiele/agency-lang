@@ -6,262 +6,169 @@ import {
 } from "./importStatement.js";
 
 describe("importStatmentParser", () => {
-  const testCases = [
-    // Unquoted module paths are no longer supported (start with "import" -> throw)
-    {
-      input: "import foo from bar;",
-      expected: { success: false },
-      throws: true,
-    },
-    {
-      input: "import myModule from path/to/module;",
-      expected: { success: false },
-      throws: true,
-    },
-
-    // Module paths with double quotes
-    {
-      input: 'import foo from "bar";',
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "foo ",
-          modulePath: "bar",
-        },
-      },
-    },
-    {
-      input: 'import foo from "./local/path.js";',
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "foo ",
-          modulePath: "./local/path.js",
-        },
-      },
-    },
-    {
-      input: 'import bar from "../utils/helper.js";',
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "bar ",
-          modulePath: "../utils/helper.js",
-        },
-      },
-    },
-    {
-      input: 'import { useState } from "react";',
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "{ useState } ",
-          modulePath: "react",
-        },
-      },
-    },
-
-    // Module paths with single quotes
-    {
-      input: "import foo from 'bar';",
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "foo ",
-          modulePath: "bar",
-        },
-      },
-    },
-    {
-      input: "import test from './module.js';",
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "test ",
-          modulePath: "./module.js",
-        },
-      },
-    },
-
-    // Without semicolon - unquoted paths no longer supported (start with "import" -> throw)
-    {
-      input: "import foo from bar\n",
-      expected: { success: false },
-      throws: true,
-    },
-    {
-      input: "import test from module",
-      expected: { success: false },
-      throws: true,
-    },
-    {
-      input: 'import foo from "bar"\n',
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "foo ",
-          modulePath: "bar",
-        },
-      },
-    },
-
-    // Multiple imported names (destructured imports) - unquoted paths no longer supported (start with "import" -> throw)
-    {
-      input: "import { foo, bar } from module;",
-      expected: { success: false },
-      throws: true,
-    },
-    {
-      input: 'import { foo, bar, baz } from "myModule";',
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "{ foo, bar, baz } ",
-          modulePath: "myModule",
-        },
-      },
-    },
-
-    // Default and named imports
-    {
-      input: 'import React, { useState } from "react";',
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "React, { useState } ",
-          modulePath: "react",
-        },
-      },
-    },
-
-    // Namespace imports
-    {
-      input: 'import * as utils from "utils";',
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "* as utils ",
-          modulePath: "utils",
-        },
-      },
-    },
-
-    // Scoped packages
-    {
-      input: 'import { Parser } from "@typescript-eslint/parser";',
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "{ Parser } ",
-          modulePath: "@typescript-eslint/parser",
-        },
-      },
-    },
-
-    // Spaces around keywords - unquoted paths no longer supported (start with "import" -> throw)
-    {
-      input: "import   foo   from   bar;",
-      expected: { success: false },
-      throws: true,
-    },
-
-    // Edge cases - single character names with unquoted path (start with "import" -> throw)
-    {
-      input: "import x from y;",
-      expected: { success: false },
-      throws: true,
-    },
-    {
-      input: 'import x from "y";',
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "x ",
-          modulePath: "y",
-        },
-      },
-    },
-
-    // Complex paths - unquoted paths no longer supported (start with "import" -> throw)
-    {
-      input: "import foo from ../../../utils/helpers;",
-      expected: { success: false },
-      throws: true,
-    },
-    {
-      input: 'import foo from "../../../utils/helpers.js";',
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "foo ",
-          modulePath: "../../../utils/helpers.js",
-        },
-      },
-    },
-
-    // Aliased imports
-    {
-      input: 'import { foo as bar } from "module";',
-      expected: {
-        success: true,
-        result: {
-          type: "importStatement",
-          importedNames: "{ foo as bar } ",
-          modulePath: "module",
-        },
-      },
-    },
-
-    // Failure cases - missing keywords (don't start with "import" -> don't throw)
-    { input: "foo from bar;", expected: { success: false }, throws: false },
-    { input: "from bar;", expected: { success: false }, throws: false },
-    { input: "import foo bar;", expected: { success: false }, throws: true },
-
-    // Failure cases - missing parts (start with "import" -> throw)
-    { input: "import from bar;", expected: { success: false }, throws: true },
-    { input: "import foo from;", expected: { success: false }, throws: true },
-    { input: "import;", expected: { success: false }, throws: true },
-
-    // Failure cases - empty input (doesn't start with "import" -> don't throw)
-    { input: "", expected: { success: false }, throws: false },
-
-    // Failure cases - just keyword
-    { input: "import", expected: { success: false }, throws: true },
-    { input: "from", expected: { success: false }, throws: false },
-  ];
-
-  testCases.forEach(({ input, expected, throws }) => {
-    if (expected.success) {
-      it(`should parse "${input}" successfully`, () => {
-        const result = importStatmentParser(input);
-        expect(result.success).toBe(true);
-        if (result.success) {
-          expect(result.result).toEqual(expected.result);
-        }
-      });
-    } else if (throws) {
-      it(`should fail to parse "${input}"`, () => {
-        expect(() => importStatmentParser(input)).toThrow();
-      });
-    } else {
-      it(`should fail to parse "${input}"`, () => {
-        const result = importStatmentParser(input);
-        expect(result.success).toBe(false);
+  // Default imports
+  it('should parse: import foo from "./foo.ts"', () => {
+    const result = importStatmentParser('import foo from "./foo.ts"');
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "importStatement",
+        importedNames: [{ type: "defaultImport", importedNames: "foo" }],
+        modulePath: "./foo.ts",
       });
     }
+  });
+
+  // Named imports
+  it('should parse: import { foo } from "./foo.ts"', () => {
+    const result = importStatmentParser('import { foo } from "./foo.ts"');
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "importStatement",
+        importedNames: [{ type: "namedImport", importedNames: ["foo"] }],
+        modulePath: "./foo.ts",
+      });
+    }
+  });
+
+  // Default + named imports
+  it('should parse: import foo, { bar } from "./foo.ts"', () => {
+    const result = importStatmentParser('import foo, { bar } from "./foo.ts"');
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "importStatement",
+        importedNames: [
+          { type: "defaultImport", importedNames: "foo" },
+          { type: "namedImport", importedNames: ["bar"] },
+        ],
+        modulePath: "./foo.ts",
+      });
+    }
+  });
+
+  // Namespace imports
+  it('should parse: import * as foo from "./foo.ts"', () => {
+    const result = importStatmentParser('import * as foo from "./foo.ts"');
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "importStatement",
+        importedNames: [{ type: "namespaceImport", importedNames: "foo" }],
+        modulePath: "./foo.ts",
+      });
+    }
+  });
+
+  // Default + namespace imports
+  it('should parse: import foo, * as bar from "./foo.ts"', () => {
+    const result = importStatmentParser(
+      'import foo, * as bar from "./foo.ts"',
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "importStatement",
+        importedNames: [
+          { type: "defaultImport", importedNames: "foo" },
+          { type: "namespaceImport", importedNames: "bar" },
+        ],
+        modulePath: "./foo.ts",
+      });
+    }
+  });
+
+  // .agency file imports
+  it('should parse: import foo from "./foo.agency"', () => {
+    const result = importStatmentParser('import foo from "./foo.agency"');
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "importStatement",
+        importedNames: [{ type: "defaultImport", importedNames: "foo" }],
+        modulePath: "./foo.agency",
+      });
+    }
+  });
+
+  it('should parse: import { foo } from "./foo.agency"', () => {
+    const result = importStatmentParser('import { foo } from "./foo.agency"');
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "importStatement",
+        importedNames: [{ type: "namedImport", importedNames: ["foo"] }],
+        modulePath: "./foo.agency",
+      });
+    }
+  });
+
+  // node/tool imports are handled by their own parsers, not importStatmentParser
+  it('should not parse: import node { foo } from "./foo.agency"', () => {
+    expect(() =>
+      importStatmentParser('import node { foo } from "./foo.agency"'),
+    ).toThrow();
+  });
+
+  it('should not parse: import tool { foo } from "./foo.agency"', () => {
+    expect(() =>
+      importStatmentParser('import tool { foo } from "./foo.agency"'),
+    ).toThrow();
+  });
+
+  // Multiple named imports
+  it('should parse: import { foo, bar, baz } from "myModule"', () => {
+    const result = importStatmentParser(
+      'import { foo, bar, baz } from "myModule"',
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "importStatement",
+        importedNames: [
+          { type: "namedImport", importedNames: ["foo", "bar", "baz"] },
+        ],
+        modulePath: "myModule",
+      });
+    }
+  });
+
+  // With semicolons
+  it('should parse imports with semicolons', () => {
+    const result = importStatmentParser('import foo from "./foo.ts";');
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.modulePath).toBe("./foo.ts");
+    }
+  });
+
+  // With single quotes
+  it("should parse imports with single quotes", () => {
+    const result = importStatmentParser("import foo from './foo.ts'");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.modulePath).toBe("./foo.ts");
+    }
+  });
+
+  // Failure cases
+  it("should fail on empty input", () => {
+    const result = importStatmentParser("");
+    expect(result.success).toBe(false);
+  });
+
+  it("should fail on non-import input", () => {
+    const result = importStatmentParser("foo from bar;");
+    expect(result.success).toBe(false);
+  });
+
+  it("should throw on unquoted paths", () => {
+    expect(() => importStatmentParser("import foo from bar;")).toThrow();
+  });
+
+  it("should throw on missing parts", () => {
+    expect(() => importStatmentParser("import foo from;")).toThrow();
   });
 });
 

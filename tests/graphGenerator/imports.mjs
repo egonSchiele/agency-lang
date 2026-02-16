@@ -1,9 +1,11 @@
 import __graph___foo from "./foo.js";
-import foo  from "./foo.ts";
-import {foo}  from "./foo.ts";
-import * as foo  from "./foo.ts";
-import foo  from "./foo.js";
-import {foo}  from "./foo.js";
+import foo from "./foo.ts";
+import { foo } from "./foo.ts";
+import foo, { bar } from "./foo.ts";
+import * as foo from "./foo.ts";
+import foo, * as bar from "./foo.ts";
+import foo from "./foo.js";
+import { foo } from "./foo.js";
 
 import { foo, __fooTool, __fooToolParams } from "./foo.js";
 import { fileURLToPath } from "url";

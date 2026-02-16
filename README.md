@@ -22,10 +22,10 @@ agency run infile.agency
 agency infile.agency
 ```
 
-Note that the generated files use several other libraries that you will need to install as well:
+Note that the generated files use a couple of other libraries that you will need to install as well:
 
 ```bash
-pnpm i nanoid openai zod smoltalk
+pnpm i nanoid zod smoltalk
 ```
 
 ## troubleshooting

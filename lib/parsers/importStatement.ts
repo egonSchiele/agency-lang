@@ -1,7 +1,11 @@
 import {
+  DefaultImport,
+  ImportNameType,
   ImportNodeStatement,
   ImportStatement,
   ImportToolStatement,
+  NamedImport,
+  NamespaceImport,
 } from "../types/importStatement.js";
 import {
   alphanum,
@@ -99,6 +103,44 @@ export const importToolStatmentParser: Parser<ImportToolStatement> = trace(
     ),
   ),
 );
+
+const namedImportParser: Parser<NamedImport> = trace(
+  "namedImportParser",
+  seqC(
+    char("{"),
+    optionalSpaces,
+    capture(sepBy1(comma, many1WithJoin(alphanum)), "importedNames"),
+    optionalSpaces,
+    char("}"),
+    set("type", "namedImport"),
+  ),
+);
+
+const namespaceImportParser: Parser<NamespaceImport> = trace(
+  "namespaceImportParser",
+  seqC(
+    many1Till(spaces),
+    spaces,
+    str("as"),
+    spaces,
+    capture(many1WithJoin(alphanum), "importedNames"),
+    set("type", "namespaceImport"),
+  ),
+);
+
+const defaultImportParser: Parser<DefaultImport> = trace(
+  "defaultImportParser",
+  seqC(
+    capture(many1WithJoin(alphanum), "importedNames"),
+    set("type", "defaultImport"),
+  ),
+);
+
+const importNameTypeParser: Parser<ImportNameType[]> = sepBy(
+  comma,
+  or(namedImportParser, namespaceImportParser, defaultImportParser),
+);
+
 export const importStatmentParser: Parser<ImportStatement> = trace(
   "importStatement",
   seqC(
@@ -108,7 +150,8 @@ export const importStatmentParser: Parser<ImportStatement> = trace(
       parseError(
         "expected a statement of the form `import { x, y } from 'filename'`",
         spaces,
-        capture(many1Till(str("from")), "importedNames"),
+        capture(importNameTypeParser, "importedNames"),
+        spaces,
         str("from"),
         spaces,
         oneOf(`'"`),

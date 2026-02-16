@@ -26,6 +26,7 @@ import { FunctionCall, FunctionDefinition } from "../types/function.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { IfElse } from "../types/ifElse.js";
 import {
+  ImportNameType,
   ImportNodeStatement,
   ImportStatement,
   ImportToolStatement,
@@ -448,10 +449,24 @@ export class AgencyGenerator extends BaseGenerator {
   }
 
   protected processImportStatement(node: ImportStatement): string {
+    const importedNames = node.importedNames.map((name) =>
+      this.processImportNameType(name),
+    );
     const str = this.indentStr(
-      `import ${node.importedNames}from "${node.modulePath}"`,
+      `import ${importedNames.join(", ")} from "${node.modulePath}"`,
     );
     return str;
+  }
+
+  protected processImportNameType(node: ImportNameType): string {
+    switch (node.type) {
+      case "namedImport":
+        return `{ ${node.importedNames.join(", ")} }`;
+      case "namespaceImport":
+        return `* as ${node.importedNames}`;
+      case "defaultImport":
+        return `${node.importedNames}`;
+    }
   }
 
   protected processImportNodeStatement(node: ImportNodeStatement): string {

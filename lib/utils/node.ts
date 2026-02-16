@@ -1,6 +1,7 @@
 import {
   AgencyNode,
   functionScope,
+  getImportedNames,
   globalScope,
   nodeScope,
   Scope,
@@ -39,7 +40,11 @@ export function* getAllVariablesInBody(
     } else if (node.type === "specialVar") {
       yield { name: node.name, node };
     } else if (node.type === "importStatement") {
-      yield { name: node.importedNames, node };
+      for (const nameObj of node.importedNames) {
+        for (const name of getImportedNames(nameObj)) {
+          yield { name, node };
+        }
+      }
     } else if (node.type === "importNodeStatement") {
       for (const name of node.importedNodes) {
         yield { name, node };

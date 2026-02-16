@@ -19,7 +19,6 @@ export function loadEnv() {
 
 function tryEnvFile(envfile: string) {
   if (existsSync(envfile)) {
-    console.log("Reading envfile", envfile);
     const env = readFileSync(envfile, "utf-8");
     env.split("\n").forEach((line) => {
       if (line.trim() === "" || line.startsWith("#")) return;

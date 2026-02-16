@@ -17,5 +17,5 @@ node bar() {
 
 node main() {
   result = llm("Hello there! What's your name?")
-  print(result)
+  return result
 }

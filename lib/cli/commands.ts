@@ -8,7 +8,7 @@ import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import { parseAgency } from "../parser.js";
-import { findRecursively } from "./util.js";
+import { findRecursively, getImports } from "./util.js";
 
 // Load configuration from agency.json
 export function loadConfig(
@@ -101,25 +101,6 @@ export function renderGraph(contents: string, config: AgencyConfig): void {
   mermaid.forEach((subgraph) => {
     console.log(subgraph);
   });
-}
-
-export function getImports(program: AgencyProgram): string[] {
-  const toolAndNodeImports = program.nodes
-    .filter(
-      (node) =>
-        node.type === "importNodeStatement" ||
-        node.type === "importToolStatement",
-    )
-    .map((node) => node.agencyFile.trim());
-  // this makes compile() try to parse non-agency files
-  const importStatements = program.nodes
-    .filter(
-      (node) =>
-        node.type === "importStatement" && node.modulePath.endsWith(".agency"),
-    )
-    .map((node) => (node as ImportStatement).modulePath.trim());
-
-  return [...toolAndNodeImports, ...importStatements];
 }
 
 const compiledFiles: Set<string> = new Set();

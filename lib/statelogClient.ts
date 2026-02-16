@@ -283,6 +283,61 @@ export class StatelogClient {
   }
 
   async remoteRun({
+    files,
+    entrypoint,
+    args,
+  }: {
+    files: AgencyFile[];
+    entrypoint: string;
+    args?: any[];
+  }): Promise<Result<any>> {
+    try {
+      const fullUrl = new URL(`/api/run`, this.host);
+      const url = fullUrl.toString();
+      const body = JSON.stringify({
+        files,
+        entrypoint,
+        args,
+      });
+      console.log({ entrypoint, args }, body);
+      const result = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body,
+      }).catch((err) => {
+        if (this.debugMode) console.error("Failed to run on statelog:", err);
+      });
+      if (result) {
+        if (!result.ok) {
+          if (this.debugMode) {
+            const responseBody = await result.text();
+            console.error("Failed to run on statelog:", {
+              result,
+              url,
+              body,
+              responseBody,
+            });
+          }
+          return failure("Failed to run on statelog");
+        }
+
+        return (await result.json()) as Result<{
+          endpointUrls: string[];
+        }>;
+      }
+    } catch (err) {
+      if (this.debugMode)
+        console.error("Error running on statelog client:", err, {
+          host: this.host,
+        });
+    }
+    return failure("Error running on statelog");
+  }
+
+  async hitServer({
     userId,
     projectId,
     filename,

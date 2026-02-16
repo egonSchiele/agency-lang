@@ -2,11 +2,17 @@ import prompts from "prompts";
 import fs, { readFileSync } from "fs";
 import path from "path";
 import { execSync } from "child_process";
-import { GraphNodeDefinition, VariableType } from "@/types.js";
+import {
+  AgencyProgram,
+  GraphNodeDefinition,
+  ImportStatement,
+  VariableType,
+} from "@/types.js";
 import renderEvaluate from "@/templates/cli/evaluate.js";
 import renderJudgeEvaluate from "@/templates/cli/judgeEvaluate.js";
 import { compile } from "./commands.js";
 import { AgencyConfig } from "@/config.js";
+import { parseAgency } from "@/parser.js";
 export function parseTarget(target: string): {
   filename: string;
   nodeName: string;
@@ -241,4 +247,50 @@ export function* findRecursively(
       yield { path: fullPath };
     }
   }
+}
+
+export function getImportsRecursively(
+  filename: string,
+  visited = new Set<string>(),
+): string[] {
+  if (visited.has(filename)) {
+    return [];
+  }
+  visited.add(filename);
+  const contents = fs.readFileSync(filename, "utf-8");
+  const parsed = parseAgency(contents, { verbose: false });
+  if (!parsed.success) {
+    console.error(`Error parsing ${filename}:`, parsed);
+    return [];
+  }
+  const program = parsed.result;
+  const imports = getImports(program);
+  for (const imp of imports) {
+    const importedFile = path.resolve(path.dirname(filename), imp);
+    if (fs.existsSync(importedFile)) {
+      imports.push(...getImportsRecursively(importedFile, visited));
+    } else {
+      console.warn(`Warning: Imported file ${importedFile} not found.`);
+    }
+  }
+  return imports;
+}
+
+export function getImports(program: AgencyProgram): string[] {
+  const toolAndNodeImports = program.nodes
+    .filter(
+      (node) =>
+        node.type === "importNodeStatement" ||
+        node.type === "importToolStatement",
+    )
+    .map((node) => node.agencyFile.trim());
+  // this makes compile() try to parse non-agency files
+  const importStatements = program.nodes
+    .filter(
+      (node) =>
+        node.type === "importStatement" && node.modulePath.endsWith(".agency"),
+    )
+    .map((node) => (node as ImportStatement).modulePath.trim());
+
+  return [...toolAndNodeImports, ...importStatements];
 }

@@ -1,15 +1,12 @@
-import { parseAgency } from "../parser.js";
 import { AgencyConfig } from "@/config.js";
-import fs from "fs";
-import path from "path";
-import { findRecursively } from "./util.js";
 import {
   getStatelogClient,
   mergeUploadResults,
   UploadResult,
 } from "@/statelogClient.js";
-import { Result } from "@/types/result.js";
-import { getImports } from "./commands.js";
+import fs from "fs";
+import path from "path";
+import { findRecursively, getImportsRecursively } from "./util.js";
 
 export async function upload(
   config: AgencyConfig,
@@ -58,52 +55,4 @@ export async function upload(
     console.log(result.value);
   }
   return result;
-}
-
-export async function remoteRun(
-  config: AgencyConfig,
-  filename: string,
-): Promise<Result<any>> {
-  const client = getStatelogClient({
-    host: config.log?.host || "http://localhost:1065",
-    projectId: config.log?.projectId || "agency-lang",
-    debugMode: config.log?.debugMode || false,
-  });
-
-  const result = await client.remoteRun({
-    userId: "1",
-    projectId: config.log?.projectId || "agency-lang",
-    filename,
-    nodeName: "bar",
-    body: "",
-  });
-  console.log(JSON.stringify(result));
-  return result;
-}
-
-export function getImportsRecursively(
-  filename: string,
-  visited = new Set<string>(),
-): string[] {
-  if (visited.has(filename)) {
-    return [];
-  }
-  visited.add(filename);
-  const contents = fs.readFileSync(filename, "utf-8");
-  const parsed = parseAgency(contents, { verbose: false });
-  if (!parsed.success) {
-    console.error(`Error parsing ${filename}:`, parsed);
-    return [];
-  }
-  const program = parsed.result;
-  const imports = getImports(program);
-  for (const imp of imports) {
-    const importedFile = path.resolve(path.dirname(filename), imp);
-    if (fs.existsSync(importedFile)) {
-      imports.push(...getImportsRecursively(importedFile, visited));
-    } else {
-      console.warn(`Warning: Imported file ${importedFile} not found.`);
-    }
-  }
-  return imports;
 }

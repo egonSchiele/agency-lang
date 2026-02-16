@@ -20,8 +20,9 @@ import { Command } from "commander";
 import * as fs from "fs";
 import { TarsecError } from "tarsec";
 import process from "process";
-import { remoteRun, upload } from "@/cli/upload.js";
+import { upload } from "@/cli/upload.js";
 import { loadEnv } from "@/utils/envfile.js";
+import { remoteRun } from "@/cli/remoteRun.js";
 
 loadEnv();
 const program = new Command();

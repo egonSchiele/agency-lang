@@ -23,7 +23,7 @@ import {
 } from "../types/access.js";
 import { AgencyArray, AgencyObject } from "../types/dataStructures.js";
 import { FunctionCall, FunctionDefinition } from "../types/function.js";
-import { GraphNodeDefinition } from "../types/graphNode.js";
+import { GraphNodeDefinition, Visibility } from "../types/graphNode.js";
 import { IfElse } from "../types/ifElse.js";
 import {
   ImportNameType,
@@ -477,6 +477,17 @@ export class AgencyGenerator extends BaseGenerator {
     return `import tool { ${node.importedTools.join(", ")} } from "${node.agencyFile}"`;
   }
 
+  protected visibilityToString(vis: Visibility): string {
+    switch (vis) {
+      case "public":
+        return "public ";
+      case "private":
+        return "private ";
+      case undefined:
+        return "";
+    }
+  }
+
   protected processGraphNode(node: GraphNodeDefinition): string {
     // Graph nodes use similar syntax to functions
     const { nodeName, body, parameters } = node;
@@ -490,8 +501,9 @@ export class AgencyGenerator extends BaseGenerator {
     const returnTypeStr = node.returnType
       ? ": " + variableTypeToString(node.returnType, this.typeAliases)
       : "";
+    const visibilityStr = this.visibilityToString(node.visibility);
     let result = this.indentStr(
-      `node ${nodeName}(${params})${returnTypeStr} {\n`,
+      `${visibilityStr}node ${nodeName}(${params})${returnTypeStr} {\n`,
     );
 
     this.increaseIndent();

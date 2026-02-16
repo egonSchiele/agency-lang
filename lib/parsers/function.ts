@@ -32,7 +32,7 @@ import {
   FunctionParameter,
   VariableType,
 } from "../types.js";
-import { GraphNodeDefinition } from "../types/graphNode.js";
+import { GraphNodeDefinition, Visibility } from "../types/graphNode.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { IfElse } from "../types/ifElse.js";
 import { accessExpressionParser, indexAccessParser } from "./access.js";
@@ -420,10 +420,18 @@ export const functionParser: Parser<FunctionDefinition> = or(
   _functionParser, // default to async if no keyword is provided
 );
 
+const visibilityParser: Parser<Visibility> = or(
+  str("public" as const),
+  str("private" as const),
+  succeed(undefined),
+);
+
 export const graphNodeParser: Parser<GraphNodeDefinition> = trace(
   "graphNodeParser",
   seqC(
     set("type", "graphNode"),
+    capture(visibilityParser, "visibility"),
+    optionalSpaces,
     str("node"),
     many1(space),
     capture(many1Till(char("(")), "nodeName"),

@@ -14,12 +14,15 @@ export type FunctionDefinition = {
 };
 */
 
+export type Visibility = "public" | "private" | undefined;
+
 export type GraphNodeDefinition = {
   type: "graphNode";
   nodeName: string;
   parameters: FunctionParameter[];
   body: AgencyNode[];
   returnType?: VariableType | null;
+  visibility?: Visibility;
 };
 
 export type NodeCall = {

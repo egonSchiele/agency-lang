@@ -1,6 +1,13 @@
 # Agency
 Agent Definition Language
 
+```ts
+node main() {
+  result = llm("Say hello to world")
+  return result
+}
+```
+
 ## Usage
 
 Add agency to a project:

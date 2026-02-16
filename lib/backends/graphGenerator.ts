@@ -35,6 +35,9 @@ export class GraphGenerator extends TypeScriptGenerator {
 
   configDefaults(): Partial<AgencyConfig> {
     return {
+      log: {
+        host: "https://agency-lang.com",
+      },
       client: {
         logLevel: "warn",
         defaultModel: "gpt-4o-mini",
@@ -160,6 +163,9 @@ export class GraphGenerator extends TypeScriptGenerator {
   } */
 
   protected generateImports(): string {
+    /* if (this.agencyConfig.verbose) {
+      console.log("Generating imports with config:", this.agencyConfig);
+    } */
     const args = {
       logHost: this.agencyConfig.log?.host || "",
       logProjectId: this.agencyConfig.log?.projectId || "",

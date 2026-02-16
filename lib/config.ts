@@ -88,6 +88,7 @@ export interface AgencyConfig {
     apiKey: string;
   }>;
 
+  /** Smoltalk client config */
   client?: Partial<{
     logLevel: "error" | "warn" | "info" | "debug";
     defaultModel: string;

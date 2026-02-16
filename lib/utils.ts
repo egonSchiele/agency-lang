@@ -44,10 +44,19 @@ export function mergeDeep(
 
   if (isObject(objA) && isObject(objB)) {
     for (const key in objB) {
+      // console.log("key", key);
       if (isObject(objB[key])) {
-        Object.assign(objA, { [key]: {} });
+        // console.log("is object!");
+        if (!objA[key]) {
+          // console.log("initializing", key);
+          Object.assign(objA, { [key]: {} });
+        } else if (!isObject(objA[key])) {
+          // console.log("overwriting non-object key", key, "with object");
+          Object.assign(objA, { [key]: {} });
+        }
         objA[key] = mergeDeep(objA[key], objB[key]);
       } else {
+        // console.log("setting", key, "to", objB[key]);
         Object.assign(objA, { [key]: objB[key] });
       }
     }

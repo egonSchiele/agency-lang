@@ -13,17 +13,19 @@ import process from "process";
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
-import { StatelogClient, SimpleMachine, goToNode } from "agency-lang";
-import { nanoid } from "nanoid";
-import * as smoltalk from "smoltalk";
+import { StatelogClient, SimpleMachine, goToNode, nanoid } from "agency-lang";
+import * as smoltalk from "agency-lang";
 
 /* Code to log to statelog */
-const statelogHost = "";
+const statelogHost = "https://agency-lang.com";
 const __traceId = nanoid();
 const statelogConfig = {
   host: statelogHost,
   traceId: __traceId,
+  
+  
   apiKey: process.env.STATELOG_API_KEY || "",
+  
   projectId: "",
   debugMode: false,
 };
@@ -34,8 +36,14 @@ const __model = "gpt-4o-mini";
 
 const __getClientWithConfig = (config = {}) => {
   const defaultConfig = {
+    
+    
     openAiApiKey: process.env.OPENAI_API_KEY || "",
+    
+    
+    
     googleApiKey: process.env.GEMINI_API_KEY || "",
+    
     model: __model,
     logLevel: "warn",
   };
@@ -155,11 +163,13 @@ export function readSkill({filepath}) {
 /******** for internal agency use only ********/
 
 function __createReturnObject(result) {
-  return structuredClone({
-    messages: result.messages.toJSON(),
+  // Note: we're *not* using structuredClone here because structuredClone
+  // doesn't call `toJSON`, so it's not cloning our message objects correctly.
+  return JSON.parse(JSON.stringify({
+    messages: result.messages,
     data: result.data,
     tokens: __stateStack.globals.__tokenStats
-  });
+  }));
 }
 
 

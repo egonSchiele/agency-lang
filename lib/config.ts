@@ -85,6 +85,7 @@ export interface AgencyConfig {
     host: string;
     projectId: string;
     debugMode: boolean;
+    apiKey: string;
   }>;
 
   client?: Partial<{

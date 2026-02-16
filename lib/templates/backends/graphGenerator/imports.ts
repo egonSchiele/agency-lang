@@ -17,7 +17,12 @@ const __traceId = nanoid();
 const statelogConfig = {
   host: statelogHost,
   traceId: __traceId,
+  {{#hasApiKey}}
+  apiKey: "{{{logApiKey?:string}}}",
+  {{/hasApiKey}}
+  {{^hasApiKey}}
   apiKey: process.env.STATELOG_API_KEY || "",
+  {{/hasApiKey}}
   projectId: "{{{logProjectId:string}}}",
   debugMode: {{{logDebugMode:boolean}}},
 };
@@ -506,6 +511,8 @@ class MessageThread {
 
 export type TemplateType = {
   logHost: string;
+  hasApiKey: boolean;
+  logApiKey?: string;
   logProjectId: string;
   logDebugMode: boolean;
   clientDefaultModel: string;

@@ -5,3 +5,4 @@ export * from "./simplemachine/index.js";
 export * from "./statelogClient.js";
 export * from "smoltalk";
 export * from "nanoid";
+export { AgencyConfig } from "./config.js";

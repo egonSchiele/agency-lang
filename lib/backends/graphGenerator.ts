@@ -163,6 +163,8 @@ export class GraphGenerator extends TypeScriptGenerator {
     const args = {
       logHost: this.agencyConfig.log?.host || "",
       logProjectId: this.agencyConfig.log?.projectId || "",
+      hasApiKey: !!this.agencyConfig.log?.apiKey,
+      logApiKey: this.agencyConfig.log?.apiKey || undefined,
       logDebugMode: this.agencyConfig.log?.debugMode || false,
       clientLogLevel: this.agencyConfig.client?.logLevel || "warn",
       clientDefaultModel:

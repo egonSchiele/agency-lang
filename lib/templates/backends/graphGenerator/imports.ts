@@ -8,8 +8,7 @@ import process from "process";
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
-import { PieMachine, goToNode } from "piemachine";
-import { StatelogClient } from "statelog-client";
+import { StatelogClient, SimpleMachine, goToNode } from "agency-lang";
 import { nanoid } from "nanoid";
 import * as smoltalk from "smoltalk";
 
@@ -41,7 +40,7 @@ const __getClientWithConfig = (config = {}) => {
 
 let __client = __getClientWithConfig();
 
-/* Code for PieMachine graph */
+/* Code for SimpleMachine graph */
 
 // enable debug logging
 const graphConfig = {
@@ -52,7 +51,7 @@ const graphConfig = {
   statelog: statelogConfig,
 };
 
-const graph = new PieMachine(graphConfig);
+const graph = new SimpleMachine(graphConfig);
 
 /******** builtins ********/
 

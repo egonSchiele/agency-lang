@@ -123,3 +123,7 @@ export type AgencyProgram = {
 };
 
 export type TypeHintMap = Record<string, VariableType>;
+
+export type JSONEdge =
+  | { type: "regular"; to: string }
+  | { type: "conditional"; adjacentNodes: readonly string[] };

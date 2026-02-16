@@ -17,18 +17,12 @@ importers:
       egonlog:
         specifier: ^0.0.2
         version: 0.0.2
-      piemachine:
-        specifier: ^0.0.8
-        version: 0.0.8
       prompts:
         specifier: ^2.4.2
         version: 2.4.2
       smoltalk:
         specifier: ^0.0.18
         version: 0.0.18(ws@8.19.0)(zod@4.3.5)
-      statelog-client:
-        specifier: ^0.0.38
-        version: 0.0.38
       tarsec:
         specifier: ^0.1.8
         version: 0.1.8
@@ -869,9 +863,6 @@ packages:
     resolution: {integrity: sha512-5gTmgEY/sqK6gFXLIsQNH19lWb4ebPDLA4SdLP7dsWkIXHWlG66oPuVvXSGFPppYZz8ZDZq0dYYrbHfBCVUb1Q==}
     engines: {node: '>=12'}
 
-  piemachine@0.0.8:
-    resolution: {integrity: sha512-uB5NkjavJ67vwxDebahXeSErfGLCFOd2pNmCEtCbehRiPKKtxGJqFQ/AEBprQ/HbMwK5QZhGQVzTivsSQ40nWg==}
-
   plimit-lit@1.6.1:
     resolution: {integrity: sha512-B7+VDyb8Tl6oMJT9oSO2CW8XC/T4UcJGrwOVoNGwOQsQYhlpfajmrMj5xeejqaASq3V/EqThyOeATEOMuSEXiA==}
     engines: {node: '>=12'}
@@ -956,12 +947,6 @@ packages:
 
   stackback@0.0.2:
     resolution: {integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==}
-
-  statelog-client@0.0.35:
-    resolution: {integrity: sha512-oumIKJZxj1AzPSBtUrLn6Fu4ditAbSFozKbQr7IspY5nW1//vmBn8aOqqjEM2D8W4DlbAFxR04Tec0kKm2Ajpg==}
-
-  statelog-client@0.0.38:
-    resolution: {integrity: sha512-rQlr9bvE9rCRc55PtzikBMYOg0A+ce7zec4gWal4OtLTtCMbVhahBPB/ZUO88Xj7CpM4r/4/0GWIKLIoNiBeXA==}
 
   std-env@3.10.0:
     resolution: {integrity: sha512-5GS12FdOZNliM5mAOxFRg7Ir0pWz8MdpYm6AY6VPkGpbA7ZzmbzNcBJQ0GPvvyWgcY7QAhCgf9Uy89I03faLkg==}
@@ -1851,12 +1836,6 @@ snapshots:
 
   picomatch@4.0.3: {}
 
-  piemachine@0.0.8:
-    dependencies:
-      nanoid: 5.1.6
-      statelog-client: 0.0.35
-      termcolors: https://codeload.github.com/egonSchiele/termcolors/tar.gz/d5c1f497618398ce1440d2383d2aad2642e4051f
-
   plimit-lit@1.6.1:
     dependencies:
       queue-lit: 1.5.2
@@ -1973,14 +1952,6 @@ snapshots:
   source-map-js@1.2.1: {}
 
   stackback@0.0.2: {}
-
-  statelog-client@0.0.35:
-    dependencies:
-      nanoid: 5.1.6
-
-  statelog-client@0.0.38:
-    dependencies:
-      nanoid: 5.1.6
 
   std-env@3.10.0: {}
 

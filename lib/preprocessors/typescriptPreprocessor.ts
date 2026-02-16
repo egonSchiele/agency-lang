@@ -9,6 +9,7 @@ import {
   Assignment,
   FunctionCall,
   FunctionDefinition,
+  getImportedNames,
   globalScope,
   IfElse,
   InterpolationSegment,
@@ -1172,8 +1173,10 @@ export class TypescriptPreprocessor {
           varNameToScope[param.name] = "args";
         }
       } else if (node.type === "importStatement") {
-        // todo imported names need to get parsed better,
-        // into an array
+        const importedNames = node.importedNames.map(getImportedNames).flat();
+        importedNames.forEach((n) => {
+          varNameToScope[n] = "global";
+        });
       } else if (node.type === "importNodeStatement") {
         node.importedNodes.forEach((n) => {
           varNameToScope[n] = "global";

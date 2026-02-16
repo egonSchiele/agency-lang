@@ -16,6 +16,26 @@ node bar() {
 }
 
 node main() {
-  result = llm("Hello there! What's your name?")
-  return result
+  return threadExample()
+}
+
+node threadExample() {
+  msgs = thread {
+    res1: number[] = llm("What are the first 5 prime numbers?")
+    res2: number[] = llm("What are the next 2 prime numbers after those?")
+    msgs2 = subthread {
+      res3: number = llm("And what is the sum of all those numbers combined?")
+    }
+    msgs3 = subthread {
+      res4: number = llm("What are the next 3 after that?")
+    }
+  }
+  print("res1", res1)
+  print("res2", res2)
+  print("res3", res3)
+  printJSON(msgs)
+  print("===============")
+  printJSON(msgs2)
+  print("===============")
+  printJSON(msgs3)
 }

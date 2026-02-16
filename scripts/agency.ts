@@ -20,6 +20,7 @@ import { Command } from "commander";
 import * as fs from "fs";
 import { TarsecError } from "tarsec";
 import process from "process";
+import { remoteRun, upload } from "@/cli/upload.js";
 
 const program = new Command();
 
@@ -248,6 +249,29 @@ program
       }
     }
     if (hasErrors) process.exit(1);
+  });
+
+program
+  .command("upload")
+  .alias("up")
+  .alias("deploy")
+  .description("Upload files to Statelog")
+  .argument("[inputs...]", "Paths to .test.json files or directories")
+  .action(async (testFile: string[]) => {
+    console.log("Uploading", testFile);
+    for (const file of testFile) {
+      await upload(getConfig(), file);
+    }
+  });
+
+program
+  .command("remote-run")
+  .alias("rr")
+  .description("Run files on Statelog remotely")
+  .argument("[filename]", "Paths to .test.json files or directories")
+  .action(async (filename: string) => {
+    console.log("Running files on Statelog remotely");
+    await remoteRun(getConfig(), filename);
   });
 
 // Default: treat unknown args as a file to run

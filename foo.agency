@@ -14,3 +14,8 @@ node bar() {
   result = llm("What is 2 + 2?")
   return result
 }
+
+node main() {
+  result = llm("Hello there! What's your name?")
+  print(result)
+}

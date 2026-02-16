@@ -1,7 +1,7 @@
 {
   "verbose": false,
   "log": {
-    "host": "https://statelog.adit.io",
+    "host": "http://localhost:1065",
     "projectId": "agency-lang",
     "debugMode": false
   },

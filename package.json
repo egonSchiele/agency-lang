@@ -1,6 +1,6 @@
 {
   "name": "agency-lang",
-  "version": "0.0.57",
+  "version": "0.0.58",
   "description": "The Agency language",
   "main": "lib/index.js",
   "scripts": {
@@ -55,7 +55,7 @@
     "piemachine": "^0.0.8",
     "prompts": "^2.4.2",
     "smoltalk": "^0.0.18",
-    "statelog-client": "^0.0.37",
+    "statelog-client": "^0.0.38",
     "tarsec": "^0.1.8",
     "typestache": "^0.4.4",
     "zod": "^4.3.5"

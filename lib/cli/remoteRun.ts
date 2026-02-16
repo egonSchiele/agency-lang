@@ -3,6 +3,8 @@ import { getStatelogClient } from "@/statelogClient.js";
 import { Result } from "@/types/result.js";
 import { getImportsRecursively } from "./util.js";
 import fs from "fs";
+import { parseAgency } from "@/parser.js";
+import { exit } from "process";
 export async function remoteRun(
   config: AgencyConfig,
   filename: string,
@@ -19,6 +21,19 @@ export async function remoteRun(
     name: file,
     contents: fs.readFileSync(file, "utf-8"),
   }));
+
+  const parsed = files.map((file) => {
+    return parseAgency(file.contents, config);
+  });
+
+  const errors = parsed
+    .filter((p) => p.success === false)
+    .map((p) => p.message);
+
+  if (errors.length > 0) {
+    console.error("Errors parsing agency files:", errors);
+    exit(1);
+  }
 
   const result = await client.remoteRun({
     files,

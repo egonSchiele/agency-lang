@@ -6,7 +6,7 @@
   "scripts": {
     "test": "vitest",
     "test:run": "vitest run",
-    "test:agency": "node ./dist/scripts/agency.js test -v tests/agency",
+    "test:agency": "node ./dist/scripts/agency.js test tests/agency",
     "build": "rm -rf dist/ && tsc && tsc-alias && cp -r lib/agents dist/lib/agents",
     "start": "node dist/index.js",
     "templates": "typestache ./lib/templates",

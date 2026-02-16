@@ -92,6 +92,8 @@ export interface AgencyConfig {
   client?: Partial<{
     logLevel: "error" | "warn" | "info" | "debug";
     defaultModel: string;
+    openAiApiKey: string;
+    googleApiKey: string;
   }>;
 
   /**

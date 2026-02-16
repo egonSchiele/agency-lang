@@ -33,8 +33,18 @@ const __model = "{{{clientDefaultModel:string}}}";
 
 const __getClientWithConfig = (config = {}) => {
   const defaultConfig = {
+    {{#hasOpenAiApiKey}}
+    openAiApiKey: "{{{clientOpenAiApiKey?:string}}}",
+    {{/hasOpenAiApiKey}}
+    {{^hasOpenAiApiKey}}
     openAiApiKey: process.env.OPENAI_API_KEY || "",
+    {{/hasOpenAiApiKey}}
+    {{#hasGoogleApiKey}}
+    googleApiKey: "{{{clientGoogleApiKey?:string}}}",
+    {{/hasGoogleApiKey}}
+    {{^hasGoogleApiKey}}
     googleApiKey: process.env.GEMINI_API_KEY || "",
+    {{/hasGoogleApiKey}}
     model: __model,
     logLevel: "{{{clientLogLevel:string}}}",
   };
@@ -516,6 +526,10 @@ export type TemplateType = {
   logProjectId: string;
   logDebugMode: boolean;
   clientDefaultModel: string;
+  hasOpenAiApiKey: boolean;
+  clientOpenAiApiKey?: string;
+  hasGoogleApiKey: boolean;
+  clientGoogleApiKey?: string;
   clientLogLevel: string;
 };
 

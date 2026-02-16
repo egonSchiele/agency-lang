@@ -175,6 +175,12 @@ export class GraphGenerator extends TypeScriptGenerator {
       clientLogLevel: this.agencyConfig.client?.logLevel || "warn",
       clientDefaultModel:
         this.agencyConfig.client?.defaultModel || "gpt-4o-mini",
+      hasOpenAiApiKey: !!this.agencyConfig.client?.openAiApiKey,
+      clientOpenAiApiKey:
+        this.agencyConfig.client?.openAiApiKey || undefined,
+      hasGoogleApiKey: !!this.agencyConfig.client?.googleApiKey,
+      clientGoogleApiKey:
+        this.agencyConfig.client?.googleApiKey || undefined,
     };
 
     const arr = [renderImports.default(args)];

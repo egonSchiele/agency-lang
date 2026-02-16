@@ -3,3 +3,5 @@ export * from "./types.js";
 export * from "./backends/index.js";
 export * from "./simplemachine/index.js";
 export * from "./statelogClient.js";
+export * from "smoltalk";
+export * from "nanoid";

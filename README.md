@@ -6,7 +6,7 @@ Agent Definition Language
 Add agency to a project:
 
 ```bash
-pnpm add agency-lang
+pnpm add agency-lang zod
 ```
 
 You can then start using the agency script on your files:
@@ -20,12 +20,6 @@ agency run infile.agency
 
 # or simply
 agency infile.agency
-```
-
-Note that the generated files use a couple of other libraries that you will need to install as well:
-
-```bash
-pnpm i nanoid zod smoltalk
 ```
 
 ## troubleshooting

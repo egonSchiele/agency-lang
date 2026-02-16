@@ -8,9 +8,8 @@ import process from "process";
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
-import { StatelogClient, SimpleMachine, goToNode } from "agency-lang";
-import { nanoid } from "nanoid";
-import * as smoltalk from "smoltalk";
+import { StatelogClient, SimpleMachine, goToNode, nanoid } from "agency-lang";
+import * as smoltalk from "agency-lang";
 
 /* Code to log to statelog */
 const statelogHost = "{{{logHost:string}}}";

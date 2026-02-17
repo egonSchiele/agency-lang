@@ -14,6 +14,7 @@ import {
   MultiLineStringLiteral,
   NumberLiteral,
   PromptLiteral,
+  PromptSegment,
   StringLiteral,
   TextSegment,
   VariableNameLiteral,
@@ -46,6 +47,7 @@ import {
   sepBy1,
   failure,
   success,
+  quotedString,
 } from "tarsec";
 import { indexAccessParser } from "./access.js";
 
@@ -178,6 +180,19 @@ export const numberParser: Parser<NumberLiteral> = seqC(
   set("type", "number"),
   capture(many1WithJoin(or(char("-"), char("."), digit)), "value"),
 );
+
+const toTextSegment = (str: string): PromptSegment[] => [
+  {
+    type: "text",
+    value: str.replaceAll('"', "").replaceAll("'", ""),
+  },
+];
+
+export const simpleStringParser: Parser<StringLiteral> = seqC(
+  set("type", "string"),
+  capture(map(quotedString, toTextSegment), "segments"),
+);
+
 export const _stringParser: Parser<StringLiteral> = seqC(
   set("type", "string"),
   char('"'),
@@ -267,5 +282,13 @@ export const literalParser: Parser<Literal> = or(
   numberParser,
   multiLineStringParser,
   stringParser,
+  variableNameParser,
+);
+
+// no string concat, no prompt strings
+export const simpleLiteralParser: Parser<Literal> = or(
+  booleanParser,
+  numberParser,
+  simpleStringParser,
   variableNameParser,
 );

@@ -10,6 +10,7 @@ import {
 import { literalParser } from "./literals.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { optionalSpaces } from "./utils.js";
+import { binOpParser } from "./binop.js";
 
 export const returnStatementParser: Parser<ReturnStatement> = seqC(
   set("type", "returnStatement"),
@@ -18,6 +19,7 @@ export const returnStatementParser: Parser<ReturnStatement> = seqC(
   capture(
     or(
       streamingPromptLiteralParser,
+      binOpParser,
       indexAccessParser,
       accessExpressionParser,
       llmPromptFunctionCallParser,

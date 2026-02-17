@@ -109,7 +109,7 @@ __stateStack.globals.result = greet([], {
         statelogClient,
         graph: __graph,
         messages: __self.messages_0.getMessages(),
-      });;
+      });
 
 await console.log(__stateStack.globals.result)//  Testing comments in different contexts
 //  1. Before type hints

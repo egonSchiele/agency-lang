@@ -903,7 +903,7 @@ graph.node("sayHi", async (state) => {
         statelogClient,
         graph: __graph,
         messages: __self.messages_0.getMessages(),
-      });;
+      });
 
 
 if (isInterrupt(__stack.locals.response)) {

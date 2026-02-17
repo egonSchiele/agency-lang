@@ -1103,11 +1103,19 @@ async function ___promptVar(__metadata) {
 }
 
 
-__self.__promptVar = ___promptVar({
+
+
+__self.__promptVar = await ___promptVar({
       messages: __self.messages_0?.getMessages(),
     });
 
-
+// return early from node if this is an interrupt
+if (isInterrupt(__self.__promptVar)) {
+  
+   
+   return  __self.__promptVar;
+   
+}
 
 __stateStack.pop();
 return __self.__promptVar;
@@ -1183,7 +1191,7 @@ if (isInterrupt(__stack.locals.msg)) {
         statelogClient,
         graph: __graph,
         messages: __self.messages_0.getMessages(),
-      });;
+      });
 
 
 if (isInterrupt(__stack.locals.res2)) {
@@ -1201,7 +1209,7 @@ if (isInterrupt(__stack.locals.res2)) {
         statelogClient,
         graph: __graph,
         messages: __self.messages_0.getMessages(),
-      });;
+      });
 
 
 if (isInterrupt(__stack.locals.res1)) {

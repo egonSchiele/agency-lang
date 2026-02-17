@@ -4,6 +4,7 @@ import { Literal } from "./literals.js";
 import { FunctionCall } from "./function.js";
 import { AgencyArray, AgencyObject } from "./dataStructures.js";
 import { ReturnStatement } from "./returnStatement.js";
+import { BinOpExpression } from "./binop.js";
 
 export type DefaultCase = "_";
 
@@ -22,6 +23,6 @@ export type MatchBlockCase = {
 
 export type MatchBlock = {
   type: "matchBlock";
-  expression: Literal;
+  expression: Literal | BinOpExpression;
   cases: (MatchBlockCase | AgencyComment)[];
 };

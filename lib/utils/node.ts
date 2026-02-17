@@ -207,6 +207,9 @@ export function* walkNodes(
       );
     } else if (node.type === "specialVar") {
       yield* walkNodes([node.value], [...ancestors, node], scopes);
+    } else if (node.type === "binOpExpression") {
+      yield* walkNodes([node.left], [...ancestors, node], scopes);
+      yield* walkNodes([node.right], [...ancestors, node], scopes);
     }
   }
 }

@@ -40,6 +40,7 @@ import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
 import { AgencyConfig } from "@/config.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
+import { BinOpExpression } from "@/types/binop.js";
 
 export class AgencyGenerator extends BaseGenerator {
   private indentLevel: number = 0;
@@ -567,6 +568,10 @@ export class AgencyGenerator extends BaseGenerator {
 
   protected processSkill(node: Skill): string {
     return this.indentStr(`skill "${node.filepath}"`);
+  }
+
+  protected processBinOpExpression(node: BinOpExpression): string {
+    return `${this.processNode(node.left).trim()} ${node.operator} ${this.processNode(node.right).trim()}`;
   }
 }
 

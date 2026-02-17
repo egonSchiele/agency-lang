@@ -1532,31 +1532,31 @@ __stateStack.globals.sum = add([5, 10], {
         statelogClient,
         graph: __graph,
         messages: __self.messages_0.getMessages(),
-      });;
+      });
 
 __stateStack.globals.greeting = greet([`Alice`], {
         statelogClient,
         graph: __graph,
         messages: __self.messages_0.getMessages(),
-      });;
+      });
 
 __stateStack.globals.labeled = mixed([42, `Answer`], {
         statelogClient,
         graph: __graph,
         messages: __self.messages_0.getMessages(),
-      });;
+      });
 
 __stateStack.globals.processed = processArray([[1, 2, 3, 4, 5]], {
         statelogClient,
         graph: __graph,
         messages: __self.messages_0.getMessages(),
-      });;
+      });
 
 __stateStack.globals.flexResult = flexible([`test`], {
         statelogClient,
         graph: __graph,
         messages: __self.messages_0.getMessages(),
-      });;
+      });
 
 
 

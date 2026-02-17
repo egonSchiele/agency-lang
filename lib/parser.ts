@@ -52,6 +52,7 @@ import { AgencyNode, AgencyProgram } from "./types.js";
 import { skillParser } from "./parsers/skill.js";
 import { AgencyConfig } from "./config.js";
 import { nanoid } from "nanoid";
+import { binOpParser } from "./parsers/binop.js";
 
 export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
   const parser = many(
@@ -75,8 +76,9 @@ export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
         functionParser,
         returnStatementParser,
         specialVarParser,
-        accessExpressionParser,
         assignmentParser,
+        binOpParser,
+        accessExpressionParser,
         llmPromptFunctionCallParser,
         functionCallParser,
         commentParser,

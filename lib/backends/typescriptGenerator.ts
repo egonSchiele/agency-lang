@@ -69,6 +69,7 @@ import { AgencyConfig } from "@/config.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
 import path from "path";
+import { BinOpExpression } from "@/types/binop.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
@@ -162,7 +163,7 @@ export class TypeScriptGenerator extends BaseGenerator {
   }
 
   protected processMatchBlock(node: MatchBlock): string {
-    let lines = [`switch (${this.generateLiteral(node.expression)}) {`];
+    let lines = [`switch (${this.processNode(node.expression)}) {`];
 
     for (const caseItem of node.cases) {
       if (caseItem.type === "comment") {
@@ -761,6 +762,10 @@ I'll probably need to do that for supporting type checking anyway.
 
   protected processSkill(node: Skill): string {
     return "";
+  }
+
+  protected processBinOpExpression(node: BinOpExpression): string {
+    return `${this.processNode(node.left).trim()} ${node.operator} ${this.processNode(node.right).trim()}`;
   }
 
   /* This generates the body of a node or function separated into multiple parts.

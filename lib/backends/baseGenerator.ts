@@ -41,6 +41,7 @@ import { AgencyConfig } from "@/config.js";
 import { mergeDeep } from "@/utils.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
+import { BinOpExpression } from "@/types/binop.js";
 
 export class BaseGenerator {
   protected typeHints: TypeHintMap = {};
@@ -237,9 +238,15 @@ export class BaseGenerator {
         return this.processMessageThread(node);
       case "skill":
         return this.processSkill(node);
+      case "binOpExpression":
+        return this.processBinOpExpression(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
+  }
+
+  protected processBinOpExpression(node: BinOpExpression): string {
+    return "processBinOpExpression not implemented";
   }
 
   protected processSkill(node: Skill): string {

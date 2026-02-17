@@ -6,6 +6,7 @@ import {
   Literal,
 } from "../types.js";
 import { AwaitStatement } from "./await.js";
+import { BinOpExpression } from "./binop.js";
 import { AgencyArray, AgencyObject } from "./dataStructures.js";
 
 export type ReturnStatement = {
@@ -16,5 +17,6 @@ export type ReturnStatement = {
     | Literal
     | AgencyObject
     | AgencyArray
-    | IndexAccess;
+    | IndexAccess
+    | BinOpExpression;
 };

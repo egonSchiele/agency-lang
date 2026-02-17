@@ -104,7 +104,8 @@ await console.log(test([], {
         statelogClient,
         graph: __graph,
         messages: __self.messages_0.getMessages(),
-      });)
+      })
+)
 export async function add(args, __metadata={}) {
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;

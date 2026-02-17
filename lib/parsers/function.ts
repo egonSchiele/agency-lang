@@ -63,6 +63,7 @@ import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
 import { newLineParser } from "./newline.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { skillParser } from "./skill.js";
+import { binOpParser } from "./binop.js";
 
 export const assignmentParser: Parser<Assignment> = (input: string) => {
   const parser = trace(
@@ -86,6 +87,7 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
       optionalSpaces,
       capture(
         or(
+          binOpParser,
           timeBlockParser,
           messageThreadParser,
           promptParser,
@@ -273,7 +275,12 @@ export const ifParser: Parser<IfElse> = (input: string) => {
       char("("),
       optionalSpaces,
       capture(
-        or(accessExpressionParser, functionCallParser, literalParser),
+        or(
+          binOpParser,
+          accessExpressionParser,
+          functionCallParser,
+          literalParser,
+        ),
         "condition",
       ),
       optionalSpaces,
@@ -299,6 +306,7 @@ export const whileLoopParser: Parser<WhileLoop> = trace(
     optionalSpaces,
     capture(
       or(
+        binOpParser,
         indexAccessParser,
         functionCallParser,
         accessExpressionParser,

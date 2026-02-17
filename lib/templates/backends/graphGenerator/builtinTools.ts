@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `function add({a, b}) {
+export const template = `/*function add({a, b}) {
   return a + b;
 }
 
@@ -15,7 +15,7 @@ const addTool = {
     b: z.number().describe("The second number to add"),
   }),
 };
-`;
+*/`;
 
 export type TemplateType = {
 };

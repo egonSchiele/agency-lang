@@ -1,4 +1,5 @@
 import { AccessExpression, DotProperty, IndexAccess } from "./types/access.js";
+import { BinOpExpression } from "./types/binop.js";
 import { AgencyArray, AgencyObject } from "./types/dataStructures.js";
 import { FunctionCall, FunctionDefinition } from "./types/function.js";
 import { GraphNodeDefinition } from "./types/graphNode.js";
@@ -64,7 +65,8 @@ export type Assignment = {
     | AgencyArray
     | IndexAccess
     | TimeBlock
-    | MessageThread;
+    | MessageThread
+    | BinOpExpression;
 };
 
 export function globalScope(): Scope {
@@ -109,13 +111,16 @@ export type AgencyNode =
   | WhileLoop
   | IfElse
   | SpecialVar
+  // are these needed if we have AccessExpression?
   | IndexAccess
   | DotProperty
+  // these two ^
   | TimeBlock
   | NewLine
   | RawCode
   | MessageThread
-  | Skill;
+  | Skill
+  | BinOpExpression;
 
 export type AgencyProgram = {
   type: "agencyProgram";

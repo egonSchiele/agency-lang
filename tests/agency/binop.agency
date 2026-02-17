@@ -1,0 +1,6 @@
+node main() {
+  x = 5
+  if (x == 5) {
+    return "x is 5"
+  }
+}

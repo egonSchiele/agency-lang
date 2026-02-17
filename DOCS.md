@@ -237,7 +237,7 @@ async function main() {
   const response = await foo()
 
   // response is a string containing the LLM's response
-  console.log(response)
+  console.log(response.data)
 }
 ```
 
@@ -341,6 +341,7 @@ node foo() {
   print(response)
   return response
 }
+```
 
 Streaming only works when you run your agent from a TypeScript file and provide an `onStream` callback.
 

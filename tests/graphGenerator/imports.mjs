@@ -519,7 +519,7 @@ class MessageThread {
     };
   }
 }
-function add({a, b}) {
+/*function add({a, b}) {
   return a + b;
 }
 
@@ -531,7 +531,7 @@ const addTool = {
     b: z.number().describe("The second number to add"),
   }),
 };
-
+*/
 
 graph.merge(__graph___foo);
 export default graph;

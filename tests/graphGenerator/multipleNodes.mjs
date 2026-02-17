@@ -509,7 +509,7 @@ class MessageThread {
     };
   }
 }
-function add({a, b}) {
+/*function add({a, b}) {
   return a + b;
 }
 
@@ -521,7 +521,7 @@ const addTool = {
     b: z.number().describe("The second number to add"),
   }),
 };
-
+*/
 
 graph.node("greet", async (state) => {
     const __graph = state.__metadata?.graph || graph;

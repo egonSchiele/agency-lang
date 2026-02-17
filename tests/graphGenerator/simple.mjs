@@ -707,7 +707,7 @@ async function _greeting(__metadata) {
 
 
 __self.greeting = _greeting({
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
         __stack.step++;
       }

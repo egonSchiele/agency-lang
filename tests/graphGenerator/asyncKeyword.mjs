@@ -704,7 +704,7 @@ async function _response(msg, __metadata) {
 
 
 __self.response = _response(__stack.locals.msg, {
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
 
 
@@ -902,7 +902,7 @@ async function _response(msg, __metadata) {
 
 
 __self.response = _response(__stack.locals.msg, {
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
 
 
@@ -1104,7 +1104,7 @@ async function ___promptVar(__metadata) {
 
 
 __self.__promptVar = ___promptVar({
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
 
 

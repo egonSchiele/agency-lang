@@ -195,7 +195,7 @@ async function _bar(__metadata) {
 
 
 __self.bar = _bar({
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
 
 

@@ -715,7 +715,7 @@ async function _result(x, y, __metadata) {
 
 
 __self.result = _result(__stack.args.x, __stack.args.y, {
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
         __stack.step++;
       }
@@ -897,7 +897,7 @@ async function _message(name, __metadata) {
 
 
 __self.message = _message(__stack.args.name, {
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
         __stack.step++;
       }
@@ -1079,7 +1079,7 @@ async function _output(label, count, __metadata) {
 
 
 __self.output = _output(__stack.args.label, __stack.args.count, {
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
         __stack.step++;
       }
@@ -1261,7 +1261,7 @@ async function _result(items, __metadata) {
 
 
 __self.result = _result(__stack.args.items, {
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
         __stack.step++;
       }
@@ -1443,7 +1443,7 @@ async function _result(value, __metadata) {
 
 
 __self.result = _result(__stack.args.value, {
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
         __stack.step++;
       }

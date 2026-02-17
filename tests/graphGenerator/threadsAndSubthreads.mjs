@@ -710,7 +710,7 @@ async function _res1(__metadata) {
 
 
 __self.res1 = await _res1({
-      messages: __self.messages_1.getMessages(),
+      messages: __self.messages_1?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -876,7 +876,7 @@ async function _res2(__metadata) {
 
 
 __self.res2 = await _res2({
-      messages: __self.messages_2.getMessages(),
+      messages: __self.messages_2?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -1042,7 +1042,7 @@ async function _res3(__metadata) {
 
 
 __self.res3 = await _res3({
-      messages: __self.messages_3.getMessages(),
+      messages: __self.messages_3?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -1212,7 +1212,7 @@ async function _res5(__metadata) {
 
 
 __self.res5 = await _res5({
-      messages: __self.messages_4.getMessages(),
+      messages: __self.messages_4?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -1386,7 +1386,7 @@ async function _res4(__metadata) {
 
 
 __self.res4 = await _res4({
-      messages: __self.messages_5.getMessages(),
+      messages: __self.messages_5?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -1643,7 +1643,7 @@ async function _res1(__metadata) {
 
 
 __self.res1 = await _res1({
-      messages: __self.messages_6.getMessages(),
+      messages: __self.messages_6?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -1809,7 +1809,7 @@ async function _res2(__metadata) {
 
 
 __self.res2 = await _res2({
-      messages: __self.messages_7.getMessages(),
+      messages: __self.messages_7?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -1975,7 +1975,7 @@ async function _res3(__metadata) {
 
 
 __self.res3 = await _res3({
-      messages: __self.messages_8.getMessages(),
+      messages: __self.messages_8?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -2145,7 +2145,7 @@ async function _res5(__metadata) {
 
 
 __self.res5 = await _res5({
-      messages: __self.messages_9.getMessages(),
+      messages: __self.messages_9?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -2319,7 +2319,7 @@ async function _res4(__metadata) {
 
 
 __self.res4 = await _res4({
-      messages: __self.messages_10.getMessages(),
+      messages: __self.messages_10?.getMessages(),
     });
 
 // return early from node if this is an interrupt

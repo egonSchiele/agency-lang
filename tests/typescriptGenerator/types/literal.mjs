@@ -195,7 +195,7 @@ async function _foo(__metadata) {
 
 
 __self.foo = _foo({
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
 
 
@@ -345,7 +345,7 @@ async function _bar(__metadata) {
 
 
 __self.bar = _bar({
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
 
 
@@ -495,7 +495,7 @@ async function _baz(__metadata) {
 
 
 __self.baz = _baz({
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
 
 

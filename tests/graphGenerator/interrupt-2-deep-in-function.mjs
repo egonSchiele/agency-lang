@@ -798,7 +798,7 @@ async function _response(name, age, __metadata) {
 
 
 __self.response = await _response(__stack.args.name, __stack.locals.age, {
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
 
 // return early from node if this is an interrupt

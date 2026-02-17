@@ -719,7 +719,7 @@ async function _result(input, __metadata) {
 
 
 __self.result = _result(__stack.args.input, {
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
         __stack.step++;
       }

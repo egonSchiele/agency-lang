@@ -195,7 +195,7 @@ async function _url(__metadata) {
 
 
 __self.url = _url({
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
 
 

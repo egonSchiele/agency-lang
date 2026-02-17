@@ -185,7 +185,7 @@ async function _greeting(name, __metadata) {
 
 
 __self.greeting = _greeting(__stateStack.globals.name, {
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
 
 

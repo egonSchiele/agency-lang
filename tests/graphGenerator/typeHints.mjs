@@ -718,7 +718,7 @@ async function _count(__metadata) {
 
 
 __self.count = _count({
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
         __stack.step++;
       }
@@ -860,7 +860,7 @@ async function _message(__metadata) {
 
 
 __self.message = _message({
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
         __stack.step++;
       }

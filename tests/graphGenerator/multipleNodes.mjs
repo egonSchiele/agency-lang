@@ -707,7 +707,7 @@ async function _greeting(__metadata) {
 
 
 __self.greeting = _greeting({
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
         __stack.step++;
       }
@@ -939,7 +939,7 @@ async function _result(msg, __metadata) {
 
 
 __self.result = _result(__stack.args.msg, {
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
         __stack.step++;
       }

@@ -726,7 +726,7 @@ Available skills:
 
 
 __self.result = await _result(__stack.args.input, {
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
 
 // return early from node if this is an interrupt

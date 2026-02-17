@@ -195,7 +195,7 @@ async function _numbers(__metadata) {
 
 
 __self.numbers = _numbers({
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
 
 
@@ -345,7 +345,7 @@ async function _greetings(__metadata) {
 
 
 __self.greetings = _greetings({
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
 
 

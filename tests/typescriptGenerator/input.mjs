@@ -197,7 +197,7 @@ async function _sentiment(message, __metadata) {
 
 
 __self.sentiment = _sentiment(__stateStack.globals.message, {
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
 
 

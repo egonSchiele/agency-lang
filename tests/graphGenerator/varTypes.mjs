@@ -724,7 +724,7 @@ async function _response(person_name, person_age, __metadata) {
 
 
 __self.response = _response(__stateStack.globals.person.name, __stateStack.globals.person.age, {
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
         __stack.step++;
       }

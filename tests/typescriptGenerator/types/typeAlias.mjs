@@ -196,7 +196,7 @@ async function _foo(__metadata) {
 
 
 __self.foo = _foo({
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
 
 

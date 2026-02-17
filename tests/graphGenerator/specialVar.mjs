@@ -727,7 +727,7 @@ async function _response1(msg, __metadata) {
 
 
 __self.response1 = _response1(__stack.locals.msg, {
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
         __stack.step++;
       }
@@ -887,7 +887,7 @@ async function _response2(msg, __metadata) {
 
 
 __self.response2 = _response2(__stack.locals.msg, {
-      messages: __self.messages_0.getMessages(),
+      messages: __self.messages_0?.getMessages(),
     });
         __stack.step++;
       }

@@ -111,7 +111,7 @@ describe("assignmentParser", () => {
         result: {
           type: "assignment",
           variableName: "_privateVar",
-          value: { type: "variableName", value: "true" },
+          value: { type: "boolean", value: true },
         },
       },
     },
@@ -323,7 +323,7 @@ describe("assignmentParser", () => {
           type: "assignment",
           variableName: "isActive",
           typeHint: { type: "primitiveType", value: "boolean" },
-          value: { type: "variableName", value: "true" },
+          value: { type: "boolean", value: true },
         },
       },
     },

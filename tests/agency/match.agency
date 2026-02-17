@@ -1,0 +1,12 @@
+node main() {
+  grade = "B"
+  points = 0
+  match(grade) {
+    "A" => points = 100
+    "B" => points = 85
+    "C" => points = 70
+    "D" => points = 55
+    _ => points = 0
+  }
+  return points
+}

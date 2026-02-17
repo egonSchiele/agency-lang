@@ -1,0 +1,9 @@
+node main() {
+  if (true) {
+    foo = "hello"
+  }
+  if (false) {
+    bar = "world"
+  }
+  return [foo, bar]
+}

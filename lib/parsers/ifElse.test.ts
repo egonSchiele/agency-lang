@@ -10,7 +10,7 @@ describe("ifParser", () => {
         success: true,
         result: {
           type: "ifElse",
-          condition: { type: "variableName", value: "true" },
+          condition: { type: "boolean", value: true },
           thenBody: [
             {
               type: "assignment",
@@ -31,7 +31,7 @@ describe("ifParser", () => {
         success: true,
         result: {
           type: "ifElse",
-          condition: { type: "variableName", value: "false" },
+          condition: { type: "boolean", value: false },
           thenBody: [
             {
               type: "assignment",
@@ -201,7 +201,7 @@ describe("ifParser", () => {
         success: true,
         result: {
           type: "ifElse",
-          condition: { type: "variableName", value: "true" },
+          condition: { type: "boolean", value: true },
           thenBody: [],
           elseBody: undefined,
         },

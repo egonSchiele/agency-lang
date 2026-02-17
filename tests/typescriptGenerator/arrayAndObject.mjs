@@ -65,7 +65,7 @@ __stateStack.globals.user = {"name": `Bob`, "tags": [`admin`, `developer`]};
 await console.log(__stateStack.globals.user)//  Array of objects
 __stateStack.globals.users = [{"name": `Alice`, "age": 30}, {"name": `Bob`, "age": 25}];
 await console.log(__stateStack.globals.users)//  Nested object
-__stateStack.globals.config = {"server": {"host": `localhost`, "port": 8080}, "debug": __stateStack.globals.true};
+__stateStack.globals.config = {"server": {"host": `localhost`, "port": 8080}, "debug": true};
 await console.log(__stateStack.globals.config)//  Array access
 __stateStack.globals.firstNum = __stateStack.globals.nums[0];
 await console.log(__stateStack.globals.firstNum)//  Object property access

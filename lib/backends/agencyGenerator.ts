@@ -147,6 +147,8 @@ export class AgencyGenerator extends BaseGenerator {
         return this.generateMultiLineStringLiteral(literal);
       case "prompt":
         return this.indentStr(this.generatePromptLiteral(literal));
+      case "boolean":
+        return literal.value ? "true" : "false";
       default:
         return "";
     }

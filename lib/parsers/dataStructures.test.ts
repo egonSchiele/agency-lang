@@ -644,7 +644,7 @@ describe("dataStructures parsers", () => {
               },
               {
                 key: "active",
-                value: { type: "variableName", value: "true" },
+                value: { type: "boolean", value: true },
               },
               {
                 key: "tags",

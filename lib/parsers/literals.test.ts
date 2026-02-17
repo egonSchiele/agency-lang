@@ -7,6 +7,7 @@ import {
   stringParser,
   multiLineStringParser,
   variableNameParser,
+  booleanParser,
   literalParser,
 } from "./literals.js";
 
@@ -1298,6 +1299,46 @@ describe("literals parsers", () => {
     });
   });
 
+  describe("booleanParser", () => {
+    const testCases = [
+      // Happy path
+      {
+        input: "true",
+        expected: { success: true, result: { type: "boolean", value: true } },
+      },
+      {
+        input: "false",
+        expected: { success: true, result: { type: "boolean", value: false } },
+      },
+
+      // Failure cases
+      { input: "", expected: { success: false } },
+      { input: "True", expected: { success: false } },
+      { input: "FALSE", expected: { success: false } },
+      { input: "yes", expected: { success: false } },
+      { input: "no", expected: { success: false } },
+      { input: "1", expected: { success: false } },
+      { input: "0", expected: { success: false } },
+    ];
+
+    testCases.forEach(({ input, expected }) => {
+      if (expected.success) {
+        it(`should parse "${input}" successfully`, () => {
+          const result = booleanParser(input);
+          expect(result.success).toBe(true);
+          if (result.success) {
+            expect(result.result).toEqual(expected.result);
+          }
+        });
+      } else {
+        it(`should fail to parse "${input}"`, () => {
+          const result = booleanParser(input);
+          expect(result.success).toBe(false);
+        });
+      }
+    });
+  });
+
   describe("literalParser", () => {
     const testCases = [
       // Prompt literals (highest precedence)
@@ -1320,6 +1361,16 @@ describe("literals parsers", () => {
             segments: [{ type: "interpolation", variableName: "foo" }],
           },
         },
+      },
+
+      // Boolean literals
+      {
+        input: "true",
+        expected: { success: true, result: { type: "boolean", value: true } },
+      },
+      {
+        input: "false",
+        expected: { success: true, result: { type: "boolean", value: false } },
       },
 
       // Number literals

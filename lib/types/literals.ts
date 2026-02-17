@@ -8,7 +8,8 @@ export type Literal =
   | MultiLineStringLiteral
   | StringLiteral
   | VariableNameLiteral
-  | PromptLiteral;
+  | PromptLiteral
+  | BooleanLiteral;
 
 export type NumberLiteral = {
   type: "number";
@@ -29,6 +30,11 @@ export type VariableNameLiteral = {
   type: "variableName";
   value: string;
   scope?: ScopeType;
+};
+
+export type BooleanLiteral = {
+  type: "boolean";
+  value: boolean;
 };
 
 // New types for prompt segments

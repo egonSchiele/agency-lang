@@ -10,7 +10,7 @@ describe("whileLoopParser", () => {
         success: true,
         result: {
           type: "whileLoop",
-          condition: { type: "variableName", value: "true" },
+          condition: { type: "boolean", value: true },
           body: [
             {
               type: "assignment",
@@ -30,7 +30,7 @@ describe("whileLoopParser", () => {
         success: true,
         result: {
           type: "whileLoop",
-          condition: { type: "variableName", value: "false" },
+          condition: { type: "boolean", value: false },
           body: [
             {
               type: "assignment",
@@ -218,7 +218,7 @@ describe("whileLoopParser", () => {
         success: true,
         result: {
           type: "whileLoop",
-          condition: { type: "variableName", value: "true" },
+          condition: { type: "boolean", value: true },
           body: [],
         },
       },

@@ -416,6 +416,8 @@ export class TypeScriptGenerator extends BaseGenerator {
           this.getScopeReturnType(),
           literal,
         );
+      case "boolean":
+        return literal.value ? "true" : "false";
     }
   }
 

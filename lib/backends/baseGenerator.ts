@@ -197,6 +197,7 @@ export class BaseGenerator {
       case "string":
       case "variableName":
       case "prompt":
+      case "boolean":
         // Standalone literals at top level
         return this.generateLiteral(node);
       case "returnStatement":

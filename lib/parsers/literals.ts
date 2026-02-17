@@ -8,6 +8,7 @@ import {
   varNameChar,
 } from "./utils.js";
 import {
+  BooleanLiteral,
   InterpolationSegment,
   Literal,
   MultiLineStringLiteral,
@@ -249,7 +250,19 @@ export const variableNameParser: Parser<VariableNameLiteral> = (
   return parser(input);
 };
 
+export const booleanParser: Parser<BooleanLiteral> = seqC(
+  set("type", "boolean"),
+  capture(
+    or(
+      map(str("true"), () => true),
+      map(str("false"), () => false),
+    ),
+    "value",
+  ),
+);
+
 export const literalParser: Parser<Literal> = or(
+  booleanParser,
   promptParser,
   numberParser,
   multiLineStringParser,

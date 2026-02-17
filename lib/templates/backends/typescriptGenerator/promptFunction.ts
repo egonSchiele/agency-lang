@@ -42,7 +42,9 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
 
     const endTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    {{#isStreaming}}
+    __completion = await handleStreamingResponse(__completion, statelogClient, __prompt, __toolCalls);
+    {{/isStreaming}}
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -110,7 +112,9 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    {{#isStreaming}}
+    __completion = await handleStreamingResponse(__completion, statelogClient, __prompt, __toolCalls);
+    {{/isStreaming}}
 
     statelogClient.promptCompletion({
       messages: __messages,

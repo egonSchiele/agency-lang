@@ -236,6 +236,10 @@ export async function respondToInterrupt(
     messages: messages,
     __metadata: {
       graph: graph,
+      // we need to pass in the state log client here because
+      // if we rely on the local state log client
+      // each client in each file has a different trace id.
+      // So we pass in the client to make sure they all use the same trace id
       statelogClient: __statelogClient,
       __stateStack: __stateStack,
       __callbacks: metadata.callbacks,
@@ -403,7 +407,7 @@ function __cloneArray(arr) {
   return [...arr];
 }
 
-const handleStreamingResponse = async (__completion) => {
+const handleStreamingResponse = async (__completion, statelogClient, __prompt, __toolCalls) => {
   if (isGenerator(__completion)) {
     if (!__callbacks.onStream) {
       console.log(
@@ -432,7 +436,7 @@ const handleStreamingResponse = async (__completion) => {
             break;
         }
       }
-      __completion = { success: true, value: syncResult };
+      return { success: true, value: syncResult };
     } else {
       // try to acquire lock
       let count = 0;
@@ -460,8 +464,7 @@ const handleStreamingResponse = async (__completion) => {
             break;
           case "done":
             __callbacks.onStream({ type: "done", result: chunk.result });
-            __completion = { success: true, value: chunk.result };
-            break;
+            return { success: true, value: chunk.result };
           case "error":
             __callbacks.onStream({ type: "error", error: chunk.error });
             break;

@@ -4,3 +4,14 @@
 def ascii(str: string): number[] {
   return llm("Return the given string as a series of ascii codes: ${str}")
 }
+
+async def greet(name: string) {
+  return llm("Say hello to ${name}!")
+}
+
+// also tests a node returning a function call
+// that will get marked async, but should we awaited,
+// as it is being returned
+node bar(name: string) {
+  return greet(name)
+}

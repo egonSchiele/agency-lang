@@ -1,5 +1,6 @@
 import tool { ascii } from "./bar.agency"
 import { bestSong } from "./funcs.js"
+import node { bar } from "./bar.agency"
 
 def bestSongTool(artist: string): string {
   """
@@ -18,4 +19,8 @@ node jsImport() {
   uses bestSongTool
   result: string = llm("Use the bestSongTool to find the best song by the artist 'The Beatles'")
   return result
+}
+
+node nodeImport() {
+  return bar("Alice")
 }

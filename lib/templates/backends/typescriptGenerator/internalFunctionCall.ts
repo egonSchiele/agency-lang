@@ -3,7 +3,8 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `{{{awaitPrefix:string}}}{{{functionName:string}}}([{{{argsString:string}}}], {{{metadata:string}}});`;
+export const template = `{{{awaitPrefix:string}}}{{{functionName:string}}}([{{{argsString:string}}}], {{{metadata:string}}})
+`;
 
 export type TemplateType = {
   awaitPrefix: string;

@@ -287,7 +287,18 @@ export class TypescriptPreprocessor {
       const isInMessageThread = ancestors.some(
         (a) => a.type === "messageThread",
       );
+      const isInReturnStatement = ancestors.some(
+        (a) => a.type === "returnStatement",
+      );
+
       if (node.type === "functionCall") {
+        // if in return, this is the last line of execution,
+        // so we need to wait for it to finish
+        if (isInReturnStatement) {
+          node.async = false;
+          continue;
+        }
+
         if (this.isBuiltinFunction(node.functionName)) {
           node.async = BUILTIN_FUNCTIONS_TO_ASYNC[node.functionName] ?? false;
           continue;
@@ -326,6 +337,14 @@ export class TypescriptPreprocessor {
           node.async = false;
           continue;
         }
+
+        // if in return, this is the last line of execution,
+        // so we need to wait for it to finish
+        if (isInReturnStatement) {
+          node.async = false;
+          continue;
+        }
+
         if (node.async !== undefined) {
           continue; // already marked as async or sync
         }

@@ -22,6 +22,18 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "nodeImport",
+      "input": "",
+      "expectedOutput": "\"Hello, Alice! Hope you're having a great day!\"",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "Should be a string greeting a person named Alice",
+          "desiredAccuracy": 90
+        }
+      ]
     }
   ]
 }

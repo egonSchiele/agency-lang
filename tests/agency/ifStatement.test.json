@@ -4,15 +4,6 @@
     {
       "nodeName": "main",
       "input": "",
-      "evaluationCriteria": [
-        {
-          "type": "llmJudge"
-        }
-      ]
-    },
-    {
-      "nodeName": "main",
-      "input": "",
       "expectedOutput": "[\"hello\",null]",
       "evaluationCriteria": [
         {

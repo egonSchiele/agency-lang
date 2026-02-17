@@ -1,0 +1,27 @@
+{
+  "sourceFile": "foo.agency",
+  "tests": [
+    {
+      "nodeName": "jsImport",
+      "input": "",
+      "expectedOutput": "\"The best song by The Beatles is \\\"Hey Jude.\\\"\"",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "Does the response make it clear that the best song by the Beatles is \"Hey Jude\"?",
+          "desiredAccuracy": 80
+        }
+      ]
+    },
+    {
+      "nodeName": "agencyImport",
+      "input": "",
+      "expectedOutput": "[104,101,108,108,111]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

@@ -606,7 +606,7 @@ I'll probably need to do that for supporting type checking anyway.
 
     const clientConfig = prompt.config ? this.processNode(prompt.config) : "{}";
     const metadataObj = `{
-      messages: __self.messages_${this.currentMessageThreadNodeId.at(-1)}.getMessages(),
+      messages: __self.messages_${this.currentMessageThreadNodeId.at(-1)}?.getMessages(),
     }`;
 
     const scopedFunctionArgs = functionArgs.map((arg) => {

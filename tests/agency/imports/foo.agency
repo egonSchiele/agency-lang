@@ -1,0 +1,21 @@
+import tool { ascii } from "./bar.agency"
+import { bestSong } from "./funcs.js"
+
+def bestSongTool(artist: string): string {
+  """
+  This tool returns the best song by a given artist.
+  """
+  return bestSong(artist)
+}
+
+node agencyImport() {
+  uses ascii
+  result: number[] = llm("Use the ascii tool to convert the string 'hello' to ASCII codes")
+  return result
+}
+
+node jsImport() {
+  uses bestSongTool
+  result: string = llm("Use the bestSongTool to find the best song by the artist 'The Beatles'")
+  return result
+}

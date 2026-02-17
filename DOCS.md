@@ -4,7 +4,7 @@ Agency is a language for creating agents. It has language-level support for LLM 
 ### Nodes
 A node is a basic building block in Agency. You define a node like this:
 
-```agency
+```ts
 node greet() {
   print("hi!");
 }
@@ -12,7 +12,7 @@ node greet() {
 
 Here are two nodes:
 
-```agency
+```ts
 node greet() {
   print("hi!");
 }
@@ -31,14 +31,14 @@ If you plan to run this agency file as a script, you will need a node named `mai
 ### LLM Calls
 To make an LLM call, use the `llm` function:
 
-```agency
+```ts
 response: string = llm(`Say hi to me`)
 magicNumber: number = llm(`Add 4 + 5`)
 ```
 
 You can also use the older backticks syntax. Any text between backticks, gets sent to an LLM. For example:
 
-```agency
+```ts
 greet = `Say hi to me`
 ```
 
@@ -48,7 +48,7 @@ If you want to request a specific output format, use a type hint.
 
 ### Type Hints
 
-```agency
+```ts
 greet: number = llm("add 4 + 5")
 ```
 
@@ -63,25 +63,25 @@ Primitive types:
 
 Union types. Example:
 
-```agency
+```ts
 status: "success" | "error" = llm("Respond with either 'success' or 'error'")
 ```
 
 Array types. Example:
 
-```agency
+```ts
 items: string[] = llm("List 5 fruits")
 ```
 
 Object types. Example:
 
-```agency
+```ts
 user: {name: string, age: number} = `Provide a user object with name and age`
 ```
 
 You can define a new type:
 
-```agency
+```ts
 type User = {
   name: string;
   age: number;
@@ -90,7 +90,7 @@ type User = {
 
 You can describe a property on an object for the LLM:
 
-```agency
+```ts
 type User = {
   name: string # The name of the user
   age: number # The age of the user
@@ -99,13 +99,13 @@ type User = {
 
 NOTE: You currently CANNOT set a type on a variable. This will not work:
 
-```agency
+```ts
 name: string[] = []
 ```
 
 You'll need to skip the type:
 
-```agency
+```ts
 name = []
 ```
 
@@ -113,7 +113,7 @@ name = []
 
 Here is an example of a function in Agency:
 
-```agency
+```ts
 def greet(name: string): string {
   greeting = `Greet the person named ${name}`
   return greeting
@@ -122,7 +122,7 @@ def greet(name: string): string {
 
 All functions in Agency can automatically be used as tools. For example, you can now use the `greet` function as a tool in a prompt.
 
-```agency
+```ts
 +greet
 response: string = `Use the greet function to greet Alice`
 ```
@@ -134,7 +134,7 @@ The `+greet` line tells Agency to make the `greet` function available as a tool 
 Agency supports `if` statements and `match` statements for control flow.
 Here is an example of an `if` statement:
 
-```agency
+```ts
 condition = false
 if (condition) {
   print("You are an adult.")
@@ -143,7 +143,7 @@ if (condition) {
 
 Here is an example of a `match` statement:
 
-```agency
+```ts
 status = "success"
 match(status) {
   "success" => print("Operation was successful.")
@@ -154,7 +154,7 @@ match(status) {
 
 Agency also supports `while` loops:
 
-```agency
+```ts
 condition = true
 while (condition) {
   print(count)
@@ -176,7 +176,7 @@ If you're importing into another agency file, you should use `import node` and `
 
 For example, to import nodes from another agency file:
 
-```agency
+```ts
 import node { ingredients, steps } from "./recipe.agency"
 ```
 
@@ -184,7 +184,7 @@ If you use `import` instead of `import node`, the node won't get merged into the
 
 To import functions (tools) from another agency file:
 
-```agency
+```ts
 import tool { fetchRecipe } from "./recipe.agency"
 ```
 
@@ -207,7 +207,7 @@ Agency has some built-in functions for common tasks:
 
 There's not much more that agency can do. It is intentionally bare-bones. However, it transpiles to TypeScript and has great interoperability with it. You can import TypeScript code. Any import statement you can use in ESM modules will work:
 
-```agency
+```ts
 import { someFunction } from "./someModule.js"
 import * as foo from "foo.js"
 import bar from "bar.js"
@@ -219,7 +219,7 @@ For any logic that is more complex, implement it in a separate TypeScript file, 
 
 You can either run an agency file directly, in which case you need to define a node named `main` that will get executed as the entry point to your agent, or you can import your agent into a TypeScript file. Here is an example of that:
 
-```agency
+```ts
 // foo.agency
 node foo() {
   name = input("> ")
@@ -335,7 +335,7 @@ await modifyInterrupt(interruptResponse, newArguments, { callbacks });
 
 You can optionally stream responses from Agency by using the Stream keyword.
 
-```agency
+```ts
 node foo() {
   response: string = stream llm("Tell me a joke and explain it")
   print(response)
@@ -363,7 +363,7 @@ main();
 
 If you choose to use streaming, your agent will continue to function exactly as is, but will also stream the response to your callback. This means you can continue to use tools etc, and the rest of the code will flow exactly as is.
 
-```agency
+```ts
 node foo() {
   response: string = stream llm("Tell me a joke and explain it")
   print(response) // the response variable will still be set to the full response once the stream is complete, so you can use it as normal
@@ -716,7 +716,7 @@ As you build more complex agents, a good way to design them is with a decision t
 
 Start with a node that classifies the user's intent:
 
-```agency
+```ts
 node router(userMessage: string) {
   intent: "mood" | "todo" = `Classify the user's intent as either "mood" or "todo" based on the message: ${userMessage}`
 
@@ -730,7 +730,7 @@ node router(userMessage: string) {
 
 Then have separate nodes for handling each intent:
 
-```agency
+```ts
 node handleMood(userMessage: string) {
   mood = `Extract the user's mood from the message: ${userMessage}`
   print(`User's mood is: ${mood}`)

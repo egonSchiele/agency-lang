@@ -25,21 +25,6 @@ match(userRole) {
 }
 ```
 
-This should work, but doesn't because of scoping... all `points` end up in the same scope
-
-```agency
-grade = "A"
-points = 0
-match(grade) {
-  "A" => points = 100
-  "B" => points = 85
-  "C" => points = 70
-  "D" => points = 55
-  _ => points = 0
-}
-
-```
-
 
 ## chained property access doesn't work
 
@@ -86,3 +71,7 @@ I'll probably need to do that for supporting type checking anyway.
 
 
 lib/templates/backends/typescriptGenerator/promptFunction.mustache is bloated and complex. Needs help
+
+---
+
+agency tests for builtin functions

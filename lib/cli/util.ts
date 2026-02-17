@@ -1,4 +1,8 @@
 import prompts from "prompts";
+
+const onCancel = () => {
+  process.exit(0);
+};
 import fs, { readFileSync } from "fs";
 import path from "path";
 import { execSync } from "child_process";
@@ -51,7 +55,7 @@ export async function promptForTarget(): Promise<{
     name: "filename",
     message: "Select an Agency file to read:",
     choices: choices,
-  });
+  }, { onCancel });
 
   filename = response.filename;
 
@@ -61,7 +65,7 @@ export async function promptForTarget(): Promise<{
       type: "text",
       name: "filename",
       message: "Enter the filename to read:",
-    });
+    }, { onCancel });
     filename = customResponse.filename;
   }
 
@@ -77,7 +81,7 @@ export async function pickANode(nodes: GraphNodeDefinition[]): Promise<string> {
       title: node.nodeName,
       value: node.nodeName,
     })),
-  });
+  }, { onCancel });
   return response.node;
 }
 
@@ -97,7 +101,7 @@ export async function promptForArgs(
       name: "provideArgs",
       message: `This node has parameters (${paramNames}). Provide arguments?`,
       initial: true,
-    });
+    }, { onCancel });
 
     if (confirmArgs.provideArgs) {
       const argValues: string[] = [];
@@ -109,7 +113,7 @@ export async function promptForArgs(
           type: "text",
           name: "value",
           message: `Value for ${param.name}${typeLabel}:`,
-        });
+        }, { onCancel });
         argValues.push(serializeArgValue(argResponse.value));
       }
       argsString = argValues.join(", ");

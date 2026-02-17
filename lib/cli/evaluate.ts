@@ -4,6 +4,10 @@ import { getNodesOfType } from "@/utils/node.js";
 import fs from "fs";
 import { nanoid } from "nanoid";
 import prompts from "prompts";
+
+const onCancel = () => {
+  process.exit(0);
+};
 import {
   executeNode,
   formatTypeHint,
@@ -91,7 +95,7 @@ async function createArgsFileInteractively(
       type: "text",
       name: "name",
       message: "Case name (optional, press enter to skip):",
-    });
+    }, { onCancel });
 
     const args: Record<string, any> = {};
     for (const param of selectedNode.parameters) {
@@ -102,7 +106,7 @@ async function createArgsFileInteractively(
         type: "text",
         name: "value",
         message: `Value for ${param.name}${typeLabel}:`,
-      });
+      }, { onCancel });
       if (argResponse.value === undefined) break;
       args[param.name] = parseArgValue(argResponse.value);
     }
@@ -118,7 +122,7 @@ async function createArgsFileInteractively(
       name: "more",
       message: "Add another case?",
       initial: true,
-    });
+    }, { onCancel });
     addMore = moreResponse.more === true;
   }
 
@@ -184,7 +188,7 @@ export async function evaluate(
       name: "filename",
       message: "Args file name:",
       initial: defaultFilename,
-    });
+    }, { onCancel });
     if (!filenameResponse.filename) return;
 
     if (fs.existsSync(filenameResponse.filename)) {
@@ -258,7 +262,7 @@ export async function evaluate(
       message: "Rate this output (1-5):",
       validate: (v) =>
         v >= 1 && v <= 5 ? true : "Rating must be between 1 and 5",
-    });
+    }, { onCancel });
 
     if (ratingResponse.rating === undefined) {
       console.log("\nEvaluation cancelled.");

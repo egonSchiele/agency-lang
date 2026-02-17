@@ -73,6 +73,10 @@ function writeTestCase(
   return testFilePath;
 }
 
+const onCancel = () => {
+  process.exit(0);
+};
+
 export async function fixtures(config: AgencyConfig, target?: string) {
   let { filename, nodeName } = target
     ? parseTarget(target)
@@ -136,7 +140,7 @@ export async function fixtures(config: AgencyConfig, target?: string) {
         { title: "Reject", value: "reject" },
         { title: "Modify arguments", value: "modify" },
       ],
-    });
+    }, { onCancel });
 
     if (!actionResponse.action) {
       console.log("Interrupt handling cancelled.");
@@ -155,7 +159,7 @@ export async function fixtures(config: AgencyConfig, target?: string) {
           type: "text",
           name: "args",
           message: "Enter modified arguments as JSON object:",
-        });
+        }, { onCancel });
         if (!modifyResponse.args) {
           console.log("Interrupt handling cancelled.");
           return;
@@ -191,7 +195,7 @@ export async function fixtures(config: AgencyConfig, target?: string) {
     name: "correct",
     message: "Does this output look correct?",
     initial: true,
-  });
+  }, { onCancel });
 
   let expectedOutput: string;
   if (correctResponse.correct) {
@@ -201,7 +205,7 @@ export async function fixtures(config: AgencyConfig, target?: string) {
       type: "text",
       name: "expected",
       message: "What should the correct output look like?",
-    });
+    }, { onCancel });
     expectedOutput = expectedResponse.expected;
   }
 
@@ -213,7 +217,7 @@ export async function fixtures(config: AgencyConfig, target?: string) {
       { title: "Exact match", value: "exact" },
       { title: "LLM Judge", value: "llmJudge" },
     ],
-  });
+  }, { onCancel });
 
   let criteria: Criteria[];
   if (criteriaResponse.criteria === "exact") {
@@ -231,7 +235,7 @@ export async function fixtures(config: AgencyConfig, target?: string) {
         message: "Desired accuracy (0-100):",
         initial: 80,
       },
-    ]);
+    ], { onCancel });
     criteria = [
       {
         type: "llmJudge",

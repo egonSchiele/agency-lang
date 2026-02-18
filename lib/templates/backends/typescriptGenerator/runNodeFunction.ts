@@ -1,5 +1,5 @@
 // THIS FILE WAS AUTO-GENERATED
-// Source: lib/templates/backends/graphGenerator/runNodeFunction.mustache
+// Source: lib/templates/backends/typescriptGenerator/runNodeFunction.mustache
 // Any manual changes will be lost.
 import { apply } from "typestache";
 

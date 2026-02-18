@@ -15,8 +15,7 @@ agency-lang/
 │   ├── parser.ts                  # Main parser entry point (parseAgency)
 │   ├── backends/
 │   │   ├── baseGenerator.ts       # Base class with processNode switch
-│   │   ├── typescriptGenerator.ts # TypeScript code generation (extends BaseGenerator)
-│   │   ├── graphGenerator.ts      # Graph code generation (extends TypeScriptGenerator)
+│   │   ├── typescriptGenerator.ts # TypeScript + graph code generation (extends BaseGenerator)
 │   │   └── agencyGenerator.ts     # Agency code formatter (extends BaseGenerator)
 │   ├── cli/                       # CLI command implementations
 │   │   ├── commands.ts            # Core commands (compile, run, parse, format, etc.)
@@ -29,11 +28,9 @@ agency-lang/
 │   └── preprocessors/             # AST preprocessors (run before code generation)
 ├── scripts/
 │   ├── agency.ts                  # CLI entry point (uses commander)
-│   ├── regenerate-fixtures.ts     # Regenerate TypeScript generator fixtures
-│   └── regenerate-graph-fixtures.ts # Regenerate graph generator fixtures
+│   └── regenerate-fixtures.ts     # Regenerate TypeScript generator fixtures
 ├── tests/
-│   ├── typescriptGenerator/       # Integration test fixtures (.agency + .mts pairs)
-│   └── graphGenerator/            # Integration test fixtures (.agency + .mts pairs)
+│   └── typescriptGenerator/       # Integration test fixtures (.agency + .mts pairs)
 ├── examples/                      # Example Agency programs
 └── dist/                          # Compiled JavaScript output
 ```
@@ -71,12 +68,10 @@ The generator class hierarchy is:
 ```
 BaseGenerator
   └── TypeScriptGenerator
-        └── GraphGenerator
 ```
 
 - **BaseGenerator** (`lib/backends/baseGenerator.ts`): Contains the `processNode` switch that dispatches to handler methods for each AST node type.
-- **TypeScriptGenerator** (`lib/backends/typescriptGenerator.ts`): Implements most code generation logic for producing TypeScript output.
-- **GraphGenerator** (`lib/backends/graphGenerator.ts`): Extends TypeScriptGenerator with graph-specific code generation (e.g., graph nodes, edges, state machines). This is the backend used in practice.
+- **TypeScriptGenerator** (`lib/backends/typescriptGenerator.ts`): Implements all code generation logic for producing TypeScript output, including graph-specific code generation (graph nodes, edges, state machines).
 
 ## Testing
 
@@ -89,13 +84,10 @@ Parser and generator unit tests live alongside source files as `.test.ts` files 
 Integration tests use fixture pairs in the `tests/` directory. Each fixture is a `.agency` file paired with a `.mts` file containing the expected generated output.
 
 - `tests/typescriptGenerator/` — fixtures for the TypeScript generator
-- `tests/graphGenerator/` — fixtures for the graph generator
 
-The integration test runners are:
-- `lib/backends/typescriptGenerator.integration.test.ts`
-- `lib/backends/graphGenerator.integration.test.ts`
+The integration test runner is `lib/backends/typescriptGenerator.integration.test.ts`.
 
-To add a new integration test, create a `.agency` file and its expected `.mts` output in the appropriate `tests/` subdirectory. Run `make fixtures` to regenerate all `.mts` fixture files from their `.agency` sources.
+To add a new integration test, create a `.agency` file and its expected `.mts` output in `tests/typescriptGenerator/`. Run `make fixtures` to regenerate all `.mts` fixture files from their `.agency` sources.
 
 ## Common Tasks
 
@@ -103,8 +95,8 @@ To add a new integration test, create a `.agency` file and its expected `.mts` o
 
 1. **Define the type** in `lib/types/` (create a new file or add to an existing one). Export it from `lib/types.ts`. Add the new type to the `AgencyNode` union type in `lib/types.ts`.
 2. **Add a parser** in `lib/parsers/`. Wire it into the main parser in `lib/parser.ts`. Add unit tests in a co-located `.test.ts` file.
-3. **Add code generation** by adding a case to `processNode` in `lib/backends/baseGenerator.ts` that calls a new handler method. Implement the handler in `TypeScriptGenerator` (for general TypeScript output) or `GraphGenerator` (for graph-specific behavior). You may also need to create new `.mustache` template files in `lib/templates/backends/` and run `pnpm run templates`.
-4. **Add integration test fixtures** — create `.agency` and `.mts` files in the appropriate `tests/` subdirectory.
+3. **Add code generation** by adding a case to `processNode` in `lib/backends/baseGenerator.ts` that calls a new handler method. Implement the handler in `TypeScriptGenerator`. You may also need to create new `.mustache` template files in `lib/templates/backends/` and run `pnpm run templates`.
+4. **Add integration test fixtures** — create `.agency` and `.mts` files in `tests/typescriptGenerator/`.
 
 ### Adding a CLI command
 

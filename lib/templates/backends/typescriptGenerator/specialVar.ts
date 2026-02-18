@@ -1,14 +1,13 @@
 // THIS FILE WAS AUTO-GENERATED
-// Source: lib/templates/backends/graphGenerator/edge.mustache
+// Source: lib/templates/backends/typescriptGenerator/specialVar.mustache
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `graph.edge("{{{fromNode}}}", "{{{toNode}}}");
-`;
+export const template = `__client = __getClientWithConfig({ {{{name}}}: {{{value}}} });`;
 
 export type TemplateType = {
-  fromNode: string | boolean | number;
-  toNode: string | boolean | number;
+  name: string | boolean | number;
+  value: string | boolean | number;
 };
 
 const render = (args: TemplateType) => {

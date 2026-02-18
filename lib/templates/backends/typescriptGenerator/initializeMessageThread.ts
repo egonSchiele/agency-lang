@@ -1,5 +1,5 @@
 // THIS FILE WAS AUTO-GENERATED
-// Source: lib/templates/backends/graphGenerator/initializeMessageThread.mustache
+// Source: lib/templates/backends/typescriptGenerator/initializeMessageThread.mustache
 // Any manual changes will be lost.
 import { apply } from "typestache";
 

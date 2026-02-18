@@ -1,6 +1,6 @@
 import { generateAgency } from "@/backends/agencyGenerator.js";
 import { AgencyConfig } from "@/config.js";
-import { AgencyProgram, generateGraph } from "@/index.js";
+import { AgencyProgram, generateTypeScript } from "@/index.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { ImportStatement } from "@/types/importStatement.js";
 import { renderMermaidAscii } from "beautiful-mermaid";
@@ -156,7 +156,7 @@ export function compile(
     }
   });
 
-  const generatedCode = generateGraph(parsedProgram, config);
+  const generatedCode = generateTypeScript(parsedProgram, config);
   fs.writeFileSync(outputFile, generatedCode, "utf-8");
 
   console.log(`${inputFile} → ${outputFile}`);

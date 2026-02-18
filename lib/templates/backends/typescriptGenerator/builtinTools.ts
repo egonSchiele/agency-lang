@@ -3,34 +3,19 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `function add({a, b}) {
+export const template = `/*function add({a, b}) {
   return a + b;
 }
 
-// Define the function tool for OpenAI
 const addTool = {
-    type: "function",
-    function: {
-      name: "add",
-      description:
-        "Adds two numbers together and returns the result.",
-      parameters: {
-        type: "object",
-        properties: {
-          a: {
-            type: "number",
-            description: "The first number to add",
-          },
-          b: {
-            type: "number",
-            description: "The second number to add",
-          },
-        },
-        required: ["a", "b"],
-        additionalProperties: false,
-      },
-    },
-  };`;
+  name: "add",
+  description: "Adds two numbers together and returns the result.",
+  schema: z.object({
+    a: z.number().describe("The first number to add"),
+    b: z.number().describe("The second number to add"),
+  }),
+};
+*/`;
 
 export type TemplateType = {
 };

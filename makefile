@@ -1,4 +1,4 @@
-.PHONY: all test graphtest
+.PHONY: all test
 
 all:
 	# pnpm run templates && pnpm run build && pnpm run start tests/function.agency
@@ -7,10 +7,6 @@ all:
 
 test:
 	pnpm run test
-	
-graphtest:
-	node dist/scripts/generateGraph.js foo.agency > foo.mts
-	STATELOG_HOST=http://localhost:1065 node foo.mts
 
 publish:
 	npm publish
@@ -18,4 +14,3 @@ publish:
 fixtures:
 	pnpm run templates && pnpm run build
 	node dist/scripts/regenerate-fixtures.js
-	node dist/scripts/regenerate-graph-fixtures.js

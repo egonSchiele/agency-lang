@@ -1,5 +1,5 @@
 // THIS FILE WAS AUTO-GENERATED
-// Source: lib/templates/backends/graphGenerator/graphNode.mustache
+// Source: lib/templates/backends/typescriptGenerator/graphNode.mustache
 // Any manual changes will be lost.
 import { apply } from "typestache";
 

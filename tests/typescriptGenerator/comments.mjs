@@ -104,28 +104,4 @@ return __stack.locals.message
       }
       
 }
-//  Comment before function call
-__stateStack.globals.result = greet([], {
-        statelogClient,
-        graph: __graph,
-        messages: __self.messages_0.getMessages(),
-      });
-
-await console.log(__stateStack.globals.result)//  Testing comments in different contexts
-//  1. Before type hints
-__stateStack.globals.age = 25;
-//  2. Before conditionals
-__stateStack.globals.status = `active`;
-switch (__stateStack.globals.status) {
-  //  Comment in match block
-  case `active`:
-await console.log(`Running`)
-    break;
-  case `inactive`:
-await console.log(`Stopped`)
-    break;
-  //  Default case comment
-  default:
-await console.log(`Unknown`)
-    break;
-}//  Final comment at end of file
+processGraphNode not implemented

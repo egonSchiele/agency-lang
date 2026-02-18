@@ -1,3 +1,0 @@
-bar :: number
-bar = `the 10th fibonacci number`
-print(bar)

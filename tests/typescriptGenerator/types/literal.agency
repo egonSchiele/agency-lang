@@ -1,8 +1,10 @@
-foo :: "hi"
-foo = `the string hi`
+node main() {
+  foo :: "hi"
+  foo = llm("the string hi")
 
-bar :: 42
-bar = `the number 42`
+  bar :: 42
+  bar = llm("the number 42")
 
-baz :: true
-baz = `the boolean true`
+  baz :: true
+  baz = llm("the boolean true")
+}

@@ -1,3 +1,5 @@
-name = "Alice"
-greeting = `say hi to ${name}`
-print(greeting)
+node main() {
+  name = "Alice"
+  greeting = llm("say hi to ${name}")
+  print(greeting)
+}

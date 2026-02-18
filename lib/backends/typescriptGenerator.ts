@@ -381,7 +381,9 @@ export class TypeScriptGenerator extends BaseGenerator {
     let argsString = "";
     if (this.isAgencyFunction(node.functionName)) {
       if (!node.threadId) {
-        throw new Error(`No threadId for function call: ${node}`);
+        throw new Error(
+          `No threadId for function call: ${JSON.stringify(node)}`,
+        );
       }
       argsString = parts.join(", ");
       const metadata = `{
@@ -541,7 +543,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     prompt: PromptLiteral;
   }): string {
     if (!prompt.threadId) {
-      throw new Error(`No threadId for prompt: ${prompt}`);
+      throw new Error(`No threadId for prompt: ${JSON.stringify(prompt)}`);
     }
 
     // Generate async function for prompt-based assignment
@@ -721,7 +723,9 @@ I'll probably need to do that for supporting type checking anyway.
         });
       case "messages":
         if (!node.threadId) {
-          throw new Error(`No threadId for messages specialVar: ${node}`);
+          throw new Error(
+            `No threadId for messages specialVar: ${JSON.stringify(node)}`,
+          );
         }
 
         return `__stack.messages[${node.threadId}].setMessages(${value});\n`;

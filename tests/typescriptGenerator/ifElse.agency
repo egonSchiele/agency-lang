@@ -1,45 +1,49 @@
-// Basic if statement with boolean variable
-flag = true
-if (flag) {
-  result = "condition was true"
-}
-
-if (isReady()) {
-  status = "ready"
-}
-
-// If statement with property access
-obj = {active: true}
-if (obj.active) {
-  message = "object is active"
-}
-
-// Nested if statements
-outer = true
-if (outer) {
-  inner = false
-  if (inner) {
-    nested = "both true"
+node main() {
+  // Basic if statement with boolean variable
+  flag = true
+  if (flag) {
+    result = "condition was true"
   }
-}
 
-// TODO fix
-// If with index access
-// arr = [1, 2, 3]
-// if (arr[0]) {
-//   firstElement = "exists"
-// }
-// Multiple statements in then body
-condition = true
-if (condition) {
-  a = 1
-  b = 2
-  c = 3
-}
+  if (isReady()) {
+    status = "ready"
+  }
 
-// Multiple statements in both then and else bodies
-value = false
-if (value) {
-  x = 10
-  y = 20
+  // If statement with property access
+  obj = { 
+    active: true
+  }
+  if (obj.active) {
+    message = "object is active"
+  }
+
+  // Nested if statements
+  outer = true
+  if (outer) {
+    inner = false
+    if (inner) {
+      nested = "both true"
+    }
+  }
+
+  // TODO fix
+  // If with index access
+  // arr = [1, 2, 3]
+  // if (arr[0]) {
+  //   firstElement = "exists"
+  // }
+  // Multiple statements in then body
+  condition = true
+  if (condition) {
+    a = 1
+    b = 2
+    c = 3
+  }
+
+  // Multiple statements in both then and else bodies
+  value = false
+  if (value) {
+    x = 10
+    y = 20
+  }
 }

@@ -1,2 +1,4 @@
-bar :: number
-bar = `the number 1`
+node main() {
+  bar :: number
+  bar = llm("the number 1")
+}

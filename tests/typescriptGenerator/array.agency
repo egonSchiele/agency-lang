@@ -1,7 +1,9 @@
-numbers :: number[]
-numbers = `the first 5 prime numbers`
-print(numbers)
+node main() {
+  numbers :: number[]
+  numbers = llm("the first 5 prime numbers")
+  print(numbers)
 
-greetings :: array<string>
-greetings = `a list of 3 common greetings in different languages`
-print(greetings)
+  greetings :: string[]
+  greetings = llm("a list of 3 common greetings in different languages")
+  print(greetings)
+}

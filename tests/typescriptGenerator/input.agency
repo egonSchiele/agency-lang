@@ -1,5 +1,6 @@
-message = input("Please enter a message: ")
+node main() {
+  message = input("Please enter a message: ")
 
-sentiment :: "happy" | "sad" | "neutral"
-sentiment = `Categorize the sentiment in this message: "${message}"`
-print(sentiment)
+  sentiment: "happy" | "sad" | "neutral" = llm("Categorize the sentiment in this message: ${message}")
+  print(sentiment)
+}

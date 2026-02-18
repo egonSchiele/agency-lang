@@ -75,3 +75,5 @@ lib/templates/backends/typescriptGenerator/promptFunction.mustache is bloated an
 ---
 
 agency tests for builtin functions
+
+should llm calls be allowed at the top level (not inside a node)? -- if so, what message thread are they put on? And what state stack ... because there isn't a global one

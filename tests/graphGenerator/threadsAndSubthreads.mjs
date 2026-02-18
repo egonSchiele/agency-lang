@@ -5,6 +5,7 @@ import * as readline from "readline";
 import fs from "fs";
 import { StatelogClient, SimpleMachine, goToNode, nanoid } from "agency-lang";
 import * as smoltalk from "agency-lang";
+import path from "path";
 
 /* Code to log to statelog */
 const statelogHost = "https://agency-lang.com";
@@ -56,6 +57,10 @@ const graphConfig = {
 
 const graph = new SimpleMachine(graphConfig);
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+  
+
 /******** builtins ********/
 
 const not = (val) => !val;
@@ -106,7 +111,8 @@ function _builtinInput(prompt) {
 }
 
 function _builtinRead(filename) {
-  const data = fs.readFileSync(filename);
+  const filePath = path.resolve(__dirname, filename);
+  const data = fs.readFileSync(filePath);
   const contents = data.toString("utf8");
   return contents;
 }
@@ -115,7 +121,8 @@ function _builtinRead(filename) {
  * @param filePath The absolute or relative path to the image file.
  * @returns The Base64 string, or null if an error occurs.
  */
-function _builtinReadImage(filePath) {
+function _builtinReadImage(filename) {
+  const filePath = path.resolve(__dirname, filename);
   const data = fs.readFileSync(filePath); // Synchronous file reading
   const base64String = data.toString("base64");
   return base64String;
@@ -150,6 +157,10 @@ export function readSkill({filepath}) {
   return _builtinRead(filepath);
 }
 
+export function __deepClone(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
+
 /******** for internal agency use only ********/
 
 function __createReturnObject(result) {
@@ -182,8 +193,8 @@ export async function respondToInterrupt(
   _interruptResponse,
   metadata = {},
 ) {
-  const interrupt = structuredClone(_interrupt);
-  const interruptResponse = structuredClone(_interruptResponse);
+  const interrupt = __deepClone(_interrupt);
+  const interruptResponse = __deepClone(_interruptResponse);
 
   __stateStack = StateStack.fromJSON(interrupt.__state || {});
   __stateStack.deserializeMode();
@@ -225,6 +236,10 @@ export async function respondToInterrupt(
     messages: messages,
     __metadata: {
       graph: graph,
+      // we need to pass in the state log client here because
+      // if we rely on the local state log client
+      // each client in each file has a different trace id.
+      // So we pass in the client to make sure they all use the same trace id
       statelogClient: __statelogClient,
       __stateStack: __stateStack,
       __callbacks: metadata.callbacks,
@@ -291,6 +306,7 @@ class StateStack {
       const newState = {
         args: {},
         locals: {},
+        messages: [],
         step: 0,
       };
       this.stack.push(newState);
@@ -314,7 +330,7 @@ class StateStack {
   }
 
   toJSON() {
-    return structuredClone({
+    return __deepClone({
       stack: this.stack,
       globals: this.globals,
       other: this.other,
@@ -392,7 +408,7 @@ function __cloneArray(arr) {
   return [...arr];
 }
 
-const handleStreamingResponse = async (__completion) => {
+const handleStreamingResponse = async (__completion, statelogClient, __prompt, __toolCalls) => {
   if (isGenerator(__completion)) {
     if (!__callbacks.onStream) {
       console.log(
@@ -421,7 +437,7 @@ const handleStreamingResponse = async (__completion) => {
             break;
         }
       }
-      __completion = { success: true, value: syncResult };
+      return { success: true, value: syncResult };
     } else {
       // try to acquire lock
       let count = 0;
@@ -449,8 +465,7 @@ const handleStreamingResponse = async (__completion) => {
             break;
           case "done":
             __callbacks.onStream({ type: "done", result: chunk.result });
-            __completion = { success: true, value: chunk.result };
-            break;
+            return { success: true, value: chunk.result };
           case "error":
             __callbacks.onStream({ type: "error", error: chunk.error });
             break;
@@ -492,13 +507,11 @@ class MessageThread {
 
   newChild() {
     const child = new MessageThread();
-    this.children.push(child);
     return child;
   }
 
   newSubthreadChild() {
     const child = new MessageThread(this.cloneMessages());
-    this.children.push(child);
     return child;
   }
 
@@ -507,6 +520,17 @@ class MessageThread {
       messages: this.messages.map(m => m.toJSON()),
       children: this.children.map((child) => child.toJSON()),
     };
+  }
+
+  static fromJSON(json) {
+    const thread = new MessageThread();
+    thread.messages = (json.messages || []).map((m) =>
+      smoltalk.messageFromJSON(m),
+    );
+    thread.children = (json.children || []).map((child) =>
+      MessageThread.fromJSON(child),
+    );
+    return thread;
   }
 }
 /*function add({a, b}) {
@@ -559,7 +583,7 @@ export async function foo(args, __metadata={}) {
         
 
 
-__self.messages_1 = __self.messages_0.newChild();
+__stack.messages[1] = __stack.messages[0].newChild();
 
 
 
@@ -599,7 +623,7 @@ async function _res1(__metadata) {
 
     const endTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -667,7 +691,7 @@ async function _res1(__metadata) {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -710,7 +734,7 @@ async function _res1(__metadata) {
 
 
 __self.res1 = await _res1({
-      messages: __self.messages_1?.getMessages(),
+      messages: __stack.messages[1]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -724,7 +748,7 @@ if (isInterrupt(__self.res1)) {
 
 
 
-__self.messages_2 = __self.messages_1.newSubthreadChild();
+__stack.messages[8] = __stack.messages[0].newSubthreadChild();
 
 
 
@@ -765,7 +789,7 @@ async function _res2(__metadata) {
 
     const endTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -833,7 +857,7 @@ async function _res2(__metadata) {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -876,7 +900,7 @@ async function _res2(__metadata) {
 
 
 __self.res2 = await _res2({
-      messages: __self.messages_2?.getMessages(),
+      messages: __stack.messages[8]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -890,7 +914,7 @@ if (isInterrupt(__self.res2)) {
 
 
 
-__self.messages_3 = __self.messages_2.newSubthreadChild();
+__stack.messages[11] = __stack.messages[0].newSubthreadChild();
 
 
 
@@ -931,7 +955,7 @@ async function _res3(__metadata) {
 
     const endTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -999,7 +1023,7 @@ async function _res3(__metadata) {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -1042,7 +1066,7 @@ async function _res3(__metadata) {
 
 
 __self.res3 = await _res3({
-      messages: __self.messages_3?.getMessages(),
+      messages: __stack.messages[11]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -1056,12 +1080,12 @@ if (isInterrupt(__self.res3)) {
 
 
 
-// __self.messages = __self.prevMessages;
+// __stack.messages = __stack.prevMessages;
 
 
 
 
-__self.messages_4 = __self.messages_2.newChild();
+__stack.messages[12] = __stack.messages[0].newChild();
 
 
 
@@ -1101,7 +1125,7 @@ async function _res5(__metadata) {
 
     const endTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -1169,7 +1193,7 @@ async function _res5(__metadata) {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -1212,7 +1236,7 @@ async function _res5(__metadata) {
 
 
 __self.res5 = await _res5({
-      messages: __self.messages_4?.getMessages(),
+      messages: __stack.messages[12]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -1226,15 +1250,15 @@ if (isInterrupt(__self.res5)) {
 
 
 
-// __self.messages = __self.prevMessages;
+// __stack.messages = __stack.prevMessages;
 
 
 
-// __self.messages = __self.prevMessages;
+// __stack.messages = __stack.prevMessages;
 
 
 
-__self.messages_5 = __self.messages_1.newSubthreadChild();
+__stack.messages[13] = __stack.messages[0].newSubthreadChild();
 
 
 
@@ -1275,7 +1299,7 @@ async function _res4(__metadata) {
 
     const endTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -1343,7 +1367,7 @@ async function _res4(__metadata) {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -1386,7 +1410,7 @@ async function _res4(__metadata) {
 
 
 __self.res4 = await _res4({
-      messages: __self.messages_5?.getMessages(),
+      messages: __stack.messages[13]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -1400,11 +1424,11 @@ if (isInterrupt(__self.res4)) {
 
 
 
-// __self.messages = __self.prevMessages;
+// __stack.messages = __stack.prevMessages;
 
 
 
-// __self.messages = __self.prevMessages;
+// __stack.messages = __stack.prevMessages;
         __stack.step++;
       }
       
@@ -1475,10 +1499,81 @@ graph.node("main", async (state) => {
     const __step = __stack.step;
 
     const __self = __stack.locals;
-    __self.messages_0 = new MessageThread();
-    if (state.messages) {
-      __self.messages_0.setMessages(state.messages);
-    }
+
+    if (__stack.messages[0]) {
+     __stack.messages[0] = MessageThread.fromJSON(__stack.messages[0]);
+} else {
+    __stack.messages[0] = new MessageThread();
+}
+if (__stack.messages[14]) {
+     __stack.messages[14] = MessageThread.fromJSON(__stack.messages[14]);
+} else {
+    __stack.messages[14] = new MessageThread();
+}
+if (__stack.messages[15]) {
+     __stack.messages[15] = MessageThread.fromJSON(__stack.messages[15]);
+} else {
+    __stack.messages[15] = new MessageThread();
+}
+if (__stack.messages[16]) {
+     __stack.messages[16] = MessageThread.fromJSON(__stack.messages[16]);
+} else {
+    __stack.messages[16] = new MessageThread();
+}
+if (__stack.messages[17]) {
+     __stack.messages[17] = MessageThread.fromJSON(__stack.messages[17]);
+} else {
+    __stack.messages[17] = new MessageThread();
+}
+if (__stack.messages[18]) {
+     __stack.messages[18] = MessageThread.fromJSON(__stack.messages[18]);
+} else {
+    __stack.messages[18] = new MessageThread();
+}
+if (__stack.messages[19]) {
+     __stack.messages[19] = MessageThread.fromJSON(__stack.messages[19]);
+} else {
+    __stack.messages[19] = new MessageThread();
+}
+if (__stack.messages[20]) {
+     __stack.messages[20] = MessageThread.fromJSON(__stack.messages[20]);
+} else {
+    __stack.messages[20] = new MessageThread();
+}
+if (__stack.messages[21]) {
+     __stack.messages[21] = MessageThread.fromJSON(__stack.messages[21]);
+} else {
+    __stack.messages[21] = new MessageThread();
+}
+if (__stack.messages[22]) {
+     __stack.messages[22] = MessageThread.fromJSON(__stack.messages[22]);
+} else {
+    __stack.messages[22] = new MessageThread();
+}
+if (__stack.messages[23]) {
+     __stack.messages[23] = MessageThread.fromJSON(__stack.messages[23]);
+} else {
+    __stack.messages[23] = new MessageThread();
+}
+if (__stack.messages[24]) {
+     __stack.messages[24] = MessageThread.fromJSON(__stack.messages[24]);
+} else {
+    __stack.messages[24] = new MessageThread();
+}
+if (__stack.messages[25]) {
+     __stack.messages[25] = MessageThread.fromJSON(__stack.messages[25]);
+} else {
+    __stack.messages[25] = new MessageThread();
+}
+if (__stack.messages[26]) {
+     __stack.messages[26] = MessageThread.fromJSON(__stack.messages[26]);
+} else {
+    __stack.messages[26] = new MessageThread();
+}
+
+    // if (state.messages) {
+    //   __stack.messages[0].setMessages(state.messages);
+    // }
 
     
     
@@ -1492,7 +1587,7 @@ graph.node("main", async (state) => {
         
 
 
-__self.messages_6 = __self.messages_0.newChild();
+__stack.messages[14] = __stack.messages[0].newChild();
 
 
 
@@ -1532,7 +1627,7 @@ async function _res1(__metadata) {
 
     const endTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -1600,7 +1695,7 @@ async function _res1(__metadata) {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -1643,13 +1738,13 @@ async function _res1(__metadata) {
 
 
 __self.res1 = await _res1({
-      messages: __self.messages_6?.getMessages(),
+      messages: __stack.messages[14]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.res1)) {
   
-  return { messages: __self.messages_6 , data: __self.res1 };
+  return { messages: __stack.messages, data: __self.res1 };
   
    
 }
@@ -1657,7 +1752,7 @@ if (isInterrupt(__self.res1)) {
 
 
 
-__self.messages_7 = __self.messages_6.newSubthreadChild();
+__stack.messages[21] = __stack.messages[0].newSubthreadChild();
 
 
 
@@ -1698,7 +1793,7 @@ async function _res2(__metadata) {
 
     const endTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -1766,7 +1861,7 @@ async function _res2(__metadata) {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -1809,13 +1904,13 @@ async function _res2(__metadata) {
 
 
 __self.res2 = await _res2({
-      messages: __self.messages_7?.getMessages(),
+      messages: __stack.messages[21]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.res2)) {
   
-  return { messages: __self.messages_7 , data: __self.res2 };
+  return { messages: __stack.messages, data: __self.res2 };
   
    
 }
@@ -1823,7 +1918,7 @@ if (isInterrupt(__self.res2)) {
 
 
 
-__self.messages_8 = __self.messages_7.newSubthreadChild();
+__stack.messages[24] = __stack.messages[0].newSubthreadChild();
 
 
 
@@ -1864,7 +1959,7 @@ async function _res3(__metadata) {
 
     const endTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -1932,7 +2027,7 @@ async function _res3(__metadata) {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -1975,13 +2070,13 @@ async function _res3(__metadata) {
 
 
 __self.res3 = await _res3({
-      messages: __self.messages_8?.getMessages(),
+      messages: __stack.messages[24]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.res3)) {
   
-  return { messages: __self.messages_8 , data: __self.res3 };
+  return { messages: __stack.messages, data: __self.res3 };
   
    
 }
@@ -1989,12 +2084,12 @@ if (isInterrupt(__self.res3)) {
 
 
 
-// __self.messages = __self.prevMessages;
+// __stack.messages = __stack.prevMessages;
 
 
 
 
-__self.messages_9 = __self.messages_7.newChild();
+__stack.messages[25] = __stack.messages[0].newChild();
 
 
 
@@ -2034,7 +2129,7 @@ async function _res5(__metadata) {
 
     const endTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -2102,7 +2197,7 @@ async function _res5(__metadata) {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -2145,13 +2240,13 @@ async function _res5(__metadata) {
 
 
 __self.res5 = await _res5({
-      messages: __self.messages_9?.getMessages(),
+      messages: __stack.messages[25]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.res5)) {
   
-  return { messages: __self.messages_9 , data: __self.res5 };
+  return { messages: __stack.messages, data: __self.res5 };
   
    
 }
@@ -2159,15 +2254,15 @@ if (isInterrupt(__self.res5)) {
 
 
 
-// __self.messages = __self.prevMessages;
+// __stack.messages = __stack.prevMessages;
 
 
 
-// __self.messages = __self.prevMessages;
+// __stack.messages = __stack.prevMessages;
 
 
 
-__self.messages_10 = __self.messages_6.newSubthreadChild();
+__stack.messages[26] = __stack.messages[0].newSubthreadChild();
 
 
 
@@ -2208,7 +2303,7 @@ async function _res4(__metadata) {
 
     const endTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -2276,7 +2371,7 @@ async function _res4(__metadata) {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -2319,13 +2414,13 @@ async function _res4(__metadata) {
 
 
 __self.res4 = await _res4({
-      messages: __self.messages_10?.getMessages(),
+      messages: __stack.messages[26]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.res4)) {
   
-  return { messages: __self.messages_10 , data: __self.res4 };
+  return { messages: __stack.messages, data: __self.res4 };
   
    
 }
@@ -2333,11 +2428,11 @@ if (isInterrupt(__self.res4)) {
 
 
 
-// __self.messages = __self.prevMessages;
+// __stack.messages = __stack.prevMessages;
 
 
 
-// __self.messages = __self.prevMessages;
+// __stack.messages = __stack.prevMessages;
         __stack.step++;
       }
       
@@ -2374,7 +2469,7 @@ if (isInterrupt(__self.res4)) {
     
     // this is just here to have a default return value from a node if the user doesn't specify one
     await __callHook("onNodeEnd", { nodeName: "main", data: undefined });
-    return { messages: __self.messages_0, data: undefined };
+    return { messages: __stack.messages, data: undefined };
 });
 
 

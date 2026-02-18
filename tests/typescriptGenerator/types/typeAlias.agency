@@ -1,5 +1,8 @@
-type Coords = { x: number; y: number }
-
-foo :: Coords
-foo = `a set of coordinates`
-print(foo)
+type Coords = {
+  x: number;
+  y: number
+}
+node main() {
+  foo: Coords = llm("a set of coordinates")
+  print(foo)
+}

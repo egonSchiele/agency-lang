@@ -5,6 +5,7 @@ import * as readline from "readline";
 import fs from "fs";
 import { StatelogClient, SimpleMachine, goToNode, nanoid } from "agency-lang";
 import * as smoltalk from "agency-lang";
+import path from "path";
 
 /* Code to log to statelog */
 const statelogHost = "https://agency-lang.com";
@@ -56,6 +57,10 @@ const graphConfig = {
 
 const graph = new SimpleMachine(graphConfig);
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+  
+
 /******** builtins ********/
 
 const not = (val) => !val;
@@ -106,7 +111,8 @@ function _builtinInput(prompt) {
 }
 
 function _builtinRead(filename) {
-  const data = fs.readFileSync(filename);
+  const filePath = path.resolve(__dirname, filename);
+  const data = fs.readFileSync(filePath);
   const contents = data.toString("utf8");
   return contents;
 }
@@ -115,7 +121,8 @@ function _builtinRead(filename) {
  * @param filePath The absolute or relative path to the image file.
  * @returns The Base64 string, or null if an error occurs.
  */
-function _builtinReadImage(filePath) {
+function _builtinReadImage(filename) {
+  const filePath = path.resolve(__dirname, filename);
   const data = fs.readFileSync(filePath); // Synchronous file reading
   const base64String = data.toString("base64");
   return base64String;
@@ -150,6 +157,10 @@ export function readSkill({filepath}) {
   return _builtinRead(filepath);
 }
 
+export function __deepClone(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
+
 /******** for internal agency use only ********/
 
 function __createReturnObject(result) {
@@ -182,8 +193,8 @@ export async function respondToInterrupt(
   _interruptResponse,
   metadata = {},
 ) {
-  const interrupt = structuredClone(_interrupt);
-  const interruptResponse = structuredClone(_interruptResponse);
+  const interrupt = __deepClone(_interrupt);
+  const interruptResponse = __deepClone(_interruptResponse);
 
   __stateStack = StateStack.fromJSON(interrupt.__state || {});
   __stateStack.deserializeMode();
@@ -225,6 +236,10 @@ export async function respondToInterrupt(
     messages: messages,
     __metadata: {
       graph: graph,
+      // we need to pass in the state log client here because
+      // if we rely on the local state log client
+      // each client in each file has a different trace id.
+      // So we pass in the client to make sure they all use the same trace id
       statelogClient: __statelogClient,
       __stateStack: __stateStack,
       __callbacks: metadata.callbacks,
@@ -291,6 +306,7 @@ class StateStack {
       const newState = {
         args: {},
         locals: {},
+        messages: [],
         step: 0,
       };
       this.stack.push(newState);
@@ -314,7 +330,7 @@ class StateStack {
   }
 
   toJSON() {
-    return structuredClone({
+    return __deepClone({
       stack: this.stack,
       globals: this.globals,
       other: this.other,
@@ -392,7 +408,7 @@ function __cloneArray(arr) {
   return [...arr];
 }
 
-const handleStreamingResponse = async (__completion) => {
+const handleStreamingResponse = async (__completion, statelogClient, __prompt, __toolCalls) => {
   if (isGenerator(__completion)) {
     if (!__callbacks.onStream) {
       console.log(
@@ -421,7 +437,7 @@ const handleStreamingResponse = async (__completion) => {
             break;
         }
       }
-      __completion = { success: true, value: syncResult };
+      return { success: true, value: syncResult };
     } else {
       // try to acquire lock
       let count = 0;
@@ -449,8 +465,7 @@ const handleStreamingResponse = async (__completion) => {
             break;
           case "done":
             __callbacks.onStream({ type: "done", result: chunk.result });
-            __completion = { success: true, value: chunk.result };
-            break;
+            return { success: true, value: chunk.result };
           case "error":
             __callbacks.onStream({ type: "error", error: chunk.error });
             break;
@@ -492,13 +507,11 @@ class MessageThread {
 
   newChild() {
     const child = new MessageThread();
-    this.children.push(child);
     return child;
   }
 
   newSubthreadChild() {
     const child = new MessageThread(this.cloneMessages());
-    this.children.push(child);
     return child;
   }
 
@@ -507,6 +520,17 @@ class MessageThread {
       messages: this.messages.map(m => m.toJSON()),
       children: this.children.map((child) => child.toJSON()),
     };
+  }
+
+  static fromJSON(json) {
+    const thread = new MessageThread();
+    thread.messages = (json.messages || []).map((m) =>
+      smoltalk.messageFromJSON(m),
+    );
+    thread.children = (json.children || []).map((child) =>
+      MessageThread.fromJSON(child),
+    );
+    return thread;
   }
 }
 /*function add({a, b}) {
@@ -603,7 +627,7 @@ async function _response(msg, __metadata) {
 
     const endTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -671,7 +695,7 @@ async function _response(msg, __metadata) {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -704,7 +728,7 @@ async function _response(msg, __metadata) {
 
 
 __self.response = _response(__stack.locals.msg, {
-      messages: __self.messages_0?.getMessages(),
+      messages: __stack.messages[1]?.getMessages(),
     });
 
 
@@ -760,7 +784,7 @@ export async function google(args, __metadata={}) {
       
 
       if (__step <= 1) {
-        __self.messages_0.setMessages([]);
+        __stack.messages[0].setMessages([]);
         __stack.step++;
       }
       
@@ -801,7 +825,7 @@ async function _response(msg, __metadata) {
 
     const endTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -869,7 +893,7 @@ async function _response(msg, __metadata) {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -902,7 +926,7 @@ async function _response(msg, __metadata) {
 
 
 __self.response = _response(__stack.locals.msg, {
-      messages: __self.messages_0?.getMessages(),
+      messages: __stack.messages[2]?.getMessages(),
     });
 
 
@@ -995,7 +1019,7 @@ async function ___promptVar(__metadata) {
 
     const endTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -1063,7 +1087,7 @@ async function ___promptVar(__metadata) {
 
     const nextEndTime = performance.now();
 
-    await handleStreamingResponse(__completion);
+    
 
     statelogClient.promptCompletion({
       messages: __messages,
@@ -1106,7 +1130,7 @@ async function ___promptVar(__metadata) {
 
 
 __self.__promptVar = await ___promptVar({
-      messages: __self.messages_0?.getMessages(),
+      messages: __stack.messages[3]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -1159,10 +1183,16 @@ graph.node("main", async (state) => {
     const __step = __stack.step;
 
     const __self = __stack.locals;
-    __self.messages_0 = new MessageThread();
-    if (state.messages) {
-      __self.messages_0.setMessages(state.messages);
-    }
+
+    if (__stack.messages[0]) {
+     __stack.messages[0] = MessageThread.fromJSON(__stack.messages[0]);
+} else {
+    __stack.messages[0] = new MessageThread();
+}
+
+    // if (state.messages) {
+    //   __stack.messages[0].setMessages(state.messages);
+    // }
 
     
     
@@ -1190,7 +1220,7 @@ if (isInterrupt(__stack.locals.msg)) {
         __stack.locals.res2 = google([__stack.locals.msg], {
         statelogClient,
         graph: __graph,
-        messages: __self.messages_0.getMessages(),
+        messages: __stack.messages[0].getMessages(),
       });
 
 
@@ -1208,7 +1238,7 @@ if (isInterrupt(__stack.locals.res2)) {
         __stack.locals.res1 = openai([__stack.locals.msg], {
         statelogClient,
         graph: __graph,
-        messages: __self.messages_0.getMessages(),
+        messages: __stack.messages[0].getMessages(),
       });
 
 
@@ -1242,7 +1272,7 @@ if (isInterrupt(__stack.locals.res1)) {
     
     // this is just here to have a default return value from a node if the user doesn't specify one
     await __callHook("onNodeEnd", { nodeName: "main", data: undefined });
-    return { messages: __self.messages_0, data: undefined };
+    return { messages: __stack.messages, data: undefined };
 });
 
 

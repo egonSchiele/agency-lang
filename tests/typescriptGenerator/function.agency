@@ -1,10 +1,11 @@
-test :: string
 def test() {
   foo = 1
-  foo
 }
-print(test())
 
-def add(a, b) {
-  // multi-param function
+node main() {
+  print(test())
+
+  def add(a, b) {
+    // multi-param function
+  }
 }

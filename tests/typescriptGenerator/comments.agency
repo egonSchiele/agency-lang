@@ -16,23 +16,23 @@ def greet() {
   return message
 }
 
-// Comment before function call
-result = greet()
-print(result)
+node main() {
+  // Comment before function call
+  result = greet()
+  print(result)
 
-// Testing comments in different contexts
-// 1. Before type hints
-age :: number
-age = 25
+  // Testing comments in different contexts
+  // 1. Before type hints
+  age :: number
+  age = 25
 
-// 2. Before conditionals
-status = "active"
-match(status) {
-  // Comment in match block
-  "active" => print("Running")
-  "inactive" => print("Stopped")
-  // Default case comment
-  _ => print("Unknown")
+  // 2. Before conditionals
+  status = "active"
+  match(status) {
+    // Comment in match block    "active" => print("Running")
+    "inactive" => print("Stopped")
+    // Default case comment    _ => print("Unknown")
+  }
+
+  // Final comment at end of file
 }
-
-// Final comment at end of file

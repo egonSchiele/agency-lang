@@ -5,6 +5,7 @@ import * as readline from "readline";
 import fs from "fs";
 import { StatelogClient, SimpleMachine, goToNode, nanoid } from "agency-lang";
 import * as smoltalk from "agency-lang";
+import path from "path";
 
 /* Code to log to statelog */
 const statelogHost = "https://agency-lang.com";
@@ -56,6 +57,10 @@ const graphConfig = {
 
 const graph = new SimpleMachine(graphConfig);
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+  
+
 /******** builtins ********/
 
 const not = (val) => !val;
@@ -106,7 +111,8 @@ function _builtinInput(prompt) {
 }
 
 function _builtinRead(filename) {
-  const data = fs.readFileSync(filename);
+  const filePath = path.resolve(__dirname, filename);
+  const data = fs.readFileSync(filePath);
   const contents = data.toString("utf8");
   return contents;
 }
@@ -115,7 +121,8 @@ function _builtinRead(filename) {
  * @param filePath The absolute or relative path to the image file.
  * @returns The Base64 string, or null if an error occurs.
  */
-function _builtinReadImage(filePath) {
+function _builtinReadImage(filename) {
+  const filePath = path.resolve(__dirname, filename);
   const data = fs.readFileSync(filePath); // Synchronous file reading
   const base64String = data.toString("base64");
   return base64String;
@@ -150,6 +157,10 @@ export function readSkill({filepath}) {
   return _builtinRead(filepath);
 }
 
+export function __deepClone(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
+
 /******** for internal agency use only ********/
 
 function __createReturnObject(result) {
@@ -182,8 +193,8 @@ export async function respondToInterrupt(
   _interruptResponse,
   metadata = {},
 ) {
-  const interrupt = structuredClone(_interrupt);
-  const interruptResponse = structuredClone(_interruptResponse);
+  const interrupt = __deepClone(_interrupt);
+  const interruptResponse = __deepClone(_interruptResponse);
 
   __stateStack = StateStack.fromJSON(interrupt.__state || {});
   __stateStack.deserializeMode();
@@ -225,6 +236,10 @@ export async function respondToInterrupt(
     messages: messages,
     __metadata: {
       graph: graph,
+      // we need to pass in the state log client here because
+      // if we rely on the local state log client
+      // each client in each file has a different trace id.
+      // So we pass in the client to make sure they all use the same trace id
       statelogClient: __statelogClient,
       __stateStack: __stateStack,
       __callbacks: metadata.callbacks,
@@ -291,6 +306,7 @@ class StateStack {
       const newState = {
         args: {},
         locals: {},
+        messages: [],
         step: 0,
       };
       this.stack.push(newState);
@@ -314,7 +330,7 @@ class StateStack {
   }
 
   toJSON() {
-    return structuredClone({
+    return __deepClone({
       stack: this.stack,
       globals: this.globals,
       other: this.other,
@@ -392,7 +408,7 @@ function __cloneArray(arr) {
   return [...arr];
 }
 
-const handleStreamingResponse = async (__completion) => {
+const handleStreamingResponse = async (__completion, statelogClient, __prompt, __toolCalls) => {
   if (isGenerator(__completion)) {
     if (!__callbacks.onStream) {
       console.log(
@@ -421,7 +437,7 @@ const handleStreamingResponse = async (__completion) => {
             break;
         }
       }
-      __completion = { success: true, value: syncResult };
+      return { success: true, value: syncResult };
     } else {
       // try to acquire lock
       let count = 0;
@@ -449,8 +465,7 @@ const handleStreamingResponse = async (__completion) => {
             break;
           case "done":
             __callbacks.onStream({ type: "done", result: chunk.result });
-            __completion = { success: true, value: chunk.result };
-            break;
+            return { success: true, value: chunk.result };
           case "error":
             __callbacks.onStream({ type: "error", error: chunk.error });
             break;
@@ -492,13 +507,11 @@ class MessageThread {
 
   newChild() {
     const child = new MessageThread();
-    this.children.push(child);
     return child;
   }
 
   newSubthreadChild() {
     const child = new MessageThread(this.cloneMessages());
-    this.children.push(child);
     return child;
   }
 
@@ -507,6 +520,17 @@ class MessageThread {
       messages: this.messages.map(m => m.toJSON()),
       children: this.children.map((child) => child.toJSON()),
     };
+  }
+
+  static fromJSON(json) {
+    const thread = new MessageThread();
+    thread.messages = (json.messages || []).map((m) =>
+      smoltalk.messageFromJSON(m),
+    );
+    thread.children = (json.children || []).map((child) =>
+      MessageThread.fromJSON(child),
+    );
+    return thread;
   }
 }
 /*function add({a, b}) {
@@ -558,10 +582,16 @@ graph.node("analyzeData", async (state) => {
     const __step = __stack.step;
 
     const __self = __stack.locals;
-    __self.messages_0 = new MessageThread();
-    if (state.messages) {
-      __self.messages_0.setMessages(state.messages);
-    }
+
+    if (__stack.messages[0]) {
+     __stack.messages[0] = MessageThread.fromJSON(__stack.messages[0]);
+} else {
+    __stack.messages[0] = new MessageThread();
+}
+
+    // if (state.messages) {
+    //   __stack.messages[0].setMessages(state.messages);
+    // }
 
     
     
@@ -578,177 +608,14 @@ graph.node("analyzeData", async (state) => {
     
     
       if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
-
-      if (__step <= 1) {
-        
-async function _result(input, __metadata) {
-  const __prompt = `Analyzing: ${input}
-You can also read a skill file to augment your capabilities for a specific task using the "readSkill" tool. This allows you to access specialized knowledge and instructions that are relevant to particular scenarios.
-
-
-Available skills:
-- data-processor (filepath: ./skills/data-processor.ts): Process and analyze data`;
-  const startTime = performance.now();
-  let __messages = __metadata?.messages || [];
-
-  // These are to restore state after interrupt.
-  // TODO I think this could be implemented in a cleaner way.
-  let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
-  const __interruptResponse = __stateStack.interruptData?.interruptResponse || null;
-  const __tools = [__readSkillTool];
-
-  
-  
-  const __responseFormat = undefined;
-  
-  
-  const __client = __getClientWithConfig({});
-  let responseMessage;
-
-  if (__toolCalls.length === 0) {
-    __messages.push(smoltalk.userMessage(__prompt));
-  
-  
-    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
-    let __completion = await __client.text({
-      messages: __messages,
-      tools: __tools,
-      responseFormat: __responseFormat,
-      stream: false
-    });
-
-    const endTime = performance.now();
-
-    await handleStreamingResponse(__completion);
-
-    statelogClient.promptCompletion({
-      messages: __messages,
-      completion: __completion,
-      model: __client.getModel(),
-      timeTaken: endTime - startTime,
-      tools: __tools,
-      responseFormat: __responseFormat
-    });
-
-    if (!__completion.success) {
-      throw new Error(
-        `Error getting response from ${__model}: ${__completion.error}`
-      );
-    }
-
-    responseMessage = __completion.value;
-    __toolCalls = responseMessage.toolCalls || [];
-
-    if (__toolCalls.length > 0) {
-      // Add assistant's response with tool calls to message history
-      __messages.push(smoltalk.assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
-    }
-
-    __updateTokenStats(responseMessage.usage, responseMessage.cost);
-    await __callHook("onLLMCallEnd", { result: responseMessage, usage: responseMessage.usage, cost: responseMessage.cost, timeTaken: endTime - startTime });
-
-  }
-
-  // Handle function calls
-  if (__toolCalls.length > 0) {
-    let toolCallStartTime, toolCallEndTime;
-    let haltExecution = false;
-    let haltToolCall = {}
-    let haltInterrupt = null;
-
-    // Process each tool call
-    for (const toolCall of __toolCalls) {
-      
-    }
-
-    if (haltExecution) {
-      statelogClient.debug(`Tool call interrupted execution.`, {
-        messages: __messages,
-        model: __client.getModel(),
-      });
-
-      __stateStack.interruptData = {
-        messages: __messages.map((msg) => msg.toJSON()),
-        nodesTraversed: __graph.getNodesTraversed(),
-        toolCall: haltToolCall,
-      };
-      haltInterrupt.__state = __stateStack.toJSON();
-      return haltInterrupt;
-    }
-  
-    const nextStartTime = performance.now();
-    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
-    let __completion = await __client.text({
-      messages: __messages,
-      tools: __tools,
-      responseFormat: __responseFormat,
-      stream: false
-    });
-
-    const nextEndTime = performance.now();
-
-    await handleStreamingResponse(__completion);
-
-    statelogClient.promptCompletion({
-      messages: __messages,
-      completion: __completion,
-      model: __client.getModel(),
-      timeTaken: nextEndTime - nextStartTime,
-      tools: __tools,
-      responseFormat: __responseFormat,
-    });
-
-    if (!__completion.success) {
-      throw new Error(
-        `Error getting response from ${__model}: ${__completion.error}`
-      );
-    }
-    responseMessage = __completion.value;
-    __updateTokenStats(responseMessage.usage, responseMessage.cost);
-    await __callHook("onLLMCallEnd", { result: responseMessage, usage: responseMessage.usage, cost: responseMessage.cost, timeTaken: nextEndTime - nextStartTime });
-  }
-
-  // Add final assistant response to history
-  // not passing tool calls back this time
-  __messages.push(smoltalk.assistantMessage(responseMessage.output));
-  
-
-  
-  return responseMessage.output;
-  
-}
-
-
-
-
-__self.result = await _result(__stack.args.input, {
-      messages: __self.messages_0?.getMessages(),
-    });
-
-// return early from node if this is an interrupt
-if (isInterrupt(__self.result)) {
-  
-  return { messages: __self.messages_0 , data: __self.result };
-  
-   
-}
-        __stack.step++;
-      }
-      
-
-      if (__step <= 2) {
-        __stack.locals.result
+        // Removed unused LLM call "Analyzing: {input}", was assigned to variable 'result' but variable was never used.
         __stack.step++;
       }
       
     
     // this is just here to have a default return value from a node if the user doesn't specify one
     await __callHook("onNodeEnd", { nodeName: "analyzeData", data: undefined });
-    return { messages: __self.messages_0, data: undefined };
+    return { messages: __stack.messages, data: undefined };
 });
 
 

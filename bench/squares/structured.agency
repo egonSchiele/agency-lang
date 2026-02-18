@@ -1,0 +1,10 @@
+import { generateRandomIntegerList } from "./benchFuncs.js"
+
+node main() {
+  nums: number[] = generateRandomIntegerList(5)
+  print(nums)
+  printTime {
+    squares: number[] = llm("What are the squares of the following numbers: ${nums}? Return the answer as a list of numbers.")
+    print(squares)
+  }
+}

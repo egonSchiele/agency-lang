@@ -1,0 +1,7 @@
+node main() {
+  story = read("story01.txt")
+  printTime {
+    summary = llm("Summarize the following story in 20 words: ${story}")
+    print(summary)
+  }
+}

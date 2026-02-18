@@ -23,6 +23,10 @@ export type GraphNodeDefinition = {
   body: AgencyNode[];
   returnType?: VariableType | null;
   visibility?: Visibility;
+
+  // what message threads exist in this node?
+  // we need to initialize them.
+  threadIds?: string[];
 };
 
 export type NodeCall = {

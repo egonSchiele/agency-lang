@@ -5,23 +5,23 @@ import { apply } from "typestache";
 
 export const template = `
 {{#isSubthread}}
-__self.messages_{{{nodeId}}} = __self.messages_{{{parentNodeId}}}.newSubthreadChild();
+__stack.messages[{{{threadId:string}}}] = __stack.messages[{{{parentThreadId:string}}}].newSubthreadChild();
 {{/isSubthread}}
 {{^isSubthread}}
-__self.messages_{{{nodeId}}} = __self.messages_{{{parentNodeId}}}.newChild();
+__stack.messages[{{{threadId:string}}}] = __stack.messages[{{{parentThreadId:string}}}].newChild();
 {{/isSubthread}}
 
 {{{bodyCode:string}}}
 {{#hasVar}}
-{{{varName?}}} = __self.messages_{{{nodeId}}}.cloneMessages()
+{{{varName?}}} = __stack.messages[{{{threadId:string}}}].cloneMessages()
 {{/hasVar}}
 
-// __self.messages = __self.prevMessages;`;
+// __stack.messages = __stack.prevMessages;`;
 
 export type TemplateType = {
   isSubthread: boolean;
-  nodeId: string | boolean | number;
-  parentNodeId: string | boolean | number;
+  threadId: string;
+  parentThreadId: string;
   bodyCode: string;
   hasVar: boolean;
   varName?: string | boolean | number;

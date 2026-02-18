@@ -6,6 +6,7 @@ import {
   nodeScope,
   Scope,
 } from "@/types.js";
+import { color } from "termcolors";
 
 export function* getAllVariablesInBody(
   body: AgencyNode[],
@@ -131,6 +132,8 @@ export function getNodesOfType<T extends AgencyNode["type"]>(
   return result;
 }
 
+export let walkNodeDebug = false;
+export const setWalkNodeDebug = (value: boolean) => (walkNodeDebug = value);
 export function* walkNodes(
   nodes: AgencyNode[],
   ancestors: AgencyNode[] = [],
@@ -140,6 +143,8 @@ export function* walkNodes(
     scopes.push(globalScope());
   }
   for (const node of nodes) {
+    if (walkNodeDebug)
+      console.log(color.magenta("walkNodes:"), { node, ancestors });
     yield { node, ancestors, scopes };
     if (node.type === "function") {
       yield* walkNodes(
@@ -165,10 +170,22 @@ export function* walkNodes(
     } else if (node.type === "timeBlock") {
       yield* walkNodes(node.body, [...ancestors, node], scopes);
     } else if (node.type === "messageThread") {
+      /* console.log(
+        color.green(
+          "HI IM IN A FUCKING MESSAGE THRED!",
+          JSON.stringify(node.body),
+        ),
+      ); */
       yield* walkNodes(node.body, [...ancestors, node], scopes);
     } else if (node.type === "returnStatement") {
       yield* walkNodes([node.value], [...ancestors, node], scopes);
     } else if (node.type === "assignment") {
+      /* console.log(
+        color.red(
+          "HI IM IN A FUCKING MESSAGE ARGUMENT!",
+          JSON.stringify([node.value]),
+        ),
+      ); */
       yield* walkNodes([node.value], [...ancestors, node], scopes);
     } else if (node.type === "functionCall") {
       yield* walkNodes(node.arguments, [...ancestors, node], scopes);
@@ -212,4 +229,28 @@ export function* walkNodes(
       yield* walkNodes([node.right], [...ancestors, node], scopes);
     }
   }
+}
+
+export function walkNodesArray(
+  nodes: AgencyNode[],
+  ancestors: AgencyNode[] = [],
+  scopes: Scope[] = [],
+) {
+  const results: {
+    node: AgencyNode;
+    ancestors: AgencyNode[];
+    scopes: Scope[];
+  }[] = [];
+  for (const result of walkNodes(nodes, ancestors, scopes)) {
+    results.push(result);
+  }
+  return results;
+}
+
+export function getAllVariablesInBodyArray(body: AgencyNode[]) {
+  const results: { name: string; node: AgencyNode }[] = [];
+  for (const result of getAllVariablesInBody(body)) {
+    results.push(result);
+  }
+  return results;
 }

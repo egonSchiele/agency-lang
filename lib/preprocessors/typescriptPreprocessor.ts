@@ -11,6 +11,7 @@ import {
   FunctionDefinition,
   getImportedNames,
   globalScope,
+  GraphNodeDefinition,
   IfElse,
   InterpolationSegment,
   PromptLiteral,
@@ -23,7 +24,15 @@ import {
 } from "@/types.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
-import { getAllVariablesInBody, walkNodes } from "@/utils/node.js";
+import {
+  getAllVariablesInBodyArray,
+  setWalkNodeDebug,
+  walkNodeDebug,
+  walkNodesArray,
+} from "@/utils/node.js";
+import { color } from "termcolors";
+
+const ROOT_THREAD_ID = "0";
 
 export class TypescriptPreprocessor {
   public program: AgencyProgram;
@@ -51,22 +60,59 @@ export class TypescriptPreprocessor {
     this.filterExcludedBuiltinFunctions();
     this.validateFetchDomains();
     this.addNodeIDsToMessageThreads();
+    this.addNodeIDsToPrompts();
     this.resolveVariableScopes();
     return this.program;
   }
 
   protected addNodeIDsToMessageThreads(): void {
+    //setWalkNodeDebug(true);
     for (const node of this.program.nodes) {
       if (node.type === "function" || node.type === "graphNode") {
-        this._addNodeIDsToMessageThreads(node.body);
+        /* console.log(
+          color.cyan(
+            "ADDING NODE IDS TO",
+            node.type,
+            node.type == "graphNode" ? node.nodeName : node.functionName,
+          ),
+        ); */
+        node.threadIds = [ROOT_THREAD_ID];
+        this._addNodeIDsToMessageThreads(node.body, node);
       }
     }
+    // setWalkNodeDebug(false);
   }
+
+  protected addNodeIDsToPrompts(): void {
+    //setWalkNodeDebug(true);
+    for (const node of this.program.nodes) {
+      if (node.type === "function" || node.type === "graphNode") {
+        /* console.log(
+          color.cyan(
+            "ADDING NODE IDS TO",
+            node.type,
+            node.type == "graphNode" ? node.nodeName : node.functionName,
+          ),
+        ); */
+        this._addNodeIDsToPrompts(node.body, node);
+      }
+    }
+    // setWalkNodeDebug(false);
+  }
+
+  // parallel llm calls also need their own message threads.
   protected _addNodeIDsToMessageThreads(
     body: AgencyNode[],
+    functionOrGraphNode: FunctionDefinition | GraphNodeDefinition,
     parentId = 0,
+    _ancestors: AgencyNode[] = [],
+    _scopes: Scope[] = [],
   ): void {
-    for (const node of body) {
+    for (const { node, ancestors, scopes } of walkNodesArray(
+      body,
+      _ancestors,
+      _scopes,
+    )) {
       let messageThreadNode: MessageThread | null = null;
 
       if (node.type === "messageThread")
@@ -76,12 +122,84 @@ export class TypescriptPreprocessor {
         messageThreadNode = node.value as MessageThread;
       if (messageThreadNode) {
         this.threadIdCounter++;
-        messageThreadNode.nodeId = this.threadIdCounter.toString();
-        messageThreadNode.parentNodeId = parentId.toString();
+        messageThreadNode.threadId = this.threadIdCounter.toString();
+        messageThreadNode.parentThreadId = parentId.toString();
+        functionOrGraphNode.threadIds?.push(messageThreadNode.threadId);
         this._addNodeIDsToMessageThreads(
           messageThreadNode.body,
+          functionOrGraphNode,
           this.threadIdCounter,
+          [...ancestors, node],
+          scopes,
         );
+        this._addNodeIDsToPromptsInThread(
+          messageThreadNode.body,
+          messageThreadNode.threadId,
+        );
+      }
+    }
+  }
+
+  protected _addNodeIDsToPromptsInThread(
+    body: AgencyNode[],
+    parentId: string = ROOT_THREAD_ID,
+  ): void {
+    for (const { node, ancestors, scopes } of walkNodesArray(body)) {
+      /* Here's what's happening here. For any LLM calls that are not inside a message thread,
+      those calls will be run in parallel. That means they will all start their own message thread,
+      which means they need their own thread ID because all of these threads are actually set on a global
+      messages object and the thread IDs are used to track the different message threads.
+      const hasThreadParent = ancestors.some((a) => a.type === "messageThread");
+
+      But of course, if they are in the message thread,
+      then they should be using their parent's thread ID so that they're all part of the same thread. */
+      let promptNode: PromptLiteral | null = null;
+      if (node.type === "prompt") promptNode = node as PromptLiteral;
+      if (node.type === "assignment" && node.value.type === "prompt")
+        promptNode = node.value as PromptLiteral;
+
+      if (node.type === "returnStatement" && node.value.type === "prompt")
+        promptNode = node.value as PromptLiteral;
+
+      if (promptNode) {
+        promptNode.threadId = parentId.toString();
+      }
+
+      if (node.type === "functionCall" || node.type === "specialVar") {
+        node.threadId = parentId.toString();
+      }
+    }
+  }
+
+  // prompts not in a message thread
+  protected _addNodeIDsToPrompts(
+    body: AgencyNode[],
+    functionOrGraphNode: FunctionDefinition | GraphNodeDefinition,
+  ): void {
+    for (const { node, ancestors, scopes } of walkNodesArray(body)) {
+      /* Here's what's happening here. For any LLM calls that are not inside a message thread,
+      those calls will be run in parallel. That means they will all start their own message thread,
+      which means they need their own thread ID because all of these threads are actually set on a global
+      messages object and the thread IDs are used to track the different message threads.
+ */
+
+      let promptNode: PromptLiteral | null = null;
+      if (node.type === "prompt") promptNode = node as PromptLiteral;
+      if (node.type === "assignment" && node.value.type === "prompt")
+        promptNode = node.value as PromptLiteral;
+
+      if (node.type === "returnStatement" && node.value.type === "prompt")
+        promptNode = node.value as PromptLiteral;
+      if (promptNode && !promptNode.threadId) {
+        this.threadIdCounter++;
+        promptNode.threadId = this.threadIdCounter.toString();
+        functionOrGraphNode.threadIds?.push(promptNode.threadId);
+      }
+
+      if (node.type === "functionCall" || node.type === "specialVar") {
+        if (!node.threadId) {
+          node.threadId = ROOT_THREAD_ID;
+        }
       }
     }
   }
@@ -162,7 +280,7 @@ export class TypescriptPreprocessor {
     nodeToExclude: AgencyNode,
     body: AgencyNode[],
   ): boolean {
-    for (const { name, node } of getAllVariablesInBody(body)) {
+    for (const { name, node } of getAllVariablesInBodyArray(body)) {
       if (node === nodeToExclude) {
         continue; // skip the variable declaration/assignment itself
       }
@@ -267,7 +385,7 @@ export class TypescriptPreprocessor {
 
   protected findChildren(body: AgencyNode[], type: string): AgencyNode[] {
     const children: AgencyNode[] = [];
-    for (const { node } of walkNodes(body)) {
+    for (const { node } of walkNodesArray(body)) {
       if (node.type === type) {
         children.push(node);
       }
@@ -283,7 +401,7 @@ export class TypescriptPreprocessor {
     if (this.program === null) {
       throw new Error("Program is not set in generator.");
     }
-    for (const { node, ancestors } of walkNodes(this.program.nodes)) {
+    for (const { node, ancestors } of walkNodesArray(this.program.nodes)) {
       const isInMessageThread = ancestors.some(
         (a) => a.type === "messageThread",
       );
@@ -387,7 +505,7 @@ export class TypescriptPreprocessor {
       return this.functionNameToUsesInterrupt[node.functionName];
     }
 
-    for (const { node: subnode } of walkNodes(node.body)) {
+    for (const { node: subnode } of walkNodesArray(node.body)) {
       if (subnode.type === "functionCall") {
         if (subnode.functionName === "interrupt") {
           this.functionNameToUsesInterrupt[node.functionName] = true;
@@ -513,7 +631,7 @@ export class TypescriptPreprocessor {
     body: AgencyNode[],
   ): (FunctionCall | PromptLiteral)[] {
     const calls: (FunctionCall | PromptLiteral)[] = [];
-    for (const { node } of walkNodes(body)) {
+    for (const { node } of walkNodesArray(body)) {
       if (node.type === "functionCall") {
         calls.push(node);
       } else if (node.type === "prompt") {
@@ -873,7 +991,7 @@ export class TypescriptPreprocessor {
 
   protected _nodeUsesVariable(node: AgencyNode, varName: string): boolean {
     // Check if the node or any of its children use the variable
-    for (const { name } of getAllVariablesInBody([node])) {
+    for (const { name } of getAllVariablesInBodyArray([node])) {
       if (name === varName) {
         return true;
       }
@@ -1098,7 +1216,7 @@ export class TypescriptPreprocessor {
       : new Set<string>();
 
     // Walk through all nodes and validate fetch calls
-    for (const { node } of walkNodes(this.program.nodes)) {
+    for (const { node } of walkNodesArray(this.program.nodes)) {
       if (
         node.type === "functionCall" &&
         (node.functionName === "fetch" ||
@@ -1178,7 +1296,7 @@ export class TypescriptPreprocessor {
     const varNameToScope: Record<string, ScopeType> = {};
 
     // First, for each variable name, we try to collect its scope.
-    for (const { node, scopes } of walkNodes(this.program.nodes)) {
+    for (const { node, scopes } of walkNodesArray(this.program.nodes)) {
       if (scopes.length === 0) {
         throw new Error(
           `Top-level nodes should have at least the global scope in their scopes array. Node: ${JSON.stringify({ node })}, scopes: ${JSON.stringify({ scopes })}`,
@@ -1220,7 +1338,7 @@ export class TypescriptPreprocessor {
 
     // Then, whenever we see a variable being referenced,
     // we try to look up its scope and set it on that variable.
-    for (const { node, scopes } of walkNodes(this.program.nodes)) {
+    for (const { node, scopes } of walkNodesArray(this.program.nodes)) {
       if (node.type === "assignment") {
         node.scope = lookupScope(node.variableName);
       } else if (node.type === "variableName") {

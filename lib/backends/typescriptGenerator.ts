@@ -74,7 +74,6 @@ import { BinOpExpression } from "@/types/binop.js";
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
 export class TypeScriptGenerator extends BaseGenerator {
-  protected currentMessageThreadNodeId = ["0"];
   constructor(args: { config?: AgencyConfig } = {}) {
     super(args);
   }
@@ -381,11 +380,14 @@ export class TypeScriptGenerator extends BaseGenerator {
     });
     let argsString = "";
     if (this.isAgencyFunction(node.functionName)) {
+      if (!node.threadId) {
+        throw new Error(`No threadId for function call: ${node}`);
+      }
       argsString = parts.join(", ");
       const metadata = `{
         statelogClient,
         graph: __graph,
-        messages: __self.messages_${this.currentMessageThreadNodeId.at(-1)}.getMessages(),
+        messages: __stack.messages[${node.threadId}].getMessages(),
       }`;
       return renderInternalFunctionCall.default({
         functionName,
@@ -538,6 +540,10 @@ export class TypeScriptGenerator extends BaseGenerator {
     functionArgs: string[];
     prompt: PromptLiteral;
   }): string {
+    if (!prompt.threadId) {
+      throw new Error(`No threadId for prompt: ${prompt}`);
+    }
+
     // Generate async function for prompt-based assignment
     const _variableType = variableType ||
       this.typeHints[variableName] || {
@@ -562,7 +568,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     }
     const tools = _tools.length > 0 ? `[${_tools}]` : "undefined";
 
-    /* What's going on here? This is a nine. We change all agency functions to take an array of arguments.
+    /* What's going on here? This is annoying. We change all agency functions to take an array of arguments.
 So, for example, `function add(a, b)` would get turned into `function add(arr)`.
 Earlier, the arguments were getting converted into an object like `function add({a, b})` because LLMs
 pass back an object of parameters for the function calls, so that made it easy to pass those arguments
@@ -607,7 +613,7 @@ I'll probably need to do that for supporting type checking anyway.
 
     const clientConfig = prompt.config ? this.processNode(prompt.config) : "{}";
     const metadataObj = `{
-      messages: __self.messages_${this.currentMessageThreadNodeId.at(-1)}?.getMessages(),
+      messages: __stack.messages[${prompt.threadId}]?.getMessages(),
     }`;
 
     const scopedFunctionArgs = functionArgs.map((arg) => {
@@ -635,7 +641,6 @@ I'll probably need to do that for supporting type checking anyway.
       nodeContext: this.getCurrentScope().type === "node",
       isStreaming: prompt.isStreaming || false,
       isAsync: prompt.async || false,
-      messagesVar: `__self.messages_${this.currentMessageThreadNodeId.at(-1)}`,
     });
   }
 
@@ -715,7 +720,11 @@ I'll probably need to do that for supporting type checking anyway.
           value,
         });
       case "messages":
-        return `__self.messages_${this.currentMessageThreadNodeId.at(-1)}.setMessages(${value});\n`;
+        if (!node.threadId) {
+          throw new Error(`No threadId for messages specialVar: ${node}`);
+        }
+
+        return `__stack.messages[${node.threadId}].setMessages(${value});\n`;
       default:
         throw new Error(`Unhandled SpecialVar name: ${node.name}`);
     }
@@ -743,20 +752,18 @@ I'll probably need to do that for supporting type checking anyway.
     node: MessageThread,
     varName?: string,
   ): string {
-    this.currentMessageThreadNodeId.push(node.nodeId || "0");
     const bodyCodes: string[] = [];
     for (const stmt of node.body) {
       bodyCodes.push(this.processNode(stmt));
     }
     const bodyCodeStr = bodyCodes.join("\n");
-    this.currentMessageThreadNodeId.pop();
     return renderMessageThread.default({
       bodyCode: bodyCodeStr,
       hasVar: !!varName,
       varName,
       isSubthread: node.subthread,
-      nodeId: node.nodeId || "0",
-      parentNodeId: node.parentNodeId || "0",
+      threadId: node.threadId || "0",
+      parentThreadId: node.parentThreadId || "0",
     });
   }
 

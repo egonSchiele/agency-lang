@@ -165,7 +165,7 @@ __self.{{{variableName:string}}} = await _{{{variableName:string}}}({{{funcCallP
 // return early from node if this is an interrupt
 if (isInterrupt(__self.{{{variableName:string}}})) {
   {{#nodeContext}}
-  return { messages: {{{messagesVar:string}}} , data: __self.{{{variableName:string}}} };
+  return { messages: __stack.messages, data: __self.{{{variableName:string}}} };
   {{/nodeContext}}
    {{^nodeContext}}
    return  __self.{{{variableName:string}}};
@@ -186,7 +186,6 @@ export type TemplateType = {
   isAsync: boolean;
   funcCallParams: string;
   nodeContext: boolean;
-  messagesVar: string;
 };
 
 const render = (args: TemplateType) => {

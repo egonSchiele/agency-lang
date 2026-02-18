@@ -1,6 +1,6 @@
 {
   "name": "agency-lang",
-  "version": "0.0.67",
+  "version": "0.0.70",
   "description": "The Agency language",
   "main": "lib/index.js",
   "scripts": {
@@ -21,8 +21,7 @@
     "rr": "node ./dist/scripts/agency.js rr",
     "diagnostics": "node ./dist/scripts/agency.js diagnostics",
     "preprocess": "node ./dist/scripts/agency.js preprocess",
-    "circular-deps": "npx dpdm --circular lib/parser.ts",
-    "postinstall": "node scripts/hooks/postinstall.js"
+    "circular-deps": "npx dpdm --circular lib/parser.ts"
   },
   "bin": {
     "agency": "./dist/scripts/agency.js"
@@ -32,7 +31,8 @@
     "url": "git+https://github.com/egonSchiele/agency-lang.git"
   },
   "files": [
-    "./dist"
+    "./dist",
+    "./scripts/hooks/postinstall.js"
   ],
   "exports": {
     ".": {
@@ -58,14 +58,14 @@
     "smoltalk": "^0.0.18",
     "tarsec": "^0.1.8",
     "typestache": "^0.4.4",
+    "nanoid": "^5.1.6",
+    "termcolors": "github:egonSchiele/termcolors",
     "zod": "^4.3.5"
   },
   "devDependencies": {
     "@types/node": "^25.0.3",
     "@types/prompts": "^2.4.9",
     "cli-highlight": "^2.1.11",
-    "nanoid": "^5.1.6",
-    "termcolors": "github:egonSchiele/termcolors",
     "tsc-alias": "^1.8.16",
     "typescript": "^5.9.3",
     "vitest": "^4.0.16"

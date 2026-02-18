@@ -1,0 +1,16 @@
+prompt = "
+Please categorize this user message.
+If the message is about something related to bash, return 'bash'.
+If the message is about remembering something, or about the user's reminders, return 'reminder'.
+If the user wants to quit, return 'quit'.
+Otherwise, return 'general'.
+"
+
+type Category = "bash" | "reminder" | "general" | "quit"
+
+node categorize(message: string) {
+  category: Category = llm("${prompt}. Here's the user message: '${message}'")
+  confirmRequest = llm("Please restate this user message, letting them know you are about to process it: '${message}'")
+
+  return [category, confirmRequest]
+}

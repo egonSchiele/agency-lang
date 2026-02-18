@@ -34,10 +34,12 @@ graph.node("{{{name}}}", async (state) => {
     const __step = __stack.step;
 
     const __self = __stack.locals;
-    __self.messages_0 = new MessageThread();
-    if (state.messages) {
-      __self.messages_0.setMessages(state.messages);
-    }
+
+    {{{initializeMessageThreads:string}}}
+
+    // if (state.messages) {
+    //   __stack.messages[0].setMessages(state.messages);
+    // }
 
     {{#hasParam}}
     
@@ -56,5 +58,5 @@ graph.node("{{{name}}}", async (state) => {
     
     // this is just here to have a default return value from a node if the user doesn't specify one
     await __callHook("onNodeEnd", { nodeName: "{{{name}}}", data: undefined });
-    return { messages: __self.messages_0, data: undefined };
+    return { messages: __stack.messages, data: undefined };
 });

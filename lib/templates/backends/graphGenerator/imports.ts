@@ -10,6 +10,7 @@ import * as readline from "readline";
 import fs from "fs";
 import { StatelogClient, SimpleMachine, goToNode, nanoid } from "agency-lang";
 import * as smoltalk from "agency-lang";
+import path from "path";
 
 /* Code to log to statelog */
 const statelogHost = "{{{logHost:string}}}";
@@ -67,6 +68,10 @@ const graphConfig = {
 
 const graph = new SimpleMachine(graphConfig);
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+  
+
 /******** builtins ********/
 
 const not = (val) => !val;
@@ -117,7 +122,8 @@ function _builtinInput(prompt) {
 }
 
 function _builtinRead(filename) {
-  const data = fs.readFileSync(filename);
+  const filePath = path.resolve(__dirname, filename);
+  const data = fs.readFileSync(filePath);
   const contents = data.toString("utf8");
   return contents;
 }
@@ -126,7 +132,8 @@ function _builtinRead(filename) {
  * @param filePath The absolute or relative path to the image file.
  * @returns The Base64 string, or null if an error occurs.
  */
-function _builtinReadImage(filePath) {
+function _builtinReadImage(filename) {
+  const filePath = path.resolve(__dirname, filename);
   const data = fs.readFileSync(filePath); // Synchronous file reading
   const base64String = data.toString("base64");
   return base64String;
@@ -161,6 +168,10 @@ export function readSkill({filepath}) {
   return _builtinRead(filepath);
 }
 
+export function __deepClone(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
+
 /******** for internal agency use only ********/
 
 function __createReturnObject(result) {
@@ -193,8 +204,8 @@ export async function respondToInterrupt(
   _interruptResponse,
   metadata = {},
 ) {
-  const interrupt = structuredClone(_interrupt);
-  const interruptResponse = structuredClone(_interruptResponse);
+  const interrupt = __deepClone(_interrupt);
+  const interruptResponse = __deepClone(_interruptResponse);
 
   __stateStack = StateStack.fromJSON(interrupt.__state || {});
   __stateStack.deserializeMode();
@@ -306,6 +317,7 @@ class StateStack {
       const newState = {
         args: {},
         locals: {},
+        messages: [],
         step: 0,
       };
       this.stack.push(newState);
@@ -329,7 +341,7 @@ class StateStack {
   }
 
   toJSON() {
-    return structuredClone({
+    return __deepClone({
       stack: this.stack,
       globals: this.globals,
       other: this.other,
@@ -506,13 +518,11 @@ class MessageThread {
 
   newChild() {
     const child = new MessageThread();
-    this.children.push(child);
     return child;
   }
 
   newSubthreadChild() {
     const child = new MessageThread(this.cloneMessages());
-    this.children.push(child);
     return child;
   }
 
@@ -521,6 +531,17 @@ class MessageThread {
       messages: this.messages.map(m => m.toJSON()),
       children: this.children.map((child) => child.toJSON()),
     };
+  }
+
+  static fromJSON(json) {
+    const thread = new MessageThread();
+    thread.messages = (json.messages || []).map((m) =>
+      smoltalk.messageFromJSON(m),
+    );
+    thread.children = (json.children || []).map((child) =>
+      MessageThread.fromJSON(child),
+    );
+    return thread;
   }
 }`;
 

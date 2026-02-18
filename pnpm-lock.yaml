@@ -17,6 +17,9 @@ importers:
       egonlog:
         specifier: ^0.0.2
         version: 0.0.2
+      nanoid:
+        specifier: ^5.1.6
+        version: 5.1.6
       prompts:
         specifier: ^2.4.2
         version: 2.4.2
@@ -26,6 +29,9 @@ importers:
       tarsec:
         specifier: ^0.1.8
         version: 0.1.8
+      termcolors:
+        specifier: github:egonSchiele/termcolors
+        version: https://codeload.github.com/egonSchiele/termcolors/tar.gz/d5c1f497618398ce1440d2383d2aad2642e4051f
       typestache:
         specifier: ^0.4.4
         version: 0.4.4
@@ -42,12 +48,6 @@ importers:
       cli-highlight:
         specifier: ^2.1.11
         version: 2.1.11
-      nanoid:
-        specifier: ^5.1.6
-        version: 5.1.6
-      termcolors:
-        specifier: github:egonSchiele/termcolors
-        version: https://codeload.github.com/egonSchiele/termcolors/tar.gz/d5c1f497618398ce1440d2383d2aad2642e4051f
       tsc-alias:
         specifier: ^1.8.16
         version: 1.8.16

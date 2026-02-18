@@ -1,0 +1,11 @@
+node main() {
+  // This prompt is assigned and used - should be kept
+  used: string = `Give me a greeting`
+  print(used)
+
+  // This prompt is assigned but never used - should be removed
+  unused: string = `Give me a farewell`
+
+  // This prompt is returned - should be kept
+  return `Final answer`
+}

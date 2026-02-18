@@ -1,0 +1,13 @@
+globalVar = "hello"
+
+def helper(param) {
+  localVar = "world"
+  result = "${globalVar} ${localVar} ${param}"
+  return result
+}
+
+node main() {
+  nodeLocal = "test"
+  output = helper(nodeLocal)
+  print(output)
+}

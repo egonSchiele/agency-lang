@@ -1,0 +1,201 @@
+{
+  "type": "agencyProgram",
+  "nodes": [
+    {
+      "type": "function",
+      "functionName": "riskyAction",
+      "parameters": [
+        {
+          "type": "functionParameter",
+          "name": "action",
+          "typeHint": {
+            "type": "primitiveType",
+            "value": "string"
+          }
+        }
+      ],
+      "returnType": {
+        "type": "primitiveType",
+        "value": "string"
+      },
+      "body": [
+        {
+          "type": "returnStatement",
+          "value": {
+            "type": "functionCall",
+            "functionName": "interrupt",
+            "arguments": [
+              {
+                "type": "string",
+                "segments": [
+                  {
+                    "type": "text",
+                    "value": "Agent wants to perform: "
+                  },
+                  {
+                    "type": "interpolation",
+                    "variableName": "action",
+                    "scope": "args"
+                  }
+                ]
+              }
+            ],
+            "async": false,
+            "threadId": "0"
+          }
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "returnStatement",
+          "value": {
+            "type": "string",
+            "segments": [
+              {
+                "type": "text",
+                "value": "Performed: "
+              },
+              {
+                "type": "interpolation",
+                "variableName": "action",
+                "scope": "args"
+              }
+            ]
+          }
+        },
+        {
+          "type": "newLine"
+        }
+      ],
+      "async": false,
+      "threadIds": [
+        "0"
+      ]
+    },
+    {
+      "type": "newLine"
+    },
+    {
+      "type": "newLine"
+    },
+    {
+      "type": "function",
+      "functionName": "safeAction",
+      "parameters": [
+        {
+          "type": "functionParameter",
+          "name": "x",
+          "typeHint": {
+            "type": "primitiveType",
+            "value": "string"
+          }
+        }
+      ],
+      "returnType": {
+        "type": "primitiveType",
+        "value": "string"
+      },
+      "body": [
+        {
+          "type": "returnStatement",
+          "value": {
+            "type": "string",
+            "segments": [
+              {
+                "type": "interpolation",
+                "variableName": "x",
+                "scope": "args"
+              },
+              {
+                "type": "text",
+                "value": " done"
+              }
+            ]
+          }
+        },
+        {
+          "type": "newLine"
+        }
+      ],
+      "async": true,
+      "threadIds": [
+        "0"
+      ]
+    },
+    {
+      "type": "newLine"
+    },
+    {
+      "type": "newLine"
+    },
+    {
+      "type": "graphNode",
+      "nodeName": "main",
+      "parameters": [],
+      "returnType": null,
+      "body": [
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "assignment",
+          "variableName": "result",
+          "typeHint": {
+            "type": "primitiveType",
+            "value": "string"
+          },
+          "value": {
+            "type": "prompt",
+            "segments": [
+              {
+                "type": "text",
+                "value": "Do something risky and something safe"
+              }
+            ],
+            "tools": {
+              "type": "usesTool",
+              "toolNames": [
+                "riskyAction",
+                "safeAction"
+              ]
+            },
+            "skills": [],
+            "async": false,
+            "threadId": "1"
+          },
+          "scope": "node"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "functionCall",
+          "functionName": "print",
+          "arguments": [
+            {
+              "type": "variableName",
+              "value": "result",
+              "scope": "node"
+            }
+          ],
+          "async": false,
+          "threadId": "0"
+        },
+        {
+          "type": "newLine"
+        }
+      ],
+      "threadIds": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "type": "newLine"
+    }
+  ]
+}

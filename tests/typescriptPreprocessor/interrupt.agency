@@ -1,0 +1,15 @@
+def riskyAction(action: string): string {
+  return interrupt("Agent wants to perform: ${action}")
+  return "Performed: ${action}"
+}
+
+def safeAction(x: string): string {
+  return "${x} done"
+}
+
+node main() {
+  +riskyAction
+  +safeAction
+  result: string = `Do something risky and something safe`
+  print(result)
+}

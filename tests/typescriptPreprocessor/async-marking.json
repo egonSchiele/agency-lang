@@ -1,0 +1,238 @@
+{
+  "type": "agencyProgram",
+  "nodes": [
+    {
+      "type": "function",
+      "functionName": "pureFunction",
+      "parameters": [
+        {
+          "type": "functionParameter",
+          "name": "x"
+        }
+      ],
+      "returnType": null,
+      "body": [
+        {
+          "type": "returnStatement",
+          "value": {
+            "type": "variableName",
+            "value": "x",
+            "scope": "args"
+          }
+        },
+        {
+          "type": "newLine"
+        }
+      ],
+      "async": true,
+      "threadIds": [
+        "0"
+      ]
+    },
+    {
+      "type": "newLine"
+    },
+    {
+      "type": "newLine"
+    },
+    {
+      "type": "function",
+      "functionName": "llmFunction",
+      "parameters": [
+        {
+          "type": "functionParameter",
+          "name": "prompt"
+        }
+      ],
+      "returnType": null,
+      "body": [
+        {
+          "type": "assignment",
+          "variableName": "result",
+          "value": {
+            "type": "prompt",
+            "segments": [
+              {
+                "type": "text",
+                "value": "Respond to: "
+              },
+              {
+                "type": "interpolation",
+                "variableName": "prompt",
+                "scope": "args"
+              }
+            ],
+            "tools": {
+              "type": "usesTool",
+              "toolNames": []
+            },
+            "skills": [],
+            "async": true,
+            "threadId": "1"
+          },
+          "scope": "node"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "rawCode",
+          "value": "[__self.result] = await Promise.all([__self.result]);"
+        },
+        {
+          "type": "returnStatement",
+          "value": {
+            "type": "variableName",
+            "value": "result",
+            "scope": "node"
+          }
+        },
+        {
+          "type": "newLine"
+        }
+      ],
+      "async": true,
+      "threadIds": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "type": "newLine"
+    },
+    {
+      "type": "newLine"
+    },
+    {
+      "type": "graphNode",
+      "nodeName": "main",
+      "parameters": [],
+      "returnType": null,
+      "body": [
+        {
+          "type": "assignment",
+          "variableName": "a",
+          "value": {
+            "type": "functionCall",
+            "functionName": "pureFunction",
+            "arguments": [
+              {
+                "type": "string",
+                "segments": [
+                  {
+                    "type": "text",
+                    "value": "hello"
+                  }
+                ]
+              }
+            ],
+            "async": true,
+            "threadId": "0"
+          },
+          "scope": "node"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "assignment",
+          "variableName": "b",
+          "value": {
+            "type": "functionCall",
+            "functionName": "llmFunction",
+            "arguments": [
+              {
+                "type": "string",
+                "segments": [
+                  {
+                    "type": "text",
+                    "value": "world"
+                  }
+                ]
+              }
+            ],
+            "async": true,
+            "threadId": "0"
+          },
+          "scope": "node"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "rawCode",
+          "value": "[__self.a, __self.b] = await Promise.all([__self.a, __self.b]);"
+        },
+        {
+          "type": "assignment",
+          "variableName": "result",
+          "typeHint": {
+            "type": "primitiveType",
+            "value": "string"
+          },
+          "value": {
+            "type": "prompt",
+            "segments": [
+              {
+                "type": "text",
+                "value": "Combine "
+              },
+              {
+                "type": "interpolation",
+                "variableName": "a",
+                "scope": "node"
+              },
+              {
+                "type": "text",
+                "value": " and "
+              },
+              {
+                "type": "interpolation",
+                "variableName": "b",
+                "scope": "node"
+              }
+            ],
+            "tools": {
+              "type": "usesTool",
+              "toolNames": []
+            },
+            "skills": [],
+            "async": true,
+            "threadId": "2"
+          },
+          "scope": "node"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "rawCode",
+          "value": "[__self.result] = await Promise.all([__self.result]);"
+        },
+        {
+          "type": "functionCall",
+          "functionName": "print",
+          "arguments": [
+            {
+              "type": "variableName",
+              "value": "result",
+              "scope": "node"
+            }
+          ],
+          "async": false,
+          "threadId": "0"
+        },
+        {
+          "type": "newLine"
+        }
+      ],
+      "threadIds": [
+        "0",
+        "2"
+      ]
+    },
+    {
+      "type": "newLine"
+    }
+  ]
+}

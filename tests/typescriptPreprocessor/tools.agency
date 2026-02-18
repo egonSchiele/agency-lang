@@ -1,0 +1,15 @@
+def getWeather(city: string): string {
+  return fetch("https://weather.example.com/${city}")
+}
+
+def formatTemp(temp: number): string {
+  return "${temp} degrees"
+}
+
+node main() {
+  +getWeather
+  +formatTemp
+  forecast: string = `What is the weather in NYC?`
+
+  summary: string = `Summarize the forecast`
+}

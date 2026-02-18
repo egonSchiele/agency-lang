@@ -1,0 +1,15 @@
+def pureFunction(x) {
+  return x
+}
+
+def llmFunction(prompt) {
+  result = `Respond to: ${prompt}`
+  return result
+}
+
+node main() {
+  a = pureFunction("hello")
+  b = llmFunction("world")
+  result: string = `Combine ${a} and ${b}`
+  print(result)
+}

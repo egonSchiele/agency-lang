@@ -1,0 +1,6 @@
+node main() {
+  skill "./skills/data-processor.ts"
+  result: string = `Analyze this data`
+
+  plain: string = `No skills here`
+}

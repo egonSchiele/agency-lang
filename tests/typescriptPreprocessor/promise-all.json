@@ -1,0 +1,199 @@
+{
+  "type": "agencyProgram",
+  "nodes": [
+    {
+      "type": "function",
+      "functionName": "slowTask",
+      "parameters": [
+        {
+          "type": "functionParameter",
+          "name": "label",
+          "typeHint": {
+            "type": "primitiveType",
+            "value": "string"
+          }
+        }
+      ],
+      "returnType": {
+        "type": "primitiveType",
+        "value": "string"
+      },
+      "body": [
+        {
+          "type": "assignment",
+          "variableName": "result",
+          "value": {
+            "type": "prompt",
+            "segments": [
+              {
+                "type": "text",
+                "value": "Process: "
+              },
+              {
+                "type": "interpolation",
+                "variableName": "label",
+                "scope": "args"
+              }
+            ],
+            "tools": {
+              "type": "usesTool",
+              "toolNames": []
+            },
+            "skills": [],
+            "async": true,
+            "threadId": "1"
+          },
+          "scope": "function"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "rawCode",
+          "value": "[__self.result] = await Promise.all([__self.result]);"
+        },
+        {
+          "type": "returnStatement",
+          "value": {
+            "type": "variableName",
+            "value": "result",
+            "scope": "function"
+          }
+        },
+        {
+          "type": "newLine"
+        }
+      ],
+      "async": true,
+      "threadIds": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "type": "newLine"
+    },
+    {
+      "type": "newLine"
+    },
+    {
+      "type": "graphNode",
+      "nodeName": "main",
+      "parameters": [],
+      "returnType": null,
+      "body": [
+        {
+          "type": "assignment",
+          "variableName": "a",
+          "typeHint": {
+            "type": "primitiveType",
+            "value": "string"
+          },
+          "value": {
+            "type": "prompt",
+            "segments": [
+              {
+                "type": "text",
+                "value": "First async task"
+              }
+            ],
+            "tools": {
+              "type": "usesTool",
+              "toolNames": []
+            },
+            "skills": [],
+            "async": true,
+            "threadId": "2"
+          },
+          "scope": "node"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "assignment",
+          "variableName": "b",
+          "typeHint": {
+            "type": "primitiveType",
+            "value": "string"
+          },
+          "value": {
+            "type": "prompt",
+            "segments": [
+              {
+                "type": "text",
+                "value": "Second async task"
+              }
+            ],
+            "tools": {
+              "type": "usesTool",
+              "toolNames": []
+            },
+            "skills": [],
+            "async": true,
+            "threadId": "3"
+          },
+          "scope": "node"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "rawCode",
+          "value": "[__self.a, __self.b] = await Promise.all([__self.a, __self.b]);"
+        },
+        {
+          "type": "assignment",
+          "variableName": "combined",
+          "value": {
+            "type": "string",
+            "segments": [
+              {
+                "type": "interpolation",
+                "variableName": "a",
+                "scope": "node"
+              },
+              {
+                "type": "text",
+                "value": " and "
+              },
+              {
+                "type": "interpolation",
+                "variableName": "b",
+                "scope": "node"
+              }
+            ]
+          },
+          "scope": "node"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "functionCall",
+          "functionName": "print",
+          "arguments": [
+            {
+              "type": "variableName",
+              "value": "combined",
+              "scope": "node"
+            }
+          ],
+          "async": false,
+          "threadId": "0"
+        },
+        {
+          "type": "newLine"
+        }
+      ],
+      "threadIds": [
+        "0",
+        "2",
+        "3"
+      ]
+    },
+    {
+      "type": "newLine"
+    }
+  ]
+}

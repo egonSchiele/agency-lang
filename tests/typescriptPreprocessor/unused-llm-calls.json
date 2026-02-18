@@ -1,0 +1,120 @@
+{
+  "type": "agencyProgram",
+  "nodes": [
+    {
+      "type": "graphNode",
+      "nodeName": "main",
+      "parameters": [],
+      "returnType": null,
+      "body": [
+        {
+          "type": "comment",
+          "content": " This prompt is assigned and used - should be kept"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "assignment",
+          "variableName": "used",
+          "typeHint": {
+            "type": "primitiveType",
+            "value": "string"
+          },
+          "value": {
+            "type": "prompt",
+            "segments": [
+              {
+                "type": "text",
+                "value": "Give me a greeting"
+              }
+            ],
+            "tools": {
+              "type": "usesTool",
+              "toolNames": []
+            },
+            "skills": [],
+            "async": true,
+            "threadId": "1"
+          },
+          "scope": "node"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "rawCode",
+          "value": "[__self.used] = await Promise.all([__self.used]);"
+        },
+        {
+          "type": "functionCall",
+          "functionName": "print",
+          "arguments": [
+            {
+              "type": "variableName",
+              "value": "used",
+              "scope": "node"
+            }
+          ],
+          "async": false,
+          "threadId": "0"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "comment",
+          "content": " This prompt is assigned but never used - should be removed"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "comment",
+          "content": "Removed unused LLM call \"Give me a farewell\", was assigned to variable 'unused' but variable was never used."
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "comment",
+          "content": " This prompt is returned - should be kept"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "returnStatement",
+          "value": {
+            "type": "prompt",
+            "segments": [
+              {
+                "type": "text",
+                "value": "Final answer"
+              }
+            ],
+            "async": false,
+            "threadId": "2"
+          }
+        },
+        {
+          "type": "newLine"
+        }
+      ],
+      "threadIds": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "type": "newLine"
+    }
+  ]
+}

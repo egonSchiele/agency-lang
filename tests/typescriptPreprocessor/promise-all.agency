@@ -1,0 +1,11 @@
+def slowTask(label: string): string {
+  result = `Process: ${label}`
+  return result
+}
+
+node main() {
+  a: string = `First async task`
+  b: string = `Second async task`
+  combined = "${a} and ${b}"
+  print(combined)
+}

@@ -1,0 +1,39 @@
+{
+  "type": "agencyProgram",
+  "nodes": [
+    {
+      "type": "graphNode",
+      "nodeName": "main",
+      "parameters": [],
+      "returnType": null,
+      "body": [
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "comment",
+          "content": "Removed unused LLM call \"Analyze this data\", was assigned to variable 'result' but variable was never used."
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "comment",
+          "content": "Removed unused LLM call \"No skills here\", was assigned to variable 'plain' but variable was never used."
+        },
+        {
+          "type": "newLine"
+        }
+      ],
+      "threadIds": [
+        "0"
+      ]
+    },
+    {
+      "type": "newLine"
+    }
+  ]
+}

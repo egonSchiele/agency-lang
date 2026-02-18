@@ -1,0 +1,8 @@
+node main() {
+  thread {
+    res1: string = `What is 2 + 2?`
+    res2: string = `And what is that times 3?`
+  }
+
+  standalone: string = `Unrelated question`
+}

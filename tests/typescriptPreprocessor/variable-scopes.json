@@ -1,0 +1,184 @@
+{
+  "type": "agencyProgram",
+  "nodes": [
+    {
+      "type": "assignment",
+      "variableName": "globalVar",
+      "value": {
+        "type": "string",
+        "segments": [
+          {
+            "type": "text",
+            "value": "hello"
+          }
+        ]
+      },
+      "scope": "global"
+    },
+    {
+      "type": "newLine"
+    },
+    {
+      "type": "newLine"
+    },
+    {
+      "type": "function",
+      "functionName": "helper",
+      "parameters": [
+        {
+          "type": "functionParameter",
+          "name": "param"
+        }
+      ],
+      "returnType": null,
+      "body": [
+        {
+          "type": "assignment",
+          "variableName": "localVar",
+          "value": {
+            "type": "string",
+            "segments": [
+              {
+                "type": "text",
+                "value": "world"
+              }
+            ]
+          },
+          "scope": "function"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "assignment",
+          "variableName": "result",
+          "value": {
+            "type": "string",
+            "segments": [
+              {
+                "type": "interpolation",
+                "variableName": "globalVar",
+                "scope": "global"
+              },
+              {
+                "type": "text",
+                "value": " "
+              },
+              {
+                "type": "interpolation",
+                "variableName": "localVar",
+                "scope": "function"
+              },
+              {
+                "type": "text",
+                "value": " "
+              },
+              {
+                "type": "interpolation",
+                "variableName": "param",
+                "scope": "args"
+              }
+            ]
+          },
+          "scope": "function"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "returnStatement",
+          "value": {
+            "type": "variableName",
+            "value": "result",
+            "scope": "function"
+          }
+        },
+        {
+          "type": "newLine"
+        }
+      ],
+      "async": true,
+      "threadIds": [
+        "0"
+      ]
+    },
+    {
+      "type": "newLine"
+    },
+    {
+      "type": "newLine"
+    },
+    {
+      "type": "graphNode",
+      "nodeName": "main",
+      "parameters": [],
+      "returnType": null,
+      "body": [
+        {
+          "type": "assignment",
+          "variableName": "nodeLocal",
+          "value": {
+            "type": "string",
+            "segments": [
+              {
+                "type": "text",
+                "value": "test"
+              }
+            ]
+          },
+          "scope": "node"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "assignment",
+          "variableName": "output",
+          "value": {
+            "type": "functionCall",
+            "functionName": "helper",
+            "arguments": [
+              {
+                "type": "variableName",
+                "value": "nodeLocal",
+                "scope": "node"
+              }
+            ],
+            "async": true,
+            "threadId": "0"
+          },
+          "scope": "node"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "rawCode",
+          "value": "[__self.output] = await Promise.all([__self.output]);"
+        },
+        {
+          "type": "functionCall",
+          "functionName": "print",
+          "arguments": [
+            {
+              "type": "variableName",
+              "value": "output",
+              "scope": "node"
+            }
+          ],
+          "async": false,
+          "threadId": "0"
+        },
+        {
+          "type": "newLine"
+        }
+      ],
+      "threadIds": [
+        "0"
+      ]
+    },
+    {
+      "type": "newLine"
+    }
+  ]
+}

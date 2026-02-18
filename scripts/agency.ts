@@ -20,6 +20,7 @@ import { Command } from "commander";
 import * as fs from "fs";
 import { TarsecError } from "tarsec";
 import process from "process";
+import { agent } from "@/cli/agent.js";
 import { upload } from "@/cli/upload.js";
 import { loadEnv } from "@/utils/envfile.js";
 import { remoteRun } from "@/cli/remoteRun.js";
@@ -275,6 +276,13 @@ program
   .action(async (filename: string) => {
     console.log("Running files on Statelog remotely");
     await remoteRun(getConfig(), filename);
+  });
+
+program
+  .command("agent")
+  .description("Launch the Agency language assistant agent")
+  .action(() => {
+    agent();
   });
 
 // Default: treat unknown args as a file to run

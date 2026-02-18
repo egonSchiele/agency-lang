@@ -1,0 +1,4 @@
+node main() {
+  greeting: string = llm("Say hello world and introduce yourself as the Agency language assistant.")
+  print(greeting)
+}

@@ -19,6 +19,7 @@
     "eval": "node ./dist/scripts/agency.js eval",
     "fixtures": "node ./dist/scripts/agency.js fixtures",
     "rr": "node ./dist/scripts/agency.js rr",
+    "agent": "node ./dist/scripts/agency.js agent",
     "diagnostics": "node ./dist/scripts/agency.js diagnostics",
     "preprocess": "node ./dist/scripts/agency.js preprocess",
     "circular-deps": "npx dpdm --circular lib/parser.ts"

@@ -41,11 +41,11 @@ def execCommandTool(command: string): string {
 node main() {
   while (true) {
     msg = input("> ")
-    +writeFileTool
-    +readFileTool
-    +printLineTool
-    +execCommandTool
-    response = `Respond to this user message: ${msg}`
+    uses writeFileTool
+    uses readFileTool
+    uses printLineTool
+    uses execCommandTool
+    response = llm("Respond to this user message: ${msg}")
     print(response)
   }
 }

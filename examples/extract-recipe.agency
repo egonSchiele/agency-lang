@@ -7,8 +7,7 @@ type Recipe = {
   instructions: string
 }
 node importRecipe(msg) {
-  url :: Url
-  url = `extract the url from this message: ${msg}`
+  url: Url = llm("extract the url from this message: ${msg}")
 
   html :: string
   html = fetch(url.url)
@@ -16,19 +15,20 @@ node importRecipe(msg) {
   html2 = html.substring(0, 100000)
 
   recipe :: Recipe
-  recipe = `extract the recipe from this html: ${html2}`
+  recipe = llm("extract the recipe from this html: ${html2}")
 
   print(recipe)
   return recipe
 }
+
 node createIngredient() {
   print("tbd")
 }
+
 node main() {
   msg = input("> ")
 
-  category :: "import_recipe" | "create_ingredient"
-  category = `determine if the user wants to import a recipe from a website or create a new ingredient based on this message: ${msg}`
+  category: "import_recipe" | "create_ingredient" = llm("determine if the user wants to import a recipe from a website or create a new ingredient based on this message: ${msg}")
 
   match(category) {
     "import_recipe" => return importRecipe(msg)

@@ -1,12 +1,11 @@
-import * as ext from "./hello.mjs";
+import * as ext from "./hello.mjs"
 
 def sayHello(name) {
-  return ext.hello(name);
+  return ext.hello(name)
 }
 
 node main() {
-  action :: string
-  +sayHello
-  greeting = `Greet John`
+  uses sayHello
+  greeting = llm("Greet John")
   print(greeting)
 }

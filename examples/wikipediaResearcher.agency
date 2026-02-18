@@ -1,4 +1,4 @@
-import {getSummary, getHtml} from "./wikipedia.ts"
+import { getSummary, getHtml } from "./wikipedia.ts"
 
 def wikipediaSummary(page: string): string {
   """
@@ -18,16 +18,13 @@ def shouldExit(msg: string): boolean {
   """
   Determines if the program should exit based on the message
   """
-  shouldExit :: boolean
-  shouldExit = `Based on this message, does the user want to exit? ${msg}`
-  return shouldExit
+  return llm("Based on this message, does the user want to exit? ${msg}")
 }
 
 node research(msg) {
-  answer :: string
-  +wikipediaSummary
-  +wikipediaFull
-  answer = `Help the user research the topic: ${msg}`
+  uses wikipediaSummary
+  uses wikipediaFull
+  answer = llm("Help the user research the topic: ${msg}")
   print(answer)
   return ask("> ")
 }

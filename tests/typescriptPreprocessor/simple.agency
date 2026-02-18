@@ -1,0 +1,4 @@
+def greet(name) {
+  result = `Hello, {name}!`
+  return result
+}

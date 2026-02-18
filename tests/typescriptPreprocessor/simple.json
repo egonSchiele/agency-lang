@@ -1,0 +1,65 @@
+{
+  "type": "agencyProgram",
+  "nodes": [
+    {
+      "type": "function",
+      "functionName": "greet",
+      "parameters": [
+        {
+          "type": "functionParameter",
+          "name": "name"
+        }
+      ],
+      "returnType": null,
+      "body": [
+        {
+          "type": "assignment",
+          "variableName": "result",
+          "value": {
+            "type": "prompt",
+            "segments": [
+              {
+                "type": "text",
+                "value": "Hello, {name}!"
+              }
+            ],
+            "tools": {
+              "type": "usesTool",
+              "toolNames": []
+            },
+            "skills": [],
+            "async": true,
+            "threadId": "1"
+          },
+          "scope": "function"
+        },
+        {
+          "type": "newLine"
+        },
+        {
+          "type": "rawCode",
+          "value": "[__self.result] = await Promise.all([__self.result]);"
+        },
+        {
+          "type": "returnStatement",
+          "value": {
+            "type": "variableName",
+            "value": "result",
+            "scope": "function"
+          }
+        },
+        {
+          "type": "newLine"
+        }
+      ],
+      "async": true,
+      "threadIds": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "type": "newLine"
+    }
+  ]
+}

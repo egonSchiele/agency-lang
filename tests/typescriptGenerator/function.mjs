@@ -627,6 +627,11 @@ graph.node("main", async (state) => {
 } else {
     __stack.messages[0] = new MessageThread();
 }
+if (__stack.messages[1]) {
+     __stack.messages[1] = MessageThread.fromJSON(__stack.messages[1]);
+} else {
+    __stack.messages[1] = new MessageThread();
+}
 
     // if (state.messages) {
     //   __stack.messages[0].setMessages(state.messages);
@@ -644,7 +649,7 @@ graph.node("main", async (state) => {
         await console.log(test([], {
         statelogClient,
         graph: __graph,
-        messages: __stack.messages[0].getMessages(),
+        messages: __stack.messages[1].getMessages(),
       })
 )
         __stack.step++;

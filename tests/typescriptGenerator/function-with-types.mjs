@@ -739,7 +739,7 @@ async function _result(x, y, __metadata) {
 
 
 __self.result = _result(__stack.args.x, __stack.args.y, {
-      messages: __stack.messages[1]?.getMessages(),
+      messages: __stack.messages[0]?.getMessages(),
     });
         __stack.step++;
       }
@@ -921,7 +921,7 @@ async function _message(name, __metadata) {
 
 
 __self.message = _message(__stack.args.name, {
-      messages: __stack.messages[2]?.getMessages(),
+      messages: __stack.messages[1]?.getMessages(),
     });
         __stack.step++;
       }
@@ -1103,7 +1103,7 @@ async function _output(label, count, __metadata) {
 
 
 __self.output = _output(__stack.args.label, __stack.args.count, {
-      messages: __stack.messages[3]?.getMessages(),
+      messages: __stack.messages[2]?.getMessages(),
     });
         __stack.step++;
       }
@@ -1285,7 +1285,7 @@ async function _result(items, __metadata) {
 
 
 __self.result = _result(__stack.args.items, {
-      messages: __stack.messages[4]?.getMessages(),
+      messages: __stack.messages[3]?.getMessages(),
     });
         __stack.step++;
       }
@@ -1467,7 +1467,7 @@ async function _result(value, __metadata) {
 
 
 __self.result = _result(__stack.args.value, {
-      messages: __stack.messages[5]?.getMessages(),
+      messages: __stack.messages[4]?.getMessages(),
     });
         __stack.step++;
       }
@@ -1523,10 +1523,10 @@ graph.node("foo", async (state) => {
 
     const __self = __stack.locals;
 
-    if (__stack.messages[0]) {
-     __stack.messages[0] = MessageThread.fromJSON(__stack.messages[0]);
+    if (__stack.messages[5]) {
+     __stack.messages[5] = MessageThread.fromJSON(__stack.messages[5]);
 } else {
-    __stack.messages[0] = new MessageThread();
+    __stack.messages[5] = new MessageThread();
 }
 
     // if (state.messages) {
@@ -1594,10 +1594,30 @@ graph.node("main", async (state) => {
 
     const __self = __stack.locals;
 
-    if (__stack.messages[0]) {
-     __stack.messages[0] = MessageThread.fromJSON(__stack.messages[0]);
+    if (__stack.messages[6]) {
+     __stack.messages[6] = MessageThread.fromJSON(__stack.messages[6]);
 } else {
-    __stack.messages[0] = new MessageThread();
+    __stack.messages[6] = new MessageThread();
+}
+if (__stack.messages[7]) {
+     __stack.messages[7] = MessageThread.fromJSON(__stack.messages[7]);
+} else {
+    __stack.messages[7] = new MessageThread();
+}
+if (__stack.messages[8]) {
+     __stack.messages[8] = MessageThread.fromJSON(__stack.messages[8]);
+} else {
+    __stack.messages[8] = new MessageThread();
+}
+if (__stack.messages[9]) {
+     __stack.messages[9] = MessageThread.fromJSON(__stack.messages[9]);
+} else {
+    __stack.messages[9] = new MessageThread();
+}
+if (__stack.messages[10]) {
+     __stack.messages[10] = MessageThread.fromJSON(__stack.messages[10]);
+} else {
+    __stack.messages[10] = new MessageThread();
 }
 
     // if (state.messages) {
@@ -1616,7 +1636,7 @@ graph.node("main", async (state) => {
         __stack.locals.sum = add([5, 10], {
         statelogClient,
         graph: __graph,
-        messages: __stack.messages[0].getMessages(),
+        messages: __stack.messages[6].getMessages(),
       });
 
 
@@ -1634,7 +1654,7 @@ if (isInterrupt(__stack.locals.sum)) {
         __stack.locals.greeting = greet([`Alice`], {
         statelogClient,
         graph: __graph,
-        messages: __stack.messages[0].getMessages(),
+        messages: __stack.messages[7].getMessages(),
       });
 
 
@@ -1652,7 +1672,7 @@ if (isInterrupt(__stack.locals.greeting)) {
         __stack.locals.labeled = mixed([42, `Answer`], {
         statelogClient,
         graph: __graph,
-        messages: __stack.messages[0].getMessages(),
+        messages: __stack.messages[8].getMessages(),
       });
 
 
@@ -1670,7 +1690,7 @@ if (isInterrupt(__stack.locals.labeled)) {
         __stack.locals.processed = processArray([[1, 2, 3, 4, 5]], {
         statelogClient,
         graph: __graph,
-        messages: __stack.messages[0].getMessages(),
+        messages: __stack.messages[9].getMessages(),
       });
 
 
@@ -1688,7 +1708,7 @@ if (isInterrupt(__stack.locals.processed)) {
         __stack.locals.flexResult = flexible([`test`], {
         statelogClient,
         graph: __graph,
-        messages: __stack.messages[0].getMessages(),
+        messages: __stack.messages[10].getMessages(),
       });
 
 

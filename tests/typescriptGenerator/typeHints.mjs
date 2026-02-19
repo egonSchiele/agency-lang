@@ -598,6 +598,11 @@ if (__stack.messages[2]) {
 } else {
     __stack.messages[2] = new MessageThread();
 }
+if (__stack.messages[3]) {
+     __stack.messages[3] = MessageThread.fromJSON(__stack.messages[3]);
+} else {
+    __stack.messages[3] = new MessageThread();
+}
 
     // if (state.messages) {
     //   __stack.messages[0].setMessages(state.messages);
@@ -758,7 +763,7 @@ async function _count(__metadata) {
 
 
 __self.count = _count({
-      messages: __stack.messages[1]?.getMessages(),
+      messages: __stack.messages[0]?.getMessages(),
     });
         __stack.step++;
       }
@@ -900,7 +905,7 @@ async function _message(__metadata) {
 
 
 __self.message = _message({
-      messages: __stack.messages[2]?.getMessages(),
+      messages: __stack.messages[1]?.getMessages(),
     });
         __stack.step++;
       }

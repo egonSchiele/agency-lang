@@ -588,6 +588,26 @@ graph.node("main", async (state) => {
 } else {
     __stack.messages[0] = new MessageThread();
 }
+if (__stack.messages[1]) {
+     __stack.messages[1] = MessageThread.fromJSON(__stack.messages[1]);
+} else {
+    __stack.messages[1] = new MessageThread();
+}
+if (__stack.messages[2]) {
+     __stack.messages[2] = MessageThread.fromJSON(__stack.messages[2]);
+} else {
+    __stack.messages[2] = new MessageThread();
+}
+if (__stack.messages[3]) {
+     __stack.messages[3] = MessageThread.fromJSON(__stack.messages[3]);
+} else {
+    __stack.messages[3] = new MessageThread();
+}
+if (__stack.messages[4]) {
+     __stack.messages[4] = MessageThread.fromJSON(__stack.messages[4]);
+} else {
+    __stack.messages[4] = new MessageThread();
+}
 
     // if (state.messages) {
     //   __stack.messages[0].setMessages(state.messages);

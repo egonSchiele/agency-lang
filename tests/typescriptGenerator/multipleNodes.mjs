@@ -742,7 +742,7 @@ async function _greeting(__metadata) {
 
 
 __self.greeting = _greeting({
-      messages: __stack.messages[1]?.getMessages(),
+      messages: __stack.messages[0]?.getMessages(),
     });
         __stack.step++;
       }
@@ -819,15 +819,15 @@ graph.node("processGreeting", async (state) => {
 
     const __self = __stack.locals;
 
-    if (__stack.messages[0]) {
-     __stack.messages[0] = MessageThread.fromJSON(__stack.messages[0]);
-} else {
-    __stack.messages[0] = new MessageThread();
-}
-if (__stack.messages[2]) {
+    if (__stack.messages[2]) {
      __stack.messages[2] = MessageThread.fromJSON(__stack.messages[2]);
 } else {
     __stack.messages[2] = new MessageThread();
+}
+if (__stack.messages[3]) {
+     __stack.messages[3] = MessageThread.fromJSON(__stack.messages[3]);
+} else {
+    __stack.messages[3] = new MessageThread();
 }
 
     // if (state.messages) {
@@ -1049,10 +1049,10 @@ graph.node("main", async (state) => {
 
     const __self = __stack.locals;
 
-    if (__stack.messages[0]) {
-     __stack.messages[0] = MessageThread.fromJSON(__stack.messages[0]);
+    if (__stack.messages[4]) {
+     __stack.messages[4] = MessageThread.fromJSON(__stack.messages[4]);
 } else {
-    __stack.messages[0] = new MessageThread();
+    __stack.messages[4] = new MessageThread();
 }
 
     // if (state.messages) {

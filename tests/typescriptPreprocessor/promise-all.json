@@ -41,7 +41,7 @@
             },
             "skills": [],
             "async": true,
-            "threadId": "1"
+            "threadId": "0"
           },
           "scope": "function"
         },
@@ -66,8 +66,7 @@
       ],
       "async": true,
       "threadIds": [
-        "0",
-        "1"
+        "0"
       ]
     },
     {
@@ -103,7 +102,7 @@
             },
             "skills": [],
             "async": true,
-            "threadId": "2"
+            "threadId": "1"
           },
           "scope": "node"
         },
@@ -131,7 +130,7 @@
             },
             "skills": [],
             "async": true,
-            "threadId": "3"
+            "threadId": "2"
           },
           "scope": "node"
         },
@@ -180,14 +179,14 @@
             }
           ],
           "async": false,
-          "threadId": "0"
+          "threadId": "3"
         },
         {
           "type": "newLine"
         }
       ],
       "threadIds": [
-        "0",
+        "1",
         "2",
         "3"
       ]

@@ -24,6 +24,7 @@ import {
 } from "@/types.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
+import { uniq } from "@/utils.js";
 import {
   getAllVariablesInBodyArray,
   setWalkNodeDebug,
@@ -95,6 +96,7 @@ export class TypescriptPreprocessor {
           ),
         ); */
         this._addNodeIDsToPrompts(node.body, node);
+        node.threadIds = uniq(node.threadIds || []);
       }
     }
     // setWalkNodeDebug(false);
@@ -224,11 +226,15 @@ export class TypescriptPreprocessor {
           functionOrGraphNode.threadIds?.push(node.threadId);
           this.threadIdCounter++;
         }
+      } else if (node.type === "specialVar") {
+        // todo what to do about special vars here?
+        // because technically they're not in a thread at all,
+        // so there are no messages to access.
+        if (!node.threadId) {
+          node.threadId = "0";
+          functionOrGraphNode.threadIds?.push(node.threadId);
+        }
       }
-
-      // todo what to do about special vars here?
-      // because technically they're not in a thread at all,
-      // so there are no messages to access.
     }
   }
 

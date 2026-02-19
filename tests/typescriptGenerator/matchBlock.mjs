@@ -588,6 +588,61 @@ graph.node("main", async (state) => {
 } else {
     __stack.messages[0] = new MessageThread();
 }
+if (__stack.messages[1]) {
+     __stack.messages[1] = MessageThread.fromJSON(__stack.messages[1]);
+} else {
+    __stack.messages[1] = new MessageThread();
+}
+if (__stack.messages[2]) {
+     __stack.messages[2] = MessageThread.fromJSON(__stack.messages[2]);
+} else {
+    __stack.messages[2] = new MessageThread();
+}
+if (__stack.messages[3]) {
+     __stack.messages[3] = MessageThread.fromJSON(__stack.messages[3]);
+} else {
+    __stack.messages[3] = new MessageThread();
+}
+if (__stack.messages[4]) {
+     __stack.messages[4] = MessageThread.fromJSON(__stack.messages[4]);
+} else {
+    __stack.messages[4] = new MessageThread();
+}
+if (__stack.messages[5]) {
+     __stack.messages[5] = MessageThread.fromJSON(__stack.messages[5]);
+} else {
+    __stack.messages[5] = new MessageThread();
+}
+if (__stack.messages[6]) {
+     __stack.messages[6] = MessageThread.fromJSON(__stack.messages[6]);
+} else {
+    __stack.messages[6] = new MessageThread();
+}
+if (__stack.messages[7]) {
+     __stack.messages[7] = MessageThread.fromJSON(__stack.messages[7]);
+} else {
+    __stack.messages[7] = new MessageThread();
+}
+if (__stack.messages[8]) {
+     __stack.messages[8] = MessageThread.fromJSON(__stack.messages[8]);
+} else {
+    __stack.messages[8] = new MessageThread();
+}
+if (__stack.messages[9]) {
+     __stack.messages[9] = MessageThread.fromJSON(__stack.messages[9]);
+} else {
+    __stack.messages[9] = new MessageThread();
+}
+if (__stack.messages[10]) {
+     __stack.messages[10] = MessageThread.fromJSON(__stack.messages[10]);
+} else {
+    __stack.messages[10] = new MessageThread();
+}
+if (__stack.messages[11]) {
+     __stack.messages[11] = MessageThread.fromJSON(__stack.messages[11]);
+} else {
+    __stack.messages[11] = new MessageThread();
+}
 
     // if (state.messages) {
     //   __stack.messages[0].setMessages(state.messages);

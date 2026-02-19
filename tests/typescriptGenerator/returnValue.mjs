@@ -583,11 +583,7 @@ graph.node("main", async (state) => {
 
     const __self = __stack.locals;
 
-    if (__stack.messages[0]) {
-     __stack.messages[0] = MessageThread.fromJSON(__stack.messages[0]);
-} else {
-    __stack.messages[0] = new MessageThread();
-}
+    
 
     // if (state.messages) {
     //   __stack.messages[0].setMessages(state.messages);

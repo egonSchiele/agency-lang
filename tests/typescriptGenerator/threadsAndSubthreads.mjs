@@ -583,9 +583,6 @@ export async function foo(args, __metadata={}) {
         
 
 
-__stack.messages[1] = __stack.messages[0].newChild();
-
-
 
 async function _res1(__metadata) {
   const __prompt = `What are the first 5 prime numbers?`;
@@ -734,7 +731,7 @@ async function _res1(__metadata) {
 
 
 __self.res1 = await _res1({
-      messages: __stack.messages[1]?.getMessages(),
+      messages: __stack.messages[0]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -748,8 +745,7 @@ if (isInterrupt(__self.res1)) {
 
 
 
-__stack.messages[2] = __stack.messages[1].newSubthreadChild();
-
+__stack.messages[1] = __stack.messages[0].newSubthreadChild();
 
 
 
@@ -900,7 +896,7 @@ async function _res2(__metadata) {
 
 
 __self.res2 = await _res2({
-      messages: __stack.messages[2]?.getMessages(),
+      messages: __stack.messages[1]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -914,8 +910,7 @@ if (isInterrupt(__self.res2)) {
 
 
 
-__stack.messages[3] = __stack.messages[2].newSubthreadChild();
-
+__stack.messages[2] = __stack.messages[1].newSubthreadChild();
 
 
 
@@ -1066,7 +1061,7 @@ async function _res3(__metadata) {
 
 
 __self.res3 = await _res3({
-      messages: __stack.messages[3]?.getMessages(),
+      messages: __stack.messages[2]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -1083,9 +1078,6 @@ if (isInterrupt(__self.res3)) {
 // __stack.messages = __stack.prevMessages;
 
 
-
-
-__stack.messages[4] = __stack.messages[2].newChild();
 
 
 
@@ -1236,7 +1228,7 @@ async function _res5(__metadata) {
 
 
 __self.res5 = await _res5({
-      messages: __stack.messages[4]?.getMessages(),
+      messages: __stack.messages[3]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -1258,8 +1250,7 @@ if (isInterrupt(__self.res5)) {
 
 
 
-__stack.messages[5] = __stack.messages[1].newSubthreadChild();
-
+__stack.messages[4] = __stack.messages[0].newSubthreadChild();
 
 
 
@@ -1410,7 +1401,7 @@ async function _res4(__metadata) {
 
 
 __self.res4 = await _res4({
-      messages: __stack.messages[5]?.getMessages(),
+      messages: __stack.messages[4]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -1500,10 +1491,10 @@ graph.node("main", async (state) => {
 
     const __self = __stack.locals;
 
-    if (__stack.messages[0]) {
-     __stack.messages[0] = MessageThread.fromJSON(__stack.messages[0]);
+    if (__stack.messages[5]) {
+     __stack.messages[5] = MessageThread.fromJSON(__stack.messages[5]);
 } else {
-    __stack.messages[0] = new MessageThread();
+    __stack.messages[5] = new MessageThread();
 }
 if (__stack.messages[6]) {
      __stack.messages[6] = MessageThread.fromJSON(__stack.messages[6]);
@@ -1525,10 +1516,30 @@ if (__stack.messages[9]) {
 } else {
     __stack.messages[9] = new MessageThread();
 }
-if (__stack.messages[10]) {
-     __stack.messages[10] = MessageThread.fromJSON(__stack.messages[10]);
+if (__stack.messages[15]) {
+     __stack.messages[15] = MessageThread.fromJSON(__stack.messages[15]);
 } else {
-    __stack.messages[10] = new MessageThread();
+    __stack.messages[15] = new MessageThread();
+}
+if (__stack.messages[16]) {
+     __stack.messages[16] = MessageThread.fromJSON(__stack.messages[16]);
+} else {
+    __stack.messages[16] = new MessageThread();
+}
+if (__stack.messages[17]) {
+     __stack.messages[17] = MessageThread.fromJSON(__stack.messages[17]);
+} else {
+    __stack.messages[17] = new MessageThread();
+}
+if (__stack.messages[18]) {
+     __stack.messages[18] = MessageThread.fromJSON(__stack.messages[18]);
+} else {
+    __stack.messages[18] = new MessageThread();
+}
+if (__stack.messages[19]) {
+     __stack.messages[19] = MessageThread.fromJSON(__stack.messages[19]);
+} else {
+    __stack.messages[19] = new MessageThread();
 }
 
     // if (state.messages) {
@@ -1545,9 +1556,6 @@ if (__stack.messages[10]) {
 
       if (__step <= 1) {
         
-
-
-__stack.messages[6] = __stack.messages[0].newChild();
 
 
 
@@ -1698,7 +1706,7 @@ async function _res1(__metadata) {
 
 
 __self.res1 = await _res1({
-      messages: __stack.messages[6]?.getMessages(),
+      messages: __stack.messages[5]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -1712,8 +1720,7 @@ if (isInterrupt(__self.res1)) {
 
 
 
-__stack.messages[7] = __stack.messages[6].newSubthreadChild();
-
+__stack.messages[6] = __stack.messages[5].newSubthreadChild();
 
 
 
@@ -1864,7 +1871,7 @@ async function _res2(__metadata) {
 
 
 __self.res2 = await _res2({
-      messages: __stack.messages[7]?.getMessages(),
+      messages: __stack.messages[6]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -1878,8 +1885,7 @@ if (isInterrupt(__self.res2)) {
 
 
 
-__stack.messages[8] = __stack.messages[7].newSubthreadChild();
-
+__stack.messages[7] = __stack.messages[6].newSubthreadChild();
 
 
 
@@ -2030,7 +2036,7 @@ async function _res3(__metadata) {
 
 
 __self.res3 = await _res3({
-      messages: __stack.messages[8]?.getMessages(),
+      messages: __stack.messages[7]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -2047,9 +2053,6 @@ if (isInterrupt(__self.res3)) {
 // __stack.messages = __stack.prevMessages;
 
 
-
-
-__stack.messages[9] = __stack.messages[7].newChild();
 
 
 
@@ -2200,7 +2203,7 @@ async function _res5(__metadata) {
 
 
 __self.res5 = await _res5({
-      messages: __stack.messages[9]?.getMessages(),
+      messages: __stack.messages[8]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -2222,8 +2225,7 @@ if (isInterrupt(__self.res5)) {
 
 
 
-__stack.messages[10] = __stack.messages[6].newSubthreadChild();
-
+__stack.messages[9] = __stack.messages[5].newSubthreadChild();
 
 
 
@@ -2374,7 +2376,7 @@ async function _res4(__metadata) {
 
 
 __self.res4 = await _res4({
-      messages: __stack.messages[10]?.getMessages(),
+      messages: __stack.messages[9]?.getMessages(),
     });
 
 // return early from node if this is an interrupt

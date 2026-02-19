@@ -598,6 +598,11 @@ if (__stack.messages[2]) {
 } else {
     __stack.messages[2] = new MessageThread();
 }
+if (__stack.messages[3]) {
+     __stack.messages[3] = MessageThread.fromJSON(__stack.messages[3]);
+} else {
+    __stack.messages[3] = new MessageThread();
+}
 
     // if (state.messages) {
     //   __stack.messages[0].setMessages(state.messages);
@@ -751,7 +756,7 @@ async function _response(__metadata) {
 
 
 __self.response = _response({
-      messages: __stack.messages[1]?.getMessages(),
+      messages: __stack.messages[0]?.getMessages(),
     });
         __stack.step++;
       }

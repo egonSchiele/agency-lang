@@ -598,6 +598,21 @@ if (__stack.messages[2]) {
 } else {
     __stack.messages[2] = new MessageThread();
 }
+if (__stack.messages[3]) {
+     __stack.messages[3] = MessageThread.fromJSON(__stack.messages[3]);
+} else {
+    __stack.messages[3] = new MessageThread();
+}
+if (__stack.messages[4]) {
+     __stack.messages[4] = MessageThread.fromJSON(__stack.messages[4]);
+} else {
+    __stack.messages[4] = new MessageThread();
+}
+if (__stack.messages[5]) {
+     __stack.messages[5] = MessageThread.fromJSON(__stack.messages[5]);
+} else {
+    __stack.messages[5] = new MessageThread();
+}
 
     // if (state.messages) {
     //   __stack.messages[0].setMessages(state.messages);
@@ -767,7 +782,7 @@ async function _response1(msg, __metadata) {
 
 
 __self.response1 = _response1(__stack.locals.msg, {
-      messages: __stack.messages[1]?.getMessages(),
+      messages: __stack.messages[2]?.getMessages(),
     });
         __stack.step++;
       }
@@ -927,7 +942,7 @@ async function _response2(msg, __metadata) {
 
 
 __self.response2 = _response2(__stack.locals.msg, {
-      messages: __stack.messages[2]?.getMessages(),
+      messages: __stack.messages[4]?.getMessages(),
     });
         __stack.step++;
       }

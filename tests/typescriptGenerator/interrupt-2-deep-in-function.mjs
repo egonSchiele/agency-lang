@@ -822,7 +822,7 @@ async function _response(name, age, __metadata) {
 
 
 __self.response = await _response(__stack.args.name, __stack.locals.age, {
-      messages: __stack.messages[1]?.getMessages(),
+      messages: __stack.messages[2]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -886,10 +886,25 @@ graph.node("sayHi", async (state) => {
 
     const __self = __stack.locals;
 
-    if (__stack.messages[0]) {
-     __stack.messages[0] = MessageThread.fromJSON(__stack.messages[0]);
+    if (__stack.messages[4]) {
+     __stack.messages[4] = MessageThread.fromJSON(__stack.messages[4]);
 } else {
-    __stack.messages[0] = new MessageThread();
+    __stack.messages[4] = new MessageThread();
+}
+if (__stack.messages[5]) {
+     __stack.messages[5] = MessageThread.fromJSON(__stack.messages[5]);
+} else {
+    __stack.messages[5] = new MessageThread();
+}
+if (__stack.messages[6]) {
+     __stack.messages[6] = MessageThread.fromJSON(__stack.messages[6]);
+} else {
+    __stack.messages[6] = new MessageThread();
+}
+if (__stack.messages[7]) {
+     __stack.messages[7] = MessageThread.fromJSON(__stack.messages[7]);
+} else {
+    __stack.messages[7] = new MessageThread();
 }
 
     // if (state.messages) {
@@ -932,7 +947,7 @@ graph.node("sayHi", async (state) => {
         __stack.locals.response = foo2([__stack.args.name, __stack.locals.age], {
         statelogClient,
         graph: __graph,
-        messages: __stack.messages[0].getMessages(),
+        messages: __stack.messages[5].getMessages(),
       });
 
 

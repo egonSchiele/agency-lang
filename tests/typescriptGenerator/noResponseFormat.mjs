@@ -742,7 +742,7 @@ async function _response1(__metadata) {
 
 
 __self.response1 = _response1({
-      messages: __stack.messages[1]?.getMessages(),
+      messages: __stack.messages[0]?.getMessages(),
     });
         __stack.step++;
       }

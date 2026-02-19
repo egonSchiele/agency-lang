@@ -27,7 +27,7 @@
                   }
                 ],
                 "async": false,
-                "threadId": "1"
+                "threadId": "0"
               },
               "scope": "node"
             },
@@ -50,7 +50,7 @@
                   }
                 ],
                 "async": false,
-                "threadId": "1"
+                "threadId": "0"
               },
               "scope": "node"
             },
@@ -58,7 +58,7 @@
               "type": "newLine"
             }
           ],
-          "threadId": "1",
+          "threadId": "0",
           "parentThreadId": "0"
         },
         {
@@ -76,8 +76,7 @@
         }
       ],
       "threadIds": [
-        "0",
-        "1"
+        "0"
       ]
     },
     {

@@ -754,7 +754,7 @@ async function _result(input, __metadata) {
 
 
 __self.result = _result(__stack.args.input, {
-      messages: __stack.messages[1]?.getMessages(),
+      messages: __stack.messages[0]?.getMessages(),
     });
         __stack.step++;
       }

@@ -728,7 +728,7 @@ async function _response(msg, __metadata) {
 
 
 __self.response = _response(__stack.locals.msg, {
-      messages: __stack.messages[1]?.getMessages(),
+      messages: __stack.messages[0]?.getMessages(),
     });
 
 
@@ -926,7 +926,7 @@ async function _response(msg, __metadata) {
 
 
 __self.response = _response(__stack.locals.msg, {
-      messages: __stack.messages[2]?.getMessages(),
+      messages: __stack.messages[1]?.getMessages(),
     });
 
 
@@ -1130,7 +1130,7 @@ async function ___promptVar(__metadata) {
 
 
 __self.__promptVar = await ___promptVar({
-      messages: __stack.messages[3]?.getMessages(),
+      messages: __stack.messages[2]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -1184,10 +1184,30 @@ graph.node("main", async (state) => {
 
     const __self = __stack.locals;
 
-    if (__stack.messages[0]) {
-     __stack.messages[0] = MessageThread.fromJSON(__stack.messages[0]);
+    if (__stack.messages[3]) {
+     __stack.messages[3] = MessageThread.fromJSON(__stack.messages[3]);
 } else {
-    __stack.messages[0] = new MessageThread();
+    __stack.messages[3] = new MessageThread();
+}
+if (__stack.messages[4]) {
+     __stack.messages[4] = MessageThread.fromJSON(__stack.messages[4]);
+} else {
+    __stack.messages[4] = new MessageThread();
+}
+if (__stack.messages[5]) {
+     __stack.messages[5] = MessageThread.fromJSON(__stack.messages[5]);
+} else {
+    __stack.messages[5] = new MessageThread();
+}
+if (__stack.messages[6]) {
+     __stack.messages[6] = MessageThread.fromJSON(__stack.messages[6]);
+} else {
+    __stack.messages[6] = new MessageThread();
+}
+if (__stack.messages[7]) {
+     __stack.messages[7] = MessageThread.fromJSON(__stack.messages[7]);
+} else {
+    __stack.messages[7] = new MessageThread();
 }
 
     // if (state.messages) {
@@ -1220,7 +1240,7 @@ if (isInterrupt(__stack.locals.msg)) {
         __stack.locals.res2 = google([__stack.locals.msg], {
         statelogClient,
         graph: __graph,
-        messages: __stack.messages[0].getMessages(),
+        messages: __stack.messages[4].getMessages(),
       });
 
 
@@ -1238,7 +1258,7 @@ if (isInterrupt(__stack.locals.res2)) {
         __stack.locals.res1 = openai([__stack.locals.msg], {
         statelogClient,
         graph: __graph,
-        messages: __stack.messages[0].getMessages(),
+        messages: __stack.messages[5].getMessages(),
       });
 
 

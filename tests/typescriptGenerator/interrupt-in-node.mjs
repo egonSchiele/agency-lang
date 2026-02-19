@@ -630,15 +630,20 @@ graph.node("foo2", async (state) => {
 
     const __self = __stack.locals;
 
-    if (__stack.messages[0]) {
-     __stack.messages[0] = MessageThread.fromJSON(__stack.messages[0]);
-} else {
-    __stack.messages[0] = new MessageThread();
-}
-if (__stack.messages[1]) {
+    if (__stack.messages[1]) {
      __stack.messages[1] = MessageThread.fromJSON(__stack.messages[1]);
 } else {
     __stack.messages[1] = new MessageThread();
+}
+if (__stack.messages[2]) {
+     __stack.messages[2] = MessageThread.fromJSON(__stack.messages[2]);
+} else {
+    __stack.messages[2] = new MessageThread();
+}
+if (__stack.messages[3]) {
+     __stack.messages[3] = MessageThread.fromJSON(__stack.messages[3]);
+} else {
+    __stack.messages[3] = new MessageThread();
 }
 
     // if (state.messages) {
@@ -861,7 +866,7 @@ async function _response(name, age, __metadata) {
 
 
 __self.response = await _response(__stack.args.name, __stack.locals.age, {
-      messages: __stack.messages[1]?.getMessages(),
+      messages: __stack.messages[2]?.getMessages(),
     });
 
 // return early from node if this is an interrupt
@@ -928,10 +933,15 @@ graph.node("sayHi", async (state) => {
 
     const __self = __stack.locals;
 
-    if (__stack.messages[0]) {
-     __stack.messages[0] = MessageThread.fromJSON(__stack.messages[0]);
+    if (__stack.messages[4]) {
+     __stack.messages[4] = MessageThread.fromJSON(__stack.messages[4]);
 } else {
-    __stack.messages[0] = new MessageThread();
+    __stack.messages[4] = new MessageThread();
+}
+if (__stack.messages[5]) {
+     __stack.messages[5] = MessageThread.fromJSON(__stack.messages[5]);
+} else {
+    __stack.messages[5] = new MessageThread();
 }
 
     // if (state.messages) {

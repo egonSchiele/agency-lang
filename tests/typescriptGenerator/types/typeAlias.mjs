@@ -754,7 +754,7 @@ async function _foo(__metadata) {
 
 
 __self.foo = _foo({
-      messages: __stack.messages[1]?.getMessages(),
+      messages: __stack.messages[0]?.getMessages(),
     });
         __stack.step++;
       }

@@ -99,9 +99,7 @@
         }
       ],
       "async": true,
-      "threadIds": [
-        "0"
-      ]
+      "threadIds": []
     },
     {
       "type": "newLine"
@@ -139,9 +137,7 @@
           "type": "newLine"
         }
       ],
-      "threadIds": [
-        "0"
-      ]
+      "threadIds": []
     },
     {
       "type": "newLine"

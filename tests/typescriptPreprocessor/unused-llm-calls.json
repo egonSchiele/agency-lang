@@ -35,7 +35,7 @@
             },
             "skills": [],
             "async": true,
-            "threadId": "1"
+            "threadId": "0"
           },
           "scope": "node"
         },
@@ -57,7 +57,7 @@
             }
           ],
           "async": false,
-          "threadId": "0"
+          "threadId": "1"
         },
         {
           "type": "newLine"

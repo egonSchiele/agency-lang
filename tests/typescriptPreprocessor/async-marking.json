@@ -25,9 +25,7 @@
         }
       ],
       "async": true,
-      "threadIds": [
-        "0"
-      ]
+      "threadIds": []
     },
     {
       "type": "newLine"
@@ -68,7 +66,7 @@
             },
             "skills": [],
             "async": true,
-            "threadId": "1"
+            "threadId": "0"
           },
           "scope": "node"
         },
@@ -93,8 +91,7 @@
       ],
       "async": true,
       "threadIds": [
-        "0",
-        "1"
+        "0"
       ]
     },
     {
@@ -127,7 +124,7 @@
               }
             ],
             "async": true,
-            "threadId": "0"
+            "threadId": "1"
           },
           "scope": "node"
         },
@@ -152,7 +149,7 @@
               }
             ],
             "async": true,
-            "threadId": "0"
+            "threadId": "2"
           },
           "scope": "node"
         },
@@ -198,7 +195,7 @@
             },
             "skills": [],
             "async": true,
-            "threadId": "2"
+            "threadId": "3"
           },
           "scope": "node"
         },
@@ -220,15 +217,17 @@
             }
           ],
           "async": false,
-          "threadId": "0"
+          "threadId": "4"
         },
         {
           "type": "newLine"
         }
       ],
       "threadIds": [
-        "0",
-        "2"
+        "1",
+        "2",
+        "3",
+        "4"
       ]
     },
     {

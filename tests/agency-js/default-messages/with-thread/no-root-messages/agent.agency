@@ -1,0 +1,15 @@
+// as part of a return value, a node will return the messages that were sent to the LLM
+// this tests what that array of messages looks like, not returned by the user,
+// but as a side-effect of the node returning.
+//
+// The returned messages array has one value: the single thread that we create.
+
+node primes() {
+  msgs = thread {
+    res1: number[] = llm("What are the first 5 prime numbers?")
+    res2: number[] = llm("What are the next 2 prime numbers after those?")
+  }
+  // still going to return the messages, otherwise the optimizer
+  // will remove the thread and the LLM calls, since they aren't used
+  return msgs
+}

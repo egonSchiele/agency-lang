@@ -184,13 +184,13 @@ program
   .command("test")
   .description("Run tests")
   .argument("[inputs...]", "Paths to .test.json files or directories")
-  .option("--ts", "Run TypeScript integration tests")
+  .option("--js", "Run JavaScript integration tests")
   .action(
     async (
       testFile: string[],
-      opts: { ts?: boolean; genFixtures?: boolean },
+      opts: { js?: boolean; genFixtures?: boolean },
     ) => {
-      if (opts.ts) {
+      if (opts.js) {
         await testTs(getConfig(), testFile);
       } else {
         for (const file of testFile) {

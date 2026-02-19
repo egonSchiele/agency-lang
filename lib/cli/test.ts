@@ -375,9 +375,7 @@ function findTsTestDirs(_inputPath: string): string[] {
     if (inputPath.endsWith("test.js")) {
       inputPath = path.dirname(inputPath);
     } else {
-      console.error(
-        `Error: ${inputPath} is not a directory or a test.js file`,
-      );
+      console.error(`Error: ${inputPath} is not a directory or a test.js file`);
       process.exit(1);
     }
   }
@@ -439,7 +437,7 @@ export async function testTs(config: AgencyConfig, inputPaths: string[]) {
       }
 
       // Execute test.js
-      const testFile = path.join(dir, "test.js");
+      const testFile = "test.js";
       try {
         execSync(`node ${testFile}`, {
           cwd: dir,

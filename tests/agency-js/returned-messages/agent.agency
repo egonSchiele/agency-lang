@@ -1,0 +1,9 @@
+// tests what messages look like when they're returned to ts
+// from a node
+node primes() {
+  msgs = thread {
+    res1: number[] = llm("What are the first 5 prime numbers?")
+    res2: number[] = llm("What are the next 2 prime numbers after those?")
+  }
+  return msgs
+}

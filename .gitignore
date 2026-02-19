@@ -7,3 +7,4 @@ __evaluate.*
 __judge*
 *.js
 skills/*
+*__result.json

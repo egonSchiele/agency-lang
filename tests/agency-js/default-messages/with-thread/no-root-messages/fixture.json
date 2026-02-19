@@ -1,0 +1,25 @@
+{
+  "messages": [
+    {
+      "messages": [
+        {
+          "role": "user",
+          "content": "What are the first 5 prime numbers?"
+        },
+        {
+          "role": "assistant",
+          "content": "{\"response\":[2,3,5,7,11]}"
+        },
+        {
+          "role": "user",
+          "content": "What are the next 2 prime numbers after those?"
+        },
+        {
+          "role": "assistant",
+          "content": "{\"response\":[13,17]}"
+        }
+      ],
+      "children": []
+    }
+  ]
+}

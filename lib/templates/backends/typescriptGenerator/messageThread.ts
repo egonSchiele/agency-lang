@@ -7,9 +7,6 @@ export const template = `
 {{#isSubthread}}
 __stack.messages[{{{threadId:string}}}] = __stack.messages[{{{parentThreadId:string}}}].newSubthreadChild();
 {{/isSubthread}}
-{{^isSubthread}}
-__stack.messages[{{{threadId:string}}}] = __stack.messages[{{{parentThreadId:string}}}].newChild();
-{{/isSubthread}}
 
 {{{bodyCode:string}}}
 {{#hasVar}}

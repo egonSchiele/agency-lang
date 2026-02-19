@@ -49,10 +49,9 @@ describe("commentParser", () => {
       },
     },
 
-    // Empty comment (fails because many1Till requires at least one char)
     {
       input: "//\n",
-      expected: { success: false },
+      expected: { success: true, result: { type: "comment", content: "" } },
     },
 
     // Comments with tabs and spaces

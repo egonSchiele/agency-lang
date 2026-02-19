@@ -76,7 +76,7 @@ export class TypescriptPreprocessor {
             node.type == "graphNode" ? node.nodeName : node.functionName,
           ),
         ); */
-        node.threadIds = [ROOT_THREAD_ID];
+        node.threadIds = [];
         this._addNodeIDsToMessageThreads(node.body, node);
       }
     }
@@ -104,7 +104,7 @@ export class TypescriptPreprocessor {
   protected _addNodeIDsToMessageThreads(
     body: AgencyNode[],
     functionOrGraphNode: FunctionDefinition | GraphNodeDefinition,
-    parentId = 0,
+    parentId = "0",
     _ancestors: AgencyNode[] = [],
     _scopes: Scope[] = [],
   ): void {
@@ -121,22 +121,22 @@ export class TypescriptPreprocessor {
       if (node.type === "assignment" && node.value.type === "messageThread")
         messageThreadNode = node.value as MessageThread;
       if (messageThreadNode && !messageThreadNode.threadId) {
-        this.threadIdCounter++;
         /* console.log(
           color.green(
             "incrementing threadIdCounter for message thread, new value:",
-          ),
-          this.threadIdCounter,
-          "thread content:",
-          messageThreadNode.body,
-        ); */
+            ),
+            this.threadIdCounter,
+            "thread content:",
+            messageThreadNode.body,
+            ); */
         messageThreadNode.threadId = this.threadIdCounter.toString();
         messageThreadNode.parentThreadId = parentId.toString();
+        this.threadIdCounter++;
         functionOrGraphNode.threadIds?.push(messageThreadNode.threadId);
         this._addNodeIDsToMessageThreads(
           messageThreadNode.body,
           functionOrGraphNode,
-          this.threadIdCounter,
+          messageThreadNode.threadId,
           [...ancestors, node],
           scopes,
         );
@@ -213,16 +213,22 @@ export class TypescriptPreprocessor {
           "prompt content:",
           promptNode.segments,
         ); */
-        this.threadIdCounter++;
         promptNode.threadId = this.threadIdCounter.toString();
         functionOrGraphNode.threadIds?.push(promptNode.threadId);
+        this.threadIdCounter++;
       }
 
-      if (node.type === "functionCall" || node.type === "specialVar") {
+      if (node.type === "functionCall") {
         if (!node.threadId) {
-          node.threadId = ROOT_THREAD_ID;
+          node.threadId = this.threadIdCounter.toString();
+          functionOrGraphNode.threadIds?.push(node.threadId);
+          this.threadIdCounter++;
         }
       }
+
+      // todo what to do about special vars here?
+      // because technically they're not in a thread at all,
+      // so there are no messages to access.
     }
   }
 

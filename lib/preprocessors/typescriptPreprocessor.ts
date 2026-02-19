@@ -120,8 +120,16 @@ export class TypescriptPreprocessor {
 
       if (node.type === "assignment" && node.value.type === "messageThread")
         messageThreadNode = node.value as MessageThread;
-      if (messageThreadNode) {
+      if (messageThreadNode && !messageThreadNode.threadId) {
         this.threadIdCounter++;
+        /* console.log(
+          color.green(
+            "incrementing threadIdCounter for message thread, new value:",
+          ),
+          this.threadIdCounter,
+          "thread content:",
+          messageThreadNode.body,
+        ); */
         messageThreadNode.threadId = this.threadIdCounter.toString();
         messageThreadNode.parentThreadId = parentId.toString();
         functionOrGraphNode.threadIds?.push(messageThreadNode.threadId);
@@ -161,7 +169,15 @@ export class TypescriptPreprocessor {
       if (node.type === "returnStatement" && node.value.type === "prompt")
         promptNode = node.value as PromptLiteral;
 
-      if (promptNode) {
+      if (promptNode && !promptNode.threadId) {
+        /* console.log(
+          color.magenta(
+            "setting threadId for prompt, threadId:",
+            parentId,
+            "prompt content:",
+            JSON.stringify(promptNode),
+          ),
+        ); */
         promptNode.threadId = parentId.toString();
       }
 
@@ -191,6 +207,12 @@ export class TypescriptPreprocessor {
       if (node.type === "returnStatement" && node.value.type === "prompt")
         promptNode = node.value as PromptLiteral;
       if (promptNode && !promptNode.threadId) {
+        /* console.log(
+          color.magenta("incrementing threadIdCounter for prompt, new value:"),
+          this.threadIdCounter,
+          "prompt content:",
+          promptNode.segments,
+        ); */
         this.threadIdCounter++;
         promptNode.threadId = this.threadIdCounter.toString();
         functionOrGraphNode.threadIds?.push(promptNode.threadId);

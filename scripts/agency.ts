@@ -11,7 +11,7 @@ import {
   run,
 } from "@/cli/commands.js";
 import { evaluate } from "@/cli/evaluate.js";
-import { fixtures, test } from "@/cli/test.js";
+import { fixtures, test, testTs } from "@/cli/test.js";
 import { AgencyConfig } from "@/config.js";
 import { _parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
@@ -184,11 +184,21 @@ program
   .command("test")
   .description("Run tests")
   .argument("[inputs...]", "Paths to .test.json files or directories")
-  .action(async (testFile: string[]) => {
-    for (const file of testFile) {
-      await test(getConfig(), file);
-    }
-  });
+  .option("--ts", "Run TypeScript integration tests")
+  .action(
+    async (
+      testFile: string[],
+      opts: { ts?: boolean; genFixtures?: boolean },
+    ) => {
+      if (opts.ts) {
+        await testTs(getConfig(), testFile);
+      } else {
+        for (const file of testFile) {
+          await test(getConfig(), file);
+        }
+      }
+    },
+  );
 
 program
   .command("diagnostics")

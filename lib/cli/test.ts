@@ -15,6 +15,8 @@ import {
 import { color } from "termcolors";
 import { AgencyConfig } from "@/config.js";
 import path from "path";
+import { compile } from "./commands.js";
+import { execSync } from "child_process";
 type Exact = { type: "exact" };
 type LLMJudge = {
   type: "llmJudge";
@@ -131,16 +133,19 @@ export async function fixtures(config: AgencyConfig, target?: string) {
   ) {
     console.log(`\n⚠️  Interrupt detected: "${json.data.data}"`);
 
-    const actionResponse = await prompts({
-      type: "select",
-      name: "action",
-      message: "How should the test handle this interrupt?",
-      choices: [
-        { title: "Approve", value: "approve" },
-        { title: "Reject", value: "reject" },
-        { title: "Modify arguments", value: "modify" },
-      ],
-    }, { onCancel });
+    const actionResponse = await prompts(
+      {
+        type: "select",
+        name: "action",
+        message: "How should the test handle this interrupt?",
+        choices: [
+          { title: "Approve", value: "approve" },
+          { title: "Reject", value: "reject" },
+          { title: "Modify arguments", value: "modify" },
+        ],
+      },
+      { onCancel },
+    );
 
     if (!actionResponse.action) {
       console.log("Interrupt handling cancelled.");
@@ -155,11 +160,14 @@ export async function fixtures(config: AgencyConfig, target?: string) {
     if (actionResponse.action === "modify") {
       let invalidJSON = true;
       while (invalidJSON) {
-        const modifyResponse = await prompts({
-          type: "text",
-          name: "args",
-          message: "Enter modified arguments as JSON object:",
-        }, { onCancel });
+        const modifyResponse = await prompts(
+          {
+            type: "text",
+            name: "args",
+            message: "Enter modified arguments as JSON object:",
+          },
+          { onCancel },
+        );
         if (!modifyResponse.args) {
           console.log("Interrupt handling cancelled.");
           return;
@@ -190,52 +198,64 @@ export async function fixtures(config: AgencyConfig, target?: string) {
   console.log("\nFinal Output:");
   console.log(JSON.stringify(json.data, null, 2));
 
-  const correctResponse = await prompts({
-    type: "confirm",
-    name: "correct",
-    message: "Does this output look correct?",
-    initial: true,
-  }, { onCancel });
+  const correctResponse = await prompts(
+    {
+      type: "confirm",
+      name: "correct",
+      message: "Does this output look correct?",
+      initial: true,
+    },
+    { onCancel },
+  );
 
   let expectedOutput: string;
   if (correctResponse.correct) {
     expectedOutput = JSON.stringify(json.data);
   } else {
-    const expectedResponse = await prompts({
-      type: "text",
-      name: "expected",
-      message: "What should the correct output look like?",
-    }, { onCancel });
+    const expectedResponse = await prompts(
+      {
+        type: "text",
+        name: "expected",
+        message: "What should the correct output look like?",
+      },
+      { onCancel },
+    );
     expectedOutput = expectedResponse.expected;
   }
 
-  const criteriaResponse = await prompts({
-    type: "select",
-    name: "criteria",
-    message: "Select evaluation criteria:",
-    choices: [
-      { title: "Exact match", value: "exact" },
-      { title: "LLM Judge", value: "llmJudge" },
-    ],
-  }, { onCancel });
+  const criteriaResponse = await prompts(
+    {
+      type: "select",
+      name: "criteria",
+      message: "Select evaluation criteria:",
+      choices: [
+        { title: "Exact match", value: "exact" },
+        { title: "LLM Judge", value: "llmJudge" },
+      ],
+    },
+    { onCancel },
+  );
 
   let criteria: Criteria[];
   if (criteriaResponse.criteria === "exact") {
     criteria = [{ type: "exact" }];
   } else {
-    const judgeResponse = await prompts([
-      {
-        type: "text",
-        name: "judgePrompt",
-        message: "Enter the judge prompt (what should the LLM evaluate?):",
-      },
-      {
-        type: "number",
-        name: "desiredAccuracy",
-        message: "Desired accuracy (0-100):",
-        initial: 80,
-      },
-    ], { onCancel });
+    const judgeResponse = await prompts(
+      [
+        {
+          type: "text",
+          name: "judgePrompt",
+          message: "Enter the judge prompt (what should the LLM evaluate?):",
+        },
+        {
+          type: "number",
+          name: "desiredAccuracy",
+          message: "Desired accuracy (0-100):",
+          initial: 80,
+        },
+      ],
+      { onCancel },
+    );
     criteria = [
       {
         type: "llmJudge",
@@ -346,4 +366,141 @@ export async function test(config: AgencyConfig, testFile: string) {
   }
 
   console.log(`\n${passed}/${total} tests passed`);
+}
+
+function findTsTestDirs(_inputPath: string): string[] {
+  const stats = fs.statSync(_inputPath);
+  let inputPath = _inputPath;
+  if (!stats.isDirectory()) {
+    if (inputPath.endsWith("test.js")) {
+      inputPath = path.dirname(inputPath);
+    } else {
+      console.error(
+        `Error: ${inputPath} is not a directory or a test.js file`,
+      );
+      process.exit(1);
+    }
+  }
+
+  // Check if inputPath itself is a test dir (contains test.js)
+  if (fs.existsSync(path.join(inputPath, "test.js"))) {
+    return [inputPath];
+  }
+
+  // Otherwise find subdirectories containing test.js
+  const dirs: string[] = [];
+  for (const entry of fs.readdirSync(inputPath)) {
+    const fullPath = path.join(inputPath, entry);
+    if (fs.statSync(fullPath).isDirectory()) {
+      dirs.push(...findTsTestDirs(fullPath));
+    }
+  }
+  return dirs;
+}
+
+function findAgencyFile(dir: string): string | null {
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".agency"));
+  return files.length > 0 ? files[0] : null;
+}
+
+export async function testTs(config: AgencyConfig, inputPaths: string[]) {
+  const successes: string[] = [];
+  const failures: string[] = [];
+
+  for (const inputPath of inputPaths) {
+    const testDirs = findTsTestDirs(inputPath);
+
+    if (testDirs.length === 0) {
+      console.log(
+        color.yellow(`No TypeScript test directories found in ${inputPath}`),
+      );
+      continue;
+    }
+
+    for (const dir of testDirs) {
+      const dirName = path.basename(dir);
+      console.log(color.yellow(`\nRunning TS test: ${dirName}`));
+
+      const agencyFile = findAgencyFile(dir);
+      if (!agencyFile) {
+        console.log(color.red(`  ✗ No .agency file found in ${dir}`));
+        failures.push(dir);
+        continue;
+      }
+
+      // Compile the .agency file
+      const agencyPath = path.join(dir, agencyFile);
+      try {
+        compile(config, agencyPath);
+      } catch (e) {
+        console.log(color.red(`  ✗ Compilation failed: ${e}`));
+        failures.push(dir);
+        continue;
+      }
+
+      // Execute test.js
+      const testFile = path.join(dir, "test.js");
+      try {
+        execSync(`node ${testFile}`, {
+          cwd: dir,
+          stdio: "inherit",
+        });
+      } catch (e) {
+        console.log(color.red(`  ✗ Test script execution failed: ${e}`));
+        failures.push(dir);
+        continue;
+      }
+
+      // Read __result.json
+      const resultFile = path.join(dir, "__result.json");
+      if (!fs.existsSync(resultFile)) {
+        console.log(color.red(`  ✗ Test script did not produce __result.json`));
+        failures.push(dir);
+        continue;
+      }
+
+      const result = fs.readFileSync(resultFile, "utf-8");
+
+      // Compare against fixture.json
+      const fixtureFile = path.join(dir, "fixture.json");
+      if (!fs.existsSync(fixtureFile)) {
+        console.log(color.yellow(`  No fixture.json found. Result:`));
+        console.log(result);
+        const response = await prompts({
+          type: "confirm",
+          name: "save",
+          message: "Save this as the fixture?",
+          initial: true,
+        });
+        if (response.save) {
+          fs.writeFileSync(fixtureFile, result);
+          console.log(color.green(`  Fixture saved to ${fixtureFile}`));
+          successes.push(dir);
+        } else {
+          failures.push(dir);
+        }
+      } else {
+        const expected = fs.readFileSync(fixtureFile, "utf-8");
+        const resultParsed = JSON.parse(result);
+        const expectedParsed = JSON.parse(expected);
+
+        if (JSON.stringify(resultParsed) === JSON.stringify(expectedParsed)) {
+          console.log(color.green(`  ✓ Fixture match passed`));
+          successes.push(dir);
+        } else {
+          console.log(color.red(`  ✗ Fixture match failed`));
+          console.log("    Expected:", JSON.stringify(expectedParsed, null, 2));
+          console.log("    Actual:  ", JSON.stringify(resultParsed, null, 2));
+          failures.push(dir);
+        }
+      }
+    }
+  }
+
+  console.log(
+    `\n${successes.length}/${successes.length + failures.length} TS tests passed`,
+  );
+  if (failures.length > 0) {
+    process.exit(1);
+  }
 }

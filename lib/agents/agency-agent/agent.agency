@@ -1,4 +1,10 @@
+import tool { addTask, listTasks, markTaskDone } from "./subagents/task.agency"
+
+systemPrompt = read("./prompts/system.md")
 node main() {
-  greeting: string = llm("Say hello world and introduce yourself as the Agency language assistant.")
-  print(greeting)
+  thread {
+    system(systemPrompt)
+    greeting: string = llm("Say hello world and introduce yourself as the Agency language assistant.")
+    print(greeting)
+  }
 }

@@ -1,0 +1,21 @@
+// fields that get filled out over time
+type Plan = {
+  desiredActions: string[];
+  requirements: string[];
+  filesToModify: string[];
+  dependencies: string[];
+  potentialChallenges: string[]
+}
+
+// example of iterations of an object
+// type Plan = {
+//   desiredActions: Action[];
+//   requirements: string[];
+//   filesToModify: string[];
+//   dependencies: string[];
+//   potentialChallenges: string[]
+// }
+
+def someTool() {
+  userMsg = interrupt("Agent wants to call someTool with args: ${args}")
+}

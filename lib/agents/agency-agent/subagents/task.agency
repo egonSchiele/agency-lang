@@ -1,0 +1,37 @@
+type Task = {
+  description: string;
+  done: boolean
+}
+
+tasks: Task[] = []
+
+def addTask(description: string): Task {
+  """
+  Adds a task to the task list with the given description and marks it as not done.
+  """
+  task: Task = { 
+    description: description,
+    done: false
+  }
+  tasks.push(task)
+  return task
+}
+
+def listTasks(): Task[] {
+  """
+  Returns the list of tasks.
+  """
+  return tasks
+}
+
+def markTaskDone(index: number): Task[] {
+  """
+  Marks the task at the given index as done
+and return the updated list of tasks.
+  """
+  // todo allow marking multiple tasks as done at once
+  // tasks = [t.done = true
+  // also allow setting a key on an obj in an array!
+  // tasks[index].done = true
+  return tasks
+}

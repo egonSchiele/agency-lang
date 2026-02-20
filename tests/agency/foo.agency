@@ -1,3 +1,3 @@
 node foo() {
-  return "Hi from foo!"
+  return 4 + 5
 }

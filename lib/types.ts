@@ -85,6 +85,11 @@ export type AgencyComment = {
   content: string;
 };
 
+export type AgencyMultiLineComment = {
+  type: "multiLineComment";
+  content: string;
+};
+
 export type NewLine = {
   type: "newLine";
 };
@@ -102,6 +107,7 @@ export type AgencyNode =
   | ReturnStatement
   | ValueAccess
   | AgencyComment
+  | AgencyMultiLineComment
   | AgencyObject
   | AgencyArray
   | ImportStatement

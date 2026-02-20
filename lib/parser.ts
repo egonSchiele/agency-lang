@@ -1,17 +1,13 @@
 import { EgonLog } from "egonlog";
 import {
-  anyChar,
-  between,
   capture,
   eof,
   many,
   or,
   Parser,
   ParserResult,
-  search,
   seqC,
   set,
-  str,
   success,
   trace,
   setInputStr,
@@ -43,6 +39,7 @@ import {
   importToolStatmentParser,
 } from "./parsers/importStatement.js";
 import { matchBlockParser } from "./parsers/matchBlock.js";
+import { multiLineCommentParser } from "./parsers/multiLineComment.js";
 import { newLineParser } from "./parsers/newline.js";
 import { returnStatementParser } from "./parsers/returnStatement.js";
 import { specialVarParser } from "./parsers/specialVar.js";
@@ -81,6 +78,7 @@ export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
         llmPromptFunctionCallParser,
         booleanParser,
         valueAccessParser,
+        multiLineCommentParser,
         commentParser,
         newLineParser,
       ),
@@ -96,18 +94,8 @@ export const agencyParser: Parser<AgencyProgram> = seqC(
   eof,
 );
 
-export const _multilineCommentParser = between(str("/*"), str("*/"), anyChar);
-
-export const multilineCommentParser = search(_multilineCommentParser);
-
 export const normalizeCode = (code: string) => {
-  const comments = multilineCommentParser(code);
-
-  if (!comments.success) {
-    throw new Error(comments.message);
-  }
-
-  return comments.rest
+  return code
     .split("\n")
     .map((line) => line.trim())
     .join("\n");
@@ -117,7 +105,6 @@ export function _parseAgency(
   input: string,
   config: AgencyConfig = {},
 ): ParserResult<AgencyProgram> {
-  // get rid of all multiline comments
   const normalized = normalizeCode(input);
   if (normalized.trim().length === 0) {
     return success(

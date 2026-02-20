@@ -1,0 +1,10 @@
+/* This is a multi-line comment */
+
+x = 42
+
+/* Another comment
+   spanning multiple lines */
+
+def greet() {
+  return "hello"
+}

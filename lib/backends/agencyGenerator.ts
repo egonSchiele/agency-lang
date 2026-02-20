@@ -1,6 +1,7 @@
 import { SpecialVar } from "@/types/specialVar.js";
 import {
   AgencyComment,
+  AgencyMultiLineComment,
   AgencyProgram,
   Assignment,
   Literal,
@@ -426,6 +427,10 @@ export class AgencyGenerator extends BaseGenerator {
   // Utility methods
   protected processComment(node: AgencyComment): string {
     return this.indentStr(`//${node.content}`);
+  }
+
+  protected processMultiLineComment(node: AgencyMultiLineComment): string {
+    return this.indentStr(`/*${node.content}*/`);
   }
 
   protected processImportStatement(node: ImportStatement): string {

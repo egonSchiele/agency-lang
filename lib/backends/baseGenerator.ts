@@ -2,6 +2,7 @@ import { SpecialVar } from "@/types/specialVar.js";
 
 import {
   AgencyComment,
+  AgencyMultiLineComment,
   AgencyNode,
   AgencyProgram,
   Assignment,
@@ -186,6 +187,8 @@ export class BaseGenerator {
         return this.processValueAccess(node);
       case "comment":
         return this.processComment(node);
+      case "multiLineComment":
+        return this.processMultiLineComment(node);
       case "matchBlock":
         return this.processMatchBlock(node);
       case "number":
@@ -308,6 +311,10 @@ export class BaseGenerator {
 
   protected processComment(node: AgencyComment): string {
     return "processComment not implemented";
+  }
+
+  protected processMultiLineComment(node: AgencyMultiLineComment): string {
+    return "processMultiLineComment not implemented";
   }
 
   protected processReturnStatement(node: ReturnStatement): string {

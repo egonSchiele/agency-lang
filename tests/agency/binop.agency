@@ -1,3 +1,5 @@
+/* This is a multi-line comment
+that should be ignored by the parser */
 node main() {
   x = 5
   if (x == 5) {

@@ -150,6 +150,10 @@ export class TypeScriptGenerator extends BaseGenerator {
     return `// ${node.content}\n`;
   }
 
+  protected processMultiLineComment(): string {
+    return "";
+  }
+
   protected processGraphNodeName(node: GraphNodeDefinition): void {
     this.graphNodes.push(node);
   }

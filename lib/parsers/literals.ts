@@ -250,7 +250,7 @@ export const variableNameParser: Parser<VariableNameLiteral> = (
   const parser = seq(
     [
       set("type", "variableName"),
-      capture(letter, "init"),
+      capture(or(letter, char("_")), "init"),
       capture(manyWithJoin(varNameChar), "value"),
     ],
     (_, captures) => {

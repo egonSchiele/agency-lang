@@ -1333,6 +1333,12 @@ export class TypescriptPreprocessor {
   protected resolveVariableScopes(): void {
     const varNameToScope: Record<string, ScopeType> = {};
 
+    function setScope(varName: string, scope: ScopeType) {
+      if (!varNameToScope[varName]) {
+        varNameToScope[varName] = scope;
+      }
+    }
+
     // First, for each variable name, we try to collect its scope.
     for (const { node, scopes } of walkNodesArray(this.program.nodes)) {
       if (scopes.length === 0) {
@@ -1341,24 +1347,24 @@ export class TypescriptPreprocessor {
         );
       }
       if (node.type === "assignment") {
-        varNameToScope[node.variableName] = scopes.at(-1)?.type || "global";
+        setScope(node.variableName, scopes.at(-1)?.type || "global");
       } else if (node.type === "function" || node.type === "graphNode") {
         // Parameters are in the function's scope
         for (const param of node.parameters) {
-          varNameToScope[param.name] = "args";
+          setScope(param.name, "args");
         }
       } else if (node.type === "importStatement") {
         const importedNames = node.importedNames.map(getImportedNames).flat();
         importedNames.forEach((n) => {
-          varNameToScope[n] = "global";
+          setScope(n, "global");
         });
       } else if (node.type === "importNodeStatement") {
         node.importedNodes.forEach((n) => {
-          varNameToScope[n] = "global";
+          setScope(n, "global");
         });
       } else if (node.type === "importToolStatement") {
         node.importedTools.forEach((t) => {
-          varNameToScope[t] = "global";
+          setScope(t, "global");
         });
       }
     }

@@ -16,7 +16,7 @@ import {
 
 import { AwaitStatement } from "@/types/await.js";
 import { TimeBlock } from "@/types/timeBlock.js";
-import { ValueAccess } from "../types/access.js";
+import { AccessChainElement, ValueAccess } from "../types/access.js";
 import { AgencyArray, AgencyObject } from "../types/dataStructures.js";
 import { FunctionCall, FunctionDefinition } from "../types/function.js";
 import { GraphNodeDefinition, Visibility } from "../types/graphNode.js";
@@ -107,9 +107,11 @@ export class AgencyGenerator extends BaseGenerator {
 
   // Assignment and literals
   protected processAssignment(node: Assignment): string {
+    const chainStr =
+      node.accessChain?.map(this.processAccessChainElement).join("") ?? "";
     const varName = node.typeHint
-      ? `${node.variableName}: ${variableTypeToString(node.typeHint, this.typeAliases)}`
-      : node.variableName;
+      ? `${node.variableName}${chainStr}: ${variableTypeToString(node.typeHint, this.typeAliases)}`
+      : `${node.variableName}${chainStr}`;
     if (node.value.type === "timeBlock") {
       const code = this.processTimeBlock(node.value);
       return this.indentStr(`${varName} = ${code.trim()}\n`);
@@ -317,17 +319,7 @@ export class AgencyGenerator extends BaseGenerator {
   protected processValueAccess(node: ValueAccess): string {
     let code = this.processNode(node.base).trim();
     for (const element of node.chain) {
-      switch (element.kind) {
-        case "property":
-          code += `.${element.name}`;
-          break;
-        case "index":
-          code += `[${this.processNode(element.index).trim()}]`;
-          break;
-        case "methodCall":
-          code += `.${this.generateFunctionCallExpression(element.functionCall)}`;
-          break;
-      }
+      code += this.processAccessChainElement(element);
     }
     return this.indentStr(this.asyncAwaitPrefix(code, node.async));
   }
@@ -554,6 +546,17 @@ export class AgencyGenerator extends BaseGenerator {
 
   protected processBinOpExpression(node: BinOpExpression): string {
     return `${this.processNode(node.left).trim()} ${node.operator} ${this.processNode(node.right).trim()}`;
+  }
+
+  protected processAccessChainElement(node: AccessChainElement): string {
+    switch (node.kind) {
+      case "property":
+        return `.${node.name}`;
+      case "index":
+        return `[${this.processNode(node.index).trim()}]`;
+      case "methodCall":
+        return `.${this.generateFunctionCallExpression(node.functionCall)}`;
+    }
   }
 }
 

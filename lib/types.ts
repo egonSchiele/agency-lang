@@ -1,4 +1,4 @@
-import { ValueAccess } from "./types/access.js";
+import { AccessChainElement, ValueAccess } from "./types/access.js";
 import { BinOpExpression } from "./types/binop.js";
 import { AgencyArray, AgencyObject } from "./types/dataStructures.js";
 import { FunctionCall, FunctionDefinition } from "./types/function.js";
@@ -55,6 +55,7 @@ export type NodeScope = {
 export type Assignment = {
   type: "assignment";
   variableName: string;
+  accessChain?: AccessChainElement[];
   typeHint?: VariableType;
   scope?: ScopeType;
   value:

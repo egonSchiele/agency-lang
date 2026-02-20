@@ -419,6 +419,54 @@ describe("assignmentParser", () => {
       },
     },
 
+    // Property assignment
+    {
+      input: 'user.name = "Bob"',
+      expected: {
+        success: true,
+        result: {
+          type: "assignment",
+          variableName: "user",
+          accessChain: [{ kind: "property", name: "name" }],
+          value: {
+            type: "string",
+            segments: [{ type: "text", value: "Bob" }],
+          },
+        },
+      },
+    },
+
+    // Index assignment
+    {
+      input: "arr[0] = 5",
+      expected: {
+        success: true,
+        result: {
+          type: "assignment",
+          variableName: "arr",
+          accessChain: [{ kind: "index", index: { type: "number", value: "0" } }],
+          value: { type: "number", value: "5" },
+        },
+      },
+    },
+
+    // Nested property assignment
+    {
+      input: "obj.nested.prop = true",
+      expected: {
+        success: true,
+        result: {
+          type: "assignment",
+          variableName: "obj",
+          accessChain: [
+            { kind: "property", name: "nested" },
+            { kind: "property", name: "prop" },
+          ],
+          value: { type: "boolean", value: true },
+        },
+      },
+    },
+
     // Failure cases
     { input: "=5", expected: { success: false } },
     { input: "x =", expected: { success: false } },

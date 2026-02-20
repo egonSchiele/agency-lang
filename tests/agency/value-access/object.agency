@@ -4,8 +4,8 @@ user = {
 }
 
 node main() {
-  print(user.name)
-  
-  // this line doesn't parse
+  name1 = user.name
   user.name = "Bob"
+  name2 = user.name
+  return [name1, name2]
 }

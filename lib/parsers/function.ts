@@ -5,6 +5,7 @@ import {
   char,
   debug,
   fail,
+  failure,
   many,
   parseError,
   many1,
@@ -22,9 +23,11 @@ import {
   spaces,
   str,
   succeed,
+  success,
   trace,
 } from "tarsec";
 import {
+  AccessChainElement,
   AgencyNode,
   Assignment,
   DocString,
@@ -35,7 +38,7 @@ import {
 import { GraphNodeDefinition, Visibility } from "../types/graphNode.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { IfElse } from "../types/ifElse.js";
-import { valueAccessParser } from "./access.js";
+import { _valueAccessParser, valueAccessParser } from "./access.js";
 import { commentParser } from "./comment.js";
 import {
   llmPromptFunctionCallParser,
@@ -70,7 +73,7 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
     seqC(
       set("type", "assignment"),
       optionalSpaces,
-      capture(many1WithJoin(varNameChar), "variableName"),
+      capture(_valueAccessParser, "target"),
       optionalSpaces,
       optional(
         captureCaptures(
@@ -103,7 +106,32 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
       optionalSemicolon,
     ),
   );
-  return parser(input);
+  const result = parser(input);
+  if (!result.success) return result;
+
+  const target = result.result.target;
+  let variableName: string;
+  let accessChain: AccessChainElement[] | undefined;
+
+  if (target.type === "variableName") {
+    variableName = target.value;
+  } else if (target.type === "valueAccess") {
+    if (target.base.type !== "variableName") {
+      return failure(
+        "assignment target must start with a variable name",
+        input,
+      );
+    }
+    variableName = target.base.value;
+    accessChain = target.chain;
+  } else {
+    return failure("invalid assignment target", input);
+  }
+
+  const parsed = result.result;
+  const { target: _target, value, ...rest } = parsed;
+  const out: Assignment = { ...rest, variableName, value, accessChain };
+  return success(out, result.rest);
 };
 
 const trim = (s: string) => s.trim();
@@ -273,12 +301,7 @@ export const ifParser: Parser<IfElse> = (input: string) => {
       char("("),
       optionalSpaces,
       capture(
-        or(
-          binOpParser,
-          booleanParser,
-          valueAccessParser,
-          literalParser,
-        ),
+        or(binOpParser, booleanParser, valueAccessParser, literalParser),
         "condition",
       ),
       optionalSpaces,
@@ -303,12 +326,7 @@ export const whileLoopParser: Parser<WhileLoop> = trace(
     char("("),
     optionalSpaces,
     capture(
-      or(
-        binOpParser,
-        booleanParser,
-        valueAccessParser,
-        literalParser,
-      ),
+      or(binOpParser, booleanParser, valueAccessParser, literalParser),
       "condition",
     ),
     optionalSpaces,

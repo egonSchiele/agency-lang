@@ -37,7 +37,7 @@ import * as renderToolCall from "../templates/backends/typescriptGenerator/toolC
 import * as renderSkillPrompt from "@/templates/prompts/skill.js";
 import * as renderBuiltinFunctionsSystem from "@/templates/backends/typescriptGenerator/builtinFunctions/system.js";
 
-import { ValueAccess } from "../types/access.js";
+import { AccessChainElement, ValueAccess } from "../types/access.js";
 import { AgencyArray, AgencyObject } from "../types/dataStructures.js";
 import {
   FunctionCall,
@@ -263,9 +263,21 @@ export class TypeScriptGenerator extends BaseGenerator {
   }
 
 
+  private renderAccessChain(chain?: AccessChainElement[]): string {
+    if (!chain || chain.length === 0) return "";
+    return chain.map(el => {
+      switch (el.kind) {
+        case "property": return `.${el.name}`;
+        case "index": return `[${this.processNode(el.index)}]`;
+        case "methodCall": return `.${this.generateFunctionCallExpression(el.functionCall)}`;
+      }
+    }).join("");
+  }
+
   protected processAssignment(node: Assignment): string {
     const { variableName, typeHint, value } = node;
     const scopeVar = this.scopetoString(node.scope!);
+    const chainStr = this.renderAccessChain(node.accessChain);
 
     const typeAnnotation = "";
 
@@ -275,7 +287,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       // Direct assignment for other literal types
       const code = this.processNode(value);
       return renderFunctionCallAssignment.default({
-        variableName: `${scopeVar}.${variableName}`,
+        variableName: `${scopeVar}.${variableName}${chainStr}`,
         functionCode: code.trim(),
         nodeContext: this.getCurrentScope().type === "node",
         globalScope: this.getCurrentScope().type === "global",
@@ -285,13 +297,13 @@ export class TypeScriptGenerator extends BaseGenerator {
       const code = this.processTimeBlock(value, timingVarName);
       return code;
     } else if (value.type === "messageThread") {
-      const varName = `${scopeVar}.${variableName}`;
+      const varName = `${scopeVar}.${variableName}${chainStr}`;
       return this.processMessageThread(value, varName);
     } else {
       // Direct assignment for other literal types
       const code = this.processNode(value);
       return (
-        `${scopeVar}.${variableName}${typeAnnotation} = ${code.trim()};` + "\n"
+        `${scopeVar}.${variableName}${chainStr}${typeAnnotation} = ${code.trim()};` + "\n"
       );
     }
   }

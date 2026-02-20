@@ -1,0 +1,5 @@
+__stack.messages[{{{threadId}}}].push(smoltalk.systemMessage({{{systemMessage:string}}}));
+let __completion = await __client.text({
+  messages: __stack.messages[{{{threadId}}}].getMessages(),
+});
+

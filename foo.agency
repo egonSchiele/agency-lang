@@ -1,39 +1,7 @@
-def nextTwoPrimes(): number[] {
-  return llm("What are the next 2 prime numbers after that?")
-}
-
 node main() {
-  msgs = thread {
-    res1: number[] = llm("What is the first prime number > 100?")
-    msgs2 = thread {
-      res2: number[] = nextTwoPrimes()
-      msgs3 = subthread {
-        res3: number[] = nextTwoPrimes()
-      }
-      msgs4 = thread {
-        res4: number[] = nextTwoPrimes()
-      }
-
-    }
-    msgs5 = subthread {
-      res5: number[] = nextTwoPrimes()
-      msgs6 = subthread {
-        res6: number[] = nextTwoPrimes()
-      }
-      msgs7 = thread {
-        res7: number[] = nextTwoPrimes()
-      }
-
-    }
-  }
-
-  return { 
-    msgs: msgs,
-    msgs2: msgs2,
-    msgs3: msgs3,
-    msgs4: msgs4,
-    msgs5: msgs5,
-    msgs6: msgs6,
-    msgs7: msgs7
+  thread {
+    system("You are a helpful assistant that only responds with lists of numbers.")
+    day = llm("What day is it today?")
+    print(day)
   }
 }

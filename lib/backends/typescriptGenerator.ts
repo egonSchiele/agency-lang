@@ -35,6 +35,7 @@ import * as renderStartNode from "../templates/backends/typescriptGenerator/star
 import * as renderTool from "../templates/backends/typescriptGenerator/tool.js";
 import * as renderToolCall from "../templates/backends/typescriptGenerator/toolCall.js";
 import * as renderSkillPrompt from "@/templates/prompts/skill.js";
+import * as renderBuiltinFunctionsSystem from "@/templates/backends/typescriptGenerator/builtinFunctions/system.js";
 
 import {
   AccessExpression,
@@ -468,6 +469,11 @@ export class TypeScriptGenerator extends BaseGenerator {
         messages: `__stack.messages`, //[${node.threadId}]`,
         threadId: node.threadId ? `${node.threadId}` : "undefined",
         awaitPrefix: node.async ? "" : "await ",
+      });
+    } else if (node.functionName === "system") {
+      return renderBuiltinFunctionsSystem.default({
+        threadId: node.threadId ? `${node.threadId}` : "undefined",
+        systemMessage: parts[0],
       });
     } else {
       // must be a builtin function or imported function

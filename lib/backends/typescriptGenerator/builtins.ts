@@ -4,6 +4,7 @@ import * as builtinFunctionsReadImage from "../../templates/backends/typescriptG
 import * as builtinFunctionsFetchJSON from "../../templates/backends/typescriptGenerator/builtinFunctions/fetchJSON.js";
 import * as builtinFunctionsFetch from "../../templates/backends/typescriptGenerator/builtinFunctions/fetch.js";
 import * as builtinFunctionsSleep from "../../templates/backends/typescriptGenerator/builtinFunctions/sleep.js";
+import * as builtinFunctionsSystem from "../../templates/backends/typescriptGenerator/builtinFunctions/system.js";
 import { BUILTIN_FUNCTIONS } from "@/config.js";
 
 /**
@@ -12,6 +13,10 @@ import { BUILTIN_FUNCTIONS } from "@/config.js";
  */
 export function mapFunctionName(functionName: string): string {
   return BUILTIN_FUNCTIONS[functionName] || functionName;
+}
+
+export function isBuiltinFunction(functionName: string): boolean {
+  return functionName in BUILTIN_FUNCTIONS;
 }
 
 /**

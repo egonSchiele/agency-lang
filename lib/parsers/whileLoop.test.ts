@@ -163,12 +163,9 @@ describe("whileLoopParser", () => {
         result: {
           type: "whileLoop",
           condition: {
-            type: "accessExpression",
-            expression: {
-              type: "dotProperty",
-              object: { type: "variableName", value: "obj" },
-              propertyName: "hasNext",
-            },
+            type: "valueAccess",
+            base: { type: "variableName", value: "obj" },
+            chain: [{ kind: "property", name: "hasNext" }],
           },
           body: [
             {
@@ -190,12 +187,9 @@ describe("whileLoopParser", () => {
         result: {
           type: "whileLoop",
           condition: {
-            type: "accessExpression",
-            expression: {
-              type: "dotProperty",
-              object: { type: "variableName", value: "state" },
-              propertyName: "running",
-            },
+            type: "valueAccess",
+            base: { type: "variableName", value: "state" },
+            chain: [{ kind: "property", name: "running" }],
           },
           body: [
             {

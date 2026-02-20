@@ -1,0 +1,11 @@
+user = { 
+  name: "Alice",
+  age: 30
+}
+
+node main() {
+  print(user.name)
+  
+  // this line doesn't parse
+  user.name = "Bob"
+}

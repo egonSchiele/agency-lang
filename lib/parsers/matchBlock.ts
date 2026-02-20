@@ -22,16 +22,15 @@ import {
   str,
 } from "tarsec";
 import { DefaultCase, MatchBlockCase } from "../types/matchBlock.js";
-import { accessExpressionParser, indexAccessParser } from "./access.js";
+import { valueAccessParser } from "./access.js";
 import { commentParser } from "./comment.js";
 import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
 import { assignmentParser } from "./function.js";
 import {
-  functionCallParser,
   llmPromptFunctionCallParser,
   streamingPromptLiteralParser,
 } from "./functionCall.js";
-import { literalParser } from "./literals.js";
+import { booleanParser, literalParser } from "./literals.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { returnStatementParser } from "./returnStatement.js";
 import { optionalSpaces, optionalSpacesOrNewline } from "./utils.js";
@@ -48,8 +47,8 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
     capture(
       or(
         defaultCaseParser,
-        indexAccessParser,
-        accessExpressionParser,
+        booleanParser,
+        valueAccessParser,
         literalParser,
       ),
       "caseValue",
@@ -64,9 +63,9 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
         llmPromptFunctionCallParser,
         agencyArrayParser,
         agencyObjectParser,
-        accessExpressionParser,
         assignmentParser,
-        functionCallParser,
+        booleanParser,
+        valueAccessParser,
         literalParser,
       ),
       "body",

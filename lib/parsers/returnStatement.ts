@@ -1,13 +1,12 @@
 import { capture, or, Parser, seqC, set, str } from "tarsec";
 import { ReturnStatement } from "../types/returnStatement.js";
-import { accessExpressionParser, indexAccessParser } from "./access.js";
+import { valueAccessParser } from "./access.js";
 import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
 import {
-  functionCallParser,
   llmPromptFunctionCallParser,
   streamingPromptLiteralParser,
 } from "./functionCall.js";
-import { literalParser } from "./literals.js";
+import { booleanParser, literalParser } from "./literals.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { optionalSpaces } from "./utils.js";
 import { binOpParser } from "./binop.js";
@@ -20,10 +19,9 @@ export const returnStatementParser: Parser<ReturnStatement> = seqC(
     or(
       streamingPromptLiteralParser,
       binOpParser,
-      indexAccessParser,
-      accessExpressionParser,
       llmPromptFunctionCallParser,
-      functionCallParser,
+      booleanParser,
+      valueAccessParser,
       literalParser,
       agencyObjectParser,
       agencyArrayParser,

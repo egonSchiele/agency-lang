@@ -4,7 +4,7 @@ import {
   AgencyObject,
   VariableType,
 } from "../types.js";
-import { AccessExpression, IndexAccess } from "./access.js";
+import { ValueAccess } from "./access.js";
 import { Literal } from "./literals.js";
 
 export type FunctionParameter = {
@@ -30,9 +30,8 @@ export type FunctionCall = {
   arguments: (
     | AgencyArray
     | AgencyObject
-    | IndexAccess
+    | ValueAccess
     | Literal
-    | AccessExpression
     | FunctionCall
   )[];
   async?: boolean;

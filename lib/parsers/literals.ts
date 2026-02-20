@@ -49,7 +49,6 @@ import {
   success,
   quotedString,
 } from "tarsec";
-import { indexAccessParser } from "./access.js";
 
 export const textSegmentParser: Parser<TextSegment> = map(
   many1Till(or(backtick, char("$"))),

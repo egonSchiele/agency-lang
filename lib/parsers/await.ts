@@ -20,7 +20,7 @@ import {
   spaces,
   str,
 } from "tarsec";
-import { accessExpressionParser } from "./access.js";
+import { valueAccessParser } from "./access.js";
 import {
   functionCallParser,
   llmPromptFunctionCallParser,
@@ -36,7 +36,7 @@ import { literalParser } from "./literals.js";
     spaces,
     capture(
       or(
-        accessExpressionParser,
+        valueAccessParser,
         llmPromptFunctionCallParser,
         functionCallParser,
         literalParser,

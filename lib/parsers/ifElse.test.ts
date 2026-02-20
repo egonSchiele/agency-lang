@@ -145,12 +145,9 @@ describe("ifParser", () => {
         result: {
           type: "ifElse",
           condition: {
-            type: "accessExpression",
-            expression: {
-              type: "dotProperty",
-              object: { type: "variableName", value: "obj" },
-              propertyName: "isReady",
-            },
+            type: "valueAccess",
+            base: { type: "variableName", value: "obj" },
+            chain: [{ kind: "property", name: "isReady" }],
           },
           thenBody: [
             {

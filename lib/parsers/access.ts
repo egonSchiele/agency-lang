@@ -1,137 +1,132 @@
-import { AgencyNode } from "@/types.js";
+import { AgencyNode, FunctionCall, VariableNameLiteral } from "@/types.js";
 import {
   capture,
-  captureCaptures,
   char,
   failure,
+  many,
   or,
+  Parser,
   ParserResult,
-  sepBy1,
   seqC,
   set,
   spaces,
   str,
   success,
 } from "tarsec";
-import {
-  accessExpression,
-  AccessExpression,
-  IndexAccess,
-} from "../types/access.js";
-import { agencyArrayParser } from "./dataStructures.js";
-import { functionCallParser } from "./functionCall.js";
+import { AccessChainElement, ValueAccess } from "../types/access.js";
+import { _functionCallParser } from "./functionCall.js";
 import { literalParser, variableNameParser } from "./literals.js";
+import { optionalSpaces } from "./utils.js";
+import { oneOfStr } from "./parserUtils.js";
 
-function createAccessExpression(arr: AgencyNode[]): AccessExpression {
-  const expression = _createAccessExpression(arr);
-  return expression as AccessExpression;
-}
-function _createAccessExpression(arr: AgencyNode[]): AgencyNode {
-  if (arr.length < 1) {
-    throw new Error(
-      `Not enough items to create access expression: ${JSON.stringify(arr)}`,
+// Parse a single chain element: .method(), .property, or [index]
+const dotMethodCallParser = (
+  input: string,
+): ParserResult<AccessChainElement> => {
+  // First try: . followed by functionCall (name + parens)
+  const dotResult = char(".")(input);
+  if (!dotResult.success) return failure("expected dot", input);
+
+  const fcResult = _functionCallParser(dotResult.rest);
+  if (fcResult.success) {
+    return success(
+      { kind: "methodCall" as const, functionCall: fcResult.result },
+      fcResult.rest,
     );
   }
-  if (arr.length === 1) {
-    return arr[0];
-  }
-  if (arr.length > 1) {
-    const head = arr.slice(0, -1);
-    const last = arr.at(-1);
-    switch (last?.type) {
-      case "variableName":
-        return accessExpression({
-          type: "dotProperty",
-          object: _createAccessExpression(head),
-          propertyName: last.value,
-        });
-      case "functionCall":
-        return accessExpression({
-          type: "dotFunctionCall",
-          object: _createAccessExpression(head),
-          functionCall: last,
-        });
-      case "indexAccess":
-        return accessExpression({
-          type: "indexAccess",
-          array: _createAccessExpression([...head, last.array]),
-          index: last.index,
-        });
-      default:
-        throw new Error(
-          `unknown type ${last && last.type} in createAccessExpression`,
-        );
-    }
-  }
-  throw new Error(`we should NEVER get here: ${JSON.stringify(arr)} `);
-}
 
-export function _accessExpressionParser(
-  input: string,
-): ParserResult<AccessExpression> {
-  const parser = sepBy1(
-    char("."),
-    or(indexAccessParser, functionCallParser, variableNameParser),
-  );
-  const result = parser(input);
-  if (result.success === false) {
-    return result;
+  // Second try: . followed by just a property name
+  const nameResult = variableNameParser(dotResult.rest);
+  if (nameResult.success) {
+    return success(
+      { kind: "property" as const, name: nameResult.result.value },
+      nameResult.rest,
+    );
   }
 
-  if (result.result.length < 2) {
-    return failure("Didn't find property access or function call", input);
-  }
-
-  const access = createAccessExpression(result.result);
-  return success(access, result.rest);
-}
-
-export const syncAccessExpressionParser = (
-  input: string,
-): ParserResult<AccessExpression> => {
-  const parser = seqC(
-    or(str("sync"), str("await")),
-    spaces,
-    captureCaptures(_accessExpressionParser),
-  );
-
-  const result = parser(input);
-  if (result.success === false) {
-    return result;
-  }
-  return success({ ...result.result, async: false }, result.rest);
+  return failure("expected property name or method call after dot", input);
 };
 
-export const asyncAccessExpressionParser = (
-  input: string,
-): ParserResult<AccessExpression> => {
+const indexChainParser = (input: string): ParserResult<AccessChainElement> => {
   const parser = seqC(
-    str("async"),
-    spaces,
-    captureCaptures(_accessExpressionParser),
-  );
-
-  const result = parser(input);
-  if (result.success === false) {
-    return result;
-  }
-  return success({ ...result.result, async: true }, result.rest);
-};
-
-export const accessExpressionParser = or(
-  asyncAccessExpressionParser,
-  syncAccessExpressionParser,
-  _accessExpressionParser,
-);
-
-export const indexAccessParser = (input: string): ParserResult<IndexAccess> => {
-  const parser = seqC(
-    set("type", "indexAccess"),
-    capture(or(agencyArrayParser, functionCallParser, literalParser), "array"),
+    set("kind", "index" as const),
     char("["),
-    capture(or(functionCallParser, literalParser), "index"),
+    optionalSpaces,
+    capture(
+      or(_functionCallParser, variableNameParser, literalParser),
+      "index",
+    ),
+    optionalSpaces,
     char("]"),
   );
 
-  return parser(input);
+  const result = parser(input);
+  return result;
 };
+
+const chainElementParser: Parser<AccessChainElement> = or(
+  dotMethodCallParser,
+  indexChainParser,
+);
+
+export const _valueAccessParser = (
+  input: string,
+): ParserResult<VariableNameLiteral | FunctionCall | ValueAccess> => {
+  const parser = seqC(
+    capture(or(_functionCallParser, variableNameParser), "base"),
+    capture(many(chainElementParser), "chain"),
+  );
+  const result = parser(input);
+  if (!result.success)
+    return failure("expected value access expression", input);
+
+  const base = result.result.base;
+  const chain = result.result.chain;
+
+  if (chain.length === 0) {
+    // No chain, return base directly
+    return success(base, result.rest);
+  } else {
+    // Return ValueAccess with base and chain
+    return success(
+      {
+        type: "valueAccess" as const,
+        base,
+        chain,
+      },
+      result.rest,
+    );
+  }
+};
+
+export const asyncValueAccessParser = (
+  input: string,
+): ParserResult<FunctionCall | ValueAccess | VariableNameLiteral> => {
+  const parser = seqC(
+    str("async"),
+    spaces,
+    capture(_valueAccessParser, "access"),
+  );
+  const result = parser(input);
+  if (!result.success) return failure("expected async keyword", input);
+
+  return success({ ...result.result.access, async: true }, result.rest);
+};
+
+export const syncValueAccessParser = (
+  input: string,
+): ParserResult<FunctionCall | ValueAccess | VariableNameLiteral> => {
+  const parser = seqC(
+    oneOfStr(["sync", "await"]),
+    spaces,
+    capture(_valueAccessParser, "access"),
+  );
+  const result = parser(input);
+  if (!result.success) return failure("expected sync/await keyword", input);
+
+  return success({ ...result.result.access, async: false }, result.rest);
+};
+
+export const valueAccessParser: Parser<
+  VariableNameLiteral | FunctionCall | ValueAccess
+> = or(asyncValueAccessParser, syncValueAccessParser, _valueAccessParser);

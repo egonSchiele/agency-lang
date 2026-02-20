@@ -37,12 +37,7 @@ import * as renderToolCall from "../templates/backends/typescriptGenerator/toolC
 import * as renderSkillPrompt from "@/templates/prompts/skill.js";
 import * as renderBuiltinFunctionsSystem from "@/templates/backends/typescriptGenerator/builtinFunctions/system.js";
 
-import {
-  AccessExpression,
-  DotFunctionCall,
-  DotProperty,
-  IndexAccess,
-} from "../types/access.js";
+import { ValueAccess } from "../types/access.js";
 import { AgencyArray, AgencyObject } from "../types/dataStructures.js";
 import {
   FunctionCall,
@@ -223,15 +218,22 @@ export class TypeScriptGenerator extends BaseGenerator {
     return `__stateStack.pop();\nreturn ${returnCode}\n`;
   }
 
-  protected processAccessExpression(node: AccessExpression): string {
-    switch (node.expression.type) {
-      case "dotProperty":
-        return this.processDotProperty(node.expression);
-      case "indexAccess":
-        return this.processIndexAccess(node.expression);
-      case "dotFunctionCall":
-        return this.processDotFunctionCall(node.expression);
+  protected processValueAccess(node: ValueAccess): string {
+    let code = this.processNode(node.base);
+    for (const element of node.chain) {
+      switch (element.kind) {
+        case "property":
+          code += `.${element.name}`;
+          break;
+        case "index":
+          code += `[${this.processNode(element.index)}]`;
+          break;
+        case "methodCall":
+          code += `.${this.generateFunctionCallExpression(element.functionCall)}`;
+          break;
+      }
     }
+    return code;
   }
 
   protected processMatchBlock(node: MatchBlock): string {
@@ -256,30 +258,6 @@ export class TypeScriptGenerator extends BaseGenerator {
     return lines.join("\n");
   }
 
-  protected processDotProperty(node: DotProperty): string {
-    const objectCode = this.processNode(node.object);
-
-    const propertyAccess = `${objectCode}.${node.propertyName}`;
-    return propertyAccess;
-  }
-
-  protected processDotFunctionCall(node: DotFunctionCall): string {
-    const objectCode = this.processNode(node.object);
-
-    const functionCallCode = this.generateFunctionCallExpression(
-      node.functionCall,
-    );
-    const fullCall = `${objectCode}.${functionCallCode}`;
-    return fullCall;
-  }
-
-  protected processIndexAccess(node: IndexAccess): string {
-    const arrayCode = this.processNode(node.array);
-
-    const indexCode = this.processNode(node.index);
-    const accessCode = `${arrayCode}[${indexCode}]`;
-    return accessCode;
-  }
 
   protected processAssignment(node: Assignment): string {
     const { variableName, typeHint, value } = node;

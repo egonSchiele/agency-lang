@@ -1,11 +1,10 @@
-import { AccessExpression } from "./access.js";
-import { AwaitStatement } from "./await.js";
+import { ValueAccess } from "./access.js";
 import { AgencyArray, AgencyObject } from "./dataStructures.js";
 import { FunctionCall } from "./function.js";
 import { Literal } from "./literals.js";
 
 export type BinOpArgument =
-  | AccessExpression
+  | ValueAccess
   | Literal
   | FunctionCall
   | AgencyObject

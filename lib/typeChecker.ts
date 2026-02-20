@@ -338,9 +338,7 @@ export class TypeChecker {
         return "any"; // Could be refined but keeping simple
       case "agencyObject":
         return "any"; // Could be refined but keeping simple
-      case "accessExpression":
-        return "any";
-      case "indexAccess":
+      case "valueAccess":
         return "any";
       default:
         return "any";

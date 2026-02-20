@@ -1,18 +1,16 @@
 import {
-  AccessExpression,
   AgencyNode,
   FunctionCall,
-  IndexAccess,
   Literal,
 } from "../types.js";
+import { ValueAccess } from "./access.js";
 import { BinOpExpression } from "./binop.js";
 
 export type WhileLoop = {
   type: "whileLoop";
   condition:
-    | IndexAccess
+    | ValueAccess
     | FunctionCall
-    | AccessExpression
     | Literal
     | BinOpExpression;
   body: AgencyNode[];

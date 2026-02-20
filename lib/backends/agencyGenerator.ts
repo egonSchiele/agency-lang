@@ -15,12 +15,7 @@ import {
 
 import { AwaitStatement } from "@/types/await.js";
 import { TimeBlock } from "@/types/timeBlock.js";
-import {
-  AccessExpression,
-  DotFunctionCall,
-  DotProperty,
-  IndexAccess,
-} from "../types/access.js";
+import { ValueAccess } from "../types/access.js";
 import { AgencyArray, AgencyObject } from "../types/dataStructures.js";
 import { FunctionCall, FunctionDefinition } from "../types/function.js";
 import { GraphNodeDefinition, Visibility } from "../types/graphNode.js";
@@ -318,18 +313,20 @@ export class AgencyGenerator extends BaseGenerator {
   }
 
   // Access expressions
-  protected processAccessExpression(node: AccessExpression): string {
-    let code = "";
-    switch (node.expression.type) {
-      case "dotProperty":
-        code = this.processDotProperty(node.expression);
-        break;
-      case "indexAccess":
-        code = this.processIndexAccess(node.expression);
-        break;
-      case "dotFunctionCall":
-        code = this.processDotFunctionCall(node.expression);
-        break;
+  protected processValueAccess(node: ValueAccess): string {
+    let code = this.processNode(node.base).trim();
+    for (const element of node.chain) {
+      switch (element.kind) {
+        case "property":
+          code += `.${element.name}`;
+          break;
+        case "index":
+          code += `[${this.processNode(element.index).trim()}]`;
+          break;
+        case "methodCall":
+          code += `.${this.generateFunctionCallExpression(element.functionCall)}`;
+          break;
+      }
     }
     return this.indentStr(this.asyncAwaitPrefix(code, node.async));
   }
@@ -341,26 +338,6 @@ export class AgencyGenerator extends BaseGenerator {
       return `await ${code}`;
     }
     return code;
-  }
-
-  protected processDotProperty(node: DotProperty): string {
-    let objectCode = this.processNode(node.object);
-    objectCode = objectCode.trim();
-    return `${objectCode}.${node.propertyName}`;
-  }
-
-  protected processIndexAccess(node: IndexAccess): string {
-    const arrayCode = this.processNode(node.array).trim();
-    const indexCode = this.processNode(node.index).trim();
-    return `${arrayCode}[${indexCode}]`;
-  }
-
-  protected processDotFunctionCall(node: DotFunctionCall): string {
-    const objectCode = this.processNode(node.object).trim();
-    const functionCallCode = this.generateFunctionCallExpression(
-      node.functionCall,
-    );
-    return `${objectCode}.${functionCallCode}`;
   }
 
   // Control flow

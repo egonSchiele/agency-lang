@@ -35,14 +35,13 @@ import {
 import { GraphNodeDefinition, Visibility } from "../types/graphNode.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { IfElse } from "../types/ifElse.js";
-import { accessExpressionParser, indexAccessParser } from "./access.js";
+import { valueAccessParser } from "./access.js";
 import { commentParser } from "./comment.js";
 import {
-  functionCallParser,
   llmPromptFunctionCallParser,
   streamingPromptLiteralParser,
 } from "./functionCall.js";
-import { literalParser, promptParser } from "./literals.js";
+import { booleanParser, literalParser, promptParser } from "./literals.js";
 import { matchBlockParser } from "./matchBlock.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { returnStatementParser } from "./returnStatement.js";
@@ -93,9 +92,8 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
           promptParser,
           streamingPromptLiteralParser,
           llmPromptFunctionCallParser,
-          functionCallParser,
-          indexAccessParser,
-          accessExpressionParser,
+          booleanParser,
+          valueAccessParser,
           agencyArrayParser,
           agencyObjectParser,
           literalParser,
@@ -137,10 +135,10 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
         messageThreadParser,
         skillParser,
         functionParser,
-        accessExpressionParser,
         assignmentParser,
         llmPromptFunctionCallParser,
-        functionCallParser,
+        booleanParser,
+        valueAccessParser,
         literalParser,
         commentParser,
         newLineParser,
@@ -277,8 +275,8 @@ export const ifParser: Parser<IfElse> = (input: string) => {
       capture(
         or(
           binOpParser,
-          accessExpressionParser,
-          functionCallParser,
+          booleanParser,
+          valueAccessParser,
           literalParser,
         ),
         "condition",
@@ -307,9 +305,8 @@ export const whileLoopParser: Parser<WhileLoop> = trace(
     capture(
       or(
         binOpParser,
-        indexAccessParser,
-        functionCallParser,
-        accessExpressionParser,
+        booleanParser,
+        valueAccessParser,
         literalParser,
       ),
       "condition",

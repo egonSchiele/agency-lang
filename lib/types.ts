@@ -1,4 +1,4 @@
-import { AccessExpression, DotProperty, IndexAccess } from "./types/access.js";
+import { ValueAccess } from "./types/access.js";
 import { BinOpExpression } from "./types/binop.js";
 import { AgencyArray, AgencyObject } from "./types/dataStructures.js";
 import { FunctionCall, FunctionDefinition } from "./types/function.js";
@@ -58,12 +58,11 @@ export type Assignment = {
   typeHint?: VariableType;
   scope?: ScopeType;
   value:
-    | AccessExpression
+    | ValueAccess
     | Literal
     | FunctionCall
     | AgencyObject
     | AgencyArray
-    | IndexAccess
     | TimeBlock
     | MessageThread
     | BinOpExpression;
@@ -101,7 +100,7 @@ export type AgencyNode =
   | FunctionCall
   | MatchBlock
   | ReturnStatement
-  | AccessExpression
+  | ValueAccess
   | AgencyComment
   | AgencyObject
   | AgencyArray
@@ -111,10 +110,6 @@ export type AgencyNode =
   | WhileLoop
   | IfElse
   | SpecialVar
-  // are these needed if we have AccessExpression?
-  | IndexAccess
-  | DotProperty
-  // these two ^
   | TimeBlock
   | NewLine
   | RawCode

@@ -21,7 +21,8 @@ import {
   setTraceId,
 } from "tarsec";
 
-import { accessExpressionParser } from "./parsers/access.js";
+import { valueAccessParser } from "./parsers/access.js";
+import { booleanParser } from "./parsers/literals.js";
 import { commentParser } from "./parsers/comment.js";
 import {
   assignmentParser,
@@ -33,7 +34,6 @@ import {
   whileLoopParser,
 } from "./parsers/function.js";
 import {
-  functionCallParser,
   llmPromptFunctionCallParser,
   streamingPromptLiteralParser,
 } from "./parsers/functionCall.js";
@@ -78,9 +78,9 @@ export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
         specialVarParser,
         assignmentParser,
         binOpParser,
-        accessExpressionParser,
         llmPromptFunctionCallParser,
-        functionCallParser,
+        booleanParser,
+        valueAccessParser,
         commentParser,
         newLineParser,
       ),

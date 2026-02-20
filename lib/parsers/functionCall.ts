@@ -14,8 +14,8 @@ import {
   str,
   success,
 } from "tarsec";
-import { accessExpressionParser, indexAccessParser } from "./access.js";
-import { literalParser, promptParser } from "./literals.js";
+import { valueAccessParser } from "./access.js";
+import { booleanParser, literalParser, promptParser } from "./literals.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { comma, optionalSpaces, varNameChar } from "./utils.js";
 import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
@@ -32,9 +32,8 @@ export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
         or(
           agencyArrayParser,
           agencyObjectParser,
-          indexAccessParser,
-          functionCallParser,
-          accessExpressionParser,
+          booleanParser,
+          valueAccessParser,
           literalParser,
         ),
       ),
@@ -47,41 +46,8 @@ export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
   return parser(input);
 };
 
-export const asyncFunctionCallParser: Parser<FunctionCall> = (
-  input: string,
-) => {
-  const parser = seqC(
-    str("async"),
-    spaces,
-    capture(_functionCallParser, "functionCall"),
-  );
-  const result = parser(input);
-  if (!result.success) {
-    return result;
-  }
-  const { functionCall } = result.result;
-  return success({ ...functionCall, async: true }, result.rest);
-};
-
-export const syncFunctionCallParser: Parser<FunctionCall> = (input: string) => {
-  const parser = seqC(
-    or(str("sync"), str("await")),
-    spaces,
-    capture(_functionCallParser, "functionCall"),
-  );
-  const result = parser(input);
-  if (!result.success) {
-    return result;
-  }
-  const { functionCall } = result.result;
-  return success({ ...functionCall, async: false }, result.rest);
-};
-
-export const functionCallParser: Parser<FunctionCall> = or(
-  asyncFunctionCallParser,
-  syncFunctionCallParser,
-  _functionCallParser, // default to async if no keyword is provided
-);
+// functionCallParser is now just _functionCallParser (no async/sync wrappers - handled by valueAccessParser)
+export const functionCallParser: Parser<FunctionCall> = _functionCallParser;
 
 export const llmPromptFunctionCallParser: Parser<PromptLiteral> = (
   input: string,

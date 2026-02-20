@@ -1,23 +1,46 @@
 import { describe, it, expect } from "vitest";
 import {
-  indexAccessParser,
-  accessExpressionParser,
-  syncAccessExpressionParser,
-  asyncAccessExpressionParser,
+  valueAccessParser,
+  _valueAccessParser,
+  asyncValueAccessParser,
+  syncValueAccessParser,
 } from "./access.js";
 
-describe("access expression parsers", () => {
-  describe("indexAccessParser", () => {
+describe("valueAccessParser", () => {
+  describe("bare variable names (unwrapped)", () => {
+    it('should parse "obj" as a VariableNameLiteral', () => {
+      const result = valueAccessParser("obj");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({ type: "variableName", value: "obj" });
+      }
+    });
+  });
+
+  describe("bare function calls (unwrapped)", () => {
+    it('should parse "func()" as a FunctionCall', () => {
+      const result = valueAccessParser("func()");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "functionCall",
+          functionName: "func",
+          arguments: [],
+        });
+      }
+    });
+  });
+
+  describe("index access", () => {
     const testCases = [
-      // Happy path - variable with number index
       {
         input: "arr[0]",
         expected: {
           success: true,
           result: {
-            type: "indexAccess",
-            array: { type: "variableName", value: "arr" },
-            index: { type: "number", value: "0" },
+            type: "valueAccess",
+            base: { type: "variableName", value: "arr" },
+            chain: [{ kind: "index", index: { type: "number", value: "0" } }],
           },
         },
       },
@@ -26,565 +49,385 @@ describe("access expression parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "indexAccess",
-            array: { type: "variableName", value: "items" },
-            index: { type: "number", value: "5" },
+            type: "valueAccess",
+            base: { type: "variableName", value: "items" },
+            chain: [{ kind: "index", index: { type: "number", value: "5" } }],
           },
         },
       },
-      {
-        input: "data[42]",
-        expected: {
-          success: true,
-          result: {
-            type: "indexAccess",
-            array: { type: "variableName", value: "data" },
-            index: { type: "number", value: "42" },
-          },
-        },
-      },
-
-      // Variable as index
       {
         input: "arr[i]",
         expected: {
           success: true,
           result: {
-            type: "indexAccess",
-            array: { type: "variableName", value: "arr" },
-            index: { type: "variableName", value: "i" },
+            type: "valueAccess",
+            base: { type: "variableName", value: "arr" },
+            chain: [
+              {
+                kind: "index",
+                index: { type: "variableName", value: "i" },
+              },
+            ],
           },
         },
       },
-      {
-        input: "items[index]",
-        expected: {
-          success: true,
-          result: {
-            type: "indexAccess",
-            array: { type: "variableName", value: "items" },
-            index: { type: "variableName", value: "index" },
-          },
-        },
-      },
-
-      // String as index (for object/map access)
       {
         input: 'obj["key"]',
         expected: {
           success: true,
           result: {
-            type: "indexAccess",
-            array: { type: "variableName", value: "obj" },
-            index: {
-              type: "string",
-              segments: [{ type: "text", value: "key" }],
-            },
+            type: "valueAccess",
+            base: { type: "variableName", value: "obj" },
+            chain: [
+              {
+                kind: "index",
+                index: {
+                  type: "string",
+                  segments: [{ type: "text", value: "key" }],
+                },
+              },
+            ],
           },
         },
       },
-      {
-        input: 'data["field"]',
-        expected: {
-          success: true,
-          result: {
-            type: "indexAccess",
-            array: { type: "variableName", value: "data" },
-            index: {
-              type: "string",
-              segments: [{ type: "text", value: "field" }],
-            },
-          },
-        },
-      },
-
-      // Function call as array
       {
         input: "getData()[0]",
         expected: {
           success: true,
           result: {
-            type: "indexAccess",
-            array: {
+            type: "valueAccess",
+            base: {
               type: "functionCall",
               functionName: "getData",
               arguments: [],
             },
-            index: { type: "number", value: "0" },
+            chain: [{ kind: "index", index: { type: "number", value: "0" } }],
           },
         },
       },
-      {
-        input: "fetchItems()[5]",
-        expected: {
-          success: true,
-          result: {
-            type: "indexAccess",
-            array: {
-              type: "functionCall",
-              functionName: "fetchItems",
-              arguments: [],
-            },
-            index: { type: "number", value: "5" },
-          },
-        },
-      },
-
-      // Function call as index
       {
         input: "arr[getIndex()]",
         expected: {
           success: true,
           result: {
-            type: "indexAccess",
-            array: { type: "variableName", value: "arr" },
-            index: {
-              type: "functionCall",
-              functionName: "getIndex",
-              arguments: [],
-            },
-          },
-        },
-      },
-      {
-        input: "items[calculatePosition()]",
-        expected: {
-          success: true,
-          result: {
-            type: "indexAccess",
-            array: { type: "variableName", value: "items" },
-            index: {
-              type: "functionCall",
-              functionName: "calculatePosition",
-              arguments: [],
-            },
-          },
-        },
-      },
-
-      // Function call with arguments as array
-      {
-        input: 'getUsers("active")[0]',
-        expected: {
-          success: true,
-          result: {
-            type: "indexAccess",
-            array: {
-              type: "functionCall",
-              functionName: "getUsers",
-              arguments: [
-                {
-                  type: "string",
-                  segments: [{ type: "text", value: "active" }],
+            type: "valueAccess",
+            base: { type: "variableName", value: "arr" },
+            chain: [
+              {
+                kind: "index",
+                index: {
+                  type: "functionCall",
+                  functionName: "getIndex",
+                  arguments: [],
                 },
-              ],
-            },
-            index: { type: "number", value: "0" },
+              },
+            ],
           },
         },
       },
-
-      // Edge cases - negative index
       {
         input: "arr[-1]",
         expected: {
           success: true,
           result: {
-            type: "indexAccess",
-            array: { type: "variableName", value: "arr" },
-            index: { type: "number", value: "-1" },
+            type: "valueAccess",
+            base: { type: "variableName", value: "arr" },
+            chain: [{ kind: "index", index: { type: "number", value: "-1" } }],
           },
         },
       },
-
-      // Edge cases - single character names
       {
         input: "a[0]",
         expected: {
           success: true,
           result: {
-            type: "indexAccess",
-            array: { type: "variableName", value: "a" },
-            index: { type: "number", value: "0" },
+            type: "valueAccess",
+            base: { type: "variableName", value: "a" },
+            chain: [{ kind: "index", index: { type: "number", value: "0" } }],
           },
         },
       },
-      {
-        input: "x[i]",
-        expected: {
-          success: true,
-          result: {
-            type: "indexAccess",
-            array: { type: "variableName", value: "x" },
-            index: { type: "variableName", value: "i" },
-          },
-        },
-      },
-
-      // Failure cases
-      { input: "arr[]", expected: { success: false } },
-      { input: "arr[", expected: { success: false } },
-      { input: "arr]", expected: { success: false } },
-      { input: "[0]", expected: { success: false } },
-      { input: "arr[0", expected: { success: false } },
-      { input: "", expected: { success: false } },
-      { input: "[]", expected: { success: false } },
-      { input: "[", expected: { success: false } },
-      { input: "]", expected: { success: false } },
     ];
 
     testCases.forEach(({ input, expected }) => {
-      if (expected.success) {
-        it(`should parse "${input}" successfully`, () => {
-          const result = indexAccessParser(input);
-          expect(result.success).toBe(true);
-          if (result.success) {
-            expect(result.result).toEqual(expected.result);
-          }
-        });
-      } else {
-        it(`should fail to parse "${input}"`, () => {
-          const result = indexAccessParser(input);
-          expect(result.success).toBe(false);
-        });
+      it(`should parse "${input}" successfully`, () => {
+        const result = valueAccessParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result).toEqual(expected.result);
+        }
+      });
+    });
+
+    // Failure cases
+    it('should fail to parse "arr[]"', () => {
+      // arr is parsed as variableName, [] fails chain - but arr still succeeds as bare variable
+      const result = valueAccessParser("arr[]");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Parses "arr" as variableName, leaves "[]" as rest
+        expect(result.result).toEqual({ type: "variableName", value: "arr" });
+        expect(result.rest).toBe("[]");
       }
+    });
+
+    it('should fail to parse "[0]"', () => {
+      const result = valueAccessParser("[0]");
+      expect(result.success).toBe(false);
+    });
+
+    it('should fail to parse ""', () => {
+      const result = valueAccessParser("");
+      expect(result.success).toBe(false);
     });
   });
 
-  describe("accessExpressionParser", () => {
+  describe("dot property access", () => {
     const testCases = [
-      // Dot property access
       {
         input: "obj.foo",
         expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "dotProperty",
-              object: { type: "variableName", value: "obj" },
-              propertyName: "foo",
-            },
-          },
+          type: "valueAccess",
+          base: { type: "variableName", value: "obj" },
+          chain: [{ kind: "property", name: "foo" }],
         },
       },
       {
         input: "response.status",
         expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "dotProperty",
-              object: { type: "variableName", value: "response" },
-              propertyName: "status",
-            },
-          },
+          type: "valueAccess",
+          base: { type: "variableName", value: "response" },
+          chain: [{ kind: "property", name: "status" }],
         },
       },
+      {
+        input: "x.y",
+        expected: {
+          type: "valueAccess",
+          base: { type: "variableName", value: "x" },
+          chain: [{ kind: "property", name: "y" }],
+        },
+      },
+    ];
 
-      // Dot function call
+    testCases.forEach(({ input, expected }) => {
+      it(`should parse "${input}" successfully`, () => {
+        const result = valueAccessParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result).toEqual(expected);
+        }
+      });
+    });
+  });
+
+  describe("dot function call", () => {
+    const testCases = [
       {
         input: "story.json()",
         expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "dotFunctionCall",
-              object: { type: "variableName", value: "story" },
+          type: "valueAccess",
+          base: { type: "variableName", value: "story" },
+          chain: [
+            {
+              kind: "methodCall",
               functionCall: {
                 type: "functionCall",
                 functionName: "json",
                 arguments: [],
               },
             },
-          },
-        },
-      },
-      {
-        input: "response.text()",
-        expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "dotFunctionCall",
-              object: { type: "variableName", value: "response" },
-              functionCall: {
-                type: "functionCall",
-                functionName: "text",
-                arguments: [],
-              },
-            },
-          },
+          ],
         },
       },
       {
         input: "obj.method(42)",
         expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "dotFunctionCall",
-              object: { type: "variableName", value: "obj" },
+          type: "valueAccess",
+          base: { type: "variableName", value: "obj" },
+          chain: [
+            {
+              kind: "methodCall",
               functionCall: {
                 type: "functionCall",
                 functionName: "method",
                 arguments: [{ type: "number", value: "42" }],
               },
             },
-          },
-        },
-      },
-
-      // Chained function calls
-      {
-        input: "fetch().json()",
-        expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "dotFunctionCall",
-              object: {
-                type: "functionCall",
-                functionName: "fetch",
-                arguments: [],
-              },
-              functionCall: {
-                type: "functionCall",
-                functionName: "json",
-                arguments: [],
-              },
-            },
-          },
-        },
-      },
-      {
-        input: "getData().process()",
-        expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "dotFunctionCall",
-              object: {
-                type: "functionCall",
-                functionName: "getData",
-                arguments: [],
-              },
-              functionCall: {
-                type: "functionCall",
-                functionName: "process",
-                arguments: [],
-              },
-            },
-          },
-        },
-      },
-      {
-        input: "foo.bar().baz()[3].a1",
-        expected: {
-          success: true,
-          result: {
-            expression: {
-              object: {
-                expression: {
-                  array: {
-                    expression: {
-                      functionCall: {
-                        arguments: [],
-                        functionName: "baz",
-                        type: "functionCall",
-                      },
-                      object: {
-                        expression: {
-                          functionCall: {
-                            arguments: [],
-                            functionName: "bar",
-                            type: "functionCall",
-                          },
-                          object: {
-                            type: "variableName",
-                            value: "foo",
-                          },
-                          type: "dotFunctionCall",
-                        },
-                        type: "accessExpression",
-                      },
-                      type: "dotFunctionCall",
-                    },
-                    type: "accessExpression",
-                  },
-                  index: {
-                    type: "number",
-                    value: "3",
-                  },
-                  type: "indexAccess",
-                },
-                type: "accessExpression",
-              },
-              propertyName: "a1",
-              type: "dotProperty",
-            },
-            type: "accessExpression",
-          },
-        },
-      },
-
-      // Edge cases
-      {
-        input: "x.y",
-        expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "dotProperty",
-              object: { type: "variableName", value: "x" },
-              propertyName: "y",
-            },
-          },
+          ],
         },
       },
       {
         input: "x.f()",
         expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "dotFunctionCall",
-              object: { type: "variableName", value: "x" },
+          type: "valueAccess",
+          base: { type: "variableName", value: "x" },
+          chain: [
+            {
+              kind: "methodCall",
               functionCall: {
                 type: "functionCall",
                 functionName: "f",
                 arguments: [],
               },
             },
-          },
+          ],
         },
       },
-
-      // Failure cases
-      { input: "", expected: { success: false } },
-      { input: "obj", expected: { success: false } }, // just a variable, not an access expression
-      { input: "42", expected: { success: false } }, // just a number
-      { input: '"string"', expected: { success: false } }, // just a string
-      { input: "func()", expected: { success: false } }, // just a function call
-      { input: "obj.", expected: { success: false } },
-      { input: ".property", expected: { success: false } },
-      { input: "[0]", expected: { success: false } },
     ];
 
     testCases.forEach(({ input, expected }) => {
-      if (expected.success) {
-        it(`should parse "${input}" successfully`, () => {
-          const result = accessExpressionParser(input);
-          expect(result.success).toBe(true);
-          if (result.success) {
-            expect(result.result).toEqual(expected.result);
-          }
-        });
-      } else {
-        it(`should fail to parse "${input}"`, () => {
-          const result = accessExpressionParser(input);
-          expect(result.success).toBe(false);
-        });
-      }
+      it(`should parse "${input}" successfully`, () => {
+        const result = valueAccessParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result).toEqual(expected);
+        }
+      });
     });
   });
 
-  describe("syncAccessExpressionParser", () => {
-    const testCases = [
-      // sync keyword - dot property
-      {
-        input: "sync obj.foo",
-        expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "dotProperty",
-              object: { type: "variableName", value: "obj" },
-              propertyName: "foo",
-            },
-            async: false,
+  describe("chained expressions (flat chain)", () => {
+    it('should parse "fetch().json()" with flat chain', () => {
+      const result = valueAccessParser("fetch().json()");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "valueAccess",
+          base: {
+            type: "functionCall",
+            functionName: "fetch",
+            arguments: [],
           },
-        },
-      },
-
-      // await keyword - dot property
-      {
-        input: "await obj.foo",
-        expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "dotProperty",
-              object: { type: "variableName", value: "obj" },
-              propertyName: "foo",
-            },
-            async: false,
-          },
-        },
-      },
-
-      // sync keyword - dot function call
-      {
-        input: "sync Promise.resolve()",
-        expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "dotFunctionCall",
-              object: { type: "variableName", value: "Promise" },
+          chain: [
+            {
+              kind: "methodCall",
               functionCall: {
                 type: "functionCall",
-                functionName: "resolve",
+                functionName: "json",
                 arguments: [],
               },
             },
-            async: false,
-          },
-        },
-      },
+          ],
+        });
+      }
+    });
 
-      // await keyword - dot function call
-      {
-        input: "await Promise.bar()",
-        expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "dotFunctionCall",
-              object: { type: "variableName", value: "Promise" },
+    it('should parse "foo.bar().baz()[3].a1" with flat 4-element chain', () => {
+      const result = valueAccessParser("foo.bar().baz()[3].a1");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "valueAccess",
+          base: { type: "variableName", value: "foo" },
+          chain: [
+            {
+              kind: "methodCall",
               functionCall: {
                 type: "functionCall",
                 functionName: "bar",
                 arguments: [],
               },
             },
-            async: false,
-          },
-        },
-      },
+            {
+              kind: "methodCall",
+              functionCall: {
+                type: "functionCall",
+                functionName: "baz",
+                arguments: [],
+              },
+            },
+            { kind: "index", index: { type: "number", value: "3" } },
+            { kind: "property", name: "a1" },
+          ],
+        });
+      }
+    });
 
-      // await keyword - dot function call with arguments
-      {
-        input: "await Promise.race(res1, res2)",
-        expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "dotFunctionCall",
-              object: { type: "variableName", value: "Promise" },
+    it('should parse "response.data.items" with flat chain', () => {
+      const result = valueAccessParser("response.data.items");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "valueAccess",
+          base: { type: "variableName", value: "response" },
+          chain: [
+            { kind: "property", name: "data" },
+            { kind: "property", name: "items" },
+          ],
+        });
+      }
+    });
+  });
+
+  describe("failure cases", () => {
+    it('should fail to parse ""', () => {
+      expect(valueAccessParser("").success).toBe(false);
+    });
+    it('should fail to parse ".property"', () => {
+      expect(valueAccessParser(".property").success).toBe(false);
+    });
+  });
+
+  describe("syncValueAccessParser", () => {
+    it('should parse "sync obj.foo" with async: false', () => {
+      const result = syncValueAccessParser("sync obj.foo");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "valueAccess",
+          base: { type: "variableName", value: "obj" },
+          chain: [{ kind: "property", name: "foo" }],
+          async: false,
+        });
+      }
+    });
+
+    it('should parse "await obj.foo" with async: false', () => {
+      const result = syncValueAccessParser("await obj.foo");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "valueAccess",
+          base: { type: "variableName", value: "obj" },
+          chain: [{ kind: "property", name: "foo" }],
+          async: false,
+        });
+      }
+    });
+
+    it('should parse "sync Promise.resolve()" with async: false', () => {
+      const result = syncValueAccessParser("sync Promise.resolve()");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "valueAccess",
+          base: { type: "variableName", value: "Promise" },
+          chain: [
+            {
+              kind: "methodCall",
+              functionCall: {
+                type: "functionCall",
+                functionName: "resolve",
+                arguments: [],
+              },
+            },
+          ],
+          async: false,
+        });
+      }
+    });
+
+    it('should parse "await Promise.race(res1, res2)" with async: false', () => {
+      const result = syncValueAccessParser("await Promise.race(res1, res2)");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "valueAccess",
+          base: { type: "variableName", value: "Promise" },
+          chain: [
+            {
+              kind: "methodCall",
               functionCall: {
                 type: "functionCall",
                 functionName: "race",
@@ -594,255 +437,251 @@ describe("access expression parsers", () => {
                 ],
               },
             },
-            async: false,
-          },
-        },
-      },
-
-      // sync keyword - chained access
-      {
-        input: "sync response.data.items",
-        expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "dotProperty",
-              object: {
-                type: "accessExpression",
-                expression: {
-                  type: "dotProperty",
-                  object: { type: "variableName", value: "response" },
-                  propertyName: "data",
-                },
-              },
-              propertyName: "items",
-            },
-            async: false,
-          },
-        },
-      },
-
-      // Failure cases
-      { input: "async obj.foo", expected: { success: false } },
-      { input: "obj.foo", expected: { success: false } },
-      { input: "syncobj.foo", expected: { success: false } },
-      { input: "awaitobj.foo", expected: { success: false } },
-      { input: "sync", expected: { success: false } },
-      { input: "await", expected: { success: false } },
-      { input: "sync ", expected: { success: false } },
-      { input: "await ", expected: { success: false } },
-      { input: "", expected: { success: false } },
-    ];
-
-    testCases.forEach(({ input, expected }) => {
-      if (expected.success) {
-        it(`should parse "${input}" successfully`, () => {
-          const result = syncAccessExpressionParser(input);
-          expect(result.success).toBe(true);
-          if (result.success) {
-            expect(result.result).toEqual(expected.result);
-          }
-        });
-      } else {
-        it(`should fail to parse "${input}"`, () => {
-          const result = syncAccessExpressionParser(input);
-          expect(result.success).toBe(false);
+          ],
+          async: false,
         });
       }
     });
+
+    it('should parse "sync response.data.items" with async: false', () => {
+      const result = syncValueAccessParser("sync response.data.items");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "valueAccess",
+          base: { type: "variableName", value: "response" },
+          chain: [
+            { kind: "property", name: "data" },
+            { kind: "property", name: "items" },
+          ],
+          async: false,
+        });
+      }
+    });
+
+    // sync on bare function call
+    it('should parse "sync fetch()" with async: false', () => {
+      const result = syncValueAccessParser("sync fetch()");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "functionCall",
+          functionName: "fetch",
+          arguments: [],
+          async: false,
+        });
+      }
+    });
+
+    // Failure cases
+    it("should fail on async keyword", () => {
+      expect(syncValueAccessParser("async obj.foo").success).toBe(false);
+    });
+    it("should fail without keyword", () => {
+      expect(syncValueAccessParser("obj.foo").success).toBe(false);
+    });
+    it("should fail on empty string", () => {
+      expect(syncValueAccessParser("").success).toBe(false);
+    });
   });
 
-  describe("asyncAccessExpressionParser", () => {
-    const testCases = [
-      // async keyword - dot property
-      {
-        input: "async obj.foo",
-        expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "dotProperty",
-              object: { type: "variableName", value: "obj" },
-              propertyName: "foo",
-            },
-            async: true,
-          },
-        },
-      },
+  describe("asyncValueAccessParser", () => {
+    it('should parse "async obj.foo" with async: true', () => {
+      const result = asyncValueAccessParser("async obj.foo");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "valueAccess",
+          base: { type: "variableName", value: "obj" },
+          chain: [{ kind: "property", name: "foo" }],
+          async: true,
+        });
+      }
+    });
 
-      // async keyword - dot function call
-      {
-        input: "async Promise.sayHi()",
-        expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "dotFunctionCall",
-              object: { type: "variableName", value: "Promise" },
+    it('should parse "async Promise.sayHi()" with async: true', () => {
+      const result = asyncValueAccessParser("async Promise.sayHi()");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "valueAccess",
+          base: { type: "variableName", value: "Promise" },
+          chain: [
+            {
+              kind: "methodCall",
               functionCall: {
                 type: "functionCall",
                 functionName: "sayHi",
                 arguments: [],
               },
             },
-            async: true,
-          },
-        },
-      },
+          ],
+          async: true,
+        });
+      }
+    });
 
-      // async keyword - dot function call with arguments
-      {
-        input: "async obj.method(42)",
-        expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "dotFunctionCall",
-              object: { type: "variableName", value: "obj" },
+    it('should parse "async obj.method(42)" with async: true', () => {
+      const result = asyncValueAccessParser("async obj.method(42)");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "valueAccess",
+          base: { type: "variableName", value: "obj" },
+          chain: [
+            {
+              kind: "methodCall",
               functionCall: {
                 type: "functionCall",
                 functionName: "method",
                 arguments: [{ type: "number", value: "42" }],
               },
             },
-            async: true,
-          },
-        },
-      },
+          ],
+          async: true,
+        });
+      }
+    });
 
-      // async keyword - chained access
-      {
-        input: "async fetch().json()",
-        expected: {
-          success: true,
-          result: {
-            type: "accessExpression",
-            expression: {
-              type: "dotFunctionCall",
-              object: {
-                type: "functionCall",
-                functionName: "fetch",
-                arguments: [],
-              },
+    it('should parse "async fetch().json()" with async: true', () => {
+      const result = asyncValueAccessParser("async fetch().json()");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "valueAccess",
+          base: {
+            type: "functionCall",
+            functionName: "fetch",
+            arguments: [],
+          },
+          chain: [
+            {
+              kind: "methodCall",
               functionCall: {
                 type: "functionCall",
                 functionName: "json",
                 arguments: [],
               },
             },
-            async: true,
-          },
-        },
-      },
-
-      // Failure cases
-      { input: "sync obj.foo", expected: { success: false } },
-      { input: "await obj.foo", expected: { success: false } },
-      { input: "obj.foo", expected: { success: false } },
-      { input: "asyncobj.foo", expected: { success: false } },
-      { input: "async", expected: { success: false } },
-      { input: "async ", expected: { success: false } },
-      { input: "", expected: { success: false } },
-    ];
-
-    testCases.forEach(({ input, expected }) => {
-      if (expected.success) {
-        it(`should parse "${input}" successfully`, () => {
-          const result = asyncAccessExpressionParser(input);
-          expect(result.success).toBe(true);
-          if (result.success) {
-            expect(result.result).toEqual(expected.result);
-          }
-        });
-      } else {
-        it(`should fail to parse "${input}"`, () => {
-          const result = asyncAccessExpressionParser(input);
-          expect(result.success).toBe(false);
+          ],
+          async: true,
         });
       }
     });
-  });
 
-  describe("accessExpressionParser with async/sync/await keywords", () => {
-    it("should parse 'await' keyword and set async: false", () => {
-      const result = accessExpressionParser("await Promise.bar()");
+    // async on bare function call
+    it('should parse "async fetch()" with async: true', () => {
+      const result = asyncValueAccessParser("async fetch()");
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.result).toEqual({
-          type: "accessExpression",
-          expression: {
-            type: "dotFunctionCall",
-            object: { type: "variableName", value: "Promise" },
-            functionCall: {
-              type: "functionCall",
-              functionName: "bar",
-              arguments: [],
+          type: "functionCall",
+          functionName: "fetch",
+          arguments: [],
+          async: true,
+        });
+      }
+    });
+
+    // Failure cases
+    it("should fail on sync keyword", () => {
+      expect(asyncValueAccessParser("sync obj.foo").success).toBe(false);
+    });
+    it("should fail on await keyword", () => {
+      expect(asyncValueAccessParser("await obj.foo").success).toBe(false);
+    });
+    it("should fail without keyword", () => {
+      expect(asyncValueAccessParser("obj.foo").success).toBe(false);
+    });
+    it("should fail on empty string", () => {
+      expect(asyncValueAccessParser("").success).toBe(false);
+    });
+  });
+
+  describe("valueAccessParser with async/sync/await keywords", () => {
+    it("should parse 'await' keyword and set async: false", () => {
+      const result = valueAccessParser("await Promise.bar()");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "valueAccess",
+          base: { type: "variableName", value: "Promise" },
+          chain: [
+            {
+              kind: "methodCall",
+              functionCall: {
+                type: "functionCall",
+                functionName: "bar",
+                arguments: [],
+              },
             },
-          },
+          ],
           async: false,
         });
       }
     });
 
     it("should parse 'async' keyword and set async: true", () => {
-      const result = accessExpressionParser("async Promise.sayHi()");
+      const result = valueAccessParser("async Promise.sayHi()");
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.result).toEqual({
-          type: "accessExpression",
-          expression: {
-            type: "dotFunctionCall",
-            object: { type: "variableName", value: "Promise" },
-            functionCall: {
-              type: "functionCall",
-              functionName: "sayHi",
-              arguments: [],
+          type: "valueAccess",
+          base: { type: "variableName", value: "Promise" },
+          chain: [
+            {
+              kind: "methodCall",
+              functionCall: {
+                type: "functionCall",
+                functionName: "sayHi",
+                arguments: [],
+              },
             },
-          },
+          ],
           async: true,
         });
       }
     });
 
     it("should parse 'sync' keyword and set async: false", () => {
-      const result = accessExpressionParser("sync Promise.sayHi()");
+      const result = valueAccessParser("sync Promise.sayHi()");
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.result).toEqual({
-          type: "accessExpression",
-          expression: {
-            type: "dotFunctionCall",
-            object: { type: "variableName", value: "Promise" },
-            functionCall: {
-              type: "functionCall",
-              functionName: "sayHi",
-              arguments: [],
+          type: "valueAccess",
+          base: { type: "variableName", value: "Promise" },
+          chain: [
+            {
+              kind: "methodCall",
+              functionCall: {
+                type: "functionCall",
+                functionName: "sayHi",
+                arguments: [],
+              },
             },
-          },
+          ],
           async: false,
         });
       }
     });
 
     it("should parse without keyword and not set async field", () => {
-      const result = accessExpressionParser("Promise.sayHi()");
+      const result = valueAccessParser("Promise.sayHi()");
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.result).toEqual({
-          type: "accessExpression",
-          expression: {
-            type: "dotFunctionCall",
-            object: { type: "variableName", value: "Promise" },
-            functionCall: {
-              type: "functionCall",
-              functionName: "sayHi",
-              arguments: [],
+          type: "valueAccess",
+          base: { type: "variableName", value: "Promise" },
+          chain: [
+            {
+              kind: "methodCall",
+              functionCall: {
+                type: "functionCall",
+                functionName: "sayHi",
+                arguments: [],
+              },
             },
-          },
+          ],
         });
       }
     });

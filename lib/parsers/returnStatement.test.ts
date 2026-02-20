@@ -123,12 +123,9 @@ describe("returnStatementParser", () => {
         result: {
           type: "returnStatement",
           value: {
-            type: "accessExpression",
-            expression: {
-              type: "dotProperty",
-              object: { type: "variableName", value: "obj" },
-              propertyName: "property",
-            },
+            type: "valueAccess",
+            base: { type: "variableName", value: "obj" },
+            chain: [{ kind: "property", name: "property" }],
           },
         },
       },

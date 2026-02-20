@@ -30,6 +30,7 @@ export type VariableNameLiteral = {
   type: "variableName";
   value: string;
   scope?: ScopeType;
+  async?: boolean;
 };
 
 export type BooleanLiteral = {

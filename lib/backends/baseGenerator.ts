@@ -18,12 +18,7 @@ import {
 
 import { AwaitStatement } from "@/types/await.js";
 import { TimeBlock } from "@/types/timeBlock.js";
-import {
-  AccessExpression,
-  DotFunctionCall,
-  DotProperty,
-  IndexAccess,
-} from "../types/access.js";
+import { ValueAccess } from "../types/access.js";
 import { AgencyArray, AgencyObject } from "../types/dataStructures.js";
 import { FunctionCall, FunctionDefinition } from "../types/function.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
@@ -187,8 +182,8 @@ export class BaseGenerator {
         return this.processFunctionDefinition(node);
       case "functionCall":
         return this.processFunctionCall(node);
-      case "accessExpression":
-        return this.processAccessExpression(node);
+      case "valueAccess":
+        return this.processValueAccess(node);
       case "comment":
         return this.processComment(node);
       case "matchBlock":
@@ -226,8 +221,6 @@ export class BaseGenerator {
         return this.processIfElse(node);
       case "specialVar":
         return this.processSpecialVar(node);
-      case "indexAccess":
-        return this.processIndexAccess(node);
       case "timeBlock":
         return this.processTimeBlock(node, `__defaultTimeblockName`);
       case "newLine":
@@ -321,31 +314,12 @@ export class BaseGenerator {
     return "processReturnStatement not implemented";
   }
 
-  protected processAccessExpression(node: AccessExpression): string {
-    switch (node.expression.type) {
-      case "dotProperty":
-        return this.processDotProperty(node.expression);
-      case "indexAccess":
-        return this.processIndexAccess(node.expression);
-      case "dotFunctionCall":
-        return this.processDotFunctionCall(node.expression);
-    }
+  protected processValueAccess(node: ValueAccess): string {
+    return "processValueAccess not implemented";
   }
 
   protected processMatchBlock(node: MatchBlock): string {
     return "processMatchBlock not implemented";
-  }
-
-  protected processDotProperty(node: DotProperty): string {
-    return "processDotProperty not implemented";
-  }
-
-  protected processDotFunctionCall(node: DotFunctionCall): string {
-    return "processDotFunctionCall not implemented";
-  }
-
-  protected processIndexAccess(node: IndexAccess): string {
-    return "processIndexAccess not implemented";
   }
 
   protected processAssignment(node: Assignment): string {

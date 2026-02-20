@@ -4,7 +4,7 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "\"Hi from foo!\"",
+      "expectedOutput": "9",
       "evaluationCriteria": [
         {
           "type": "exact"

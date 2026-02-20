@@ -1,9 +1,4 @@
-// THIS FILE WAS AUTO-GENERATED
-// Source: lib/templates/backends/typescriptGenerator/imports.mustache
-// Any manual changes will be lost.
-import { apply } from "typestache";
-
-export const template = `import { fileURLToPath } from "url";
+import { fileURLToPath } from "url";
 import process from "process";
 import { z } from "zod";
 import * as readline from "readline";
@@ -13,41 +8,35 @@ import * as smoltalk from "agency-lang";
 import path from "path";
 
 /* Code to log to statelog */
-const statelogHost = "{{{logHost:string}}}";
+const statelogHost = "https://agency-lang.com";
 const __traceId = nanoid();
 const statelogConfig = {
   host: statelogHost,
   traceId: __traceId,
-  {{#hasApiKey}}
-  apiKey: "{{{logApiKey?:string}}}",
-  {{/hasApiKey}}
-  {{^hasApiKey}}
+  
+  
   apiKey: process.env.STATELOG_API_KEY || "",
-  {{/hasApiKey}}
-  projectId: "{{{logProjectId:string}}}",
-  debugMode: {{{logDebugMode:boolean}}},
+  
+  projectId: "",
+  debugMode: false,
 };
 const __statelogClient = new StatelogClient(statelogConfig);
 
 /* Code for Smoltalk client */
-const __model = "{{{clientDefaultModel:string}}}";
+const __model = "gpt-4o-mini";
 
 const __getClientWithConfig = (config = {}) => {
   const defaultConfig = {
-    {{#hasOpenAiApiKey}}
-    openAiApiKey: "{{{clientOpenAiApiKey?:string}}}",
-    {{/hasOpenAiApiKey}}
-    {{^hasOpenAiApiKey}}
+    
+    
     openAiApiKey: process.env.OPENAI_API_KEY || "",
-    {{/hasOpenAiApiKey}}
-    {{#hasGoogleApiKey}}
-    googleApiKey: "{{{clientGoogleApiKey?:string}}}",
-    {{/hasGoogleApiKey}}
-    {{^hasGoogleApiKey}}
+    
+    
+    
     googleApiKey: process.env.GEMINI_API_KEY || "",
-    {{/hasGoogleApiKey}}
+    
     model: __model,
-    logLevel: "{{{clientLogLevel:string}}}",
+    logLevel: "warn",
   };
 
   return smoltalk.getClient({ ...defaultConfig, ...config });
@@ -93,7 +82,7 @@ async function _builtinFetch(url, args = {}) {
     const text = await result.text();
     return text;
   } catch (e) {
-    throw new Error(\`Failed to get text from $\{url\}: $\{e\}\`);
+    throw new Error(`Failed to get text from ${url}: ${e}`);
   }
 }
 
@@ -103,7 +92,7 @@ async function _builtinFetchJSON(url, args = {}) {
     const json = await result.json();
     return json;
   } catch (e) {
-    throw new Error(\`Failed to parse JSON from $\{url\}: $\{e\}\`);
+    throw new Error(`Failed to parse JSON from ${url}: ${e}`);
   }
 }
 
@@ -151,7 +140,7 @@ function printJSON(obj) {
 
 export const __readSkillTool = {
   name: "readSkill",
-  description: \`Skills provide specialized knowledge and instructions for particular scenarios.
+  description: `Skills provide specialized knowledge and instructions for particular scenarios.
 Use this tool when you need enhanced guidance for a specific type of task.
 
 Args:
@@ -160,7 +149,7 @@ Args:
 Returns:
     The skill content with specialized instructions, or an error message
     if the skill is not found.
-\`,
+`,
   schema: z.object({"filepath": z.string(), })
 };
 
@@ -176,7 +165,7 @@ export function __deepClone(obj) {
 
 function __createReturnObject(result) {
   // Note: we're *not* using structuredClone here because structuredClone
-  // doesn't call \`toJSON\`, so it's not cloning our message objects correctly.
+  // doesn't call `toJSON`, so it's not cloning our message objects correctly.
   return JSON.parse(JSON.stringify({
     messages: result.messages,
     data: result.data,
@@ -450,7 +439,7 @@ const handleStreamingResponse = async (__completion, statelogClient, __prompt, _
             syncResult = chunk.result;
             break;
           case "error":
-            console.error(\`Error in LLM response stream: \${chunk.error}\`);
+            console.error(`Error in LLM response stream: ${chunk.error}`);
             break;
           default:
             break;
@@ -466,7 +455,7 @@ const handleStreamingResponse = async (__completion, statelogClient, __prompt, _
         count++;
       }
       if (onStreamLock) {
-        console.log(\`Couldn't acquire lock, \${count}\`);
+        console.log(`Couldn't acquire lock, ${count}`);
       }
       onStreamLock = true;
 
@@ -556,25 +545,273 @@ class MessageThread {
     );
     return thread;
   }
-}`;
-
-export type TemplateType = {
-  logHost: string;
-  hasApiKey: boolean;
-  logApiKey?: string;
-  logProjectId: string;
-  logDebugMode: boolean;
-  clientDefaultModel: string;
-  hasOpenAiApiKey: boolean;
-  clientOpenAiApiKey?: string;
-  hasGoogleApiKey: boolean;
-  clientGoogleApiKey?: string;
-  clientLogLevel: string;
-};
-
-const render = (args: TemplateType) => {
-  return apply(template, args);
+}
+/*function add({a, b}) {
+  return a + b;
 }
 
-export default render;
+const addTool = {
+  name: "add",
+  description: "Adds two numbers together and returns the result.",
+  schema: z.object({
+    a: z.number().describe("The first number to add"),
+    b: z.number().describe("The second number to add"),
+  }),
+};
+*/
+
+graph.node("main", async (state) => {
+    const __graph = state.__metadata?.graph || graph;
+    const statelogClient = state.__metadata?.statelogClient || __statelogClient;
     
+    // if `state.__metadata?.__stateStack` is set, that means we are resuming execution
+    // at this node after an interrupt. In that case, this is the line that restores the state.
+    if (state.__metadata?.__stateStack) {
+      __stateStack = state.__metadata.__stateStack;
+      
+      // restore global state
+      if (state.__metadata?.__stateStack?.global) {
+        __global = state.__metadata.__stateStack.global;
+      }
+
+      // clear the state stack from metadata so it doesn't propagate to other nodes.
+      state.__metadata.__stateStack = undefined;
+    }
+
+    if (state.__metadata?.callbacks) {
+      __callbacks = state.__metadata.callbacks;
+    }
+
+    await __callHook("onNodeStart", { nodeName: "main" });
+
+    // either creates a new stack for this node,
+    // or restores the stack if we're resuming after an interrupt,
+    // depending on the mode of the state stack (serialize or deserialize).
+    const __stack = __stateStack.getNewState();
+    
+    // We're going to modify __stack.step to keep track of what line we're on,
+    // but first we save this value. This will help us figure out if we should execute
+    // from the start of this node or from a specific line.
+    const __step = __stack.step;
+
+    const __self = __stack.locals;
+
+    if (__stack.messages[0]) {
+     __stack.messages[0] = MessageThread.fromJSON(__stack.messages[0]);
+} else {
+    __stack.messages[0] = new MessageThread();
+}
+if (__stack.messages[1]) {
+     __stack.messages[1] = MessageThread.fromJSON(__stack.messages[1]);
+} else {
+    __stack.messages[1] = new MessageThread();
+}
+
+    // if (state.messages) {
+    //   __stack.messages[0].setMessages(state.messages);
+    // }
+
+    
+    
+      if (__step <= 0) {
+        
+        __stack.step++;
+      }
+      
+
+      if (__step <= 1) {
+        if (__stateStack.interruptData?.interruptResponse?.type === "resolve") {
+  __stack.locals.name = __stateStack.interruptData.interruptResponse.value;
+  __stateStack.interruptData.interruptResponse = null;
+} else {
+  const __interruptResult = interrupt(`What is your name?`);
+  __stateStack.interruptData = {
+    nodesTraversed: __graph.getNodesTraversed(),
+  };
+  __interruptResult.__state = __stateStack.toJSON();
+  
+  return { messages: __stack.messages, data: __interruptResult };
+  
+  
+}
+        __stack.step++;
+      }
+      
+
+      if (__step <= 2) {
+        
+async function _greeting(__metadata) {
+  const __prompt = `Say hello to {name}`;
+  const startTime = performance.now();
+  let __messages = __metadata?.messages || new MessageThread();
+
+  // These are to restore state after interrupt.
+  // TODO I think this could be implemented in a cleaner way.
+  let __toolCalls = __stateStack.interruptData?.toolCall ? [__stateStack.interruptData.toolCall] : [];
+  const __interruptResponse = __stateStack.interruptData?.interruptResponse || null;
+  const __tools = undefined;
+
+  
+  
+  const __responseFormat = undefined;
+  
+  
+  const __client = __getClientWithConfig({});
+  let responseMessage;
+
+  if (__toolCalls.length === 0) {
+    __messages.push(smoltalk.userMessage(__prompt));
+  
+  
+    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
+    let __completion = await __client.text({
+      messages: __messages.getMessages(),
+      tools: __tools,
+      responseFormat: __responseFormat,
+      stream: false
+    });
+
+    const endTime = performance.now();
+
+    
+
+    statelogClient.promptCompletion({
+      messages: __messages.getMessages(),
+      completion: __completion,
+      model: __client.getModel(),
+      timeTaken: endTime - startTime,
+      tools: __tools,
+      responseFormat: __responseFormat
+    });
+
+    if (!__completion.success) {
+      throw new Error(
+        `Error getting response from ${__model}: ${__completion.error}`
+      );
+    }
+
+    responseMessage = __completion.value;
+    __toolCalls = responseMessage.toolCalls || [];
+
+    if (__toolCalls.length > 0) {
+      // Add assistant's response with tool calls to message history
+      __messages.push(smoltalk.assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+    }
+
+    __updateTokenStats(responseMessage.usage, responseMessage.cost);
+    await __callHook("onLLMCallEnd", { result: responseMessage, usage: responseMessage.usage, cost: responseMessage.cost, timeTaken: endTime - startTime });
+
+  }
+
+  // Handle function calls
+  if (__toolCalls.length > 0) {
+    let toolCallStartTime, toolCallEndTime;
+    let haltExecution = false;
+    let haltToolCall = {}
+    let haltInterrupt = null;
+
+    // Process each tool call
+    for (const toolCall of __toolCalls) {
+      
+    }
+
+    if (haltExecution) {
+      statelogClient.debug(`Tool call interrupted execution.`, {
+        messages: __messages.getMessages(),
+        model: __client.getModel(),
+      });
+
+      __stateStack.interruptData = {
+        messages: __messages.toJSON().messages,
+        nodesTraversed: __graph.getNodesTraversed(),
+        toolCall: haltToolCall,
+      };
+      haltInterrupt.__state = __stateStack.toJSON();
+      return haltInterrupt;
+    }
+  
+    const nextStartTime = performance.now();
+    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
+    let __completion = await __client.text({
+      messages: __messages.getMessages(),
+      tools: __tools,
+      responseFormat: __responseFormat,
+      stream: false
+    });
+
+    const nextEndTime = performance.now();
+
+    
+
+    statelogClient.promptCompletion({
+      messages: __messages.getMessages(),
+      completion: __completion,
+      model: __client.getModel(),
+      timeTaken: nextEndTime - nextStartTime,
+      tools: __tools,
+      responseFormat: __responseFormat,
+    });
+
+    if (!__completion.success) {
+      throw new Error(
+        `Error getting response from ${__model}: ${__completion.error}`
+      );
+    }
+    responseMessage = __completion.value;
+    __updateTokenStats(responseMessage.usage, responseMessage.cost);
+    await __callHook("onLLMCallEnd", { result: responseMessage, usage: responseMessage.usage, cost: responseMessage.cost, timeTaken: nextEndTime - nextStartTime });
+  }
+
+  // Add final assistant response to history
+  // not passing tool calls back this time
+  __messages.push(smoltalk.assistantMessage(responseMessage.output));
+  
+
+  
+  return responseMessage.output;
+  
+}
+
+
+__self.greeting = _greeting({
+      messages: __stack.messages[(typeof __threadId !== 'undefined') ? __threadId : 1]
+    });
+        __stack.step++;
+      }
+      
+
+      if (__step <= 3) {
+        [__self.greeting] = await Promise.all([__self.greeting]);
+        __stack.step++;
+      }
+      
+
+      if (__step <= 4) {
+        return { messages: __stack.messages, data: __stack.locals.greeting}
+        __stack.step++;
+      }
+      
+    
+    // this is just here to have a default return value from a node if the user doesn't specify one
+    await __callHook("onNodeEnd", { nodeName: "main", data: undefined });
+    return { messages: __stack.messages, data: undefined };
+});
+
+
+
+export async function main({ messages, callbacks } = {}) {
+
+  const __data = [  ];
+  __callbacks = callbacks || {};
+  await __callHook("onAgentStart", { nodeName: "main", args: __data, messages: messages || [] });
+  const __result = await graph.run("main", { messages: messages || [], data: __data });
+  const __returnObject = __createReturnObject(__result);
+  await __callHook("onAgentEnd", { nodeName: "main", result: __returnObject });
+  return __returnObject;
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+    const initialState = { messages: [], data: {} };
+    await main(initialState);
+}
+export default graph;

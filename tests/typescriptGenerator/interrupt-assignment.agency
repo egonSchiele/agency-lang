@@ -1,0 +1,5 @@
+node main() {
+  name = interrupt("What is your name?")
+  greeting = llm("Say hello to {name}")
+  return greeting
+}

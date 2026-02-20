@@ -24,6 +24,7 @@ import * as renderConditionalEdge from "../templates/backends/typescriptGenerato
 import * as renderFunctionDefinition from "../templates/backends/typescriptGenerator/functionDefinition.js";
 import * as renderInternalFunctionCall from "../templates/backends/typescriptGenerator/internalFunctionCall.js";
 import * as renderFunctionCallAssignment from "../templates/backends/typescriptGenerator/functionCallAssignment.js";
+import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
 import * as goToNode from "../templates/backends/typescriptGenerator/goToNode.js";
 import * as renderGraphNode from "../templates/backends/typescriptGenerator/graphNode.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
@@ -283,6 +284,14 @@ export class TypeScriptGenerator extends BaseGenerator {
 
     if (value.type === "prompt") {
       return this.processPromptLiteral(variableName, typeHint, value);
+    } else if (value.type === "functionCall" && value.functionName === "interrupt") {
+      // Special handling for interrupt assignments: x = interrupt("prompt")
+      const interruptArgs = value.arguments.map((arg) => this.processNode(arg)).join(", ");
+      return renderInterruptAssignment.default({
+        variableName: `${scopeVar}.${variableName}${chainStr}`,
+        interruptArgs,
+        nodeContext: this.getCurrentScope().type === "node",
+      });
     } else if (value.type === "functionCall") {
       // Direct assignment for other literal types
       const code = this.processNode(value);

@@ -283,6 +283,14 @@ export async function rejectInterrupt(
   return await respondToInterrupt(interrupt, { type: "reject" }, metadata);
 }
 
+export async function resolveInterrupt(
+  interrupt,
+  value,
+  metadata = {},
+) {
+  return await respondToInterrupt(interrupt, { type: "resolve", value }, metadata);
+}
+
 /****** StateStack and related functions for serializing/deserializing execution state during interrupts ********/
 
 // See docs for notes on how this works.

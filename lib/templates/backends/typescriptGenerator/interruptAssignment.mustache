@@ -1,0 +1,16 @@
+if (__stateStack.interruptData?.interruptResponse?.type === "resolve") {
+  {{{variableName}}} = __stateStack.interruptData.interruptResponse.value;
+  __stateStack.interruptData.interruptResponse = null;
+} else {
+  const __interruptResult = interrupt({{{interruptArgs}}});
+  __stateStack.interruptData = {
+    nodesTraversed: __graph.getNodesTraversed(),
+  };
+  __interruptResult.__state = __stateStack.toJSON();
+  {{#nodeContext}}
+  return { messages: __stack.messages, data: __interruptResult };
+  {{/nodeContext}}
+  {{^nodeContext}}
+  return __interruptResult;
+  {{/nodeContext}}
+}

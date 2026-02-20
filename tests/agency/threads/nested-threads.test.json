@@ -1,0 +1,17 @@
+{
+  "sourceFile": "nested-threads.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[[{\"role\":\"user\",\"content\":\"What is the first prime number > 100?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":[101]}\"}],[{\"role\":\"user\",\"content\":\"What are the next 2 prime numbers after those?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":[11, 13]}\"}]]",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "This is part of a test on message threads. The result should be four messages:\n- The first message should be from the user asking \"What is the first prime number > 100?\"\n- The second message should be a response from the assistant giving the 101 as the answer.\n- The third should be a message from a user asking, \"what are the next two prime numbers after that?\"\n- At this point we are testing that the third and fourth message are not connected to the first and second message. So the fourth message should be the assistant giving two more prime numbers, but they shouldn't be the next two numbers in the sequence, because at this point the assistant should not know about the first two messages in the chat. So the fourth message should be a response from the assistant, giving any two prime numbers (7 and 11 or 11 and 13 are okay answers, for example), but not the two prime numbers after 101.",
+          "desiredAccuracy": 80
+        }
+      ]
+    }
+  ]
+}

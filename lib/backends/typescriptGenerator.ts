@@ -460,15 +460,13 @@ export class TypeScriptGenerator extends BaseGenerator {
         );
       }
       argsString = parts.join(", ");
-      const metadata = `{
-        statelogClient,
-        graph: __graph,
-        messages: __stack.messages[${node.threadId}].getMessages(),
-      }`;
       return renderInternalFunctionCall.default({
         functionName,
         argsString,
-        metadata,
+        statelogClient: "statelogClient",
+        graph: "__graph",
+        messages: `__stack.messages`, //[${node.threadId}]`,
+        threadId: node.threadId ? `${node.threadId}` : "undefined",
         awaitPrefix: node.async ? "" : "await ",
       });
     } else {
@@ -704,7 +702,7 @@ I'll probably need to do that for supporting type checking anyway.
 
     const clientConfig = prompt.config ? this.processNode(prompt.config) : "{}";
     const metadataObj = `{
-      messages: __stack.messages[${prompt.threadId}]?.getMessages(),
+      messages: __stack.messages[(typeof __threadId !== 'undefined') ? __threadId : ${prompt.threadId}]
     }`;
 
     const scopedFunctionArgs = functionArgs.map((arg) => {

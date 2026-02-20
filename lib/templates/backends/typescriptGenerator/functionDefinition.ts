@@ -10,7 +10,14 @@ export async function {{{functionName:string}}}(args, __metadata={}) {
     const __self = __stack.locals;
     const __graph = __metadata?.graph || graph;
     const statelogClient = __metadata?.statelogClient || __statelogClient;
+    const __threadId = __metadata?.threadId;
 
+    // if we're passing messages in,
+    // that means we want this function to add messages to that thread
+    // so this func call is currently in a thread/subthread
+    if (__metadata?.messages) {
+      __stack.messages = __metadata.messages;
+    }
     // args are always set whether we're restoring from state or not.
     // If we're not restoring from state, args were obviously passed in through the code.
     // If we are restoring from state, the node that called this function had to have passed

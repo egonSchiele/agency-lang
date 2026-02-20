@@ -155,35 +155,39 @@ export class TypescriptPreprocessor {
     parentId: string = ROOT_THREAD_ID,
   ): void {
     for (const { node, ancestors, scopes } of walkNodesArray(body)) {
-      /* Here's what's happening here. For any LLM calls that are not inside a message thread,
-      those calls will be run in parallel. That means they will all start their own message thread,
-      which means they need their own thread ID because all of these threads are actually set on a global
-      messages object and the thread IDs are used to track the different message threads.
-      const hasThreadParent = ancestors.some((a) => a.type === "messageThread");
-
-      But of course, if they are in the message thread,
+      /* If llm calls or function calls are in a message thread,
       then they should be using their parent's thread ID so that they're all part of the same thread. */
-      let promptNode: PromptLiteral | null = null;
-      if (node.type === "prompt") promptNode = node as PromptLiteral;
-      if (node.type === "assignment" && node.value.type === "prompt")
-        promptNode = node.value as PromptLiteral;
 
-      if (node.type === "returnStatement" && node.value.type === "prompt")
-        promptNode = node.value as PromptLiteral;
+      function setThreadId<T extends AgencyNode & { threadId?: string }>(
+        node: AgencyNode,
+        nodeType: string,
+      ): void {
+        let promptOrFuncNode: T | null = null;
+        if (node.type === nodeType) promptOrFuncNode = node as T;
+        if (node.type === "assignment" && node.value.type === nodeType)
+          promptOrFuncNode = node.value as T;
 
-      if (promptNode && !promptNode.threadId) {
-        /* console.log(
+        if (node.type === "returnStatement" && node.value.type === nodeType)
+          promptOrFuncNode = node.value as T;
+
+        if (promptOrFuncNode && !promptOrFuncNode.threadId) {
+          /* console.log(
           color.magenta(
             "setting threadId for prompt, threadId:",
             parentId,
             "prompt content:",
-            JSON.stringify(promptNode),
+            JSON.stringify(promptOrFuncNode),
           ),
         ); */
-        promptNode.threadId = parentId.toString();
+          promptOrFuncNode.threadId = parentId.toString();
+        }
       }
 
-      if (node.type === "functionCall" || node.type === "specialVar") {
+      setThreadId<PromptLiteral>(node, "prompt");
+      setThreadId<FunctionCall>(node, "functionCall");
+
+      // TODO still unsure what to do about specialVars
+      if (node.type === "specialVar") {
         node.threadId = parentId.toString();
       }
     }

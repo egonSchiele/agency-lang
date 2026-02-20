@@ -339,7 +339,8 @@ export async function test(config: AgencyConfig, testFile: string) {
             testCase.expectedOutput,
             criterion.judgePrompt,
           );
-          if (judgeResult.score >= criterion.desiredAccuracy) {
+          const passed = judgeResult.score >= criterion.desiredAccuracy;
+          if (passed) {
             console.log(
               color.green(
                 `  ✓ LLM Judge passed (score: ${judgeResult.score}/${criterion.desiredAccuracy})`,
@@ -353,6 +354,7 @@ export async function test(config: AgencyConfig, testFile: string) {
               ),
             );
             console.log(`    Reasoning: ${judgeResult.reasoning}`);
+            console.log(`    Actual Output:\n${actual}`);
             testPassed = false;
           }
         } catch (e) {

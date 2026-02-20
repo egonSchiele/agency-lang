@@ -1,0 +1,19 @@
+def canYouRepeatThat() {
+  return llm("What was the last message from you?")
+}
+
+node main() {
+  res1 = canYouRepeatThat()
+  msgs = thread {
+    res2: number[] = llm("What is the first prime number > 100?")
+    res3 = canYouRepeatThat()
+  }
+  res4 = canYouRepeatThat()
+
+  return { 
+    res1: res1,
+    res2: res2,
+    res3: res3,
+    res4: res4
+  }
+}

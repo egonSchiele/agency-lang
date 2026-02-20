@@ -1,0 +1,17 @@
+{
+  "sourceFile": "inside-and-outside.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"res1\":\"I don't have access to previous conversations, so I can't recall my last message to you or anyone else. However, I'm here to help with any questions or topics you'd like to discuss! What can I assist you with today?\",\"res2\":[101],\"res3\":\"The last message from me indicated that the first prime number greater than 100 is 101.\",\"res4\":\"I don't have the ability to recall previous interactions or messages in this chat. Each session is independent, so I don't retain any memory of past conversations. However, I'm here to help with any questions or topics you want to discuss now!\"}",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "You should see an object with the keys res1, res2, res3, and res4. Let's go through these keys one at a time:\n\n## res1\nThe value should be a string, something like \"I don't have access to previous conversations, so I can't recall my last message\". The phrasing can vary as long as the meaning stays the same.\n\n## res2\nThe message should be a number in an array: [101]\n\n## res3\nThe value should be a string, something like \"The last message from me indicated that the first prime number greater than 100 is 101.\"\n\n## res4\nThe value should be a string, something like \"I don't have access to previous conversations, so I can't recall my last message\" Again, the phrasing can vary as long as the meaning stays the same.",
+          "desiredAccuracy": 75
+        }
+      ]
+    }
+  ]
+}

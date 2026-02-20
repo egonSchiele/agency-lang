@@ -3,14 +3,21 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `{{{awaitPrefix:string}}}{{{functionName:string}}}([{{{argsString:string}}}], {{{metadata:string}}})
-`;
+export const template = `{{{awaitPrefix:string}}}{{{functionName:string}}}([{{{argsString:string}}}], {
+    statelogClient: {{{statelogClient:string}}},
+    graph: {{{graph:string}}},
+    messages: {{{messages:string}}},
+    threadId: {{{threadId:string}}}
+})`;
 
 export type TemplateType = {
   awaitPrefix: string;
   functionName: string;
   argsString: string;
-  metadata: string;
+  statelogClient: string;
+  graph: string;
+  messages: string;
+  threadId: string;
 };
 
 const render = (args: TemplateType) => {

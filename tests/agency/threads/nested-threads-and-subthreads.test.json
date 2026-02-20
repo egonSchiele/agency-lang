@@ -1,0 +1,17 @@
+{
+  "sourceFile": "nested-threads-and-subthreads.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[[{\"role\":\"user\",\"content\":\"What is the first prime number > 100?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":[101]}\"}],[{\"role\":\"user\",\"content\":\"What are the next 2 prime numbers after that?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":[11, 13]}\"}],[{\"role\":\"user\",\"content\":\"What is the first prime number > 100?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":[101]}\"},{\"role\":\"user\",\"content\":\"What are the next 2 prime numbers after that?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":[103, 107]}\"}]]",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "This is part of a test on message threads. The result should be an array with 3 nested arrays:\nThe first array should be a length of 2\nthe second array should be a length of 2\nthe third array should be a length of 4.\n\n## Messages in the first array\n\n- The first message should be from the user asking \"What is the first prime number > 100?\"\n- The second message should be a response from the assistant giving the 101 as the response.\n\n## Messages in the second array\n\n- The first message should be from the user asking \"What are the next 2 prime numbers after that?\"\n- The second message should be a response from the assistant giving two prime numbers. Any numbers except 103 and 107 will work.\n\n## Messages in the third array\n\n- The first message should be from the user asking \"What is the first prime number > 100?\"\n- The second message should be a response from the assistant giving the 101 as the response.\nThe third message should be from the user, asking \"what are the next 2 prime numbers after that?\n\"The fourth message should be the assistant responding with \"[103, 107]\"",
+          "desiredAccuracy": 80
+        }
+      ]
+    }
+  ]
+}

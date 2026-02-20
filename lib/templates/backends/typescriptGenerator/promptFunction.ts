@@ -7,7 +7,7 @@ export const template = `
 async function _{{{variableName:string}}}({{{argsStr:string}}}) {
   const __prompt = {{{promptCode:string}}};
   const startTime = performance.now();
-  let __messages = __metadata?.messages || [];
+  let __messages = __metadata?.messages || new MessageThread();
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
@@ -34,7 +34,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
   
     await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
     let __completion = await __client.text({
-      messages: __messages,
+      messages: __messages.getMessages(),
       tools: __tools,
       responseFormat: __responseFormat,
       stream: {{{isStreaming:boolean}}}
@@ -47,7 +47,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
     {{/isStreaming}}
 
     statelogClient.promptCompletion({
-      messages: __messages,
+      messages: __messages.getMessages(),
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
@@ -88,12 +88,12 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
 
     if (haltExecution) {
       statelogClient.debug(\`Tool call interrupted execution.\`, {
-        messages: __messages,
+        messages: __messages.getMessages(),
         model: __client.getModel(),
       });
 
       __stateStack.interruptData = {
-        messages: __messages.map((msg) => msg.toJSON()),
+        messages: __messages.toJSON().messages,
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
       };
@@ -104,7 +104,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
     const nextStartTime = performance.now();
     await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
     let __completion = await __client.text({
-      messages: __messages,
+      messages: __messages.getMessages(),
       tools: __tools,
       responseFormat: __responseFormat,
       stream: {{{isStreaming:boolean}}}
@@ -117,7 +117,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
     {{/isStreaming}}
 
     statelogClient.promptCompletion({
-      messages: __messages,
+      messages: __messages.getMessages(),
       completion: __completion,
       model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,

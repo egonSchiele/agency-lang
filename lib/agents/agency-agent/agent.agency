@@ -1,10 +1,34 @@
 import tool { addTask, listTasks, markTaskDone } from "./subagents/task.agency"
+import tool { writeToPlan, readPlan } from "./subagents/plan.agency"
 
 systemPrompt = read("./prompts/system.md")
+
+planPrompt = read("./prompts/plan.md")
+
+type NextAction = { type: "askUser"; question: string } | { type: "done" } | { type: "start" }
+
+def printTool(str: string) {
+  """
+  Use this tool to print out any string to the console. This is useful for debugging and for communicating with the user.
+  """
+  print(str)
+}
+
 node main() {
   thread {
-    system(systemPrompt)
-    greeting: string = llm("Say hello world and introduce yourself as the Agency language assistant.")
-    print(greeting)
+    system("${systemPrompt}\n\n${planPrompt}")
+    userMsg = input("What would you like to accomplish today? ")
+    nextAction: NextAction = { 
+      type: "start"
+    }
+    nextType = nextAction.type
+    while (nextType != "done") {
+      uses writeToPlan, readPlan, printTool
+      nextAction: NextAction = llm("${userMsg}")
+      hasQuestion = nextAction.type == "askUser"
+      if (hasQuestion) {
+        userMsg = input(nextAction.question)
+      }
+    }
   }
 }

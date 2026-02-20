@@ -36,14 +36,6 @@ response: string = llm(`Say hi to me`)
 magicNumber: number = llm(`Add 4 + 5`)
 ```
 
-You can also use the older backticks syntax. Any text between backticks, gets sent to an LLM. For example:
-
-```ts
-greet = `Say hi to me`
-```
-
-The text "Say hi to me" will be sent as a user message to the LLM, and the variable `greet` will be set to the LLM's response.
-
 If you want to request a specific output format, use a type hint.
 
 ### Type Hints
@@ -76,7 +68,7 @@ items: string[] = llm("List 5 fruits")
 Object types. Example:
 
 ```ts
-user: {name: string, age: number} = `Provide a user object with name and age`
+user: {name: string, age: number} = llm("Provide a user object with name and age")
 ```
 
 You can define a new type:
@@ -97,18 +89,6 @@ type User = {
 }
 ```
 
-NOTE: You currently CANNOT set a type on a variable. This will not work:
-
-```ts
-name: string[] = []
-```
-
-You'll need to skip the type:
-
-```ts
-name = []
-```
-
 ### Functions / tools
 
 Here is an example of a function in Agency:
@@ -123,11 +103,11 @@ def greet(name: string): string {
 All functions in Agency can automatically be used as tools. For example, you can now use the `greet` function as a tool in a prompt.
 
 ```ts
-+greet
+use greet
 response: string = `Use the greet function to greet Alice`
 ```
 
-The `+greet` line tells Agency to make the `greet` function available as a tool in the LLM prompt.
+The `use greet` line tells Agency to make the `greet` function available as a tool in the LLM prompt.
 
 ### Control Flow
 

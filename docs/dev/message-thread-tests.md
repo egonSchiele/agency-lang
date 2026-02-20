@@ -11,6 +11,8 @@
 - threads and subthreads inside functions
 
 - Subthreads that are not nested inside of a thread should raise an error with the typechecker.
+- Another thought: what about tools? What if a func that assumed it will be threaded is called as a tool?
+- If I do want to transfer message history to another node, how would I do that?
 
 - We also need to test messages being returned from an agent to JavaScript
 - messages being returned from a function to a node

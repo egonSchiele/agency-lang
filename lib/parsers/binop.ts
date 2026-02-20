@@ -1,7 +1,7 @@
 import { BinOpExpression, Operator } from "@/types/binop.js";
 import { capture, oneOf, or, Parser, seqC, set, str, trace } from "tarsec";
 import { simpleLiteralParser } from "./literals.js";
-import { optionalSemicolon } from "./parserUtils.js";
+import { oneOfStr, optionalSemicolon } from "./parserUtils.js";
 import { optionalSpaces } from "./utils.js";
 
 export const binOpParser: Parser<BinOpExpression> = (input: string) => {
@@ -12,13 +12,7 @@ export const binOpParser: Parser<BinOpExpression> = (input: string) => {
       capture(simpleLiteralParser, "left"),
       optionalSpaces,
       capture(
-        or(
-          str("=="),
-          str("!="),
-          str("<="),
-          str(">="),
-          oneOf("+-*/<>"),
-        ) as Parser<Operator>,
+        oneOfStr(["==", "!=", "+=", "-=", "*=", "/=", "<=", ">=", "+", "-", "*", "/", "<", ">"] as Operator[]),
         "operator",
       ),
       optionalSpaces,

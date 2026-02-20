@@ -487,6 +487,7 @@ class MessageThread {
   constructor(messages = []) {
     this.messages = messages;
     this.children = [];
+    this.id = nanoid();
   }
 
   addMessage(message) {
@@ -503,6 +504,10 @@ class MessageThread {
 
   setMessages(messages) {
     this.messages = messages;
+  }
+
+  push(message) {
+    this.messages.push(message);
   }
 
   newChild() {
@@ -567,7 +572,14 @@ export async function greet(args, __metadata={}) {
     const __self = __stack.locals;
     const __graph = __metadata?.graph || graph;
     const statelogClient = __metadata?.statelogClient || __statelogClient;
+    const __threadId = __metadata?.threadId;
 
+    // if we're passing messages in,
+    // that means we want this function to add messages to that thread
+    // so this func call is currently in a thread/subthread
+    if (__metadata?.messages) {
+      __stack.messages = __metadata.messages;
+    }
     // args are always set whether we're restoring from state or not.
     // If we're not restoring from state, args were obviously passed in through the code.
     // If we are restoring from state, the node that called this function had to have passed
@@ -668,10 +680,11 @@ if (__stack.messages[2]) {
 
       if (__step <= 1) {
         __stack.locals.result = greet([], {
-        statelogClient,
-        graph: __graph,
-        messages: __stack.messages[0].getMessages(),
-      });
+    statelogClient: statelogClient,
+    graph: __graph,
+    messages: __stack.messages,
+    threadId: 0
+});
 
 
 if (isInterrupt(__stack.locals.result)) {

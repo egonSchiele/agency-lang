@@ -487,6 +487,7 @@ class MessageThread {
   constructor(messages = []) {
     this.messages = messages;
     this.children = [];
+    this.id = nanoid();
   }
 
   addMessage(message) {
@@ -503,6 +504,10 @@ class MessageThread {
 
   setMessages(messages) {
     this.messages = messages;
+  }
+
+  push(message) {
+    this.messages.push(message);
   }
 
   newChild() {
@@ -583,7 +588,14 @@ export async function add(args, __metadata={}) {
     const __self = __stack.locals;
     const __graph = __metadata?.graph || graph;
     const statelogClient = __metadata?.statelogClient || __statelogClient;
+    const __threadId = __metadata?.threadId;
 
+    // if we're passing messages in,
+    // that means we want this function to add messages to that thread
+    // so this func call is currently in a thread/subthread
+    if (__metadata?.messages) {
+      __stack.messages = __metadata.messages;
+    }
     // args are always set whether we're restoring from state or not.
     // If we're not restoring from state, args were obviously passed in through the code.
     // If we are restoring from state, the node that called this function had to have passed
@@ -608,7 +620,7 @@ export async function add(args, __metadata={}) {
 async function _result(x, y, __metadata) {
   const __prompt = `add ${x} and ${y}`;
   const startTime = performance.now();
-  let __messages = __metadata?.messages || [];
+  let __messages = __metadata?.messages || new MessageThread();
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
@@ -630,7 +642,7 @@ async function _result(x, y, __metadata) {
   
     await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
     let __completion = await __client.text({
-      messages: __messages,
+      messages: __messages.getMessages(),
       tools: __tools,
       responseFormat: __responseFormat,
       stream: false
@@ -641,7 +653,7 @@ async function _result(x, y, __metadata) {
     
 
     statelogClient.promptCompletion({
-      messages: __messages,
+      messages: __messages.getMessages(),
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
@@ -682,12 +694,12 @@ async function _result(x, y, __metadata) {
 
     if (haltExecution) {
       statelogClient.debug(`Tool call interrupted execution.`, {
-        messages: __messages,
+        messages: __messages.getMessages(),
         model: __client.getModel(),
       });
 
       __stateStack.interruptData = {
-        messages: __messages.map((msg) => msg.toJSON()),
+        messages: __messages.toJSON().messages,
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
       };
@@ -698,7 +710,7 @@ async function _result(x, y, __metadata) {
     const nextStartTime = performance.now();
     await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
     let __completion = await __client.text({
-      messages: __messages,
+      messages: __messages.getMessages(),
       tools: __tools,
       responseFormat: __responseFormat,
       stream: false
@@ -709,7 +721,7 @@ async function _result(x, y, __metadata) {
     
 
     statelogClient.promptCompletion({
-      messages: __messages,
+      messages: __messages.getMessages(),
       completion: __completion,
       model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
@@ -739,7 +751,7 @@ async function _result(x, y, __metadata) {
 
 
 __self.result = _result(__stack.args.x, __stack.args.y, {
-      messages: __stack.messages[0]?.getMessages(),
+      messages: __stack.messages[(typeof __threadId !== 'undefined') ? __threadId : 0]
     });
         __stack.step++;
       }
@@ -765,7 +777,14 @@ export async function greet(args, __metadata={}) {
     const __self = __stack.locals;
     const __graph = __metadata?.graph || graph;
     const statelogClient = __metadata?.statelogClient || __statelogClient;
+    const __threadId = __metadata?.threadId;
 
+    // if we're passing messages in,
+    // that means we want this function to add messages to that thread
+    // so this func call is currently in a thread/subthread
+    if (__metadata?.messages) {
+      __stack.messages = __metadata.messages;
+    }
     // args are always set whether we're restoring from state or not.
     // If we're not restoring from state, args were obviously passed in through the code.
     // If we are restoring from state, the node that called this function had to have passed
@@ -790,7 +809,7 @@ export async function greet(args, __metadata={}) {
 async function _message(name, __metadata) {
   const __prompt = `Hello ${name}!`;
   const startTime = performance.now();
-  let __messages = __metadata?.messages || [];
+  let __messages = __metadata?.messages || new MessageThread();
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
@@ -812,7 +831,7 @@ async function _message(name, __metadata) {
   
     await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
     let __completion = await __client.text({
-      messages: __messages,
+      messages: __messages.getMessages(),
       tools: __tools,
       responseFormat: __responseFormat,
       stream: false
@@ -823,7 +842,7 @@ async function _message(name, __metadata) {
     
 
     statelogClient.promptCompletion({
-      messages: __messages,
+      messages: __messages.getMessages(),
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
@@ -864,12 +883,12 @@ async function _message(name, __metadata) {
 
     if (haltExecution) {
       statelogClient.debug(`Tool call interrupted execution.`, {
-        messages: __messages,
+        messages: __messages.getMessages(),
         model: __client.getModel(),
       });
 
       __stateStack.interruptData = {
-        messages: __messages.map((msg) => msg.toJSON()),
+        messages: __messages.toJSON().messages,
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
       };
@@ -880,7 +899,7 @@ async function _message(name, __metadata) {
     const nextStartTime = performance.now();
     await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
     let __completion = await __client.text({
-      messages: __messages,
+      messages: __messages.getMessages(),
       tools: __tools,
       responseFormat: __responseFormat,
       stream: false
@@ -891,7 +910,7 @@ async function _message(name, __metadata) {
     
 
     statelogClient.promptCompletion({
-      messages: __messages,
+      messages: __messages.getMessages(),
       completion: __completion,
       model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
@@ -921,7 +940,7 @@ async function _message(name, __metadata) {
 
 
 __self.message = _message(__stack.args.name, {
-      messages: __stack.messages[1]?.getMessages(),
+      messages: __stack.messages[(typeof __threadId !== 'undefined') ? __threadId : 1]
     });
         __stack.step++;
       }
@@ -947,7 +966,14 @@ export async function mixed(args, __metadata={}) {
     const __self = __stack.locals;
     const __graph = __metadata?.graph || graph;
     const statelogClient = __metadata?.statelogClient || __statelogClient;
+    const __threadId = __metadata?.threadId;
 
+    // if we're passing messages in,
+    // that means we want this function to add messages to that thread
+    // so this func call is currently in a thread/subthread
+    if (__metadata?.messages) {
+      __stack.messages = __metadata.messages;
+    }
     // args are always set whether we're restoring from state or not.
     // If we're not restoring from state, args were obviously passed in through the code.
     // If we are restoring from state, the node that called this function had to have passed
@@ -972,7 +998,7 @@ export async function mixed(args, __metadata={}) {
 async function _output(label, count, __metadata) {
   const __prompt = `${label}: ${count}`;
   const startTime = performance.now();
-  let __messages = __metadata?.messages || [];
+  let __messages = __metadata?.messages || new MessageThread();
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
@@ -994,7 +1020,7 @@ async function _output(label, count, __metadata) {
   
     await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
     let __completion = await __client.text({
-      messages: __messages,
+      messages: __messages.getMessages(),
       tools: __tools,
       responseFormat: __responseFormat,
       stream: false
@@ -1005,7 +1031,7 @@ async function _output(label, count, __metadata) {
     
 
     statelogClient.promptCompletion({
-      messages: __messages,
+      messages: __messages.getMessages(),
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
@@ -1046,12 +1072,12 @@ async function _output(label, count, __metadata) {
 
     if (haltExecution) {
       statelogClient.debug(`Tool call interrupted execution.`, {
-        messages: __messages,
+        messages: __messages.getMessages(),
         model: __client.getModel(),
       });
 
       __stateStack.interruptData = {
-        messages: __messages.map((msg) => msg.toJSON()),
+        messages: __messages.toJSON().messages,
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
       };
@@ -1062,7 +1088,7 @@ async function _output(label, count, __metadata) {
     const nextStartTime = performance.now();
     await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
     let __completion = await __client.text({
-      messages: __messages,
+      messages: __messages.getMessages(),
       tools: __tools,
       responseFormat: __responseFormat,
       stream: false
@@ -1073,7 +1099,7 @@ async function _output(label, count, __metadata) {
     
 
     statelogClient.promptCompletion({
-      messages: __messages,
+      messages: __messages.getMessages(),
       completion: __completion,
       model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
@@ -1103,7 +1129,7 @@ async function _output(label, count, __metadata) {
 
 
 __self.output = _output(__stack.args.label, __stack.args.count, {
-      messages: __stack.messages[2]?.getMessages(),
+      messages: __stack.messages[(typeof __threadId !== 'undefined') ? __threadId : 2]
     });
         __stack.step++;
       }
@@ -1129,7 +1155,14 @@ export async function processArray(args, __metadata={}) {
     const __self = __stack.locals;
     const __graph = __metadata?.graph || graph;
     const statelogClient = __metadata?.statelogClient || __statelogClient;
+    const __threadId = __metadata?.threadId;
 
+    // if we're passing messages in,
+    // that means we want this function to add messages to that thread
+    // so this func call is currently in a thread/subthread
+    if (__metadata?.messages) {
+      __stack.messages = __metadata.messages;
+    }
     // args are always set whether we're restoring from state or not.
     // If we're not restoring from state, args were obviously passed in through the code.
     // If we are restoring from state, the node that called this function had to have passed
@@ -1154,7 +1187,7 @@ export async function processArray(args, __metadata={}) {
 async function _result(items, __metadata) {
   const __prompt = `Processing array with ${items} items`;
   const startTime = performance.now();
-  let __messages = __metadata?.messages || [];
+  let __messages = __metadata?.messages || new MessageThread();
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
@@ -1176,7 +1209,7 @@ async function _result(items, __metadata) {
   
     await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
     let __completion = await __client.text({
-      messages: __messages,
+      messages: __messages.getMessages(),
       tools: __tools,
       responseFormat: __responseFormat,
       stream: false
@@ -1187,7 +1220,7 @@ async function _result(items, __metadata) {
     
 
     statelogClient.promptCompletion({
-      messages: __messages,
+      messages: __messages.getMessages(),
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
@@ -1228,12 +1261,12 @@ async function _result(items, __metadata) {
 
     if (haltExecution) {
       statelogClient.debug(`Tool call interrupted execution.`, {
-        messages: __messages,
+        messages: __messages.getMessages(),
         model: __client.getModel(),
       });
 
       __stateStack.interruptData = {
-        messages: __messages.map((msg) => msg.toJSON()),
+        messages: __messages.toJSON().messages,
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
       };
@@ -1244,7 +1277,7 @@ async function _result(items, __metadata) {
     const nextStartTime = performance.now();
     await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
     let __completion = await __client.text({
-      messages: __messages,
+      messages: __messages.getMessages(),
       tools: __tools,
       responseFormat: __responseFormat,
       stream: false
@@ -1255,7 +1288,7 @@ async function _result(items, __metadata) {
     
 
     statelogClient.promptCompletion({
-      messages: __messages,
+      messages: __messages.getMessages(),
       completion: __completion,
       model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
@@ -1285,7 +1318,7 @@ async function _result(items, __metadata) {
 
 
 __self.result = _result(__stack.args.items, {
-      messages: __stack.messages[3]?.getMessages(),
+      messages: __stack.messages[(typeof __threadId !== 'undefined') ? __threadId : 3]
     });
         __stack.step++;
       }
@@ -1311,7 +1344,14 @@ export async function flexible(args, __metadata={}) {
     const __self = __stack.locals;
     const __graph = __metadata?.graph || graph;
     const statelogClient = __metadata?.statelogClient || __statelogClient;
+    const __threadId = __metadata?.threadId;
 
+    // if we're passing messages in,
+    // that means we want this function to add messages to that thread
+    // so this func call is currently in a thread/subthread
+    if (__metadata?.messages) {
+      __stack.messages = __metadata.messages;
+    }
     // args are always set whether we're restoring from state or not.
     // If we're not restoring from state, args were obviously passed in through the code.
     // If we are restoring from state, the node that called this function had to have passed
@@ -1336,7 +1376,7 @@ export async function flexible(args, __metadata={}) {
 async function _result(value, __metadata) {
   const __prompt = `Received value: ${value}`;
   const startTime = performance.now();
-  let __messages = __metadata?.messages || [];
+  let __messages = __metadata?.messages || new MessageThread();
 
   // These are to restore state after interrupt.
   // TODO I think this could be implemented in a cleaner way.
@@ -1358,7 +1398,7 @@ async function _result(value, __metadata) {
   
     await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
     let __completion = await __client.text({
-      messages: __messages,
+      messages: __messages.getMessages(),
       tools: __tools,
       responseFormat: __responseFormat,
       stream: false
@@ -1369,7 +1409,7 @@ async function _result(value, __metadata) {
     
 
     statelogClient.promptCompletion({
-      messages: __messages,
+      messages: __messages.getMessages(),
       completion: __completion,
       model: __client.getModel(),
       timeTaken: endTime - startTime,
@@ -1410,12 +1450,12 @@ async function _result(value, __metadata) {
 
     if (haltExecution) {
       statelogClient.debug(`Tool call interrupted execution.`, {
-        messages: __messages,
+        messages: __messages.getMessages(),
         model: __client.getModel(),
       });
 
       __stateStack.interruptData = {
-        messages: __messages.map((msg) => msg.toJSON()),
+        messages: __messages.toJSON().messages,
         nodesTraversed: __graph.getNodesTraversed(),
         toolCall: haltToolCall,
       };
@@ -1426,7 +1466,7 @@ async function _result(value, __metadata) {
     const nextStartTime = performance.now();
     await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
     let __completion = await __client.text({
-      messages: __messages,
+      messages: __messages.getMessages(),
       tools: __tools,
       responseFormat: __responseFormat,
       stream: false
@@ -1437,7 +1477,7 @@ async function _result(value, __metadata) {
     
 
     statelogClient.promptCompletion({
-      messages: __messages,
+      messages: __messages.getMessages(),
       completion: __completion,
       model: __client.getModel(),
       timeTaken: nextEndTime - nextStartTime,
@@ -1467,7 +1507,7 @@ async function _result(value, __metadata) {
 
 
 __self.result = _result(__stack.args.value, {
-      messages: __stack.messages[4]?.getMessages(),
+      messages: __stack.messages[(typeof __threadId !== 'undefined') ? __threadId : 4]
     });
         __stack.step++;
       }
@@ -1634,10 +1674,11 @@ if (__stack.messages[10]) {
 
       if (__step <= 1) {
         __stack.locals.sum = add([5, 10], {
-        statelogClient,
-        graph: __graph,
-        messages: __stack.messages[6].getMessages(),
-      });
+    statelogClient: statelogClient,
+    graph: __graph,
+    messages: __stack.messages,
+    threadId: 6
+});
 
 
 if (isInterrupt(__stack.locals.sum)) {
@@ -1652,10 +1693,11 @@ if (isInterrupt(__stack.locals.sum)) {
 
       if (__step <= 2) {
         __stack.locals.greeting = greet([`Alice`], {
-        statelogClient,
-        graph: __graph,
-        messages: __stack.messages[7].getMessages(),
-      });
+    statelogClient: statelogClient,
+    graph: __graph,
+    messages: __stack.messages,
+    threadId: 7
+});
 
 
 if (isInterrupt(__stack.locals.greeting)) {
@@ -1670,10 +1712,11 @@ if (isInterrupt(__stack.locals.greeting)) {
 
       if (__step <= 3) {
         __stack.locals.labeled = mixed([42, `Answer`], {
-        statelogClient,
-        graph: __graph,
-        messages: __stack.messages[8].getMessages(),
-      });
+    statelogClient: statelogClient,
+    graph: __graph,
+    messages: __stack.messages,
+    threadId: 8
+});
 
 
 if (isInterrupt(__stack.locals.labeled)) {
@@ -1688,10 +1731,11 @@ if (isInterrupt(__stack.locals.labeled)) {
 
       if (__step <= 4) {
         __stack.locals.processed = processArray([[1, 2, 3, 4, 5]], {
-        statelogClient,
-        graph: __graph,
-        messages: __stack.messages[9].getMessages(),
-      });
+    statelogClient: statelogClient,
+    graph: __graph,
+    messages: __stack.messages,
+    threadId: 9
+});
 
 
 if (isInterrupt(__stack.locals.processed)) {
@@ -1706,10 +1750,11 @@ if (isInterrupt(__stack.locals.processed)) {
 
       if (__step <= 5) {
         __stack.locals.flexResult = flexible([`test`], {
-        statelogClient,
-        graph: __graph,
-        messages: __stack.messages[10].getMessages(),
-      });
+    statelogClient: statelogClient,
+    graph: __graph,
+    messages: __stack.messages,
+    threadId: 10
+});
 
 
 if (isInterrupt(__stack.locals.flexResult)) {

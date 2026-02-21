@@ -1,0 +1,17 @@
+{
+  "sourceFile": "thread-inside-function.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"res1\":[2,3,5,7,11],\"res2\":{\"foo\":[41,43],\"bar\":[47,53]},\"res3\":{\"foo\":[19,23],\"bar\":[29,31]},\"msgs\":[{\"role\":\"user\",\"content\":\"What are the first 5 prime numbers?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":[2,3,5,7,11]}\"}]}",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The result should be an object. Let's go through the keys one by one:\n\n## res1\nres1 should be exactly `[2, 3, 5, 7, 11]`.\n\n## res2 and res3\nres2 and res3 should be an object with two keys, `foo`, and `bar`. For both keys, the value should be an array of two primes. What the primes are does not matter, they don't need to match the expected output. The important point is that the primes in the bar array should be the ones that follow the primes in the `foo` array sequentially. So, for example, if the primes in the foo array are `[19,23]` the primes in the bar array should be `[29,31]`.\nBoth Res2 and Res3 should match this general structure, but the numbers can be different. The primes in Res3 don't need to have any connection to the primes in Res2",
+          "desiredAccuracy": 75
+        }
+      ]
+    }
+  ]
+}

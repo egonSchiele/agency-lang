@@ -1,0 +1,15 @@
+{
+  "sourceFile": "parallel-thread-dependent-call.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"res1\":[101],\"res2\":[103,107]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "sourceFile": "subthread-inside-function.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"res1\":[2,3,5,7,11],\"res2\":[13,17],\"res3\":[13,17],\"msgs\":[{\"role\":\"user\",\"content\":\"What are the first 5 prime numbers?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":[2,3,5,7,11]}\"}]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

@@ -8,9 +8,13 @@
 
 - message thread with nested function calls: tests/agency/threads/nested-function-calls/nested-three-levels-deep.agency
 - the same function being called inside and outside a message thread: tests/agency/threads/nested-function-calls/inside-and-outside.agency
-- threads and subthreads inside functions
+- subthreads inside functions: tests/agency/threads/subthread-inside-function.agency
+- threads inside functions: tests/agency/threads/thread-inside-function.agency
+- subthread with no parent thread: tests/agency/threads/subthread-no-parent-thread.agency
 
-- Subthreads that are not nested inside of a thread should raise an error with the typechecker.
+- Not in a thread, but one LLM call depends on the result of another LLM call.: tests/agency/threads/no-thread-dependent-call.agency
+- In a parallel thread, but one LLM call depends on the result of another LLM call.: tests/agency/threads/parallel-thread-dependent-call.agency
+
 - Another thought: what about tools? What if a func that assumed it will be threaded is called as a tool?
 - If I do want to transfer message history to another node, how would I do that?
 

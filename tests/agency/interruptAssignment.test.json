@@ -1,0 +1,22 @@
+{
+  "sourceFile": "interruptAssignment.agency",
+  "tests": [
+    {
+      "nodeName": "foo",
+      "input": "",
+      "expectedOutput": "\"Kya chal raha jai, michaelangelo!\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "resolve",
+          "expectedMessage": "Who do you want to say hi to?",
+          "resolvedValue": "michaelangelo"
+        }
+      ]
+    }
+  ]
+}

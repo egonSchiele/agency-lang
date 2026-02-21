@@ -160,8 +160,9 @@ export function executeNode({
   hasArgs: boolean;
   argsString: string;
   interruptHandlers?: Array<{
-    action: "approve" | "reject" | "modify";
+    action: "approve" | "reject" | "modify" | "resolve";
     modifiedArgs?: Record<string, any>;
+    resolvedValue?: any;
     expectedMessage?: string;
   }>;
 }): { data: any; [key: string]: any } {
@@ -217,8 +218,9 @@ export function executeJudge(
   expectedOutput: string,
   judgePrompt: string,
   interruptHandlers?: Array<{
-    action: "approve" | "reject" | "modify";
+    action: "approve" | "reject" | "modify" | "resolve";
     modifiedArgs?: Record<string, any>;
+    resolvedValue?: any;
     expectedMessage?: string;
   }>,
 ): { score: number; reasoning: string } {

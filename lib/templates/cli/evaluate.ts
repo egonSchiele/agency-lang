@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `import { {{{nodeName:string}}}, isInterrupt, approveInterrupt, rejectInterrupt, modifyInterrupt } from "./{{{filename:string}}}";
+export const template = `import { {{{nodeName:string}}}, isInterrupt, approveInterrupt, rejectInterrupt, modifyInterrupt, resolveInterrupt } from "./{{{filename:string}}}";
 import { writeFileSync } from "fs";
 
 export async function runEvaluation() {
@@ -42,6 +42,8 @@ export async function runEvaluation() {
       result = await rejectInterrupt(interruptData);
     } else if (handler.action === "modify") {
       result = await modifyInterrupt(interruptData, handler.modifiedArgs);
+    } else if (handler.action === "resolve") {
+      result = await resolveInterrupt(interruptData, handler.resolvedValue);
     } else {
       throw new Error("Unknown interrupt action: " + handler.action);
     }

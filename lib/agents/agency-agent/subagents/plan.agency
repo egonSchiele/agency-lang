@@ -21,9 +21,14 @@ def writeToPlan(fieldName: string, content: string): Plan {
   """
   Use this tool to incrementally fill out the Plan object and build a plan. The structure of the Plan object is as follows:
 
-```
-${Plan}
-```
+type Plan = {
+desiredActions: string[];
+requirements: string[];
+dependencies: string[];
+potentialChallenges: string[];
+toolsNeeded: string[];
+skillsNeeded: string[]
+}
 
 Call this tool, one field at a time, passing in the field name you want to modify and the new content for that field. The tool returns the current plan after your modification.
   """

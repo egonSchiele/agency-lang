@@ -4,10 +4,6 @@
 import { apply } from "typestache";
 
 export const template = `__threads.active().push(smoltalk.systemMessage({{{systemMessage:string}}}));
-let __completion = await __client.text({
-  messages: __threads.active().getMessages(),
-});
-
 `;
 
 export type TemplateType = {

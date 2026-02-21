@@ -843,7 +843,7 @@ async function _response(person_name, person_age, __metadata) {
 
 
 __self.response = _response(__stateStack.globals.person.name, __stateStack.globals.person.age, {
-      messages: __threads.getOrCreateActive()
+      messages: new MessageThread()
     });
         __stack.step++;
       }

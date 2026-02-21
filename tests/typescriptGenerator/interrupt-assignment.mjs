@@ -845,7 +845,7 @@ async function _greeting(__metadata) {
 
 
 __self.greeting = _greeting({
-      messages: __threads.getOrCreateActive()
+      messages: new MessageThread()
     });
         __stack.step++;
       }

@@ -826,7 +826,7 @@ async function _response1(__metadata) {
 
 
 __self.response1 = _response1({
-      messages: __threads.getOrCreateActive()
+      messages: new MessageThread()
     });
         __stack.step++;
       }

@@ -830,7 +830,7 @@ async function _response(__metadata) {
 
 
 __self.response = _response({
-      messages: __threads.getOrCreateActive()
+      messages: new MessageThread()
     });
         __stack.step++;
       }
@@ -988,7 +988,7 @@ async function _response2(__metadata) {
 
 
 __self.response2 = _response2({
-      messages: __threads.getOrCreateActive()
+      messages: new MessageThread()
     });
         __stack.step++;
       }

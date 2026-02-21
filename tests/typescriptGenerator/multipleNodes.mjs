@@ -826,7 +826,7 @@ async function _greeting(__metadata) {
 
 
 __self.greeting = _greeting({
-      messages: __threads.getOrCreateActive()
+      messages: new MessageThread()
     });
         __stack.step++;
       }
@@ -1063,7 +1063,7 @@ async function _result(msg, __metadata) {
 
 
 __self.result = _result(__stack.args.msg, {
-      messages: __threads.getOrCreateActive()
+      messages: new MessageThread()
     });
         __stack.step++;
       }

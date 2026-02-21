@@ -838,7 +838,7 @@ async function _result(input, __metadata) {
 
 
 __self.result = _result(__stack.args.input, {
-      messages: __threads.getOrCreateActive()
+      messages: new MessageThread()
     });
         __stack.step++;
       }

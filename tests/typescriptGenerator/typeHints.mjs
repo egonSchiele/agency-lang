@@ -837,7 +837,7 @@ async function _count(__metadata) {
 
 
 __self.count = _count({
-      messages: __threads.getOrCreateActive()
+      messages: new MessageThread()
     });
         __stack.step++;
       }
@@ -979,7 +979,7 @@ async function _message(__metadata) {
 
 
 __self.message = _message({
-      messages: __threads.getOrCreateActive()
+      messages: new MessageThread()
     });
         __stack.step++;
       }

@@ -828,7 +828,7 @@ async function _response(msg, __metadata) {
 
 
 __self.response = _response(__stack.args.msg, {
-      messages: __threads.getOrCreateActive()
+      messages: new MessageThread()
     });
 
 
@@ -1031,7 +1031,7 @@ async function _response(msg, __metadata) {
 
 
 __self.response = _response(__stack.args.msg, {
-      messages: __threads.getOrCreateActive()
+      messages: new MessageThread()
     });
 
 

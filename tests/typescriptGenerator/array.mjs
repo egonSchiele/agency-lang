@@ -837,7 +837,7 @@ async function _numbers(__metadata) {
 
 
 __self.numbers = _numbers({
-      messages: __threads.getOrCreateActive()
+      messages: new MessageThread()
     });
         __stack.step++;
       }
@@ -1002,7 +1002,7 @@ async function _greetings(__metadata) {
 
 
 __self.greetings = _greetings({
-      messages: __threads.getOrCreateActive()
+      messages: new MessageThread()
     });
         __stack.step++;
       }

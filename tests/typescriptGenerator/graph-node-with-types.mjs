@@ -839,7 +839,7 @@ async function _greeting(name, __metadata) {
 
 
 __self.greeting = _greeting(__stack.args.name, {
-      messages: __threads.getOrCreateActive()
+      messages: new MessageThread()
     });
         __stack.step++;
       }

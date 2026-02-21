@@ -851,7 +851,7 @@ async function _sentiment(message, __metadata) {
 
 
 __self.sentiment = _sentiment(__stack.locals.message, {
-      messages: __threads.getOrCreateActive()
+      messages: new MessageThread()
     });
         __stack.step++;
       }

@@ -838,7 +838,7 @@ async function _foo(__metadata) {
 
 
 __self.foo = _foo({
-      messages: __threads.getOrCreateActive()
+      messages: new MessageThread()
     });
         __stack.step++;
       }

@@ -837,7 +837,7 @@ async function _url(__metadata) {
 
 
 __self.url = _url({
-      messages: __threads.getOrCreateActive()
+      messages: new MessageThread()
     });
         __stack.step++;
       }

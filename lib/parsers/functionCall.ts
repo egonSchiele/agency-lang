@@ -80,9 +80,9 @@ export const llmPromptFunctionCallParser: Parser<PromptLiteral> = (
     throw new Error(`First argument to llm function must be a prompt literal.`);
   }
   const promptConfig = args[1];
-  if (promptConfig && promptConfig.type !== "agencyObject") {
+  if (promptConfig && promptConfig.type !== "agencyObject" && promptConfig.type !== "variableName") {
     throw new Error(
-      `Second argument to llm function must be an object literal for configuration.`,
+      `Second argument to llm function must be an object literal or variable.`,
     );
   }
 

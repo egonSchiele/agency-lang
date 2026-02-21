@@ -93,6 +93,9 @@ export function* getAllVariablesInBody(
         for (const toolName of node.tools?.toolNames ?? []) {
           yield { name: toolName, node };
         }
+        if (node.config) {
+          yield* getAllVariablesInBody([node.config]);
+        }
       }
     } else if (node.type === "returnStatement") {
       yield* getAllVariablesInBody([node.value]);
@@ -204,6 +207,10 @@ export function* walkNodes(
       );
     } else if (node.type === "specialVar") {
       yield* walkNodes([node.value], [...ancestors, node], scopes);
+    } else if (node.type === "prompt") {
+      if (node.config) {
+        yield* walkNodes([node.config], [...ancestors, node], scopes);
+      }
     } else if (node.type === "binOpExpression") {
       yield* walkNodes([node.left], [...ancestors, node], scopes);
       yield* walkNodes([node.right], [...ancestors, node], scopes);

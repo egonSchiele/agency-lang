@@ -1,4 +1,4 @@
-import { ScopeType } from "@/types.js";
+import { AgencyNode, ScopeType } from "@/types.js";
 import { AgencyObject } from "./dataStructures.js";
 import { Skill } from "./skill.js";
 import { UsesTool } from "./tools.js";
@@ -55,7 +55,7 @@ export type InterpolationSegment = {
 export type PromptLiteral = {
   type: "prompt";
   segments: PromptSegment[];
-  config?: AgencyObject;
+  config?: AgencyNode;
   isStreaming?: boolean;
   async?: boolean;
   tools?: UsesTool;

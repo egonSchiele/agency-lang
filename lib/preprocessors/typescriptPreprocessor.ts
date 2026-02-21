@@ -1219,7 +1219,7 @@ export class TypescriptPreprocessor {
 
     // Then, whenever we see a variable being referenced,
     // we try to look up its scope and set it on that variable.
-    for (const { node, scopes } of walkNodesArray(this.program.nodes)) {
+    for (const { node } of getAllVariablesInBodyArray(this.program.nodes)) {
       if (node.type === "assignment") {
         node.scope = lookupScope(node.variableName);
       } else if (node.type === "variableName") {

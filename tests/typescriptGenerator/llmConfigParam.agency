@@ -3,5 +3,8 @@ config = {
 }
 node main() {
   foo: number[] = llm("What are 5 numbers?", config)
-  print(foo)
+  foo2: number[] = llm("What are 5 numbers?", { 
+    maxTokens: 100
+  })
+  print(foo, foo2)
 }

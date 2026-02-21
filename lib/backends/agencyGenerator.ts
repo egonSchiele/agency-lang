@@ -170,7 +170,7 @@ export class AgencyGenerator extends BaseGenerator {
     }
 
     if (node.config) {
-      const objCode = this.processAgencyObject(node.config);
+      const objCode = this.processNode(node.config);
       result += `", ${objCode})`;
     } else {
       result += `")`;

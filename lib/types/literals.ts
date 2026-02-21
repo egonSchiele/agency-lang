@@ -60,7 +60,6 @@ export type PromptLiteral = {
   async?: boolean;
   tools?: UsesTool;
   skills?: Skill[];
-  threadId?: string;
 };
 
 export type RawCode = {

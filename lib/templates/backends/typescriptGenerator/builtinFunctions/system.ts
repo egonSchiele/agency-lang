@@ -3,15 +3,14 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `__stack.messages[{{{threadId}}}].push(smoltalk.systemMessage({{{systemMessage:string}}}));
+export const template = `__threads.active().push(smoltalk.systemMessage({{{systemMessage:string}}}));
 let __completion = await __client.text({
-  messages: __stack.messages[{{{threadId}}}].getMessages(),
+  messages: __threads.active().getMessages(),
 });
 
 `;
 
 export type TemplateType = {
-  threadId: string | boolean | number;
   systemMessage: string;
 };
 

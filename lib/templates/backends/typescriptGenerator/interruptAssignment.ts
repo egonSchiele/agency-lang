@@ -13,7 +13,7 @@ export const template = `if (__stateStack.interruptData?.interruptResponse?.type
   };
   __interruptResult.__state = __stateStack.toJSON();
   {{#nodeContext}}
-  return { messages: __stack.messages, data: __interruptResult };
+  return { messages: __threads, data: __interruptResult };
   {{/nodeContext}}
   {{^nodeContext}}
   return __interruptResult;

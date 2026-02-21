@@ -8,7 +8,7 @@ if (__stateStack.interruptData?.interruptResponse?.type === "resolve") {
   };
   __interruptResult.__state = __stateStack.toJSON();
   {{#nodeContext}}
-  return { messages: __stack.messages, data: __interruptResult };
+  return { messages: __threads, data: __interruptResult };
   {{/nodeContext}}
   {{^nodeContext}}
   return __interruptResult;

@@ -6,8 +6,7 @@ import { apply } from "typestache";
 export const template = `{{{awaitPrefix:string}}}{{{functionName:string}}}([{{{argsString:string}}}], {
     statelogClient: {{{statelogClient:string}}},
     graph: {{{graph:string}}},
-    messages: {{{messages:string}}},
-    threadId: {{{threadId:string}}}
+    threads: __threads
 })`;
 
 export type TemplateType = {
@@ -16,8 +15,6 @@ export type TemplateType = {
   argsString: string;
   statelogClient: string;
   graph: string;
-  messages: string;
-  threadId: string;
 };
 
 const render = (args: TemplateType) => {

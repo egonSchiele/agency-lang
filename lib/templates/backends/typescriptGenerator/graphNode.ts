@@ -7,12 +7,12 @@ export const template = `
 graph.node("{{{name}}}", async (state) => {
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
-    
+
     // if \`state.__metadata?.__stateStack\` is set, that means we are resuming execution
     // at this node after an interrupt. In that case, this is the line that restores the state.
     if (state.__metadata?.__stateStack) {
       __stateStack = state.__metadata.__stateStack;
-      
+
       // restore global state
       if (state.__metadata?.__stateStack?.global) {
         __global = state.__metadata.__stateStack.global;
@@ -32,7 +32,7 @@ graph.node("{{{name}}}", async (state) => {
     // or restores the stack if we're resuming after an interrupt,
     // depending on the mode of the state stack (serialize or deserialize).
     const __stack = __stateStack.getNewState();
-    
+
     // We're going to modify __stack.step to keep track of what line we're on,
     // but first we save this value. This will help us figure out if we should execute
     // from the start of this node or from a specific line.
@@ -40,16 +40,14 @@ graph.node("{{{name}}}", async (state) => {
 
     const __self = __stack.locals;
 
-    {{{initializeMessageThreads:string}}}
-
-    // if (state.messages) {
-    //   __stack.messages[0].setMessages(state.messages);
-    // }
+    // Initialize or restore the ThreadStore for dynamic message thread management
+    const __threads = __stack.threads ? ThreadStore.fromJSON(__stack.threads) : new ThreadStore();
+    __stack.threads = __threads;
 
     {{#hasParam}}
-    
+
     const __params = {{{paramNames}}};
-    
+
     // Any arguments that were passed into this node,
     // save them onto the stack, unless we are restoring the stack after an interrupt,
     // in which case leave as is
@@ -60,16 +58,15 @@ graph.node("{{{name}}}", async (state) => {
     }
     {{/hasParam}}
     {{{body}}}
-    
+
     // this is just here to have a default return value from a node if the user doesn't specify one
     await __callHook("onNodeEnd", { nodeName: "{{{name}}}", data: undefined });
-    return { messages: __stack.messages, data: undefined };
+    return { messages: __threads, data: undefined };
 });
 `;
 
 export type TemplateType = {
   name: string | boolean | number;
-  initializeMessageThreads: string;
   hasParam: boolean;
   paramNames: string | boolean | number;
   body: string | boolean | number;

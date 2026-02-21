@@ -28,7 +28,6 @@ import * as renderInterruptAssignment from "../templates/backends/typescriptGene
 import * as goToNode from "../templates/backends/typescriptGenerator/goToNode.js";
 import * as renderGraphNode from "../templates/backends/typescriptGenerator/graphNode.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
-import * as renderInitializeMessageThread from "../templates/backends/typescriptGenerator/initializeMessageThread.js";
 import * as renderMessageThread from "../templates/backends/typescriptGenerator/messageThread.js";
 import * as promptFunction from "../templates/backends/typescriptGenerator/promptFunction.js";
 import * as renderRunNodeFunction from "../templates/backends/typescriptGenerator/runNodeFunction.js";
@@ -187,9 +186,6 @@ export class TypeScriptGenerator extends BaseGenerator {
       body: bodyCode.join("\n"),
       hasParam: parameters.length > 0,
       paramNames,
-      initializeMessageThreads: this.initializeMessageThreads(
-        node.threadIds || [],
-      ),
     });
   }
 
@@ -202,7 +198,7 @@ export class TypeScriptGenerator extends BaseGenerator {
           return `return ${returnCode}\n`;
         }
       }
-      return `return { messages: __stack.messages, data: ${returnCode}}\n`;
+      return `return { messages: __threads, data: ${returnCode}}\n`;
     }
 
     const returnCode = this.processNode(node.value);
@@ -263,16 +259,20 @@ export class TypeScriptGenerator extends BaseGenerator {
     return lines.join("\n");
   }
 
-
   private renderAccessChain(chain?: AccessChainElement[]): string {
     if (!chain || chain.length === 0) return "";
-    return chain.map(el => {
-      switch (el.kind) {
-        case "property": return `.${el.name}`;
-        case "index": return `[${this.processNode(el.index)}]`;
-        case "methodCall": return `.${this.generateFunctionCallExpression(el.functionCall)}`;
-      }
-    }).join("");
+    return chain
+      .map((el) => {
+        switch (el.kind) {
+          case "property":
+            return `.${el.name}`;
+          case "index":
+            return `[${this.processNode(el.index)}]`;
+          case "methodCall":
+            return `.${this.generateFunctionCallExpression(el.functionCall)}`;
+        }
+      })
+      .join("");
   }
 
   protected processAssignment(node: Assignment): string {
@@ -284,9 +284,14 @@ export class TypeScriptGenerator extends BaseGenerator {
 
     if (value.type === "prompt") {
       return this.processPromptLiteral(variableName, typeHint, value);
-    } else if (value.type === "functionCall" && value.functionName === "interrupt") {
+    } else if (
+      value.type === "functionCall" &&
+      value.functionName === "interrupt"
+    ) {
       // Special handling for interrupt assignments: x = interrupt("prompt")
-      const interruptArgs = value.arguments.map((arg) => this.processNode(arg)).join(", ");
+      const interruptArgs = value.arguments
+        .map((arg) => this.processNode(arg))
+        .join(", ");
       return renderInterruptAssignment.default({
         variableName: `${scopeVar}.${variableName}${chainStr}`,
         interruptArgs,
@@ -312,7 +317,8 @@ export class TypeScriptGenerator extends BaseGenerator {
       // Direct assignment for other literal types
       const code = this.processNode(value);
       return (
-        `${scopeVar}.${variableName}${chainStr}${typeAnnotation} = ${code.trim()};` + "\n"
+        `${scopeVar}.${variableName}${chainStr}${typeAnnotation} = ${code.trim()};` +
+        "\n"
       );
     }
   }
@@ -458,24 +464,16 @@ export class TypeScriptGenerator extends BaseGenerator {
     });
     let argsString = "";
     if (this.isAgencyFunction(node.functionName)) {
-      if (!node.threadId) {
-        throw new Error(
-          `No threadId for function call: ${JSON.stringify(node)}`,
-        );
-      }
       argsString = parts.join(", ");
       return renderInternalFunctionCall.default({
         functionName,
         argsString,
         statelogClient: "statelogClient",
         graph: "__graph",
-        messages: `__stack.messages`, //[${node.threadId}]`,
-        threadId: node.threadId ? `${node.threadId}` : "undefined",
         awaitPrefix: node.async ? "" : "await ",
       });
     } else if (node.functionName === "system") {
       return renderBuiltinFunctionsSystem.default({
-        threadId: node.threadId ? `${node.threadId}` : "undefined",
         systemMessage: parts[0],
       });
     } else {
@@ -638,10 +636,6 @@ export class TypeScriptGenerator extends BaseGenerator {
     functionArgs: string[];
     prompt: PromptLiteral;
   }): string {
-    if (!prompt.threadId) {
-      throw new Error(`No threadId for prompt: ${JSON.stringify(prompt)}`);
-    }
-
     // Generate async function for prompt-based assignment
     const _variableType = variableType ||
       this.typeHints[variableName] || {
@@ -711,7 +705,7 @@ I'll probably need to do that for supporting type checking anyway.
 
     const clientConfig = prompt.config ? this.processNode(prompt.config) : "{}";
     const metadataObj = `{
-      messages: __stack.messages[(typeof __threadId !== 'undefined') ? __threadId : ${prompt.threadId}]
+      messages: __threads.getOrCreateActive()
     }`;
 
     const scopedFunctionArgs = functionArgs.map((arg) => {
@@ -818,13 +812,7 @@ I'll probably need to do that for supporting type checking anyway.
           value,
         });
       case "messages":
-        if (!node.threadId) {
-          throw new Error(
-            `No threadId for messages specialVar: ${JSON.stringify(node)}`,
-          );
-        }
-
-        return `__stack.messages[${node.threadId}].setMessages(${value});\n`;
+        return `__threads.active().setMessages(${value});\n`;
       default:
         throw new Error(`Unhandled SpecialVar name: ${node.name}`);
     }
@@ -862,8 +850,6 @@ I'll probably need to do that for supporting type checking anyway.
       hasVar: !!varName,
       varName,
       isSubthread: node.subthread,
-      threadId: node.threadId || "0",
-      parentThreadId: node.parentThreadId || "0",
     });
   }
 
@@ -902,13 +888,6 @@ I'll probably need to do that for supporting type checking anyway.
       hasData: parts.length > 0,
       data: argsString,
     });
-  }
-
-  protected initializeMessageThreads(threadIds: string[]): string {
-    const lines = threadIds.map((threadId, index) => {
-      return renderInitializeMessageThread.default({ index: threadId });
-    });
-    return lines.join("\n");
   }
 
   private agencyFileToDefaultImportName(agencyFile: string): string {

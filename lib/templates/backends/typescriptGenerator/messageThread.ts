@@ -4,21 +4,26 @@
 import { apply } from "typestache";
 
 export const template = `
+{
 {{#isSubthread}}
-__stack.messages[{{{threadId:string}}}] = __stack.messages[{{{parentThreadId:string}}}].newSubthreadChild();
+const __tid = __threads.createSubthread();
 {{/isSubthread}}
+{{^isSubthread}}
+const __tid = __threads.create();
+{{/isSubthread}}
+__threads.pushActive(__tid);
 
 {{{bodyCode:string}}}
 {{#hasVar}}
-{{{varName?}}} = __stack.messages[{{{threadId:string}}}].cloneMessages()
+{{{varName?}}} = __threads.active().cloneMessages();
 {{/hasVar}}
 
-// __stack.messages = __stack.prevMessages;`;
+__threads.popActive();
+}
+`;
 
 export type TemplateType = {
   isSubthread: boolean;
-  threadId: string;
-  parentThreadId: string;
   bodyCode: string;
   hasVar: boolean;
   varName?: string | boolean | number;

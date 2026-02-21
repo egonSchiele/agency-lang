@@ -8,5 +8,4 @@ export type SpecialVar = {
   type: "specialVar";
   name: SpecialVarName;
   value: Literal | AgencyObject | AgencyArray;
-  threadId?: string;
 };

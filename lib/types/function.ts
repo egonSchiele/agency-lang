@@ -21,7 +21,6 @@ export type FunctionDefinition = {
   returnType?: VariableType | null;
   docString?: DocString;
   async?: boolean;
-  threadIds?: string[];
 };
 
 export type FunctionCall = {
@@ -35,7 +34,6 @@ export type FunctionCall = {
     | FunctionCall
   )[];
   async?: boolean;
-  threadId?: string;
 };
 
 export type DocString = {

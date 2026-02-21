@@ -11,29 +11,20 @@ import {
   FunctionDefinition,
   getImportedNames,
   globalScope,
-  GraphNodeDefinition,
   IfElse,
-  InterpolationSegment,
   PromptLiteral,
   RawCode,
   Scope,
   ScopeType,
   TimeBlock,
-  VariableNameLiteral,
   WhileLoop,
 } from "@/types.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
-import { uniq } from "@/utils.js";
 import {
   getAllVariablesInBodyArray,
-  setWalkNodeDebug,
-  walkNodeDebug,
   walkNodesArray,
 } from "@/utils/node.js";
-import { color } from "termcolors";
-
-const ROOT_THREAD_ID = "0";
 
 export class TypescriptPreprocessor {
   public program: AgencyProgram;
@@ -41,7 +32,6 @@ export class TypescriptPreprocessor {
   protected functionNameToAsync: Record<string, boolean> = {};
   protected functionNameToUsesInterrupt: Record<string, boolean> = {};
   protected functionDefinitions: Record<string, FunctionDefinition> = {};
-  protected threadIdCounter: number = 0;
   protected importedTools: string[] = [];
   constructor(program: AgencyProgram, config: AgencyConfig = {}) {
     this.program = structuredClone(program);
@@ -60,186 +50,8 @@ export class TypescriptPreprocessor {
     this.filterExcludedNodeTypes();
     this.filterExcludedBuiltinFunctions();
     this.validateFetchDomains();
-    this.addNodeIDsToMessageThreads();
-    this.addNodeIDsToPrompts();
     this.resolveVariableScopes();
     return this.program;
-  }
-
-  protected addNodeIDsToMessageThreads(): void {
-    //setWalkNodeDebug(true);
-    for (const node of this.program.nodes) {
-      if (node.type === "function" || node.type === "graphNode") {
-        /* console.log(
-          color.cyan(
-            "ADDING NODE IDS TO",
-            node.type,
-            node.type == "graphNode" ? node.nodeName : node.functionName,
-          ),
-        ); */
-        node.threadIds = [];
-        this._addNodeIDsToMessageThreads(node.body, node);
-      }
-    }
-    // setWalkNodeDebug(false);
-  }
-
-  protected addNodeIDsToPrompts(): void {
-    //setWalkNodeDebug(true);
-    for (const node of this.program.nodes) {
-      if (node.type === "function" || node.type === "graphNode") {
-        /* console.log(
-          color.cyan(
-            "ADDING NODE IDS TO",
-            node.type,
-            node.type == "graphNode" ? node.nodeName : node.functionName,
-          ),
-        ); */
-        this._addNodeIDsToPrompts(node.body, node);
-        node.threadIds = uniq(node.threadIds || []);
-      }
-    }
-    // setWalkNodeDebug(false);
-  }
-
-  // parallel llm calls also need their own message threads.
-  protected _addNodeIDsToMessageThreads(
-    body: AgencyNode[],
-    functionOrGraphNode: FunctionDefinition | GraphNodeDefinition,
-    parentId = "0",
-    _ancestors: AgencyNode[] = [],
-    _scopes: Scope[] = [],
-  ): void {
-    for (const { node, ancestors, scopes } of walkNodesArray(
-      body,
-      _ancestors,
-      _scopes,
-    )) {
-      let messageThreadNode: MessageThread | null = null;
-
-      if (node.type === "messageThread")
-        messageThreadNode = node as MessageThread;
-
-      if (node.type === "assignment" && node.value.type === "messageThread")
-        messageThreadNode = node.value as MessageThread;
-      if (messageThreadNode && !messageThreadNode.threadId) {
-        /* console.log(
-          color.green(
-            "incrementing threadIdCounter for message thread, new value:",
-            ),
-            this.threadIdCounter,
-            "thread content:",
-            messageThreadNode.body,
-            ); */
-        messageThreadNode.threadId = this.threadIdCounter.toString();
-        messageThreadNode.parentThreadId = parentId.toString();
-        this.threadIdCounter++;
-        functionOrGraphNode.threadIds?.push(messageThreadNode.threadId);
-        this._addNodeIDsToMessageThreads(
-          messageThreadNode.body,
-          functionOrGraphNode,
-          messageThreadNode.threadId,
-          [...ancestors, node],
-          scopes,
-        );
-        this._addNodeIDsToPromptsInThread(
-          messageThreadNode.body,
-          messageThreadNode.threadId,
-        );
-      }
-    }
-  }
-
-  protected _addNodeIDsToPromptsInThread(
-    body: AgencyNode[],
-    parentId: string = ROOT_THREAD_ID,
-  ): void {
-    for (const { node, ancestors, scopes } of walkNodesArray(body)) {
-      /* If llm calls or function calls are in a message thread,
-      then they should be using their parent's thread ID so that they're all part of the same thread. */
-
-      function setThreadId<T extends AgencyNode & { threadId?: string }>(
-        node: AgencyNode,
-        nodeType: string,
-      ): void {
-        let promptOrFuncNode: T | null = null;
-        if (node.type === nodeType) promptOrFuncNode = node as T;
-        if (node.type === "assignment" && node.value.type === nodeType)
-          promptOrFuncNode = node.value as T;
-
-        if (node.type === "returnStatement" && node.value.type === nodeType)
-          promptOrFuncNode = node.value as T;
-
-        if (promptOrFuncNode && !promptOrFuncNode.threadId) {
-          /* console.log(
-          color.magenta(
-            "setting threadId for prompt, threadId:",
-            parentId,
-            "prompt content:",
-            JSON.stringify(promptOrFuncNode),
-          ),
-        ); */
-          promptOrFuncNode.threadId = parentId.toString();
-        }
-      }
-
-      setThreadId<PromptLiteral>(node, "prompt");
-      setThreadId<FunctionCall>(node, "functionCall");
-
-      // TODO still unsure what to do about specialVars
-      if (node.type === "specialVar") {
-        node.threadId = parentId.toString();
-      }
-    }
-  }
-
-  // prompts not in a message thread
-  protected _addNodeIDsToPrompts(
-    body: AgencyNode[],
-    functionOrGraphNode: FunctionDefinition | GraphNodeDefinition,
-  ): void {
-    for (const { node, ancestors, scopes } of walkNodesArray(body)) {
-      /* Here's what's happening here. For any LLM calls that are not inside a message thread,
-      those calls will be run in parallel. That means they will all start their own message thread,
-      which means they need their own thread ID because all of these threads are actually set on a global
-      messages object and the thread IDs are used to track the different message threads.
- */
-
-      let promptNode: PromptLiteral | null = null;
-      if (node.type === "prompt") promptNode = node as PromptLiteral;
-      if (node.type === "assignment" && node.value.type === "prompt")
-        promptNode = node.value as PromptLiteral;
-
-      if (node.type === "returnStatement" && node.value.type === "prompt")
-        promptNode = node.value as PromptLiteral;
-      if (promptNode && !promptNode.threadId) {
-        /* console.log(
-          color.magenta("incrementing threadIdCounter for prompt, new value:"),
-          this.threadIdCounter,
-          "prompt content:",
-          promptNode.segments,
-        ); */
-        promptNode.threadId = this.threadIdCounter.toString();
-        functionOrGraphNode.threadIds?.push(promptNode.threadId);
-        this.threadIdCounter++;
-      }
-
-      if (node.type === "functionCall") {
-        if (!node.threadId) {
-          node.threadId = this.threadIdCounter.toString();
-          functionOrGraphNode.threadIds?.push(node.threadId);
-          this.threadIdCounter++;
-        }
-      } else if (node.type === "specialVar") {
-        // todo what to do about special vars here?
-        // because technically they're not in a thread at all,
-        // so there are no messages to access.
-        if (!node.threadId) {
-          node.threadId = "0";
-          functionOrGraphNode.threadIds?.push(node.threadId);
-        }
-      }
-    }
   }
 
   protected removeUnusedLlmCalls(): void {

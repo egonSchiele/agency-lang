@@ -1,0 +1,9 @@
+def foo() {
+  thread {
+    res1: number[] = llm("What are the first 5 prime numbers?")
+    parallel {
+      res2: number = llm("What is 2+2?")
+      res3: number = llm("What is 3+3?")
+    }
+  }
+}

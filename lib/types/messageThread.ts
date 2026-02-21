@@ -1,7 +1,9 @@
 import { AgencyNode } from "@/types.js";
 
+type ThreadType = "thread" | "subthread" | "parallel";
+
 export type MessageThread = {
   type: "messageThread";
-  subthread: boolean;
+  threadType: ThreadType;
   body: AgencyNode[];
 };

@@ -2814,7 +2814,7 @@ describe("messageThreadParser", () => {
           success: true,
           result: {
             type: "messageThread",
-            subthread: false,
+            threadType: "thread",
             body: [],
           },
         },
@@ -2826,7 +2826,7 @@ describe("messageThreadParser", () => {
           success: true,
           result: {
             type: "messageThread",
-            subthread: false,
+            threadType: "thread",
             body: [],
           },
         },
@@ -2838,7 +2838,7 @@ describe("messageThreadParser", () => {
           success: true,
           result: {
             type: "messageThread",
-            subthread: false,
+            threadType: "thread",
             body: [],
           },
         },
@@ -2850,7 +2850,7 @@ describe("messageThreadParser", () => {
           success: true,
           result: {
             type: "messageThread",
-            subthread: false,
+            threadType: "thread",
             body: [],
           },
         },
@@ -2864,7 +2864,7 @@ describe("messageThreadParser", () => {
           expect(result.success).toBe(true);
           if (result.success) {
             expect(result.result.type).toBe(expected.result.type);
-            expect(result.result.subthread).toBe(expected.result.subthread);
+            expect(result.result.threadType).toBe(expected.result.threadType);
             expect(result.result.body).toBeDefined();
           }
         });
@@ -2886,7 +2886,7 @@ describe("messageThreadParser", () => {
           success: true,
           result: {
             type: "messageThread",
-            subthread: true,
+            threadType: "subthread",
             body: [],
           },
         },
@@ -2898,7 +2898,7 @@ describe("messageThreadParser", () => {
           success: true,
           result: {
             type: "messageThread",
-            subthread: true,
+            threadType: "subthread",
             body: [],
           },
         },
@@ -2910,7 +2910,7 @@ describe("messageThreadParser", () => {
           success: true,
           result: {
             type: "messageThread",
-            subthread: true,
+            threadType: "subthread",
             body: [],
           },
         },
@@ -2922,7 +2922,7 @@ describe("messageThreadParser", () => {
           success: true,
           result: {
             type: "messageThread",
-            subthread: true,
+            threadType: "subthread",
             body: [],
           },
         },
@@ -2936,7 +2936,7 @@ describe("messageThreadParser", () => {
           expect(result.success).toBe(true);
           if (result.success) {
             expect(result.result.type).toBe(expected.result.type);
-            expect(result.result.subthread).toBe(expected.result.subthread);
+            expect(result.result.threadType).toBe(expected.result.threadType);
             expect(result.result.body).toBeDefined();
           }
         });
@@ -2958,8 +2958,8 @@ describe("messageThreadParser", () => {
       expect(subthreadResult.success).toBe(true);
 
       if (threadResult.success && subthreadResult.success) {
-        expect(threadResult.result.subthread).toBe(false);
-        expect(subthreadResult.result.subthread).toBe(true);
+        expect(threadResult.result.threadType).toBe("thread");
+        expect(subthreadResult.result.threadType).toBe("subthread");
       }
     });
 
@@ -2988,7 +2988,7 @@ describe("messageThreadParser", () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.result.type).toBe("messageThread");
-        expect(result.result.subthread).toBe(false);
+        expect(result.result.threadType).toBe("thread");
         expect(result.result.body.length).toBeGreaterThan(0);
       }
     });
@@ -3000,7 +3000,7 @@ describe("messageThreadParser", () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.result.type).toBe("messageThread");
-        expect(result.result.subthread).toBe(true);
+        expect(result.result.threadType).toBe("subthread");
         expect(result.result.body.length).toBeGreaterThan(0);
       }
     });
@@ -3041,7 +3041,7 @@ describe("messageThreadParser", () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.result.type).toBe("messageThread");
-        expect(result.result.subthread).toBe(false);
+        expect(result.result.threadType).toBe("thread");
         expect(result.result.body.length).toBeGreaterThan(0);
       }
     });
@@ -3055,7 +3055,7 @@ describe("messageThreadParser", () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.result.type).toBe("messageThread");
-        expect(result.result.subthread).toBe(true);
+        expect(result.result.threadType).toBe("subthread");
         expect(result.result.body.length).toBeGreaterThan(0);
       }
     });
@@ -3099,7 +3099,7 @@ describe("messageThreadParser", () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result.subthread).toBe(false);
+        expect(result.result.threadType).toBe("thread");
       }
     });
 
@@ -3109,7 +3109,7 @@ describe("messageThreadParser", () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result.subthread).toBe(false);
+        expect(result.result.threadType).toBe("thread");
       }
     });
 
@@ -3119,7 +3119,7 @@ describe("messageThreadParser", () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result.subthread).toBe(true);
+        expect(result.result.threadType).toBe("subthread");
       }
     });
   });
@@ -3169,7 +3169,7 @@ describe("messageThreadParser", () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.result.type).toBe("messageThread");
-        expect(result.result.subthread).toBe(true);
+        expect(result.result.threadType).toBe("subthread");
         expect(result.result.body.length).toBeGreaterThan(0);
       }
     });
@@ -3202,13 +3202,13 @@ describe("messageThreadParser", () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.result.type).toBe("messageThread");
-        expect(result.result.subthread).toBe(false);
+        expect(result.result.threadType).toBe("thread");
         expect(result.result.body.length).toBeGreaterThan(0);
 
         // Find the nested subthread in the body
         const nestedSubthread = result.result.body.find(
           (node: any) =>
-            node.type === "messageThread" && node.subthread === true,
+            node.type === "messageThread" && node.threadType === "subthread",
         );
         expect(nestedSubthread).toBeDefined();
       }
@@ -3229,12 +3229,12 @@ describe("messageThreadParser", () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.result.type).toBe("messageThread");
-        expect(result.result.subthread).toBe(false);
+        expect(result.result.threadType).toBe("thread");
 
         // Count subthreads in the body
         const subthreads = result.result.body.filter(
           (node: any) =>
-            node.type === "messageThread" && node.subthread === true,
+            node.type === "messageThread" && node.threadType === "subthread",
         );
         expect(subthreads.length).toBe(2);
       }
@@ -3252,12 +3252,12 @@ describe("messageThreadParser", () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.result.type).toBe("messageThread");
-        expect(result.result.subthread).toBe(true);
+        expect(result.result.threadType).toBe("subthread");
 
         // Find the nested thread in the body
         const nestedThread = result.result.body.find(
           (node: any) =>
-            node.type === "messageThread" && node.subthread === false,
+            node.type === "messageThread" && node.threadType === "thread",
         );
         expect(nestedThread).toBeDefined();
       }
@@ -3278,12 +3278,12 @@ describe("messageThreadParser", () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.result.type).toBe("messageThread");
-        expect(result.result.subthread).toBe(false);
+        expect(result.result.threadType).toBe("thread");
 
         // Find the first level subthread
         const firstSubthread = result.result.body.find(
           (node: any) =>
-            node.type === "messageThread" && node.subthread === true,
+            node.type === "messageThread" && node.threadType === "subthread",
         );
         expect(firstSubthread).toBeDefined();
 
@@ -3291,7 +3291,7 @@ describe("messageThreadParser", () => {
           // Find the second level subthread
           const secondSubthread = (firstSubthread as any).body.find(
             (node: any) =>
-              node.type === "messageThread" && node.subthread === true,
+              node.type === "messageThread" && node.threadType === "subthread",
           );
           expect(secondSubthread).toBeDefined();
         }
@@ -3313,18 +3313,18 @@ describe("messageThreadParser", () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.result.type).toBe("messageThread");
-        expect(result.result.subthread).toBe(false);
+        expect(result.result.threadType).toBe("thread");
 
         const firstSubthread = result.result.body.find(
           (node: any) =>
-            node.type === "messageThread" && node.subthread === true,
+            node.type === "messageThread" && node.threadType === "subthread",
         );
         expect(firstSubthread).toBeDefined();
 
         if (firstSubthread) {
           const nestedThread = (firstSubthread as any).body.find(
             (node: any) =>
-              node.type === "messageThread" && node.subthread === false,
+              node.type === "messageThread" && node.threadType === "thread",
           );
           expect(nestedThread).toBeDefined();
         }
@@ -3352,12 +3352,12 @@ describe("messageThreadParser", () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.result.type).toBe("messageThread");
-        expect(result.result.subthread).toBe(false);
+        expect(result.result.threadType).toBe("thread");
 
         // Should have 2 top-level subthreads
         const topLevelSubthreads = result.result.body.filter(
           (node: any) =>
-            node.type === "messageThread" && node.subthread === true,
+            node.type === "messageThread" && node.threadType === "subthread",
         );
         expect(topLevelSubthreads.length).toBe(2);
       }
@@ -3377,7 +3377,7 @@ describe("messageThreadParser", () => {
 
         const nestedSubthread = result.result.body.find(
           (node: any) =>
-            node.type === "messageThread" && node.subthread === true,
+            node.type === "messageThread" && node.threadType === "subthread",
         );
         expect(nestedSubthread).toBeDefined();
         if (nestedSubthread) {
@@ -3397,11 +3397,11 @@ describe("messageThreadParser", () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.result.type).toBe("messageThread");
-        expect(result.result.subthread).toBe(true);
+        expect(result.result.threadType).toBe("subthread");
 
         const nestedThread = result.result.body.find(
           (node: any) =>
-            node.type === "messageThread" && node.subthread === false,
+            node.type === "messageThread" && node.threadType === "thread",
         );
         expect(nestedThread).toBeDefined();
         if (nestedThread) {
@@ -3454,7 +3454,7 @@ describe("messageThreadParser", () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.result.type).toBe("messageThread");
-        expect(result.result.subthread).toBe(false);
+        expect(result.result.threadType).toBe("thread");
 
         // Verify first level nesting exists
         const level1Subthread = result.result.body.find(
@@ -3482,7 +3482,7 @@ describe("messageThreadParser", () => {
       if (result.success) {
         const subthreads = result.result.body.filter(
           (node: any) =>
-            node.type === "messageThread" && node.subthread === true,
+            node.type === "messageThread" && node.threadType === "subthread",
         );
         expect(subthreads.length).toBe(3);
       }
@@ -3545,7 +3545,7 @@ x=1
 
         const nestedSubthread = result.result.body.find(
           (node: any) =>
-            node.type === "messageThread" && node.subthread === true,
+            node.type === "messageThread" && node.threadType === "subthread",
         );
         expect(nestedSubthread).toBeDefined();
       }
@@ -3571,7 +3571,7 @@ x=1
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.result.type).toBe("messageThread");
-        expect(result.result.subthread).toBe(false);
+        expect(result.result.threadType).toBe("thread");
       } else {
         console.log(
           "Parsing failed for input:",

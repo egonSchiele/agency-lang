@@ -15,7 +15,7 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
             body: [
               {
                 type: "messageThread",
-                subthread: false,
+                threadType: "thread",
                 body: [
                   {
                     type: "assignment",

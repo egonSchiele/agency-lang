@@ -194,7 +194,7 @@ export const _messageThreadParser: Parser<MessageThread> = trace(
   seqC(
     set("type", "messageThread"),
     str("thread"),
-    set("subthread", false),
+    set("threadType", "thread"),
     optionalSpaces,
     char("{"),
     spaces,
@@ -208,7 +208,21 @@ export const _submessageThreadParser: Parser<MessageThread> = trace(
   seqC(
     set("type", "messageThread"),
     str("subthread"),
-    set("subthread", true),
+    set("threadType", "subthread"),
+    optionalSpaces,
+    char("{"),
+    spaces,
+    capture(bodyParser, "body"),
+    optionalSpacesOrNewline,
+    char("}"),
+  ),
+);
+export const _parallelThreadParser: Parser<MessageThread> = trace(
+  "_parallelThreadParser",
+  seqC(
+    set("type", "messageThread"),
+    str("parallel"),
+    set("threadType", "parallel"),
     optionalSpaces,
     char("{"),
     spaces,
@@ -221,6 +235,7 @@ export const _submessageThreadParser: Parser<MessageThread> = trace(
 export const messageThreadParser: Parser<MessageThread> = or(
   _messageThreadParser,
   _submessageThreadParser,
+  _parallelThreadParser,
 );
 
 export const printTimeBlockParser: Parser<TimeBlock> = trace(

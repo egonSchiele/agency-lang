@@ -80,6 +80,7 @@ export class TypeScriptGenerator extends BaseGenerator {
   protected adjacentNodes: Record<string, string[]> = {};
   protected currentAdjacentNodes: string[] = [];
   protected isInsideGraphNode: boolean = false;
+  private parallelThreadVars: Record<string, string> = {};
 
   constructor(args: { config?: AgencyConfig } = {}) {
     super(args);
@@ -704,8 +705,11 @@ I'll probably need to do that for supporting type checking anyway.
       .join("\n");
 
     const clientConfig = prompt.config ? this.processNode(prompt.config) : "{}";
+    const threadExpr = this.parallelThreadVars[variableName]
+      ? `__threads.get(${this.parallelThreadVars[variableName]})`
+      : `__threads.getOrCreateActive()`;
     const metadataObj = `{
-      messages: __threads.getOrCreateActive()
+      messages: ${threadExpr}
     }`;
 
     const scopedFunctionArgs = functionArgs.map((arg) => {
@@ -840,6 +844,10 @@ I'll probably need to do that for supporting type checking anyway.
     node: MessageThread,
     varName?: string,
   ): string {
+    if (node.threadType === "parallel") {
+      return this.processParallelThread(node, varName);
+    }
+
     const bodyCodes: string[] = [];
     for (const stmt of node.body) {
       bodyCodes.push(this.processNode(stmt));
@@ -849,8 +857,54 @@ I'll probably need to do that for supporting type checking anyway.
       bodyCode: bodyCodeStr,
       hasVar: !!varName,
       varName,
-      isSubthread: node.subthread,
+      isSubthread: node.threadType === "subthread",
     });
+  }
+
+  protected processParallelThread(
+    node: MessageThread,
+    varName?: string,
+  ): string {
+    const lines: string[] = ["{"];
+
+    // Extract assignment variable names from body to create per-call threads
+    const assignmentVarNames: string[] = [];
+    for (const stmt of node.body) {
+      if (stmt.type === "assignment" && stmt.value.type === "prompt") {
+        assignmentVarNames.push(stmt.variableName);
+      }
+    }
+
+    // Generate thread creation for each parallel call
+    for (const name of assignmentVarNames) {
+      const threadVarName = `__ptid_${name}`;
+      lines.push(`const ${threadVarName} = __threads.create();`);
+      this.parallelThreadVars[name] = threadVarName;
+    }
+
+    // Process body nodes normally (they'll check parallelThreadVars)
+    for (const stmt of node.body) {
+      lines.push(this.processNode(stmt));
+    }
+
+    // If assigned to a variable, generate object with cloned messages from each thread
+    if (varName) {
+      const entries = assignmentVarNames
+        .map(
+          (name) =>
+            `${name}: __threads.get(${this.parallelThreadVars[name]}).cloneMessages()`,
+        )
+        .join(", ");
+      lines.push(`${varName} = { ${entries} };`);
+    }
+
+    // Clear parallel thread vars
+    for (const name of assignmentVarNames) {
+      delete this.parallelThreadVars[name];
+    }
+
+    lines.push("}");
+    return lines.join("\n");
   }
 
   protected processSkill(node: Skill): string {

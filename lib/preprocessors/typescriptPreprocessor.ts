@@ -252,9 +252,11 @@ export class TypescriptPreprocessor {
       throw new Error("Program is not set in generator.");
     }
     for (const { node, ancestors } of walkNodesArray(this.program.nodes)) {
-      const isInMessageThread = ancestors.some(
+      const closestMessageThread = [...ancestors].reverse().find(
         (a) => a.type === "messageThread",
-      );
+      ) as MessageThread | undefined;
+      const isInMessageThread = !!closestMessageThread;
+      const isInParallelThread = closestMessageThread?.threadType === "parallel";
       const isInReturnStatement = ancestors.some(
         (a) => a.type === "returnStatement",
       );
@@ -289,8 +291,8 @@ export class TypescriptPreprocessor {
         // all prompts need to run synchronously within a message thread
         // to ensure correct ordering of messages, so if this function
         // calls any prompts and is being called within a message thread,
-        // it also needs to be synchronous.
-        if (isInMessageThread && containsPrompt) {
+        // it also needs to be synchronous (unless in a parallel block).
+        if (isInMessageThread && !isInParallelThread && containsPrompt) {
           node.async = false;
           continue;
         }
@@ -301,7 +303,8 @@ export class TypescriptPreprocessor {
         }
       } else if (node.type === "prompt") {
         // prompts in message threads are sync to preserve message order
-        if (isInMessageThread) {
+        // (unless in a parallel block where they run concurrently)
+        if (isInMessageThread && !isInParallelThread) {
           node.async = false;
           continue;
         }
@@ -789,6 +792,28 @@ export class TypescriptPreprocessor {
           ...currentPath,
           i,
         ]);
+
+        // For parallel blocks, append a Promise.all for all async vars defined within
+        if (node.threadType === "parallel") {
+          const parallelAsyncVars = node.body
+            .filter(
+              (n): n is Assignment =>
+                n.type === "assignment" &&
+                n.value.type === "prompt" &&
+                !!n.value.async,
+            )
+            .map((n) => n.variableName);
+
+          if (parallelAsyncVars.length > 0) {
+            const varArray = parallelAsyncVars
+              .map((v) => `__self.${v}`)
+              .join(", ");
+            node.body.push({
+              type: "rawCode",
+              value: `[${varArray}] = await Promise.all([${varArray}]);`,
+            });
+          }
+        }
       } else if (node.type === "timeBlock") {
         node.body = this._insertPromiseAllCalls(node.body, locationToVars, [
           ...currentPath,

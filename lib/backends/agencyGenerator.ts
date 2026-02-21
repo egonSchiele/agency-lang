@@ -534,7 +534,7 @@ export class AgencyGenerator extends BaseGenerator {
     }
     this.decreaseIndent();
     const bodyCodeStr = bodyCodes.join("");
-    const threadType = node.subthread ? "subthread" : "thread";
+    const threadType = node.threadType;
     return this.indentStr(
       `${threadType} {\n${bodyCodeStr}${this.indentStr("}")}`,
     );

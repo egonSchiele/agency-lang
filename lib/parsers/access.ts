@@ -127,6 +127,13 @@ export const syncValueAccessParser = (
   return success({ ...result.result.access, async: false }, result.rest);
 };
 
-export const valueAccessParser: Parser<
-  VariableNameLiteral | FunctionCall | ValueAccess
-> = or(asyncValueAccessParser, syncValueAccessParser, _valueAccessParser);
+export function valueAccessParser(
+  input: string,
+): ParserResult<VariableNameLiteral | FunctionCall | ValueAccess> {
+  const parser = or(
+    asyncValueAccessParser,
+    syncValueAccessParser,
+    _valueAccessParser,
+  );
+  return parser(input);
+}

@@ -1,6 +1,6 @@
 import { AccessChainElement, ValueAccess } from "./types/access.js";
 import { BinOpExpression } from "./types/binop.js";
-import { AgencyArray, AgencyObject } from "./types/dataStructures.js";
+import { AgencyArray, AgencyObject, SplatExpression } from "./types/dataStructures.js";
 import { FunctionCall, FunctionDefinition } from "./types/function.js";
 import { GraphNodeDefinition } from "./types/graphNode.js";
 import { IfElse } from "./types/ifElse.js";

@@ -296,6 +296,9 @@ export class AgencyGenerator extends BaseGenerator {
   // Data structures
   protected processAgencyArray(node: AgencyArray): string {
     const items = node.items.map((item) => {
+      if (item.type === "splat") {
+        return `...${this.processNode(item.value).trim()}`;
+      }
       return this.processNode(item).trim();
     });
     return `[${items.join(", ")}]`;
@@ -305,8 +308,12 @@ export class AgencyGenerator extends BaseGenerator {
     this.increaseIndent();
 
     const entries = node.entries.map((entry) => {
-      const valueCode = this.processNode(entry.value).trim();
-      return this.indentStr(`${entry.key}: ${valueCode}`);
+      if ("type" in entry && entry.type === "splat") {
+        return this.indentStr(`...${this.processNode(entry.value).trim()}`);
+      }
+      const kv = entry as import("../types/dataStructures.js").AgencyObjectKV;
+      const valueCode = this.processNode(kv.value).trim();
+      return this.indentStr(`${kv.key}: ${valueCode}`);
     });
     this.decreaseIndent();
     if (entries.length === 0) {

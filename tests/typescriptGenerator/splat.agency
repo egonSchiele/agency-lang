@@ -1,0 +1,9 @@
+arr1 = [1, 2]
+arr2 = [3, 4]
+combined = [...arr1, ...arr2]
+withExtra = [...arr1, 5, 6]
+
+obj1 = {a: 1}
+obj2 = {b: 2}
+merged = {...obj1, ...obj2}
+withKey = {...obj1, c: 3}

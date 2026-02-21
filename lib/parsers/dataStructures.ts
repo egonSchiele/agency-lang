@@ -2,6 +2,7 @@ import {
   AgencyArray,
   AgencyObject,
   AgencyObjectKV,
+  SplatExpression,
 } from "../types/dataStructures.js";
 import {
   capture,
@@ -15,6 +16,7 @@ import {
   sepBy,
   seqC,
   set,
+  str,
   succeed,
   trace,
 } from "tarsec";
@@ -27,6 +29,12 @@ import {
   optionalSpacesOrNewline,
 } from "./utils.js";
 
+export const splatParser: Parser<SplatExpression> = seqC(
+  set("type", "splat"),
+  str("..."),
+  capture(valueAccessParser, "value"),
+);
+
 export const agencyArrayParser: Parser<AgencyArray> = (
   input: string,
 ): ParserResult<AgencyArray> => {
@@ -35,10 +43,12 @@ export const agencyArrayParser: Parser<AgencyArray> = (
     seqC(
       set("type", "agencyArray"),
       char("["),
+      optionalSpacesOrNewline,
       capture(
         sepBy(
           comma,
           or(
+            splatParser,
             booleanParser,
             valueAccessParser,
             literalParser,
@@ -48,7 +58,7 @@ export const agencyArrayParser: Parser<AgencyArray> = (
         ),
         "items",
       ),
-
+      optionalSpacesOrNewline,
       char("]"),
     ),
   );
@@ -90,7 +100,10 @@ export const agencyObjectParser: Parser<AgencyObject> = seqC(
   char("{"),
   optionalSpacesOrNewline,
   capture(
-    or(sepBy(commaWithNewline, agencyObjectKVParser), succeed([])),
+    or(
+      sepBy(commaWithNewline, or(splatParser, agencyObjectKVParser)),
+      succeed([]),
+    ),
     "entries",
   ),
   optional(char(",")),

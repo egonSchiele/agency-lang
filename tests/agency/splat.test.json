@@ -1,0 +1,15 @@
+{
+  "sourceFile": "splat.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"user2\":{\"name\":\"Frodo\",\"age\":50},\"arr3\":[1,2,3,4,5,6]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

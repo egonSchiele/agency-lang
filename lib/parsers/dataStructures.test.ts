@@ -3,6 +3,7 @@ import {
   agencyArrayParser,
   agencyObjectParser,
   agencyObjectKVParser,
+  splatParser,
 } from "./dataStructures.js";
 
 describe("dataStructures parsers", () => {
@@ -165,6 +166,35 @@ describe("dataStructures parsers", () => {
               { type: "number", value: "-1" },
               { type: "number", value: "-2.5" },
               { type: "number", value: "3" },
+            ],
+          },
+        },
+      },
+
+      // Arrays with splat
+      {
+        input: "[...arr1, 1, 2]",
+        expected: {
+          success: true,
+          result: {
+            type: "agencyArray",
+            items: [
+              { type: "splat", value: { type: "variableName", value: "arr1" } },
+              { type: "number", value: "1" },
+              { type: "number", value: "2" },
+            ],
+          },
+        },
+      },
+      {
+        input: "[...arr1, ...arr2]",
+        expected: {
+          success: true,
+          result: {
+            type: "agencyArray",
+            items: [
+              { type: "splat", value: { type: "variableName", value: "arr1" } },
+              { type: "splat", value: { type: "variableName", value: "arr2" } },
             ],
           },
         },
@@ -655,6 +685,41 @@ describe("dataStructures parsers", () => {
                     { type: "string", segments: [{ type: "text", value: "b" }] },
                   ],
                 },
+              },
+            ],
+          },
+        },
+      },
+
+      // Objects with splat
+      {
+        input: "{...obj1, key: 1}",
+        expected: {
+          success: true,
+          result: {
+            type: "agencyObject",
+            entries: [
+              { type: "splat", value: { type: "variableName", value: "obj1" } },
+              {
+                key: "key",
+                value: { type: "number", value: "1" },
+              },
+            ],
+          },
+        },
+      },
+      {
+        input: "{...obj1, ...obj2, key: 1}",
+        expected: {
+          success: true,
+          result: {
+            type: "agencyObject",
+            entries: [
+              { type: "splat", value: { type: "variableName", value: "obj1" } },
+              { type: "splat", value: { type: "variableName", value: "obj2" } },
+              {
+                key: "key",
+                value: { type: "number", value: "1" },
               },
             ],
           },

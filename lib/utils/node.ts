@@ -73,11 +73,19 @@ export function* getAllVariablesInBody(
       }
     } else if (node.type === "agencyArray") {
       for (const item of node.items) {
-        yield* getAllVariablesInBody([item]);
+        if (item.type === "splat") {
+          yield* getAllVariablesInBody([item.value]);
+        } else {
+          yield* getAllVariablesInBody([item]);
+        }
       }
     } else if (node.type === "agencyObject") {
       for (const entry of node.entries) {
-        yield* getAllVariablesInBody([entry.value]);
+        if ("type" in entry && entry.type === "splat") {
+          yield* getAllVariablesInBody([entry.value]);
+        } else {
+          yield* getAllVariablesInBody([(entry as any).value]);
+        }
       }
     } else if (
       node.type === "prompt" ||
@@ -198,10 +206,16 @@ export function* walkNodes(
         }
       }
     } else if (node.type === "agencyArray") {
-      yield* walkNodes(node.items, [...ancestors, node], scopes);
+      const arrayItems = node.items.map((item) =>
+        item.type === "splat" ? item.value : item,
+      );
+      yield* walkNodes(arrayItems as AgencyNode[], [...ancestors, node], scopes);
     } else if (node.type === "agencyObject") {
+      const objValues = node.entries.map((e) =>
+        "type" in e && e.type === "splat" ? e.value : (e as any).value,
+      );
       yield* walkNodes(
-        node.entries.map((e) => e.value),
+        objValues as AgencyNode[],
         [...ancestors, node],
         scopes,
       );

@@ -134,8 +134,12 @@ export class TypeScriptGenerator extends BaseGenerator {
 
   protected processAgencyObject(node: AgencyObject): string {
     const kvCodes = node.entries.map((entry) => {
-      const keyCode = entry.key;
-      const valueCode = this.processNode(entry.value).trim();
+      if ("type" in entry && entry.type === "splat") {
+        return `...${this.processNode(entry.value).trim()}`;
+      }
+      const kv = entry as import("../types/dataStructures.js").AgencyObjectKV;
+      const keyCode = kv.key;
+      const valueCode = this.processNode(kv.value).trim();
       return `"${keyCode}": ${valueCode}`;
     });
     return `{${kvCodes.join(", ")}}`;
@@ -143,6 +147,9 @@ export class TypeScriptGenerator extends BaseGenerator {
 
   protected processAgencyArray(node: AgencyArray): string {
     const itemCodes = node.items.map((item) => {
+      if (item.type === "splat") {
+        return `...${this.processNode(item.value).trim()}`;
+      }
       return this.processNode(item).trim();
     });
     return `[${itemCodes.join(", ")}]`;

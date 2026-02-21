@@ -303,10 +303,11 @@ export type TestStats = {
   failed: number;
   filesPassed: number;
   filesFailed: number;
+  failedFiles: string[];
 };
 
 function emptyStats(): TestStats {
-  return { passed: 0, failed: 0, filesPassed: 0, filesFailed: 0 };
+  return { passed: 0, failed: 0, filesPassed: 0, filesFailed: 0, failedFiles: [] };
 }
 
 export function mergeStats(a: TestStats, b: TestStats): TestStats {
@@ -315,6 +316,7 @@ export function mergeStats(a: TestStats, b: TestStats): TestStats {
     failed: a.failed + b.failed,
     filesPassed: a.filesPassed + b.filesPassed,
     filesFailed: a.filesFailed + b.filesFailed,
+    failedFiles: [...a.failedFiles, ...b.failedFiles],
   };
 }
 
@@ -447,6 +449,7 @@ export async function test(
     failed,
     filesPassed: failed === 0 ? 1 : 0,
     filesFailed: failed === 0 ? 0 : 1,
+    failedFiles: failed > 0 ? [testFile] : [],
   };
 }
 

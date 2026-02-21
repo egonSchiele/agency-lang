@@ -18,6 +18,7 @@ import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.j
 import { formatErrors, typeCheck } from "@/typeChecker.js";
 import { Command } from "commander";
 import * as fs from "fs";
+import { color } from "termcolors";
 import { TarsecError } from "tarsec";
 import process from "process";
 import { agent } from "@/cli/agent.js";
@@ -198,6 +199,7 @@ program
           failed: 0,
           filesPassed: 0,
           filesFailed: 0,
+          failedFiles: [],
         };
         for (const file of testFile) {
           const stats = await test(getConfig(), file);
@@ -218,8 +220,15 @@ program
           ]
             .filter(Boolean)
             .join(" | ");
-          console.log(`\n Test Files  ${filesStatus} (${totalFiles})`);
-          console.log(`      Tests  ${testsStatus} (${totalTests})`);
+          if (totals.failedFiles.length > 0) {
+            console.log("");
+            for (const file of totals.failedFiles) {
+              console.log(color.red(` FAIL  ${file}`));
+            }
+          }
+          const colorFn = totals.failed > 0 ? color.red : color.green;
+          console.log(colorFn(`\n Test Files  ${filesStatus} (${totalFiles})`));
+          console.log(colorFn(`      Tests  ${testsStatus} (${totalTests})`));
         }
         if (totals.failed > 0) {
           process.exit(1);

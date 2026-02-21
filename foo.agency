@@ -1,10 +1,6 @@
 node main() {
-  foo: number[] = llm("What are some numbers?", { 
-    maxTokens: 10,
-    messages: [{ 
-      role: "system",
-      content: "You are a helpful assistant that generates numbers."
-    }]
+  foo: number[] = llm("What are 5 numbers?", { 
+    maxTokens: 100
   })
-  print(foo[0])
+  print(foo)
 }

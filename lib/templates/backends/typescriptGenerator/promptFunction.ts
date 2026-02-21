@@ -25,19 +25,20 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
   const __responseFormat = undefined;
   {{/hasResponseFormat}}
   
-  const __client = __getClientWithConfig({{{clientConfig:string}}});
+  const __clientConfig = __getSmoltalkConfig({{{clientConfig:string}}});
   let responseMessage;
 
   if (__toolCalls.length === 0) {
     __messages.push(smoltalk.userMessage(__prompt));
   
   
-    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
-    let __completion = await __client.text({
+    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __clientConfig.model });
+    let __completion = await smoltalk.text({
       messages: __messages.getMessages(),
       tools: __tools,
       responseFormat: __responseFormat,
-      stream: {{{isStreaming:boolean}}}
+      stream: {{{isStreaming:boolean}}},
+      ...__clientConfig
     });
 
     const endTime = performance.now();
@@ -49,7 +50,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
     statelogClient.promptCompletion({
       messages: __messages.getMessages(),
       completion: __completion,
-      model: __client.getModel(),
+      model: __clientConfig.model,
       timeTaken: endTime - startTime,
       tools: __tools,
       responseFormat: __responseFormat
@@ -57,7 +58,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
 
     if (!__completion.success) {
       throw new Error(
-        \`Error getting response from $\{__model\}: $\{__completion.error\}\`
+        \`Error getting response from $\{__clientConfig.model\}: $\{__completion.error\}\`
       );
     }
 
@@ -89,7 +90,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
     if (haltExecution) {
       statelogClient.debug(\`Tool call interrupted execution.\`, {
         messages: __messages.getMessages(),
-        model: __client.getModel(),
+        model: __clientConfig.model,
       });
 
       __stateStack.interruptData = {
@@ -102,12 +103,13 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
     }
   
     const nextStartTime = performance.now();
-    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
-    let __completion = await __client.text({
+    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __clientConfig.model });
+    let __completion = await smoltalk.text({
       messages: __messages.getMessages(),
       tools: __tools,
       responseFormat: __responseFormat,
-      stream: {{{isStreaming:boolean}}}
+      stream: {{{isStreaming:boolean}}},
+      ...__clientConfig
     });
 
     const nextEndTime = performance.now();
@@ -119,7 +121,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
     statelogClient.promptCompletion({
       messages: __messages.getMessages(),
       completion: __completion,
-      model: __client.getModel(),
+      model: __clientConfig.model,
       timeTaken: nextEndTime - nextStartTime,
       tools: __tools,
       responseFormat: __responseFormat,
@@ -127,7 +129,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
 
     if (!__completion.success) {
       throw new Error(
-        \`Error getting response from $\{__model\}: $\{__completion.error\}\`
+        \`Error getting response from $\{__clientConfig.model\}: $\{__completion.error\}\`
       );
     }
     responseMessage = __completion.value;

@@ -29,6 +29,6 @@
 - parallel block: tests/agency/threads/parallel.agency
 - parallel block with async function calls inside
 - nested parallel blocks: tests/agency/threads/nested-parallel.agency
-- no thread -- just making sure that if there is no thread, things run async as normal
+- no thread -- just making sure that if there is no thread, things run async as normal: tests/agency/threads/no-thread.agency
 
 - do funcs specifically marked sync/async create threads? What about func calls that are awaited?

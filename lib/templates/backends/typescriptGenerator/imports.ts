@@ -33,7 +33,7 @@ const __statelogClient = new StatelogClient(statelogConfig);
 /* Code for Smoltalk client */
 const __model = "{{{clientDefaultModel:string}}}";
 
-const __getClientWithConfig = (config = {}) => {
+const __getSmoltalkConfig = (config = {}) => {
   const defaultConfig = {
     {{#hasOpenAiApiKey}}
     openAiApiKey: "{{{clientOpenAiApiKey?:string}}}",
@@ -51,10 +51,8 @@ const __getClientWithConfig = (config = {}) => {
     logLevel: "{{{clientLogLevel:string}}}",
   };
 
-  return smoltalk.getClient({ ...defaultConfig, ...config });
+  return { ...defaultConfig, ...config };
 };
-
-let __client = __getClientWithConfig();
 
 /* Code for SimpleMachine graph */
 

@@ -495,7 +495,11 @@ export class TypeScriptGenerator extends BaseGenerator {
       case "multiLineString":
         return this.generateStringLiteral(literal.segments);
       case "variableName":
-        return `${this.scopetoString(literal.scope!)}.${literal.value}`;
+        const scopeStr = this.scopetoString(literal.scope!);
+        if (scopeStr === "") {
+          return literal.value;
+        }
+        return `${scopeStr}.${literal.value}`;
       case "prompt":
         return this.processPromptLiteral(
           DEFAULT_PROMPT_NAME,

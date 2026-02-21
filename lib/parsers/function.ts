@@ -187,10 +187,15 @@ export const _timeBlockParser: Parser<TimeBlock> = trace(
     str("time"),
     optionalSpaces,
     char("{"),
-    spaces,
-    capture(bodyParser, "body"),
-    optionalSpacesOrNewline,
-    char("}"),
+    captureCaptures(
+      parseError(
+        "expected block body followed by `}`",
+        spaces,
+        capture(bodyParser, "body"),
+        optionalSpacesOrNewline,
+        char("}"),
+      ),
+    ),
   ),
 );
 export const _messageThreadParser: Parser<MessageThread> = trace(
@@ -201,10 +206,15 @@ export const _messageThreadParser: Parser<MessageThread> = trace(
     set("threadType", "thread"),
     optionalSpaces,
     char("{"),
-    spaces,
-    capture(bodyParser, "body"),
-    optionalSpacesOrNewline,
-    char("}"),
+    captureCaptures(
+      parseError(
+        "expected block body followed by `}`",
+        spaces,
+        capture(bodyParser, "body"),
+        optionalSpacesOrNewline,
+        char("}"),
+      ),
+    ),
   ),
 );
 export const _submessageThreadParser: Parser<MessageThread> = trace(
@@ -215,10 +225,15 @@ export const _submessageThreadParser: Parser<MessageThread> = trace(
     set("threadType", "subthread"),
     optionalSpaces,
     char("{"),
-    spaces,
-    capture(bodyParser, "body"),
-    optionalSpacesOrNewline,
-    char("}"),
+    captureCaptures(
+      parseError(
+        "expected block body followed by `}`",
+        spaces,
+        capture(bodyParser, "body"),
+        optionalSpacesOrNewline,
+        char("}"),
+      ),
+    ),
   ),
 );
 export const _parallelThreadParser: Parser<MessageThread> = trace(
@@ -229,10 +244,15 @@ export const _parallelThreadParser: Parser<MessageThread> = trace(
     set("threadType", "parallel"),
     optionalSpaces,
     char("{"),
-    spaces,
-    capture(bodyParser, "body"),
-    optionalSpacesOrNewline,
-    char("}"),
+    captureCaptures(
+      parseError(
+        "expected block body followed by `}`",
+        spaces,
+        capture(bodyParser, "body"),
+        optionalSpacesOrNewline,
+        char("}"),
+      ),
+    ),
   ),
 );
 
@@ -250,10 +270,15 @@ export const printTimeBlockParser: Parser<TimeBlock> = trace(
       str("printTime"),
       optionalSpaces,
       char("{"),
-      spaces,
-      capture(bodyParser, "body"),
-      optionalSpacesOrNewline,
-      char("}"),
+      captureCaptures(
+        parseError(
+          "expected block body followed by `}`",
+          spaces,
+          capture(bodyParser, "body"),
+          optionalSpacesOrNewline,
+          char("}"),
+        ),
+      ),
     ),
     (result) => ({
       ...result,
@@ -326,11 +351,16 @@ export const ifParser: Parser<IfElse> = (input: string) => {
       optionalSpaces,
       char(")"),
       optionalSpaces,
-      char("{"),
-      spaces,
-      capture(bodyParser, "thenBody"),
-      optionalSpaces,
-      char("}"),
+      captureCaptures(
+        parseError(
+          "expected `{` to open if block body",
+          char("{"),
+          spaces,
+          capture(bodyParser, "thenBody"),
+          optionalSpaces,
+          char("}"),
+        ),
+      ),
     ),
   );
   return parser(input);
@@ -351,11 +381,16 @@ export const whileLoopParser: Parser<WhileLoop> = trace(
     optionalSpaces,
     char(")"),
     optionalSpaces,
-    char("{"),
-    spaces,
-    capture(bodyParser, "body"),
-    optionalSpaces,
-    char("}"),
+    captureCaptures(
+      parseError(
+        "expected `{` to open while loop body",
+        char("{"),
+        spaces,
+        capture(bodyParser, "body"),
+        optionalSpaces,
+        char("}"),
+      ),
+    ),
   ),
 );
 
@@ -490,12 +525,17 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = trace(
     char(")"),
     optionalSpaces,
     capture(optional(functionReturnTypeParser), "returnType"),
-    optionalSpaces,
-    char("{"),
-    optionalSpacesOrNewline,
-    capture(bodyParser, "body"),
-    optionalSpaces,
-    char("}"),
-    optionalSemicolon,
+    captureCaptures(
+      parseError(
+        "expected node body",
+        optionalSpaces,
+        char("{"),
+        optionalSpacesOrNewline,
+        capture(bodyParser, "body"),
+        optionalSpaces,
+        char("}"),
+        optionalSemicolon,
+      ),
+    ),
   ),
 );

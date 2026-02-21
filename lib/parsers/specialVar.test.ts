@@ -212,18 +212,18 @@ describe("specialVar parsers", () => {
       },
 
       // Failure cases
-      { input: "@model =", expected: { success: false } },
+      { input: "@model =", expected: { success: false }, throws: true },
       { input: '@notSpecial = "value"', expected: { success: false } },
       { input: 'model = "value"', expected: { success: false } }, // missing @
       { input: '@Model = "value"', expected: { success: false } }, // wrong case
       { input: '@ model = "value"', expected: { success: false } }, // space after @
       { input: "", expected: { success: false } },
       { input: "@", expected: { success: false } },
-      { input: "@model", expected: { success: false } },
+      { input: "@model", expected: { success: false }, throws: true },
       { input: '@"model" = "value"', expected: { success: false } },
     ];
 
-    testCases.forEach(({ input, expected }) => {
+    testCases.forEach(({ input, expected, throws }: any) => {
       if (expected.success) {
         it(`should parse "${input}" successfully`, () => {
           const result = specialVarParser(input);
@@ -231,6 +231,10 @@ describe("specialVar parsers", () => {
           if (result.success) {
             expect(result.result).toEqual(expected.result);
           }
+        });
+      } else if (throws) {
+        it(`should fail to parse "${input}"`, () => {
+          expect(() => specialVarParser(input)).toThrow();
         });
       } else {
         it(`should fail to parse "${input}"`, () => {

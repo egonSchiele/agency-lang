@@ -284,12 +284,12 @@ describe("skillParser", () => {
     {
       input: "skill path/to/skill.ts",
       expected: { success: false },
-      throws: false,
+      throws: true,
     },
     {
       input: "skills ./skills/analyze.ts",
       expected: { success: false },
-      throws: false,
+      throws: true,
     },
 
     // Failure cases - missing filepath

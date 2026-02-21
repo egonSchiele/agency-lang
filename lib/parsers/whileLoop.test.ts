@@ -338,14 +338,17 @@ describe("whileLoopParser", () => {
     {
       input: "while (x) \n  foo = 1\n",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "while (x) {\n  foo = 1",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "while (x) \n  foo = 1\n}",
       expected: { success: false },
+      throws: true,
     },
 
     // Failure cases - missing condition
@@ -370,10 +373,11 @@ describe("whileLoopParser", () => {
     {
       input: "while (x)",
       expected: { success: false },
+      throws: true,
     },
   ];
 
-  testCases.forEach(({ input, expected }) => {
+  testCases.forEach(({ input, expected, throws }: any) => {
     if (expected.success) {
       it(`should parse "${input.replace(/\n/g, "\\n")}" successfully`, () => {
         const result = whileLoopParser(input);
@@ -381,6 +385,10 @@ describe("whileLoopParser", () => {
         if (result.success) {
           expect(result.result).toEqual(expected.result);
         }
+      });
+    } else if (throws) {
+      it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
+        expect(() => whileLoopParser(input)).toThrow();
       });
     } else {
       it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {

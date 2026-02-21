@@ -11,9 +11,11 @@ export type MatchBlock = {
 
 import {
   capture,
+  captureCaptures,
   char,
   newline,
   or,
+  parseError,
   Parser,
   ParserResult,
   sepBy,
@@ -85,12 +87,17 @@ export const matchBlockParser = seqC(
   char(")"),
   optionalSpaces,
   char("{"),
-  optionalSpacesOrNewline,
-  capture(
-    sepBy(or(semicolon, newline), or(commentParser, matchBlockParserCase)),
-    "cases",
+  captureCaptures(
+    parseError(
+      "expected match cases of the form `value => expression` separated by `;` or newlines, followed by `}`",
+      optionalSpacesOrNewline,
+      capture(
+        sepBy(or(semicolon, newline), or(commentParser, matchBlockParserCase)),
+        "cases",
+      ),
+      optionalSpaces,
+      char("}"),
+    ),
   ),
-  optionalSpaces,
-  char("}"),
   optionalSemicolon,
 );

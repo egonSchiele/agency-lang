@@ -249,15 +249,15 @@ describe("returnStatementParser", () => {
     },
 
     // Failure cases
-    { input: "return", expected: { success: false } },
-    { input: "return;", expected: { success: false } },
-    { input: "return ", expected: { success: false } },
+    { input: "return", expected: { success: false }, throws: true },
+    { input: "return;", expected: { success: false }, throws: true },
+    { input: "return ", expected: { success: false }, throws: true },
     { input: "retur 5", expected: { success: false } },
     { input: "", expected: { success: false } },
     { input: "42", expected: { success: false } },
   ];
 
-  testCases.forEach(({ input, expected }) => {
+  testCases.forEach(({ input, expected, throws }: any) => {
     if (expected.success) {
       it(`should parse "${input}" successfully`, () => {
         const result = returnStatementParser(input);
@@ -265,6 +265,10 @@ describe("returnStatementParser", () => {
         if (result.success) {
           expect(result.result).toEqual(expected.result);
         }
+      });
+    } else if (throws) {
+      it(`should fail to parse "${input}"`, () => {
+        expect(() => returnStatementParser(input)).toThrow();
       });
     } else {
       it(`should fail to parse "${input}"`, () => {

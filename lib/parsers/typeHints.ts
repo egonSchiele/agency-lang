@@ -105,8 +105,13 @@ export const angleBracketsArrayTypeParser: Parser<ArrayType> = trace(
     set("type", "arrayType"),
     str("array"),
     char("<"),
-    capture(or(primitiveTypeParser, typeAliasVariableParser), "elementType"),
-    char(">"),
+    captureCaptures(
+      parseError(
+        "expected a type name followed by `>`, e.g. `array<string>`",
+        capture(or(primitiveTypeParser, typeAliasVariableParser), "elementType"),
+        char(">"),
+      ),
+    ),
   ),
 );
 

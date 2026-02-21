@@ -1,10 +1,12 @@
 import { AgencyObject, FunctionCall, PromptLiteral } from "../types.js";
 import {
   capture,
+  captureCaptures,
   char,
   failure,
   many1WithJoin,
   or,
+  parseError,
   Parser,
   sepBy,
   seqC,
@@ -110,7 +112,12 @@ export const streamingPromptLiteralParser: Parser<PromptLiteral> = (
   const parser = seqC(
     or(str("streaming"), str("stream")),
     spaces,
-    capture(or(promptParser, llmPromptFunctionCallParser), "prompt"),
+    captureCaptures(
+      parseError(
+        "expected a prompt or llm() call after `stream`",
+        capture(or(promptParser, llmPromptFunctionCallParser), "prompt"),
+      ),
+    ),
   );
   const result = parser(input);
   if (!result.success) {

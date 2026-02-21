@@ -200,10 +200,11 @@ describe("angleBracketsArrayTypeParser", () => {
     {
       input: "array<>",
       expected: { success: false },
+      throws: true,
     },
   ];
 
-  testCases.forEach(({ input, expected }) => {
+  testCases.forEach(({ input, expected, throws }: any) => {
     if (expected.success) {
       it(`should parse "${input}" successfully`, () => {
         const result = angleBracketsArrayTypeParser(input);
@@ -211,6 +212,10 @@ describe("angleBracketsArrayTypeParser", () => {
         if (result.success) {
           expect(result.result).toEqual(expected.result);
         }
+      });
+    } else if (throws) {
+      it(`should fail to parse "${input}"`, () => {
+        expect(() => angleBracketsArrayTypeParser(input)).toThrow();
       });
     } else {
       it(`should fail to parse "${input}"`, () => {

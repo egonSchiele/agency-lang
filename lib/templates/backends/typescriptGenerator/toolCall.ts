@@ -34,7 +34,7 @@ export const template = `if (
       toolName: "{{{name:string}}}",
       params,
       output: result,
-      model: __client.getModel(),
+      model: __clientConfig.model,
       timeTaken: toolCallEndTime - toolCallStartTime,
     });
 

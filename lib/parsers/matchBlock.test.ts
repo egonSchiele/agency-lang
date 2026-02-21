@@ -535,6 +535,7 @@ describe("matchBlockParser", () => {
       name: "missing closing brace",
       input: `match(foo) { x => 1`,
       expected: { success: false },
+      throws: true,
     },
     {
       name: "missing expression",
@@ -548,7 +549,7 @@ describe("matchBlockParser", () => {
     },
   ];
 
-  testCases.forEach(({ name, input, expected }) => {
+  testCases.forEach(({ name, input, expected, throws }: any) => {
     if (expected.success) {
       it(`should parse ${name}`, () => {
         const result = matchBlockParser(input);
@@ -556,6 +557,10 @@ describe("matchBlockParser", () => {
         if (result.success) {
           expect(result.result).toEqual(expected.result);
         }
+      });
+    } else if (throws) {
+      it(`should fail to parse ${name}`, () => {
+        expect(() => matchBlockParser(input)).toThrow();
       });
     } else {
       it(`should fail to parse ${name}`, () => {

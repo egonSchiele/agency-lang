@@ -6,9 +6,11 @@ import {
   str,
   spaces,
   capture,
+  captureCaptures,
   manyWithJoin,
   noneOf,
   or,
+  parseError,
   quotedString,
   map,
   trace,
@@ -33,7 +35,12 @@ export function _skillParser(input: string): ParserResult<Skill> {
       set("type", "skill"),
       or(str("skills"), str("skill")),
       spaces,
-      capture(map(quotedString, removeQuotes), "filepath"),
+      captureCaptures(
+        parseError(
+          "expected a quoted filepath, e.g. skill 'path/to/file.ts'",
+          capture(map(quotedString, removeQuotes), "filepath"),
+        ),
+      ),
     ),
   );
 

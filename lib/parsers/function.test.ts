@@ -2330,6 +2330,7 @@ describe("timeBlockParser", () => {
     {
       input: "time {\n  x = 1",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "time \n  x = 1\n}",
@@ -2348,10 +2349,11 @@ describe("timeBlockParser", () => {
     {
       input: "time {",
       expected: { success: false },
+      throws: true,
     },
   ];
 
-  testCases.forEach(({ input, expected }) => {
+  testCases.forEach(({ input, expected, throws }: any) => {
     if (expected.success) {
       it(`should parse "${input.replace(/\n/g, "\\n")}" successfully`, () => {
         const result = timeBlockParser(input);
@@ -2359,6 +2361,10 @@ describe("timeBlockParser", () => {
         if (result.success) {
           expect(result.result).toEqual(expected.result);
         }
+      });
+    } else if (throws) {
+      it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
+        expect(() => timeBlockParser(input)).toThrow();
       });
     } else {
       it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
@@ -2760,10 +2766,12 @@ describe("graphNodeParser", () => {
     {
       input: "node main() x = 1",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "node main() {",
       expected: { success: false },
+      throws: true,
     },
     {
       input: "",
@@ -3066,8 +3074,8 @@ describe("messageThreadParser", () => {
       { input: "", description: "empty string" },
       { input: "thread", description: "missing braces" },
       { input: "subthread", description: "subthread missing braces" },
-      { input: "thread {", description: "missing closing brace" },
-      { input: "subthread {", description: "subthread missing closing brace" },
+      { input: "thread {", description: "missing closing brace", throws: true },
+      { input: "subthread {", description: "subthread missing closing brace", throws: true },
       { input: "thread }", description: "missing opening brace" },
       { input: "subthread }", description: "subthread missing opening brace" },
       { input: "threads { }", description: "wrong keyword (threads)" },
@@ -3084,11 +3092,17 @@ describe("messageThreadParser", () => {
       { input: "// thread { }", description: "commented out" },
     ];
 
-    failureCases.forEach(({ input, description }) => {
-      it(`should fail to parse ${description}: "${input.replace(/\n/g, "\\n")}"`, () => {
-        const result = messageThreadParser(normalizeCode(input));
-        expect(result.success).toBe(false);
-      });
+    failureCases.forEach(({ input, description, throws }: any) => {
+      if (throws) {
+        it(`should fail to parse ${description}: "${input.replace(/\n/g, "\\n")}"`, () => {
+          expect(() => messageThreadParser(normalizeCode(input))).toThrow();
+        });
+      } else {
+        it(`should fail to parse ${description}: "${input.replace(/\n/g, "\\n")}"`, () => {
+          const result = messageThreadParser(normalizeCode(input));
+          expect(result.success).toBe(false);
+        });
+      }
     });
   });
 

@@ -841,7 +841,7 @@ async function _response(name, age, __metadata) {
       toolName: "greet",
       params,
       output: result,
-      model: __client.getModel(),
+      model: __clientConfig.model,
       timeTaken: toolCallEndTime - toolCallStartTime,
     });
 

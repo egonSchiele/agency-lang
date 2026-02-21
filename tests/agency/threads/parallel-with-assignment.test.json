@@ -9,7 +9,7 @@
       "evaluationCriteria": [
         {
           "type": "llmJudge",
-          "judgePrompt": "foo",
+          "judgePrompt": "The result should be an object with a single key, `msgs`. The value of the `msgs` key should be another object with two keys, `res1` and `res2`. The value for `res1` should be exactly `[101]`. The value for `res2` should be an array containing any two prime numbers. The expected output has the primes 5 and 7, but any two primes except `[103, 107]` will do.",
           "desiredAccuracy": 75
         }
       ]

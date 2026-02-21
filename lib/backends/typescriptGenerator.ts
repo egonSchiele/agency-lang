@@ -74,6 +74,10 @@ import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
 import path from "path";
 import { BinOpExpression } from "@/types/binop.js";
+import {
+  expressionToString,
+  getBaseVarName,
+} from "@/utils/node.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
@@ -345,7 +349,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     const interpolatedVars = uniq(
       node.segments
         .filter((s) => s.type === "interpolation")
-        .map((s) => (s as InterpolationSegment).variableName),
+        .map((s) => getBaseVarName(s as InterpolationSegment)),
     );
 
     /*     for (const varName of interpolatedVars) {
@@ -577,14 +581,15 @@ export class TypeScriptGenerator extends BaseGenerator {
         promptParts.push(escaped);
       } else {
         // Interpolation segment
-        const varName = segment.variableName.replace(".", "_");
-        const varType = typeHints[varName];
+        const exprStr = expressionToString(segment.expression);
+        const baseVarName = getBaseVarName(segment);
+        const varType = typeHints[baseVarName];
 
         // Serialize complex types to JSON
         if (varType && varType.type === "arrayType") {
-          promptParts.push(`\${JSON.stringify(${varName})}`);
+          promptParts.push(`\${JSON.stringify(${exprStr})}`);
         } else {
-          promptParts.push(`\${${varName}}`);
+          promptParts.push(`\${${exprStr}}`);
         }
       }
     }
@@ -621,14 +626,8 @@ export class TypeScriptGenerator extends BaseGenerator {
         const escaped = escape(segment.value);
         stringParts.push(escaped);
       } else {
-        // Interpolation segment
-        stringParts.push(
-          "${" +
-            this.scopetoString(segment.scope!) +
-            "." +
-            segment.variableName +
-            "}",
-        );
+        // Interpolation segment — processNode on the expression handles scope
+        stringParts.push("${" + this.processNode(segment.expression) + "}");
       }
     }
 
@@ -664,7 +663,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       typeHints: this.typeHints,
       skills: prompt.skills || [],
     });
-    const parts = functionArgs.map((arg) => arg.replace(".", "_"));
+    const parts = [...functionArgs];
     parts.push("__metadata");
     const argsStr = parts.join(", ");
     let _tools = "";
@@ -730,15 +729,21 @@ I'll probably need to do that for supporting type checking anyway.
     }`;
 
     const scopedFunctionArgs = functionArgs.map((arg) => {
-      // Find the scope for this interpolated variable from the prompt segments
+      // Find the interpolation segment matching this base var name
       const interpSegment = prompt.segments.find(
-        (s) => s.type === "interpolation" && s.variableName === arg,
-      );
-      const scope =
-        interpSegment?.type === "interpolation"
-          ? interpSegment.scope
-          : undefined;
-      return `${this.scopetoString(scope!)}.${arg}`;
+        (s) =>
+          s.type === "interpolation" &&
+          getBaseVarName(s as InterpolationSegment) === arg,
+      ) as InterpolationSegment | undefined;
+      if (!interpSegment) {
+        return arg;
+      }
+      // Get the base VariableNameLiteral and use processNode to get scoped code
+      const baseExpr =
+        interpSegment.expression.type === "variableName"
+          ? interpSegment.expression
+          : interpSegment.expression.base;
+      return this.processNode(baseExpr);
     });
 
     return promptFunction.default({

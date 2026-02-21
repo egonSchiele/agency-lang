@@ -57,8 +57,11 @@
             "segments": [
               {
                 "type": "interpolation",
-                "variableName": "globalVar",
-                "scope": "global"
+                "expression": {
+                  "type": "variableName",
+                  "value": "globalVar",
+                  "scope": "global"
+                }
               },
               {
                 "type": "text",
@@ -66,8 +69,11 @@
               },
               {
                 "type": "interpolation",
-                "variableName": "localVar",
-                "scope": "function"
+                "expression": {
+                  "type": "variableName",
+                  "value": "localVar",
+                  "scope": "function"
+                }
               },
               {
                 "type": "text",
@@ -75,8 +81,11 @@
               },
               {
                 "type": "interpolation",
-                "variableName": "param",
-                "scope": "args"
+                "expression": {
+                  "type": "variableName",
+                  "value": "param",
+                  "scope": "args"
+                }
               }
             ]
           },

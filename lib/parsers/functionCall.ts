@@ -95,8 +95,8 @@ export const llmPromptFunctionCallParser: Parser<PromptLiteral> = (
         promptArg.type === "variableName"
           ? [
               {
-                type: "interpolation",
-                variableName: promptArg.value,
+                type: "interpolation" as const,
+                expression: promptArg,
               },
             ]
           : promptArg.segments,

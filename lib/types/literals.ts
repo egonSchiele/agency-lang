@@ -1,4 +1,5 @@
 import { AgencyNode, ScopeType } from "@/types.js";
+import { ValueAccess } from "./access.js";
 import { AgencyObject } from "./dataStructures.js";
 import { Skill } from "./skill.js";
 import { UsesTool } from "./tools.js";
@@ -48,8 +49,7 @@ export type TextSegment = {
 
 export type InterpolationSegment = {
   type: "interpolation";
-  variableName: string;
-  scope?: ScopeType;
+  expression: VariableNameLiteral | ValueAccess;
 };
 
 export type PromptLiteral = {

@@ -689,15 +689,21 @@ graph.node("main", async (state) => {
       
 
       if (__step <= 1) {
-        __stack.locals.person = {"name": `Alice`, "age": 30};
+        __stack.locals.user = {"name": `Alice`, "age": 30};
         __stack.step++;
       }
       
 
       if (__step <= 2) {
+        __stack.locals.greeting = `Hello, ${__stack.locals.user.name}!`;
+        __stack.step++;
+      }
+      
+
+      if (__step <= 3) {
         
-async function _response(person, __metadata) {
-  const __prompt = `Say hi to ${person.name}, who is ${person.age} years old.`;
+async function _result(user, __metadata) {
+  const __prompt = `Tell me about ${user.name} who is ${user.age} years old`;
   const startTime = performance.now();
   let __messages = __metadata?.messages || new MessageThread();
 
@@ -708,11 +714,8 @@ async function _response(person, __metadata) {
   const __tools = undefined;
 
   
-  // Need to make sure this is always an object
-  const __responseFormat = z.object({
-     response: z.object({ "greeting": z.string() })
-  });
   
+  const __responseFormat = undefined;
   
   
   const __clientConfig = __getSmoltalkConfig({});
@@ -827,36 +830,28 @@ async function _response(person, __metadata) {
   // not passing tool calls back this time
   __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
-  try {
-  const result = JSON.parse(responseMessage.output || "");
-  return result.response;
-  } catch (e) {
-    return responseMessage.output;
-    // console.error("Error parsing response for variable 'response':", e);
-    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
-    // throw e;
-  }
-  
 
+  
+  return responseMessage.output;
   
 }
 
 
-__self.response = _response(__stack.locals.person, {
+__self.result = _result(__stack.locals.user, {
       messages: new MessageThread()
     });
         __stack.step++;
       }
       
 
-      if (__step <= 3) {
-        [__self.response] = await Promise.all([__self.response]);
+      if (__step <= 4) {
+        [__self.result] = await Promise.all([__self.result]);
         __stack.step++;
       }
       
 
-      if (__step <= 4) {
-        await console.log(__stack.locals.response)
+      if (__step <= 5) {
+        await console.log(__stack.locals.result)
         __stack.step++;
       }
       

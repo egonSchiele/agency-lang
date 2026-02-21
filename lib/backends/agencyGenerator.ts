@@ -37,6 +37,7 @@ import { AgencyConfig } from "@/config.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
 import { BinOpExpression } from "@/types/binop.js";
+import { expressionToString } from "@/utils/node.js";
 
 export class AgencyGenerator extends BaseGenerator {
   private indentLevel: number = 0;
@@ -165,7 +166,7 @@ export class AgencyGenerator extends BaseGenerator {
       if (segment.type === "text") {
         result += segment.value;
       } else if (segment.type === "interpolation") {
-        result += `\${${segment.variableName}}`;
+        result += `\${${expressionToString(segment.expression)}}`;
       }
     }
 
@@ -184,7 +185,7 @@ export class AgencyGenerator extends BaseGenerator {
       if (segment.type === "text") {
         result += segment.value;
       } else if (segment.type === "interpolation") {
-        result += `\${${segment.variableName}}`;
+        result += `\${${expressionToString(segment.expression)}}`;
       }
     }
     result += '"';
@@ -197,7 +198,7 @@ export class AgencyGenerator extends BaseGenerator {
       if (segment.type === "text") {
         result += segment.value;
       } else if (segment.type === "interpolation") {
-        result += `\${${segment.variableName}}`;
+        result += `\${${expressionToString(segment.expression)}}`;
       }
     }
     result += '"""';

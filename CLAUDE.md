@@ -89,6 +89,13 @@ The integration test runner is `lib/backends/typescriptGenerator.integration.tes
 
 To add a new integration test, create a `.agency` file and its expected `.mts` output in `tests/typescriptGenerator/`. Run `make fixtures` to regenerate all `.mts` fixture files from their `.agency` sources.
 
+### Agency integration tests
+This is a new way to write integration tests. There are a bunch of `.agency` test files in the `tests/agency` directory. These files are run with a test harness, and the output is compared using either exact match or an LLM as a judge. You can check out some of these `.agency` files to see what they look like. Also check out some of the `.test.json` files to see what the expected output and evaluation criteria look like.
+
+As you can imagine, this is a much better way to write integration tests, because we're not just checking the generated code; we are actually running it and checking the result itself.
+
+Feel free to write agency integration tests.
+
 ## Common Tasks
 
 ### Adding a new AST node type

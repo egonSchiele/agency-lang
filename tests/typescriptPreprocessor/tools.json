@@ -34,8 +34,11 @@
                   },
                   {
                     "type": "interpolation",
-                    "variableName": "city",
-                    "scope": "args"
+                    "expression": {
+                      "type": "variableName",
+                      "value": "city",
+                      "scope": "args"
+                    }
                   }
                 ]
               }
@@ -80,8 +83,11 @@
             "segments": [
               {
                 "type": "interpolation",
-                "variableName": "temp",
-                "scope": "args"
+                "expression": {
+                  "type": "variableName",
+                  "value": "temp",
+                  "scope": "args"
+                }
               },
               {
                 "type": "text",

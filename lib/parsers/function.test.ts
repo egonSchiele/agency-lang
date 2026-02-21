@@ -482,7 +482,7 @@ describe("functionParser", () => {
                 type: "prompt",
                 segments: [
                   { type: "text", value: "say hello to " },
-                  { type: "interpolation", variableName: "name" },
+                  { type: "interpolation", expression: { type: "variableName", value: "name" } },
                 ],
               },
             },

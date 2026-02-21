@@ -3,14 +3,13 @@
   "tests": [
     {
       "nodeName": "main",
-      "input": "\"Alice\", \"coffee\"",
-      "expectedOutput": "\"Alice wants coffee\"",
+      "input": "\"alice\", \"coffee\"",
+      "expectedOutput": "\"alice wants hot spicy coffee\"",
       "evaluationCriteria": [
         {
           "type": "exact"
         }
-      ],
-      "retry": 2
+      ]
     }
   ]
 }

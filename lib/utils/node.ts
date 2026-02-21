@@ -1,5 +1,8 @@
 import {
   AgencyNode,
+  InterpolationSegment,
+  ValueAccess,
+  VariableNameLiteral,
   functionScope,
   getImportedNames,
   globalScope,
@@ -7,6 +10,53 @@ import {
   Scope,
 } from "@/types.js";
 import { color } from "termcolors";
+
+/**
+ * Extract the base variable name from an interpolation segment's expression.
+ */
+export function getBaseVarName(seg: InterpolationSegment): string {
+  if (seg.expression.type === "variableName") {
+    return seg.expression.value;
+  }
+  // ValueAccess — the base should be a VariableNameLiteral
+  return (seg.expression.base as VariableNameLiteral).value;
+}
+
+/**
+ * Render an expression (VariableNameLiteral or ValueAccess) as a string
+ * WITHOUT scope prefix. Used for prompt function bodies (where variables
+ * are function parameters) and for re-emitting agency source code.
+ */
+export function expressionToString(
+  expr: VariableNameLiteral | ValueAccess,
+): string {
+  if (expr.type === "variableName") {
+    return expr.value;
+  }
+  // ValueAccess
+  let code = expressionToString(expr.base as VariableNameLiteral | ValueAccess);
+  for (const element of expr.chain) {
+    switch (element.kind) {
+      case "property":
+        code += `.${element.name}`;
+        break;
+      case "index":
+        code += `[${expressionToString(element.index as VariableNameLiteral | ValueAccess)}]`;
+        break;
+      case "methodCall": {
+        const fc = element.functionCall;
+        const args = fc.arguments
+          .map((a) =>
+            expressionToString(a as VariableNameLiteral | ValueAccess),
+          )
+          .join(", ");
+        code += `.${fc.functionName}(${args})`;
+        break;
+      }
+    }
+  }
+  return code;
+}
 
 export function* getAllVariablesInBody(
   body: AgencyNode[],
@@ -94,7 +144,7 @@ export function* getAllVariablesInBody(
     ) {
       for (const seg of node.segments) {
         if (seg.type === "interpolation") {
-          yield { name: seg.variableName, node };
+          yield* getAllVariablesInBody([seg.expression as AgencyNode]);
         }
       }
       if (node.type === "prompt") {
@@ -221,8 +271,21 @@ export function* walkNodes(
       );
     } else if (node.type === "specialVar") {
       yield* walkNodes([node.value], [...ancestors, node], scopes);
-    } else if (node.type === "prompt") {
-      if (node.config) {
+    } else if (
+      node.type === "prompt" ||
+      node.type === "string" ||
+      node.type === "multiLineString"
+    ) {
+      for (const seg of node.segments) {
+        if (seg.type === "interpolation") {
+          yield* walkNodes(
+            [seg.expression as AgencyNode],
+            [...ancestors, node],
+            scopes,
+          );
+        }
+      }
+      if (node.type === "prompt" && node.config) {
         yield* walkNodes([node.config], [...ancestors, node], scopes);
       }
     } else if (node.type === "binOpExpression") {

@@ -49,6 +49,7 @@ import {
   success,
   quotedString,
 } from "tarsec";
+import { _valueAccessParser } from "./access.js";
 
 export const textSegmentParser: Parser<TextSegment> = map(
   many1Till(or(backtick, char("$"))),
@@ -74,13 +75,36 @@ export const multiLineStringTextSegmentParser: Parser<TextSegment> = map(
   }),
 );
 
-export const interpolationSegmentParser: Parser<InterpolationSegment> = seqC(
-  set("type", "interpolation"),
-  char("$"),
-  char("{"),
-  capture(manyTillStr("}"), "variableName"),
-  char("}"),
-);
+export const interpolationSegmentParser: Parser<InterpolationSegment> = (
+  input: string,
+) => {
+  const parser = seqC(
+    char("$"),
+    char("{"),
+    capture(_valueAccessParser, "expression"),
+    char("}"),
+  );
+
+  const result = parser(input);
+  if (!result.success) {
+    return result;
+  }
+
+  const exprResult = result.result.expression;
+
+  // Reject bare function calls — only variable names and value access allowed
+  if (exprResult.type === "functionCall") {
+    return failure("function calls not allowed in interpolation", input);
+  }
+
+  return success(
+    {
+      type: "interpolation" as const,
+      expression: exprResult,
+    },
+    result.rest,
+  );
+};
 
 export const promptParserBackticks: Parser<PromptLiteral> = seqC(
   set("type", "prompt"),
@@ -221,7 +245,7 @@ export const stringParser: Parser<StringLiteral> = (input: string) => {
     } else if (part.type === "variableName") {
       segments.push({
         type: "interpolation",
-        variableName: part.value,
+        expression: part,
       });
     }
   });

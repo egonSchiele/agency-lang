@@ -346,7 +346,7 @@ describe("streamingPromptLiteralParser", () => {
           type: "prompt",
           segments: [
             { type: "text", value: "Hello " },
-            { type: "interpolation", variableName: "name" },
+            { type: "interpolation", expression: { type: "variableName", value: "name" } },
           ],
           isStreaming: true,
         },

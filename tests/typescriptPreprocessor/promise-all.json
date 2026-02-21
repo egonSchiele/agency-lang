@@ -31,8 +31,11 @@
               },
               {
                 "type": "interpolation",
-                "variableName": "label",
-                "scope": "args"
+                "expression": {
+                  "type": "variableName",
+                  "value": "label",
+                  "scope": "args"
+                }
               }
             ],
             "tools": {
@@ -143,8 +146,11 @@
             "segments": [
               {
                 "type": "interpolation",
-                "variableName": "a",
-                "scope": "node"
+                "expression": {
+                  "type": "variableName",
+                  "value": "a",
+                  "scope": "node"
+                }
               },
               {
                 "type": "text",
@@ -152,8 +158,11 @@
               },
               {
                 "type": "interpolation",
-                "variableName": "b",
-                "scope": "node"
+                "expression": {
+                  "type": "variableName",
+                  "value": "b",
+                  "scope": "node"
+                }
               }
             ]
           },

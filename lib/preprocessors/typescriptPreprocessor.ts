@@ -22,6 +22,7 @@ import {
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
 import {
+  expressionToString,
   getAllVariablesInBodyArray,
   walkNodesArray,
 } from "@/utils/node.js";
@@ -64,7 +65,11 @@ export class TypescriptPreprocessor {
 
   protected promptLiteralToString(prompt: PromptLiteral): string {
     return prompt.segments
-      .map((seg) => (seg.type === "text" ? seg.value : `{${seg.variableName}}`))
+      .map((seg) =>
+        seg.type === "text"
+          ? seg.value
+          : `{${expressionToString(seg.expression)}}`,
+      )
       .join("");
   }
 
@@ -389,7 +394,9 @@ export class TypescriptPreprocessor {
     } else if (call.type === "prompt") {
       const stringified = call.segments
         .map((seg) =>
-          seg.type === "text" ? seg.value : `{${seg.variableName}}`,
+          seg.type === "text"
+            ? seg.value
+            : `{${expressionToString(seg.expression)}}`,
         )
         .join("__")
         .substring(0, 20);
@@ -1219,21 +1226,14 @@ export class TypescriptPreprocessor {
 
     // Then, whenever we see a variable being referenced,
     // we try to look up its scope and set it on that variable.
+    // Note: segment expressions are now walked by walkNodes/getAllVariablesInBody,
+    // so the base VariableNameLiteral inside interpolation segments gets its scope
+    // set via the node.type === "variableName" branch below.
     for (const { node } of getAllVariablesInBodyArray(this.program.nodes)) {
       if (node.type === "assignment") {
         node.scope = lookupScope(node.variableName);
       } else if (node.type === "variableName") {
         node.scope = lookupScope(node.value);
-      } else if (
-        node.type === "prompt" ||
-        node.type === "string" ||
-        node.type === "multiLineString"
-      ) {
-        node.segments.forEach((seg) => {
-          if (seg.type === "interpolation") {
-            seg.scope = lookupScope(seg.variableName);
-          }
-        });
       }
     }
   }

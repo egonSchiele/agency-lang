@@ -1,0 +1,15 @@
+{
+  "sourceFile": "nested-parallel.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"msgs\":[{\"role\":\"user\",\"content\":\"What is the first prime number > 100?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":[101]}\"}],\"msgs2\":[{\"role\":\"user\",\"content\":\"What is the first prime number > 100?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":[101]}\"},{\"role\":\"user\",\"content\":\"What are the next 2 integers after that?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":[102,103]}\"}],\"res1\":[101],\"res2\":[102,103],\"res3\":{},\"res4\":{},\"res5\":[104,105],\"res6\":{}}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

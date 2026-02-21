@@ -1,0 +1,29 @@
+node main() {
+  msgs = thread {
+    res1: number[] = llm("What is the first prime number > 100?")
+    msgs2 = subthread {
+      res2: number[] = llm("What are the next 2 integers after that?")
+      parallel {
+        res3: number[] = llm("What are the next 2 integers after that?")
+        res4: number[] = llm("What are the next 2 integers after that?")
+        subthread {
+          res5: number[] = llm("What are the next 2 integers after that?")
+          parallel {
+            res6: number[] = llm("What are the next 2 integers after that?")
+          }
+        }
+      }
+    }
+  }
+
+  return { 
+    msgs: msgs,
+    msgs2: msgs2,
+    res1: res1,
+    res2: res2,
+    res3: res3,
+    res4: res4,
+    res5: res5,
+    res6: res6
+  }
+}

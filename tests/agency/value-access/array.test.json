@@ -1,0 +1,15 @@
+{
+  "sourceFile": "array.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"name1\":\"Alice\",\"name2\":\"Bob\",\"names\":[\"Bob\",\"Charlie\"]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

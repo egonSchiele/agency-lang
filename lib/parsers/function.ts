@@ -25,6 +25,7 @@ import {
   succeed,
   success,
   trace,
+  newline,
 } from "tarsec";
 import {
   AccessChainElement,
@@ -66,6 +67,7 @@ import { newLineParser } from "./newline.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { skillParser } from "./skill.js";
 import { binOpParser } from "./binop.js";
+import { multiLineCommentParser } from "./multiLineComment.js";
 
 export const assignmentParser: Parser<Assignment> = (input: string) => {
   const parser = trace(
@@ -104,6 +106,7 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
         "value",
       ),
       optionalSemicolon,
+      //optional(newline),
     ),
   );
   const result = parser(input);
@@ -161,6 +164,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
         ifParser,
         timeBlockParser,
         messageThreadParser,
+        multiLineCommentParser,
         skillParser,
         functionParser,
         assignmentParser,

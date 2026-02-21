@@ -10,18 +10,28 @@ node main() {
   name2 = users[0].name
 
   // var for index
-  users.push({ name: "Charlie", age: 25 })
+  users.push({ 
+    name: "Charlie",
+    age: 25
+  })
   i = 0
+  names = []
   while (i < users.length) {
-    print(users[i].name)
+    names.push(users[i].name)
     i = i + 1
   }
 
-  print(users[0 + 1].name)
+  // print(users[0 + 1].name)
 
-  obj = { x: 1}
+  obj = { 
+    x: 1
+  }
 
-  print(users[obj.x].name)
+  //print(users[obj.x].name)
 
-  return [name1, name2]
+  return { 
+    name1: name1,
+    name2: name2,
+    names: names
+  }
 }

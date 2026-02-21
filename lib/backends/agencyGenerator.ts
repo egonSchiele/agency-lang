@@ -108,7 +108,9 @@ export class AgencyGenerator extends BaseGenerator {
   // Assignment and literals
   protected processAssignment(node: Assignment): string {
     const chainStr =
-      node.accessChain?.map(this.processAccessChainElement).join("") ?? "";
+      node.accessChain
+        ?.map((ce) => this.processAccessChainElement(ce))
+        .join("") ?? "";
     const varName = node.typeHint
       ? `${node.variableName}${chainStr}: ${variableTypeToString(node.typeHint, this.typeAliases)}`
       : `${node.variableName}${chainStr}`;

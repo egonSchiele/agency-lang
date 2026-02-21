@@ -4,6 +4,7 @@ import {
   specialVarNames,
 } from "@/types/specialVar.js";
 import { capture, char, or, Parser, seqC, set, str } from "tarsec";
+import { valueAccessParser } from "./access.js";
 import { optionalSpaces } from "./utils.js";
 import { literalParser } from "./literals.js";
 import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
@@ -19,6 +20,6 @@ export const specialVarParser: Parser<SpecialVar> = seqC(
   optionalSpaces,
   char("="),
   optionalSpaces,
-  capture(or(agencyObjectParser, agencyArrayParser, literalParser), "value"),
+  capture(or(agencyObjectParser, agencyArrayParser, valueAccessParser, literalParser), "value"),
   optionalSemicolon
 );

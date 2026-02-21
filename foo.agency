@@ -1,7 +1,3 @@
 node main() {
-  thread {
-    system("You are a helpful assistant that only responds with lists of numbers.")
-    day = llm("What day is it today?")
-    print(day)
-  }
+  users[0].name = "Bob"
 }

@@ -463,6 +463,60 @@ describe("matchBlockParser", () => {
       },
     },
     {
+      name: "match with valueAccess expression",
+      input: `match(obj.status) {
+  "active" => 1
+  _ => 0
+}`,
+      expected: {
+        success: true,
+        result: {
+          type: "matchBlock",
+          expression: {
+            type: "valueAccess",
+            base: { type: "variableName", value: "obj" },
+            chain: [{ kind: "property", name: "status" }],
+          },
+          cases: [
+            {
+              type: "matchBlockCase",
+              caseValue: { type: "string", segments: [{ type: "text", value: "active" }] },
+              body: { type: "number", value: "1" },
+            },
+            {
+              type: "matchBlockCase",
+              caseValue: "_",
+              body: { type: "number", value: "0" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      name: "match with indexed valueAccess expression",
+      input: `match(arr[0]) {
+  1 => "first"
+}`,
+      expected: {
+        success: true,
+        result: {
+          type: "matchBlock",
+          expression: {
+            type: "valueAccess",
+            base: { type: "variableName", value: "arr" },
+            chain: [{ kind: "index", index: { type: "number", value: "0" } }],
+          },
+          cases: [
+            {
+              type: "matchBlockCase",
+              caseValue: { type: "number", value: "1" },
+              body: { type: "string", segments: [{ type: "text", value: "first" }] },
+            },
+          ],
+        },
+      },
+    },
+    {
       name: "missing opening parenthesis",
       input: `match foo) { x => 1 }`,
       expected: { success: false },

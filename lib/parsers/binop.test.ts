@@ -315,6 +315,60 @@ describe("binOpParser", () => {
     });
   });
 
+  // ValueAccess operands
+  describe("valueAccess operands", () => {
+    it('should parse "obj.count + 1"', () => {
+      const result = binOpParser("obj.count + 1");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "binOpExpression",
+          operator: "+",
+          left: {
+            type: "valueAccess",
+            base: { type: "variableName", value: "obj" },
+            chain: [{ kind: "property", name: "count" }],
+          },
+          right: { type: "number", value: "1" },
+        });
+      }
+    });
+
+    it('should parse "arr[0] == \\"done\\""', () => {
+      const result = binOpParser('arr[0] == "done"');
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "binOpExpression",
+          operator: "==",
+          left: {
+            type: "valueAccess",
+            base: { type: "variableName", value: "arr" },
+            chain: [{ kind: "index", index: { type: "number", value: "0" } }],
+          },
+          right: { type: "string", segments: [{ type: "text", value: "done" }] },
+        });
+      }
+    });
+
+    it('should parse "response.status >= 400"', () => {
+      const result = binOpParser("response.status >= 400");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "binOpExpression",
+          operator: ">=",
+          left: {
+            type: "valueAccess",
+            base: { type: "variableName", value: "response" },
+            chain: [{ kind: "property", name: "status" }],
+          },
+          right: { type: "number", value: "400" },
+        });
+      }
+    });
+  });
+
   // Failure cases
   describe("failure cases", () => {
     const failureCases = [

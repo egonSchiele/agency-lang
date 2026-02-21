@@ -81,7 +81,7 @@ export const matchBlockParser = seqC(
   str("match"),
   optionalSpaces,
   char("("),
-  capture(or(binOpParser, literalParser), "expression"),
+  capture(or(binOpParser, valueAccessParser, literalParser), "expression"),
   char(")"),
   optionalSpaces,
   char("{"),

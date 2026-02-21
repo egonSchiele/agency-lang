@@ -23,6 +23,6 @@ export type MatchBlockCase = {
 
 export type MatchBlock = {
   type: "matchBlock";
-  expression: Literal | BinOpExpression;
+  expression: Literal | BinOpExpression | ValueAccess | FunctionCall;
   cases: (MatchBlockCase | AgencyComment)[];
 };

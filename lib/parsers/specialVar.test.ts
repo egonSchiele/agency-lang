@@ -194,6 +194,23 @@ describe("specialVar parsers", () => {
         },
       },
 
+      // ValueAccess values
+      {
+        input: "@model = config.modelName",
+        expected: {
+          success: true,
+          result: {
+            type: "specialVar",
+            name: "model",
+            value: {
+              type: "valueAccess",
+              base: { type: "variableName", value: "config" },
+              chain: [{ kind: "property", name: "modelName" }],
+            },
+          },
+        },
+      },
+
       // Failure cases
       { input: "@model =", expected: { success: false } },
       { input: '@notSpecial = "value"', expected: { success: false } },

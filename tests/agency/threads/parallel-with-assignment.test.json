@@ -1,0 +1,17 @@
+{
+  "sourceFile": "parallel-with-assignment.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"msgs\":{\"res1\":[{\"role\":\"user\",\"content\":\"What is the first prime number > 100?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":[101]}\"}],\"res2\":[{\"role\":\"user\",\"content\":\"What are the next 2 prime numbers after that?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":[5,7]}\"}]}}",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "foo",
+          "desiredAccuracy": 75
+        }
+      ]
+    }
+  ]
+}

@@ -1,21 +1,3 @@
-/*
-{
-"msgs": {
-"res1": [
-{
-"role": "user",
-"content": "What is the first prime number > 100?"
-}
-],
-"res2": [
-{
-"role": "user",
-"content": "What are the next 2 prime numbers after that?"
-}
-]
-}
-}
-*/
 node main() {
   msgs = parallel {
     res1: number[] = llm("What is the first prime number > 100?")

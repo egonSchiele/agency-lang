@@ -1,0 +1,15 @@
+response = { 
+  success: true,
+  status: ""
+}
+
+node main() {
+  while (response.success) {
+    response.status = "success"
+    response.success = false
+  }
+  while (response.status == "success") {
+    return "The operation was successful!"
+  }
+  return "The operation failed."
+}

@@ -11,7 +11,7 @@ import {
   run,
 } from "@/cli/commands.js";
 import { evaluate } from "@/cli/evaluate.js";
-import { fixtures, test, testTs } from "@/cli/test.js";
+import { fixtures, test, testTs, TestStats, mergeStats } from "@/cli/test.js";
 import { AgencyConfig } from "@/config.js";
 import { _parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
@@ -193,8 +193,36 @@ program
       if (opts.js) {
         await testTs(getConfig(), testFile);
       } else {
+        let totals: TestStats = {
+          passed: 0,
+          failed: 0,
+          filesPassed: 0,
+          filesFailed: 0,
+        };
         for (const file of testFile) {
-          await test(getConfig(), file);
+          const stats = await test(getConfig(), file);
+          totals = mergeStats(totals, stats);
+        }
+        const totalFiles = totals.filesPassed + totals.filesFailed;
+        const totalTests = totals.passed + totals.failed;
+        if (totalFiles > 0) {
+          const filesStatus = [
+            totals.filesFailed > 0 ? `${totals.filesFailed} failed` : "",
+            `${totals.filesPassed} passed`,
+          ]
+            .filter(Boolean)
+            .join(" | ");
+          const testsStatus = [
+            totals.failed > 0 ? `${totals.failed} failed` : "",
+            `${totals.passed} passed`,
+          ]
+            .filter(Boolean)
+            .join(" | ");
+          console.log(`\n Test Files  ${filesStatus} (${totalFiles})`);
+          console.log(`      Tests  ${testsStatus} (${totalTests})`);
+        }
+        if (totals.failed > 0) {
+          process.exit(1);
         }
       }
     },

@@ -2,6 +2,7 @@
   "sourceFile": "parallel-with-func.agency",
   "tests": [
     {
+      "retry": 2,
       "nodeName": "main",
       "input": "",
       "expectedOutput": "{\"res1\":[101],\"res2\":[11,13],\"res3\":[9,10],\"res4\":[1,2],\"res5\":[1,2],\"res6\":[1,2],\"res7\":[3,4]}",

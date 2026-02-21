@@ -36,6 +36,7 @@ type TestCase = {
   evaluationCriteria: Criteria[];
   interruptHandlers?: InterruptHandler[];
   description?: string;
+  retry?: number;
 };
 type Tests = { sourceFile: string; tests: TestCase[] };
 
@@ -277,13 +278,105 @@ export async function fixtures(config: AgencyConfig, target?: string) {
   console.log(`Test case saved to ${testFilePath}`);
 }
 
-export async function test(config: AgencyConfig, testFile: string) {
-  const stats = fs.statSync(testFile);
-  if (stats.isDirectory()) {
-    for (const { path } of findRecursively(testFile, ".test.json")) {
-      await test(config, path);
+export type TestStats = {
+  passed: number;
+  failed: number;
+  filesPassed: number;
+  filesFailed: number;
+};
+
+function emptyStats(): TestStats {
+  return { passed: 0, failed: 0, filesPassed: 0, filesFailed: 0 };
+}
+
+export function mergeStats(a: TestStats, b: TestStats): TestStats {
+  return {
+    passed: a.passed + b.passed,
+    failed: a.failed + b.failed,
+    filesPassed: a.filesPassed + b.filesPassed,
+    filesFailed: a.filesFailed + b.filesFailed,
+  };
+}
+
+function runSingleTest(
+  config: AgencyConfig,
+  testFile: string,
+  tests: Tests,
+  testCase: TestCase,
+): boolean {
+  const hasArgs = testCase.input !== "";
+  const relativeSourceFilePath = path.join(
+    path.dirname(testFile),
+    tests.sourceFile,
+  );
+  const result = executeNode({
+    config,
+    agencyFile: relativeSourceFilePath,
+    nodeName: testCase.nodeName,
+    hasArgs,
+    argsString: testCase.input,
+    interruptHandlers: testCase.interruptHandlers,
+  });
+
+  let testPassed = true;
+  for (const criterion of testCase.evaluationCriteria) {
+    if (criterion.type === "exact") {
+      const actual = JSON.stringify(result.data);
+      if (actual === testCase.expectedOutput) {
+        console.log(color.green("  ✓ Exact match passed"));
+      } else {
+        console.log(color.red("  ✗ Exact match failed"));
+        console.log("    Expected:", testCase.expectedOutput);
+        console.log("    Actual:  ", actual);
+        testPassed = false;
+      }
+    } else if (criterion.type === "llmJudge") {
+      const actual = JSON.stringify(result.data);
+      try {
+        const judgeResult = executeJudge(
+          actual,
+          testCase.expectedOutput,
+          criterion.judgePrompt,
+        );
+        const passed = judgeResult.score >= criterion.desiredAccuracy;
+        if (passed) {
+          console.log(
+            color.green(
+              `  ✓ LLM Judge passed (score: ${judgeResult.score}/${criterion.desiredAccuracy})`,
+            ),
+          );
+          console.log(`    Reasoning: ${judgeResult.reasoning}`);
+        } else {
+          console.log(
+            color.red(
+              `  ✗ LLM Judge failed (score: ${judgeResult.score}/${criterion.desiredAccuracy})`,
+            ),
+          );
+          console.log(`    Reasoning: ${judgeResult.reasoning}`);
+          console.log(`    Actual Output:\n${actual}`);
+          testPassed = false;
+        }
+      } catch (e) {
+        console.log(color.red(`  ✗ LLM Judge error: ${e}`));
+        testPassed = false;
+      }
     }
-    return;
+  }
+  return testPassed;
+}
+
+export async function test(
+  config: AgencyConfig,
+  testFile: string,
+): Promise<TestStats> {
+  const fileStats = fs.statSync(testFile);
+  if (fileStats.isDirectory()) {
+    let stats = emptyStats();
+    for (const { path } of findRecursively(testFile, ".test.json")) {
+      const childStats = await test(config, path);
+      stats = mergeStats(stats, childStats);
+    }
+    return stats;
   }
 
   console.log(color.yellow(`Running tests for ${testFile}...`));
@@ -294,7 +387,6 @@ export async function test(config: AgencyConfig, testFile: string) {
 
   for (let i = 0; i < total; i++) {
     const testCase = tests.tests[i];
-    const hasArgs = testCase.input !== "";
     const interruptInfo = testCase.interruptHandlers
       ? ` interrupts=${testCase.interruptHandlers.length}`
       : "";
@@ -306,68 +398,36 @@ export async function test(config: AgencyConfig, testFile: string) {
       console.log(color.cyan("Description:", testCase.description), "\n");
     }
 
-    const relativeSourceFilePath = path.join(
-      path.dirname(testFile),
-      tests.sourceFile,
-    );
-    const result = executeNode({
-      config,
-      agencyFile: relativeSourceFilePath,
-      nodeName: testCase.nodeName,
-      hasArgs,
-      argsString: testCase.input,
-      interruptHandlers: testCase.interruptHandlers,
-    });
+    const maxAttempts = (testCase.retry ?? 0) + 1;
+    let testPassed = false;
 
-    let testPassed = true;
-    for (const criterion of testCase.evaluationCriteria) {
-      if (criterion.type === "exact") {
-        const actual = JSON.stringify(result.data);
-        if (actual === testCase.expectedOutput) {
-          console.log(color.green("  ✓ Exact match passed"));
-        } else {
-          console.log(color.red("  ✗ Exact match failed"));
-          console.log("    Expected:", testCase.expectedOutput);
-          console.log("    Actual:  ", actual);
-          testPassed = false;
-        }
-      } else if (criterion.type === "llmJudge") {
-        const actual = JSON.stringify(result.data);
-        try {
-          const judgeResult = executeJudge(
-            actual,
-            testCase.expectedOutput,
-            criterion.judgePrompt,
-          );
-          const passed = judgeResult.score >= criterion.desiredAccuracy;
-          if (passed) {
-            console.log(
-              color.green(
-                `  ✓ LLM Judge passed (score: ${judgeResult.score}/${criterion.desiredAccuracy})`,
-              ),
-            );
-            console.log(`    Reasoning: ${judgeResult.reasoning}`);
-          } else {
-            console.log(
-              color.red(
-                `  ✗ LLM Judge failed (score: ${judgeResult.score}/${criterion.desiredAccuracy})`,
-              ),
-            );
-            console.log(`    Reasoning: ${judgeResult.reasoning}`);
-            console.log(`    Actual Output:\n${actual}`);
-            testPassed = false;
-          }
-        } catch (e) {
-          console.log(color.red(`  ✗ LLM Judge error: ${e}`));
-          testPassed = false;
-        }
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      if (attempt > 1) {
+        console.log(
+          color.yellow(`  Retry ${attempt - 1}/${testCase.retry}...`),
+        );
+      }
+      try {
+        testPassed = runSingleTest(config, testFile, tests, testCase);
+        if (testPassed) break;
+      } catch (e) {
+        console.log(color.red(`  ✗ Test error: ${e}`));
+        testPassed = false;
       }
     }
 
     if (testPassed) passed++;
   }
 
+  const failed = total - passed;
   console.log(`\n${passed}/${total} tests passed`);
+
+  return {
+    passed,
+    failed,
+    filesPassed: failed === 0 ? 1 : 0,
+    filesFailed: failed === 0 ? 0 : 1,
+  };
 }
 
 function findTsTestDirs(_inputPath: string): string[] {

@@ -1,0 +1,16 @@
+{
+  "sourceFile": "syncFunc.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "50",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "retry": 2
+    }
+  ]
+}

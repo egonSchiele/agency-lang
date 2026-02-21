@@ -1,0 +1,4 @@
+node main() {
+  contents = read("testdata.txt")
+  return contents
+}

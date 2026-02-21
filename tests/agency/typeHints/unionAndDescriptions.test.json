@@ -1,0 +1,31 @@
+{
+  "sourceFile": "unionAndDescriptions.agency",
+  "tests": [
+    {
+      "nodeName": "analyzeSentiment",
+      "input": "\"I am so happy and excited today!\"",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The output should be a JSON object with 'sentiment' set to 'positive' and 'confidence' as a number between 0 and 100. Check that the sentiment classification is correct for the happy input text.",
+          "desiredAccuracy": 80
+        }
+      ],
+      "retry": 1
+    },
+    {
+      "nodeName": "analyzeSentiment",
+      "input": "\"This is terrible and I am very sad\"",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The output should be a JSON object with 'sentiment' set to 'negative' and 'confidence' as a number between 0 and 100. Check that the sentiment classification is correct for the sad input text.",
+          "desiredAccuracy": 80
+        }
+      ],
+      "retry": 1
+    }
+  ]
+}

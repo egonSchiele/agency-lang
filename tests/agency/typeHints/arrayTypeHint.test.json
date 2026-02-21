@@ -1,0 +1,16 @@
+{
+  "sourceFile": "arrayTypeHint.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"apple\",\"banana\",\"cherry\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "retry": 1
+    }
+  ]
+}

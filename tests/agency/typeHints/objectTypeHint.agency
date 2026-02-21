@@ -1,0 +1,9 @@
+type UserInfo = {
+  name: string;
+  age: number
+}
+
+node main() {
+  user: UserInfo = llm("Create a user object for a person named Alice who is 30 years old")
+  return user
+}

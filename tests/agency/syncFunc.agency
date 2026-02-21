@@ -1,0 +1,13 @@
+sync def getNumber(): number {
+  return llm("Return the number 42")
+}
+
+sync def addToNumber(x: number): number {
+  return llm("Add 8 to ${x} and return the result as a number")
+}
+
+node main() {
+  a: number = getNumber()
+  b: number = addToNumber(a)
+  return b
+}

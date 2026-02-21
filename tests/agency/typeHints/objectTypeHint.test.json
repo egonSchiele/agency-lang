@@ -1,0 +1,16 @@
+{
+  "sourceFile": "objectTypeHint.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"name\":\"Alice\",\"age\":30}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "retry": 1
+    }
+  ]
+}

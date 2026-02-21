@@ -1,0 +1,9 @@
+type Sentiment = {
+  sentiment: "positive" | "negative" | "neutral" # The overall sentiment;
+  confidence: number # A confidence score from 0 to 100
+}
+
+node analyzeSentiment(text: string) {
+  result: Sentiment = llm("Analyze the sentiment of: '${text}'")
+  return result
+}

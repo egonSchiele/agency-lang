@@ -1,0 +1,16 @@
+{
+  "sourceFile": "stringInterpolation.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "\"Alice\", \"coffee\"",
+      "expectedOutput": "\"Alice wants coffee\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "retry": 2
+    }
+  ]
+}

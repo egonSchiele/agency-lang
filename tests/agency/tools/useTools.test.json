@@ -1,0 +1,29 @@
+{
+  "sourceFile": "useTools.agency",
+  "tests": [
+    {
+      "nodeName": "withUses",
+      "description": "Test 'uses' syntax for providing functions as tools",
+      "input": "",
+      "expectedOutput": "10",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "retry": 1
+    },
+    {
+      "nodeName": "withPlus",
+      "description": "Test '+' syntax for providing functions as tools",
+      "input": "",
+      "expectedOutput": "20",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "retry": 1
+    }
+  ]
+}

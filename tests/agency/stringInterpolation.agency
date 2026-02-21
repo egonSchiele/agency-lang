@@ -1,0 +1,4 @@
+node main(name: string, item: string) {
+  result: string = llm("Respond with ONLY this exact text: '${name} wants ${item}'")
+  return result
+}

@@ -1,0 +1,29 @@
+{
+  "sourceFile": "graphEdges.agency",
+  "tests": [
+    {
+      "nodeName": "classify",
+      "description": "Greeting input should route to respondGreeting node",
+      "input": "\"Hey there!\"",
+      "expectedOutput": "\"hello\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "retry": 1
+    },
+    {
+      "nodeName": "classify",
+      "description": "Farewell input should route to respondFarewell node",
+      "input": "\"Bye, see you later!\"",
+      "expectedOutput": "\"goodbye\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "retry": 1
+    }
+  ]
+}

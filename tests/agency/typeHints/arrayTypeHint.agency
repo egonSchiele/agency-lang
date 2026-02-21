@@ -1,0 +1,4 @@
+node main() {
+  fruits: string[] = llm("List exactly 3 fruits: apple, banana, cherry")
+  return fruits
+}

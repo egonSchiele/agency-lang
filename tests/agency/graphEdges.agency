@@ -1,0 +1,16 @@
+node classify(message: string) {
+  category: "greeting" | "farewell" = llm("Classify as 'greeting' or 'farewell': '${message}'")
+  match(category) {
+    "greeting" => return respondGreeting()
+    "farewell" => return respondFarewell()
+    _ => return "unknown"
+  }
+}
+
+node respondGreeting() {
+  return "hello"
+}
+
+node respondFarewell() {
+  return "goodbye"
+}

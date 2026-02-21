@@ -1,0 +1,19 @@
+def add(a: number, b: number): number {
+  return a + b
+}
+
+def multiply(a: number, b: number): number {
+  return a * b
+}
+
+node withUses() {
+  uses add
+  result: number = llm("Use the add function to compute 3 + 7. Return ONLY the result.")
+  return result
+}
+
+node withPlus() {
+  +multiply
+  result: number = llm("Use the multiply function to compute 4 * 5. Return ONLY the result.")
+  return result
+}

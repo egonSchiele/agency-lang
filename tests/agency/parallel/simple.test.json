@@ -1,0 +1,18 @@
+{
+  "sourceFile": "simple.agency",
+  "tests": [
+    {
+      "nodeName": "categorize",
+      "input": "\"Remind me to buy groceries\"",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The output should be an array with two elements. The first element should be 'reminder' (since the input is about remembering something). The second element should be a string that acknowledges the user's message about buying groceries.",
+          "desiredAccuracy": 80
+        }
+      ],
+      "retry": 1
+    }
+  ]
+}

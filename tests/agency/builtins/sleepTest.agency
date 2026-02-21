@@ -1,0 +1,6 @@
+node main() {
+  x = "before"
+  sleep(0.1)
+  x = "after"
+  return x
+}

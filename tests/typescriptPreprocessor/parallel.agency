@@ -1,0 +1,9 @@
+def foo() {
+  thread {
+    res1: number[] = `What are the first 5 prime numbers?`
+    parallel {
+      res2: number = `What is 2+2?`
+      res3: number = `What is 3+3?`
+    }
+  }
+}

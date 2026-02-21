@@ -1,0 +1,108 @@
+{
+  "type": "agencyProgram",
+  "nodes": [
+    {
+      "type": "function",
+      "functionName": "foo",
+      "parameters": [],
+      "returnType": null,
+      "body": [
+        {
+          "type": "messageThread",
+          "threadType": "thread",
+          "body": [
+            {
+              "type": "assignment",
+              "typeHint": {
+                "type": "arrayType",
+                "elementType": {
+                  "type": "primitiveType",
+                  "value": "number"
+                }
+              },
+              "variableName": "res1",
+              "value": {
+                "type": "prompt",
+                "segments": [
+                  {
+                    "type": "text",
+                    "value": "What are the first 5 prime numbers?"
+                  }
+                ],
+                "async": false
+              },
+              "scope": "function"
+            },
+            {
+              "type": "newLine"
+            },
+            {
+              "type": "messageThread",
+              "threadType": "parallel",
+              "body": [
+                {
+                  "type": "assignment",
+                  "typeHint": {
+                    "type": "primitiveType",
+                    "value": "number"
+                  },
+                  "variableName": "res2",
+                  "value": {
+                    "type": "prompt",
+                    "segments": [
+                      {
+                        "type": "text",
+                        "value": "What is 2+2?"
+                      }
+                    ],
+                    "async": true
+                  },
+                  "scope": "function"
+                },
+                {
+                  "type": "newLine"
+                },
+                {
+                  "type": "assignment",
+                  "typeHint": {
+                    "type": "primitiveType",
+                    "value": "number"
+                  },
+                  "variableName": "res3",
+                  "value": {
+                    "type": "prompt",
+                    "segments": [
+                      {
+                        "type": "text",
+                        "value": "What is 3+3?"
+                      }
+                    ],
+                    "async": true
+                  },
+                  "scope": "function"
+                },
+                {
+                  "type": "newLine"
+                },
+                {
+                  "type": "rawCode",
+                  "value": "[__self.res2, __self.res3] = await Promise.all([__self.res2, __self.res3]);"
+                }
+              ]
+            },
+            {
+              "type": "newLine"
+            }
+          ]
+        },
+        {
+          "type": "newLine"
+        }
+      ],
+      "async": true
+    },
+    {
+      "type": "newLine"
+    }
+  ]
+}

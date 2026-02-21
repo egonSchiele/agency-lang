@@ -80,6 +80,7 @@ export class TypeScriptGenerator extends BaseGenerator {
   protected adjacentNodes: Record<string, string[]> = {};
   protected currentAdjacentNodes: string[] = [];
   protected isInsideGraphNode: boolean = false;
+  private isInsideMessageThread: boolean = false;
   private parallelThreadVars: Record<string, string> = {};
 
   constructor(args: { config?: AgencyConfig } = {}) {
@@ -705,9 +706,14 @@ I'll probably need to do that for supporting type checking anyway.
       .join("\n");
 
     const clientConfig = prompt.config ? this.processNode(prompt.config) : "{}";
-    const threadExpr = this.parallelThreadVars[variableName]
-      ? `__threads.get(${this.parallelThreadVars[variableName]})`
-      : `__threads.getOrCreateActive()`;
+    let threadExpr: string;
+    if (this.parallelThreadVars[variableName]) {
+      threadExpr = `__threads.get(${this.parallelThreadVars[variableName]})`;
+    } else if (!this.isInsideMessageThread) {
+      threadExpr = `new MessageThread()`;
+    } else {
+      threadExpr = `__threads.getOrCreateActive()`;
+    }
     const metadataObj = `{
       messages: ${threadExpr}
     }`;
@@ -848,11 +854,17 @@ I'll probably need to do that for supporting type checking anyway.
       return this.processParallelThread(node, varName);
     }
 
+    const prevInsideMessageThread = this.isInsideMessageThread;
+    this.isInsideMessageThread = true;
+
     const bodyCodes: string[] = [];
     for (const stmt of node.body) {
       bodyCodes.push(this.processNode(stmt));
     }
     const bodyCodeStr = bodyCodes.join("\n");
+
+    this.isInsideMessageThread = prevInsideMessageThread;
+
     return renderMessageThread.default({
       bodyCode: bodyCodeStr,
       hasVar: !!varName,
@@ -865,6 +877,9 @@ I'll probably need to do that for supporting type checking anyway.
     node: MessageThread,
     varName?: string,
   ): string {
+    const prevInsideMessageThread = this.isInsideMessageThread;
+    this.isInsideMessageThread = true;
+
     const lines: string[] = ["{"];
 
     // Extract assignment variable names from body to create per-call threads
@@ -902,6 +917,8 @@ I'll probably need to do that for supporting type checking anyway.
     for (const name of assignmentVarNames) {
       delete this.parallelThreadVars[name];
     }
+
+    this.isInsideMessageThread = prevInsideMessageThread;
 
     lines.push("}");
     return lines.join("\n");

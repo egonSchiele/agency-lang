@@ -799,8 +799,8 @@ export class TypescriptPreprocessor {
             .filter(
               (n): n is Assignment =>
                 n.type === "assignment" &&
-                n.value.type === "prompt" &&
-                !!n.value.async,
+                ((n.value.type === "prompt" && !!n.value.async) ||
+                  (n.value.type === "functionCall" && !!n.value.async)),
             )
             .map((n) => n.variableName);
 

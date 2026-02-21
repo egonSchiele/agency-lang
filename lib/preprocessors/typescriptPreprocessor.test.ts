@@ -735,6 +735,84 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
       }
     });
 
+    it("should include async function calls (not just prompts) in parallel Promise.all", () => {
+      // A parallel block with a mix of prompt and function call assignments
+      // should include both in the Promise.all
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "helper",
+            parameters: [],
+            body: [
+              {
+                type: "assignment",
+                variableName: "inner",
+                typeHint: { type: "primitiveType", value: "string" },
+                value: {
+                  type: "prompt",
+                  segments: [{ type: "text", value: "helper prompt" }],
+                },
+              },
+            ],
+          },
+          {
+            type: "function",
+            functionName: "foo",
+            parameters: [],
+            body: [
+              {
+                type: "messageThread",
+                threadType: "parallel",
+                body: [
+                  {
+                    type: "assignment",
+                    variableName: "fromPrompt",
+                    typeHint: { type: "primitiveType", value: "number" },
+                    value: {
+                      type: "prompt",
+                      segments: [{ type: "text", value: "What is 2+2?" }],
+                    },
+                  },
+                  {
+                    type: "assignment",
+                    variableName: "fromFunc",
+                    value: {
+                      type: "functionCall",
+                      functionName: "helper",
+                      arguments: [],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const preprocessor = new TypescriptPreprocessor(program);
+      const result = preprocessor.preprocess();
+
+      const fooNode = result.nodes.find(
+        (n) => n.type === "function" && n.functionName === "foo",
+      );
+      if (fooNode?.type !== "function") return;
+
+      const parallelNode = fooNode.body.find(
+        (n) => n.type === "messageThread",
+      );
+      if (parallelNode?.type !== "messageThread") return;
+
+      const lastNode = parallelNode.body[parallelNode.body.length - 1];
+      expect(lastNode.type).toBe("rawCode");
+      if (lastNode.type === "rawCode") {
+        expect(lastNode.value).toContain("Promise.all");
+        expect(lastNode.value).toContain("__self.fromPrompt");
+        expect(lastNode.value).toContain("__self.fromFunc");
+      }
+    });
+
     it("should have Promise.all inside parallel block and usage-based Promise.all outside", () => {
       // The parallel block appends its own Promise.all for its async vars.
       // The usage-based system also sees those vars used later and inserts

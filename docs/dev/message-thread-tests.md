@@ -25,3 +25,7 @@
 - func calls assigned to a var
 - built-in function calls
 - built-in function calls assigned to a var
+
+- parallel block
+- parallel block with async function calls inside
+- no thread -- just making sure that if there is no thread, things run async as normal

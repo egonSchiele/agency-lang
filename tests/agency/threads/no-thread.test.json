@@ -1,0 +1,17 @@
+{
+  "sourceFile": "no-thread.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"res1\":[101],\"res2\":[23,29]}",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The result should be an object with two keys `res1` and `res2`. res1 should be an array with one number: 101. res2 should be an array of ANY two prime numbers, not necessarily the specified ones.",
+          "desiredAccuracy": 75
+        }
+      ]
+    }
+  ]
+}

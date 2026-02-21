@@ -4,10 +4,12 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "{\"msgs\":[{\"role\":\"user\",\"content\":\"What is the first prime number > 100?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":[101]}\"}],\"msgs2\":[{\"role\":\"user\",\"content\":\"What is the first prime number > 100?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":[101]}\"},{\"role\":\"user\",\"content\":\"What are the next 2 integers after that?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":[102,103]}\"}],\"res1\":[101],\"res2\":[102,103],\"res3\":{},\"res4\":{},\"res5\":[104,105],\"res6\":{}}",
+      "expectedOutput": "{\"msgs\":[{\"role\":\"user\",\"content\":\"What is the first prime number > 100?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":[101]}\"}],\"msgs2\":[{\"role\":\"user\",\"content\":\"What is the first prime number > 100?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":[101]}\"},{\"role\":\"user\",\"content\":\"What are the next 2 integers after that?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":[102, 103]}\"}],\"res1\":[101],\"res2\":[102,103],\"res3\":[14,15],\"res4\":[2,3],\"res5\":[104,105],\"res6\":[7,8]}",
       "evaluationCriteria": [
         {
-          "type": "exact"
+          "type": "llmJudge",
+          "judgePrompt": "The final output should be an object with all of the same keys as the expected output. The values should all match exactly, except for the following keys: `res3`, `res4`, and `res6`. For all three of these keys, the values should be an array of any two integers EXCEPT the following:\n- res3 cannot be [104, 105]\n- res4 cannot be [106, 107]\n- res6 cannot be [106, 107] or [108, 109]",
+          "desiredAccuracy": 75
         }
       ]
     }

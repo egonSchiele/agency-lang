@@ -7,6 +7,7 @@ import {
   Literal,
   PromptLiteral,
   PromptSegment,
+  ScopeType,
   TypeAlias,
   TypeHint,
   TypeHintMap,
@@ -874,15 +875,15 @@ I'll probably need to do that for supporting type checking anyway.
     const lines: string[] = ["{"];
 
     // Extract assignment variable names from body to create per-call threads
-    const assignmentVarNames: string[] = [];
+    const assignmentVarNames: [string, ScopeType][] = [];
     for (const stmt of node.body) {
       if (stmt.type === "assignment" && stmt.value.type === "prompt") {
-        assignmentVarNames.push(stmt.variableName);
+        assignmentVarNames.push([stmt.variableName, stmt.scope!]);
       }
     }
 
     // Generate thread creation for each parallel call
-    for (const name of assignmentVarNames) {
+    for (const [name, scope] of assignmentVarNames) {
       const threadVarName = `__ptid_${name}`;
       lines.push(`const ${threadVarName} = __threads.create();`);
       this.parallelThreadVars[name] = threadVarName;
@@ -893,11 +894,19 @@ I'll probably need to do that for supporting type checking anyway.
       lines.push(this.processNode(stmt));
     }
 
+    const varNames = assignmentVarNames.map(
+      ([name, scope]) => `${this.scopetoString(scope)}.${name}`,
+    );
+
+    lines.push(
+      `[${varNames.join(", ")}] = await Promise.all([${varNames.join(", ")}]);`,
+    );
+
     // If assigned to a variable, generate object with cloned messages from each thread
     if (varName) {
       const entries = assignmentVarNames
         .map(
-          (name) =>
+          ([name, scope]) =>
             `${name}: __threads.get(${this.parallelThreadVars[name]}).cloneMessages()`,
         )
         .join(", ");
@@ -905,7 +914,7 @@ I'll probably need to do that for supporting type checking anyway.
     }
 
     // Clear parallel thread vars
-    for (const name of assignmentVarNames) {
+    for (const [name, scope] of assignmentVarNames) {
       delete this.parallelThreadVars[name];
     }
 

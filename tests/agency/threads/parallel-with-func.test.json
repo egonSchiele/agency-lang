@@ -1,0 +1,17 @@
+{
+  "sourceFile": "parallel-with-func.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"res1\":[101],\"res2\":[11,13],\"res3\":[9,10],\"res4\":[1,2],\"res5\":[1,2],\"res6\":[1,2],\"res7\":[3,4]}",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The result should be an object, res1 should equal `[101]`. All of the other six keys should be an array of two numbers, none of which should be `[102, 103]`. The exact values don't matter and don't need to be the same as the expected output.",
+          "desiredAccuracy": 75
+        }
+      ]
+    }
+  ]
+}

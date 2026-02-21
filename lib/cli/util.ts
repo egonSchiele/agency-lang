@@ -50,22 +50,28 @@ export async function promptForTarget(): Promise<{
     ...agencyFiles,
   ];
 
-  const response = await prompts({
-    type: "select",
-    name: "filename",
-    message: "Select an Agency file to read:",
-    choices: choices,
-  }, { onCancel });
+  const response = await prompts(
+    {
+      type: "select",
+      name: "filename",
+      message: "Select an Agency file to read:",
+      choices: choices,
+    },
+    { onCancel },
+  );
 
   filename = response.filename;
 
   // If user chose custom option, prompt for filename
   if (filename === "__custom__") {
-    const customResponse = await prompts({
-      type: "text",
-      name: "filename",
-      message: "Enter the filename to read:",
-    }, { onCancel });
+    const customResponse = await prompts(
+      {
+        type: "text",
+        name: "filename",
+        message: "Enter the filename to read:",
+      },
+      { onCancel },
+    );
     filename = customResponse.filename;
   }
 
@@ -73,15 +79,25 @@ export async function promptForTarget(): Promise<{
 }
 
 export async function pickANode(nodes: GraphNodeDefinition[]): Promise<string> {
-  const response = await prompts({
-    type: "select",
-    name: "node",
-    message: "Pick a node:",
-    choices: nodes.map((node) => ({
-      title: node.nodeName,
-      value: node.nodeName,
-    })),
-  }, { onCancel });
+  if (nodes.length === 0) {
+    console.log("No nodes found in the file.");
+    process.exit(0);
+  }
+  if (nodes.length === 1) {
+    return nodes[0].nodeName;
+  }
+  const response = await prompts(
+    {
+      type: "select",
+      name: "node",
+      message: "Pick a node:",
+      choices: nodes.map((node) => ({
+        title: node.nodeName,
+        value: node.nodeName,
+      })),
+    },
+    { onCancel },
+  );
   return response.node;
 }
 
@@ -96,12 +112,15 @@ export async function promptForArgs(
 
   if (selectedNode.parameters.length > 0) {
     const paramNames = selectedNode.parameters.map((p) => p.name).join(", ");
-    const confirmArgs = await prompts({
-      type: "confirm",
-      name: "provideArgs",
-      message: `This node has parameters (${paramNames}). Provide arguments?`,
-      initial: true,
-    }, { onCancel });
+    const confirmArgs = await prompts(
+      {
+        type: "confirm",
+        name: "provideArgs",
+        message: `This node has parameters (${paramNames}). Provide arguments?`,
+        initial: true,
+      },
+      { onCancel },
+    );
 
     if (confirmArgs.provideArgs) {
       const argValues: string[] = [];
@@ -109,11 +128,14 @@ export async function promptForArgs(
         const typeLabel = param.typeHint
           ? ` (${formatTypeHint(param.typeHint)})`
           : "";
-        const argResponse = await prompts({
-          type: "text",
-          name: "value",
-          message: `Value for ${param.name}${typeLabel}:`,
-        }, { onCancel });
+        const argResponse = await prompts(
+          {
+            type: "text",
+            name: "value",
+            message: `Value for ${param.name}${typeLabel}:`,
+          },
+          { onCancel },
+        );
         argValues.push(serializeArgValue(argResponse.value));
       }
       argsString = argValues.join(", ");

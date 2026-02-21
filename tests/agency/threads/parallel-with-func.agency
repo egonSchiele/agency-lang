@@ -1,0 +1,32 @@
+def nextTwo(): number[] {
+  return llm("What are the next 2 integers after that?")
+}
+
+sync def syncNextTwo(): number[] {
+  return llm("What are the next 2 integers after that?")
+}
+
+node main() {
+  parallel {
+    res1: number[] = llm("What is the first prime number > 100?")
+    res2: number[] = llm("What are the next 2 prime numbers after that?")
+    res3: number[] = nextTwo()
+    res4: number[] = await nextTwo()
+    res5: number[] = nextTwo()
+
+    // not sure if the sync func should create a thread,
+    // but right now it seems to?
+    res6: number[] = syncNextTwo()
+    res7: number[] = nextTwo()
+  }
+
+  return { 
+    res1: res1,
+    res2: res2,
+    res3: res3,
+    res4: res4,
+    res5: res5,
+    res6: res6,
+    res7: res7
+  }
+}

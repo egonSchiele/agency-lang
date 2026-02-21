@@ -97,8 +97,7 @@
           "type": "newLine"
         }
       ],
-      "async": true,
-      "threadIds": []
+      "async": true
     },
     {
       "type": "newLine"
@@ -142,8 +141,7 @@
                 "scope": "node"
               }
             ],
-            "async": true,
-            "threadId": "0"
+            "async": true
           },
           "scope": "node"
         },
@@ -164,16 +162,11 @@
               "scope": "node"
             }
           ],
-          "async": false,
-          "threadId": "1"
+          "async": false
         },
         {
           "type": "newLine"
         }
-      ],
-      "threadIds": [
-        "0",
-        "1"
       ]
     },
     {

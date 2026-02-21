@@ -40,8 +40,7 @@
                 ]
               }
             ],
-            "async": false,
-            "threadId": "0"
+            "async": false
           }
         },
         {
@@ -68,10 +67,7 @@
           "type": "newLine"
         }
       ],
-      "async": false,
-      "threadIds": [
-        "0"
-      ]
+      "async": false
     },
     {
       "type": "newLine"
@@ -118,8 +114,7 @@
           "type": "newLine"
         }
       ],
-      "async": true,
-      "threadIds": []
+      "async": true
     },
     {
       "type": "newLine"
@@ -141,11 +136,11 @@
         },
         {
           "type": "assignment",
-          "variableName": "result",
           "typeHint": {
             "type": "primitiveType",
             "value": "string"
           },
+          "variableName": "result",
           "value": {
             "type": "prompt",
             "segments": [
@@ -162,8 +157,7 @@
               ]
             },
             "skills": [],
-            "async": false,
-            "threadId": "1"
+            "async": false
           },
           "scope": "node"
         },
@@ -180,16 +174,11 @@
               "scope": "node"
             }
           ],
-          "async": false,
-          "threadId": "2"
+          "async": false
         },
         {
           "type": "newLine"
         }
-      ],
-      "threadIds": [
-        "1",
-        "2"
       ]
     },
     {

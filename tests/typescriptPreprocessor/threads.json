@@ -13,11 +13,11 @@
           "body": [
             {
               "type": "assignment",
-              "variableName": "res1",
               "typeHint": {
                 "type": "primitiveType",
                 "value": "string"
               },
+              "variableName": "res1",
               "value": {
                 "type": "prompt",
                 "segments": [
@@ -26,8 +26,7 @@
                     "value": "What is 2 + 2?"
                   }
                 ],
-                "async": false,
-                "threadId": "0"
+                "async": false
               },
               "scope": "node"
             },
@@ -36,11 +35,11 @@
             },
             {
               "type": "assignment",
-              "variableName": "res2",
               "typeHint": {
                 "type": "primitiveType",
                 "value": "string"
               },
+              "variableName": "res2",
               "value": {
                 "type": "prompt",
                 "segments": [
@@ -49,17 +48,14 @@
                     "value": "And what is that times 3?"
                   }
                 ],
-                "async": false,
-                "threadId": "0"
+                "async": false
               },
               "scope": "node"
             },
             {
               "type": "newLine"
             }
-          ],
-          "threadId": "0",
-          "parentThreadId": "0"
+          ]
         },
         {
           "type": "newLine"
@@ -74,9 +70,6 @@
         {
           "type": "newLine"
         }
-      ],
-      "threadIds": [
-        "0"
       ]
     },
     {

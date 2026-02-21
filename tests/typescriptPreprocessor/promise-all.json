@@ -40,8 +40,7 @@
               "toolNames": []
             },
             "skills": [],
-            "async": true,
-            "threadId": "0"
+            "async": true
           },
           "scope": "function"
         },
@@ -64,10 +63,7 @@
           "type": "newLine"
         }
       ],
-      "async": true,
-      "threadIds": [
-        "0"
-      ]
+      "async": true
     },
     {
       "type": "newLine"
@@ -83,11 +79,11 @@
       "body": [
         {
           "type": "assignment",
-          "variableName": "a",
           "typeHint": {
             "type": "primitiveType",
             "value": "string"
           },
+          "variableName": "a",
           "value": {
             "type": "prompt",
             "segments": [
@@ -101,8 +97,7 @@
               "toolNames": []
             },
             "skills": [],
-            "async": true,
-            "threadId": "1"
+            "async": true
           },
           "scope": "node"
         },
@@ -111,11 +106,11 @@
         },
         {
           "type": "assignment",
-          "variableName": "b",
           "typeHint": {
             "type": "primitiveType",
             "value": "string"
           },
+          "variableName": "b",
           "value": {
             "type": "prompt",
             "segments": [
@@ -129,8 +124,7 @@
               "toolNames": []
             },
             "skills": [],
-            "async": true,
-            "threadId": "2"
+            "async": true
           },
           "scope": "node"
         },
@@ -178,17 +172,11 @@
               "scope": "node"
             }
           ],
-          "async": false,
-          "threadId": "3"
+          "async": false
         },
         {
           "type": "newLine"
         }
-      ],
-      "threadIds": [
-        "1",
-        "2",
-        "3"
       ]
     },
     {

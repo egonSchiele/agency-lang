@@ -40,18 +40,14 @@
                 ]
               }
             ],
-            "async": false,
-            "threadId": "0"
+            "async": false
           }
         },
         {
           "type": "newLine"
         }
       ],
-      "async": true,
-      "threadIds": [
-        "0"
-      ]
+      "async": true
     },
     {
       "type": "newLine"
@@ -98,8 +94,7 @@
           "type": "newLine"
         }
       ],
-      "async": true,
-      "threadIds": []
+      "async": true
     },
     {
       "type": "newLine"
@@ -136,8 +131,7 @@
         {
           "type": "newLine"
         }
-      ],
-      "threadIds": []
+      ]
     },
     {
       "type": "newLine"

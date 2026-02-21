@@ -28,8 +28,7 @@
               "toolNames": []
             },
             "skills": [],
-            "async": true,
-            "threadId": "0"
+            "async": true
           },
           "scope": "function"
         },
@@ -52,10 +51,7 @@
           "type": "newLine"
         }
       ],
-      "async": true,
-      "threadIds": [
-        "0"
-      ]
+      "async": true
     },
     {
       "type": "newLine"

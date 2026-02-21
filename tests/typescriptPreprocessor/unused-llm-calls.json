@@ -16,11 +16,11 @@
         },
         {
           "type": "assignment",
-          "variableName": "used",
           "typeHint": {
             "type": "primitiveType",
             "value": "string"
           },
+          "variableName": "used",
           "value": {
             "type": "prompt",
             "segments": [
@@ -34,8 +34,7 @@
               "toolNames": []
             },
             "skills": [],
-            "async": true,
-            "threadId": "0"
+            "async": true
           },
           "scope": "node"
         },
@@ -56,8 +55,7 @@
               "scope": "node"
             }
           ],
-          "async": false,
-          "threadId": "1"
+          "async": false
         },
         {
           "type": "newLine"
@@ -99,18 +97,12 @@
                 "value": "Final answer"
               }
             ],
-            "async": false,
-            "threadId": "2"
+            "async": false
           }
         },
         {
           "type": "newLine"
         }
-      ],
-      "threadIds": [
-        "0",
-        "1",
-        "2"
       ]
     },
     {

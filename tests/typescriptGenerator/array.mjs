@@ -6,6 +6,7 @@ import fs from "fs";
 import { StatelogClient, SimpleMachine, goToNode, nanoid } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
+import { color } from "termcolors";
 
 /* Code to log to statelog */
 const statelogHost = "https://agency-lang.com";
@@ -277,6 +278,14 @@ export async function rejectInterrupt(
   return await respondToInterrupt(interrupt, { type: "reject" }, metadata);
 }
 
+export async function resolveInterrupt(
+  interrupt,
+  value,
+  metadata = {},
+) {
+  return await respondToInterrupt(interrupt, { type: "resolve", value }, metadata);
+}
+
 /****** StateStack and related functions for serializing/deserializing execution state during interrupts ********/
 
 // See docs for notes on how this works.
@@ -306,7 +315,7 @@ class StateStack {
       const newState = {
         args: {},
         locals: {},
-        messages: [],
+        threads: null,
         step: 0,
       };
       this.stack.push(newState);
@@ -528,6 +537,7 @@ class MessageThread {
   }
 
   static fromJSON(json) {
+    if (json instanceof MessageThread) return json;
     const thread = new MessageThread();
     thread.messages = (json.messages || []).map((m) =>
       smoltalk.messageFromJSON(m),
@@ -536,6 +546,86 @@ class MessageThread {
       MessageThread.fromJSON(child),
     );
     return thread;
+  }
+}
+
+/**** Thread Store — dynamic thread management ****/
+
+class ThreadStore {
+  constructor() {
+    this.threads = {};
+    this.counter = 0;
+    this.activeStack = [];
+  }
+
+  // Create a new empty thread, return its ID
+  create() {
+    const id = (this.counter++).toString();
+    this.threads[id] = new MessageThread();
+    return id;
+  }
+
+  // Create a subthread that inherits from the current active thread
+  createSubthread() {
+    const parentId = this.activeId();
+    const id = (this.counter++).toString();
+    this.threads[id] = this.threads[parentId].newSubthreadChild();
+    return id;
+  }
+
+  // Get a thread by ID
+  get(id) { return this.threads[id]; }
+
+  // Push a thread ID onto the active stack
+  pushActive(id) { this.activeStack.push(id); }
+
+  // Pop the active stack (thread stays in store!)
+  popActive() { return this.activeStack.pop(); }
+
+  // Get the currently active thread ID
+  activeId() { return this.activeStack[this.activeStack.length - 1]; }
+
+  // Get the currently active MessageThread
+  active() {
+    const id = this.activeId();
+    return id !== undefined ? this.threads[id] : undefined;
+  }
+
+  // Get the active thread, or create a new one, push it active, and return it.
+  // Used by prompts not inside a thread block — ensures the thread is
+  // tracked in the store for serialization and becomes the active thread.
+  getOrCreateActive() {
+    const existing = this.active();
+    if (existing) return existing;
+    const id = this.create();
+    this.pushActive(id);
+    return this.threads[id];
+  }
+
+  // Serialize all threads for interrupt handling / state return
+  toJSON() {
+    const threadsJson = {};
+    for (const [id, thread] of Object.entries(this.threads)) {
+      threadsJson[id] = thread.toJSON();
+    }
+    return {
+      threads: threadsJson,
+      counter: this.counter,
+      activeStack: [...this.activeStack],
+    };
+  }
+
+  static fromJSON(json) {
+    if (json instanceof ThreadStore) return json;
+    const store = new ThreadStore();
+    if (json.threads) {
+      for (const [id, threadJson] of Object.entries(json.threads)) {
+        store.threads[id] = MessageThread.fromJSON(threadJson);
+      }
+    }
+    store.counter = json.counter || 0;
+    store.activeStack = json.activeStack || [];
+    return store;
   }
 }
 /*function add({a, b}) {
@@ -555,12 +645,12 @@ const addTool = {
 graph.node("main", async (state) => {
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
-    
+
     // if `state.__metadata?.__stateStack` is set, that means we are resuming execution
     // at this node after an interrupt. In that case, this is the line that restores the state.
     if (state.__metadata?.__stateStack) {
       __stateStack = state.__metadata.__stateStack;
-      
+
       // restore global state
       if (state.__metadata?.__stateStack?.global) {
         __global = state.__metadata.__stateStack.global;
@@ -580,7 +670,7 @@ graph.node("main", async (state) => {
     // or restores the stack if we're resuming after an interrupt,
     // depending on the mode of the state stack (serialize or deserialize).
     const __stack = __stateStack.getNewState();
-    
+
     // We're going to modify __stack.step to keep track of what line we're on,
     // but first we save this value. This will help us figure out if we should execute
     // from the start of this node or from a specific line.
@@ -588,30 +678,9 @@ graph.node("main", async (state) => {
 
     const __self = __stack.locals;
 
-    if (__stack.messages[0]) {
-     __stack.messages[0] = MessageThread.fromJSON(__stack.messages[0]);
-} else {
-    __stack.messages[0] = new MessageThread();
-}
-if (__stack.messages[1]) {
-     __stack.messages[1] = MessageThread.fromJSON(__stack.messages[1]);
-} else {
-    __stack.messages[1] = new MessageThread();
-}
-if (__stack.messages[2]) {
-     __stack.messages[2] = MessageThread.fromJSON(__stack.messages[2]);
-} else {
-    __stack.messages[2] = new MessageThread();
-}
-if (__stack.messages[3]) {
-     __stack.messages[3] = MessageThread.fromJSON(__stack.messages[3]);
-} else {
-    __stack.messages[3] = new MessageThread();
-}
-
-    // if (state.messages) {
-    //   __stack.messages[0].setMessages(state.messages);
-    // }
+    // Initialize or restore the ThreadStore for dynamic message thread management
+    const __threads = __stack.threads ? ThreadStore.fromJSON(__stack.threads) : new ThreadStore();
+    __stack.threads = __threads;
 
     
     
@@ -768,7 +837,7 @@ async function _numbers(__metadata) {
 
 
 __self.numbers = _numbers({
-      messages: __stack.messages[(typeof __threadId !== 'undefined') ? __threadId : 0]
+      messages: __threads.getOrCreateActive()
     });
         __stack.step++;
       }
@@ -933,7 +1002,7 @@ async function _greetings(__metadata) {
 
 
 __self.greetings = _greetings({
-      messages: __stack.messages[(typeof __threadId !== 'undefined') ? __threadId : 2]
+      messages: __threads.getOrCreateActive()
     });
         __stack.step++;
       }
@@ -950,10 +1019,10 @@ __self.greetings = _greetings({
         __stack.step++;
       }
       
-    
+
     // this is just here to have a default return value from a node if the user doesn't specify one
     await __callHook("onNodeEnd", { nodeName: "main", data: undefined });
-    return { messages: __stack.messages, data: undefined };
+    return { messages: __threads, data: undefined };
 });
 
 

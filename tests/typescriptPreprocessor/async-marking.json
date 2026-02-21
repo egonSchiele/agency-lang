@@ -24,8 +24,7 @@
           "type": "newLine"
         }
       ],
-      "async": true,
-      "threadIds": []
+      "async": true
     },
     {
       "type": "newLine"
@@ -65,10 +64,9 @@
               "toolNames": []
             },
             "skills": [],
-            "async": true,
-            "threadId": "0"
+            "async": true
           },
-          "scope": "node"
+          "scope": "function"
         },
         {
           "type": "newLine"
@@ -82,17 +80,14 @@
           "value": {
             "type": "variableName",
             "value": "result",
-            "scope": "node"
+            "scope": "function"
           }
         },
         {
           "type": "newLine"
         }
       ],
-      "async": true,
-      "threadIds": [
-        "0"
-      ]
+      "async": true
     },
     {
       "type": "newLine"
@@ -123,8 +118,7 @@
                 ]
               }
             ],
-            "async": true,
-            "threadId": "1"
+            "async": true
           },
           "scope": "node"
         },
@@ -148,8 +142,7 @@
                 ]
               }
             ],
-            "async": true,
-            "threadId": "2"
+            "async": true
           },
           "scope": "node"
         },
@@ -162,11 +155,11 @@
         },
         {
           "type": "assignment",
-          "variableName": "result",
           "typeHint": {
             "type": "primitiveType",
             "value": "string"
           },
+          "variableName": "result",
           "value": {
             "type": "prompt",
             "segments": [
@@ -194,10 +187,9 @@
               "toolNames": []
             },
             "skills": [],
-            "async": true,
-            "threadId": "3"
+            "async": true
           },
-          "scope": "node"
+          "scope": "function"
         },
         {
           "type": "newLine"
@@ -213,21 +205,14 @@
             {
               "type": "variableName",
               "value": "result",
-              "scope": "node"
+              "scope": "function"
             }
           ],
-          "async": false,
-          "threadId": "4"
+          "async": false
         },
         {
           "type": "newLine"
         }
-      ],
-      "threadIds": [
-        "1",
-        "2",
-        "3",
-        "4"
       ]
     },
     {

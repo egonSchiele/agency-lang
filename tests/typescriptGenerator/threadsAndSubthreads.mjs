@@ -6,6 +6,7 @@ import fs from "fs";
 import { StatelogClient, SimpleMachine, goToNode, nanoid } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
+import { color } from "termcolors";
 
 /* Code to log to statelog */
 const statelogHost = "https://agency-lang.com";
@@ -277,6 +278,14 @@ export async function rejectInterrupt(
   return await respondToInterrupt(interrupt, { type: "reject" }, metadata);
 }
 
+export async function resolveInterrupt(
+  interrupt,
+  value,
+  metadata = {},
+) {
+  return await respondToInterrupt(interrupt, { type: "resolve", value }, metadata);
+}
+
 /****** StateStack and related functions for serializing/deserializing execution state during interrupts ********/
 
 // See docs for notes on how this works.
@@ -306,7 +315,7 @@ class StateStack {
       const newState = {
         args: {},
         locals: {},
-        messages: [],
+        threads: null,
         step: 0,
       };
       this.stack.push(newState);
@@ -528,6 +537,7 @@ class MessageThread {
   }
 
   static fromJSON(json) {
+    if (json instanceof MessageThread) return json;
     const thread = new MessageThread();
     thread.messages = (json.messages || []).map((m) =>
       smoltalk.messageFromJSON(m),
@@ -536,6 +546,86 @@ class MessageThread {
       MessageThread.fromJSON(child),
     );
     return thread;
+  }
+}
+
+/**** Thread Store — dynamic thread management ****/
+
+class ThreadStore {
+  constructor() {
+    this.threads = {};
+    this.counter = 0;
+    this.activeStack = [];
+  }
+
+  // Create a new empty thread, return its ID
+  create() {
+    const id = (this.counter++).toString();
+    this.threads[id] = new MessageThread();
+    return id;
+  }
+
+  // Create a subthread that inherits from the current active thread
+  createSubthread() {
+    const parentId = this.activeId();
+    const id = (this.counter++).toString();
+    this.threads[id] = this.threads[parentId].newSubthreadChild();
+    return id;
+  }
+
+  // Get a thread by ID
+  get(id) { return this.threads[id]; }
+
+  // Push a thread ID onto the active stack
+  pushActive(id) { this.activeStack.push(id); }
+
+  // Pop the active stack (thread stays in store!)
+  popActive() { return this.activeStack.pop(); }
+
+  // Get the currently active thread ID
+  activeId() { return this.activeStack[this.activeStack.length - 1]; }
+
+  // Get the currently active MessageThread
+  active() {
+    const id = this.activeId();
+    return id !== undefined ? this.threads[id] : undefined;
+  }
+
+  // Get the active thread, or create a new one, push it active, and return it.
+  // Used by prompts not inside a thread block — ensures the thread is
+  // tracked in the store for serialization and becomes the active thread.
+  getOrCreateActive() {
+    const existing = this.active();
+    if (existing) return existing;
+    const id = this.create();
+    this.pushActive(id);
+    return this.threads[id];
+  }
+
+  // Serialize all threads for interrupt handling / state return
+  toJSON() {
+    const threadsJson = {};
+    for (const [id, thread] of Object.entries(this.threads)) {
+      threadsJson[id] = thread.toJSON();
+    }
+    return {
+      threads: threadsJson,
+      counter: this.counter,
+      activeStack: [...this.activeStack],
+    };
+  }
+
+  static fromJSON(json) {
+    if (json instanceof ThreadStore) return json;
+    const store = new ThreadStore();
+    if (json.threads) {
+      for (const [id, threadJson] of Object.entries(json.threads)) {
+        store.threads[id] = MessageThread.fromJSON(threadJson);
+      }
+    }
+    store.counter = json.counter || 0;
+    store.activeStack = json.activeStack || [];
+    return store;
   }
 }
 /*function add({a, b}) {
@@ -564,14 +654,12 @@ export async function foo(args, __metadata={}) {
     const __self = __stack.locals;
     const __graph = __metadata?.graph || graph;
     const statelogClient = __metadata?.statelogClient || __statelogClient;
-    const __threadId = __metadata?.threadId;
 
-    // if we're passing messages in,
-    // that means we want this function to add messages to that thread
-    // so this func call is currently in a thread/subthread
-    if (__metadata?.messages) {
-      __stack.messages = __metadata.messages;
-    }
+    // if being called from a node, we'll pass in threads.
+    // if being called as a tool, we won't have threads, but we'll create an empty ThreadStore here.
+    // obv none of these messages will connect to a thread the user can see.
+    const __threads = __metadata?.threads || new ThreadStore();
+
     // args are always set whether we're restoring from state or not.
     // If we're not restoring from state, args were obviously passed in through the code.
     // If we are restoring from state, the node that called this function had to have passed
@@ -593,7 +681,12 @@ export async function foo(args, __metadata={}) {
 
       if (__step <= 1) {
         
+{
 
+
+const __tid = __threads.create();
+
+__threads.pushActive(__tid);
 
 
 async function _res1(__metadata) {
@@ -743,7 +836,7 @@ async function _res1(__metadata) {
 
 
 __self.res1 = await _res1({
-      messages: __stack.messages[(typeof __threadId !== 'undefined') ? __threadId : 0]
+      messages: __threads.getOrCreateActive()
     });
 
 // return early from node if this is an interrupt
@@ -756,9 +849,12 @@ if (isInterrupt(__self.res1)) {
 
 
 
+{
 
-__stack.messages[1] = __stack.messages[0].newSubthreadChild();
+const __tid = __threads.createSubthread();
 
+
+__threads.pushActive(__tid);
 
 
 async function _res2(__metadata) {
@@ -908,7 +1004,7 @@ async function _res2(__metadata) {
 
 
 __self.res2 = await _res2({
-      messages: __stack.messages[(typeof __threadId !== 'undefined') ? __threadId : 1]
+      messages: __threads.getOrCreateActive()
     });
 
 // return early from node if this is an interrupt
@@ -921,9 +1017,12 @@ if (isInterrupt(__self.res2)) {
 
 
 
+{
 
-__stack.messages[2] = __stack.messages[1].newSubthreadChild();
+const __tid = __threads.createSubthread();
 
+
+__threads.pushActive(__tid);
 
 
 async function _res3(__metadata) {
@@ -1073,7 +1172,7 @@ async function _res3(__metadata) {
 
 
 __self.res3 = await _res3({
-      messages: __stack.messages[(typeof __threadId !== 'undefined') ? __threadId : 2]
+      messages: __threads.getOrCreateActive()
     });
 
 // return early from node if this is an interrupt
@@ -1087,10 +1186,17 @@ if (isInterrupt(__self.res3)) {
 
 
 
-// __stack.messages = __stack.prevMessages;
+__threads.popActive();
+}
 
 
 
+{
+
+
+const __tid = __threads.create();
+
+__threads.pushActive(__tid);
 
 
 async function _res5(__metadata) {
@@ -1240,7 +1346,7 @@ async function _res5(__metadata) {
 
 
 __self.res5 = await _res5({
-      messages: __stack.messages[(typeof __threadId !== 'undefined') ? __threadId : 3]
+      messages: __threads.getOrCreateActive()
     });
 
 // return early from node if this is an interrupt
@@ -1254,16 +1360,23 @@ if (isInterrupt(__self.res5)) {
 
 
 
-// __stack.messages = __stack.prevMessages;
+__threads.popActive();
+}
 
 
 
-// __stack.messages = __stack.prevMessages;
+
+__threads.popActive();
+}
 
 
 
-__stack.messages[4] = __stack.messages[0].newSubthreadChild();
+{
 
+const __tid = __threads.createSubthread();
+
+
+__threads.pushActive(__tid);
 
 
 async function _res4(__metadata) {
@@ -1413,7 +1526,7 @@ async function _res4(__metadata) {
 
 
 __self.res4 = await _res4({
-      messages: __stack.messages[(typeof __threadId !== 'undefined') ? __threadId : 4]
+      messages: __threads.getOrCreateActive()
     });
 
 // return early from node if this is an interrupt
@@ -1427,11 +1540,14 @@ if (isInterrupt(__self.res4)) {
 
 
 
-// __stack.messages = __stack.prevMessages;
+__threads.popActive();
+}
 
 
 
-// __stack.messages = __stack.prevMessages;
+
+__threads.popActive();
+}
         __stack.step++;
       }
       
@@ -1470,12 +1586,12 @@ if (isInterrupt(__self.res4)) {
 graph.node("main", async (state) => {
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
-    
+
     // if `state.__metadata?.__stateStack` is set, that means we are resuming execution
     // at this node after an interrupt. In that case, this is the line that restores the state.
     if (state.__metadata?.__stateStack) {
       __stateStack = state.__metadata.__stateStack;
-      
+
       // restore global state
       if (state.__metadata?.__stateStack?.global) {
         __global = state.__metadata.__stateStack.global;
@@ -1495,7 +1611,7 @@ graph.node("main", async (state) => {
     // or restores the stack if we're resuming after an interrupt,
     // depending on the mode of the state stack (serialize or deserialize).
     const __stack = __stateStack.getNewState();
-    
+
     // We're going to modify __stack.step to keep track of what line we're on,
     // but first we save this value. This will help us figure out if we should execute
     // from the start of this node or from a specific line.
@@ -1503,60 +1619,9 @@ graph.node("main", async (state) => {
 
     const __self = __stack.locals;
 
-    if (__stack.messages[5]) {
-     __stack.messages[5] = MessageThread.fromJSON(__stack.messages[5]);
-} else {
-    __stack.messages[5] = new MessageThread();
-}
-if (__stack.messages[6]) {
-     __stack.messages[6] = MessageThread.fromJSON(__stack.messages[6]);
-} else {
-    __stack.messages[6] = new MessageThread();
-}
-if (__stack.messages[7]) {
-     __stack.messages[7] = MessageThread.fromJSON(__stack.messages[7]);
-} else {
-    __stack.messages[7] = new MessageThread();
-}
-if (__stack.messages[8]) {
-     __stack.messages[8] = MessageThread.fromJSON(__stack.messages[8]);
-} else {
-    __stack.messages[8] = new MessageThread();
-}
-if (__stack.messages[9]) {
-     __stack.messages[9] = MessageThread.fromJSON(__stack.messages[9]);
-} else {
-    __stack.messages[9] = new MessageThread();
-}
-if (__stack.messages[15]) {
-     __stack.messages[15] = MessageThread.fromJSON(__stack.messages[15]);
-} else {
-    __stack.messages[15] = new MessageThread();
-}
-if (__stack.messages[16]) {
-     __stack.messages[16] = MessageThread.fromJSON(__stack.messages[16]);
-} else {
-    __stack.messages[16] = new MessageThread();
-}
-if (__stack.messages[17]) {
-     __stack.messages[17] = MessageThread.fromJSON(__stack.messages[17]);
-} else {
-    __stack.messages[17] = new MessageThread();
-}
-if (__stack.messages[18]) {
-     __stack.messages[18] = MessageThread.fromJSON(__stack.messages[18]);
-} else {
-    __stack.messages[18] = new MessageThread();
-}
-if (__stack.messages[19]) {
-     __stack.messages[19] = MessageThread.fromJSON(__stack.messages[19]);
-} else {
-    __stack.messages[19] = new MessageThread();
-}
-
-    // if (state.messages) {
-    //   __stack.messages[0].setMessages(state.messages);
-    // }
+    // Initialize or restore the ThreadStore for dynamic message thread management
+    const __threads = __stack.threads ? ThreadStore.fromJSON(__stack.threads) : new ThreadStore();
+    __stack.threads = __threads;
 
     
     
@@ -1568,7 +1633,12 @@ if (__stack.messages[19]) {
 
       if (__step <= 1) {
         
+{
 
+
+const __tid = __threads.create();
+
+__threads.pushActive(__tid);
 
 
 async function _res1(__metadata) {
@@ -1718,22 +1788,25 @@ async function _res1(__metadata) {
 
 
 __self.res1 = await _res1({
-      messages: __stack.messages[(typeof __threadId !== 'undefined') ? __threadId : 5]
+      messages: __threads.getOrCreateActive()
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.res1)) {
   
-  return { messages: __stack.messages, data: __self.res1 };
+  return { messages: __threads, data: __self.res1 };
   
    
 }
 
 
 
+{
 
-__stack.messages[6] = __stack.messages[5].newSubthreadChild();
+const __tid = __threads.createSubthread();
 
+
+__threads.pushActive(__tid);
 
 
 async function _res2(__metadata) {
@@ -1883,22 +1956,25 @@ async function _res2(__metadata) {
 
 
 __self.res2 = await _res2({
-      messages: __stack.messages[(typeof __threadId !== 'undefined') ? __threadId : 6]
+      messages: __threads.getOrCreateActive()
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.res2)) {
   
-  return { messages: __stack.messages, data: __self.res2 };
+  return { messages: __threads, data: __self.res2 };
   
    
 }
 
 
 
+{
 
-__stack.messages[7] = __stack.messages[6].newSubthreadChild();
+const __tid = __threads.createSubthread();
 
+
+__threads.pushActive(__tid);
 
 
 async function _res3(__metadata) {
@@ -2048,13 +2124,13 @@ async function _res3(__metadata) {
 
 
 __self.res3 = await _res3({
-      messages: __stack.messages[(typeof __threadId !== 'undefined') ? __threadId : 7]
+      messages: __threads.getOrCreateActive()
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.res3)) {
   
-  return { messages: __stack.messages, data: __self.res3 };
+  return { messages: __threads, data: __self.res3 };
   
    
 }
@@ -2062,10 +2138,17 @@ if (isInterrupt(__self.res3)) {
 
 
 
-// __stack.messages = __stack.prevMessages;
+__threads.popActive();
+}
 
 
 
+{
+
+
+const __tid = __threads.create();
+
+__threads.pushActive(__tid);
 
 
 async function _res5(__metadata) {
@@ -2215,13 +2298,13 @@ async function _res5(__metadata) {
 
 
 __self.res5 = await _res5({
-      messages: __stack.messages[(typeof __threadId !== 'undefined') ? __threadId : 8]
+      messages: __threads.getOrCreateActive()
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.res5)) {
   
-  return { messages: __stack.messages, data: __self.res5 };
+  return { messages: __threads, data: __self.res5 };
   
    
 }
@@ -2229,16 +2312,23 @@ if (isInterrupt(__self.res5)) {
 
 
 
-// __stack.messages = __stack.prevMessages;
+__threads.popActive();
+}
 
 
 
-// __stack.messages = __stack.prevMessages;
+
+__threads.popActive();
+}
 
 
 
-__stack.messages[9] = __stack.messages[5].newSubthreadChild();
+{
 
+const __tid = __threads.createSubthread();
+
+
+__threads.pushActive(__tid);
 
 
 async function _res4(__metadata) {
@@ -2388,13 +2478,13 @@ async function _res4(__metadata) {
 
 
 __self.res4 = await _res4({
-      messages: __stack.messages[(typeof __threadId !== 'undefined') ? __threadId : 9]
+      messages: __threads.getOrCreateActive()
     });
 
 // return early from node if this is an interrupt
 if (isInterrupt(__self.res4)) {
   
-  return { messages: __stack.messages, data: __self.res4 };
+  return { messages: __threads, data: __self.res4 };
   
    
 }
@@ -2402,11 +2492,14 @@ if (isInterrupt(__self.res4)) {
 
 
 
-// __stack.messages = __stack.prevMessages;
+__threads.popActive();
+}
 
 
 
-// __stack.messages = __stack.prevMessages;
+
+__threads.popActive();
+}
         __stack.step++;
       }
       
@@ -2440,10 +2533,10 @@ if (isInterrupt(__self.res4)) {
         __stack.step++;
       }
       
-    
+
     // this is just here to have a default return value from a node if the user doesn't specify one
     await __callHook("onNodeEnd", { nodeName: "main", data: undefined });
-    return { messages: __stack.messages, data: undefined };
+    return { messages: __threads, data: undefined };
 });
 
 

@@ -26,7 +26,7 @@ const __statelogClient = new StatelogClient(statelogConfig);
 /* Code for Smoltalk client */
 const __model = "gpt-4o-mini";
 
-const __getClientWithConfig = (config = {}) => {
+const __getSmoltalkConfig = (config = {}) => {
   const defaultConfig = {
     
     
@@ -40,10 +40,8 @@ const __getClientWithConfig = (config = {}) => {
     logLevel: "warn",
   };
 
-  return smoltalk.getClient({ ...defaultConfig, ...config });
+  return { ...defaultConfig, ...config };
 };
-
-let __client = __getClientWithConfig();
 
 /* Code for SimpleMachine graph */
 
@@ -708,19 +706,20 @@ async function _res1(__metadata) {
   
   
   
-  const __client = __getClientWithConfig({});
+  const __clientConfig = __getSmoltalkConfig({});
   let responseMessage;
 
   if (__toolCalls.length === 0) {
     __messages.push(smoltalk.userMessage(__prompt));
   
   
-    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
-    let __completion = await __client.text({
+    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __clientConfig.model });
+    let __completion = await smoltalk.text({
       messages: __messages.getMessages(),
       tools: __tools,
       responseFormat: __responseFormat,
-      stream: false
+      stream: false,
+      ...__clientConfig
     });
 
     const endTime = performance.now();
@@ -730,7 +729,7 @@ async function _res1(__metadata) {
     statelogClient.promptCompletion({
       messages: __messages.getMessages(),
       completion: __completion,
-      model: __client.getModel(),
+      model: __clientConfig.model,
       timeTaken: endTime - startTime,
       tools: __tools,
       responseFormat: __responseFormat
@@ -738,7 +737,7 @@ async function _res1(__metadata) {
 
     if (!__completion.success) {
       throw new Error(
-        `Error getting response from ${__model}: ${__completion.error}`
+        `Error getting response from ${__clientConfig.model}: ${__completion.error}`
       );
     }
 
@@ -770,7 +769,7 @@ async function _res1(__metadata) {
     if (haltExecution) {
       statelogClient.debug(`Tool call interrupted execution.`, {
         messages: __messages.getMessages(),
-        model: __client.getModel(),
+        model: __clientConfig.model,
       });
 
       __stateStack.interruptData = {
@@ -783,12 +782,13 @@ async function _res1(__metadata) {
     }
   
     const nextStartTime = performance.now();
-    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
-    let __completion = await __client.text({
+    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __clientConfig.model });
+    let __completion = await smoltalk.text({
       messages: __messages.getMessages(),
       tools: __tools,
       responseFormat: __responseFormat,
-      stream: false
+      stream: false,
+      ...__clientConfig
     });
 
     const nextEndTime = performance.now();
@@ -798,7 +798,7 @@ async function _res1(__metadata) {
     statelogClient.promptCompletion({
       messages: __messages.getMessages(),
       completion: __completion,
-      model: __client.getModel(),
+      model: __clientConfig.model,
       timeTaken: nextEndTime - nextStartTime,
       tools: __tools,
       responseFormat: __responseFormat,
@@ -806,7 +806,7 @@ async function _res1(__metadata) {
 
     if (!__completion.success) {
       throw new Error(
-        `Error getting response from ${__model}: ${__completion.error}`
+        `Error getting response from ${__clientConfig.model}: ${__completion.error}`
       );
     }
     responseMessage = __completion.value;
@@ -871,19 +871,20 @@ async function _res2(__metadata) {
   
   
   
-  const __client = __getClientWithConfig({});
+  const __clientConfig = __getSmoltalkConfig({});
   let responseMessage;
 
   if (__toolCalls.length === 0) {
     __messages.push(smoltalk.userMessage(__prompt));
   
   
-    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
-    let __completion = await __client.text({
+    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __clientConfig.model });
+    let __completion = await smoltalk.text({
       messages: __messages.getMessages(),
       tools: __tools,
       responseFormat: __responseFormat,
-      stream: false
+      stream: false,
+      ...__clientConfig
     });
 
     const endTime = performance.now();
@@ -893,7 +894,7 @@ async function _res2(__metadata) {
     statelogClient.promptCompletion({
       messages: __messages.getMessages(),
       completion: __completion,
-      model: __client.getModel(),
+      model: __clientConfig.model,
       timeTaken: endTime - startTime,
       tools: __tools,
       responseFormat: __responseFormat
@@ -901,7 +902,7 @@ async function _res2(__metadata) {
 
     if (!__completion.success) {
       throw new Error(
-        `Error getting response from ${__model}: ${__completion.error}`
+        `Error getting response from ${__clientConfig.model}: ${__completion.error}`
       );
     }
 
@@ -933,7 +934,7 @@ async function _res2(__metadata) {
     if (haltExecution) {
       statelogClient.debug(`Tool call interrupted execution.`, {
         messages: __messages.getMessages(),
-        model: __client.getModel(),
+        model: __clientConfig.model,
       });
 
       __stateStack.interruptData = {
@@ -946,12 +947,13 @@ async function _res2(__metadata) {
     }
   
     const nextStartTime = performance.now();
-    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
-    let __completion = await __client.text({
+    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __clientConfig.model });
+    let __completion = await smoltalk.text({
       messages: __messages.getMessages(),
       tools: __tools,
       responseFormat: __responseFormat,
-      stream: false
+      stream: false,
+      ...__clientConfig
     });
 
     const nextEndTime = performance.now();
@@ -961,7 +963,7 @@ async function _res2(__metadata) {
     statelogClient.promptCompletion({
       messages: __messages.getMessages(),
       completion: __completion,
-      model: __client.getModel(),
+      model: __clientConfig.model,
       timeTaken: nextEndTime - nextStartTime,
       tools: __tools,
       responseFormat: __responseFormat,
@@ -969,7 +971,7 @@ async function _res2(__metadata) {
 
     if (!__completion.success) {
       throw new Error(
-        `Error getting response from ${__model}: ${__completion.error}`
+        `Error getting response from ${__clientConfig.model}: ${__completion.error}`
       );
     }
     responseMessage = __completion.value;
@@ -1023,19 +1025,20 @@ async function _res3(__metadata) {
   
   
   
-  const __client = __getClientWithConfig({});
+  const __clientConfig = __getSmoltalkConfig({});
   let responseMessage;
 
   if (__toolCalls.length === 0) {
     __messages.push(smoltalk.userMessage(__prompt));
   
   
-    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
-    let __completion = await __client.text({
+    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __clientConfig.model });
+    let __completion = await smoltalk.text({
       messages: __messages.getMessages(),
       tools: __tools,
       responseFormat: __responseFormat,
-      stream: false
+      stream: false,
+      ...__clientConfig
     });
 
     const endTime = performance.now();
@@ -1045,7 +1048,7 @@ async function _res3(__metadata) {
     statelogClient.promptCompletion({
       messages: __messages.getMessages(),
       completion: __completion,
-      model: __client.getModel(),
+      model: __clientConfig.model,
       timeTaken: endTime - startTime,
       tools: __tools,
       responseFormat: __responseFormat
@@ -1053,7 +1056,7 @@ async function _res3(__metadata) {
 
     if (!__completion.success) {
       throw new Error(
-        `Error getting response from ${__model}: ${__completion.error}`
+        `Error getting response from ${__clientConfig.model}: ${__completion.error}`
       );
     }
 
@@ -1085,7 +1088,7 @@ async function _res3(__metadata) {
     if (haltExecution) {
       statelogClient.debug(`Tool call interrupted execution.`, {
         messages: __messages.getMessages(),
-        model: __client.getModel(),
+        model: __clientConfig.model,
       });
 
       __stateStack.interruptData = {
@@ -1098,12 +1101,13 @@ async function _res3(__metadata) {
     }
   
     const nextStartTime = performance.now();
-    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __client.getModel() });
-    let __completion = await __client.text({
+    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __clientConfig.model });
+    let __completion = await smoltalk.text({
       messages: __messages.getMessages(),
       tools: __tools,
       responseFormat: __responseFormat,
-      stream: false
+      stream: false,
+      ...__clientConfig
     });
 
     const nextEndTime = performance.now();
@@ -1113,7 +1117,7 @@ async function _res3(__metadata) {
     statelogClient.promptCompletion({
       messages: __messages.getMessages(),
       completion: __completion,
-      model: __client.getModel(),
+      model: __clientConfig.model,
       timeTaken: nextEndTime - nextStartTime,
       tools: __tools,
       responseFormat: __responseFormat,
@@ -1121,7 +1125,7 @@ async function _res3(__metadata) {
 
     if (!__completion.success) {
       throw new Error(
-        `Error getting response from ${__model}: ${__completion.error}`
+        `Error getting response from ${__clientConfig.model}: ${__completion.error}`
       );
     }
     responseMessage = __completion.value;
@@ -1156,6 +1160,7 @@ __self.res3 = _res3({
 
 
 [__self.res2, __self.res3] = await Promise.all([__self.res2, __self.res3]);
+[__stack.locals.res2, __stack.locals.res3] = await Promise.all([__stack.locals.res2, __stack.locals.res3]);
 }
 
 

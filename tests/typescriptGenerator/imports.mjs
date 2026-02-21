@@ -36,7 +36,7 @@ const __statelogClient = new StatelogClient(statelogConfig);
 /* Code for Smoltalk client */
 const __model = "gpt-4o-mini";
 
-const __getClientWithConfig = (config = {}) => {
+const __getSmoltalkConfig = (config = {}) => {
   const defaultConfig = {
     
     
@@ -50,10 +50,8 @@ const __getClientWithConfig = (config = {}) => {
     logLevel: "warn",
   };
 
-  return smoltalk.getClient({ ...defaultConfig, ...config });
+  return { ...defaultConfig, ...config };
 };
-
-let __client = __getClientWithConfig();
 
 /* Code for SimpleMachine graph */
 

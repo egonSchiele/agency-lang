@@ -55,6 +55,8 @@ export const BUILTIN_TOOLS = [
   "round",
 ];
 
+export const BUILTIN_VARIABLES = ["color"];
+
 /**
  * Configuration options for the Agency compiler
  */

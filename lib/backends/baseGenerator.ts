@@ -33,7 +33,7 @@ import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
-import { AgencyConfig } from "@/config.js";
+import { AgencyConfig, BUILTIN_VARIABLES } from "@/config.js";
 import { mergeDeep } from "@/utils.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
@@ -382,6 +382,9 @@ export class BaseGenerator {
   }
 
   protected scopetoString(scope: ScopeType, varName?: string): string {
+    if (varName && BUILTIN_VARIABLES.includes(varName)) {
+      return "";
+    }
     switch (scope) {
       case "global":
         return "__stateStack.globals";

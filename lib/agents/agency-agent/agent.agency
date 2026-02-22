@@ -14,6 +14,9 @@ config = {
   model: { 
     optimizeFor: ["speed", "cost"],
     providers: ["openai"]
+  },
+  responseFormatOptions: { 
+    strict: true
   }
 }
 
@@ -22,6 +25,7 @@ node main() {
 }
 
 node plan() {
+  print(color.cyan("Let's start by coming up with a plan for what you want to accomplish."))
   thread {
     system("${systemPrompt}\n\n${planPrompt}")
     userMsg = input("What would you like to accomplish today? ")
@@ -37,7 +41,7 @@ node plan() {
     }
 
     plan = readPlan()
-    print("Here's the plan we've come up with")
+    print(color.cyan("Here's the plan we've come up with"))
     printJSON(plan)
   }
   return design(plan)
@@ -49,6 +53,7 @@ type Plan = {
 }
 
 node design(plan: Plan) {
+  print(color.cyan("Now let's design an agent to accomplish that plan."))
   designPrompt = read("./prompts/design.md")
   prompt = """
   Help the user design an agent that can accomplish the following goal: ${plan.overallGoal}

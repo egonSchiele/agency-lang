@@ -1,7 +1,9 @@
 import tool { addTask, listTasks, markTaskDone } from "./subagents/task.agency"
 import tool { writeToPlan, readPlan } from "./subagents/plan.agency"
 import tool { writeCode, appendCode, readCode } from "./subagents/code.agency"
-import { Plan } from "./subagents/plan.agency"
+
+// todo allow this
+// import { Plan } from "./subagents/plan.agency"
 
 systemPrompt = read("./prompts/system.md")
 planPrompt = read("./prompts/plan.md")
@@ -38,6 +40,12 @@ node plan() {
     print("Here's the plan we've come up with")
     printJSON(plan)
   }
+  return design(plan)
+}
+
+type Plan = {
+  overallGoal: string;
+  desiredActions: string[] # array of descriptions of each action
 }
 
 node design(plan: Plan) {
@@ -56,7 +64,7 @@ node design(plan: Plan) {
       uses writeCode, appendCode, readCode, print
       nextAction: NextAction = llm("${userMsg}", config)
       if (nextAction.type == "askUser") {
-        userMsg = input("${nextAction.question} ")
+        userMsg = input("\n${nextAction.question} ")
       }
     }
   }

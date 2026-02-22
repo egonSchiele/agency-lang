@@ -257,11 +257,12 @@ export class TypescriptPreprocessor {
       throw new Error("Program is not set in generator.");
     }
     for (const { node, ancestors } of walkNodesArray(this.program.nodes)) {
-      const closestMessageThread = [...ancestors].reverse().find(
-        (a) => a.type === "messageThread",
-      ) as MessageThread | undefined;
+      const closestMessageThread = [...ancestors]
+        .reverse()
+        .find((a) => a.type === "messageThread") as MessageThread | undefined;
       const isInMessageThread = !!closestMessageThread;
-      const isInParallelThread = closestMessageThread?.threadType === "parallel";
+      const isInParallelThread =
+        closestMessageThread?.threadType === "parallel";
       const isInReturnStatement = ancestors.some(
         (a) => a.type === "returnStatement",
       );
@@ -1210,6 +1211,8 @@ export class TypescriptPreprocessor {
         node.importedTools.forEach((t) => {
           setScope(t, "global");
         });
+      } else if (node.type === "variableName") {
+        setScope(node.value, scopes.at(-1)?.type || "global");
       }
     }
 

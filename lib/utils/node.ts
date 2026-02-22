@@ -235,6 +235,23 @@ export function* walkNodes(
         ),
       ); */
       yield* walkNodes([node.value], [...ancestors, node], scopes);
+      if (node.accessChain) {
+        for (const accessElement of node.accessChain) {
+          if (accessElement.kind === "index") {
+            yield* walkNodes(
+              [accessElement.index],
+              [...ancestors, node],
+              scopes,
+            );
+          } else if (accessElement.kind === "methodCall") {
+            yield* walkNodes(
+              [accessElement.functionCall],
+              [...ancestors, node],
+              scopes,
+            );
+          }
+        }
+      }
     } else if (node.type === "functionCall") {
       yield* walkNodes(node.arguments, [...ancestors, node], scopes);
     } else if (node.type === "matchBlock") {
@@ -252,23 +269,27 @@ export function* walkNodes(
         if (element.kind === "index") {
           yield* walkNodes([element.index], [...ancestors, node], scopes);
         } else if (element.kind === "methodCall") {
-          yield* walkNodes([element.functionCall], [...ancestors, node], scopes);
+          yield* walkNodes(
+            [element.functionCall],
+            [...ancestors, node],
+            scopes,
+          );
         }
       }
     } else if (node.type === "agencyArray") {
       const arrayItems = node.items.map((item) =>
         item.type === "splat" ? item.value : item,
       );
-      yield* walkNodes(arrayItems as AgencyNode[], [...ancestors, node], scopes);
+      yield* walkNodes(
+        arrayItems as AgencyNode[],
+        [...ancestors, node],
+        scopes,
+      );
     } else if (node.type === "agencyObject") {
       const objValues = node.entries.map((e) =>
         "type" in e && e.type === "splat" ? e.value : (e as any).value,
       );
-      yield* walkNodes(
-        objValues as AgencyNode[],
-        [...ancestors, node],
-        scopes,
-      );
+      yield* walkNodes(objValues as AgencyNode[], [...ancestors, node], scopes);
     } else if (node.type === "specialVar") {
       yield* walkNodes([node.value], [...ancestors, node], scopes);
     } else if (

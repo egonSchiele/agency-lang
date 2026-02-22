@@ -1,4 +1,4 @@
-import { color } from "termcolors";
+import { color } from "@/utils/termcolors.js";
 
 import { SimpleMachineError } from "./error.js";
 

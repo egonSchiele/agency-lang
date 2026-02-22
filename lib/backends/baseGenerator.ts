@@ -33,7 +33,7 @@ import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
-import { AgencyConfig } from "@/config.js";
+import { AgencyConfig, BUILTIN_VARIABLES } from "@/config.js";
 import { mergeDeep } from "@/utils.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
@@ -381,7 +381,10 @@ export class BaseGenerator {
     return this.currentScope[this.currentScope.length - 1];
   }
 
-  protected scopetoString(scope: ScopeType): string {
+  protected scopetoString(scope: ScopeType, varName?: string): string {
+    if (varName && BUILTIN_VARIABLES.includes(varName)) {
+      return "";
+    }
     switch (scope) {
       case "global":
         return "__stateStack.globals";
@@ -391,7 +394,7 @@ export class BaseGenerator {
       case "args":
         return "__stack.args";
       default:
-        throw new Error(`Unknown scope type: ${scope}`);
+        throw new Error(`Unknown scope type: ${scope} for varName: ${varName}`);
     }
   }
 

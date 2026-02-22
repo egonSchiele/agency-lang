@@ -7,7 +7,7 @@ import {
 } from "./foo.js";
 import readline from "readline";
 import type { StreamChunk } from "smoltalk";
-import { color } from "termcolors";
+import { color } from "@/utils/termcolors.js";
 
 function input(prompt: string): Promise<string> {
   const rl = readline.createInterface({

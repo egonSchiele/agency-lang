@@ -12,7 +12,7 @@ import {
   promptForArgs,
   promptForTarget,
 } from "./util.js";
-import { color } from "termcolors";
+import { color } from "@/utils/termcolors.js";
 import { AgencyConfig } from "@/config.js";
 import path from "path";
 import { compile } from "./commands.js";
@@ -307,7 +307,13 @@ export type TestStats = {
 };
 
 function emptyStats(): TestStats {
-  return { passed: 0, failed: 0, filesPassed: 0, filesFailed: 0, failedFiles: [] };
+  return {
+    passed: 0,
+    failed: 0,
+    filesPassed: 0,
+    filesFailed: 0,
+    failedFiles: [],
+  };
 }
 
 export function mergeStats(a: TestStats, b: TestStats): TestStats {

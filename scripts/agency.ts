@@ -18,7 +18,7 @@ import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.j
 import { formatErrors, typeCheck } from "@/typeChecker.js";
 import { Command } from "commander";
 import * as fs from "fs";
-import { color } from "termcolors";
+import { color } from "@/utils/termcolors.js";
 import { TarsecError } from "tarsec";
 import process from "process";
 import { agent } from "@/cli/agent.js";
@@ -329,7 +329,8 @@ program
   .command("agent")
   .description("Launch the Agency language assistant agent")
   .action(() => {
-    agent();
+    const config = getConfig();
+    agent(config);
   });
 
 // Default: treat unknown args as a file to run

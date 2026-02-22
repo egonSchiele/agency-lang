@@ -1,7 +1,7 @@
 // parse .env file if it exists into process.env
 import { existsSync, readFileSync } from "fs";
 import { resolve, join } from "path";
-import { color } from "termcolors";
+import { color } from "@/utils/termcolors.js";
 export const __dirname = import.meta.dirname;
 export const rootDir = join(__dirname, "../../");
 

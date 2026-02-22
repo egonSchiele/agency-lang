@@ -83,5 +83,6 @@ should llm calls be allowed at the top level (not inside a node)? -- if so, what
 ```
 users[0 + 1].name
 users[obj.x].name
-"Hello, ${user.name}!"  // only simple variable interpolation is supported for now, not expressions
 ```
+
+add the ability to export and import types from other files so I can use the type from another file as the response type for an llm call

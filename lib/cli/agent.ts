@@ -1,8 +1,9 @@
+import { AgencyConfig } from "@/config.js";
 import { compile } from "./commands.js";
 import { spawn } from "child_process";
 import * as path from "path";
 
-export function agent(): void {
+export function agent(config: AgencyConfig): void {
   // Resolve the bundled agent directory relative to this file in dist/
   const currentDir = path.dirname(new URL(import.meta.url).pathname);
   const agentDir = path.resolve(currentDir, "../agents/agency-agent");
@@ -10,7 +11,7 @@ export function agent(): void {
   const runFile = path.join(agentDir, "run.js");
 
   // Compile the agent's .agency file
-  compile({}, agencyFile);
+  compile(config, agencyFile);
 
   // Run the wrapper
   console.log("---");

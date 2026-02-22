@@ -55,6 +55,8 @@ export const BUILTIN_TOOLS = [
   "round",
 ];
 
+export const BUILTIN_VARIABLES = ["color"];
+
 /**
  * Configuration options for the Agency compiler
  */
@@ -94,6 +96,13 @@ export interface AgencyConfig {
    * Optionally specify a custom host for tarsec trace collection
    */
   tarsecTraceHost?: string;
+
+  /**
+   * Number of times the LLM can go back and forth between calling tools
+   * and responding to their outputs before halting execution to prevent infinite loops.
+   * Default 10.
+   */
+  maxToolCallRounds?: number;
 
   /** Statelog config */
   log?: Partial<{

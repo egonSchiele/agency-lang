@@ -26,6 +26,7 @@ import {
   getAllVariablesInBodyArray,
   walkNodesArray,
 } from "@/utils/node.js";
+import { color } from "@/utils/termcolors.js";
 
 export class TypescriptPreprocessor {
   public program: AgencyProgram;
@@ -173,17 +174,21 @@ export class TypescriptPreprocessor {
 
   protected collectToolsInFunction(body: AgencyNode[]): void {
     let toolsUsed: string[] = [];
-    body.forEach((node) => {
+    for (const { node } of walkNodesArray(body)) {
       if (node.type === "usesTool") {
         toolsUsed.push(...node.toolNames);
-      } else if (node.type === "prompt") {
+      } else if (node.type === "prompt" && !node.tools) {
         node.tools = { type: "usesTool", toolNames: toolsUsed };
         toolsUsed = [];
-      } else if (node.type === "assignment" && node.value.type === "prompt") {
-        node.value.tools = { type: "usesTool", toolNames: toolsUsed };
+      } else if (
+        node.type === "assignment" &&
+        node.value.type === "prompt" &&
+        !node.value.tools
+      ) {
+        node.value.tools = { type: "usesTool", toolNames: [...toolsUsed] };
         toolsUsed = [];
       }
-    });
+    }
   }
 
   protected collectSkills(): void {
@@ -217,7 +222,7 @@ export class TypescriptPreprocessor {
       skillsUsed = [];
     };
 
-    body.forEach((node) => {
+    for (const { node } of walkNodesArray(body)) {
       if (node.type === "skill") {
         skillsUsed.push(node);
       } else if (node.type === "prompt") {
@@ -225,7 +230,7 @@ export class TypescriptPreprocessor {
       } else if (node.type === "assignment" && node.value.type === "prompt") {
         setSkillsForPrompt(node.value);
       }
-    });
+    }
   }
 
   protected markFunctionsAsync(): void {
@@ -257,11 +262,12 @@ export class TypescriptPreprocessor {
       throw new Error("Program is not set in generator.");
     }
     for (const { node, ancestors } of walkNodesArray(this.program.nodes)) {
-      const closestMessageThread = [...ancestors].reverse().find(
-        (a) => a.type === "messageThread",
-      ) as MessageThread | undefined;
+      const closestMessageThread = [...ancestors]
+        .reverse()
+        .find((a) => a.type === "messageThread") as MessageThread | undefined;
       const isInMessageThread = !!closestMessageThread;
-      const isInParallelThread = closestMessageThread?.threadType === "parallel";
+      const isInParallelThread =
+        closestMessageThread?.threadType === "parallel";
       const isInReturnStatement = ancestors.some(
         (a) => a.type === "returnStatement",
       );
@@ -1210,6 +1216,8 @@ export class TypescriptPreprocessor {
         node.importedTools.forEach((t) => {
           setScope(t, "global");
         });
+      } else if (node.type === "variableName") {
+        setScope(node.value, scopes.at(-1)?.type || "global");
       }
     }
 

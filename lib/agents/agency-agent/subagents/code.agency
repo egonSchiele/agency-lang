@@ -1,0 +1,33 @@
+// fields that get filled out over time
+type Code = {
+  contents: string
+}
+
+code: Code = { 
+  contents: ""
+}
+
+def writeCode(content: string): File {
+  """
+  Use this tool to write code to a file. The tool takes in a string of code content and replaces the existing code with it.
+  The tool returns the current state of the code after your modification.
+  """
+  code.contents = content
+  return code.contents
+}
+
+def appendCode(content: string): File {
+  """
+  Use this tool to incrementally write code to a file. The tool takes in a string of code content and appends it to the existing code.
+  The tool returns the current state of the code after your modification.
+  """
+  code.contents += "\n${content}"
+  return code.contents
+}
+
+def readCode() {
+  """
+  Use this tool to read the current code. This is useful to see what code has been written so far as you build it out over multiple steps.
+  """
+  return code.contents
+}

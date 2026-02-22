@@ -1,34 +1,79 @@
 import tool { addTask, listTasks, markTaskDone } from "./subagents/task.agency"
 import tool { writeToPlan, readPlan } from "./subagents/plan.agency"
+import tool { writeCode, appendCode, readCode } from "./subagents/code.agency"
+
+// todo allow this
+// import { Plan } from "./subagents/plan.agency"
 
 systemPrompt = read("./prompts/system.md")
-
 planPrompt = read("./prompts/plan.md")
 
 type NextAction = { type: "askUser"; question: string } | { type: "done" } | { type: "start" }
 
-def printTool(str: string) {
-  """
-  Use this tool to print out any string to the console. This is useful for debugging and for communicating with the user.
-  """
-  print(str)
+config = { 
+  model: { 
+    optimizeFor: ["speed", "cost"],
+    providers: ["openai"]
+  },
+  responseFormatOptions: { 
+    strict: true
+  }
 }
 
 node main() {
+  return plan()
+}
+
+node plan() {
+  print(color.cyan("Let's start by coming up with a plan for what you want to accomplish."))
   thread {
     system("${systemPrompt}\n\n${planPrompt}")
     userMsg = input("What would you like to accomplish today? ")
     nextAction: NextAction = { 
       type: "start"
     }
-    nextType = nextAction.type
-    while (nextType != "done") {
-      uses writeToPlan, readPlan, printTool
-      nextAction: NextAction = llm("${userMsg}")
-      hasQuestion = nextAction.type == "askUser"
-      if (hasQuestion) {
-        userMsg = input(nextAction.question)
+    while (nextAction.type != "done") {
+      uses writeToPlan, readPlan, print
+      nextAction: NextAction = llm("${userMsg}", config)
+      if (nextAction.type == "askUser") {
+        userMsg = input("${nextAction.question} ")
+      }
+    }
+
+    plan = readPlan()
+    print(color.cyan("Here's the plan we've come up with"))
+    printJSON(plan)
+  }
+  return design(plan)
+}
+
+type Plan = {
+  overallGoal: string;
+  desiredActions: string[] # array of descriptions of each action
+}
+
+node design(plan: Plan) {
+  print(color.cyan("Now let's design an agent to accomplish that plan."))
+  designPrompt = read("./prompts/design.md")
+  prompt = """
+  Help the user design an agent that can accomplish the following goal: ${plan.overallGoal}
+  with the following actions: ${plan.desiredActions}.
+  """
+  thread {
+    system(designPrompt)
+    userMsg = prompt
+    nextAction: NextAction = { 
+      type: "start"
+    }
+    while (nextAction.type != "done") {
+      uses writeCode, appendCode, readCode, print
+      nextAction: NextAction = llm("${userMsg}", config)
+      if (nextAction.type == "askUser") {
+        userMsg = input("\n${nextAction.question} ")
       }
     }
   }
+  code = readCode()
+  print("Here's the code we've come up with")
+  print(code)
 }

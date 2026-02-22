@@ -13,10 +13,9 @@ import process from "process";
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
-import { StatelogClient, SimpleMachine, goToNode, nanoid } from "agency-lang";
+import { StatelogClient, SimpleMachine, goToNode, nanoid, color } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
-import { color } from "termcolors";
 
 /* Code to log to statelog */
 const statelogHost = "https://agency-lang.com";

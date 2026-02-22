@@ -3,10 +3,9 @@ import process from "process";
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
-import { StatelogClient, SimpleMachine, goToNode, nanoid } from "agency-lang";
+import { StatelogClient, SimpleMachine, goToNode, nanoid, color } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
-import { color } from "termcolors";
 
 /* Code to log to statelog */
 const statelogHost = "https://agency-lang.com";
@@ -822,10 +821,12 @@ async function _response(msg, __metadata) {
 
     
 
+  const modelName = __completion.model || __clientConfig.model || "unknown model";
+
     statelogClient.promptCompletion({
       messages: __messages.getMessages(),
       completion: __completion,
-      model: __clientConfig.model,
+      model: modelName,
       timeTaken: endTime - startTime,
       tools: __tools,
       responseFormat: __responseFormat
@@ -833,7 +834,7 @@ async function _response(msg, __metadata) {
 
     if (!__completion.success) {
       throw new Error(
-        `Error getting response from ${__clientConfig.model}: ${__completion.error}`
+        `Error getting response from ${modelName}: ${__completion.error}`
       );
     }
 
@@ -851,7 +852,12 @@ async function _response(msg, __metadata) {
   }
 
   // Handle function calls
-  if (__toolCalls.length > 0) {
+  let __toolCallRound = 0;
+  const __maxToolCallRounds = 10;
+  while (__toolCalls.length > 0) {
+    if (__toolCallRound++ >= __maxToolCallRounds) {
+      throw new Error(`Exceeded maximum tool call rounds (${__maxToolCallRounds})`);
+    }
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
     let haltToolCall = {}
@@ -878,7 +884,7 @@ async function _response(msg, __metadata) {
     }
   
     const nextStartTime = performance.now();
-    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __clientConfig.model });
+    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __clientConfig.model, toolCalls: __toolCalls });
     let __completion = await smoltalk.text({
       messages: __messages.getMessages(),
       tools: __tools,
@@ -891,10 +897,12 @@ async function _response(msg, __metadata) {
 
     
 
+    const modelName = __completion.model || __clientConfig.model || "unknown model";
+
     statelogClient.promptCompletion({
       messages: __messages.getMessages(),
       completion: __completion,
-      model: __clientConfig.model,
+      model: modelName,
       timeTaken: nextEndTime - nextStartTime,
       tools: __tools,
       responseFormat: __responseFormat,
@@ -902,10 +910,16 @@ async function _response(msg, __metadata) {
 
     if (!__completion.success) {
       throw new Error(
-        `Error getting response from ${__clientConfig.model}: ${__completion.error}`
+        `Error getting response from ${modelName}: ${__completion.error}`
       );
     }
     responseMessage = __completion.value;
+    __toolCalls = responseMessage.toolCalls || [];
+
+    if (__toolCalls.length > 0) {
+      __messages.push(smoltalk.assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+    }
+
     __updateTokenStats(responseMessage.usage, responseMessage.cost);
     await __callHook("onLLMCallEnd", { result: responseMessage, usage: responseMessage.usage, cost: responseMessage.cost, timeTaken: nextEndTime - nextStartTime });
   }
@@ -1027,10 +1041,12 @@ async function _response(msg, __metadata) {
 
     
 
+  const modelName = __completion.model || __clientConfig.model || "unknown model";
+
     statelogClient.promptCompletion({
       messages: __messages.getMessages(),
       completion: __completion,
-      model: __clientConfig.model,
+      model: modelName,
       timeTaken: endTime - startTime,
       tools: __tools,
       responseFormat: __responseFormat
@@ -1038,7 +1054,7 @@ async function _response(msg, __metadata) {
 
     if (!__completion.success) {
       throw new Error(
-        `Error getting response from ${__clientConfig.model}: ${__completion.error}`
+        `Error getting response from ${modelName}: ${__completion.error}`
       );
     }
 
@@ -1056,7 +1072,12 @@ async function _response(msg, __metadata) {
   }
 
   // Handle function calls
-  if (__toolCalls.length > 0) {
+  let __toolCallRound = 0;
+  const __maxToolCallRounds = 10;
+  while (__toolCalls.length > 0) {
+    if (__toolCallRound++ >= __maxToolCallRounds) {
+      throw new Error(`Exceeded maximum tool call rounds (${__maxToolCallRounds})`);
+    }
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
     let haltToolCall = {}
@@ -1083,7 +1104,7 @@ async function _response(msg, __metadata) {
     }
   
     const nextStartTime = performance.now();
-    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __clientConfig.model });
+    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __clientConfig.model, toolCalls: __toolCalls });
     let __completion = await smoltalk.text({
       messages: __messages.getMessages(),
       tools: __tools,
@@ -1096,10 +1117,12 @@ async function _response(msg, __metadata) {
 
     
 
+    const modelName = __completion.model || __clientConfig.model || "unknown model";
+
     statelogClient.promptCompletion({
       messages: __messages.getMessages(),
       completion: __completion,
-      model: __clientConfig.model,
+      model: modelName,
       timeTaken: nextEndTime - nextStartTime,
       tools: __tools,
       responseFormat: __responseFormat,
@@ -1107,10 +1130,16 @@ async function _response(msg, __metadata) {
 
     if (!__completion.success) {
       throw new Error(
-        `Error getting response from ${__clientConfig.model}: ${__completion.error}`
+        `Error getting response from ${modelName}: ${__completion.error}`
       );
     }
     responseMessage = __completion.value;
+    __toolCalls = responseMessage.toolCalls || [];
+
+    if (__toolCalls.length > 0) {
+      __messages.push(smoltalk.assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+    }
+
     __updateTokenStats(responseMessage.usage, responseMessage.cost);
     await __callHook("onLLMCallEnd", { result: responseMessage, usage: responseMessage.usage, cost: responseMessage.cost, timeTaken: nextEndTime - nextStartTime });
   }
@@ -1228,10 +1257,12 @@ async function ___promptVar(__metadata) {
 
     
 
+  const modelName = __completion.model || __clientConfig.model || "unknown model";
+
     statelogClient.promptCompletion({
       messages: __messages.getMessages(),
       completion: __completion,
-      model: __clientConfig.model,
+      model: modelName,
       timeTaken: endTime - startTime,
       tools: __tools,
       responseFormat: __responseFormat
@@ -1239,7 +1270,7 @@ async function ___promptVar(__metadata) {
 
     if (!__completion.success) {
       throw new Error(
-        `Error getting response from ${__clientConfig.model}: ${__completion.error}`
+        `Error getting response from ${modelName}: ${__completion.error}`
       );
     }
 
@@ -1257,7 +1288,12 @@ async function ___promptVar(__metadata) {
   }
 
   // Handle function calls
-  if (__toolCalls.length > 0) {
+  let __toolCallRound = 0;
+  const __maxToolCallRounds = 10;
+  while (__toolCalls.length > 0) {
+    if (__toolCallRound++ >= __maxToolCallRounds) {
+      throw new Error(`Exceeded maximum tool call rounds (${__maxToolCallRounds})`);
+    }
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
     let haltToolCall = {}
@@ -1284,7 +1320,7 @@ async function ___promptVar(__metadata) {
     }
   
     const nextStartTime = performance.now();
-    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __clientConfig.model });
+    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __clientConfig.model, toolCalls: __toolCalls });
     let __completion = await smoltalk.text({
       messages: __messages.getMessages(),
       tools: __tools,
@@ -1297,10 +1333,12 @@ async function ___promptVar(__metadata) {
 
     
 
+    const modelName = __completion.model || __clientConfig.model || "unknown model";
+
     statelogClient.promptCompletion({
       messages: __messages.getMessages(),
       completion: __completion,
-      model: __clientConfig.model,
+      model: modelName,
       timeTaken: nextEndTime - nextStartTime,
       tools: __tools,
       responseFormat: __responseFormat,
@@ -1308,10 +1346,16 @@ async function ___promptVar(__metadata) {
 
     if (!__completion.success) {
       throw new Error(
-        `Error getting response from ${__clientConfig.model}: ${__completion.error}`
+        `Error getting response from ${modelName}: ${__completion.error}`
       );
     }
     responseMessage = __completion.value;
+    __toolCalls = responseMessage.toolCalls || [];
+
+    if (__toolCalls.length > 0) {
+      __messages.push(smoltalk.assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+    }
+
     __updateTokenStats(responseMessage.usage, responseMessage.cost);
     await __callHook("onLLMCallEnd", { result: responseMessage, usage: responseMessage.usage, cost: responseMessage.cost, timeTaken: nextEndTime - nextStartTime });
   }
@@ -1461,7 +1505,7 @@ if (isInterrupt(__stack.locals.res1)) {
       
 
       if (__step <= 5) {
-        __stack.locals.results = __stateStack.globals.Promise.race([__stack.locals.res1, __stack.locals.res2]);
+        __stack.locals.results = __stack.locals.Promise.race([__stack.locals.res1, __stack.locals.res2]);
         __stack.step++;
       }
       

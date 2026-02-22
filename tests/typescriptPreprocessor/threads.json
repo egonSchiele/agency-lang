@@ -26,6 +26,11 @@
                     "value": "What is 2 + 2?"
                   }
                 ],
+                "tools": {
+                  "type": "usesTool",
+                  "toolNames": []
+                },
+                "skills": [],
                 "async": false
               },
               "scope": "node"
@@ -48,6 +53,11 @@
                     "value": "And what is that times 3?"
                   }
                 ],
+                "tools": {
+                  "type": "usesTool",
+                  "toolNames": []
+                },
+                "skills": [],
                 "async": false
               },
               "scope": "node"

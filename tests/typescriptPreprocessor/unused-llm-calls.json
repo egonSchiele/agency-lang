@@ -97,6 +97,11 @@
                 "value": "Final answer"
               }
             ],
+            "tools": {
+              "type": "usesTool",
+              "toolNames": []
+            },
+            "skills": [],
             "async": false
           }
         },

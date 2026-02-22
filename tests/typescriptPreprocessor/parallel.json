@@ -29,6 +29,11 @@
                     "value": "What are the first 5 prime numbers?"
                   }
                 ],
+                "tools": {
+                  "type": "usesTool",
+                  "toolNames": []
+                },
+                "skills": [],
                 "async": false
               },
               "scope": "function"
@@ -55,6 +60,11 @@
                         "value": "What is 2+2?"
                       }
                     ],
+                    "tools": {
+                      "type": "usesTool",
+                      "toolNames": []
+                    },
+                    "skills": [],
                     "async": true
                   },
                   "scope": "function"
@@ -77,6 +87,11 @@
                         "value": "What is 3+3?"
                       }
                     ],
+                    "tools": {
+                      "type": "usesTool",
+                      "toolNames": []
+                    },
+                    "skills": [],
                     "async": true
                   },
                   "scope": "function"

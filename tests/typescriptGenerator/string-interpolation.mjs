@@ -3,10 +3,9 @@ import process from "process";
 import { z } from "zod";
 import * as readline from "readline";
 import fs from "fs";
-import { StatelogClient, SimpleMachine, goToNode, nanoid } from "agency-lang";
+import { StatelogClient, SimpleMachine, goToNode, nanoid, color } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
-import { color } from "termcolors";
 
 /* Code to log to statelog */
 const statelogHost = "https://agency-lang.com";
@@ -780,7 +779,7 @@ graph.node("main", async (state) => {
       
 
       if (__step <= 1) {
-        __stack.locals.greeting = `Hello, my name is ${__stateStack.globals.name} and I am ${__stateStack.globals.age} years old.`;
+        __stack.locals.greeting = `Hello, my name is ${__stack.locals.name} and I am ${__stack.locals.age} years old.`;
         __stack.step++;
       }
       

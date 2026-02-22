@@ -97,6 +97,13 @@ export interface AgencyConfig {
    */
   tarsecTraceHost?: string;
 
+  /**
+   * Number of times the LLM can go back and forth between calling tools
+   * and responding to their outputs before halting execution to prevent infinite loops.
+   * Default 10.
+   */
+  maxToolCallRounds?: number;
+
   /** Statelog config */
   log?: Partial<{
     host: string;

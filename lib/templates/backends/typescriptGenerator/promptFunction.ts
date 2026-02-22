@@ -78,7 +78,12 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
   }
 
   // Handle function calls
-  if (__toolCalls.length > 0) {
+  let __toolCallRound = 0;
+  const __maxToolCallRounds = {{{maxToolCallRounds:number}}};
+  while (__toolCalls.length > 0) {
+    if (__toolCallRound++ >= __maxToolCallRounds) {
+      throw new Error(\`Exceeded maximum tool call rounds ($\{__maxToolCallRounds\})\`);
+    }
     let toolCallStartTime, toolCallEndTime;
     let haltExecution = false;
     let haltToolCall = {}
@@ -92,7 +97,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
     if (haltExecution) {
       statelogClient.debug(\`Tool call interrupted execution.\`, {
         messages: __messages.getMessages(),
-        model: modelName,
+        model: __clientConfig.model,
       });
 
       __stateStack.interruptData = {
@@ -137,6 +142,12 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
       );
     }
     responseMessage = __completion.value;
+    __toolCalls = responseMessage.toolCalls || [];
+
+    if (__toolCalls.length > 0) {
+      __messages.push(smoltalk.assistantMessage(responseMessage.output, { toolCalls: __toolCalls }));
+    }
+
     __updateTokenStats(responseMessage.usage, responseMessage.cost);
     await __callHook("onLLMCallEnd", { result: responseMessage, usage: responseMessage.usage, cost: responseMessage.cost, timeTaken: nextEndTime - nextStartTime });
   }
@@ -188,6 +199,7 @@ export type TemplateType = {
   zodSchema: string;
   clientConfig: string;
   isStreaming: boolean;
+  maxToolCallRounds: number;
   functionCalls: string;
   isAsync: boolean;
   funcCallParams: string;

@@ -94,6 +94,7 @@ export class TypeScriptGenerator extends BaseGenerator {
 
   configDefaults(): Partial<AgencyConfig> {
     return {
+      maxToolCallRounds: 10,
       log: {
         host: "https://agency-lang.com",
       },
@@ -768,6 +769,7 @@ I'll probably need to do that for supporting type checking anyway.
       nodeContext: this.getCurrentScope().type === "node",
       isStreaming: prompt.isStreaming || false,
       isAsync: prompt.async || false,
+      maxToolCallRounds: this.agencyConfig.maxToolCallRounds || 10,
     });
   }
 

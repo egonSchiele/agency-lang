@@ -1366,7 +1366,13 @@ async function ___promptVar(__metadata) {
   
   try {
   const result = JSON.parse(responseMessage.output || "");
-  return result.response;
+  
+  // because the LLM doesn't always follow the response format perfectly
+  if ("response" in result) {
+    return result.response;
+  }
+  return result;
+
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable '__promptVar':", e);

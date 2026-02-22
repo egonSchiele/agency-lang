@@ -926,7 +926,13 @@ async function _res1(__metadata) {
   
   try {
   const result = JSON.parse(responseMessage.output || "");
-  return result.response;
+  
+  // because the LLM doesn't always follow the response format perfectly
+  if ("response" in result) {
+    return result.response;
+  }
+  return result;
+
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable 'res1':", e);
@@ -1111,7 +1117,13 @@ async function _res2(__metadata) {
   
   try {
   const result = JSON.parse(responseMessage.output || "");
-  return result.response;
+  
+  // because the LLM doesn't always follow the response format perfectly
+  if ("response" in result) {
+    return result.response;
+  }
+  return result;
+
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable 'res2':", e);
@@ -1296,7 +1308,13 @@ async function _res3(__metadata) {
   
   try {
   const result = JSON.parse(responseMessage.output || "");
-  return result.response;
+  
+  // because the LLM doesn't always follow the response format perfectly
+  if ("response" in result) {
+    return result.response;
+  }
+  return result;
+
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable 'res3':", e);
@@ -1487,7 +1505,13 @@ async function _res5(__metadata) {
   
   try {
   const result = JSON.parse(responseMessage.output || "");
-  return result.response;
+  
+  // because the LLM doesn't always follow the response format perfectly
+  if ("response" in result) {
+    return result.response;
+  }
+  return result;
+
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable 'res5':", e);
@@ -1684,7 +1708,13 @@ async function _res4(__metadata) {
   
   try {
   const result = JSON.parse(responseMessage.output || "");
-  return result.response;
+  
+  // because the LLM doesn't always follow the response format perfectly
+  if ("response" in result) {
+    return result.response;
+  }
+  return result;
+
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable 'res4':", e);
@@ -1963,7 +1993,13 @@ async function _res1(__metadata) {
   
   try {
   const result = JSON.parse(responseMessage.output || "");
-  return result.response;
+  
+  // because the LLM doesn't always follow the response format perfectly
+  if ("response" in result) {
+    return result.response;
+  }
+  return result;
+
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable 'res1':", e);
@@ -2148,7 +2184,13 @@ async function _res2(__metadata) {
   
   try {
   const result = JSON.parse(responseMessage.output || "");
-  return result.response;
+  
+  // because the LLM doesn't always follow the response format perfectly
+  if ("response" in result) {
+    return result.response;
+  }
+  return result;
+
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable 'res2':", e);
@@ -2333,7 +2375,13 @@ async function _res3(__metadata) {
   
   try {
   const result = JSON.parse(responseMessage.output || "");
-  return result.response;
+  
+  // because the LLM doesn't always follow the response format perfectly
+  if ("response" in result) {
+    return result.response;
+  }
+  return result;
+
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable 'res3':", e);
@@ -2524,7 +2572,13 @@ async function _res5(__metadata) {
   
   try {
   const result = JSON.parse(responseMessage.output || "");
-  return result.response;
+  
+  // because the LLM doesn't always follow the response format perfectly
+  if ("response" in result) {
+    return result.response;
+  }
+  return result;
+
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable 'res5':", e);
@@ -2721,7 +2775,13 @@ async function _res4(__metadata) {
   
   try {
   const result = JSON.parse(responseMessage.output || "");
-  return result.response;
+  
+  // because the LLM doesn't always follow the response format perfectly
+  if ("response" in result) {
+    return result.response;
+  }
+  return result;
+
   } catch (e) {
     return responseMessage.output;
     // console.error("Error parsing response for variable 'res4':", e);

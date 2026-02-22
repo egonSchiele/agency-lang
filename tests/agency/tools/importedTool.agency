@@ -1,0 +1,10 @@
+import tool { mogrify } from "./useTools.agency"
+
+// test an imported tool being used in a thread.
+node test() {
+  thread {
+    uses mogrify
+    result: number = llm("Use the mogrify function to mogrify 4, 7. Return ONLY the result.")
+    return result
+  }
+}

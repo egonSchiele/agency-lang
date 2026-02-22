@@ -1,0 +1,15 @@
+{
+  "sourceFile": "importedTool.agency",
+  "tests": [
+    {
+      "nodeName": "test",
+      "input": "",
+      "expectedOutput": "33",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

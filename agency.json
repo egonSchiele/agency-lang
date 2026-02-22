@@ -1,7 +1,6 @@
 {
   "verbose": false,
   "log": {
-    "host": "stdout",
     "projectId": "agency-lang",
     "debugMode": false
   },

@@ -26,6 +26,7 @@ import {
   getAllVariablesInBodyArray,
   walkNodesArray,
 } from "@/utils/node.js";
+import { color } from "termcolors";
 
 export class TypescriptPreprocessor {
   public program: AgencyProgram;
@@ -173,17 +174,21 @@ export class TypescriptPreprocessor {
 
   protected collectToolsInFunction(body: AgencyNode[]): void {
     let toolsUsed: string[] = [];
-    body.forEach((node) => {
+    for (const { node } of walkNodesArray(body)) {
       if (node.type === "usesTool") {
         toolsUsed.push(...node.toolNames);
-      } else if (node.type === "prompt") {
+      } else if (node.type === "prompt" && !node.tools) {
         node.tools = { type: "usesTool", toolNames: toolsUsed };
         toolsUsed = [];
-      } else if (node.type === "assignment" && node.value.type === "prompt") {
-        node.value.tools = { type: "usesTool", toolNames: toolsUsed };
+      } else if (
+        node.type === "assignment" &&
+        node.value.type === "prompt" &&
+        !node.value.tools
+      ) {
+        node.value.tools = { type: "usesTool", toolNames: [...toolsUsed] };
         toolsUsed = [];
       }
-    });
+    }
   }
 
   protected collectSkills(): void {
@@ -217,7 +222,7 @@ export class TypescriptPreprocessor {
       skillsUsed = [];
     };
 
-    body.forEach((node) => {
+    for (const { node } of walkNodesArray(body)) {
       if (node.type === "skill") {
         skillsUsed.push(node);
       } else if (node.type === "prompt") {
@@ -225,7 +230,7 @@ export class TypescriptPreprocessor {
       } else if (node.type === "assignment" && node.value.type === "prompt") {
         setSkillsForPrompt(node.value);
       }
-    });
+    }
   }
 
   protected markFunctionsAsync(): void {

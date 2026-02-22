@@ -122,6 +122,12 @@ function _builtinRead(filename) {
   return contents;
 }
 
+function _builtinWrite(filename, content) {
+  const filePath = path.resolve(__dirname, filename);
+  fs.writeFileSync(filePath, content, "utf8");
+  return true;
+}
+
 /*
  * @param filePath The absolute or relative path to the image file.
  * @returns The Base64 string, or null if an error occurs.
@@ -139,8 +145,12 @@ function _builtinSleep(seconds) {
   });
 }
 
-function printJSON(obj) {
+function _printJSON(obj) {
   console.log(JSON.stringify(obj, null, 2));
+}
+
+function _print(...args) {
+  console.log(...args);
 }
 
 export const __readSkillTool = {

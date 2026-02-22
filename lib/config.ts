@@ -15,11 +15,12 @@ export const TYPES_THAT_DONT_TRIGGER_NEW_PART: AgencyNode["type"][] = [
  * Maps Agency built-in function names to TypeScript equivalents
  */
 export const BUILTIN_FUNCTIONS: Record<string, string> = {
-  print: "console.log",
+  print: "_print",
+  printJSON: "_printJSON",
   input: "_builtinInput",
   read: "_builtinRead",
   readImage: "_builtinReadImage",
-  write: "fs.writeFileSync",
+  write: "_builtinWrite",
   fetch: "_builtinFetch",
   fetchJSON: "_builtinFetchJSON",
   fetchJson: "_builtinFetchJSON",

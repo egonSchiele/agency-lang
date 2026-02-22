@@ -12,6 +12,8 @@ def writeCode(content: string): File {
   Use this tool to write code to a file. The tool takes in a string of code content and replaces the existing code with it.
   The tool returns the current state of the code after your modification.
   """
+  print(color.green("Overwriting code with new content"))
+  print(content)
   code.contents = content
   return code.contents
 }

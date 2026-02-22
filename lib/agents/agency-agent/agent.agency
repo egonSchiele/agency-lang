@@ -1,7 +1,7 @@
 import tool { addTask, listTasks, markTaskDone } from "./subagents/task.agency"
 import tool { writeToPlan, readPlan } from "./subagents/plan.agency"
 import tool { writeCode, appendCode, readCode } from "./subagents/code.agency"
-
+import { syntaxHighlight } from "../../utils/agentUtils.js"
 // todo allow this
 // import { Plan } from "./subagents/plan.agency"
 
@@ -20,13 +20,22 @@ config = {
   }
 }
 
-node main() {
-  return plan()
-  /* plan = {
-overallGoal: "Help with meal planning by generating meal plans with recipe imports and database interactions.",
-desiredActions: ["Scrape recipe data from a provided URL.", "Create ingredients in the database based on scraped data.", "Create meals in the database based on scraped recipe data."]
+def printCode(code: string): string {
+  """
+  Use this tool to print code to the terminal with syntax highlighting.
+  Use this to print any generated code you want the user to look at.
+  """
+  print(syntaxHighlight(code, "ts"))
+  return "printed code successfully"
 }
-return design(plan) */
+
+node main() {
+  //return plan()
+  plan = { 
+    overallGoal: "Help with meal planning by generating meal plans with recipe imports and database interactions.",
+    desiredActions: ["Scrape recipe data from a provided URL.", "Create ingredients in the database based on scraped data.", "Create meals in the database based on scraped recipe data."]
+  }
+  return design(plan)
 }
 
 node plan() {
@@ -71,7 +80,7 @@ node design(plan) {
       type: "start"
     }
     while (nextAction.type != "done") {
-      uses writeCode, appendCode, readCode, print
+      uses writeCode, appendCode, readCode, print, printCode
       nextAction: NextAction = llm("${userMsg}", config)
       if (nextAction.type == "askUser") {
         userMsg = input("\n${nextAction.question} ")
@@ -80,5 +89,5 @@ node design(plan) {
   }
   code = readCode()
   print("Here's the code we've come up with")
-  print(code)
+  printCode(code)
 }

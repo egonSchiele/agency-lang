@@ -38,7 +38,7 @@ import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
 import { BinOpExpression } from "@/types/binop.js";
 import { expressionToString } from "@/utils/node.js";
-import { color } from "termcolors";
+import { color } from "@/utils/termcolors.js";
 
 export class AgencyGenerator extends BaseGenerator {
   private indentLevel: number = 0;

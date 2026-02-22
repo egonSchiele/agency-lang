@@ -26,7 +26,7 @@ import {
   getAllVariablesInBodyArray,
   walkNodesArray,
 } from "@/utils/node.js";
-import { color } from "termcolors";
+import { color } from "@/utils/termcolors.js";
 
 export class TypescriptPreprocessor {
   public program: AgencyProgram;

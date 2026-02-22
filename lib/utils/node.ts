@@ -9,7 +9,7 @@ import {
   nodeScope,
   Scope,
 } from "@/types.js";
-import { color } from "termcolors";
+import { color } from "@/utils/termcolors.js";
 
 /**
  * Extract the base variable name from an interpolation segment's expression.

@@ -18,7 +18,7 @@ import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.j
 import { formatErrors, typeCheck } from "@/typeChecker.js";
 import { Command } from "commander";
 import * as fs from "fs";
-import { color } from "termcolors";
+import { color } from "@/utils/termcolors.js";
 import { TarsecError } from "tarsec";
 import process from "process";
 import { agent } from "@/cli/agent.js";

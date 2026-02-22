@@ -1,4 +1,4 @@
-import { color } from "termcolors";
+import { color } from "@/utils/termcolors.js";
 import { AgencyConfig, BUILTIN_FUNCTIONS } from "./config.js";
 import {
   AgencyNode,

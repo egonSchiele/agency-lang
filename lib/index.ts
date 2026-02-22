@@ -7,3 +7,4 @@ export * from "smoltalk";
 export type { StreamChunk } from "smoltalk";
 export * from "nanoid";
 export { AgencyConfig } from "./config.js";
+export { color } from "@/utils/termcolors.js";

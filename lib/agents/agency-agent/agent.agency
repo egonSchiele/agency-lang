@@ -11,31 +11,38 @@ planPrompt = read("./prompts/plan.md")
 type NextAction = { type: "askUser"; question: string } | { type: "done" } | { type: "start" }
 
 config = { 
-  model: { 
-    optimizeFor: ["speed", "cost"],
-    providers: ["openai"]
-  },
-  responseFormatOptions: { 
-    strict: true
-  }
+  model: "gpt-4o-mini"
 }
+/* config = {
+model: {
+optimizeFor: ["reasoning", "speed", "cost"],
+providers: ["openai", "google"],
+limit: {
+cost: 40
+}
+},
+responseFormatOptions: {
+strict: true
+}
+} */
 
 def printCode(code: string): string {
   """
   Use this tool to print code to the terminal with syntax highlighting.
   Use this to print any generated code you want the user to look at.
   """
+  print(color.cyan("Printing code with syntax highlighting"))
   print(syntaxHighlight(code, "ts"))
   return "printed code successfully"
 }
 
 node main() {
-  //return plan()
-  plan = { 
-    overallGoal: "Help with meal planning by generating meal plans with recipe imports and database interactions.",
-    desiredActions: ["Scrape recipe data from a provided URL.", "Create ingredients in the database based on scraped data.", "Create meals in the database based on scraped recipe data."]
-  }
-  return design(plan)
+  return plan()
+  /* plan = {
+overallGoal: "Help with meal planning by generating meal plans with recipe imports and database interactions.",
+desiredActions: ["Scrape recipe data from a provided URL.", "Create ingredients in the database based on scraped data.", "Create meals in the database based on scraped recipe data."]
+}
+return design(plan) */
 }
 
 node plan() {
@@ -82,6 +89,8 @@ node design(plan) {
     while (nextAction.type != "done") {
       uses writeCode, appendCode, readCode, print, printCode
       nextAction: NextAction = llm("${userMsg}", config)
+      print(color.yellow("Next action:"))
+      printJSON(nextAction)
       if (nextAction.type == "askUser") {
         userMsg = input("\n${nextAction.question} ")
       }

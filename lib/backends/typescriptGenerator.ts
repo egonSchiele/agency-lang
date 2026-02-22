@@ -14,7 +14,11 @@ import {
   VariableType,
 } from "../types.js";
 
-import { BUILTIN_TOOLS, TYPES_THAT_DONT_TRIGGER_NEW_PART } from "@/config.js";
+import {
+  BUILTIN_FUNCTIONS,
+  BUILTIN_TOOLS,
+  TYPES_THAT_DONT_TRIGGER_NEW_PART,
+} from "@/config.js";
 import { AwaitStatement } from "@/types/await.js";
 import { SpecialVar } from "@/types/specialVar.js";
 import { TimeBlock } from "@/types/timeBlock.js";
@@ -74,10 +78,7 @@ import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
 import path from "path";
 import { BinOpExpression } from "@/types/binop.js";
-import {
-  expressionToString,
-  getBaseVarName,
-} from "@/utils/node.js";
+import { expressionToString, getBaseVarName } from "@/utils/node.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
@@ -698,8 +699,15 @@ I'll probably need to do that for supporting type checking anyway.
     const functionCalls = (
       prompt.tools || { type: "usesTool", toolNames: [] }
     ).toolNames
-      .filter((t) => !BUILTIN_TOOLS.includes(t))
       .map((toolName) => {
+        if (BUILTIN_TOOLS.includes(toolName)) {
+          const internalName = BUILTIN_FUNCTIONS[toolName] || toolName;
+          return renderToolCall.default({
+            name: toolName,
+            internalName,
+            isBuiltin: true,
+          });
+        }
         if (
           !this.functionDefinitions[toolName] &&
           !this.isImportedTool(toolName)
@@ -711,6 +719,7 @@ I'll probably need to do that for supporting type checking anyway.
 
         return renderToolCall.default({
           name: toolName,
+          isBuiltin: false,
         });
       })
       .join("\n");

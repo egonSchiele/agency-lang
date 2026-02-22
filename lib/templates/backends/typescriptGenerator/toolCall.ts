@@ -26,7 +26,14 @@ export const template = `if (
       });
   } else {
     await __callHook("onToolCallStart", { toolName: "{{{name}}}", args: params });
+    {{#isBuiltin}}
+    // if it's a builtin, that means it doesn't take an array of params.
+    // use a spread operator to pass in the params as individual arguments.
+    result = await {{{internalName?:string}}}(...params);
+    {{/isBuiltin}}
+    {{^isBuiltin}}
     result = await {{{name}}}(params);
+    {{/isBuiltin}}
     toolCallEndTime = performance.now();
     await __callHook("onToolCallEnd", { toolName: "{{{name}}}", result, timeTaken: toolCallEndTime - toolCallStartTime });
   
@@ -59,6 +66,8 @@ export const template = `if (
 
 export type TemplateType = {
   name: string;
+  isBuiltin: boolean;
+  internalName?: string;
 };
 
 const render = (args: TemplateType) => {

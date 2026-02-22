@@ -25,6 +25,7 @@ export const BUILTIN_FUNCTIONS: Record<string, string> = {
   fetchJSON: "_builtinFetchJSON",
   fetchJson: "_builtinFetchJSON",
   sleep: "_builtinSleep",
+  round: "_builtinRound",
 };
 
 export const BUILTIN_FUNCTIONS_TO_ASYNC: Record<string, boolean> = {
@@ -39,7 +40,20 @@ export const BUILTIN_FUNCTIONS_TO_ASYNC: Record<string, boolean> = {
   sleep: false,
 };
 
-export const BUILTIN_TOOLS = ["readSkill"];
+export const BUILTIN_TOOLS = [
+  "readSkill",
+  "print",
+  "printJSON",
+  "input",
+  "read",
+  "readImage",
+  "write",
+  "fetch",
+  "fetchJSON",
+  "fetchJson",
+  "sleep",
+  "round",
+];
 
 /**
  * Configuration options for the Agency compiler

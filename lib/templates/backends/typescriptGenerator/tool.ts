@@ -9,7 +9,8 @@ export const template = `export const __{{{name:string}}}Tool = {
   schema: z.object({{{schema:string}}})
 };
 
-export const __{{{name:string}}}ToolParams = {{{parameters:string}}};`;
+export const __{{{name:string}}}ToolParams = {{{parameters:string}}};
+`;
 
 export type TemplateType = {
   name: string;

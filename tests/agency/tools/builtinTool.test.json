@@ -1,0 +1,15 @@
+{
+  "sourceFile": "builtinTool.agency",
+  "tests": [
+    {
+      "nodeName": "withUses",
+      "input": "",
+      "expectedOutput": "3.1416",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

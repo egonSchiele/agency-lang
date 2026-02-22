@@ -116,6 +116,12 @@ function _builtinRead(filename) {
   return contents;
 }
 
+function _builtinWrite(filename, content) {
+  const filePath = path.resolve(__dirname, filename);
+  fs.writeFileSync(filePath, content, "utf8");
+  return true;
+}
+
 /*
  * @param filePath The absolute or relative path to the image file.
  * @returns The Base64 string, or null if an error occurs.
@@ -133,10 +139,24 @@ function _builtinSleep(seconds) {
   });
 }
 
-function printJSON(obj) {
+function _printJSON(obj) {
   console.log(JSON.stringify(obj, null, 2));
 }
 
+function _print(...args) {
+  console.log(...args);
+}
+
+export function readSkill({filepath}) {
+  return _builtinRead(filepath);
+}
+
+function _builtinRound(num, precision) {
+  const factor = Math.pow(10, precision);
+  return Math.round(num * factor) / factor;
+}
+
+/******* tools and params arrays for built-in funcs ********/
 export const __readSkillTool = {
   name: "readSkill",
   description: `Skills provide specialized knowledge and instructions for particular scenarios.
@@ -152,9 +172,80 @@ Returns:
   schema: z.object({"filepath": z.string(), })
 };
 
-export function readSkill({filepath}) {
-  return _builtinRead(filepath);
-}
+export const __readSkillToolParams = ["filepath"];
+
+export const __printTool = {
+  name: "print",
+  description: `A tool for printing messages to the console.`,
+  schema: z.object({"message": z.string(), })
+};
+export const __printToolParams = ["message"];
+
+export const __printJSONTool = {
+  name: "printJSON",
+  description: `A tool for printing an object as formatted JSON to the console.`,
+  schema: z.object({"obj": z.any(), })
+};
+export const __printJSONToolParams = ["obj"];
+
+export const __inputTool = {
+  name: "input",
+  description: `A tool for prompting the user for input and returning their response.`,
+  schema: z.object({"prompt": z.string(), })
+};
+export const __inputToolParams = ["prompt"];
+
+export const __readTool = {
+  name: "read",
+  description: `A tool for reading the contents of a file and returning it as a string.`,
+  schema: z.object({"filename": z.string(), })
+};
+export const __readToolParams = ["filename"];
+
+export const __readImageTool = {
+  name: "readImage",
+  description: `A tool for reading an image file and returning its contents as a Base64-encoded string.`,
+  schema: z.object({"filename": z.string(), })
+};
+export const __readImageToolParams = ["filename"];
+
+export const __writeTool = {
+  name: "write",
+  description: `A tool for writing content to a file.`,
+  schema: z.object({"filename": z.string(), "content": z.string(), })
+};
+export const __writeToolParams = ["filename", "content"];
+
+export const __fetchTool = {
+  name: "fetch",
+  description: `A tool for fetching a URL and returning the response as text.`,
+  schema: z.object({"url": z.string(), })
+};
+export const __fetchToolParams = ["url"];
+
+export const __fetchJSONTool = {
+  name: "fetchJSON",
+  description: `A tool for fetching a URL and returning the response as parsed JSON.`,
+  schema: z.object({"url": z.string(), })
+};
+export const __fetchJSONToolParams = ["url"];
+
+export const __fetchJsonTool = __fetchJSONTool;
+export const __fetchJsonToolParams = __fetchJSONToolParams;
+
+export const __sleepTool = {
+  name: "sleep",
+  description: `A tool for pausing execution for a specified number of seconds.`,
+  schema: z.object({"seconds": z.number(), })
+};
+export const __sleepToolParams = ["seconds"];
+
+export const __roundTool = {
+  name: "round",
+  description: `A tool for rounding a number to a specified number of decimal places.`,
+  schema: z.object({"num": z.number(), "precision": z.number().optional().default(0), })
+};
+export const __roundToolParams = ["num", "precision"];
 
 export function __deepClone(obj) {
   return JSON.parse(JSON.stringify(obj));
@@ -642,23 +733,23 @@ const addTool = {
 //  Test arrays and objects
 //  Simple array
 __stateStack.globals.nums = [1, 2, 3, 4, 5];
-await console.log(__stateStack.globals.nums)//  Array with strings
+await _print(__stateStack.globals.nums)//  Array with strings
 __stateStack.globals.names = [`Alice`, `Bob`, `Charlie`];
-await console.log(__stateStack.globals.names)//  Nested arrays
+await _print(__stateStack.globals.names)//  Nested arrays
 __stateStack.globals.matrix = [[1, 2], [3, 4], [5, 6]];
-await console.log(__stateStack.globals.matrix)//  Simple object
+await _print(__stateStack.globals.matrix)//  Simple object
 __stateStack.globals.person = {"name": `Alice`, "age": 30};
-await console.log(__stateStack.globals.person)//  Object with nested structure
+await _print(__stateStack.globals.person)//  Object with nested structure
 __stateStack.globals.address = {"street": `123 Main St`, "city": `NYC`, "zip": `10001`};
-await console.log(__stateStack.globals.address)//  Object with array property
+await _print(__stateStack.globals.address)//  Object with array property
 __stateStack.globals.user = {"name": `Bob`, "tags": [`admin`, `developer`]};
-await console.log(__stateStack.globals.user)//  Array of objects
+await _print(__stateStack.globals.user)//  Array of objects
 __stateStack.globals.users = [{"name": `Alice`, "age": 30}, {"name": `Bob`, "age": 25}];
-await console.log(__stateStack.globals.users)//  Nested object
+await _print(__stateStack.globals.users)//  Nested object
 __stateStack.globals.config = {"server": {"host": `localhost`, "port": 8080}, "debug": true};
-await console.log(__stateStack.globals.config)//  Array access
+await _print(__stateStack.globals.config)//  Array access
 __stateStack.globals.firstNum = __stateStack.globals.nums[0];
-await console.log(__stateStack.globals.firstNum)//  Object property access
+await _print(__stateStack.globals.firstNum)//  Object property access
 __stateStack.globals.personName = __stateStack.globals.person.name;
-await console.log(__stateStack.globals.personName)
+await _print(__stateStack.globals.personName)
 export default graph;

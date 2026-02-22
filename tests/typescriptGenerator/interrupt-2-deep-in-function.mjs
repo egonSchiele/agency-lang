@@ -116,6 +116,12 @@ function _builtinRead(filename) {
   return contents;
 }
 
+function _builtinWrite(filename, content) {
+  const filePath = path.resolve(__dirname, filename);
+  fs.writeFileSync(filePath, content, "utf8");
+  return true;
+}
+
 /*
  * @param filePath The absolute or relative path to the image file.
  * @returns The Base64 string, or null if an error occurs.
@@ -133,10 +139,24 @@ function _builtinSleep(seconds) {
   });
 }
 
-function printJSON(obj) {
+function _printJSON(obj) {
   console.log(JSON.stringify(obj, null, 2));
 }
 
+function _print(...args) {
+  console.log(...args);
+}
+
+export function readSkill({filepath}) {
+  return _builtinRead(filepath);
+}
+
+function _builtinRound(num, precision) {
+  const factor = Math.pow(10, precision);
+  return Math.round(num * factor) / factor;
+}
+
+/******* tools and params arrays for built-in funcs ********/
 export const __readSkillTool = {
   name: "readSkill",
   description: `Skills provide specialized knowledge and instructions for particular scenarios.
@@ -152,9 +172,80 @@ Returns:
   schema: z.object({"filepath": z.string(), })
 };
 
-export function readSkill({filepath}) {
-  return _builtinRead(filepath);
-}
+export const __readSkillToolParams = ["filepath"];
+
+export const __printTool = {
+  name: "print",
+  description: `A tool for printing messages to the console.`,
+  schema: z.object({"message": z.string(), })
+};
+export const __printToolParams = ["message"];
+
+export const __printJSONTool = {
+  name: "printJSON",
+  description: `A tool for printing an object as formatted JSON to the console.`,
+  schema: z.object({"obj": z.any(), })
+};
+export const __printJSONToolParams = ["obj"];
+
+export const __inputTool = {
+  name: "input",
+  description: `A tool for prompting the user for input and returning their response.`,
+  schema: z.object({"prompt": z.string(), })
+};
+export const __inputToolParams = ["prompt"];
+
+export const __readTool = {
+  name: "read",
+  description: `A tool for reading the contents of a file and returning it as a string.`,
+  schema: z.object({"filename": z.string(), })
+};
+export const __readToolParams = ["filename"];
+
+export const __readImageTool = {
+  name: "readImage",
+  description: `A tool for reading an image file and returning its contents as a Base64-encoded string.`,
+  schema: z.object({"filename": z.string(), })
+};
+export const __readImageToolParams = ["filename"];
+
+export const __writeTool = {
+  name: "write",
+  description: `A tool for writing content to a file.`,
+  schema: z.object({"filename": z.string(), "content": z.string(), })
+};
+export const __writeToolParams = ["filename", "content"];
+
+export const __fetchTool = {
+  name: "fetch",
+  description: `A tool for fetching a URL and returning the response as text.`,
+  schema: z.object({"url": z.string(), })
+};
+export const __fetchToolParams = ["url"];
+
+export const __fetchJSONTool = {
+  name: "fetchJSON",
+  description: `A tool for fetching a URL and returning the response as parsed JSON.`,
+  schema: z.object({"url": z.string(), })
+};
+export const __fetchJSONToolParams = ["url"];
+
+export const __fetchJsonTool = __fetchJSONTool;
+export const __fetchJsonToolParams = __fetchJSONToolParams;
+
+export const __sleepTool = {
+  name: "sleep",
+  description: `A tool for pausing execution for a specified number of seconds.`,
+  schema: z.object({"seconds": z.number(), })
+};
+export const __sleepToolParams = ["seconds"];
+
+export const __roundTool = {
+  name: "round",
+  description: `A tool for rounding a number to a specified number of decimal places.`,
+  schema: z.object({"num": z.number(), "precision": z.number().optional().default(0), })
+};
+export const __roundToolParams = ["num", "precision"];
 
 export function __deepClone(obj) {
   return JSON.parse(JSON.stringify(obj));
@@ -645,13 +736,15 @@ export const __greetTool = {
   schema: z.object({"name": z.string(), "age": z.number(), })
 };
 
-export const __greetToolParams = ["name","age"];export const __foo2Tool = {
+export const __greetToolParams = ["name","age"];
+export const __foo2Tool = {
   name: "foo2",
   description: `No description provided.`,
   schema: z.object({"name": z.string(), "age": z.number(), })
 };
 
 export const __foo2ToolParams = ["name","age"];
+
 export async function greet(args, __metadata={}) {
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
@@ -730,7 +823,7 @@ export async function foo2(args, __metadata={}) {
       
 
       if (__step <= 1) {
-        await console.log(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`)
+        await _print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`)
         __stack.step++;
       }
       
@@ -833,7 +926,10 @@ async function _response(name, age, __metadata) {
       });
   } else {
     await __callHook("onToolCallStart", { toolName: "greet", args: params });
+    
+    
     result = await greet(params);
+    
     toolCallEndTime = performance.now();
     await __callHook("onToolCallEnd", { toolName: "greet", result, timeTaken: toolCallEndTime - toolCallStartTime });
   
@@ -942,7 +1038,7 @@ if (isInterrupt(__self.response)) {
       
 
       if (__step <= 3) {
-        await console.log(`Greeted, age is still ${__stack.args.age}...`)
+        await _print(`Greeted, age is still ${__stack.args.age}...`)
         __stack.step++;
       }
       
@@ -1016,7 +1112,7 @@ graph.node("sayHi", async (state) => {
       
 
       if (__step <= 1) {
-        await console.log(`Saying hi to ${__stack.args.name}...`)
+        await _print(`Saying hi to ${__stack.args.name}...`)
         __stack.step++;
       }
       
@@ -1052,13 +1148,13 @@ if (isInterrupt(__stack.locals.response)) {
       
 
       if (__step <= 5) {
-        await console.log(__stack.locals.response)
+        await _print(__stack.locals.response)
         __stack.step++;
       }
       
 
       if (__step <= 6) {
-        await console.log(`Greeting sent.`)
+        await _print(`Greeting sent.`)
         __stack.step++;
       }
       

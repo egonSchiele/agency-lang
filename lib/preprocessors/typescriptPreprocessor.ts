@@ -1196,7 +1196,7 @@ export class TypescriptPreprocessor {
     const setScope = (varName: string, scope: ScopeType) => {
       const nodeNames = Object.keys(this.graphNodeDefinitions);
       const functionNames = Object.keys(this.functionDefinitions);
-      if (nodeNames.includes(varName)) {
+      /*  if (nodeNames.includes(varName)) {
         throw new Error(
           `Variable name "${varName}" conflicts with a graph node name. Variable names cannot be the same as graph node names. All graph node names: ${nodeNames.join(", ")}`,
         );
@@ -1205,7 +1205,7 @@ export class TypescriptPreprocessor {
         throw new Error(
           `Variable name "${varName}" conflicts with a function name. Variable names cannot be the same as function names. All function names: ${functionNames.join(", ")}`,
         );
-      }
+      } */
       if (!varNameToScope[varName]) {
         varNameToScope[varName] = scope;
       }

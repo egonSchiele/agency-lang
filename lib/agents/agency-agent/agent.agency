@@ -21,7 +21,11 @@ config = {
 }
 
 node main() {
-  return plan()
+  userPlan = { 
+    overallGoal: "Help with meal planning by generating meal plans with recipe imports and database interactions.",
+    desiredActions: ["Scrape recipe data from a provided URL.", "Create ingredients in the database based on scraped data.", "Create meals in the database based on scraped recipe data."]
+  }
+  return design(userPlan)
 }
 
 node plan() {
@@ -40,11 +44,11 @@ node plan() {
       }
     }
 
-    plan = readPlan()
+    userPlan = readPlan()
     print(color.cyan("Here's the plan we've come up with"))
-    printJSON(plan)
+    printJSON(userPlan)
   }
-  return design(plan)
+  return design(userPlan)
 }
 
 type Plan = {
@@ -52,12 +56,12 @@ type Plan = {
   desiredActions: string[] # array of descriptions of each action
 }
 
-node design(plan: Plan) {
+node design(userPlan) {
   print(color.cyan("Now let's design an agent to accomplish that plan."))
   designPrompt = read("./prompts/design.md")
   prompt = """
-  Help the user design an agent that can accomplish the following goal: ${plan.overallGoal}
-  with the following actions: ${plan.desiredActions}.
+  Help the user design an agent that can accomplish the following goal: ${userPlan.overallGoal}
+  with the following actions: ${userPlan.desiredActions}.
   """
   thread {
     system(designPrompt)

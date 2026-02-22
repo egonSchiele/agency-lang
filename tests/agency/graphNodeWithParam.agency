@@ -1,0 +1,21 @@
+type User = {
+  name: string;
+  age: number
+}
+
+node foo(user: User) {
+  name = user.name
+  greeting = llm("Say hello to ${user.name}")
+  return { 
+    name: name,
+    greeting: greeting
+  }
+}
+
+node main() {
+  user: User = { 
+    name: "Alice",
+    age: 30
+  }
+  return foo(user)
+}

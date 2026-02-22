@@ -46,7 +46,7 @@ export const agencyArrayParser: Parser<AgencyArray> = (
       optionalSpacesOrNewline,
       capture(
         sepBy(
-          comma,
+          commaWithNewline,
           or(
             splatParser,
             booleanParser,

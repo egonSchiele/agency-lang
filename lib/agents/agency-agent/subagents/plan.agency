@@ -4,29 +4,31 @@ type Plan = {
   desiredActions: string[] # array of descriptions of each action
 }
 
-plan: Plan = { 
+userPlan: Plan = { 
   overallGoal: "",
   desiredActions: []
 }
 
-def writeToPlan(fieldName: string, content: string): Plan {
+def writeToPlan(fieldName: string, content: string | string[]): Plan {
   """
   Use this tool to incrementally fill out the Plan object and build a plan. The structure of the Plan object is as follows:
-
-type Plan = {
-overallGoal: string; # a description of the overall goal that the user wants to achieve
-desiredActions: string[]; # array of descriptions of each action
-}
-
-Call this tool, one field at a time, passing in the field name you want to modify and the new content for that field. The tool returns the current plan after your modification.
+  
+  type Plan = {
+  overallGoal: string; # a description of the overall goal that the user wants to achieve
+  desiredActions: string[]; # array of descriptions of each action
+  }
+  
+  Call this tool, one field at a time, passing in the field name you want to modify and the new content for that field. The tool returns the current plan after your modification.
   """
-  plan[fieldName] = content
-  return plan
+  userPlan[fieldName] = content
+  print(color.green("Updated plan ${fieldName}"))
+  printJSON(userPlan)
+  return userPlan
 }
 
 def readPlan() {
   """
   Use this tool to read the current state of the plan. This is useful to keep track of the plan as you build it out over multiple steps.
   """
-  return plan
+  return userPlan
 }

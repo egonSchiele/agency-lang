@@ -1,0 +1,17 @@
+{
+  "sourceFile": "graphNodeWithParam.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"name\":\"Alice\",\"greeting\":\"Hello, Alice! How are you today?\"}",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The result should be an object with two fields name and greeting. The name should match exactly. The greeting can be any greeting that says hello to Alice. It can optionally also ask how are you today. It doesn't need to match the exact words. Anything with the same meaning should be enough to give a perfect score for this test.",
+          "desiredAccuracy": 75
+        }
+      ]
+    }
+  ]
+}

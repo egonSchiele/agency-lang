@@ -34,6 +34,7 @@ export class TypescriptPreprocessor {
   protected functionNameToAsync: Record<string, boolean> = {};
   protected functionNameToUsesInterrupt: Record<string, boolean> = {};
   protected functionDefinitions: Record<string, FunctionDefinition> = {};
+  protected graphNodeDefinitions: Record<string, AgencyNode> = {};
   protected importedTools: string[] = [];
   constructor(program: AgencyProgram, config: AgencyConfig = {}) {
     this.program = structuredClone(program);
@@ -42,6 +43,7 @@ export class TypescriptPreprocessor {
 
   preprocess(): AgencyProgram {
     this.getFunctionDefinitions();
+    this.getGraphNodeDefinitions();
     this.getImportedTools();
     this.collectTools();
     this.collectSkills();
@@ -151,6 +153,14 @@ export class TypescriptPreprocessor {
     for (const node of this.program.nodes) {
       if (node.type === "function") {
         this.functionDefinitions[node.functionName] = node;
+      }
+    }
+  }
+
+  protected getGraphNodeDefinitions() {
+    for (const node of this.program.nodes) {
+      if (node.type === "graphNode") {
+        this.graphNodeDefinitions[node.nodeName] = node;
       }
     }
   }
@@ -1183,9 +1193,36 @@ export class TypescriptPreprocessor {
   protected resolveVariableScopes(): void {
     const varNameToScope: Record<string, ScopeType> = {};
 
-    function setScope(varName: string, scope: ScopeType) {
+    const setScope = (varName: string, scope: ScopeType) => {
+      const nodeNames = Object.keys(this.graphNodeDefinitions);
+      const functionNames = Object.keys(this.functionDefinitions);
+      if (nodeNames.includes(varName)) {
+        throw new Error(
+          `Variable name "${varName}" conflicts with a graph node name. Variable names cannot be the same as graph node names. All graph node names: ${nodeNames.join(", ")}`,
+        );
+      }
+      if (functionNames.includes(varName)) {
+        throw new Error(
+          `Variable name "${varName}" conflicts with a function name. Variable names cannot be the same as function names. All function names: ${functionNames.join(", ")}`,
+        );
+      }
       if (!varNameToScope[varName]) {
         varNameToScope[varName] = scope;
+      }
+    };
+
+    // first, make sure all args are scoped correctly.
+    for (const { node, scopes } of walkNodesArray(this.program.nodes)) {
+      if (scopes.length === 0) {
+        throw new Error(
+          `Top-level nodes should have at least the global scope in their scopes array. Node: ${JSON.stringify({ node })}, scopes: ${JSON.stringify({ scopes })}`,
+        );
+      }
+      if (node.type === "function" || node.type === "graphNode") {
+        // Parameters are in the function's scope
+        for (const param of node.parameters) {
+          setScope(param.name, "args");
+        }
       }
     }
 

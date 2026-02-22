@@ -3,6 +3,7 @@ import {
   approveInterrupt,
   rejectInterrupt,
   modifyInterrupt,
+  resolveInterrupt,
 } from "./foo.js";
 import readline from "readline";
 import type { StreamChunk } from "smoltalk";
@@ -61,11 +62,12 @@ async function main() {
       finalState = await rejectInterrupt(result, { callbacks });
       result = finalState.data;
     } else {
-      finalState = await modifyInterrupt(
+      finalState = await resolveInterrupt(result, response, { callbacks });
+      /* finalState = await modifyInterrupt(
         result,
         { name: response },
         { callbacks },
-      );
+      ); */
       result = finalState.data;
     }
   }

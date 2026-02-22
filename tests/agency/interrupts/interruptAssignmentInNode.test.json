@@ -1,0 +1,22 @@
+{
+  "sourceFile": "interruptAssignmentInNode.agency",
+  "tests": [
+    {
+      "nodeName": "foo",
+      "input": "",
+      "expectedOutput": "{\"name\":\"hermione\",\"age\":30}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "resolve",
+          "expectedMessage": "What's the new name?",
+          "resolvedValue": "hermione"
+        }
+      ]
+    }
+  ]
+}

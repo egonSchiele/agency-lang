@@ -1,0 +1,15 @@
+type User = {
+  name: string;
+  age: number
+}
+
+user: User = { 
+  name: "Alice",
+  age: 30
+}
+
+node foo() {
+  newName = interrupt("What's the new name?")
+  user.name = newName
+  return user
+}

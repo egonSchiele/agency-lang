@@ -1,28 +1,27 @@
 // fields that get filled out over time
-type Code = {
-  contents: string
+type Plan = {
+  overallGoal: string;
+  desiredActions: string[] # array of descriptions of each action
 }
 
-code: Code = { 
-  contents: ""
+plan: Plan = { 
+  overallGoal: "",
+  desiredActions: []
 }
 
-def writeCode(content: string): File {
+def writeToPlan(fieldName: string, content: string): Plan {
   """
-  Use this tool to write code to a file. The tool takes in a string of code content and replaces the existing code with it.
-The tool returns the current state of the code after your modification.
+  Use this tool to incrementally fill out the Plan object and build a plan. The structure of the Plan object is as follows:
+  
+  type Plan = {
+  overallGoal: string; # a description of the overall goal that the user wants to achieve
+  desiredActions: string[]; # array of descriptions of each action
+  }
+  
+  Call this tool, one field at a time, passing in the field name you want to modify and the new content for that field. The tool returns the current plan after your modification.
   """
-  code.contents = content
-  return code.contents
-}
-
-def appendCode(content: string): File {
-  """
-  Use this tool to incrementally write code to a file. The tool takes in a string of code content and appends it to the existing code.
-The tool returns the current state of the code after your modification.
-  """
-  code.contents = code.contents + "\n${content}"
-  return code.contents
+  plan[fieldName] = content
+  return plan
 }
 
 def readPlan() {
@@ -31,12 +30,3 @@ def readPlan() {
   """
   return plan
 }
-
-// example of iterations of an object
-// type Plan = {
-//   desiredActions: Action[];
-//   requirements: string[];
-//   filesToModify: string[];
-//   dependencies: string[];
-//   potentialChallenges: string[]
-// }

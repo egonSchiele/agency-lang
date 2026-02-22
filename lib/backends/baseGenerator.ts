@@ -381,7 +381,7 @@ export class BaseGenerator {
     return this.currentScope[this.currentScope.length - 1];
   }
 
-  protected scopetoString(scope: ScopeType): string {
+  protected scopetoString(scope: ScopeType, varName?: string): string {
     switch (scope) {
       case "global":
         return "__stateStack.globals";
@@ -391,7 +391,7 @@ export class BaseGenerator {
       case "args":
         return "__stack.args";
       default:
-        throw new Error(`Unknown scope type: ${scope}`);
+        throw new Error(`Unknown scope type: ${scope} for varName: ${varName}`);
     }
   }
 

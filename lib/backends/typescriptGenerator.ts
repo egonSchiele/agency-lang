@@ -291,7 +291,7 @@ export class TypeScriptGenerator extends BaseGenerator {
 
   protected processAssignment(node: Assignment): string {
     const { variableName, typeHint, value } = node;
-    const scopeVar = this.scopetoString(node.scope!);
+    const scopeVar = this.scopetoString(node.scope!, variableName);
     const chainStr = this.renderAccessChain(node.accessChain);
 
     const typeAnnotation = "";
@@ -507,7 +507,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       case "multiLineString":
         return this.generateStringLiteral(literal.segments);
       case "variableName":
-        const scopeStr = this.scopetoString(literal.scope!);
+        const scopeStr = this.scopetoString(literal.scope!, literal.value);
         if (scopeStr === "") {
           return literal.value;
         }
@@ -920,7 +920,7 @@ I'll probably need to do that for supporting type checking anyway.
     }
 
     const varNames = assignmentVarNames.map(
-      ([name, scope]) => `${this.scopetoString(scope)}.${name}`,
+      ([name, scope]) => `${this.scopetoString(scope, name)}.${name}`,
     );
 
     lines.push(

@@ -1,5 +1,6 @@
 import tool { addTask, listTasks, markTaskDone } from "./subagents/task.agency"
 import tool { writeToPlan, readPlan } from "./subagents/plan.agency"
+import tool { writeCode, appendCode, readCode } from "./subagents/code.agency"
 import { Plan } from "./subagents/plan.agency"
 
 systemPrompt = read("./prompts/system.md")
@@ -52,11 +53,14 @@ node design(plan: Plan) {
       type: "start"
     }
     while (nextAction.type != "done") {
-      uses writeToPlan, readPlan, print
+      uses writeCode, appendCode, readCode, print
       nextAction: NextAction = llm("${userMsg}", config)
       if (nextAction.type == "askUser") {
         userMsg = input("${nextAction.question} ")
       }
     }
   }
+  code = readCode()
+  print("Here's the code we've come up with")
+  print(code)
 }

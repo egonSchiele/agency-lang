@@ -30,12 +30,3 @@ def readPlan() {
   """
   return plan
 }
-
-// example of iterations of an object
-// type Plan = {
-//   desiredActions: Action[];
-//   requirements: string[];
-//   filesToModify: string[];
-//   dependencies: string[];
-//   potentialChallenges: string[]
-// }

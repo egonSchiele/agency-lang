@@ -1,22 +1,42 @@
-type User = {
-  name: string;
-  age: number
+// fields that get filled out over time
+type Code = {
+  contents: string
 }
 
-user: User = { 
-  name: "Alice",
-  age: 30
+code: Code = { 
+  contents: ""
 }
 
-node main() {
-  name1 = user.name
-  user.name = "Bob"
-  name2 = user.name
-  greet = llm("Say hi to ${name1}", { 
-    model: { 
-      optimizeFor: ["speed"],
-      providers: ["openai", "google"]
-    }
-  })
-  print(greet)
+def writeCode(content: string): File {
+  """
+  Use this tool to write code to a file. The tool takes in a string of code content and replaces the existing code with it.
+The tool returns the current state of the code after your modification.
+  """
+  code.contents = content
+  return code.contents
 }
+
+def appendCode(content: string): File {
+  """
+  Use this tool to incrementally write code to a file. The tool takes in a string of code content and appends it to the existing code.
+The tool returns the current state of the code after your modification.
+  """
+  code.contents = code.contents + "\n${content}"
+  return code.contents
+}
+
+def readPlan() {
+  """
+  Use this tool to read the current state of the plan. This is useful to keep track of the plan as you build it out over multiple steps.
+  """
+  return plan
+}
+
+// example of iterations of an object
+// type Plan = {
+//   desiredActions: Action[];
+//   requirements: string[];
+//   filesToModify: string[];
+//   dependencies: string[];
+//   potentialChallenges: string[]
+// }

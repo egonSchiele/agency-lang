@@ -168,6 +168,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
         skillParser,
         functionParser,
         assignmentParser,
+        binOpParser,
         llmPromptFunctionCallParser,
         booleanParser,
         valueAccessParser,

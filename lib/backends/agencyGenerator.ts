@@ -38,6 +38,7 @@ import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
 import { BinOpExpression } from "@/types/binop.js";
 import { expressionToString } from "@/utils/node.js";
+import { color } from "termcolors";
 
 export class AgencyGenerator extends BaseGenerator {
   private indentLevel: number = 0;
@@ -202,6 +203,7 @@ export class AgencyGenerator extends BaseGenerator {
       }
     }
     result += '"""';
+    //console.log(color.green(result));
     return result
       .split("\n")
       .map((line) => this.indentStr(line))
@@ -254,10 +256,10 @@ export class AgencyGenerator extends BaseGenerator {
     this.increaseIndent();
 
     if (node.docString) {
-      const docLines = [`"""`, node.docString.value, `"""`]
-        .map((line) => this.indentStr(line))
-        .join("\n");
-      result += `${docLines}\n`;
+      const docLines = [`"""`, ...node.docString.value.split("\n"), `"""`];
+      //console.log(color.red(JSON.stringify(docLines)));
+      const docStr = docLines.map((line) => this.indentStr(line)).join("\n");
+      result += `${docStr}\n`;
     }
 
     const lines: string[] = [];
@@ -555,7 +557,9 @@ export class AgencyGenerator extends BaseGenerator {
   }
 
   protected processBinOpExpression(node: BinOpExpression): string {
-    return `${this.processNode(node.left).trim()} ${node.operator} ${this.processNode(node.right).trim()}`;
+    return this.indentStr(
+      `${this.processNode(node.left).trim()} ${node.operator} ${this.processNode(node.right).trim()}`,
+    );
   }
 
   protected processAccessChainElement(node: AccessChainElement): string {

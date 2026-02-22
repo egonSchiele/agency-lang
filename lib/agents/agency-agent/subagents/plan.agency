@@ -1,20 +1,12 @@
 // fields that get filled out over time
 type Plan = {
-  desiredActions: string[];
-  requirements: string[];
-  dependencies: string[];
-  potentialChallenges: string[];
-  toolsNeeded: string[];
-  skillsNeeded: string[]
+  overallGoal: string;
+  desiredActions: string[] # array of descriptions of each action
 }
 
 plan: Plan = { 
-  desiredActions: [],
-  requirements: [],
-  dependencies: [],
-  potentialChallenges: [],
-  toolsNeeded: [],
-  skillsNeeded: []
+  overallGoal: "",
+  desiredActions: []
 }
 
 def writeToPlan(fieldName: string, content: string): Plan {
@@ -22,17 +14,13 @@ def writeToPlan(fieldName: string, content: string): Plan {
   Use this tool to incrementally fill out the Plan object and build a plan. The structure of the Plan object is as follows:
 
 type Plan = {
-desiredActions: string[];
-requirements: string[];
-dependencies: string[];
-potentialChallenges: string[];
-toolsNeeded: string[];
-skillsNeeded: string[]
+overallGoal: string; # a description of the overall goal that the user wants to achieve
+desiredActions: string[]; # array of descriptions of each action
 }
 
 Call this tool, one field at a time, passing in the field name you want to modify and the new content for that field. The tool returns the current plan after your modification.
   """
-  //plan[fieldName] = content
+  plan[fieldName] = content
   return plan
 }
 
@@ -51,7 +39,3 @@ def readPlan() {
 //   dependencies: string[];
 //   potentialChallenges: string[]
 // }
-
-def someTool() {
-  userMsg = interrupt("Agent wants to call someTool with args: ${args}")
-}

@@ -329,7 +329,8 @@ program
   .command("agent")
   .description("Launch the Agency language assistant agent")
   .action(() => {
-    agent();
+    const config = getConfig();
+    agent(config);
   });
 
 // Default: treat unknown args as a file to run

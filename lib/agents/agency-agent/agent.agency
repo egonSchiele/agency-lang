@@ -2,10 +2,16 @@ import tool { addTask, listTasks, markTaskDone } from "./subagents/task.agency"
 import tool { writeToPlan, readPlan } from "./subagents/plan.agency"
 
 systemPrompt = read("./prompts/system.md")
-
 planPrompt = read("./prompts/plan.md")
 
 type NextAction = { type: "askUser"; question: string } | { type: "done" } | { type: "start" }
+
+config = { 
+  model: { 
+    optimizeFor: ["speed", "cost"],
+    providers: ["openai"]
+  }
+}
 
 def printTool(str: string) {
   """
@@ -21,13 +27,11 @@ node main() {
     nextAction: NextAction = { 
       type: "start"
     }
-    nextType = nextAction.type
-    while (nextType != "done") {
+    while (nextAction.type != "done") {
       uses writeToPlan, readPlan, printTool
-      nextAction: NextAction = llm("${userMsg}")
-      hasQuestion = nextAction.type == "askUser"
-      if (hasQuestion) {
-        userMsg = input(nextAction.question)
+      nextAction: NextAction = llm("${userMsg}", config)
+      if (nextAction.type == "askUser") {
+        userMsg = input("${nextAction.question} ")
       }
     }
   }

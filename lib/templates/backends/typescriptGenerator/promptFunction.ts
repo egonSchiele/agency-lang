@@ -47,10 +47,12 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
     __completion = await handleStreamingResponse(__completion, statelogClient, __prompt, __toolCalls);
     {{/isStreaming}}
 
+  const modelName = __completion.model || __clientConfig.model || "unknown model";
+
     statelogClient.promptCompletion({
       messages: __messages.getMessages(),
       completion: __completion,
-      model: __clientConfig.model,
+      model: modelName,
       timeTaken: endTime - startTime,
       tools: __tools,
       responseFormat: __responseFormat
@@ -58,7 +60,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
 
     if (!__completion.success) {
       throw new Error(
-        \`Error getting response from $\{__clientConfig.model\}: $\{__completion.error\}\`
+        \`Error getting response from $\{modelName\}: $\{__completion.error\}\`
       );
     }
 
@@ -90,7 +92,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
     if (haltExecution) {
       statelogClient.debug(\`Tool call interrupted execution.\`, {
         messages: __messages.getMessages(),
-        model: __clientConfig.model,
+        model: modelName,
       });
 
       __stateStack.interruptData = {
@@ -103,7 +105,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
     }
   
     const nextStartTime = performance.now();
-    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __clientConfig.model });
+    await __callHook("onLLMCallStart", { prompt: __prompt, tools: __tools, model: __clientConfig.model, toolCalls: __toolCalls });
     let __completion = await smoltalk.text({
       messages: __messages.getMessages(),
       tools: __tools,
@@ -118,10 +120,12 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
     __completion = await handleStreamingResponse(__completion, statelogClient, __prompt, __toolCalls);
     {{/isStreaming}}
 
+    const modelName = __completion.model || __clientConfig.model || "unknown model";
+
     statelogClient.promptCompletion({
       messages: __messages.getMessages(),
       completion: __completion,
-      model: __clientConfig.model,
+      model: modelName,
       timeTaken: nextEndTime - nextStartTime,
       tools: __tools,
       responseFormat: __responseFormat,
@@ -129,7 +133,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
 
     if (!__completion.success) {
       throw new Error(
-        \`Error getting response from $\{__clientConfig.model\}: $\{__completion.error\}\`
+        \`Error getting response from $\{modelName\}: $\{__completion.error\}\`
       );
     }
     responseMessage = __completion.value;

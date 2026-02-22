@@ -9,7 +9,7 @@
       "evaluationCriteria": [
         {
           "type": "llmJudge",
-          "judgePrompt": "The final output should be an object with all of the same keys as the expected output. The values should all match exactly, except for the following keys: `res3`, `res4`, and `res6`. For all three of these keys, the values should be an array of any two integers EXCEPT the following:\n- res3 cannot be [104, 105]\n- res4 cannot be [106, 107]\n- res6 cannot be [106, 107] or [108, 109]",
+          "judgePrompt": "The final output should be an object with all of the same keys as the expected output. ONLY the values for keys `res1`, `res2`, and `res5` should match exactly. The other keys, `res3`, `res4`, and `res6`, do not need to match exactly! For all three of these keys, the values should be an array of any two integers EXCEPT the following:\n- res3 cannot be [104, 105]\n- res4 cannot be [106, 107]\n- res6 cannot be [106, 107] or [108, 109]. As long as these conditions are met, the test should be considered passing at a perfect score.",
           "desiredAccuracy": 75
         }
       ]

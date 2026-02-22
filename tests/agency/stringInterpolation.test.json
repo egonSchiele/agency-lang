@@ -4,6 +4,7 @@
     {
       "nodeName": "main",
       "input": "\"alice\", \"coffee\"",
+      "retry": 2,
       "expectedOutput": "\"alice wants hot spicy coffee\"",
       "evaluationCriteria": [
         {

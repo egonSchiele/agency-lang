@@ -1,0 +1,41 @@
+node main() {
+  print("Welcome to the meal planning agent!")
+  userMsg = input("How may I help you? ")
+  return categorize(userMsg)
+}
+
+
+type Category = "scrape-recipe" | "create-ingredients" | "create-meals"
+
+node categorize(userMsg: string) {
+  categorizePrompt = """
+  If you are a master at categorization, the user is going to give you some text regarding meal planning. Take this user input, and classify their intent into one of these categories:
+  
+  - If the user wants to scrape recipe data from a provided URL, return "scrape-recipe"
+  - If the user wants to create ingredients in the database based on scraped data, return "create-ingredients"
+  - If the user wants to create meals in the database based on scraped recipe data, return "create-meals"
+  Here is the user input: ${userMsg}
+  """
+  category: Category = llm("${categorizePrompt}")
+
+  match(category) {
+    "scrape-recipe" => return scrapeRecipe()
+    "create-ingredients" => return createIngredients()
+    "create-meals" => return createMeals()
+  }
+}
+
+node scrapeRecipe() {
+  print("Scraping recipe data from URL!")
+  // more code here
+}
+
+node createIngredients() {
+  print("Creating ingredients in the database!")
+  // more code here
+}
+
+node createMeals() {
+  print("Creating meals in the database!")
+  // more code here
+}

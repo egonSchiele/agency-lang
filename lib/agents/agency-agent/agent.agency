@@ -37,12 +37,19 @@ def printCode(code: string): string {
 }
 
 node main() {
-  return plan()
-  /* plan = {
-overallGoal: "Help with meal planning by generating meal plans with recipe imports and database interactions.",
-desiredActions: ["Scrape recipe data from a provided URL.", "Create ingredients in the database based on scraped data.", "Create meals in the database based on scraped recipe data."]
+  //return plan()
+  //return printSample()
+  plan = { 
+    overallGoal: "Help with meal planning by generating meal plans with recipe imports and database interactions.",
+    desiredActions: ["Scrape recipe data from a provided URL.", "Create ingredients in the database based on scraped data.", "Create meals in the database based on scraped recipe data."]
+  }
+  return design(plan)
 }
-return design(plan) */
+
+node printSample() {
+  codeSample = read("./prompts/codeSample.agency")
+  print(color.cyan("Here's a sample of how you might structure your code in the agency language:"))
+  printCode(codeSample)
 }
 
 node plan() {
@@ -73,6 +80,8 @@ type Plan = {
   desiredActions: string[] # array of descriptions of each action
 }
 
+type DesignAction = { type: "askUser"; question: string } | { type: "done"; finalCode: string } | { type: "start" }
+
 node design(plan) {
   print(color.cyan("Now let's design an agent to accomplish that plan."))
   designPrompt = read("./prompts/design.md")
@@ -83,20 +92,21 @@ node design(plan) {
   thread {
     system(designPrompt)
     userMsg = prompt
-    nextAction: NextAction = { 
+    nextAction: DesignAction = { 
       type: "start"
     }
     while (nextAction.type != "done") {
-      uses writeCode, appendCode, readCode, print, printCode
-      nextAction: NextAction = llm("${userMsg}", config)
-      print(color.yellow("Next action:"))
+      uses print, printCode
+      nextAction: DesignAction = llm("${userMsg}", config)
+      print(color.yellow("Next action"))
       printJSON(nextAction)
       if (nextAction.type == "askUser") {
         userMsg = input("\n${nextAction.question} ")
       }
     }
   }
-  code = readCode()
-  print("Here's the code we've come up with")
-  printCode(code)
+  if (nextAction.finalCode) {
+    print(color.cyan("Here's the final code for the agent we've designed:"))
+    printCode(nextAction.finalCode)
+  }
 }

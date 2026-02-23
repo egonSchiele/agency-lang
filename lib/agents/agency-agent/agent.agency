@@ -31,7 +31,6 @@ def printCode(code: string): string {
   Use this tool to print code to the terminal with syntax highlighting.
   Use this to print any generated code you want the user to look at.
   """
-  print(color.cyan("Printing code with syntax highlighting"))
   print(syntaxHighlight(code, "ts"))
   return "printed code successfully"
 }

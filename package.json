@@ -58,6 +58,7 @@
     "commander": "^14.0.3",
     "egonlog": "^0.0.2",
     "nanoid": "^5.1.6",
+    "ora": "^9.3.0",
     "prompts": "^2.4.2",
     "smoltalk": "^0.0.22",
     "tarsec": "^0.1.8",

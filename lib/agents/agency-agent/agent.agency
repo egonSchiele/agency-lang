@@ -36,7 +36,7 @@ def printCode(code: string): string {
 }
 
 node main() {
-  //return plan()
+  return plan()
   //return printSample()
   plan = { 
     overallGoal: "Help with meal planning by generating meal plans with recipe imports and database interactions.",

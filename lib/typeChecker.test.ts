@@ -2240,4 +2240,320 @@ describe("TypeChecker", () => {
       expect(errors).toHaveLength(0);
     });
   });
+
+  describe("return type inference", () => {
+    it("should infer return type from single return and catch call site mismatch", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "foo",
+            parameters: [],
+            body: [
+              {
+                type: "returnStatement",
+                value: { type: "string", segments: [{ type: "text", value: "hello" }] },
+              },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "number" },
+            value: {
+              type: "functionCall",
+              functionName: "foo",
+              arguments: [],
+            },
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors.some((e) => e.message.includes("string") && e.message.includes("number"))).toBe(true);
+    });
+
+    it("should infer return type from multiple consistent returns", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "bar",
+            parameters: [],
+            body: [
+              {
+                type: "ifElse",
+                condition: { type: "boolean", value: true },
+                thenBody: [
+                  {
+                    type: "returnStatement",
+                    value: { type: "number", value: "1" },
+                  },
+                ],
+                elseBody: [
+                  {
+                    type: "returnStatement",
+                    value: { type: "number", value: "2" },
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "string" },
+            value: {
+              type: "functionCall",
+              functionName: "bar",
+              arguments: [],
+            },
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors.some((e) => e.message.includes("number") && e.message.includes("string"))).toBe(true);
+    });
+
+    it("should infer void when no return statements", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "noop",
+            parameters: [],
+            body: [
+              {
+                type: "functionCall",
+                functionName: "print",
+                arguments: [{ type: "string", segments: [{ type: "text", value: "hi" }] }],
+              },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "string" },
+            value: {
+              type: "functionCall",
+              functionName: "noop",
+              arguments: [],
+            },
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors.some((e) => e.message.includes("void") && e.message.includes("string"))).toBe(true);
+    });
+
+    it("should fall back to any with inconsistent return types", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "mixed",
+            parameters: [],
+            body: [
+              {
+                type: "ifElse",
+                condition: { type: "boolean", value: true },
+                thenBody: [
+                  {
+                    type: "returnStatement",
+                    value: { type: "string", segments: [{ type: "text", value: "hi" }] },
+                  },
+                ],
+                elseBody: [
+                  {
+                    type: "returnStatement",
+                    value: { type: "number", value: "42" },
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "boolean" },
+            value: {
+              type: "functionCall",
+              functionName: "mixed",
+              arguments: [],
+            },
+          },
+        ],
+      };
+
+      // Inconsistent returns → any → no type error at call site
+      const { errors } = typeCheck(program);
+      expect(errors.filter((e) => e.message.includes("mixed"))).toHaveLength(0);
+    });
+
+    it("should not infinite loop on recursive functions", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "rec",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [
+              {
+                type: "returnStatement",
+                value: {
+                  type: "functionCall",
+                  functionName: "rec",
+                  arguments: [{ type: "number", value: "1" }],
+                },
+              },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "boolean" },
+            value: {
+              type: "functionCall",
+              functionName: "rec",
+              arguments: [{ type: "number", value: "5" }],
+            },
+          },
+        ],
+      };
+
+      // Should not hang — recursive → any → no error
+      const { errors } = typeCheck(program);
+      expect(errors.filter((e) => e.message.includes("rec"))).toHaveLength(0);
+    });
+
+    it("should collect return inside if/else correctly", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "check",
+            parameters: [],
+            body: [
+              {
+                type: "ifElse",
+                condition: { type: "boolean", value: true },
+                thenBody: [
+                  {
+                    type: "returnStatement",
+                    value: { type: "boolean", value: true },
+                  },
+                ],
+                elseBody: [
+                  {
+                    type: "returnStatement",
+                    value: { type: "boolean", value: false },
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "number" },
+            value: {
+              type: "functionCall",
+              functionName: "check",
+              arguments: [],
+            },
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors.some((e) => e.message.includes("boolean") && e.message.includes("number"))).toBe(true);
+    });
+
+    it("should prefer explicit return type over inferred type", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "typed",
+            parameters: [],
+            returnType: { type: "primitiveType", value: "string" },
+            body: [
+              {
+                type: "returnStatement",
+                value: { type: "number", value: "42" },
+              },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "string" },
+            value: {
+              type: "functionCall",
+              functionName: "typed",
+              arguments: [],
+            },
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      // The return type mismatch (number vs string) should be caught
+      expect(errors.some((e) => e.message.includes("number") && e.message.includes("string"))).toBe(true);
+      // But assignment of typed() to string should NOT error (explicit return type is string)
+      expect(errors.some((e) => e.message.includes("assignment to 'x'"))).toBe(false);
+    });
+
+    it("should infer return types for graph nodes", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "graphNode",
+            nodeName: "myNode",
+            parameters: [],
+            body: [
+              {
+                type: "returnStatement",
+                value: { type: "number", value: "42" },
+              },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "string" },
+            value: {
+              type: "functionCall",
+              functionName: "myNode",
+              arguments: [],
+            },
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors.some((e) => e.message.includes("number") && e.message.includes("string"))).toBe(true);
+    });
+  });
 });

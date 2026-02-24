@@ -98,6 +98,8 @@ export class TypeChecker {
   private functionDefs: Record<string, FunctionDefinition> = {};
   private nodeDefs: Record<string, GraphNodeDefinition> = {};
   private errors: TypeCheckError[] = [];
+  private inferredReturnTypes: Record<string, VariableType | "any"> = {};
+  private inferringReturnType = new Set<string>();
 
   constructor(program: AgencyProgram, config: AgencyConfig = {}) {
     this.program = program;
@@ -108,6 +110,7 @@ export class TypeChecker {
     this.errors = [];
     this.collectTypeAliases();
     this.collectFunctionDefs();
+    this.inferReturnTypes();
     this.checkScopes();
     return { errors: this.deduplicateErrors() };
   }
@@ -167,6 +170,81 @@ export class TypeChecker {
         this.nodeDefs[node.nodeName] = node;
       }
     }
+  }
+
+  private inferReturnTypes(): void {
+    const allDefs: (FunctionDefinition | GraphNodeDefinition)[] = [
+      ...Object.values(this.functionDefs),
+      ...Object.values(this.nodeDefs),
+    ];
+
+    for (const def of allDefs) {
+      if (def.returnType) continue; // explicit return type, skip inference
+
+      const name = def.type === "function" ? def.functionName : def.nodeName;
+      this.inferReturnTypeFor(name, def);
+    }
+  }
+
+  private inferReturnTypeFor(
+    name: string,
+    def: FunctionDefinition | GraphNodeDefinition,
+  ): VariableType | "any" {
+    // Already inferred
+    if (name in this.inferredReturnTypes) {
+      return this.inferredReturnTypes[name];
+    }
+
+    // Recursion guard
+    if (this.inferringReturnType.has(name)) {
+      return "any";
+    }
+
+    this.inferringReturnType.add(name);
+
+    // Build scope variable types
+    const vars: Record<string, VariableType | "any"> = {};
+    for (const param of def.parameters) {
+      vars[param.name] = param.typeHint ?? "any";
+    }
+    this.collectVariableTypes(def.body, vars, name);
+
+    // Collect return statements from the body, filtering out returns inside nested functions/nodes
+    const returnValues: AgencyNode[] = [];
+    for (const { node, ancestors } of walkNodes(def.body)) {
+      if (node.type === "returnStatement") {
+        // Skip returns inside nested function or graphNode definitions
+        const insideNested = ancestors.some(
+          (a) => a.type === "function" || a.type === "graphNode",
+        );
+        if (!insideNested) {
+          returnValues.push(node.value);
+        }
+      }
+    }
+
+    let inferred: VariableType | "any";
+    if (returnValues.length === 0) {
+      inferred = { type: "primitiveType", value: "void" };
+    } else {
+      const types = returnValues.map((v) => this.synthType(v, vars));
+      if (types.some((t) => t === "any")) {
+        inferred = "any";
+      } else {
+        const first = types[0] as VariableType;
+        const allSame = types.every(
+          (t) =>
+            t !== "any" &&
+            this.isAssignable(t, first) &&
+            this.isAssignable(first, t),
+        );
+        inferred = allSame ? first : "any";
+      }
+    }
+
+    this.inferredReturnTypes[name] = inferred;
+    this.inferringReturnType.delete(name);
+    return inferred;
   }
 
   private checkScopes(): void {
@@ -506,6 +584,9 @@ export class TypeChecker {
         const graphNode = this.nodeDefs[expr.functionName];
         const def = fn ?? graphNode;
         if (def?.returnType) return def.returnType;
+        if (expr.functionName in this.inferredReturnTypes) {
+          return this.inferredReturnTypes[expr.functionName];
+        }
         return "any";
       }
       case "agencyArray": {

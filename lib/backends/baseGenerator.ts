@@ -32,6 +32,7 @@ import {
 import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
+import { ForLoop } from "../types/forLoop.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { AgencyConfig, BUILTIN_VARIABLES } from "@/config.js";
 import { mergeDeep } from "@/utils.js";
@@ -219,6 +220,8 @@ export class BaseGenerator {
       case "importToolStatement":
         this.importStatements.push(this.processImportToolStatement(node));
         return "";
+      case "forLoop":
+        return this.processForLoop(node);
       case "whileLoop":
         return this.processWhileLoop(node);
       case "ifElse":
@@ -274,6 +277,10 @@ export class BaseGenerator {
 
   protected processSpecialVar(node: SpecialVar): string {
     return "processSpecialVar not implemented";
+  }
+
+  protected processForLoop(node: ForLoop): string {
+    return "processForLoop not implemented";
   }
 
   protected processWhileLoop(node: WhileLoop): string {

@@ -60,6 +60,7 @@ import {
 import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
+import { ForLoop } from "../types/forLoop.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { escape, uniq } from "../utils.js";
 import { BaseGenerator } from "./baseGenerator.js";
@@ -88,6 +89,7 @@ export class TypeScriptGenerator extends BaseGenerator {
   protected currentAdjacentNodes: string[] = [];
   protected isInsideGraphNode: boolean = false;
   private parallelThreadVars: Record<string, string> = {};
+  private loopVars: string[] = [];
 
   constructor(args: { config?: AgencyConfig } = {}) {
     super(args);
@@ -808,6 +810,49 @@ I'll probably need to do that for supporting type checking anyway.
     return `import { ${importNames.join(", ")} } from "${node.agencyFile.replace(/\.agency$/, ".js")}";`;
   }
 
+  protected processForLoop(node: ForLoop): string {
+    // Register loop variables so they bypass scope resolution
+    this.loopVars.push(node.itemVar);
+    if (node.indexVar) {
+      this.loopVars.push(node.indexVar);
+    }
+
+    const bodyCodes: string[] = [];
+    for (const stmt of node.body) {
+      bodyCodes.push(this.processNode(stmt));
+    }
+    const bodyCodeStr = bodyCodes.join("\n");
+
+    // Unregister loop variables
+    this.loopVars = this.loopVars.filter(
+      (v) => v !== node.itemVar && v !== node.indexVar,
+    );
+
+    // Range form: for (i in range(start, end)) → for (let i = start; i < end; i++)
+    if (
+      node.iterable.type === "functionCall" &&
+      node.iterable.functionName === "range"
+    ) {
+      const args = node.iterable.arguments;
+      const start = args.length >= 1 ? this.processNode(args[0]) : "0";
+      const end = args.length >= 2 ? this.processNode(args[1]) : this.processNode(args[0]);
+      const actualStart = args.length >= 2 ? start : "0";
+      const actualEnd = args.length >= 2 ? end : start;
+      return `for (let ${node.itemVar} = ${actualStart}; ${node.itemVar} < ${actualEnd}; ${node.itemVar}++) {\n${bodyCodeStr}\n}\n`;
+    }
+
+    const iterableCode = this.processNode(node.iterable);
+
+    // Indexed form: for (item, index in collection) → for (let index = 0; index < collection.length; index++) { const item = collection[index]; ... }
+    if (node.indexVar) {
+      const indexedBody = `const ${node.itemVar} = ${iterableCode}[${node.indexVar}];\n${bodyCodeStr}`;
+      return `for (let ${node.indexVar} = 0; ${node.indexVar} < ${iterableCode}.length; ${node.indexVar}++) {\n${indexedBody}\n}\n`;
+    }
+
+    // Basic form: for (item in collection) → for (const item of collection)
+    return `for (const ${node.itemVar} of ${iterableCode}) {\n${bodyCodeStr}\n}\n`;
+  }
+
   protected processWhileLoop(node: WhileLoop): string {
     const conditionCode = this.processNode(node.condition);
     const bodyCodes: string[] = [];
@@ -1087,6 +1132,13 @@ I'll probably need to do that for supporting type checking anyway.
 
   protected processKeyword(node: Keyword): string {
     return `${node.value};\n`;
+  }
+
+  protected scopetoString(scope: ScopeType, varName?: string): string {
+    if (varName && this.loopVars.includes(varName)) {
+      return "";
+    }
+    return super.scopetoString(scope, varName);
   }
 }
 

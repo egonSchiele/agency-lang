@@ -13,6 +13,7 @@ import {
   ImportStatement,
   ImportToolStatement,
 } from "./types/importStatement.js";
+import { ForLoop } from "./types/forLoop.js";
 import { Keyword } from "./types/keyword.js";
 import { Literal, RawCode } from "./types/literals.js";
 import { MatchBlock } from "./types/matchBlock.js";
@@ -38,6 +39,7 @@ export * from "./types/timeBlock.js";
 export * from "./types/tools.js";
 export * from "./types/typeHints.js";
 export * from "./types/whileLoop.js";
+export * from "./types/forLoop.js";
 
 export type Scope = GlobalScope | FunctionScope | NodeScope;
 export type ScopeType = Scope["type"] | "args";
@@ -128,7 +130,8 @@ export type AgencyNode =
   | MessageThread
   | Skill
   | BinOpExpression
-  | Keyword;
+  | Keyword
+  | ForLoop;
 
 export type AgencyProgram = {
   type: "agencyProgram";

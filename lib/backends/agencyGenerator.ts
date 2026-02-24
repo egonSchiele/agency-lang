@@ -30,6 +30,7 @@ import {
 import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
+import { ForLoop } from "../types/forLoop.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { BaseGenerator } from "./baseGenerator.js";
 import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
@@ -370,6 +371,26 @@ export class AgencyGenerator extends BaseGenerator {
       const bodyCode = this.processNode(caseNode.body).trim();
 
       result += this.indentStr(`${pattern} => ${bodyCode}\n`);
+    }
+
+    this.decreaseIndent();
+
+    result += this.indentStr(`}`);
+
+    return result;
+  }
+
+  protected processForLoop(node: ForLoop): string {
+    const iterableCode = this.processNode(node.iterable).trim();
+    const vars = node.indexVar
+      ? `${node.itemVar}, ${node.indexVar}`
+      : node.itemVar;
+    let result = this.indentStr(`for (${vars} in ${iterableCode}) {\n`);
+
+    this.increaseIndent();
+
+    for (const stmt of node.body) {
+      result += this.processNode(stmt);
     }
 
     this.decreaseIndent();

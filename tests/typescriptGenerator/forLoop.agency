@@ -1,0 +1,19 @@
+node main() {
+  // Basic for-of loop
+  items = ["a", "b", "c"]
+  for (item in items) {
+    print(item)
+  }
+
+  // Range-based for loop
+  for (i in range(0, 5)) {
+    print(i)
+  }
+
+  // Indexed for loop
+  names = ["alice", "bob"]
+  for (name, index in names) {
+    print(name)
+    print(index)
+  }
+}

@@ -157,6 +157,9 @@ export function* getAllVariablesInBody(
       }
     } else if (node.type === "returnStatement") {
       yield* getAllVariablesInBody([node.value]);
+    } else if (node.type === "forLoop") {
+      yield* getAllVariablesInBody([node.iterable]);
+      yield* getAllVariablesInBody(node.body);
     } else if (node.type === "whileLoop") {
       yield* getAllVariablesInBody(node.body);
     } else if (node.type === "timeBlock") {
@@ -212,6 +215,9 @@ export function* walkNodes(
       if (node.elseBody) {
         yield* walkNodes(node.elseBody, [...ancestors, node], scopes);
       }
+    } else if (node.type === "forLoop") {
+      yield* walkNodes([node.iterable as AgencyNode], [...ancestors, node], scopes);
+      yield* walkNodes(node.body, [...ancestors, node], scopes);
     } else if (node.type === "whileLoop") {
       yield* walkNodes([node.condition], [...ancestors, node], scopes);
       yield* walkNodes(node.body, [...ancestors, node], scopes);

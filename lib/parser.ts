@@ -50,6 +50,7 @@ import { skillParser } from "./parsers/skill.js";
 import { AgencyConfig } from "./config.js";
 import { nanoid } from "nanoid";
 import { binOpParser } from "./parsers/binop.js";
+import { forLoopParser } from "./parsers/forLoop.js";
 import { keywordParser } from "./parsers/keyword.js";
 
 export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
@@ -65,6 +66,7 @@ export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
         graphNodeParser,
         typeAliasParser,
         ifParser,
+        forLoopParser,
         whileLoopParser,
         typeHintParser,
         matchBlockParser,

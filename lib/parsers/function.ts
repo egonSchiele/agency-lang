@@ -37,11 +37,13 @@ import {
   VariableType,
 } from "../types.js";
 import { GraphNodeDefinition, Visibility } from "../types/graphNode.js";
+import { ForLoop } from "../types/forLoop.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { IfElse } from "../types/ifElse.js";
 import { _valueAccessParser, valueAccessParser } from "./access.js";
 import { commentParser } from "./comment.js";
 import {
+  functionCallParser,
   llmPromptFunctionCallParser,
   streamingPromptLiteralParser,
 } from "./functionCall.js";
@@ -160,6 +162,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
         debug(typeHintParser, "error in typeHintParser"),
         specialVarParser,
         returnStatementParser,
+        forLoopParser,
         whileLoopParser,
         matchBlockParser,
         streamingPromptLiteralParser,
@@ -391,6 +394,48 @@ export const whileLoopParser: Parser<WhileLoop> = trace(
         spaces,
         capture(bodyParser, "body"),
         optionalSpaces,
+        char("}"),
+      ),
+    ),
+  ),
+);
+
+export const forLoopParser: Parser<ForLoop> = trace(
+  "forLoopParser",
+  seqC(
+    set("type", "forLoop"),
+    str("for"),
+    optionalSpaces,
+    char("("),
+    optionalSpaces,
+    capture(many1WithJoin(varNameChar), "itemVar"),
+    optional(
+      captureCaptures(
+        seqC(
+          optionalSpaces,
+          char(","),
+          optionalSpaces,
+          capture(many1WithJoin(varNameChar), "indexVar"),
+        ),
+      ),
+    ),
+    optionalSpaces,
+    str("in"),
+    spaces,
+    capture(
+      or(functionCallParser, valueAccessParser, literalParser),
+      "iterable",
+    ),
+    optionalSpaces,
+    char(")"),
+    optionalSpaces,
+    captureCaptures(
+      parseError(
+        "expected `{` to open for loop body",
+        char("{"),
+        spaces,
+        capture(bodyParser, "body"),
+        optionalSpacesOrNewline,
         char("}"),
       ),
     ),

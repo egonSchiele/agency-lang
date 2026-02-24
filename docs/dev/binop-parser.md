@@ -222,16 +222,28 @@ export const binOpParser: Parser<BinOpExpression> = (input) => {
 
 ## Code generation
 
-When the code generators (`TypeScriptGenerator`, `AgencyGenerator`) emit code for a `BinOpExpression`, they check whether the `left` or `right` child is itself a `BinOpExpression`. If so, they wrap it in parentheses to preserve the tree structure in the output:
+When the code generators (`TypeScriptGenerator`, `AgencyGenerator`) emit code for a `BinOpExpression`, they use precedence-aware logic to decide whether parentheses are needed around child `BinOpExpression` nodes. This avoids unnecessary parentheses in common cases like chained same-operator expressions.
+
+The rules are implemented as two helper methods in `BaseGenerator`:
+
+**Left child**: parens only if `childPrec < parentPrec`. Same or higher precedence is safe because left-associativity naturally groups the left child first.
+
+**Right child**: parens if `childPrec <= parentPrec`. Equal precedence needs parens because re-parsing without them would left-associate differently.
 
 ```typescript
-protected processBinOpExpression(node: BinOpExpression): string {
-  const left = this.processNode(node.left).trim();
-  const right = this.processNode(node.right).trim();
-  const wrappedLeft = node.left.type === "binOpExpression" ? `(${left})` : left;
-  const wrappedRight = node.right.type === "binOpExpression" ? `(${right})` : right;
-  return `${wrappedLeft} ${node.operator} ${wrappedRight}`;
+protected needsParensLeft(child: BinOpArgument, parentOp: Operator): boolean {
+  if (child.type !== "binOpExpression") return false;
+  return PRECEDENCE[child.operator] < PRECEDENCE[parentOp];
+}
+
+protected needsParensRight(child: BinOpArgument, parentOp: Operator): boolean {
+  if (child.type !== "binOpExpression") return false;
+  return PRECEDENCE[child.operator] <= PRECEDENCE[parentOp];
 }
 ```
 
-For example, the AST `BinOp(BinOp(1, +, 2), *, 3)` generates `(1 + 2) * 3`, not `1 + 2 * 3` (which would have different semantics in the output language).
+Examples:
+- `BinOp(BinOp(1, +, 2), +, 3)` → `1 + 2 + 3` (no parens, same prec left child)
+- `BinOp(BinOp(1, +, 2), *, 3)` → `(1 + 2) * 3` (parens needed, lower prec left child)
+- `BinOp(1, -, BinOp(2, +, 3))` → `1 - (2 + 3)` (parens needed, same prec right child)
+- `BinOp(1, +, BinOp(2, *, 3))` → `1 + 2 * 3` (no parens, higher prec right child)

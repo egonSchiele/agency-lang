@@ -1,28 +1,14 @@
-import { BinOpArgument, BinOpExpression, Operator } from "@/types/binop.js";
+import {
+  BinOpArgument,
+  BinOpExpression,
+  Operator,
+  PRECEDENCE,
+} from "@/types/binop.js";
 import { char, failure, or, Parser, ParserResult, success } from "tarsec";
 import { valueAccessParser } from "./access.js";
 import { booleanParser, simpleLiteralParser } from "./literals.js";
 import { oneOfStr, optionalSemicolon } from "./parserUtils.js";
 import { optionalSpaces } from "./utils.js";
-
-const PRECEDENCE: Record<string, number> = {
-  "||": 1,
-  "&&": 2,
-  "==": 3,
-  "!=": 3,
-  "<": 4,
-  ">": 4,
-  "<=": 4,
-  ">=": 4,
-  "+": 5,
-  "-": 5,
-  "*": 6,
-  "/": 6,
-  "+=": 0,
-  "-=": 0,
-  "*=": 0,
-  "/=": 0,
-};
 
 const operatorParser = oneOfStr([
   "==", "!=", "+=", "-=", "*=", "/=", "<=", ">=",

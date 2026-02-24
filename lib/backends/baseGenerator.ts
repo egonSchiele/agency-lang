@@ -38,7 +38,12 @@ import { AgencyConfig, BUILTIN_VARIABLES } from "@/config.js";
 import { mergeDeep } from "@/utils.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
-import { BinOpExpression } from "@/types/binop.js";
+import {
+  BinOpArgument,
+  BinOpExpression,
+  Operator,
+  PRECEDENCE,
+} from "@/types/binop.js";
 import { Keyword } from "@/types/keyword.js";
 
 export class BaseGenerator {
@@ -253,6 +258,16 @@ export class BaseGenerator {
 
   protected processBinOpExpression(node: BinOpExpression): string {
     return "processBinOpExpression not implemented";
+  }
+
+  protected needsParensLeft(child: BinOpArgument, parentOp: Operator): boolean {
+    if (child.type !== "binOpExpression") return false;
+    return PRECEDENCE[child.operator] < PRECEDENCE[parentOp];
+  }
+
+  protected needsParensRight(child: BinOpArgument, parentOp: Operator): boolean {
+    if (child.type !== "binOpExpression") return false;
+    return PRECEDENCE[child.operator] <= PRECEDENCE[parentOp];
   }
 
   protected processSkill(node: Skill): string {

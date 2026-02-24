@@ -21,6 +21,7 @@ import { booleanParser, literalParser, promptParser } from "./literals.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { comma, optionalSpaces, varNameChar } from "./utils.js";
 import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
+import { binOpParser } from "./binop.js";
 
 export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
   const parser = seqC(
@@ -35,6 +36,7 @@ export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
           agencyArrayParser,
           agencyObjectParser,
           booleanParser,
+          binOpParser,
           valueAccessParser,
           literalParser,
         ),
@@ -82,7 +84,11 @@ export const llmPromptFunctionCallParser: Parser<PromptLiteral> = (
     throw new Error(`First argument to llm function must be a prompt literal.`);
   }
   const promptConfig = args[1];
-  if (promptConfig && promptConfig.type !== "agencyObject" && promptConfig.type !== "variableName") {
+  if (
+    promptConfig &&
+    promptConfig.type !== "agencyObject" &&
+    promptConfig.type !== "variableName"
+  ) {
     throw new Error(
       `Second argument to llm function must be an object literal or variable.`,
     );

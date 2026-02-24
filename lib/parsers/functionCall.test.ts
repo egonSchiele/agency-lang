@@ -182,6 +182,234 @@ describe("functionCallParser", () => {
         },
       },
     },
+    // Function calls with binop arguments
+    {
+      input: "print(1 + 2)",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "print",
+          arguments: [
+            {
+              type: "binOpExpression",
+              operator: "+",
+              left: { type: "number", value: "1" },
+              right: { type: "number", value: "2" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "print(1 + 2 + 3 + 4)",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "print",
+          arguments: [
+            {
+              type: "binOpExpression",
+              operator: "+",
+              left: {
+                type: "binOpExpression",
+                operator: "+",
+                left: {
+                  type: "binOpExpression",
+                  operator: "+",
+                  left: { type: "number", value: "1" },
+                  right: { type: "number", value: "2" },
+                },
+                right: { type: "number", value: "3" },
+              },
+              right: { type: "number", value: "4" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "print(1 + 2 * 4)",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "print",
+          arguments: [
+            {
+              type: "binOpExpression",
+              operator: "+",
+              left: { type: "number", value: "1" },
+              right: {
+                type: "binOpExpression",
+                operator: "*",
+                left: { type: "number", value: "2" },
+                right: { type: "number", value: "4" },
+              },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "print((1 + 2) * 4)",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "print",
+          arguments: [
+            {
+              type: "binOpExpression",
+              operator: "*",
+              left: {
+                type: "binOpExpression",
+                operator: "+",
+                left: { type: "number", value: "1" },
+                right: { type: "number", value: "2" },
+              },
+              right: { type: "number", value: "4" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "print(1 + 2 || 4)",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "print",
+          arguments: [
+            {
+              type: "binOpExpression",
+              operator: "||",
+              left: {
+                type: "binOpExpression",
+                operator: "+",
+                left: { type: "number", value: "1" },
+                right: { type: "number", value: "2" },
+              },
+              right: { type: "number", value: "4" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "print(1 + (2 || 4))",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "print",
+          arguments: [
+            {
+              type: "binOpExpression",
+              operator: "+",
+              left: { type: "number", value: "1" },
+              right: {
+                type: "binOpExpression",
+                operator: "||",
+                left: { type: "number", value: "2" },
+                right: { type: "number", value: "4" },
+              },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "print((1 + 2), 3 + 4)",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "print",
+          arguments: [
+            {
+              type: "binOpExpression",
+              operator: "+",
+              left: { type: "number", value: "1" },
+              right: { type: "number", value: "2" },
+            },
+            {
+              type: "binOpExpression",
+              operator: "+",
+              left: { type: "number", value: "3" },
+              right: { type: "number", value: "4" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "add(x * 2, y + 1)",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "add",
+          arguments: [
+            {
+              type: "binOpExpression",
+              operator: "*",
+              left: { type: "variableName", value: "x" },
+              right: { type: "number", value: "2" },
+            },
+            {
+              type: "binOpExpression",
+              operator: "+",
+              left: { type: "variableName", value: "y" },
+              right: { type: "number", value: "1" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "check(a == b)",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "check",
+          arguments: [
+            {
+              type: "binOpExpression",
+              operator: "==",
+              left: { type: "variableName", value: "a" },
+              right: { type: "variableName", value: "b" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "test(a && b || c)",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "test",
+          arguments: [
+            {
+              type: "binOpExpression",
+              operator: "||",
+              left: {
+                type: "binOpExpression",
+                operator: "&&",
+                left: { type: "variableName", value: "a" },
+                right: { type: "variableName", value: "b" },
+              },
+              right: { type: "variableName", value: "c" },
+            },
+          ],
+        },
+      },
+    },
     // Function calls with mixed arguments
     {
       input: 'mixed(42, [1, 2], {key: "value"})',

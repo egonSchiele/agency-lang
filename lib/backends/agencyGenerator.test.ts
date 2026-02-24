@@ -184,3 +184,82 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
     });
   });
 });
+
+describe("AgencyGenerator - Smart parenthesization", () => {
+  function formatAgency(input: string): string {
+    const parseResult = parseAgency(input);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return "";
+    const generator = new AgencyGenerator();
+    return generator.generate(parseResult.result).output.trim();
+  }
+
+  describe("no unnecessary parens", () => {
+    it("should not add parens for chained same-precedence left-associative ops", () => {
+      const output = formatAgency('x = "hi" + name + "!"');
+      expect(output).toContain('"hi" + name + "!"');
+    });
+
+    it("should not add parens for chained addition", () => {
+      const output = formatAgency("x = 1 + 2 + 3 + 4");
+      expect(output).toContain("1 + 2 + 3 + 4");
+    });
+
+    it("should not add parens when right child has higher precedence", () => {
+      const output = formatAgency("x = 1 + 2 * 3");
+      expect(output).toContain("1 + 2 * 3");
+    });
+
+    it("should not add parens when left child has higher precedence", () => {
+      const output = formatAgency("x = 2 * 3 + 1");
+      expect(output).toContain("2 * 3 + 1");
+    });
+
+    it("should not add parens for chained logical AND", () => {
+      const output = formatAgency("x = a && b && c");
+      expect(output).toContain("a && b && c");
+    });
+
+    it("should not add parens when && is inside ||", () => {
+      const output = formatAgency("x = a && b || c");
+      expect(output).toContain("a && b || c");
+    });
+  });
+
+  describe("parens preserved when needed", () => {
+    it("should add parens when left child has lower precedence than parent", () => {
+      const output = formatAgency("x = (1 + 2) * 3");
+      expect(output).toContain("(1 + 2) * 3");
+    });
+
+    it("should add parens when right child has same precedence (associativity matters)", () => {
+      const output = formatAgency("x = 1 - (2 + 3)");
+      expect(output).toContain("1 - (2 + 3)");
+    });
+
+    it("should add parens for right-nested subtraction", () => {
+      const output = formatAgency("x = 1 - (2 - 3)");
+      expect(output).toContain("1 - (2 - 3)");
+    });
+
+    it("should add parens for right-nested division", () => {
+      const output = formatAgency("x = 8 / (4 / 2)");
+      expect(output).toContain("8 / (4 / 2)");
+    });
+
+    it("should add parens when || is inside && (lower prec inside higher)", () => {
+      const output = formatAgency("x = (a || b) && c");
+      expect(output).toContain("(a || b) && c");
+    });
+
+    it("should add parens when || is right child of &&", () => {
+      const output = formatAgency("x = a && (b || c)");
+      expect(output).toContain("a && (b || c)");
+    });
+
+    it("should add parens for lower-prec right child inside +", () => {
+      const output = formatAgency("x = 1 + (2 || 4)");
+      expect(output).toContain("1 + (2 || 4)");
+    });
+  });
+});

@@ -88,8 +88,14 @@ users[obj.x].name
 add the ability to export and import types from other files so I can use the type from another file as the response type for an llm call
 
 config for max messages in thread - smoltalk
-spinner? ora
+
+spinner?
 hooks?
 debugger? with time travel?
 
 https://www.npmjs.com/package/replace-in-file
+
+request timeout - smoltalk - support abortsignal?
+
+save agency agent generated code to file?
+break; keyword

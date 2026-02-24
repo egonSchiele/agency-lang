@@ -39,6 +39,7 @@ import { Skill } from "@/types/skill.js";
 import { BinOpExpression } from "@/types/binop.js";
 import { expressionToString } from "@/utils/node.js";
 import { color } from "@/utils/termcolors.js";
+import { Keyword } from "@/types/keyword.js";
 
 export class AgencyGenerator extends BaseGenerator {
   private indentLevel: number = 0;
@@ -571,6 +572,10 @@ export class AgencyGenerator extends BaseGenerator {
       case "methodCall":
         return `.${this.generateFunctionCallExpression(node.functionCall)}`;
     }
+  }
+
+  protected processKeyword(node: Keyword): string {
+    return this.indentStr(`${node.value}`);
   }
 }
 

@@ -38,6 +38,7 @@ import { mergeDeep } from "@/utils.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
 import { BinOpExpression } from "@/types/binop.js";
+import { Keyword } from "@/types/keyword.js";
 
 export class BaseGenerator {
   protected typeHints: TypeHintMap = {};
@@ -236,9 +237,15 @@ export class BaseGenerator {
         return this.processSkill(node);
       case "binOpExpression":
         return this.processBinOpExpression(node);
+      case "keyword":
+        return this.processKeyword(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
+  }
+
+  protected processKeyword(node: Keyword): string {
+    return "processKeyword not implemented";
   }
 
   protected processBinOpExpression(node: BinOpExpression): string {

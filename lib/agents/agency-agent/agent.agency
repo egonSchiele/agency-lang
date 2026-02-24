@@ -97,8 +97,6 @@ node design(plan) {
     while (nextAction.type != "done") {
       uses print, printCode
       nextAction: DesignAction = llm("${userMsg}", config)
-      print(color.yellow("Next action"))
-      printJSON(nextAction)
       if (nextAction.type == "askUser") {
         userMsg = input("\n${nextAction.question} ")
       }

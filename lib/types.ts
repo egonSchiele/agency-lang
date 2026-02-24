@@ -1,6 +1,10 @@
 import { AccessChainElement, ValueAccess } from "./types/access.js";
 import { BinOpExpression } from "./types/binop.js";
-import { AgencyArray, AgencyObject, SplatExpression } from "./types/dataStructures.js";
+import {
+  AgencyArray,
+  AgencyObject,
+  SplatExpression,
+} from "./types/dataStructures.js";
 import { FunctionCall, FunctionDefinition } from "./types/function.js";
 import { GraphNodeDefinition } from "./types/graphNode.js";
 import { IfElse } from "./types/ifElse.js";
@@ -9,6 +13,7 @@ import {
   ImportStatement,
   ImportToolStatement,
 } from "./types/importStatement.js";
+import { Keyword } from "./types/keyword.js";
 import { Literal, RawCode } from "./types/literals.js";
 import { MatchBlock } from "./types/matchBlock.js";
 import { MessageThread } from "./types/messageThread.js";
@@ -122,7 +127,8 @@ export type AgencyNode =
   | RawCode
   | MessageThread
   | Skill
-  | BinOpExpression;
+  | BinOpExpression
+  | Keyword;
 
 export type AgencyProgram = {
   type: "agencyProgram";

@@ -79,6 +79,7 @@ import { Skill } from "@/types/skill.js";
 import path from "path";
 import { BinOpExpression } from "@/types/binop.js";
 import { expressionToString, getBaseVarName } from "@/utils/node.js";
+import { Keyword } from "@/types/keyword.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
@@ -1082,6 +1083,10 @@ I'll probably need to do that for supporting type checking anyway.
       partNum++;
     }
     return bodyCode;
+  }
+
+  protected processKeyword(node: Keyword): string {
+    return `${node.value};\n`;
   }
 }
 

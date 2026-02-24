@@ -34,6 +34,9 @@ export const template = `if (
     {{^isBuiltin}}
     result = await {{{name}}}(params);
     {{/isBuiltin}}
+
+    result = result || "{{{name}}} ran successfully but did not return a value";
+
     toolCallEndTime = performance.now();
     await __callHook("onToolCallEnd", { toolName: "{{{name}}}", result, timeTaken: toolCallEndTime - toolCallStartTime });
   

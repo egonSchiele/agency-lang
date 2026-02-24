@@ -68,6 +68,7 @@ import { MessageThread } from "@/types/messageThread.js";
 import { skillParser } from "./skill.js";
 import { binOpParser } from "./binop.js";
 import { multiLineCommentParser } from "./multiLineComment.js";
+import { keywordParser } from "./keyword.js";
 
 export const assignmentParser: Parser<Assignment> = (input: string) => {
   const parser = trace(
@@ -153,6 +154,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
     "functionBodyParser",
     many(
       or(
+        keywordParser,
         usesToolParser,
         debug(typeAliasParser, "error in typeAliasParser"),
         debug(typeHintParser, "error in typeHintParser"),

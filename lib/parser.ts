@@ -50,12 +50,14 @@ import { skillParser } from "./parsers/skill.js";
 import { AgencyConfig } from "./config.js";
 import { nanoid } from "nanoid";
 import { binOpParser } from "./parsers/binop.js";
+import { keywordParser } from "./parsers/keyword.js";
 
 export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
   const parser = many(
     trace(
       "agencyParser",
       or(
+        keywordParser,
         usesToolParser,
         importNodeStatmentParser,
         importToolStatmentParser,

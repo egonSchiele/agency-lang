@@ -39,9 +39,12 @@ import {
   space,
   spaces,
   str,
+  success,
   trace,
 } from "tarsec";
 import { optionalSemicolon } from "./parserUtils.js";
+import { commentParser } from "./comment.js";
+import { multiLineCommentParser } from "./multiLineComment.js";
 
 export const primitiveTypeParser: Parser<PrimitiveType> = trace(
   "primitiveTypeParser",
@@ -108,7 +111,10 @@ export const angleBracketsArrayTypeParser: Parser<ArrayType> = trace(
     captureCaptures(
       parseError(
         "expected a type name followed by `>`, e.g. `array<string>`",
-        capture(or(primitiveTypeParser, typeAliasVariableParser), "elementType"),
+        capture(
+          or(primitiveTypeParser, typeAliasVariableParser),
+          "elementType",
+        ),
         char(">"),
       ),
     ),
@@ -191,7 +197,12 @@ export const objectTypeParser: Parser<ObjectType> = trace(
       capture(
         sepBy(
           objectPropertyDelimiter,
-          or(objectPropertyWithDescriptionParser, objectPropertyParser),
+          or(
+            objectPropertyWithDescriptionParser,
+            objectPropertyParser,
+            commentParser,
+            multiLineCommentParser,
+          ),
         ),
         "properties",
       ),
@@ -201,7 +212,24 @@ export const objectTypeParser: Parser<ObjectType> = trace(
         char("}"),
       ),
     );
-    return parser(input);
+    const result = parser(input);
+    if (!result.success) {
+      return result;
+    }
+    // Filter out comment properties from the final result
+    const properties = result.result.properties.filter(
+      (prop): prop is ObjectProperty =>
+        !("type" in prop) ||
+        (prop.type !== "comment" && prop.type !== "multiLineComment"),
+    );
+
+    return success(
+      {
+        type: "objectType",
+        properties,
+      },
+      result.rest,
+    );
   },
 );
 

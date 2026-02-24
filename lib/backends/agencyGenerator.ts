@@ -579,8 +579,12 @@ export class AgencyGenerator extends BaseGenerator {
   }
 
   protected processBinOpExpression(node: BinOpExpression): string {
+    const left = this.processNode(node.left).trim();
+    const right = this.processNode(node.right).trim();
+    const wrappedLeft = node.left.type === "binOpExpression" ? `(${left})` : left;
+    const wrappedRight = node.right.type === "binOpExpression" ? `(${right})` : right;
     return this.indentStr(
-      `${this.processNode(node.left).trim()} ${node.operator} ${this.processNode(node.right).trim()}`,
+      `${wrappedLeft} ${node.operator} ${wrappedRight}`,
     );
   }
 

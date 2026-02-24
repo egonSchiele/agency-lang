@@ -8,7 +8,8 @@ export type BinOpArgument =
   | Literal
   | FunctionCall
   | AgencyObject
-  | AgencyArray;
+  | AgencyArray
+  | BinOpExpression;
 
 export type Operator =
   | "+"
@@ -24,7 +25,9 @@ export type Operator =
   | "<"
   | ">"
   | "<="
-  | ">=";
+  | ">="
+  | "&&"
+  | "||";
 
 export type BinOpExpression = {
   type: "binOpExpression";

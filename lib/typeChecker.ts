@@ -109,7 +109,17 @@ export class TypeChecker {
     this.collectTypeAliases();
     this.collectFunctionDefs();
     this.checkScopes();
-    return { errors: this.errors };
+    return { errors: this.deduplicateErrors() };
+  }
+
+  private deduplicateErrors(): TypeCheckError[] {
+    const seen = new Set<string>();
+    return this.errors.filter((err) => {
+      const key = err.message;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }
 
   private collectTypeAliases(): void {
@@ -202,12 +212,13 @@ export class TypeChecker {
       });
     }
 
-    // Now check function calls and return types within each scope
+    // Now check function calls, return types, and expressions within each scope
     for (const scope of scopes) {
       this.checkFunctionCallsInScope(scope);
       if (scope.returnType !== undefined) {
         this.checkReturnTypesInScope(scope);
       }
+      this.checkExpressionsInScope(scope);
     }
   }
 
@@ -406,6 +417,22 @@ export class TypeChecker {
   }
 
   /**
+   * Walk all expressions in a scope and synthesize their types to trigger
+   * validation errors (e.g., property access on non-object types).
+   */
+  private checkExpressionsInScope(scope: ScopeInfo): void {
+    for (const { node } of walkNodes(scope.body)) {
+      if (node.type === "valueAccess") {
+        this.synthType(node, scope.variableTypes);
+      } else if (node.type === "returnStatement") {
+        // Always synth the return value to validate sub-expressions,
+        // even when the function has no declared return type
+        this.synthType(node.value, scope.variableTypes);
+      }
+    }
+  }
+
+  /**
    * Check mode (top-down): verify that an expression is compatible with expectedType.
    * Prompts are skipped since they adopt the expected type for structured output.
    */
@@ -555,6 +582,9 @@ export class TypeChecker {
           } else if (resolved.type === "arrayType" && element.name === "length") {
             currentType = { type: "primitiveType", value: "number" };
           } else {
+            this.errors.push({
+              message: `Property '${element.name}' does not exist on type '${formatTypeHint(resolved)}'.`,
+            });
             return "any";
           }
           break;

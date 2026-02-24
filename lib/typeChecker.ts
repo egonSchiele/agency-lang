@@ -1,5 +1,5 @@
 import { color } from "@/utils/termcolors.js";
-import { AgencyConfig, BUILTIN_FUNCTIONS } from "./config.js";
+import { AgencyConfig } from "./config.js";
 import {
   AgencyNode,
   AgencyProgram,
@@ -586,6 +586,10 @@ export class TypeChecker {
         if (def?.returnType) return def.returnType;
         if (expr.functionName in this.inferredReturnTypes) {
           return this.inferredReturnTypes[expr.functionName];
+        }
+        // Lazily trigger inference if we're in the inference phase
+        if (def && !def.returnType && this.inferringReturnType.size > 0) {
+          return this.inferReturnTypeFor(expr.functionName, def);
         }
         return "any";
       }

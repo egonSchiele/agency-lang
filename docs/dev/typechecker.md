@@ -18,12 +18,13 @@ The key insight is that some expressions are easier to handle in one mode than t
 
 ## Architecture overview
 
-The type checker is implemented as the `TypeChecker` class. When `check()` is called, it runs three phases in order:
+The type checker is implemented as the `TypeChecker` class. When `check()` is called, it runs four phases in order:
 
 ```
 1. collectTypeAliases()   — gather all `type Foo = ...` definitions
 2. collectFunctionDefs()  — gather all function and graph node definitions
-3. checkScopes()          — build scopes, collect variable types, then check
+3. inferReturnTypes()     — infer return types for functions/nodes without explicit annotations
+4. checkScopes()          — build scopes, collect variable types, then check
 ```
 
 ### Scopes
@@ -75,7 +76,7 @@ After variable types are collected, two checks run over each scope:
 | `boolean` | `boolean` |
 | `prompt` | `string` (in synth mode; see check mode for the special case) |
 | `binOpExpression` | See [Binary operators](#binary-operators) below |
-| `functionCall` | The function's declared return type, or `"any"` if unknown |
+| `functionCall` | The function's declared return type, then inferred return type (see [Return type inference](#return-type-inference)), or `"any"` if unknown |
 | `agencyArray` | See [Arrays](#arrays) below |
 | `agencyObject` | See [Objects](#objects) below |
 | `valueAccess` | See [Value access chains](#value-access-chains) below |
@@ -195,6 +196,28 @@ for name, i in names {
 ```
 
 If the iterable isn't a known array type, both the item and index variables are `"any"`.
+
+## Return type inference
+
+Functions and graph nodes without an explicit return type annotation have their return types inferred from `return` statements. This happens in the `inferReturnTypes()` phase, before scopes are checked, so that call sites get proper type checking.
+
+For each function/node without a `returnType`, the inference works as follows:
+
+1. Build the scope's variable types (parameters + body assignments)
+2. Collect all `return` statements from the body, skipping returns inside nested function/node definitions
+3. Synth the type of each return value
+4. Apply these rules:
+
+| Situation | Inferred type |
+|-----------|--------------|
+| No return statements | `void` |
+| Any return value synths to `"any"` | `"any"` (conservative — avoids cascading false errors) |
+| All return values have the same type | That type |
+| Return values have different types | `"any"` (could be union in the future) |
+
+**Recursion guard**: If function A calls function B which calls function A, the inference detects the cycle via an `inferringReturnType` set and returns `"any"` for the recursive call, preventing infinite loops.
+
+**Explicit annotations take precedence**: If a function has a declared `returnType`, inference is skipped entirely and the declared type is used.
 
 ## When the type checker runs
 

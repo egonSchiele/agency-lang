@@ -2523,6 +2523,56 @@ describe("TypeChecker", () => {
       expect(errors.some((e) => e.message.includes("assignment to 'x'"))).toBe(false);
     });
 
+    it("should infer return type when function returns another function's call", () => {
+      // foo is defined before bar, but foo() returns bar()
+      // Lazy inference should trigger bar's inference when processing foo
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "foo",
+            parameters: [],
+            body: [
+              {
+                type: "returnStatement",
+                value: {
+                  type: "functionCall",
+                  functionName: "bar",
+                  arguments: [],
+                },
+              },
+            ],
+          },
+          {
+            type: "function",
+            functionName: "bar",
+            parameters: [],
+            body: [
+              {
+                type: "returnStatement",
+                value: { type: "number", value: "7" },
+              },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "string" },
+            value: {
+              type: "functionCall",
+              functionName: "foo",
+              arguments: [],
+            },
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors.some((e) => e.message.includes("number") && e.message.includes("string"))).toBe(true);
+    });
+
     it("should infer return types for graph nodes", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",

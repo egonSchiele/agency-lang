@@ -135,4 +135,9 @@ export interface AgencyConfig {
    * If true, type errors are fatal during compilation (implies typeCheck: true).
    */
   typeCheckStrict?: boolean;
+
+  /**
+   * If true, generate .d.ts declaration files alongside .js output.
+   */
+  declarations?: boolean;
 }

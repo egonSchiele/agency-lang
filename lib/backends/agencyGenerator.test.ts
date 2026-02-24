@@ -184,3 +184,46 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
     });
   });
 });
+
+describe("AgencyGenerator - Smart parenthesization", () => {
+  function formatAgency(input: string): string {
+    const parseResult = parseAgency(input);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return "";
+    const generator = new AgencyGenerator();
+    return generator.generate(parseResult.result).output.trim();
+  }
+
+  describe("no unnecessary parens", () => {
+    it("should not add parens for chained same-precedence left-associative ops", () => {
+      const output = formatAgency('x = "hi" + name + "!"');
+      expect(output).toContain('"hi" + name + "!"');
+    });
+
+    it("should not add parens for chained addition", () => {
+      const output = formatAgency("x = 1 + 2 + 3 + 4");
+      expect(output).toContain("1 + 2 + 3 + 4");
+    });
+
+    it("should not add parens when right child has higher precedence", () => {
+      const output = formatAgency("x = 1 + 2 * 3");
+      expect(output).toContain("1 + 2 * 3");
+    });
+
+    it("should not add parens when left child has higher precedence", () => {
+      const output = formatAgency("x = 2 * 3 + 1");
+      expect(output).toContain("2 * 3 + 1");
+    });
+
+    it("should not add parens for chained logical AND", () => {
+      const output = formatAgency("x = a && b && c");
+      expect(output).toContain("a && b && c");
+    });
+
+    it("should not add parens when && is inside ||", () => {
+      const output = formatAgency("x = a && b || c");
+      expect(output).toContain("a && b || c");
+    });
+  });
+
+});

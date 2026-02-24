@@ -308,6 +308,14 @@ export const literalParser: Parser<Literal> = or(
   variableNameParser,
 );
 
+export const literalParserNoVarName: Parser<Literal> = or(
+  booleanParser,
+  promptParser,
+  numberParser,
+  multiLineStringParser,
+  stringParser,
+);
+
 // no string concat, no prompt strings
 export const simpleLiteralParser: Parser<Literal> = or(
   booleanParser,

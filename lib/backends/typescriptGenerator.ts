@@ -1002,8 +1002,8 @@ I'll probably need to do that for supporting type checking anyway.
   protected processBinOpExpression(node: BinOpExpression): string {
     const left = this.processNode(node.left).trim();
     const right = this.processNode(node.right).trim();
-    const wrappedLeft = node.left.type === "binOpExpression" ? `(${left})` : left;
-    const wrappedRight = node.right.type === "binOpExpression" ? `(${right})` : right;
+    const wrappedLeft = this.needsParensLeft(node.left, node.operator) ? `(${left})` : left;
+    const wrappedRight = this.needsParensRight(node.right, node.operator) ? `(${right})` : right;
     return `${wrappedLeft} ${node.operator} ${wrappedRight}`;
   }
 

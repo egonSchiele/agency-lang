@@ -37,20 +37,12 @@ The parser is built from two mutually recursive functions:
 
 ### `parseAtom(input)`
 
-Parses the smallest unit of an expression — either a parenthesized sub-expression or a simple value (boolean, variable, number, string).
+Parses the smallest unit of an expression — a simple value (boolean, variable, number, string).
 
 ```
 parseAtom(input):
-  if input starts with '(':
-    consume '('
-    result = parseExprPrec(remaining, 0)    // recurse into full expression parser
-    consume ')'
-    return result
-  else:
-    return parse a boolean, variable access, or literal
+  return parse a boolean, variable access, or literal
 ```
-
-The key insight is that parentheses are handled at the atom level. A parenthesized group like `(1 + 2)` is treated as a single atomic value by the rest of the algorithm. Inside the parentheses, we start a fresh call to `parseExprPrec` with `minPrec = 0`, which means any operator is allowed — the parentheses create a clean scope.
 
 ### `parseExprPrec(input, minPrec)`
 
@@ -164,42 +156,6 @@ The `+ 1` in `prec(op) + 1` is what makes this left-associative. When parsing th
 
 If we used `prec(op)` instead of `prec(op) + 1`, the second `+` would be consumed by the inner call (since `5 >= 5`), producing right-associative grouping: `1 + (2 + 3)`. That `+ 1` is the entire difference between left- and right-associativity.
 
-## How parentheses work
-
-Parentheses are handled entirely by `parseAtom`. When it sees `(`, it calls `parseExprPrec` with `minPrec=0`, then expects `)`.
-
-Consider `(1 + 2) * 3`:
-
-```
-parseExprPrec("(1 + 2) * 3", minPrec=0)
-│
-├─ parseAtom("(1 + 2) * 3")
-│  ├─ See '('. Consume it.
-│  ├─ parseExprPrec("1 + 2) * 3", minPrec=0)
-│  │  ├─ parseAtom → 1
-│  │  ├─ See '+' (prec 5 >= 0). Consume it.
-│  │  │  ├─ parseExprPrec("2) * 3", minPrec=6)
-│  │  │  │  ├─ parseAtom → 2
-│  │  │  │  ├─ See ')'. That's not an operator. Stop.
-│  │  │  │  └─ return 2
-│  │  │  └─ left = BinOp(1, +, 2)
-│  │  ├─ See ')'. Not an operator. Stop.
-│  │  └─ return BinOp(1, +, 2)
-│  ├─ See ')'. Consume it.
-│  └─ return BinOp(1, +, 2)     // the entire group is now a single atom
-│
-├─ See '*' (prec 6 >= 0). Consume it.
-│  ├─ parseExprPrec("3", minPrec=7)
-│  │  └─ return 3
-│  └─ left = BinOp(BinOp(1, +, 2), *, 3)
-│
-└─ return BinOp(BinOp(1, +, 2), *, 3)
-```
-
-Without parentheses, `1 + 2 * 3` would give `BinOp(1, +, BinOp(2, *, 3))` because `*` has higher precedence. But with parentheses, the `1 + 2` gets parsed as a complete expression inside `parseAtom`, and only then does `*` see the result as its left operand.
-
-The `minPrec=0` in the recursive call inside parentheses is important — it resets the precedence floor, so any operator is valid inside parens. This means `(a || b)` works even if it appears in a context where only high-precedence operators would normally be consumed.
-
 ## The `binOpParser` wrapper
 
 The exported `binOpParser` function wraps `parseExprPrec` with one additional check: it only succeeds if the result is actually a `BinOpExpression` (i.e., at least one operator was consumed). If the input is just a bare value like `x`, the parser returns failure. This is necessary because `binOpParser` sits in an `or(...)` chain alongside other parsers (like the variable parser), and we don't want it to "steal" inputs that should be handled by those other parsers.
@@ -222,16 +178,28 @@ export const binOpParser: Parser<BinOpExpression> = (input) => {
 
 ## Code generation
 
-When the code generators (`TypeScriptGenerator`, `AgencyGenerator`) emit code for a `BinOpExpression`, they check whether the `left` or `right` child is itself a `BinOpExpression`. If so, they wrap it in parentheses to preserve the tree structure in the output:
+When the code generators (`TypeScriptGenerator`, `AgencyGenerator`) emit code for a `BinOpExpression`, they use precedence-aware logic to decide whether parentheses are needed around child `BinOpExpression` nodes. This avoids unnecessary parentheses in common cases like chained same-operator expressions.
+
+The rules are implemented as two helper methods in `BaseGenerator`:
+
+**Left child**: parens only if `childPrec < parentPrec`. Same or higher precedence is safe because left-associativity naturally groups the left child first.
+
+**Right child**: parens if `childPrec <= parentPrec`. Equal precedence needs parens because re-parsing without them would left-associate differently.
 
 ```typescript
-protected processBinOpExpression(node: BinOpExpression): string {
-  const left = this.processNode(node.left).trim();
-  const right = this.processNode(node.right).trim();
-  const wrappedLeft = node.left.type === "binOpExpression" ? `(${left})` : left;
-  const wrappedRight = node.right.type === "binOpExpression" ? `(${right})` : right;
-  return `${wrappedLeft} ${node.operator} ${wrappedRight}`;
+protected needsParensLeft(child: BinOpArgument, parentOp: Operator): boolean {
+  if (child.type !== "binOpExpression") return false;
+  return PRECEDENCE[child.operator] < PRECEDENCE[parentOp];
+}
+
+protected needsParensRight(child: BinOpArgument, parentOp: Operator): boolean {
+  if (child.type !== "binOpExpression") return false;
+  return PRECEDENCE[child.operator] <= PRECEDENCE[parentOp];
 }
 ```
 
-For example, the AST `BinOp(BinOp(1, +, 2), *, 3)` generates `(1 + 2) * 3`, not `1 + 2 * 3` (which would have different semantics in the output language).
+Examples:
+- `BinOp(BinOp(1, +, 2), +, 3)` → `1 + 2 + 3` (no parens, same prec left child)
+- `BinOp(BinOp(1, +, 2), *, 3)` → `(1 + 2) * 3` (parens needed, lower prec left child)
+- `BinOp(1, -, BinOp(2, +, 3))` → `1 - (2 + 3)` (parens needed, same prec right child)
+- `BinOp(1, +, BinOp(2, *, 3))` → `1 + 2 * 3` (no parens, higher prec right child)

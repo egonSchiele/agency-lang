@@ -29,6 +29,25 @@ export type Operator =
   | "&&"
   | "||";
 
+export const PRECEDENCE: Record<string, number> = {
+  "||": 1,
+  "&&": 2,
+  "==": 3,
+  "!=": 3,
+  "<": 4,
+  ">": 4,
+  "<=": 4,
+  ">=": 4,
+  "+": 5,
+  "-": 5,
+  "*": 6,
+  "/": 6,
+  "+=": 0,
+  "-=": 0,
+  "*=": 0,
+  "/=": 0,
+};
+
 export type BinOpExpression = {
   type: "binOpExpression";
   operator: Operator;

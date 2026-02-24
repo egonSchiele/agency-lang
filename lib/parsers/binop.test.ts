@@ -463,68 +463,6 @@ describe("binOpParser", () => {
     });
   });
 
-  // Parenthesized expressions
-  describe("parenthesized expressions", () => {
-    it('should parse "(1 + 2) * 3"', () => {
-      const result = binOpParser("(1 + 2) * 3");
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.result).toEqual({
-          type: "binOpExpression",
-          operator: "*",
-          left: {
-            type: "binOpExpression",
-            operator: "+",
-            left: { type: "number", value: "1" },
-            right: { type: "number", value: "2" },
-          },
-          right: { type: "number", value: "3" },
-        });
-      }
-    });
-
-    it('should parse "x - (y + 1)"', () => {
-      const result = binOpParser("x - (y + 1)");
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.result).toEqual({
-          type: "binOpExpression",
-          operator: "-",
-          left: { type: "variableName", value: "x" },
-          right: {
-            type: "binOpExpression",
-            operator: "+",
-            left: { type: "variableName", value: "y" },
-            right: { type: "number", value: "1" },
-          },
-        });
-      }
-    });
-
-    it('should parse "(a < 2) && (b < 3)"', () => {
-      const result = binOpParser("(a < 2) && (b < 3)");
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.result).toEqual({
-          type: "binOpExpression",
-          operator: "&&",
-          left: {
-            type: "binOpExpression",
-            operator: "<",
-            left: { type: "variableName", value: "a" },
-            right: { type: "number", value: "2" },
-          },
-          right: {
-            type: "binOpExpression",
-            operator: "<",
-            left: { type: "variableName", value: "b" },
-            right: { type: "number", value: "3" },
-          },
-        });
-      }
-    });
-  });
-
   // Failure cases
   describe("failure cases", () => {
     const failureCases = [

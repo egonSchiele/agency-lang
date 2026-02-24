@@ -1,9 +1,9 @@
-def greet(name): string {
-  return ("Hello, " + name) + "!"
+type User = {
+  name: string;
+  age: number
 }
 
 node main() {
-  response: number = greet("World")
-  print(response)
-  return response
+  response: User = llm("What is your name and age?")
+  print(response.asdasd)
 }

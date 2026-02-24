@@ -1351,22 +1351,10 @@ describe("TypeChecker", () => {
   });
 
   describe("value access on unknown property", () => {
-    it("should return any for unknown property access", () => {
+    it("should error for unknown property on a typed object", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
-          {
-            type: "function",
-            functionName: "expectNum",
-            parameters: [
-              {
-                type: "functionParameter",
-                name: "n",
-                typeHint: { type: "primitiveType", value: "number" },
-              },
-            ],
-            body: [],
-          },
           {
             type: "assignment",
             variableName: "obj",
@@ -1388,7 +1376,7 @@ describe("TypeChecker", () => {
           },
           {
             type: "functionCall",
-            functionName: "expectNum",
+            functionName: "print",
             arguments: [
               {
                 type: "valueAccess",
@@ -1400,7 +1388,84 @@ describe("TypeChecker", () => {
         ],
       };
 
-      // Unknown property returns any, so no type error
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("Property 'nonexistent' does not exist on type");
+    });
+
+    it("should error for unknown property on a type alias object", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "typeAlias",
+            aliasName: "User",
+            aliasedType: {
+              type: "objectType",
+              properties: [
+                { key: "name", value: { type: "primitiveType", value: "string" } },
+                { key: "age", value: { type: "primitiveType", value: "number" } },
+              ],
+            },
+          },
+          {
+            type: "assignment",
+            variableName: "response",
+            typeHint: { type: "typeAliasVariable", aliasName: "User" },
+            value: {
+              type: "prompt",
+              segments: [{ type: "text", value: "What is your name and age?" }],
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "print",
+            arguments: [
+              {
+                type: "valueAccess",
+                base: { type: "variableName", value: "response" },
+                chain: [{ kind: "property", name: "asdasd" }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("Property 'asdasd' does not exist on type");
+    });
+
+    it("should not error for property on untyped variable", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "data",
+            value: {
+              type: "functionCall",
+              functionName: "fetchJSON",
+              arguments: [
+                { type: "string", segments: [{ type: "text", value: "https://example.com" }] },
+              ],
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "print",
+            arguments: [
+              {
+                type: "valueAccess",
+                base: { type: "variableName", value: "data" },
+                chain: [{ kind: "property", name: "anything" }],
+              },
+            ],
+          },
+        ],
+      };
+
+      // data is any (fetchJSON returns any), so property access is fine
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(0);
     });

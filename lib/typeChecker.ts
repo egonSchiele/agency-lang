@@ -347,10 +347,9 @@ export class TypeChecker {
 
       // Type check each argument
       for (let i = 0; i < call.arguments.length; i++) {
+        const argType = this.synthType(call.arguments[i], scopeVars);
         const paramType = sig.params[i];
         if (paramType === "any") continue;
-
-        const argType = this.synthType(call.arguments[i], scopeVars);
         if (argType === "any") continue;
 
         if (!this.isAssignable(argType, paramType)) {
@@ -381,10 +380,9 @@ export class TypeChecker {
 
     // Type check each argument
     for (let i = 0; i < call.arguments.length; i++) {
+      const argType = this.synthType(call.arguments[i], scopeVars);
       const paramType = params[i].typeHint;
       if (!paramType) continue; // No type hint on param, skip
-
-      const argType = this.synthType(call.arguments[i], scopeVars);
       if (argType === "any") continue;
 
       if (!this.isAssignable(argType, paramType)) {
@@ -549,6 +547,9 @@ export class TypeChecker {
             if (prop) {
               currentType = prop.value;
             } else {
+              this.errors.push({
+                message: `Property '${element.name}' does not exist on type '${formatTypeHint(resolved)}'.`,
+              });
               return "any";
             }
           } else if (resolved.type === "arrayType" && element.name === "length") {

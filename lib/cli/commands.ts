@@ -2,6 +2,7 @@ import { generateAgency } from "@/backends/agencyGenerator.js";
 import { AgencyConfig } from "@/config.js";
 import { AgencyProgram, generateTypeScript } from "@/index.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
+import { typeCheck, formatErrors } from "@/typeChecker.js";
 import { ImportStatement } from "@/types/importStatement.js";
 import { renderMermaidAscii } from "beautiful-mermaid";
 import { spawn } from "child_process";
@@ -140,6 +141,19 @@ export function compile(
 
   const contents = readFile(inputFile);
   const parsedProgram = parse(contents, config);
+
+  // Run type checking if enabled via config
+  if (config.typeCheck || config.typeCheckStrict) {
+    const { errors } = typeCheck(parsedProgram, config);
+    if (errors.length > 0) {
+      if (config.typeCheckStrict) {
+        console.error(formatErrors(errors));
+        process.exit(1);
+      } else {
+        console.warn(formatErrors(errors));
+      }
+    }
+  }
 
   const imports = getImports(parsedProgram);
 

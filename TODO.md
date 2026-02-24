@@ -99,3 +99,5 @@ request timeout - smoltalk - support abortsignal?
 save agency agent generated code to file?
 
 I don't think interrupts would work correctly in a for loop, I don't think they would keep track of what iteration of the loop they're on. Something to consider as the pros and cons of having loops. Would they work in recursion? Something else to check.
+
+thoroughly read the code in lib/typeChecker.ts

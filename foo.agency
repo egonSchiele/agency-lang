@@ -1,6 +1,14 @@
+type User = {
+  name: string;
+  age: number
+}
+
+def foo() {
+  response: User = llm("What is your name and age?")
+  return response.asdasd
+}
+
 node main() {
-  uses round
-  response = llm("Round the following numbers to 2 decimal places: 1.5215. After getting the response, round the response to the nearest integer.")
-  print(response)
-  return response
+  response: boolean = foo()
+  print(response.asdasd)
 }

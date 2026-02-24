@@ -125,4 +125,14 @@ export interface AgencyConfig {
    * If false (default), untyped variables are implicitly `any`.
    */
   strictTypes?: boolean;
+
+  /**
+   * If true, run type checking during compilation and print warnings.
+   */
+  typeCheck?: boolean;
+
+  /**
+   * If true, type errors are fatal during compilation (implies typeCheck: true).
+   */
+  typeCheckStrict?: boolean;
 }

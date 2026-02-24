@@ -11,7 +11,10 @@ import {
   Assignment,
   FunctionCall,
   ReturnStatement,
+  ValueAccess,
+  AccessChainElement,
 } from "./types.js";
+import { getImportedNames } from "./types/importStatement.js";
 import { walkNodes } from "./utils/node.js";
 import { formatTypeHint } from "./cli/util.js";
 
@@ -31,6 +34,61 @@ type ScopeInfo = {
   body: AgencyNode[];
   name: string;
   returnType?: VariableType | null;
+};
+
+type BuiltinSignature = {
+  params: (VariableType | "any")[];
+  returnType: VariableType | "any";
+};
+
+const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
+  print: {
+    params: ["any"],
+    returnType: { type: "primitiveType", value: "void" },
+  },
+  printJSON: {
+    params: ["any"],
+    returnType: { type: "primitiveType", value: "void" },
+  },
+  input: {
+    params: [{ type: "primitiveType", value: "string" }],
+    returnType: { type: "primitiveType", value: "string" },
+  },
+  read: {
+    params: [{ type: "primitiveType", value: "string" }],
+    returnType: { type: "primitiveType", value: "string" },
+  },
+  readImage: {
+    params: [{ type: "primitiveType", value: "string" }],
+    returnType: { type: "primitiveType", value: "string" },
+  },
+  write: {
+    params: [
+      { type: "primitiveType", value: "string" },
+      { type: "primitiveType", value: "string" },
+    ],
+    returnType: { type: "primitiveType", value: "void" },
+  },
+  fetch: {
+    params: [{ type: "primitiveType", value: "string" }],
+    returnType: { type: "primitiveType", value: "string" },
+  },
+  fetchJSON: {
+    params: [{ type: "primitiveType", value: "string" }],
+    returnType: "any",
+  },
+  fetchJson: {
+    params: [{ type: "primitiveType", value: "string" }],
+    returnType: "any",
+  },
+  sleep: {
+    params: [{ type: "primitiveType", value: "number" }],
+    returnType: { type: "primitiveType", value: "void" },
+  },
+  round: {
+    params: [{ type: "primitiveType", value: "number" }],
+    returnType: { type: "primitiveType", value: "number" },
+  },
 };
 
 export class TypeChecker {
@@ -167,7 +225,7 @@ export class TypeChecker {
       }
     }
 
-    // Second pass: collect assignments
+    // Second pass: collect assignments, imports, and for loops
     for (const node of nodes) {
       if (node.type === "assignment") {
         const existingType = vars[node.variableName];
@@ -189,11 +247,13 @@ export class TypeChecker {
               actualType: formatTypeHint(newType),
             });
           }
+          // Check that the assigned value is compatible with the annotation
+          this.checkType(node.value, newType, vars, `assignment to '${node.variableName}'`);
           vars[node.variableName] = newType;
         } else if (existingType) {
           // Variable being reassigned without a new type annotation
           // Check if the value's inferred type is compatible
-          const valueType = this.inferExpressionType(node.value, vars);
+          const valueType = this.synthType(node.value, vars);
           if (
             valueType !== "any" &&
             existingType !== "any" &&
@@ -210,15 +270,37 @@ export class TypeChecker {
             });
           }
         } else {
-          // No type annotation anywhere
+          // No type annotation anywhere — infer from the value
           if (this.config.strictTypes) {
             this.errors.push({
               message: `Variable '${node.variableName}' has no type annotation (strict mode).`,
               variableName: node.variableName,
             });
           }
-          vars[node.variableName] = "any";
+          const inferred = this.synthType(node.value, vars);
+          vars[node.variableName] = inferred;
         }
+      } else if (node.type === "importStatement") {
+        for (const importName of node.importedNames) {
+          for (const name of getImportedNames(importName)) {
+            vars[name] = "any";
+          }
+        }
+      } else if (node.type === "forLoop") {
+        // Infer item variable type from the iterable's array element type
+        const iterableType = this.synthType(node.iterable, vars);
+        if (
+          iterableType !== "any" &&
+          iterableType.type === "arrayType"
+        ) {
+          vars[node.itemVar] = iterableType.elementType;
+        } else {
+          vars[node.itemVar] = "any";
+        }
+        if (node.indexVar) {
+          vars[node.indexVar] = { type: "primitiveType", value: "number" };
+        }
+        this.collectVariableTypes(node.body, vars, scopeName);
       }
     }
 
@@ -251,8 +333,36 @@ export class TypeChecker {
     call: FunctionCall,
     scopeVars: Record<string, VariableType | "any">,
   ): void {
-    // Skip builtins
-    if (call.functionName in BUILTIN_FUNCTIONS) return;
+    // Check builtins using their type signatures
+    if (call.functionName in BUILTIN_FUNCTION_TYPES) {
+      const sig = BUILTIN_FUNCTION_TYPES[call.functionName];
+
+      // Arity check
+      if (call.arguments.length !== sig.params.length) {
+        this.errors.push({
+          message: `Expected ${sig.params.length} argument(s) for '${call.functionName}', but got ${call.arguments.length}.`,
+        });
+        return;
+      }
+
+      // Type check each argument
+      for (let i = 0; i < call.arguments.length; i++) {
+        const paramType = sig.params[i];
+        if (paramType === "any") continue;
+
+        const argType = this.synthType(call.arguments[i], scopeVars);
+        if (argType === "any") continue;
+
+        if (!this.isAssignable(argType, paramType)) {
+          this.errors.push({
+            message: `Argument type '${formatTypeHint(argType)}' is not assignable to parameter type '${formatTypeHint(paramType)}' in call to '${call.functionName}'.`,
+            expectedType: formatTypeHint(paramType),
+            actualType: formatTypeHint(argType),
+          });
+        }
+      }
+      return;
+    }
 
     const fn = this.functionDefs[call.functionName];
     const graphNode = this.nodeDefs[call.functionName];
@@ -274,7 +384,7 @@ export class TypeChecker {
       const paramType = params[i].typeHint;
       if (!paramType) continue; // No type hint on param, skip
 
-      const argType = this.inferExpressionType(call.arguments[i], scopeVars);
+      const argType = this.synthType(call.arguments[i], scopeVars);
       if (argType === "any") continue;
 
       if (!this.isAssignable(argType, paramType)) {
@@ -292,24 +402,40 @@ export class TypeChecker {
 
     for (const { node } of walkNodes(scope.body)) {
       if (node.type === "returnStatement") {
-        const valueType = this.inferExpressionType(
-          node.value,
-          scope.variableTypes,
-        );
-        if (valueType === "any") continue;
-
-        if (!this.isAssignable(valueType, scope.returnType)) {
-          this.errors.push({
-            message: `Return type '${formatTypeHint(valueType)}' is not assignable to declared return type '${formatTypeHint(scope.returnType)}' in '${scope.name}'.`,
-            expectedType: formatTypeHint(scope.returnType),
-            actualType: formatTypeHint(valueType),
-          });
-        }
+        this.checkType(node.value, scope.returnType, scope.variableTypes, `return in '${scope.name}'`);
       }
     }
   }
 
-  private inferExpressionType(
+  /**
+   * Check mode (top-down): verify that an expression is compatible with expectedType.
+   * Prompts are skipped since they adopt the expected type for structured output.
+   */
+  private checkType(
+    expr: AgencyNode,
+    expectedType: VariableType,
+    scopeVars: Record<string, VariableType | "any">,
+    context: string,
+  ): void {
+    // Prompts adopt the expected type — skip checking
+    if (expr.type === "prompt") return;
+
+    const actualType = this.synthType(expr, scopeVars);
+    if (actualType === "any") return;
+
+    if (!this.isAssignable(actualType, expectedType)) {
+      this.errors.push({
+        message: `Type '${formatTypeHint(actualType)}' is not assignable to type '${formatTypeHint(expectedType)}' (${context}).`,
+        expectedType: formatTypeHint(expectedType),
+        actualType: formatTypeHint(actualType),
+      });
+    }
+  }
+
+  /**
+   * Synth mode (bottom-up): infer the type of an expression from its structure.
+   */
+  private synthType(
     expr: AgencyNode,
     scopeVars: Record<string, VariableType | "any">,
   ): VariableType | "any" {
@@ -323,26 +449,131 @@ export class TypeChecker {
       case "string":
       case "multiLineString":
         return { type: "primitiveType", value: "string" };
+      case "boolean":
+        return { type: "primitiveType", value: "boolean" };
       case "prompt":
-        return "any"; // LLM output type depends on type hint
+        return { type: "primitiveType", value: "string" };
+      case "binOpExpression": {
+        const op = expr.operator;
+        if (op === "==" || op === "!=" || op === "<" || op === ">" || op === "<=" || op === ">=" || op === "&&" || op === "||") {
+          return { type: "primitiveType", value: "boolean" };
+        }
+        // Arithmetic operators: +, -, *, /, +=, -=, *=, /=
+        if (op === "+") {
+          // Special case: + with a string operand → string
+          const leftType = this.synthType(expr.left, scopeVars);
+          const rightType = this.synthType(expr.right, scopeVars);
+          if (
+            (leftType !== "any" && leftType.type === "primitiveType" && leftType.value === "string") ||
+            (rightType !== "any" && rightType.type === "primitiveType" && rightType.value === "string")
+          ) {
+            return { type: "primitiveType", value: "string" };
+          }
+        }
+        return { type: "primitiveType", value: "number" };
+      }
       case "functionCall": {
-        // Skip builtins
-        if (expr.functionName in BUILTIN_FUNCTIONS) return "any";
+        // Check builtins first
+        if (expr.functionName in BUILTIN_FUNCTION_TYPES) {
+          return BUILTIN_FUNCTION_TYPES[expr.functionName].returnType;
+        }
         const fn = this.functionDefs[expr.functionName];
         const graphNode = this.nodeDefs[expr.functionName];
         const def = fn ?? graphNode;
         if (def?.returnType) return def.returnType;
         return "any";
       }
-      case "agencyArray":
-        return "any"; // Could be refined but keeping simple
-      case "agencyObject":
-        return "any"; // Could be refined but keeping simple
-      case "valueAccess":
+      case "agencyArray": {
+        if (expr.items.length === 0) return { type: "arrayType", elementType: { type: "primitiveType", value: "any" } };
+        // Synth each item; if all share a type, return that array type
+        const itemTypes: (VariableType | "any")[] = [];
+        for (const item of expr.items) {
+          if (item.type === "splat") {
+            // Can't easily infer splat element types
+            return "any";
+          }
+          itemTypes.push(this.synthType(item, scopeVars));
+        }
+        // Check if all non-any types are the same primitive
+        const concreteTypes = itemTypes.filter((t) => t !== "any");
+        if (concreteTypes.length === 0) return "any";
+        const first = concreteTypes[0];
+        const allSame = concreteTypes.every((t) =>
+          this.isAssignable(t, first) && this.isAssignable(first, t)
+        );
+        if (allSame) {
+          return { type: "arrayType", elementType: first };
+        }
         return "any";
+      }
+      case "agencyObject": {
+        const properties: { key: string; value: VariableType }[] = [];
+        for (const entry of expr.entries) {
+          if ("type" in entry && entry.type === "splat") {
+            // Can't easily infer splat properties
+            return "any";
+          }
+          const kv = entry as { key: string; value: AgencyNode };
+          const valueType = this.synthType(kv.value, scopeVars);
+          if (valueType === "any") {
+            return "any";
+          }
+          properties.push({ key: kv.key, value: valueType });
+        }
+        return { type: "objectType", properties };
+      }
+      case "valueAccess":
+        return this.synthValueAccess(expr, scopeVars);
       default:
         return "any";
     }
+  }
+
+  /**
+   * Walk the access chain on a ValueAccess node to resolve its type.
+   */
+  private synthValueAccess(
+    expr: ValueAccess,
+    scopeVars: Record<string, VariableType | "any">,
+  ): VariableType | "any" {
+    let currentType = this.synthType(expr.base, scopeVars);
+
+    for (const element of expr.chain) {
+      if (currentType === "any") return "any";
+      const resolved = this.resolveType(currentType);
+
+      switch (element.kind) {
+        case "property": {
+          if (resolved.type === "objectType") {
+            const prop = resolved.properties.find((p) => p.key === element.name);
+            if (prop) {
+              currentType = prop.value;
+            } else {
+              return "any";
+            }
+          } else if (resolved.type === "arrayType" && element.name === "length") {
+            currentType = { type: "primitiveType", value: "number" };
+          } else {
+            return "any";
+          }
+          break;
+        }
+        case "index": {
+          if (resolved.type === "arrayType") {
+            currentType = resolved.elementType;
+          } else {
+            return "any";
+          }
+          break;
+        }
+        case "methodCall": {
+          // Method calls return any
+          return "any";
+        }
+      }
+    }
+
+    return currentType;
   }
 
   private resolveType(vt: VariableType): VariableType {

@@ -233,7 +233,10 @@ describe("TypeChecker", () => {
             type: "assignment",
             variableName: "s",
             typeHint: { type: "stringLiteralType", value: "success" },
-            value: { type: "string", segments: [{ type: "text", value: "success" }] },
+            value: {
+              type: "prompt",
+              segments: [{ type: "text", value: "Pick a status" }],
+            },
           },
           {
             type: "functionCall",
@@ -334,8 +337,36 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
-      expect(errors[0].message).toContain("Return type");
-      expect(errors[0].message).toContain("not assignable to declared return type");
+      expect(errors[0].message).toContain("not assignable to type");
+    });
+
+    it("should skip prompt in return type check (prompts adopt expected type)", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "askName",
+            parameters: [],
+            returnType: {
+              type: "objectType",
+              properties: [{ key: "name", value: { type: "primitiveType", value: "string" } }],
+            },
+            body: [
+              {
+                type: "returnStatement",
+                value: {
+                  type: "prompt",
+                  segments: [{ type: "text", value: "What is your name?" }],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(0);
     });
   });
 
@@ -344,7 +375,6 @@ describe("TypeChecker", () => {
       const checker = new TypeChecker(
         { type: "agencyProgram", nodes: [] },
       );
-      // Need to call check() to initialize, but we test isAssignable directly
       checker.check();
 
       expect(
@@ -484,8 +514,8 @@ describe("TypeChecker", () => {
     });
   });
 
-  describe("builtin functions", () => {
-    it("should skip type checking for builtin functions", () => {
+  describe("builtin function type checking", () => {
+    it("should type check builtins - print accepts any", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -505,6 +535,631 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(0);
+    });
+
+    it("should pass sleep with a number argument", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "functionCall",
+            functionName: "sleep",
+            arguments: [{ type: "number", value: "42" }],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(0);
+    });
+
+    it("should error sleep with a string argument", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "functionCall",
+            functionName: "sleep",
+            arguments: [
+              { type: "string", segments: [{ type: "text", value: "hello" }] },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("not assignable to parameter type");
+      expect(errors[0].message).toContain("sleep");
+    });
+
+    it("should error write with wrong arity", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "functionCall",
+            functionName: "write",
+            arguments: [
+              { type: "string", segments: [{ type: "text", value: "file.txt" }] },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("Expected 2 argument(s)");
+      expect(errors[0].message).toContain("but got 1");
+    });
+
+    it("should infer builtin return type (round returns number)", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "name",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "greet",
+            arguments: [
+              {
+                type: "functionCall",
+                functionName: "round",
+                arguments: [{ type: "number", value: "3.14" }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("not assignable to parameter type");
+      expect(errors[0].actualType).toBe("number");
+      expect(errors[0].expectedType).toBe("string");
+    });
+  });
+
+  describe("binop type inference", () => {
+    it("should infer number for arithmetic operations", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "name",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "result",
+            value: {
+              type: "binOpExpression",
+              operator: "+",
+              left: { type: "number", value: "1" },
+              right: { type: "number", value: "2" },
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "greet",
+            arguments: [{ type: "variableName", value: "result" }],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("number");
+    });
+
+    it("should infer boolean for comparison operations", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "doSomething",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "result",
+            value: {
+              type: "binOpExpression",
+              operator: "==",
+              left: { type: "number", value: "1" },
+              right: { type: "number", value: "2" },
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "doSomething",
+            arguments: [{ type: "variableName", value: "result" }],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("boolean");
+    });
+
+    it("should infer string for + with a string operand", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "doSomething",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "result",
+            value: {
+              type: "binOpExpression",
+              operator: "+",
+              left: { type: "string", segments: [{ type: "text", value: "hello " }] },
+              right: { type: "number", value: "42" },
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "doSomething",
+            arguments: [{ type: "variableName", value: "result" }],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("string");
+    });
+  });
+
+  describe("array type inference", () => {
+    it("should infer number[] for array of numbers", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "name",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "greet",
+            arguments: [
+              {
+                type: "agencyArray",
+                items: [
+                  { type: "number", value: "1" },
+                  { type: "number", value: "2" },
+                  { type: "number", value: "3" },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("number[]");
+    });
+  });
+
+  describe("object type inference", () => {
+    it("should infer object type with property types", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "doSomething",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "doSomething",
+            arguments: [
+              {
+                type: "agencyObject",
+                entries: [
+                  {
+                    key: "name",
+                    value: { type: "string", segments: [{ type: "text", value: "Alice" }] },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("not assignable to parameter type");
+    });
+  });
+
+  describe("value access type inference", () => {
+    it("should resolve property access on typed object", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "doSomething",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "obj",
+            typeHint: {
+              type: "objectType",
+              properties: [
+                { key: "name", value: { type: "primitiveType", value: "string" } },
+              ],
+            },
+            value: {
+              type: "agencyObject",
+              entries: [
+                {
+                  key: "name",
+                  value: { type: "string", segments: [{ type: "text", value: "Alice" }] },
+                },
+              ],
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "doSomething",
+            arguments: [
+              {
+                type: "valueAccess",
+                base: { type: "variableName", value: "obj" },
+                chain: [{ kind: "property", name: "name" }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("string");
+      expect(errors[0].expectedType).toBe("number");
+    });
+
+    it("should resolve index access on typed array", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "name",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "nums",
+            typeHint: {
+              type: "arrayType",
+              elementType: { type: "primitiveType", value: "number" },
+            },
+            value: {
+              type: "agencyArray",
+              items: [{ type: "number", value: "1" }],
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "greet",
+            arguments: [
+              {
+                type: "valueAccess",
+                base: { type: "variableName", value: "nums" },
+                chain: [{ kind: "index", index: { type: "number", value: "0" } }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("number");
+      expect(errors[0].expectedType).toBe("string");
+    });
+
+    it("should resolve .length on array to number", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "name",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "nums",
+            typeHint: {
+              type: "arrayType",
+              elementType: { type: "primitiveType", value: "number" },
+            },
+            value: {
+              type: "agencyArray",
+              items: [{ type: "number", value: "1" }],
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "greet",
+            arguments: [
+              {
+                type: "valueAccess",
+                base: { type: "variableName", value: "nums" },
+                chain: [{ kind: "property", name: "length" }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("number");
+    });
+  });
+
+  describe("prompt type inference", () => {
+    it("should infer string for prompt in synth mode", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "doSomething",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "doSomething",
+            arguments: [
+              {
+                type: "prompt",
+                segments: [{ type: "text", value: "What is 2+2?" }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("string");
+    });
+  });
+
+  describe("variable type inference without annotations", () => {
+    it("should infer type from number literal and catch misuse", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "name",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            value: { type: "number", value: "42" },
+          },
+          {
+            type: "functionCall",
+            functionName: "greet",
+            arguments: [{ type: "variableName", value: "x" }],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("not assignable to parameter type");
+      expect(errors[0].actualType).toBe("number");
+    });
+  });
+
+  describe("for loop variable type inference", () => {
+    it("should infer item variable type from array element type", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "doSomething",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "names",
+            typeHint: {
+              type: "arrayType",
+              elementType: { type: "primitiveType", value: "string" },
+            },
+            value: {
+              type: "agencyArray",
+              items: [
+                { type: "string", segments: [{ type: "text", value: "Alice" }] },
+              ],
+            },
+          },
+          {
+            type: "forLoop",
+            itemVar: "name",
+            indexVar: "i",
+            iterable: { type: "variableName", value: "names" },
+            body: [
+              {
+                type: "functionCall",
+                functionName: "doSomething",
+                arguments: [{ type: "variableName", value: "name" }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("not assignable to parameter type");
+      expect(errors[0].actualType).toBe("string");
+      expect(errors[0].expectedType).toBe("number");
+    });
+
+    it("should infer index variable as number", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "name",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "names",
+            typeHint: {
+              type: "arrayType",
+              elementType: { type: "primitiveType", value: "string" },
+            },
+            value: {
+              type: "agencyArray",
+              items: [
+                { type: "string", segments: [{ type: "text", value: "Alice" }] },
+              ],
+            },
+          },
+          {
+            type: "forLoop",
+            itemVar: "name",
+            indexVar: "i",
+            iterable: { type: "variableName", value: "names" },
+            body: [
+              {
+                type: "functionCall",
+                functionName: "greet",
+                arguments: [{ type: "variableName", value: "i" }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("number");
+      expect(errors[0].expectedType).toBe("string");
     });
   });
 
@@ -546,6 +1201,978 @@ describe("TypeChecker", () => {
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain("not assignable to parameter type");
+    });
+  });
+
+  describe("boolean literal inference", () => {
+    it("should infer boolean type from boolean literal", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "doSomething",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "doSomething",
+            arguments: [{ type: "boolean", value: true }],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("boolean");
+    });
+  });
+
+  describe("mixed-type array inference", () => {
+    it("should fall back to any for arrays with mixed types", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectNum",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "expectNum",
+            arguments: [
+              {
+                type: "agencyArray",
+                items: [
+                  { type: "number", value: "1" },
+                  { type: "string", segments: [{ type: "text", value: "hello" }] },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      // Mixed array infers any, so no type error (any is assignable to number)
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(0);
+    });
+  });
+
+  describe("chained value access", () => {
+    it("should resolve multi-step property chain", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectNum",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "obj",
+            typeHint: {
+              type: "objectType",
+              properties: [
+                {
+                  key: "nested",
+                  value: {
+                    type: "objectType",
+                    properties: [
+                      { key: "name", value: { type: "primitiveType", value: "string" } },
+                    ],
+                  },
+                },
+              ],
+            },
+            value: {
+              type: "agencyObject",
+              entries: [
+                {
+                  key: "nested",
+                  value: {
+                    type: "agencyObject",
+                    entries: [
+                      {
+                        key: "name",
+                        value: { type: "string", segments: [{ type: "text", value: "Alice" }] },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "expectNum",
+            arguments: [
+              {
+                type: "valueAccess",
+                base: { type: "variableName", value: "obj" },
+                chain: [
+                  { kind: "property", name: "nested" },
+                  { kind: "property", name: "name" },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("string");
+      expect(errors[0].expectedType).toBe("number");
+    });
+  });
+
+  describe("value access on unknown property", () => {
+    it("should return any for unknown property access", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectNum",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "obj",
+            typeHint: {
+              type: "objectType",
+              properties: [
+                { key: "name", value: { type: "primitiveType", value: "string" } },
+              ],
+            },
+            value: {
+              type: "agencyObject",
+              entries: [
+                {
+                  key: "name",
+                  value: { type: "string", segments: [{ type: "text", value: "Alice" }] },
+                },
+              ],
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "expectNum",
+            arguments: [
+              {
+                type: "valueAccess",
+                base: { type: "variableName", value: "obj" },
+                chain: [{ kind: "property", name: "nonexistent" }],
+              },
+            ],
+          },
+        ],
+      };
+
+      // Unknown property returns any, so no type error
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(0);
+    });
+  });
+
+  describe("method call in access chain", () => {
+    it("should return any for method calls", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectNum",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "arr",
+            typeHint: {
+              type: "arrayType",
+              elementType: { type: "primitiveType", value: "number" },
+            },
+            value: {
+              type: "agencyArray",
+              items: [{ type: "number", value: "1" }],
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "expectNum",
+            arguments: [
+              {
+                type: "valueAccess",
+                base: { type: "variableName", value: "arr" },
+                chain: [
+                  {
+                    kind: "methodCall",
+                    functionCall: {
+                      type: "functionCall",
+                      functionName: "map",
+                      arguments: [],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      // Method call returns any, so no type error
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(0);
+    });
+  });
+
+  describe("reassigning an inferred variable", () => {
+    it("should error when reassigning inferred number variable with string", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "x",
+            value: { type: "number", value: "42" },
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            value: { type: "string", segments: [{ type: "text", value: "hello" }] },
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("not assignable to type");
+      expect(errors[0].variableName).toBe("x");
+      expect(errors[0].expectedType).toBe("number");
+      expect(errors[0].actualType).toBe("string");
+    });
+  });
+
+  describe("nested object type inference", () => {
+    it("should infer nested object types", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectNum",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "data",
+            value: {
+              type: "agencyObject",
+              entries: [
+                {
+                  key: "user",
+                  value: {
+                    type: "agencyObject",
+                    entries: [
+                      {
+                        key: "name",
+                        value: { type: "string", segments: [{ type: "text", value: "Alice" }] },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "expectNum",
+            arguments: [
+              {
+                type: "valueAccess",
+                base: { type: "variableName", value: "data" },
+                chain: [
+                  { kind: "property", name: "user" },
+                  { kind: "property", name: "name" },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("string");
+      expect(errors[0].expectedType).toBe("number");
+    });
+  });
+
+  describe("type alias in value access", () => {
+    it("should resolve type alias when accessing properties", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "typeAlias",
+            aliasName: "User",
+            aliasedType: {
+              type: "objectType",
+              properties: [
+                { key: "name", value: { type: "primitiveType", value: "string" } },
+                { key: "age", value: { type: "primitiveType", value: "number" } },
+              ],
+            },
+          },
+          {
+            type: "function",
+            functionName: "expectNum",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "user",
+            typeHint: { type: "typeAliasVariable", aliasName: "User" },
+            value: {
+              type: "agencyObject",
+              entries: [
+                {
+                  key: "name",
+                  value: { type: "string", segments: [{ type: "text", value: "Alice" }] },
+                },
+                {
+                  key: "age",
+                  value: { type: "number", value: "30" },
+                },
+              ],
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "expectNum",
+            arguments: [
+              {
+                type: "valueAccess",
+                base: { type: "variableName", value: "user" },
+                chain: [{ kind: "property", name: "name" }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("string");
+      expect(errors[0].expectedType).toBe("number");
+    });
+  });
+
+  describe("logical operators", () => {
+    it("should infer boolean for && operator", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectNum",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "result",
+            value: {
+              type: "binOpExpression",
+              operator: "&&",
+              left: { type: "boolean", value: true },
+              right: { type: "boolean", value: false },
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "expectNum",
+            arguments: [{ type: "variableName", value: "result" }],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("boolean");
+    });
+
+    it("should infer boolean for || operator", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectNum",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "result",
+            value: {
+              type: "binOpExpression",
+              operator: "||",
+              left: { type: "boolean", value: true },
+              right: { type: "boolean", value: false },
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "expectNum",
+            arguments: [{ type: "variableName", value: "result" }],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("boolean");
+    });
+  });
+
+  describe("arithmetic operators", () => {
+    it("should infer number for - operator", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectStr",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "s",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "result",
+            value: {
+              type: "binOpExpression",
+              operator: "-",
+              left: { type: "number", value: "10" },
+              right: { type: "number", value: "3" },
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "expectStr",
+            arguments: [{ type: "variableName", value: "result" }],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("number");
+      expect(errors[0].expectedType).toBe("string");
+    });
+
+    it("should infer number for * operator", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectStr",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "s",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "result",
+            value: {
+              type: "binOpExpression",
+              operator: "*",
+              left: { type: "number", value: "4" },
+              right: { type: "number", value: "5" },
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "expectStr",
+            arguments: [{ type: "variableName", value: "result" }],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("number");
+      expect(errors[0].expectedType).toBe("string");
+    });
+
+    it("should infer number for / operator", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectStr",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "s",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "result",
+            value: {
+              type: "binOpExpression",
+              operator: "/",
+              left: { type: "number", value: "10" },
+              right: { type: "number", value: "2" },
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "expectStr",
+            arguments: [{ type: "variableName", value: "result" }],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("number");
+      expect(errors[0].expectedType).toBe("string");
+    });
+  });
+
+  describe("empty array inference", () => {
+    it("should infer array type for empty array", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectStr",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "s",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "expectStr",
+            arguments: [
+              {
+                type: "agencyArray",
+                items: [],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("not assignable to parameter type");
+    });
+  });
+
+  describe("for loop with non-array iterable", () => {
+    it("should infer any for item when iterable is not an array type", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectNum",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "data",
+            typeHint: { type: "primitiveType", value: "string" },
+            value: { type: "string", segments: [{ type: "text", value: "hello" }] },
+          },
+          {
+            type: "forLoop",
+            itemVar: "item",
+            iterable: { type: "variableName", value: "data" },
+            body: [
+              {
+                type: "functionCall",
+                functionName: "expectNum",
+                arguments: [{ type: "variableName", value: "item" }],
+              },
+            ],
+          },
+        ],
+      };
+
+      // item is any since data is string (not array), so no error
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(0);
+    });
+  });
+
+  describe("inferred variable used correctly", () => {
+    it("should pass when inferred type matches expected parameter type", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectNum",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            value: { type: "number", value: "42" },
+          },
+          {
+            type: "functionCall",
+            functionName: "expectNum",
+            arguments: [{ type: "variableName", value: "x" }],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(0);
+    });
+  });
+
+  describe("assignment value vs annotation mismatch", () => {
+    it("should error when function return type conflicts with variable annotation", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "name",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
+            ],
+            returnType: { type: "primitiveType", value: "string" },
+            body: [
+              {
+                type: "returnStatement",
+                value: { type: "string", segments: [{ type: "text", value: "Hello" }] },
+              },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "response",
+            typeHint: { type: "primitiveType", value: "number" },
+            value: {
+              type: "functionCall",
+              functionName: "greet",
+              arguments: [
+                { type: "string", segments: [{ type: "text", value: "World" }] },
+              ],
+            },
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("not assignable to type");
+      expect(errors[0].actualType).toBe("string");
+      expect(errors[0].expectedType).toBe("number");
+    });
+
+    it("should pass when function return type matches variable annotation", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "getNum",
+            parameters: [],
+            returnType: { type: "primitiveType", value: "number" },
+            body: [
+              {
+                type: "returnStatement",
+                value: { type: "number", value: "42" },
+              },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "number" },
+            value: {
+              type: "functionCall",
+              functionName: "getNum",
+              arguments: [],
+            },
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(0);
+    });
+
+    it("should allow prompt assigned to any annotated type (check mode skips prompts)", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "result",
+            typeHint: {
+              type: "objectType",
+              properties: [
+                { key: "name", value: { type: "primitiveType", value: "string" } },
+              ],
+            },
+            value: {
+              type: "prompt",
+              segments: [{ type: "text", value: "What is your name?" }],
+            },
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(0);
+    });
+
+    it("should error when literal value conflicts with annotation", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "number" },
+            value: { type: "string", segments: [{ type: "text", value: "hello" }] },
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("not assignable to type");
+      expect(errors[0].actualType).toBe("string");
+      expect(errors[0].expectedType).toBe("number");
+    });
+  });
+
+  describe("builtin return type inference", () => {
+    it("should infer string from input() return type", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectNum",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "expectNum",
+            arguments: [
+              {
+                type: "functionCall",
+                functionName: "input",
+                arguments: [
+                  { type: "string", segments: [{ type: "text", value: "Enter name: " }] },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("string");
+      expect(errors[0].expectedType).toBe("number");
+    });
+
+    it("should infer string from read() return type", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectNum",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "expectNum",
+            arguments: [
+              {
+                type: "functionCall",
+                functionName: "read",
+                arguments: [
+                  { type: "string", segments: [{ type: "text", value: "file.txt" }] },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].actualType).toBe("string");
+      expect(errors[0].expectedType).toBe("number");
+    });
+
+    it("should infer any from fetchJSON() return type (passes any check)", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectNum",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "expectNum",
+            arguments: [
+              {
+                type: "functionCall",
+                functionName: "fetchJSON",
+                arguments: [
+                  { type: "string", segments: [{ type: "text", value: "https://example.com" }] },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      // fetchJSON returns any, so it should pass any parameter check
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(0);
     });
   });
 });

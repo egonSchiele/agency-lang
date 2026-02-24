@@ -958,6 +958,9 @@ async function _response(name, age, __metadata) {
     
     result = await greet(params);
     
+
+    result = result || "greet ran successfully but did not return a value";
+
     toolCallEndTime = performance.now();
     await __callHook("onToolCallEnd", { toolName: "greet", result, timeTaken: toolCallEndTime - toolCallStartTime });
   

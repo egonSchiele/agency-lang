@@ -242,9 +242,9 @@ export class TypeChecker {
       }
     }
 
-    this.inferredReturnTypes[name] = inferred;
+    this.inferredReturnTypes[name] = this.widenType(inferred);
     this.inferringReturnType.delete(name);
-    return inferred;
+    return this.inferredReturnTypes[name];
   }
 
   private checkScopes(): void {
@@ -367,7 +367,7 @@ export class TypeChecker {
             });
           }
           const inferred = this.synthType(node.value, vars);
-          vars[node.variableName] = inferred;
+          vars[node.variableName] = this.widenType(inferred);
         }
       } else if (node.type === "importStatement") {
         for (const importName of node.importedNames) {
@@ -549,7 +549,13 @@ export class TypeChecker {
       }
       case "number":
         return { type: "primitiveType", value: "number" };
-      case "string":
+      case "string": {
+        // Plain string literal (single text segment, no interpolation) → literal type
+        if (expr.segments.length === 1 && expr.segments[0].type === "text") {
+          return { type: "stringLiteralType", value: expr.segments[0].value };
+        }
+        return { type: "primitiveType", value: "string" };
+      }
       case "multiLineString":
         return { type: "primitiveType", value: "string" };
       case "boolean":
@@ -566,10 +572,11 @@ export class TypeChecker {
           // Special case: + with a string operand → string
           const leftType = this.synthType(expr.left, scopeVars);
           const rightType = this.synthType(expr.right, scopeVars);
-          if (
-            (leftType !== "any" && leftType.type === "primitiveType" && leftType.value === "string") ||
-            (rightType !== "any" && rightType.type === "primitiveType" && rightType.value === "string")
-          ) {
+          const isString = (t: VariableType | "any") =>
+            t !== "any" &&
+            ((t.type === "primitiveType" && t.value === "string") ||
+              t.type === "stringLiteralType");
+          if (isString(leftType) || isString(rightType)) {
             return { type: "primitiveType", value: "string" };
           }
         }
@@ -654,7 +661,31 @@ export class TypeChecker {
 
       switch (element.kind) {
         case "property": {
-          if (resolved.type === "objectType") {
+          if (resolved.type === "unionType") {
+            // Collect property types from all union members that have this property
+            const propTypes: VariableType[] = [];
+            for (const member of resolved.types) {
+              const resolvedMember = this.resolveType(member);
+              if (resolvedMember.type === "objectType") {
+                const prop = resolvedMember.properties.find(
+                  (p) => p.key === element.name,
+                );
+                if (prop) propTypes.push(prop.value);
+              }
+            }
+            if (propTypes.length > 0) {
+              if (propTypes.length === 1) {
+                currentType = propTypes[0];
+              } else {
+                currentType = { type: "unionType", types: propTypes };
+              }
+            } else {
+              this.errors.push({
+                message: `Property '${element.name}' does not exist on type '${formatTypeHint(resolved)}'.`,
+              });
+              return "any";
+            }
+          } else if (resolved.type === "objectType") {
             const prop = resolved.properties.find((p) => p.key === element.name);
             if (prop) {
               currentType = prop.value;
@@ -692,6 +723,42 @@ export class TypeChecker {
     return currentType;
   }
 
+  /**
+   * Widen literal types to their base primitives.
+   * Used when inferring types for untyped variables so that reassignment works.
+   */
+  private widenType(vt: VariableType | "any"): VariableType | "any" {
+    if (vt === "any") return "any";
+    switch (vt.type) {
+      case "stringLiteralType":
+        return { type: "primitiveType", value: "string" };
+      case "numberLiteralType":
+        return { type: "primitiveType", value: "number" };
+      case "booleanLiteralType":
+        return { type: "primitiveType", value: "boolean" };
+      case "objectType":
+        return {
+          type: "objectType",
+          properties: vt.properties.map((p) => ({
+            key: p.key,
+            value: this.widenType(p.value) as VariableType,
+          })),
+        };
+      case "arrayType":
+        return {
+          type: "arrayType",
+          elementType: this.widenType(vt.elementType) as VariableType,
+        };
+      case "unionType":
+        return {
+          type: "unionType",
+          types: vt.types.map((t) => this.widenType(t) as VariableType),
+        };
+      default:
+        return vt;
+    }
+  }
+
   private resolveType(vt: VariableType): VariableType {
     if (vt.type === "typeAliasVariable") {
       const resolved = this.typeAliases[vt.aliasName];
@@ -710,17 +777,19 @@ export class TypeChecker {
     const resolvedSource = this.resolveType(source);
     const resolvedTarget = this.resolveType(target);
 
+    // Union type as source: every member must be assignable to target
+    // (checked first so that union-to-union works: each source member is tested
+    // against the full target union via the "union as target" rule below)
+    if (resolvedSource.type === "unionType") {
+      return resolvedSource.types.every((t) =>
+        this.isAssignable(t, resolvedTarget),
+      );
+    }
+
     // Union type as target: source must be assignable to at least one member
     if (resolvedTarget.type === "unionType") {
       return resolvedTarget.types.some((t) =>
         this.isAssignable(resolvedSource, t),
-      );
-    }
-
-    // Union type as source: every member must be assignable to target
-    if (resolvedSource.type === "unionType") {
-      return resolvedSource.types.every((t) =>
-        this.isAssignable(t, resolvedTarget),
       );
     }
 

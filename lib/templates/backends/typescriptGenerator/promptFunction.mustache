@@ -152,19 +152,14 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
   __messages.push(smoltalk.assistantMessage(responseMessage.output));
   {{#hasResponseFormat}}
   try {
-  const result = JSON.parse(responseMessage.output || "");
-  
-  // because the LLM doesn't always follow the response format perfectly
-  if ("response" in result) {
-    return result.response;
-  }
-  return result;
-
+    const __rawResult = JSON.parse(responseMessage.output || "");
+    const extracted =  __extractResponse(__rawResult, {{{zodSchema:string}}});
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   } catch (e) {
-    return responseMessage.output;
-    // console.error("Error parsing response for variable '{{{variableName:string}}}':", e);
-    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
-    // throw e;
+    const extracted =  __extractResponse(responseMessage.output, {{{zodSchema:string}}});
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   }
   {{/hasResponseFormat}}
 

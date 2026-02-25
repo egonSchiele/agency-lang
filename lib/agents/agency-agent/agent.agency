@@ -35,8 +35,22 @@ def printCode(code: string): string {
   return "printed code successfully"
 }
 
+def writeCodeWithConfirm(filename: string, content: string): string {
+  """
+  Use this tool to write code to a file to the filesystem. The filename should include the path and extension (e.g., 'lib/agents/myAgent.agency').
+  """
+  print(color.yellow())
+  message = "You're about to write to the file ${filename} with the following content"
+  return interrupt({ 
+    tool: "writeCodeWithConfirm",
+    message: message,
+    content: content
+  })
+  write(filename, content)
+}
+
 node main() {
-  return plan()
+  // return plan()
   //return printSample()
   plan = { 
     overallGoal: "Help with meal planning by generating meal plans with recipe imports and database interactions.",
@@ -79,7 +93,7 @@ type Plan = {
   desiredActions: string[] # array of descriptions of each action
 }
 
-type DesignAction = { type: "askUser"; question: string } | { type: "done"; finalCode: string } | { type: "start" }
+type DesignAction = { type: "askUser"; question: string } | { type: "done"; finalCode: string; filename: string } | { type: "start" }
 
 node design(plan) {
   print(color.cyan("Now let's design an agent to accomplish that plan."))
@@ -102,8 +116,7 @@ node design(plan) {
       }
     }
   }
-  if (nextAction.finalCode) {
-    print(color.cyan("Here's the final code for the agent we've designed:"))
-    printCode(nextAction.finalCode)
-  }
+  printJSON(color.magenta(nextAction))
+  nextAction.filename = nextAction.filename || "agent.agency"
+  writeCodeWithConfirm(nextAction.filename, nextAction.finalCode)
 }

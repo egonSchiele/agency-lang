@@ -142,6 +142,22 @@ while (condition) {
 }
 ```
 
+And `for` loops:
+
+```ts
+for (i in range(5)) {
+  print(i)
+}
+
+for (item in items) {
+  print(item)
+}
+
+for (item, index in items) {
+  print(item, index)
+}
+```
+
 ### Imports
 When an agency file gets transpiled to TypeScript, all of the nodes and functions are available for import. You can import them into a typescript file like this:
 
@@ -728,6 +744,5 @@ node handleTodo(userMessage: string) {
 When you create multiple agency files and import nodes from one file into another, the nodes in all the files will get merged into a single graph. This means the node names must be unique across all files.
 
 ### Unsupported features
-- else statements aren't supported yet -- use match statements with a default case instead
 - no higher order functions yet (e.g., `map`, `filter`, `reduce`, etc.) or lambda functions
 - string interpolation is limited -- you can only interpolate variable names, not expressions.

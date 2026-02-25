@@ -21,8 +21,8 @@ def writeToPlan(fieldName: string, content: string | string[]): Plan {
   Call this tool, one field at a time, passing in the field name you want to modify and the new content for that field. The tool returns the current plan after your modification.
   """
   userPlan[fieldName] = content
-  print(color.green("Updated plan ${fieldName}"))
-  printJSON(userPlan)
+  // print(color.green("Updated plan ${fieldName}"))
+  // printJSON(userPlan)
   return userPlan
 }
 

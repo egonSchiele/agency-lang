@@ -259,7 +259,7 @@ export function simpleLiteralParser(input: string): ParserResult<Literal> {
   const parser = or(
     booleanParser,
     numberParser,
-    simpleStringParser,
+    _stringParser,
     variableNameParser,
   );
   return parser(input);

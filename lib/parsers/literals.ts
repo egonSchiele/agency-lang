@@ -150,6 +150,7 @@ export const simpleStringParser: Parser<StringLiteral> = seqC(
     map(stringTextSegmentParser, (x) => [x]),
     "segments",
   ),
+  oneOf('"`'),
 );
 
 export const _stringParser: Parser<StringLiteral> = seqC(

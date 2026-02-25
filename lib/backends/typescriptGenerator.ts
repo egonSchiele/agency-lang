@@ -182,14 +182,15 @@ export class TypeScriptGenerator extends BaseGenerator {
     this.adjacentNodes[nodeName] = [...this.currentAdjacentNodes];
     this.isInsideGraphNode = false;
     this.endScope();
-    const paramNames =
-      "[" + parameters.map((p) => `"${p.name}"`).join(", ") + "]";
+    const paramAssignments = parameters
+      .map((p) => `__stack.args["${p.name}"] = state.data.${p.name};`)
+      .join("\n      ");
 
     return renderGraphNode.default({
       name: nodeName,
       body: bodyCode.join("\n"),
       hasParam: parameters.length > 0,
-      paramNames,
+      paramAssignments,
     });
   }
 
@@ -420,10 +421,14 @@ export class TypeScriptGenerator extends BaseGenerator {
     const bodyCode = this.processBodyAsParts(body);
 
     this.endScope();
-    const argsStr = args.map((arg) => `"${arg}"`).join(", ") || "";
+    const paramList = args.length > 0 ? args.join(", ") + ", " : "";
+    const paramAssignments = args
+      .map((arg) => `__stack.args["${arg}"] = ${arg};`)
+      .join("\n    ");
     return renderFunctionDefinition.default({
       functionName,
-      argsStr,
+      paramList,
+      paramAssignments,
       functionBody: bodyCode.join("\n"),
     });
   }
@@ -472,6 +477,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       return renderInternalFunctionCall.default({
         functionName,
         argsString,
+        hasArgs: parts.length > 0,
         statelogClient: "statelogClient",
         graph: "__graph",
         awaitPrefix: node.async ? "" : "await ",
@@ -665,29 +671,6 @@ export class TypeScriptGenerator extends BaseGenerator {
     }
     const tools = _tools.length > 0 ? `[${_tools}]` : "undefined";
 
-    /* What's going on here? This is annoying. We change all agency functions to take an array of arguments.
-So, for example, `function add(a, b)` would get turned into `function add(arr)`.
-Earlier, the arguments were getting converted into an object like `function add({a, b})` because LLMs
-pass back an object of parameters for the function calls, so that made it easy to pass those arguments
-straight to a function.
-
-But that meant if a function was defined in another file, we would need to parse the contents of the file
-to understand the names of the function parameters, hence the idea of an array. Unfortunately, the array
-still doesn't solve the problem completely, because if what we get back from a tool call is an object
-like `{a:1, b:2}`, we need to know how to convert it into an array. We need to know the order of the parameters.
-
-So now, every function call generates a related tool definition, but it also generats an array of parameter names.
-So if the user defines `add`, we'll generate `export const __addTool`, which is the tool definition,
-and `export const __addToolParams`, which is an array of param names.
-
-It's a mess and needs rethinking 🤮
-
-This still doesn't work perfectly, because I can't introspect imported functions to see if they throw an interrupt,
-so I have to always assume they do, which reduces some opportunity for parallelism. Maybe I just need to bite the bullet
-and commit to having a preprocessed step where all the files get read.
-I'll probably need to do that for supporting type checking anyway.
-*/
-
     const functionCalls = (
       prompt.tools || { type: "usesTool", toolNames: [] }
     ).toolNames
@@ -825,7 +808,10 @@ I'll probably need to do that for supporting type checking anyway.
     ) {
       const args = node.iterable.arguments;
       const start = args.length >= 1 ? this.processNode(args[0]) : "0";
-      const end = args.length >= 2 ? this.processNode(args[1]) : this.processNode(args[0]);
+      const end =
+        args.length >= 2
+          ? this.processNode(args[1])
+          : this.processNode(args[0]);
       const actualStart = args.length >= 2 ? start : "0";
       const actualEnd = args.length >= 2 ? end : start;
       return `for (let ${node.itemVar} = ${actualStart}; ${node.itemVar} < ${actualEnd}; ${node.itemVar}++) {\n${bodyCodeStr}\n}\n`;
@@ -987,8 +973,12 @@ I'll probably need to do that for supporting type checking anyway.
   protected processBinOpExpression(node: BinOpExpression): string {
     const left = this.processNode(node.left).trim();
     const right = this.processNode(node.right).trim();
-    const wrappedLeft = this.needsParensLeft(node.left, node.operator) ? `(${left})` : left;
-    const wrappedRight = this.needsParensRight(node.right, node.operator) ? `(${right})` : right;
+    const wrappedLeft = this.needsParensLeft(node.left, node.operator)
+      ? `(${left})`
+      : left;
+    const wrappedRight = this.needsParensRight(node.right, node.operator)
+      ? `(${right})`
+      : right;
     return `${wrappedLeft} ${node.operator} ${wrappedRight}`;
   }
 
@@ -1013,7 +1003,27 @@ I'll probably need to do that for supporting type checking anyway.
         return this.processNode(arg);
       }
     });
-    const argsString = "[" + parts.join(", ") + "]";
+
+    // Look up target node's parameter names
+    const targetNode = this.graphNodes.find((n) => n.nodeName === functionName);
+    let argsString: string;
+    if (targetNode && targetNode.parameters.length > 0) {
+      const entries = targetNode.parameters.map(
+        (p, i) => `${p.name}: ${parts[i]}`,
+      );
+      argsString = "{ " + entries.join(", ") + " }";
+    } else if (parts.length > 0) {
+      // For imported nodes, build the object at runtime using __NodeParams
+      argsString = `Object.fromEntries(__${functionName}NodeParams.map((k, i) => [k, [${parts.join(", ")}][i]]))`;
+    } else if (parts.length === 0) {
+      argsString = "{}";
+    } else {
+      throw new Error(
+        `Too many arguments provided to node '${functionName}'. Expected 0 but got ${parts.length}.`,
+      );
+      //argsString = parts.join(", ");
+    }
+
     return goToNode.default({
       nodeName: functionName,
       hasData: parts.length > 0,
@@ -1033,6 +1043,13 @@ I'll probably need to do that for supporting type checking anyway.
       );
       lines.push(
         `import ${defaultImportName} from "${importNode.agencyFile.replace(".agency", ".js")}";`,
+      );
+      // Import node parameter names for building correct data objects in goToNode calls
+      const nodeParamImports = importNode.importedNodes
+        .map((name) => `__${name}NodeParams`)
+        .join(", ");
+      lines.push(
+        `import { ${nodeParamImports} } from "${importNode.agencyFile.replace(".agency", ".js")}";`,
       );
     });
 
@@ -1070,6 +1087,11 @@ I'll probably need to do that for supporting type checking anyway.
           hasArgs: args.length > 0,
           argsStr,
         }),
+      );
+      // Export node parameter names so imported nodes can build correct data objects
+      const paramNames = args.map((arg) => `"${arg.name}"`).join(", ");
+      lines.push(
+        `export const __${node.nodeName}NodeParams = [${paramNames}];`,
       );
     }
 

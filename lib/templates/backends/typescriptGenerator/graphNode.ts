@@ -46,15 +46,11 @@ graph.node("{{{name}}}", async (state) => {
 
     {{#hasParam}}
 
-    const __params = {{{paramNames}}};
-
     // Any arguments that were passed into this node,
     // save them onto the stack, unless we are restoring the stack after an interrupt,
     // in which case leave as is
     if (state.data !== "<from-stack>") {
-      (state.data).forEach((item, index) => {
-        __stack.args[__params[index]] = item;
-      });
+      {{{paramAssignments}}}
     }
     {{/hasParam}}
     {{{body}}}
@@ -68,7 +64,7 @@ graph.node("{{{name}}}", async (state) => {
 export type TemplateType = {
   name: string | boolean | number;
   hasParam: boolean;
-  paramNames: string | boolean | number;
+  paramAssignments: string | boolean | number;
   body: string | boolean | number;
 };
 

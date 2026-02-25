@@ -193,13 +193,11 @@ export class DeclarationGenerator {
   }
 
   private emitFunction(fn: FunctionDefinition): void {
-    // def functions are exported as: export async function name(args, __metadata={})
-    // args is an array of the parameter types
-    const paramTypes = fn.parameters.map((p) =>
-      p.typeHint ? this.typeToString(p.typeHint) : "any",
-    );
-    const argsType =
-      paramTypes.length > 0 ? `[${paramTypes.join(", ")}]` : "[]";
+    const params = fn.parameters.map((p) => {
+      const type = p.typeHint ? this.typeToString(p.typeHint) : "any";
+      return `${p.name}: ${type}`;
+    });
+    params.push("__metadata?: Record<string, any>");
     const returnType = fn.returnType
       ? this.typeToString(fn.returnType)
       : "any";
@@ -208,7 +206,7 @@ export class DeclarationGenerator {
       this.emit(`/** ${fn.docString.value.trim()} */`);
     }
     this.emit(
-      `export function ${fn.functionName}(args: ${argsType}, __metadata?: Record<string, any>): Promise<${returnType}>;`,
+      `export function ${fn.functionName}(${params.join(", ")}): Promise<${returnType}>;`,
     );
   }
 

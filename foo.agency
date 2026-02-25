@@ -3,12 +3,12 @@ type User = {
   age: number
 }
 
-def foo() {
+def foo(name: string, age: number): User {
   response: User = llm("What is your name and age?")
-  return response.asdasd
+  return response
 }
 
 node main() {
-  response: boolean = foo()
-  print(response.asdasd)
+  response = foo("John", 30)
+  print(response.name)
 }

@@ -30,7 +30,7 @@ describe("DeclarationGenerator", () => {
 
     const result = generateDeclarations(program);
     expect(result).toContain(
-      "export function add(args: [number, number], __metadata?: Record<string, any>): Promise<number>;",
+      "export function add(x: number, y: number, __metadata?: Record<string, any>): Promise<number>;",
     );
     expect(result).toContain('export const __addTool:');
     expect(result).toContain('export const __addToolParams: ["x", "y"];');
@@ -113,7 +113,7 @@ describe("DeclarationGenerator", () => {
 
     const result = generateDeclarations(program);
     expect(result).toContain(
-      "export function doStuff(args: [any], __metadata?: Record<string, any>): Promise<any>;",
+      "export function doStuff(input: any, __metadata?: Record<string, any>): Promise<any>;",
     );
   });
 
@@ -184,7 +184,7 @@ describe("DeclarationGenerator", () => {
 
     const result = generateDeclarations(program);
     expect(result).toContain(
-      'export function process(args: [number[], "fast" | "slow"], __metadata?: Record<string, any>): Promise<{ count: number; result: string }>;',
+      'export function process(items: number[], mode: "fast" | "slow", __metadata?: Record<string, any>): Promise<{ count: number; result: string }>;',
     );
   });
 
@@ -311,7 +311,7 @@ describe("DeclarationGenerator", () => {
     // Has function with docstring
     expect(result).toContain("/** Formats a name */");
     expect(result).toContain(
-      "export function formatName(args: [Name], __metadata?: Record<string, any>): Promise<string>;",
+      "export function formatName(name: Name, __metadata?: Record<string, any>): Promise<string>;",
     );
     // Has node
     expect(result).toContain(

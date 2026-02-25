@@ -13,7 +13,7 @@ export const template = `if (
           })
 
   toolCallStartTime = performance.now();
-  
+
   let result;
   if (__interruptResponse && __interruptResponse.type === "reject") {
         __messages.push(smoltalk.toolMessage("tool call rejected", {
@@ -27,19 +27,17 @@ export const template = `if (
   } else {
     await __callHook("onToolCallStart", { toolName: "{{{name}}}", args: params });
     {{#isBuiltin}}
-    // if it's a builtin, that means it doesn't take an array of params.
-    // use a spread operator to pass in the params as individual arguments.
     result = await {{{internalName?:string}}}(...params);
     {{/isBuiltin}}
     {{^isBuiltin}}
-    result = await {{{name}}}(params);
+    result = await {{{name}}}(...params);
     {{/isBuiltin}}
 
     result = result || "{{{name}}} ran successfully but did not return a value";
 
     toolCallEndTime = performance.now();
     await __callHook("onToolCallEnd", { toolName: "{{{name}}}", result, timeTaken: toolCallEndTime - toolCallStartTime });
-  
+
     statelogClient.toolCall({
       toolName: "{{{name:string}}}",
       params,
@@ -58,7 +56,7 @@ export const template = `if (
       haltExecution = true;
       break;
     }
-  
+
       // Add function result to messages
     __messages.push(smoltalk.toolMessage(result, {
           tool_call_id: toolCall.id,

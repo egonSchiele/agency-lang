@@ -1,0 +1,21 @@
+{
+  "sourceFile": "interruptReturnInFunc.agency",
+  "tests": [
+    {
+      "nodeName": "foo",
+      "input": "",
+      "expectedOutput": "{\"greeting\":\"Kya chal raha jai, AI World!\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to greet someone?"
+        }
+      ]
+    }
+  ]
+}

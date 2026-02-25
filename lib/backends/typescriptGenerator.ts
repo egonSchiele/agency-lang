@@ -29,6 +29,7 @@ import * as renderFunctionDefinition from "../templates/backends/typescriptGener
 import * as renderInternalFunctionCall from "../templates/backends/typescriptGenerator/internalFunctionCall.js";
 import * as renderFunctionCallAssignment from "../templates/backends/typescriptGenerator/functionCallAssignment.js";
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
+import * as renderInterruptReturn from "../templates/backends/typescriptGenerator/interruptReturn.js";
 import * as goToNode from "../templates/backends/typescriptGenerator/goToNode.js";
 import * as renderGraphNode from "../templates/backends/typescriptGenerator/graphNode.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
@@ -211,11 +212,13 @@ export class TypeScriptGenerator extends BaseGenerator {
       node.value.type === "functionCall" &&
       node.value.functionName === "interrupt"
     ) {
-      /* In this case we're not popping off the stack, because we need to save the state,
-      because we will be restoring it (since this is an interrupt). However we do need to
-      advance the step so that the next time we come here, we start at the part after this
-      interrupt. */
-      return `__stack.step++;\nreturn ${returnCode}\n`;
+      const interruptArgs = node.value.arguments
+        .map((arg) => this.processNode(arg))
+        .join(", ");
+      return renderInterruptReturn.default({
+        interruptArgs,
+        nodeContext: this.getCurrentScope().type === "node",
+      });
     } else if (node.value.type === "prompt") {
       return `${returnCode}\n__stateStack.pop();\nreturn __self.${DEFAULT_PROMPT_NAME};\n`;
     }

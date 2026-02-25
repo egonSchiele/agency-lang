@@ -760,8 +760,27 @@ export async function greet(name, age, __metadata={}) {
       
 
       if (__step <= 1) {
-        __stack.step++;
-return interrupt(`Agent wants to call the greet function with name: ${__stack.args.name} and age: ${__stack.args.age}`)
+        if (__stateStack.interruptData?.interruptResponse?.type === "approve") {
+  __stateStack.interruptData.interruptResponse = null;
+} else if (__stateStack.interruptData?.interruptResponse?.type === "resolve") {
+  const __resolvedValue = __stateStack.interruptData.interruptResponse.value;
+  __stateStack.interruptData.interruptResponse = null;
+  
+  
+  __stateStack.pop();
+  return __resolvedValue;
+  
+} else {
+  const __interruptResult = interrupt(`Agent wants to call the greet function with name: ${__stack.args.name} and age: ${__stack.args.age}`);
+  __stateStack.interruptData = {
+    nodesTraversed: __graph.getNodesTraversed(),
+  };
+  __interruptResult.__state = __stateStack.toJSON();
+  
+  
+  return __interruptResult;
+  
+}
         __stack.step++;
       }
       

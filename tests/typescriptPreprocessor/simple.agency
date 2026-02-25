@@ -1,4 +1,4 @@
 def greet(name) {
-  result = `Hello, {name}!`
+  result = llm("Hello, {name}!")
   return result
 }

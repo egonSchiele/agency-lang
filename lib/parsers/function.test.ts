@@ -169,7 +169,7 @@ describe("functionParser", () => {
               type: "assignment",
               variableName: "bar",
               value: {
-                type: "prompt",
+                type: "string",
                 segments: [{ type: "text", value: "say hello" }],
               },
             },
@@ -358,7 +358,7 @@ describe("functionParser", () => {
               type: "assignment",
               variableName: "bar",
               value: {
-                type: "prompt",
+                type: "string",
                 segments: [{ type: "text", value: "say hello" }],
               },
             },
@@ -479,7 +479,7 @@ describe("functionParser", () => {
               type: "assignment",
               variableName: "bar",
               value: {
-                type: "prompt",
+                type: "string",
                 segments: [
                   { type: "text", value: "say hello to " },
                   { type: "interpolation", expression: { type: "variableName", value: "name" } },
@@ -1776,7 +1776,7 @@ describe("asyncFunctionParser", () => {
               type: "assignment",
               variableName: "bar",
               value: {
-                type: "prompt",
+                type: "string",
                 segments: [{ type: "text", value: "say hello" }],
               },
             },
@@ -1918,7 +1918,7 @@ describe("syncFunctionParser", () => {
               type: "assignment",
               variableName: "bar",
               value: {
-                type: "prompt",
+                type: "string",
                 segments: [{ type: "text", value: "say hello" }],
               },
             },
@@ -2152,7 +2152,7 @@ describe("timeBlockParser", () => {
               type: "assignment",
               variableName: "foo",
               value: {
-                type: "prompt",
+                type: "string",
                 segments: [{ type: "text", value: "hello" }],
               },
             },
@@ -2298,7 +2298,7 @@ describe("timeBlockParser", () => {
               type: "assignment",
               variableName: "y",
               value: {
-                type: "prompt",
+                type: "string",
                 segments: [{ type: "text", value: "prompt" }],
               },
             },
@@ -2411,7 +2411,7 @@ describe("graphNodeParser", () => {
               type: "assignment",
               variableName: "message",
               value: {
-                type: "prompt",
+                type: "string",
                 segments: [{ type: "text", value: "hello" }],
               },
             },
@@ -2551,7 +2551,7 @@ describe("graphNodeParser", () => {
               type: "assignment",
               variableName: "message",
               value: {
-                type: "prompt",
+                type: "string",
                 segments: [{ type: "text", value: "hello" }],
               },
             },

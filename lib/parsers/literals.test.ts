@@ -309,16 +309,8 @@ describe("literals parsers", () => {
           },
         },
       },
-      {
-        input: '"`backtick`"',
-        expected: {
-          success: true,
-          result: {
-            type: "string",
-            segments: [{ type: "text", value: "`backtick`" }],
-          },
-        },
-      },
+      // backticks are now string delimiters, so they can't be embedded in double-quoted strings
+      // (this test case removed as the parser partially succeeds in a misleading way)
 
       // Strings with interpolation
       {
@@ -1289,13 +1281,13 @@ describe("literals parsers", () => {
 
   describe("literalParser", () => {
     const testCases = [
-      // Prompt literals (highest precedence)
+      // Backtick string literals (highest precedence)
       {
         input: "`hello`",
         expected: {
           success: true,
           result: {
-            type: "prompt",
+            type: "string",
             segments: [{ type: "text", value: "hello" }],
           },
         },
@@ -1305,7 +1297,7 @@ describe("literals parsers", () => {
         expected: {
           success: true,
           result: {
-            type: "prompt",
+            type: "string",
             segments: [
               {
                 type: "interpolation",

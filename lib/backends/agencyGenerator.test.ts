@@ -197,7 +197,7 @@ describe("AgencyGenerator - Smart parenthesization", () => {
   describe("no unnecessary parens", () => {
     it("should not add parens for chained same-precedence left-associative ops", () => {
       const output = formatAgency('x = "hi" + name + "!"');
-      expect(output).toContain('"hi" + name + "!"');
+      expect(output).toContain('"hi${name}!"');
     });
 
     it("should not add parens for chained addition", () => {

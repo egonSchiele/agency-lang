@@ -10,6 +10,6 @@ def safeAction(x: string): string {
 node main() {
   +riskyAction
   +safeAction
-  result: string = `Do something risky and something safe`
+  result: string = llm("Do something risky and something safe")
   print(result)
 }

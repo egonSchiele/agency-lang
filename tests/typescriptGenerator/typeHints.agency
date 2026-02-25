@@ -1,9 +1,9 @@
 node main() {
   count :: number
-  count = `the number 42`
+  count = llm("the number 42")
 
   message :: string
-  message = `a greeting message`
+  message = llm("a greeting message")
 
   print(count)
   print(message)

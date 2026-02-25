@@ -46,7 +46,7 @@ import {
 } from "./utils.js";
 
 export const stringTextSegmentParser: Parser<TextSegment> = map(
-  many1Till(oneOf("'\"`$")),
+  many1Till(oneOf('"`$')),
   (text) => ({
     type: "text",
     value: text,
@@ -145,7 +145,7 @@ export function numberParser(input: string): ParserResult<NumberLiteral> {
 
 export const simpleStringParser: Parser<StringLiteral> = seqC(
   set("type", "string"),
-  oneOf("'\"`"),
+  oneOf('"`'),
   capture(
     map(stringTextSegmentParser, (x) => [x]),
     "segments",
@@ -154,12 +154,12 @@ export const simpleStringParser: Parser<StringLiteral> = seqC(
 
 export const _stringParser: Parser<StringLiteral> = seqC(
   set("type", "string"),
-  oneOf("'\"`"),
+  oneOf('"`'),
   capture(
     many(or(stringTextSegmentParser, interpolationSegmentParser)),
     "segments",
   ),
-  oneOf("'\"`"),
+  oneOf('"`'),
 );
 
 export const stringParser: Parser<StringLiteral> = (input: string) => {

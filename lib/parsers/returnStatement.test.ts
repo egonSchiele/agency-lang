@@ -31,7 +31,7 @@ describe("returnStatementParser", () => {
         result: {
           type: "returnStatement",
           value: {
-            type: "prompt",
+            type: "string",
             segments: [{ type: "text", value: "say hello" }],
           },
         },

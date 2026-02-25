@@ -383,7 +383,7 @@ describe("async/sync function calls via valueAccessParser", () => {
 describe("streamingPromptLiteralParser", () => {
   const testCases = [
     {
-      input: "streaming `Hello world`",
+      input: 'streaming llm("Hello world")',
       expected: {
         success: true,
         result: {
@@ -394,7 +394,7 @@ describe("streamingPromptLiteralParser", () => {
       },
     },
     {
-      input: "stream `Generate a response`",
+      input: 'stream llm("Generate a response")',
       expected: {
         success: true,
         result: {
@@ -405,7 +405,7 @@ describe("streamingPromptLiteralParser", () => {
       },
     },
     {
-      input: "streaming `Hello ${name}`",
+      input: 'streaming llm("Hello ${name}")',
       expected: {
         success: true,
         result: {
@@ -419,7 +419,7 @@ describe("streamingPromptLiteralParser", () => {
       },
     },
     {
-      input: "streaming ``",
+      input: 'streaming llm("")',
       expected: {
         success: true,
         result: {
@@ -430,8 +430,8 @@ describe("streamingPromptLiteralParser", () => {
       },
     },
     // Failure cases
-    { input: "`Hello world`", expected: { success: false } },
-    { input: "streaming`Hello`", expected: { success: false } },
+    { input: '`Hello world`', expected: { success: false } },
+    { input: 'streaming`Hello`', expected: { success: false } },
     { input: "streaming", expected: { success: false } },
     { input: "", expected: { success: false } },
   ];

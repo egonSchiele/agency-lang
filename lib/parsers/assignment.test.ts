@@ -37,7 +37,7 @@ describe("assignmentParser", () => {
           type: "assignment",
           variableName: "bar",
           value: {
-            type: "prompt",
+            type: "string",
             segments: [{ type: "text", value: "the number 1" }],
           },
         },
@@ -291,7 +291,7 @@ describe("assignmentParser", () => {
           variableName: "bar",
           typeHint: { type: "primitiveType", value: "number" },
           value: {
-            type: "prompt",
+            type: "string",
             segments: [{ type: "text", value: "the number 1" }],
           },
         },
@@ -398,7 +398,7 @@ describe("assignmentParser", () => {
           variableName: "y",
           typeHint: { type: "primitiveType", value: "string" },
           value: {
-            type: "prompt",
+            type: "string",
             segments: [{ type: "text", value: "hello" }],
           },
         },

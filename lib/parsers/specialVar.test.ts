@@ -35,7 +35,7 @@ describe("specialVar parsers", () => {
             type: "specialVar",
             name: "model",
             value: {
-              type: "prompt",
+              type: "string",
               segments: [{ type: "text", value: "the best model" }],
             },
           },

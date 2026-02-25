@@ -773,15 +773,11 @@ graph.node("greet", async (state) => {
 
     
 
-    const __params = ["name"];
-
     // Any arguments that were passed into this node,
     // save them onto the stack, unless we are restoring the stack after an interrupt,
     // in which case leave as is
     if (state.data !== "<from-stack>") {
-      (state.data).forEach((item, index) => {
-        __stack.args[__params[index]] = item;
-      });
+      __stack.args["name"] = state.data.name;
     }
     
     
@@ -971,7 +967,7 @@ __self.greeting = _greeting(__stack.args.name, {
 export async function greet(name, { messages, callbacks } = {}) {
 
 
-  const __data = [ name ];
+  const __data = { name };
   __callbacks = callbacks || {};
   await __callHook("onAgentStart", { nodeName: "greet", args: __data, messages: messages || [] });
   const __result = await graph.run("greet", { messages: messages || [], data: __data });
@@ -980,4 +976,5 @@ export async function greet(name, { messages, callbacks } = {}) {
   return __returnObject;
 }
 
+export const __greetNodeParams = ["name"];
 export default graph;

@@ -772,15 +772,11 @@ graph.node("analyzeData", async (state) => {
 
     
 
-    const __params = ["input"];
-
     // Any arguments that were passed into this node,
     // save them onto the stack, unless we are restoring the stack after an interrupt,
     // in which case leave as is
     if (state.data !== "<from-stack>") {
-      (state.data).forEach((item, index) => {
-        __stack.args[__params[index]] = item;
-      });
+      __stack.args["input"] = state.data.input;
     }
     
     
@@ -799,7 +795,7 @@ graph.node("analyzeData", async (state) => {
 export async function analyzeData(input, { messages, callbacks } = {}) {
 
 
-  const __data = [ input ];
+  const __data = { input };
   __callbacks = callbacks || {};
   await __callHook("onAgentStart", { nodeName: "analyzeData", args: __data, messages: messages || [] });
   const __result = await graph.run("analyzeData", { messages: messages || [], data: __data });
@@ -808,4 +804,5 @@ export async function analyzeData(input, { messages, callbacks } = {}) {
   return __returnObject;
 }
 
+export const __analyzeDataNodeParams = ["input"];
 export default graph;

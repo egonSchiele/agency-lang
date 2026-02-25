@@ -745,7 +745,7 @@ __stateStack.globals.x = 42;
 __stateStack.globals.y = `hello`;
 //  Comment before function definition
 
-export async function greet(args, __metadata={}) {
+export async function greet(__metadata={}) {
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self = __stack.locals;
@@ -757,17 +757,7 @@ export async function greet(args, __metadata={}) {
     // obv none of these messages will connect to a thread the user can see.
     const __threads = __metadata?.threads || new ThreadStore();
 
-    // args are always set whether we're restoring from state or not.
-    // If we're not restoring from state, args were obviously passed in through the code.
-    // If we are restoring from state, the node that called this function had to have passed
-    // these arguments into this function call.
-    // if we're restoring state, this will override __stack.args (which will be set),
-    // but with the same values, so it doesn't matter that those values are being overwritten.
-    const __params = [];
-    (args).forEach((item, index) => {
-      __stack.args[__params[index]] = item;
-    });
-
+    
 
     
       if (__step <= 0) {
@@ -840,7 +830,7 @@ graph.node("main", async (state) => {
       
 
       if (__step <= 1) {
-        __stack.locals.result = greet([], {
+        __stack.locals.result = greet({
     statelogClient: statelogClient,
     graph: __graph,
     threads: __threads
@@ -904,7 +894,7 @@ await _print(`Stopped`)
 
 export async function main({ messages, callbacks } = {}) {
 
-  const __data = [  ];
+  const __data = {  };
   __callbacks = callbacks || {};
   await __callHook("onAgentStart", { nodeName: "main", args: __data, messages: messages || [] });
   const __result = await graph.run("main", { messages: messages || [], data: __data });
@@ -913,6 +903,7 @@ export async function main({ messages, callbacks } = {}) {
   return __returnObject;
 }
 
+export const __mainNodeParams = [];
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const initialState = { messages: [], data: {} };
     await main(initialState);

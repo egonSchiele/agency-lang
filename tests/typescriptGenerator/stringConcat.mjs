@@ -813,7 +813,7 @@ if (isInterrupt(__stack.locals.name)) {
 
 export async function foo({ messages, callbacks } = {}) {
 
-  const __data = [  ];
+  const __data = {  };
   __callbacks = callbacks || {};
   await __callHook("onAgentStart", { nodeName: "foo", args: __data, messages: messages || [] });
   const __result = await graph.run("foo", { messages: messages || [], data: __data });
@@ -822,4 +822,5 @@ export async function foo({ messages, callbacks } = {}) {
   return __returnObject;
 }
 
+export const __fooNodeParams = [];
 export default graph;

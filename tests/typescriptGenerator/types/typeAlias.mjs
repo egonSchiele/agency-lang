@@ -730,7 +730,6 @@ const addTool = {
 };
 */
 
-
 graph.node("main", async (state) => {
     const __graph = state.__metadata?.graph || graph;
     const statelogClient = state.__metadata?.statelogClient || __statelogClient;
@@ -976,7 +975,7 @@ __self.foo = _foo({
 
 export async function main({ messages, callbacks } = {}) {
 
-  const __data = [  ];
+  const __data = {  };
   __callbacks = callbacks || {};
   await __callHook("onAgentStart", { nodeName: "main", args: __data, messages: messages || [] });
   const __result = await graph.run("main", { messages: messages || [], data: __data });
@@ -985,6 +984,7 @@ export async function main({ messages, callbacks } = {}) {
   return __returnObject;
 }
 
+export const __mainNodeParams = [];
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const initialState = { messages: [], data: {} };
     await main(initialState);

@@ -1,4 +1,5 @@
 import __graph___foo from "./foo.js";
+import { __fooNodeParams } from "./foo.js";
 import foo from "./foo.ts";
 import { foo } from "./foo.ts";
 import foo, { bar } from "./foo.ts";

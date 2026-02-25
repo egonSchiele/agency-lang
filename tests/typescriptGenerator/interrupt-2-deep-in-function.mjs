@@ -744,7 +744,7 @@ export const __foo2Tool = {
 
 export const __foo2ToolParams = ["name","age"];
 
-export async function greet(args, __metadata={}) {
+export async function greet(name, age, __metadata={}) {
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self = __stack.locals;
@@ -756,17 +756,8 @@ export async function greet(args, __metadata={}) {
     // obv none of these messages will connect to a thread the user can see.
     const __threads = __metadata?.threads || new ThreadStore();
 
-    // args are always set whether we're restoring from state or not.
-    // If we're not restoring from state, args were obviously passed in through the code.
-    // If we are restoring from state, the node that called this function had to have passed
-    // these arguments into this function call.
-    // if we're restoring state, this will override __stack.args (which will be set),
-    // but with the same values, so it doesn't matter that those values are being overwritten.
-    const __params = ["name", "age"];
-    (args).forEach((item, index) => {
-      __stack.args[__params[index]] = item;
-    });
-
+    __stack.args["name"] = name;
+    __stack.args["age"] = age;
 
     
       if (__step <= 0) {
@@ -790,7 +781,7 @@ return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} yea
       
 }
 
-export async function foo2(args, __metadata={}) {
+export async function foo2(name, age, __metadata={}) {
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self = __stack.locals;
@@ -802,17 +793,8 @@ export async function foo2(args, __metadata={}) {
     // obv none of these messages will connect to a thread the user can see.
     const __threads = __metadata?.threads || new ThreadStore();
 
-    // args are always set whether we're restoring from state or not.
-    // If we're not restoring from state, args were obviously passed in through the code.
-    // If we are restoring from state, the node that called this function had to have passed
-    // these arguments into this function call.
-    // if we're restoring state, this will override __stack.args (which will be set),
-    // but with the same values, so it doesn't matter that those values are being overwritten.
-    const __params = ["name", "age"];
-    (args).forEach((item, index) => {
-      __stack.args[__params[index]] = item;
-    });
-
+    __stack.args["name"] = name;
+    __stack.args["age"] = age;
 
     
       if (__step <= 0) {
@@ -919,7 +901,7 @@ async function _response(name, age, __metadata) {
           })
 
   toolCallStartTime = performance.now();
-  
+
   let result;
   if (__interruptResponse && __interruptResponse.type === "reject") {
         __messages.push(smoltalk.toolMessage("tool call rejected", {
@@ -934,14 +916,14 @@ async function _response(name, age, __metadata) {
     await __callHook("onToolCallStart", { toolName: "greet", args: params });
     
     
-    result = await greet(params);
+    result = await greet(...params);
     
 
     result = result || "greet ran successfully but did not return a value";
 
     toolCallEndTime = performance.now();
     await __callHook("onToolCallEnd", { toolName: "greet", result, timeTaken: toolCallEndTime - toolCallStartTime });
-  
+
     statelogClient.toolCall({
       toolName: "greet",
       params,
@@ -960,7 +942,7 @@ async function _response(name, age, __metadata) {
       haltExecution = true;
       break;
     }
-  
+
       // Add function result to messages
     __messages.push(smoltalk.toolMessage(result, {
           tool_call_id: toolCall.id,
@@ -1110,15 +1092,11 @@ graph.node("sayHi", async (state) => {
 
     
 
-    const __params = ["name"];
-
     // Any arguments that were passed into this node,
     // save them onto the stack, unless we are restoring the stack after an interrupt,
     // in which case leave as is
     if (state.data !== "<from-stack>") {
-      (state.data).forEach((item, index) => {
-        __stack.args[__params[index]] = item;
-      });
+      __stack.args["name"] = state.data.name;
     }
     
     
@@ -1141,7 +1119,7 @@ graph.node("sayHi", async (state) => {
       
 
       if (__step <= 3) {
-        __stack.locals.response = foo2([__stack.args.name, __stack.args.age], {
+        __stack.locals.response = foo2(__stack.args.name, __stack.args.age, {
     statelogClient: statelogClient,
     graph: __graph,
     threads: __threads
@@ -1191,7 +1169,7 @@ if (isInterrupt(__stack.locals.response)) {
 export async function sayHi(name, { messages, callbacks } = {}) {
 
 
-  const __data = [ name ];
+  const __data = { name };
   __callbacks = callbacks || {};
   await __callHook("onAgentStart", { nodeName: "sayHi", args: __data, messages: messages || [] });
   const __result = await graph.run("sayHi", { messages: messages || [], data: __data });
@@ -1200,4 +1178,5 @@ export async function sayHi(name, { messages, callbacks } = {}) {
   return __returnObject;
 }
 
+export const __sayHiNodeParams = ["name"];
 export default graph;

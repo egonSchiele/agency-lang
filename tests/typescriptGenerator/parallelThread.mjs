@@ -737,7 +737,7 @@ export const __fooTool = {
 
 export const __fooToolParams = [];
 
-export async function foo(args, __metadata={}) {
+export async function foo(__metadata={}) {
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self = __stack.locals;
@@ -749,17 +749,7 @@ export async function foo(args, __metadata={}) {
     // obv none of these messages will connect to a thread the user can see.
     const __threads = __metadata?.threads || new ThreadStore();
 
-    // args are always set whether we're restoring from state or not.
-    // If we're not restoring from state, args were obviously passed in through the code.
-    // If we are restoring from state, the node that called this function had to have passed
-    // these arguments into this function call.
-    // if we're restoring state, this will override __stack.args (which will be set),
-    // but with the same values, so it doesn't matter that those values are being overwritten.
-    const __params = [];
-    (args).forEach((item, index) => {
-      __stack.args[__params[index]] = item;
-    });
-
+    
 
     
       if (__step <= 0) {

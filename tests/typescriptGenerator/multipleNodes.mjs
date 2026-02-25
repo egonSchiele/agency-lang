@@ -958,7 +958,7 @@ __self.greeting = _greeting({
       callbacks: __callbacks,
     },
     
-    data: [__stack.locals.greeting]
+    data: { msg: __stack.locals.greeting }
     
     
   }
@@ -1014,15 +1014,11 @@ graph.node("processGreeting", async (state) => {
 
     
 
-    const __params = ["msg"];
-
     // Any arguments that were passed into this node,
     // save them onto the stack, unless we are restoring the stack after an interrupt,
     // in which case leave as is
     if (state.data !== "<from-stack>") {
-      (state.data).forEach((item, index) => {
-        __stack.args[__params[index]] = item;
-      });
+      __stack.args["msg"] = state.data.msg;
     }
     
     
@@ -1293,7 +1289,7 @@ graph.conditionalEdge("main", ["greet"]);
 
 export async function greet({ messages, callbacks } = {}) {
 
-  const __data = [  ];
+  const __data = {  };
   __callbacks = callbacks || {};
   await __callHook("onAgentStart", { nodeName: "greet", args: __data, messages: messages || [] });
   const __result = await graph.run("greet", { messages: messages || [], data: __data });
@@ -1302,11 +1298,12 @@ export async function greet({ messages, callbacks } = {}) {
   return __returnObject;
 }
 
+export const __greetNodeParams = [];
 
 export async function processGreeting(msg, { messages, callbacks } = {}) {
 
 
-  const __data = [ msg ];
+  const __data = { msg };
   __callbacks = callbacks || {};
   await __callHook("onAgentStart", { nodeName: "processGreeting", args: __data, messages: messages || [] });
   const __result = await graph.run("processGreeting", { messages: messages || [], data: __data });
@@ -1315,11 +1312,12 @@ export async function processGreeting(msg, { messages, callbacks } = {}) {
   return __returnObject;
 }
 
+export const __processGreetingNodeParams = ["msg"];
 
 
 export async function main({ messages, callbacks } = {}) {
 
-  const __data = [  ];
+  const __data = {  };
   __callbacks = callbacks || {};
   await __callHook("onAgentStart", { nodeName: "main", args: __data, messages: messages || [] });
   const __result = await graph.run("main", { messages: messages || [], data: __data });
@@ -1328,6 +1326,7 @@ export async function main({ messages, callbacks } = {}) {
   return __returnObject;
 }
 
+export const __mainNodeParams = [];
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const initialState = { messages: [], data: {} };
     await main(initialState);

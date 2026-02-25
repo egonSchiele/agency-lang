@@ -772,15 +772,11 @@ graph.node("main", async (state) => {
 
     
 
-    const __params = ["input"];
-
     // Any arguments that were passed into this node,
     // save them onto the stack, unless we are restoring the stack after an interrupt,
     // in which case leave as is
     if (state.data !== "<from-stack>") {
-      (state.data).forEach((item, index) => {
-        __stack.args[__params[index]] = item;
-      });
+      __stack.args["input"] = state.data.input;
     }
     
     
@@ -970,7 +966,7 @@ __self.result = _result(__stack.args.input, {
 export async function main(input, { messages, callbacks } = {}) {
 
 
-  const __data = [ input ];
+  const __data = { input };
   __callbacks = callbacks || {};
   await __callHook("onAgentStart", { nodeName: "main", args: __data, messages: messages || [] });
   const __result = await graph.run("main", { messages: messages || [], data: __data });
@@ -979,6 +975,7 @@ export async function main(input, { messages, callbacks } = {}) {
   return __returnObject;
 }
 
+export const __mainNodeParams = ["input"];
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const initialState = { messages: [], data: {} };
     await main(initialState);

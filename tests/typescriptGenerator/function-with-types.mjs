@@ -765,7 +765,7 @@ export const __flexibleTool = {
 
 export const __flexibleToolParams = ["value"];
 
-export async function add(args, __metadata={}) {
+export async function add(x, y, __metadata={}) {
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self = __stack.locals;
@@ -777,17 +777,8 @@ export async function add(args, __metadata={}) {
     // obv none of these messages will connect to a thread the user can see.
     const __threads = __metadata?.threads || new ThreadStore();
 
-    // args are always set whether we're restoring from state or not.
-    // If we're not restoring from state, args were obviously passed in through the code.
-    // If we are restoring from state, the node that called this function had to have passed
-    // these arguments into this function call.
-    // if we're restoring state, this will override __stack.args (which will be set),
-    // but with the same values, so it doesn't matter that those values are being overwritten.
-    const __params = ["x", "y"];
-    (args).forEach((item, index) => {
-      __stack.args[__params[index]] = item;
-    });
-
+    __stack.args["x"] = x;
+    __stack.args["y"] = y;
 
     
       if (__step <= 0) {
@@ -969,7 +960,7 @@ return __stack.locals.result
       
 }
 
-export async function greet(args, __metadata={}) {
+export async function greet(name, __metadata={}) {
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self = __stack.locals;
@@ -981,17 +972,7 @@ export async function greet(args, __metadata={}) {
     // obv none of these messages will connect to a thread the user can see.
     const __threads = __metadata?.threads || new ThreadStore();
 
-    // args are always set whether we're restoring from state or not.
-    // If we're not restoring from state, args were obviously passed in through the code.
-    // If we are restoring from state, the node that called this function had to have passed
-    // these arguments into this function call.
-    // if we're restoring state, this will override __stack.args (which will be set),
-    // but with the same values, so it doesn't matter that those values are being overwritten.
-    const __params = ["name"];
-    (args).forEach((item, index) => {
-      __stack.args[__params[index]] = item;
-    });
-
+    __stack.args["name"] = name;
 
     
       if (__step <= 0) {
@@ -1173,7 +1154,7 @@ return __stack.locals.message
       
 }
 
-export async function mixed(args, __metadata={}) {
+export async function mixed(count, label, __metadata={}) {
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self = __stack.locals;
@@ -1185,17 +1166,8 @@ export async function mixed(args, __metadata={}) {
     // obv none of these messages will connect to a thread the user can see.
     const __threads = __metadata?.threads || new ThreadStore();
 
-    // args are always set whether we're restoring from state or not.
-    // If we're not restoring from state, args were obviously passed in through the code.
-    // If we are restoring from state, the node that called this function had to have passed
-    // these arguments into this function call.
-    // if we're restoring state, this will override __stack.args (which will be set),
-    // but with the same values, so it doesn't matter that those values are being overwritten.
-    const __params = ["count", "label"];
-    (args).forEach((item, index) => {
-      __stack.args[__params[index]] = item;
-    });
-
+    __stack.args["count"] = count;
+    __stack.args["label"] = label;
 
     
       if (__step <= 0) {
@@ -1377,7 +1349,7 @@ return __stack.locals.output
       
 }
 
-export async function processArray(args, __metadata={}) {
+export async function processArray(items, __metadata={}) {
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self = __stack.locals;
@@ -1389,17 +1361,7 @@ export async function processArray(args, __metadata={}) {
     // obv none of these messages will connect to a thread the user can see.
     const __threads = __metadata?.threads || new ThreadStore();
 
-    // args are always set whether we're restoring from state or not.
-    // If we're not restoring from state, args were obviously passed in through the code.
-    // If we are restoring from state, the node that called this function had to have passed
-    // these arguments into this function call.
-    // if we're restoring state, this will override __stack.args (which will be set),
-    // but with the same values, so it doesn't matter that those values are being overwritten.
-    const __params = ["items"];
-    (args).forEach((item, index) => {
-      __stack.args[__params[index]] = item;
-    });
-
+    __stack.args["items"] = items;
 
     
       if (__step <= 0) {
@@ -1581,7 +1543,7 @@ return __stack.locals.result
       
 }
 
-export async function flexible(args, __metadata={}) {
+export async function flexible(value, __metadata={}) {
     const __stack = __stateStack.getNewState();
     const __step = __stack.step;
     const __self = __stack.locals;
@@ -1593,17 +1555,7 @@ export async function flexible(args, __metadata={}) {
     // obv none of these messages will connect to a thread the user can see.
     const __threads = __metadata?.threads || new ThreadStore();
 
-    // args are always set whether we're restoring from state or not.
-    // If we're not restoring from state, args were obviously passed in through the code.
-    // If we are restoring from state, the node that called this function had to have passed
-    // these arguments into this function call.
-    // if we're restoring state, this will override __stack.args (which will be set),
-    // but with the same values, so it doesn't matter that those values are being overwritten.
-    const __params = ["value"];
-    (args).forEach((item, index) => {
-      __stack.args[__params[index]] = item;
-    });
-
+    __stack.args["value"] = value;
 
     
       if (__step <= 0) {
@@ -1899,7 +1851,7 @@ graph.node("main", async (state) => {
       
 
       if (__step <= 1) {
-        __stack.locals.sum = add([5, 10], {
+        __stack.locals.sum = add(5, 10, {
     statelogClient: statelogClient,
     graph: __graph,
     threads: __threads
@@ -1917,7 +1869,7 @@ if (isInterrupt(__stack.locals.sum)) {
       
 
       if (__step <= 2) {
-        __stack.locals.greeting = greet([`Alice`], {
+        __stack.locals.greeting = greet(`Alice`, {
     statelogClient: statelogClient,
     graph: __graph,
     threads: __threads
@@ -1935,7 +1887,7 @@ if (isInterrupt(__stack.locals.greeting)) {
       
 
       if (__step <= 3) {
-        __stack.locals.labeled = mixed([42, `Answer`], {
+        __stack.locals.labeled = mixed(42, `Answer`, {
     statelogClient: statelogClient,
     graph: __graph,
     threads: __threads
@@ -1953,7 +1905,7 @@ if (isInterrupt(__stack.locals.labeled)) {
       
 
       if (__step <= 4) {
-        __stack.locals.processed = processArray([[1, 2, 3, 4, 5]], {
+        __stack.locals.processed = processArray([1, 2, 3, 4, 5], {
     statelogClient: statelogClient,
     graph: __graph,
     threads: __threads
@@ -1971,7 +1923,7 @@ if (isInterrupt(__stack.locals.processed)) {
       
 
       if (__step <= 5) {
-        __stack.locals.flexResult = flexible([`test`], {
+        __stack.locals.flexResult = flexible(`test`, {
     statelogClient: statelogClient,
     graph: __graph,
     threads: __threads
@@ -1997,7 +1949,7 @@ if (isInterrupt(__stack.locals.flexResult)) {
 
 export async function foo({ messages, callbacks } = {}) {
 
-  const __data = [  ];
+  const __data = {  };
   __callbacks = callbacks || {};
   await __callHook("onAgentStart", { nodeName: "foo", args: __data, messages: messages || [] });
   const __result = await graph.run("foo", { messages: messages || [], data: __data });
@@ -2006,11 +1958,12 @@ export async function foo({ messages, callbacks } = {}) {
   return __returnObject;
 }
 
+export const __fooNodeParams = [];
 
 
 export async function main({ messages, callbacks } = {}) {
 
-  const __data = [  ];
+  const __data = {  };
   __callbacks = callbacks || {};
   await __callHook("onAgentStart", { nodeName: "main", args: __data, messages: messages || [] });
   const __result = await graph.run("main", { messages: messages || [], data: __data });
@@ -2019,6 +1972,7 @@ export async function main({ messages, callbacks } = {}) {
   return __returnObject;
 }
 
+export const __mainNodeParams = [];
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const initialState = { messages: [], data: {} };
     await main(initialState);

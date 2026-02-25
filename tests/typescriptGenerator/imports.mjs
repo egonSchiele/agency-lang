@@ -261,6 +261,58 @@ export function __deepClone(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 
+function __extractResponse(rawValue, schema) {
+  console.log(color.green("Extracting response. Raw value:", JSON.stringify(rawValue)));
+  // 1. Direct match — try parsing as-is
+  const direct = schema.safeParse(rawValue);
+  if (direct.success) return direct.data;
+
+  // 2. String → try JSON.parse, then recurse
+  if (typeof rawValue === "string") {
+    const stripped = rawValue;
+    try {
+      return __extractResponse(JSON.parse(stripped), schema);
+    } catch {}
+    return rawValue;
+  }
+
+  // 3. Null/undefined/primitive — nothing to unwrap
+  if (rawValue == null || typeof rawValue !== "object") {
+    return rawValue;
+  }
+
+  // 4. Array with one element — unwrap
+  if (Array.isArray(rawValue) && rawValue.length === 1) {
+    const inner = schema.safeParse(rawValue[0]);
+    if (inner.success) return inner.data;
+  }
+
+  // 5. Object with "response" or "properties" key — unwrap
+  const wrapKeys = ["response", "properties"];
+  for (const key of wrapKeys) {
+    if (key in rawValue) {
+      const inner = schema.safeParse(rawValue[key]);
+      if (inner.success) return inner.data[key];
+    }
+  }
+
+  // 6. Object with a single key whose value matches — unwrap
+  const keys = Object.keys(rawValue);
+  if (keys.length === 1) {
+    const inner = schema.safeParse(rawValue[keys[0]]);
+    if (inner.success) return inner.data;
+  }
+
+  // 7. Shallow search — check every value of the object
+  for (const key of keys) {
+    const inner = schema.safeParse(rawValue[key]);
+    if (inner.success) return inner.data;
+  }
+
+  // 8. Nothing worked — return the original value as-is
+  return rawValue;
+}
+
 /******** for internal agency use only ********/
 
 function __createReturnObject(result) {

@@ -250,6 +250,58 @@ export function __deepClone(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 
+function __extractResponse(rawValue, schema) {
+  console.log(color.green("Extracting response. Raw value:", JSON.stringify(rawValue)));
+  // 1. Direct match — try parsing as-is
+  const direct = schema.safeParse(rawValue);
+  if (direct.success) return direct.data;
+
+  // 2. String → try JSON.parse, then recurse
+  if (typeof rawValue === "string") {
+    const stripped = rawValue;
+    try {
+      return __extractResponse(JSON.parse(stripped), schema);
+    } catch {}
+    return rawValue;
+  }
+
+  // 3. Null/undefined/primitive — nothing to unwrap
+  if (rawValue == null || typeof rawValue !== "object") {
+    return rawValue;
+  }
+
+  // 4. Array with one element — unwrap
+  if (Array.isArray(rawValue) && rawValue.length === 1) {
+    const inner = schema.safeParse(rawValue[0]);
+    if (inner.success) return inner.data;
+  }
+
+  // 5. Object with "response" or "properties" key — unwrap
+  const wrapKeys = ["response", "properties"];
+  for (const key of wrapKeys) {
+    if (key in rawValue) {
+      const inner = schema.safeParse(rawValue[key]);
+      if (inner.success) return inner.data[key];
+    }
+  }
+
+  // 6. Object with a single key whose value matches — unwrap
+  const keys = Object.keys(rawValue);
+  if (keys.length === 1) {
+    const inner = schema.safeParse(rawValue[keys[0]]);
+    if (inner.success) return inner.data;
+  }
+
+  // 7. Shallow search — check every value of the object
+  for (const key of keys) {
+    const inner = schema.safeParse(rawValue[key]);
+    if (inner.success) return inner.data;
+  }
+
+  // 8. Nothing worked — return the original value as-is
+  return rawValue;
+}
+
 /******** for internal agency use only ********/
 
 function __createReturnObject(result) {
@@ -915,19 +967,14 @@ async function _res1(__metadata) {
   __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
   try {
-  const result = JSON.parse(responseMessage.output || "");
-  
-  // because the LLM doesn't always follow the response format perfectly
-  if ("response" in result) {
-    return result.response;
-  }
-  return result;
-
+    const __rawResult = JSON.parse(responseMessage.output || "");
+    const extracted =  __extractResponse(__rawResult, z.array(z.number()));
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   } catch (e) {
-    return responseMessage.output;
-    // console.error("Error parsing response for variable 'res1':", e);
-    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
-    // throw e;
+    const extracted =  __extractResponse(responseMessage.output, z.array(z.number()));
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   }
   
 
@@ -1106,19 +1153,14 @@ async function _res2(__metadata) {
   __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
   try {
-  const result = JSON.parse(responseMessage.output || "");
-  
-  // because the LLM doesn't always follow the response format perfectly
-  if ("response" in result) {
-    return result.response;
-  }
-  return result;
-
+    const __rawResult = JSON.parse(responseMessage.output || "");
+    const extracted =  __extractResponse(__rawResult, z.array(z.number()));
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   } catch (e) {
-    return responseMessage.output;
-    // console.error("Error parsing response for variable 'res2':", e);
-    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
-    // throw e;
+    const extracted =  __extractResponse(responseMessage.output, z.array(z.number()));
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   }
   
 
@@ -1297,19 +1339,14 @@ async function _res3(__metadata) {
   __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
   try {
-  const result = JSON.parse(responseMessage.output || "");
-  
-  // because the LLM doesn't always follow the response format perfectly
-  if ("response" in result) {
-    return result.response;
-  }
-  return result;
-
+    const __rawResult = JSON.parse(responseMessage.output || "");
+    const extracted =  __extractResponse(__rawResult, z.number());
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   } catch (e) {
-    return responseMessage.output;
-    // console.error("Error parsing response for variable 'res3':", e);
-    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
-    // throw e;
+    const extracted =  __extractResponse(responseMessage.output, z.number());
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   }
   
 
@@ -1494,19 +1531,14 @@ async function _res5(__metadata) {
   __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
   try {
-  const result = JSON.parse(responseMessage.output || "");
-  
-  // because the LLM doesn't always follow the response format perfectly
-  if ("response" in result) {
-    return result.response;
-  }
-  return result;
-
+    const __rawResult = JSON.parse(responseMessage.output || "");
+    const extracted =  __extractResponse(__rawResult, z.number());
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   } catch (e) {
-    return responseMessage.output;
-    // console.error("Error parsing response for variable 'res5':", e);
-    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
-    // throw e;
+    const extracted =  __extractResponse(responseMessage.output, z.number());
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   }
   
 
@@ -1697,19 +1729,14 @@ async function _res4(__metadata) {
   __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
   try {
-  const result = JSON.parse(responseMessage.output || "");
-  
-  // because the LLM doesn't always follow the response format perfectly
-  if ("response" in result) {
-    return result.response;
-  }
-  return result;
-
+    const __rawResult = JSON.parse(responseMessage.output || "");
+    const extracted =  __extractResponse(__rawResult, z.number());
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   } catch (e) {
-    return responseMessage.output;
-    // console.error("Error parsing response for variable 'res4':", e);
-    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
-    // throw e;
+    const extracted =  __extractResponse(responseMessage.output, z.number());
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   }
   
 
@@ -1982,19 +2009,14 @@ async function _res1(__metadata) {
   __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
   try {
-  const result = JSON.parse(responseMessage.output || "");
-  
-  // because the LLM doesn't always follow the response format perfectly
-  if ("response" in result) {
-    return result.response;
-  }
-  return result;
-
+    const __rawResult = JSON.parse(responseMessage.output || "");
+    const extracted =  __extractResponse(__rawResult, z.array(z.number()));
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   } catch (e) {
-    return responseMessage.output;
-    // console.error("Error parsing response for variable 'res1':", e);
-    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
-    // throw e;
+    const extracted =  __extractResponse(responseMessage.output, z.array(z.number()));
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   }
   
 
@@ -2173,19 +2195,14 @@ async function _res2(__metadata) {
   __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
   try {
-  const result = JSON.parse(responseMessage.output || "");
-  
-  // because the LLM doesn't always follow the response format perfectly
-  if ("response" in result) {
-    return result.response;
-  }
-  return result;
-
+    const __rawResult = JSON.parse(responseMessage.output || "");
+    const extracted =  __extractResponse(__rawResult, z.array(z.number()));
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   } catch (e) {
-    return responseMessage.output;
-    // console.error("Error parsing response for variable 'res2':", e);
-    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
-    // throw e;
+    const extracted =  __extractResponse(responseMessage.output, z.array(z.number()));
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   }
   
 
@@ -2364,19 +2381,14 @@ async function _res3(__metadata) {
   __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
   try {
-  const result = JSON.parse(responseMessage.output || "");
-  
-  // because the LLM doesn't always follow the response format perfectly
-  if ("response" in result) {
-    return result.response;
-  }
-  return result;
-
+    const __rawResult = JSON.parse(responseMessage.output || "");
+    const extracted =  __extractResponse(__rawResult, z.number());
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   } catch (e) {
-    return responseMessage.output;
-    // console.error("Error parsing response for variable 'res3':", e);
-    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
-    // throw e;
+    const extracted =  __extractResponse(responseMessage.output, z.number());
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   }
   
 
@@ -2561,19 +2573,14 @@ async function _res5(__metadata) {
   __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
   try {
-  const result = JSON.parse(responseMessage.output || "");
-  
-  // because the LLM doesn't always follow the response format perfectly
-  if ("response" in result) {
-    return result.response;
-  }
-  return result;
-
+    const __rawResult = JSON.parse(responseMessage.output || "");
+    const extracted =  __extractResponse(__rawResult, z.number());
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   } catch (e) {
-    return responseMessage.output;
-    // console.error("Error parsing response for variable 'res5':", e);
-    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
-    // throw e;
+    const extracted =  __extractResponse(responseMessage.output, z.number());
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   }
   
 
@@ -2764,19 +2771,14 @@ async function _res4(__metadata) {
   __messages.push(smoltalk.assistantMessage(responseMessage.output));
   
   try {
-  const result = JSON.parse(responseMessage.output || "");
-  
-  // because the LLM doesn't always follow the response format perfectly
-  if ("response" in result) {
-    return result.response;
-  }
-  return result;
-
+    const __rawResult = JSON.parse(responseMessage.output || "");
+    const extracted =  __extractResponse(__rawResult, z.number());
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   } catch (e) {
-    return responseMessage.output;
-    // console.error("Error parsing response for variable 'res4':", e);
-    // console.error("Full completion response:", JSON.stringify(__completion, null, 2));
-    // throw e;
+    const extracted =  __extractResponse(responseMessage.output, z.number());
+    console.log(color.yellow("extracted", JSON.stringify(extracted, null, 2)));
+    return extracted;
   }
   
 

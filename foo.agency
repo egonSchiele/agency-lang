@@ -1,14 +1,3 @@
-type User = {
-  name: string;
-  age: number
-}
-
 def foo(name: string, age: number): User {
-  response: User = llm("What is your name and age?")
-  return response
-}
-
-node main() {
-  response = foo("John", 30)
-  print(response.name)
+  return "hi there! your name is ${response.name} and you are ${response.age} years old."
 }

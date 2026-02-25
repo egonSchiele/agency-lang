@@ -1,8 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  textSegmentParser,
   interpolationSegmentParser,
-  promptParser,
   numberParser,
   stringParser,
   multiLineStringParser,
@@ -12,80 +10,6 @@ import {
 } from "./literals.js";
 
 describe("literals parsers", () => {
-  describe("textSegmentParser", () => {
-    const testCases = [
-      // Happy path
-      {
-        input: "hello`",
-        expected: { success: true, result: { type: "text", value: "hello" } },
-      },
-      {
-        input: "hello",
-        expected: { success: true, result: { type: "text", value: "hello" } },
-      },
-      {
-        input: "hello world`",
-        expected: {
-          success: true,
-          result: { type: "text", value: "hello world" },
-        },
-      },
-      {
-        input: "hello$",
-        expected: { success: true, result: { type: "text", value: "hello" } },
-      },
-
-      // Edge cases
-      {
-        input: "a`",
-        expected: { success: true, result: { type: "text", value: "a" } },
-      },
-      {
-        input: "spaces   and   tabs\t\t`",
-        expected: {
-          success: true,
-          result: { type: "text", value: "spaces   and   tabs\t\t" },
-        },
-      },
-      {
-        input: "123numbers`",
-        expected: {
-          success: true,
-          result: { type: "text", value: "123numbers" },
-        },
-      },
-      {
-        input: "special!@#%^&*()chars`",
-        expected: {
-          success: true,
-          result: { type: "text", value: "special!@#%^&*()chars" },
-        },
-      },
-
-      // Failure cases
-      { input: "`", expected: { success: false } },
-      { input: "$", expected: { success: false } },
-      { input: "", expected: { success: false } },
-    ];
-
-    testCases.forEach(({ input, expected }) => {
-      if (expected.success) {
-        it(`should parse "${input}" successfully`, () => {
-          const result = textSegmentParser(input);
-          expect(result.success).toBe(true);
-          if (result.success) {
-            expect(result.result).toEqual(expected.result);
-          }
-        });
-      } else {
-        it(`should fail to parse "${input}"`, () => {
-          const result = textSegmentParser(input);
-          expect(result.success).toBe(false);
-        });
-      }
-    });
-  });
-
   describe("interpolationSegmentParser", () => {
     const testCases = [
       // Happy path
@@ -93,21 +17,30 @@ describe("literals parsers", () => {
         input: "${foo}",
         expected: {
           success: true,
-          result: { type: "interpolation", expression: { type: "variableName", value: "foo" } },
+          result: {
+            type: "interpolation",
+            expression: { type: "variableName", value: "foo" },
+          },
         },
       },
       {
         input: "${bar123}",
         expected: {
           success: true,
-          result: { type: "interpolation", expression: { type: "variableName", value: "bar123" } },
+          result: {
+            type: "interpolation",
+            expression: { type: "variableName", value: "bar123" },
+          },
         },
       },
       {
         input: "${x}",
         expected: {
           success: true,
-          result: { type: "interpolation", expression: { type: "variableName", value: "x" } },
+          result: {
+            type: "interpolation",
+            expression: { type: "variableName", value: "x" },
+          },
         },
       },
 
@@ -118,7 +51,10 @@ describe("literals parsers", () => {
           success: true,
           result: {
             type: "interpolation",
-            expression: { type: "variableName", value: "longVariableNameWithNumbers123" },
+            expression: {
+              type: "variableName",
+              value: "longVariableNameWithNumbers123",
+            },
           },
         },
       },
@@ -178,138 +114,6 @@ describe("literals parsers", () => {
       } else {
         it(`should fail to parse "${input}"`, () => {
           const result = interpolationSegmentParser(input);
-          expect(result.success).toBe(false);
-        });
-      }
-    });
-  });
-
-  describe("promptParser", () => {
-    const testCases = [
-      // Simple text prompts
-      {
-        input: "`hello`",
-        expected: {
-          success: true,
-          result: {
-            type: "prompt",
-            segments: [{ type: "text", value: "hello" }],
-          },
-        },
-      },
-      {
-        input: "`the number 1`",
-        expected: {
-          success: true,
-          result: {
-            type: "prompt",
-            segments: [{ type: "text", value: "the number 1" }],
-          },
-        },
-      },
-
-      // Empty prompt
-      {
-        input: "``",
-        expected: {
-          success: true,
-          result: {
-            type: "prompt",
-            segments: [],
-          },
-        },
-      },
-
-      // Prompts with interpolation only
-      {
-        input: "`${foo}`",
-        expected: {
-          success: true,
-          result: {
-            type: "prompt",
-            segments: [{ type: "interpolation", expression: { type: "variableName", value: "foo" } }],
-          },
-        },
-      },
-
-      // Mixed segments
-      {
-        input: "`hello ${name}`",
-        expected: {
-          success: true,
-          result: {
-            type: "prompt",
-            segments: [
-              { type: "text", value: "hello " },
-              { type: "interpolation", expression: { type: "variableName", value: "name" } },
-            ],
-          },
-        },
-      },
-      {
-        input: "`${greeting} world`",
-        expected: {
-          success: true,
-          result: {
-            type: "prompt",
-            segments: [
-              { type: "interpolation", expression: { type: "variableName", value: "greeting" } },
-              { type: "text", value: " world" },
-            ],
-          },
-        },
-      },
-      {
-        input: "`The value is ${x} and ${y}`",
-        expected: {
-          success: true,
-          result: {
-            type: "prompt",
-            segments: [
-              { type: "text", value: "The value is " },
-              { type: "interpolation", expression: { type: "variableName", value: "x" } },
-              { type: "text", value: " and " },
-              { type: "interpolation", expression: { type: "variableName", value: "y" } },
-            ],
-          },
-        },
-      },
-
-      // Multiple interpolations
-      {
-        input: "`${a}${b}${c}`",
-        expected: {
-          success: true,
-          result: {
-            type: "prompt",
-            segments: [
-              { type: "interpolation", expression: { type: "variableName", value: "a" } },
-              { type: "interpolation", expression: { type: "variableName", value: "b" } },
-              { type: "interpolation", expression: { type: "variableName", value: "c" } },
-            ],
-          },
-        },
-      },
-
-      // Failure cases
-      { input: "`hello", expected: { success: false } },
-      { input: "hello`", expected: { success: false } },
-      { input: "", expected: { success: false } },
-      { input: "hello", expected: { success: false } },
-    ];
-
-    testCases.forEach(({ input, expected }) => {
-      if (expected.success) {
-        it(`should parse "${input}" successfully`, () => {
-          const result = promptParser(input);
-          expect(result.success).toBe(true);
-          if (result.success) {
-            expect(result.result).toEqual(expected.result);
-          }
-        });
-      } else {
-        it(`should fail to parse "${input}"`, () => {
-          const result = promptParser(input);
           expect(result.success).toBe(false);
         });
       }
@@ -525,7 +329,10 @@ describe("literals parsers", () => {
             type: "string",
             segments: [
               { type: "text", value: "Hello " },
-              { type: "interpolation", expression: { type: "variableName", value: "name" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "name" },
+              },
             ],
           },
         },
@@ -537,7 +344,10 @@ describe("literals parsers", () => {
           result: {
             type: "string",
             segments: [
-              { type: "interpolation", expression: { type: "variableName", value: "greeting" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "greeting" },
+              },
               { type: "text", value: " world" },
             ],
           },
@@ -551,9 +361,15 @@ describe("literals parsers", () => {
             type: "string",
             segments: [
               { type: "text", value: "The value is " },
-              { type: "interpolation", expression: { type: "variableName", value: "x" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "x" },
+              },
               { type: "text", value: " and " },
-              { type: "interpolation", expression: { type: "variableName", value: "y" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "y" },
+              },
             ],
           },
         },
@@ -596,7 +412,10 @@ describe("literals parsers", () => {
             type: "string",
             segments: [
               { type: "text", value: "Hello, " },
-              { type: "interpolation", expression: { type: "variableName", value: "name" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "name" },
+              },
             ],
           },
         },
@@ -609,7 +428,10 @@ describe("literals parsers", () => {
             type: "string",
             segments: [
               { type: "text", value: "Value: " },
-              { type: "interpolation", expression: { type: "variableName", value: "x" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "x" },
+              },
             ],
           },
         },
@@ -623,7 +445,10 @@ describe("literals parsers", () => {
           result: {
             type: "string",
             segments: [
-              { type: "interpolation", expression: { type: "variableName", value: "name" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "name" },
+              },
               { type: "text", value: "!" },
             ],
           },
@@ -636,7 +461,10 @@ describe("literals parsers", () => {
           result: {
             type: "string",
             segments: [
-              { type: "interpolation", expression: { type: "variableName", value: "greeting" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "greeting" },
+              },
               { type: "text", value: " world" },
             ],
           },
@@ -652,7 +480,10 @@ describe("literals parsers", () => {
             type: "string",
             segments: [
               { type: "text", value: "Hello, " },
-              { type: "interpolation", expression: { type: "variableName", value: "name" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "name" },
+              },
               { type: "text", value: "!" },
             ],
           },
@@ -666,7 +497,10 @@ describe("literals parsers", () => {
             type: "string",
             segments: [
               { type: "text", value: "[" },
-              { type: "interpolation", expression: { type: "variableName", value: "status" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "status" },
+              },
               { type: "text", value: "]" },
             ],
           },
@@ -709,8 +543,14 @@ describe("literals parsers", () => {
           result: {
             type: "string",
             segments: [
-              { type: "interpolation", expression: { type: "variableName", value: "firstName" } },
-              { type: "interpolation", expression: { type: "variableName", value: "lastName" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "firstName" },
+              },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "lastName" },
+              },
             ],
           },
         },
@@ -722,8 +562,14 @@ describe("literals parsers", () => {
           result: {
             type: "string",
             segments: [
-              { type: "interpolation", expression: { type: "variableName", value: "x" } },
-              { type: "interpolation", expression: { type: "variableName", value: "y" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "x" },
+              },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "y" },
+              },
             ],
           },
         },
@@ -751,9 +597,15 @@ describe("literals parsers", () => {
           result: {
             type: "string",
             segments: [
-              { type: "interpolation", expression: { type: "variableName", value: "firstName" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "firstName" },
+              },
               { type: "text", value: " " },
-              { type: "interpolation", expression: { type: "variableName", value: "lastName" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "lastName" },
+              },
             ],
           },
         },
@@ -766,24 +618,42 @@ describe("literals parsers", () => {
             type: "string",
             segments: [
               { type: "text", value: "[" },
-              { type: "interpolation", expression: { type: "variableName", value: "tag" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "tag" },
+              },
               { type: "text", value: "] " },
-              { type: "interpolation", expression: { type: "variableName", value: "message" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "message" },
+              },
             ],
           },
         },
       },
       {
-        input: 'a + b + c + d',
+        input: "a + b + c + d",
         expected: {
           success: true,
           result: {
             type: "string",
             segments: [
-              { type: "interpolation", expression: { type: "variableName", value: "a" } },
-              { type: "interpolation", expression: { type: "variableName", value: "b" } },
-              { type: "interpolation", expression: { type: "variableName", value: "c" } },
-              { type: "interpolation", expression: { type: "variableName", value: "d" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "a" },
+              },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "b" },
+              },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "c" },
+              },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "d" },
+              },
             ],
           },
         },
@@ -798,8 +668,14 @@ describe("literals parsers", () => {
             type: "string",
             segments: [
               { type: "text", value: "Hello " },
-              { type: "interpolation", expression: { type: "variableName", value: "x" } },
-              { type: "interpolation", expression: { type: "variableName", value: "name" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "x" },
+              },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "name" },
+              },
             ],
           },
         },
@@ -811,9 +687,15 @@ describe("literals parsers", () => {
           result: {
             type: "string",
             segments: [
-              { type: "interpolation", expression: { type: "variableName", value: "greeting" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "greeting" },
+              },
               { type: "text", value: " " },
-              { type: "interpolation", expression: { type: "variableName", value: "name" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "name" },
+              },
               { type: "text", value: "!" },
             ],
           },
@@ -826,8 +708,14 @@ describe("literals parsers", () => {
           result: {
             type: "string",
             segments: [
-              { type: "interpolation", expression: { type: "variableName", value: "a" } },
-              { type: "interpolation", expression: { type: "variableName", value: "b" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "a" },
+              },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "b" },
+              },
             ],
           },
         },
@@ -854,7 +742,10 @@ describe("literals parsers", () => {
           result: {
             type: "string",
             segments: [
-              { type: "interpolation", expression: { type: "variableName", value: "name" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "name" },
+              },
               { type: "text", value: "!" },
             ],
           },
@@ -868,7 +759,12 @@ describe("literals parsers", () => {
           success: true,
           result: {
             type: "string",
-            segments: [{ type: "interpolation", expression: { type: "variableName", value: "name" } }],
+            segments: [
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "name" },
+              },
+            ],
           },
         },
       },
@@ -878,7 +774,12 @@ describe("literals parsers", () => {
           success: true,
           result: {
             type: "string",
-            segments: [{ type: "interpolation", expression: { type: "variableName", value: "name" } }],
+            segments: [
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "name" },
+              },
+            ],
           },
         },
       },
@@ -915,7 +816,10 @@ describe("literals parsers", () => {
             type: "string",
             segments: [
               { type: "text", value: "a" },
-              { type: "interpolation", expression: { type: "variableName", value: "name" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "name" },
+              },
             ],
           },
         },
@@ -927,7 +831,10 @@ describe("literals parsers", () => {
           result: {
             type: "string",
             segments: [
-              { type: "interpolation", expression: { type: "variableName", value: "x" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "x" },
+              },
               { type: "text", value: "y" },
             ],
           },
@@ -1116,7 +1023,12 @@ describe("literals parsers", () => {
           success: true,
           result: {
             type: "multiLineString",
-            segments: [{ type: "interpolation", expression: { type: "variableName", value: "name" } }],
+            segments: [
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "name" },
+              },
+            ],
           },
         },
       },
@@ -1128,7 +1040,10 @@ describe("literals parsers", () => {
             type: "multiLineString",
             segments: [
               { type: "text", value: "Hello, " },
-              { type: "interpolation", expression: { type: "variableName", value: "name" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "name" },
+              },
               { type: "text", value: "!" },
             ],
           },
@@ -1141,9 +1056,15 @@ describe("literals parsers", () => {
           result: {
             type: "multiLineString",
             segments: [
-              { type: "interpolation", expression: { type: "variableName", value: "firstName" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "firstName" },
+              },
               { type: "text", value: " " },
-              { type: "interpolation", expression: { type: "variableName", value: "lastName" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "lastName" },
+              },
             ],
           },
         },
@@ -1156,7 +1077,10 @@ describe("literals parsers", () => {
             type: "multiLineString",
             segments: [
               { type: "text", value: "line1\n" },
-              { type: "interpolation", expression: { type: "variableName", value: "variable" } },
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "variable" },
+              },
               { type: "text", value: "\nline3" },
             ],
           },
@@ -1382,7 +1306,12 @@ describe("literals parsers", () => {
           success: true,
           result: {
             type: "prompt",
-            segments: [{ type: "interpolation", expression: { type: "variableName", value: "foo" } }],
+            segments: [
+              {
+                type: "interpolation",
+                expression: { type: "variableName", value: "foo" },
+              },
+            ],
           },
         },
       },

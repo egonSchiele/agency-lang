@@ -1,66 +1,52 @@
 import {
-  backtick,
-  comma,
-  commaWithNewline,
-  optionalSpaces,
-  optionalSpacesOrNewline,
-  plusSign,
-  varNameChar,
-} from "./utils.js";
+  Parser,
+  ParserResult,
+  capture,
+  char,
+  digit,
+  failure,
+  letter,
+  many,
+  many1Till,
+  many1WithJoin,
+  manyWithJoin,
+  map,
+  noneOf,
+  oneOf,
+  optional,
+  or,
+  quotedString,
+  sepBy,
+  sepBy1,
+  seq,
+  seqC,
+  set,
+  str,
+  success,
+  trace,
+} from "tarsec";
 import {
   BooleanLiteral,
   InterpolationSegment,
   Literal,
   MultiLineStringLiteral,
   NumberLiteral,
-  PromptLiteral,
   PromptSegment,
   StringLiteral,
   TextSegment,
   VariableNameLiteral,
 } from "../types.js";
-import {
-  Parser,
-  ParserResult,
-  capture,
-  char,
-  digit,
-  letter,
-  many,
-  many1Till,
-  many1WithJoin,
-  manyTill,
-  manyTillOneOf,
-  manyTillStr,
-  manyWithJoin,
-  map,
-  noneOf,
-  optional,
-  or,
-  sepBy,
-  seq,
-  seqC,
-  set,
-  succeed,
-  str,
-  trace,
-  sepBy1,
-  failure,
-  success,
-  quotedString,
-} from "tarsec";
 import { _valueAccessParser } from "./access.js";
-
-export const textSegmentParser: Parser<TextSegment> = map(
-  many1Till(or(backtick, char("$"))),
-  (text) => ({
-    type: "text",
-    value: text,
-  }),
-);
+import {
+  commaWithNewline,
+  optionalSpaces,
+  optionalSpacesOrNewline,
+  plusSign,
+  varNameChar,
+} from "./utils.js";
 
 export const stringTextSegmentParser: Parser<TextSegment> = map(
-  many1Till(or(char('"'), char("$"))),
+  many1Till(oneOf("'\"`$")),
   (text) => ({
     type: "text",
     value: text,
@@ -106,13 +92,6 @@ export const interpolationSegmentParser: Parser<InterpolationSegment> = (
   );
 };
 
-export const promptParserBackticks: Parser<PromptLiteral> = seqC(
-  set("type", "prompt"),
-  backtick,
-  capture(many(or(textSegmentParser, interpolationSegmentParser)), "segments"),
-  backtick,
-);
-
 const objectParser = (input: string): ParserResult<Record<string, any>> => {
   const kvParser = trace(
     "objectKVParser",
@@ -156,74 +135,31 @@ const objectParser = (input: string): ParserResult<Record<string, any>> => {
   return parser(input);
 };
 
-/* export const promptParserLlmFunctionWithConfig: Parser<PromptLiteral> = (
-  input: string,
-) => {
+export function numberParser(input: string): ParserResult<NumberLiteral> {
   const parser = seqC(
-    set("type", "prompt"),
-    str("llm("),
-    optionalSpaces,
-    capture(
-      map(stringParser, (str) => str.segments),
-      "segments",
-    ),
-    optionalSpaces,
-    char(","),
-    capture(objectParser, "config"),
-    optionalSpaces,
-    char(")"),
+    set("type", "number"),
+    capture(many1WithJoin(or(char("-"), char("."), digit)), "value"),
   );
   return parser(input);
-};
-
-export const promptParserLlmFunction: Parser<PromptLiteral> = (
-  input: string,
-) => {
-  const parser = seqC(
-    set("type", "prompt"),
-    str("llm("),
-    optionalSpaces,
-    capture(
-      map(stringParser, (str) => str.segments),
-      "segments",
-    ),
-    optionalSpaces,
-    char(")"),
-  );
-  return parser(input);
-};
- */
-export const promptParser: Parser<PromptLiteral> = promptParserBackticks; /* or(
-  promptParserBackticks,
-  promptParserLlmFunctionWithConfig,
-  promptParserLlmFunction,
-); */
-
-export const numberParser: Parser<NumberLiteral> = seqC(
-  set("type", "number"),
-  capture(many1WithJoin(or(char("-"), char("."), digit)), "value"),
-);
-
-const toTextSegment = (str: string): PromptSegment[] => [
-  {
-    type: "text",
-    value: str.replaceAll('"', "").replaceAll("'", ""),
-  },
-];
+}
 
 export const simpleStringParser: Parser<StringLiteral> = seqC(
   set("type", "string"),
-  capture(map(quotedString, toTextSegment), "segments"),
+  oneOf("'\"`"),
+  capture(
+    map(stringTextSegmentParser, (x) => [x]),
+    "segments",
+  ),
 );
 
 export const _stringParser: Parser<StringLiteral> = seqC(
   set("type", "string"),
-  char('"'),
+  oneOf("'\"`"),
   capture(
     many(or(stringTextSegmentParser, interpolationSegmentParser)),
     "segments",
   ),
-  char('"'),
+  oneOf("'\"`"),
 );
 
 export const stringParser: Parser<StringLiteral> = (input: string) => {
@@ -288,20 +224,22 @@ export const variableNameParser: Parser<VariableNameLiteral> = (
   return parser(input);
 };
 
-export const booleanParser: Parser<BooleanLiteral> = seqC(
-  set("type", "boolean"),
-  capture(
-    or(
-      map(str("true"), () => true),
-      map(str("false"), () => false),
+export function booleanParser(input: string): ParserResult<BooleanLiteral> {
+  const parser = seqC(
+    set("type", "boolean"),
+    capture(
+      or(
+        map(str("true"), () => true),
+        map(str("false"), () => false),
+      ),
+      "value",
     ),
-    "value",
-  ),
-);
+  );
+  return parser(input);
+}
 
 export const literalParser: Parser<Literal> = or(
   booleanParser,
-  promptParser,
   numberParser,
   multiLineStringParser,
   stringParser,
@@ -310,16 +248,18 @@ export const literalParser: Parser<Literal> = or(
 
 export const literalParserNoVarName: Parser<Literal> = or(
   booleanParser,
-  promptParser,
   numberParser,
   multiLineStringParser,
   stringParser,
 );
 
 // no string concat, no prompt strings
-export const simpleLiteralParser: Parser<Literal> = or(
-  booleanParser,
-  numberParser,
-  simpleStringParser,
-  variableNameParser,
-);
+export function simpleLiteralParser(input: string): ParserResult<Literal> {
+  const parser = or(
+    booleanParser,
+    numberParser,
+    simpleStringParser,
+    variableNameParser,
+  );
+  return parser(input);
+}

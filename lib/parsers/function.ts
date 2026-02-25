@@ -47,7 +47,7 @@ import {
   llmPromptFunctionCallParser,
   streamingPromptLiteralParser,
 } from "./functionCall.js";
-import { booleanParser, literalParser, promptParser } from "./literals.js";
+import { booleanParser, literalParser } from "./literals.js";
 import { matchBlockParser } from "./matchBlock.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { returnStatementParser } from "./returnStatement.js";
@@ -97,7 +97,6 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
           binOpParser,
           timeBlockParser,
           messageThreadParser,
-          promptParser,
           streamingPromptLiteralParser,
           llmPromptFunctionCallParser,
           booleanParser,

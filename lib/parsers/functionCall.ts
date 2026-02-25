@@ -21,7 +21,6 @@ import {
   booleanParser,
   literalParser,
   literalParserNoVarName,
-  promptParser,
   variableNameParser,
 } from "./literals.js";
 import { optionalSemicolon } from "./parserUtils.js";
@@ -127,8 +126,8 @@ export const streamingPromptLiteralParser: Parser<PromptLiteral> = (
     spaces,
     captureCaptures(
       parseError(
-        "expected a prompt or llm() call after `stream`",
-        capture(or(promptParser, llmPromptFunctionCallParser), "prompt"),
+        "expected an llm() call after `stream`",
+        capture(llmPromptFunctionCallParser, "prompt"),
       ),
     ),
   );

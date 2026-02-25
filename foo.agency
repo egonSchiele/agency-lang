@@ -1,3 +1,7 @@
-def foo(name: string, age: number): User {
-  return "hi there! your name is ${response.name} and you are ${response.age} years old."
+node plan() {
+
+      if (nextAction.type == `askUser`) {
+        userMsg = input("${nextAction.question} ")
+      }
+  
 }

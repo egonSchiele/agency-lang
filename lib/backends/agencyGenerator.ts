@@ -429,15 +429,22 @@ export class AgencyGenerator extends BaseGenerator {
     this.decreaseIndent();
     lines.push(bodyLines.join("").trimEnd() + "\n");
 
-    const elseBodyLines: string[] = [];
     if (node.elseBody && node.elseBody.length > 0) {
-      lines.push(this.indentStr(`} else {\n`));
-      this.increaseIndent();
-      for (const stmt of node.elseBody) {
-        elseBodyLines.push(this.processNode(stmt));
+      if (node.elseBody.length === 1 && node.elseBody[0].type === "ifElse") {
+        // Emit "} else if (...)" instead of "} else { if (...) }"
+        const elseIfCode = this.processIfElse(node.elseBody[0] as IfElse);
+        lines.push(this.indentStr(`} else ${elseIfCode.trimStart()}`));
+        return lines.join("");
+      } else {
+        const elseBodyLines: string[] = [];
+        lines.push(this.indentStr(`} else {\n`));
+        this.increaseIndent();
+        for (const stmt of node.elseBody) {
+          elseBodyLines.push(this.processNode(stmt));
+        }
+        this.decreaseIndent();
+        lines.push(elseBodyLines.join("").trimEnd() + "\n");
       }
-      this.decreaseIndent();
-      lines.push(elseBodyLines.join("").trimEnd() + "\n");
     }
 
     lines.push(this.indentStr(`}`));

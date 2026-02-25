@@ -890,6 +890,40 @@ __stack.locals.y = 20;
 
 
 }
+//  Basic else
+        __stack.step++;
+      }
+      
+
+      if (__step <= 12) {
+        if (__stack.locals.flag) {
+__stack.locals.result = `yes`;
+
+
+} else {
+__stack.locals.result = `no`;
+
+
+}
+//  else if chain
+        __stack.step++;
+      }
+      
+
+      if (__step <= 13) {
+        if (__stack.locals.a == 1) {
+__stack.locals.result = `one`;
+
+
+} else if (__stack.locals.a == 2) {
+__stack.locals.result = `two`;
+
+
+} else {
+__stack.locals.result = `other`;
+
+
+}
         __stack.step++;
       }
       

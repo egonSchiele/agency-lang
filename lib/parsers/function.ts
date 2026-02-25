@@ -297,48 +297,33 @@ export const timeBlockParser: Parser<TimeBlock> = or(
   _timeBlockParser,
 );
 
-/* const elseClauseParser: Parser<AgencyNode[]> = seqC(
-  str("else"),
-  optionalSpaces,
-  char("{"),
-  spaces,
-  captureCaptures(bodyParser),
-  optionalSpaces,
-  char("}"),
-);
-
-export const ifElseParser: Parser<IfElse> = (input: string) => {
-  const parser = trace(
-    "ifElseParser",
-    seqC(
-      set("type", "ifElse"),
-      str("if"),
-      optionalSpaces,
-      char("("),
-      optionalSpaces,
-      capture(
-        or(
-          indexAccessParser,
-          functionCallParser,
-          accessExpressionParser,
-          literalParser,
-        ),
-        "condition",
-      ),
-      optionalSpaces,
-      char(")"),
-      optionalSpaces,
-      char("{"),
-      spaces,
-      capture(bodyParser, "thenBody"),
-      optionalSpaces,
-      char("}"),
-      optionalSpaces,
-      capture(optional(elseClauseParser), "elseBody"),
-    ),
+const elseClauseParser: Parser<AgencyNode[]> = (input: string) => {
+  const parser = seqC(
+    optionalSpaces,
+    str("else"),
+    optionalSpaces,
   );
-  return parser(input);
-}; */
+  const prefixResult = parser(input);
+  if (!prefixResult.success) return prefixResult;
+
+  // Try parsing "else if" (another ifParser)
+  const elseIfResult = ifParser(prefixResult.rest);
+  if (elseIfResult.success) {
+    return success([elseIfResult.result], elseIfResult.rest);
+  }
+
+  // Otherwise parse "else { body }"
+  const elseBlockParser = seqC(
+    char("{"),
+    spaces,
+    capture(bodyParser, "body"),
+    optionalSpaces,
+    char("}"),
+  );
+  const blockResult = elseBlockParser(prefixResult.rest);
+  if (!blockResult.success) return blockResult;
+  return success(blockResult.result.body, blockResult.rest);
+};
 
 export const ifParser: Parser<IfElse> = (input: string) => {
   const parser = trace(
@@ -368,7 +353,16 @@ export const ifParser: Parser<IfElse> = (input: string) => {
       ),
     ),
   );
-  return parser(input);
+  const result = parser(input);
+  if (!result.success) return result;
+
+  // Try to parse an optional else clause
+  const elseResult = elseClauseParser(result.rest);
+  if (elseResult.success) {
+    return success({ ...result.result, elseBody: elseResult.result }, elseResult.rest);
+  }
+
+  return result;
 };
 
 export const whileLoopParser: Parser<WhileLoop> = trace(

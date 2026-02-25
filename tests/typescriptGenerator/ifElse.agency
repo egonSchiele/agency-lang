@@ -46,4 +46,20 @@ node main() {
     x = 10
     y = 20
   }
+
+  // Basic else
+  if (flag) {
+    result = "yes"
+  } else {
+    result = "no"
+  }
+
+  // else if chain
+  if (a == 1) {
+    result = "one"
+  } else if (a == 2) {
+    result = "two"
+  } else {
+    result = "other"
+  }
 }

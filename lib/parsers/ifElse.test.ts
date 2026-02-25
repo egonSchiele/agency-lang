@@ -368,10 +368,154 @@ describe("ifParser", () => {
       expected: { success: false },
       throws: true,
     },
+    // Basic else
     {
-      input: "if (x) {}else",
-      expected: { success: false },
-      throws: true,
+      input: "if (x) {\n  a = 1\n} else {\n  b = 2\n}",
+      expected: {
+        success: true,
+        result: {
+          type: "ifElse",
+          condition: { type: "variableName", value: "x" },
+          thenBody: [
+            {
+              type: "assignment",
+              variableName: "a",
+              value: { type: "number", value: "1" },
+            },
+            {
+              type: "newLine",
+            },
+          ],
+          elseBody: [
+            {
+              type: "assignment",
+              variableName: "b",
+              value: { type: "number", value: "2" },
+            },
+            {
+              type: "newLine",
+            },
+          ],
+        },
+      },
+    },
+
+    // else if chain
+    {
+      input: "if (x) {\n  a = 1\n} else if (y) {\n  b = 2\n}",
+      expected: {
+        success: true,
+        result: {
+          type: "ifElse",
+          condition: { type: "variableName", value: "x" },
+          thenBody: [
+            {
+              type: "assignment",
+              variableName: "a",
+              value: { type: "number", value: "1" },
+            },
+            {
+              type: "newLine",
+            },
+          ],
+          elseBody: [
+            {
+              type: "ifElse",
+              condition: { type: "variableName", value: "y" },
+              thenBody: [
+                {
+                  type: "assignment",
+                  variableName: "b",
+                  value: { type: "number", value: "2" },
+                },
+                {
+                  type: "newLine",
+                },
+              ],
+            },
+          ],
+        },
+      },
+    },
+
+    // Full chain: if / else if / else
+    {
+      input: "if (x) {\n  a = 1\n} else if (y) {\n  b = 2\n} else {\n  c = 3\n}",
+      expected: {
+        success: true,
+        result: {
+          type: "ifElse",
+          condition: { type: "variableName", value: "x" },
+          thenBody: [
+            {
+              type: "assignment",
+              variableName: "a",
+              value: { type: "number", value: "1" },
+            },
+            {
+              type: "newLine",
+            },
+          ],
+          elseBody: [
+            {
+              type: "ifElse",
+              condition: { type: "variableName", value: "y" },
+              thenBody: [
+                {
+                  type: "assignment",
+                  variableName: "b",
+                  value: { type: "number", value: "2" },
+                },
+                {
+                  type: "newLine",
+                },
+              ],
+              elseBody: [
+                {
+                  type: "assignment",
+                  variableName: "c",
+                  value: { type: "number", value: "3" },
+                },
+                {
+                  type: "newLine",
+                },
+              ],
+            },
+          ],
+        },
+      },
+    },
+
+    // Whitespace variation: no spaces around else
+    {
+      input: "if (x) {\n  a = 1\n}else{\n  b = 2\n}",
+      expected: {
+        success: true,
+        result: {
+          type: "ifElse",
+          condition: { type: "variableName", value: "x" },
+          thenBody: [
+            {
+              type: "assignment",
+              variableName: "a",
+              value: { type: "number", value: "1" },
+            },
+            {
+              type: "newLine",
+            },
+          ],
+          elseBody: [
+            {
+              type: "assignment",
+              variableName: "b",
+              value: { type: "number", value: "2" },
+            },
+            {
+              type: "newLine",
+            },
+          ],
+        },
+      },
     },
   ];
 

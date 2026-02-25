@@ -851,12 +851,18 @@ export class TypeScriptGenerator extends BaseGenerator {
     let result = `if (${conditionCode}) {\n${thenBodyStr}\n}`;
 
     if (node.elseBody && node.elseBody.length > 0) {
-      const elseBodyCodes: string[] = [];
-      for (const stmt of node.elseBody) {
-        elseBodyCodes.push(this.processNode(stmt));
+      if (node.elseBody.length === 1 && node.elseBody[0].type === "ifElse") {
+        // Emit "else if" instead of "else { if }"
+        const elseIfCode = this.processIfElse(node.elseBody[0] as IfElse).trimEnd();
+        result += ` else ${elseIfCode}`;
+      } else {
+        const elseBodyCodes: string[] = [];
+        for (const stmt of node.elseBody) {
+          elseBodyCodes.push(this.processNode(stmt));
+        }
+        const elseBodyStr = elseBodyCodes.join("\n");
+        result += ` else {\n${elseBodyStr}\n}`;
       }
-      const elseBodyStr = elseBodyCodes.join("\n");
-      result += ` else {\n${elseBodyStr}\n}`;
     }
 
     return result + "\n";

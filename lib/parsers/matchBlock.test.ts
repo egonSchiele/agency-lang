@@ -517,6 +517,58 @@ describe("matchBlockParser", () => {
       },
     },
     {
+      name: "match with duplicate case values",
+      input: `match(x) {
+  1 => "first"
+  1 => "second"
+}`,
+      expected: {
+        success: true,
+        result: {
+          type: "matchBlock",
+          expression: { type: "variableName", value: "x" },
+          cases: [
+            {
+              type: "matchBlockCase",
+              caseValue: { type: "number", value: "1" },
+              body: { type: "string", segments: [{ type: "text", value: "first" }] },
+            },
+            {
+              type: "matchBlockCase",
+              caseValue: { type: "number", value: "1" },
+              body: { type: "string", segments: [{ type: "text", value: "second" }] },
+            },
+          ],
+        },
+      },
+    },
+    {
+      name: "match with multiple default arms",
+      input: `match(x) {
+  _ => 1
+  _ => 2
+}`,
+      expected: {
+        success: true,
+        result: {
+          type: "matchBlock",
+          expression: { type: "variableName", value: "x" },
+          cases: [
+            {
+              type: "matchBlockCase",
+              caseValue: "_",
+              body: { type: "number", value: "1" },
+            },
+            {
+              type: "matchBlockCase",
+              caseValue: "_",
+              body: { type: "number", value: "2" },
+            },
+          ],
+        },
+      },
+    },
+    {
       name: "missing opening parenthesis",
       input: `match foo) { x => 1 }`,
       expected: { success: false },

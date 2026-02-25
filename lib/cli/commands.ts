@@ -106,6 +106,11 @@ export function renderGraph(contents: string, config: AgencyConfig): void {
 }
 
 const compiledFiles: Set<string> = new Set();
+
+export function resetCompilationCache(): void {
+  compiledFiles.clear();
+}
+
 export function compile(
   config: AgencyConfig,
   inputFile: string,
@@ -161,6 +166,14 @@ export function compile(
   const inputDir = path.dirname(absoluteInputFile);
   for (const importPath of imports) {
     const absPath = path.resolve(inputDir, importPath);
+    if (config.restrictImports) {
+      const projectRoot = process.cwd();
+      if (!absPath.startsWith(projectRoot + path.sep) && absPath !== projectRoot) {
+        throw new Error(
+          `Import path '${importPath}' resolves to '${absPath}' which is outside the project directory '${projectRoot}'.`,
+        );
+      }
+    }
     compile(config, absPath, undefined);
   }
 

@@ -200,6 +200,54 @@ describe("dataStructures parsers", () => {
         },
       },
 
+      // Trailing comma in arrays
+      {
+        input: "[1, 2, 3,]",
+        expected: {
+          success: true,
+          result: {
+            type: "agencyArray",
+            items: [
+              { type: "number", value: "1" },
+              { type: "number", value: "2" },
+              { type: "number", value: "3" },
+            ],
+          },
+        },
+      },
+
+      // Deep nesting (5+ levels)
+      {
+        input: "[[[[[1]]]]]",
+        expected: {
+          success: true,
+          result: {
+            type: "agencyArray",
+            items: [
+              {
+                type: "agencyArray",
+                items: [
+                  {
+                    type: "agencyArray",
+                    items: [
+                      {
+                        type: "agencyArray",
+                        items: [
+                          {
+                            type: "agencyArray",
+                            items: [{ type: "number", value: "1" }],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+
       // Failure cases
       { input: "[", expected: { success: false } },
       { input: "]", expected: { success: false } },

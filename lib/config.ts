@@ -140,4 +140,10 @@ export interface AgencyConfig {
    * If true, generate .d.ts declaration files alongside .js output.
    */
   declarations?: boolean;
+
+  /**
+   * If true, validate that import paths resolve within the project directory.
+   * Prevents path traversal attacks via imports like `../../etc/passwd`.
+   */
+  restrictImports?: boolean;
 }

@@ -14,7 +14,6 @@ import {
   VariableType,
 } from "../types.js";
 
-import { AwaitStatement } from "@/types/await.js";
 import { TimeBlock } from "@/types/timeBlock.js";
 import { AccessChainElement, ValueAccess } from "../types/access.js";
 import { AgencyArray, AgencyObject } from "../types/dataStructures.js";
@@ -551,11 +550,6 @@ export class AgencyGenerator extends BaseGenerator {
   private indentStr(str: string): string {
     return `${this.indent()}${str}`;
   }
-  protected processAwaitStatement(node: AwaitStatement): string {
-    const code = this.processNode(node.expression);
-    return this.indentStr(`await ${code.trim()}`);
-  }
-
   protected processNewLine(_node: NewLine): string {
     return "\n";
   }
@@ -596,6 +590,8 @@ export class AgencyGenerator extends BaseGenerator {
         return `[${this.processNode(node.index).trim()}]`;
       case "methodCall":
         return `.${this.generateFunctionCallExpression(node.functionCall)}`;
+      default:
+        throw new Error(`Unknown access chain element kind: ${(node as any).kind}`);
     }
   }
 

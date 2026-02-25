@@ -19,7 +19,6 @@ import {
   BUILTIN_TOOLS,
   TYPES_THAT_DONT_TRIGGER_NEW_PART,
 } from "@/config.js";
-import { AwaitStatement } from "@/types/await.js";
 import { SpecialVar } from "@/types/specialVar.js";
 import { TimeBlock } from "@/types/timeBlock.js";
 import * as renderSpecialVar from "../templates/backends/typescriptGenerator/specialVar.js";
@@ -68,7 +67,6 @@ import {
   generateBuiltinHelpers,
   mapFunctionName,
 } from "./typescriptGenerator/builtins.js";
-import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
 import {
   DEFAULT_SCHEMA,
   mapTypeToZodSchema,
@@ -114,18 +112,6 @@ export class TypeScriptGenerator extends BaseGenerator {
 
   protected processTypeAlias(node: TypeAlias): string {
     this.typeAliases[node.aliasName] = node.aliasedType;
-    const typeAliasStr = this.typeAliasToString(node);
-    if (!this.generatedTypeAliases.includes(typeAliasStr)) {
-      this.generatedTypeAliases.push(typeAliasStr);
-    }
-    return "";
-  }
-
-  protected typeAliasToString(node: TypeAlias): string {
-    const aliasedTypeStr = variableTypeToString(
-      node.aliasedType,
-      this.typeAliases,
-    );
     return "";
   }
 
@@ -147,7 +133,7 @@ export class TypeScriptGenerator extends BaseGenerator {
         return `...${this.processNode(entry.value).trim()}`;
       }
       const kv = entry as import("../types/dataStructures.js").AgencyObjectKV;
-      const keyCode = kv.key;
+      const keyCode = kv.key.replace(/"/g, '\\"');
       const valueCode = this.processNode(kv.value).trim();
       return `"${keyCode}": ${valueCode}`;
     });
@@ -397,7 +383,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     });
     let schema = "";
     for (const [key, value] of Object.entries(properties)) {
-      schema += `"${key}": ${value}, `;
+      schema += `"${key.replace(/"/g, '\\"')}": ${value}, `;
     }
 
     return renderTool.default({
@@ -546,6 +532,8 @@ export class TypeScriptGenerator extends BaseGenerator {
           return graphNode.returnType;
         }
         return undefined;
+      default:
+        throw new Error(`Unknown scope type: ${(currentScope as any).type}`);
     }
   }
   protected generateImports(): string {
@@ -792,6 +780,8 @@ I'll probably need to do that for supporting type checking anyway.
         return `* as ${node.importedNames}`;
       case "defaultImport":
         return `${node.importedNames}`;
+      default:
+        throw new Error(`Unknown import name type: ${(node as any).type}`);
     }
   }
 
@@ -912,11 +902,6 @@ I'll probably need to do that for supporting type checking anyway.
       bodyCodeStr,
       printTime: node.printTime || false,
     });
-  }
-
-  protected processAwaitStatement(node: AwaitStatement): string {
-    const code = this.processNode(node.expression);
-    return `await ${code}`;
   }
 
   protected processMessageThread(

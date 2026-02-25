@@ -30,7 +30,7 @@ export function mapTypeToZodSchema(
     );
     return `z.array(${elementSchema})`;
   } else if (variableType.type === "stringLiteralType") {
-    return `z.literal("${variableType.value}")`;
+    return `z.literal("${variableType.value.replace(/"/g, '\\"')}")`;
   } else if (variableType.type === "numberLiteralType") {
     return `z.literal(${variableType.value})`;
   } else if (variableType.type === "booleanLiteralType") {
@@ -43,7 +43,7 @@ export function mapTypeToZodSchema(
   } else if (variableType.type === "objectType") {
     const props = variableType.properties
       .map((prop) => {
-        let str = `"${prop.key}": ${mapTypeToZodSchema(
+        let str = `"${prop.key.replace(/"/g, '\\"')}": ${mapTypeToZodSchema(
           prop.value,
           typeAliases
         )}`;

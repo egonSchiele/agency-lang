@@ -463,6 +463,93 @@ describe("binOpParser", () => {
     });
   });
 
+  // Assignment operators
+  describe("assignment operators", () => {
+    it('should parse "x += 5"', () => {
+      const result = binOpParser("x += 5");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "binOpExpression",
+          operator: "+=",
+          left: { type: "variableName", value: "x" },
+          right: { type: "number", value: "5" },
+        });
+      }
+    });
+
+    it('should parse "count -= 1"', () => {
+      const result = binOpParser("count -= 1");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "binOpExpression",
+          operator: "-=",
+          left: { type: "variableName", value: "count" },
+          right: { type: "number", value: "1" },
+        });
+      }
+    });
+
+    it('should parse "x *= 2"', () => {
+      const result = binOpParser("x *= 2");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "binOpExpression",
+          operator: "*=",
+          left: { type: "variableName", value: "x" },
+          right: { type: "number", value: "2" },
+        });
+      }
+    });
+
+    it('should parse "x /= 3"', () => {
+      const result = binOpParser("x /= 3");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqual({
+          type: "binOpExpression",
+          operator: "/=",
+          left: { type: "variableName", value: "x" },
+          right: { type: "number", value: "3" },
+        });
+      }
+    });
+  });
+
+  // Multiple operators with mixed precedence
+  describe("multiple operators with mixed precedence", () => {
+    it('should parse "1 + 2 * 3 - 4 / 5" with correct precedence', () => {
+      const result = binOpParser("1 + 2 * 3 - 4 / 5");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Should parse as (1 + (2 * 3)) - (4 / 5)
+        expect(result.result).toEqual({
+          type: "binOpExpression",
+          operator: "-",
+          left: {
+            type: "binOpExpression",
+            operator: "+",
+            left: { type: "number", value: "1" },
+            right: {
+              type: "binOpExpression",
+              operator: "*",
+              left: { type: "number", value: "2" },
+              right: { type: "number", value: "3" },
+            },
+          },
+          right: {
+            type: "binOpExpression",
+            operator: "/",
+            left: { type: "number", value: "4" },
+            right: { type: "number", value: "5" },
+          },
+        });
+      }
+    });
+  });
+
   // Failure cases
   describe("failure cases", () => {
     const failureCases = [

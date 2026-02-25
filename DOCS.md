@@ -729,7 +729,5 @@ When you create multiple agency files and import nodes from one file into anothe
 
 ### Unsupported features
 - else statements aren't supported yet -- use match statements with a default case instead
-- loops aren't supported yet -- use recursion
 - no higher order functions yet (e.g., `map`, `filter`, `reduce`, etc.) or lambda functions
-- no infix operators yet (e.g., `+`, `-`, `*`, `/`, `&&`, `||`, `>=`, `<=`, `==`, `!=`, etc.)
 - string interpolation is limited -- you can only interpolate variable names, not expressions.

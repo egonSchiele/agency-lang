@@ -156,6 +156,28 @@ describe("forLoopParser", () => {
       },
     },
 
+    // Same variable name for item and index
+    {
+      input: "for (x, x in xs) {\n  foo = 1\n}",
+      expected: {
+        success: true,
+        result: {
+          type: "forLoop",
+          itemVar: "x",
+          indexVar: "x",
+          iterable: { type: "variableName", value: "xs" },
+          body: [
+            {
+              type: "assignment",
+              variableName: "foo",
+              value: { type: "number", value: "1" },
+            },
+            { type: "newLine" },
+          ],
+        },
+      },
+    },
+
     // Failure cases
     {
       input: "for x in xs {\n  foo = 1\n}",

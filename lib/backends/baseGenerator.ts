@@ -17,7 +17,6 @@ import {
   VariableType,
 } from "../types.js";
 
-import { AwaitStatement } from "@/types/await.js";
 import { TimeBlock } from "@/types/timeBlock.js";
 import { ValueAccess } from "../types/access.js";
 import { AgencyArray, AgencyObject } from "../types/dataStructures.js";
@@ -253,11 +252,11 @@ export class BaseGenerator {
   }
 
   protected processKeyword(node: Keyword): string {
-    return "processKeyword not implemented";
+    throw new Error("processKeyword not implemented");
   }
 
   protected processBinOpExpression(node: BinOpExpression): string {
-    return "processBinOpExpression not implemented";
+    throw new Error("processBinOpExpression not implemented");
   }
 
   protected needsParensLeft(child: BinOpArgument, parentOp: Operator): boolean {
@@ -271,95 +270,91 @@ export class BaseGenerator {
   }
 
   protected processSkill(node: Skill): string {
-    return "processSkill not implemented";
+    throw new Error("processSkill not implemented");
   }
 
   protected processMessageThread(node: MessageThread): string {
-    return "processMessageThread not implemented";
+    throw new Error("processMessageThread not implemented");
   }
 
   protected processNewLine(_node: NewLine): string {
     return "";
   }
 
-  protected processAwaitStatement(node: AwaitStatement): string {
-    return "processAwaitStatement not implemented";
-  }
-
   protected processTimeBlock(node: TimeBlock, timingVarName: string): string {
-    return "processTimeBlock not implemented";
+    throw new Error("processTimeBlock not implemented");
   }
 
   protected processSpecialVar(node: SpecialVar): string {
-    return "processSpecialVar not implemented";
+    throw new Error("processSpecialVar not implemented");
   }
 
   protected processForLoop(node: ForLoop): string {
-    return "processForLoop not implemented";
+    throw new Error("processForLoop not implemented");
   }
 
   protected processWhileLoop(node: WhileLoop): string {
-    return "processWhileLoop not implemented";
+    throw new Error("processWhileLoop not implemented");
   }
 
   protected processIfElse(node: IfElse): string {
-    return "processIfElse not implemented";
+    throw new Error("processIfElse not implemented");
   }
 
   protected processImportStatement(node: ImportStatement): string {
-    return "processImportStatement not implemented";
+    throw new Error("processImportStatement not implemented");
   }
 
   protected processImportNodeStatement(node: ImportNodeStatement): string {
-    return "processImportNodeStatement not implemented";
+    throw new Error("processImportNodeStatement not implemented");
   }
 
   protected processImportToolStatement(node: ImportToolStatement): string {
-    return "processImportToolStatement not implemented";
+    throw new Error("processImportToolStatement not implemented");
   }
 
   protected processTool(node: FunctionDefinition): string {
-    return "processTool not implemented";
+    throw new Error("processTool not implemented");
   }
 
   protected processUsesTool(node: UsesTool): string {
-    return "processUsesTool not implemented";
+    throw new Error("processUsesTool not implemented");
   }
 
   protected processGraphNode(node: GraphNodeDefinition): string {
-    return "processGraphNode not implemented";
+    throw new Error("processGraphNode not implemented");
   }
 
   protected processAgencyObject(node: AgencyObject): string {
-    return "<processAgencyObject not implemented>";
+    throw new Error("processAgencyObject not implemented");
   }
 
   protected processAgencyArray(node: AgencyArray): string {
-    return "<processAgencyArray not implemented>";
+    throw new Error("processAgencyArray not implemented");
   }
 
   protected processComment(node: AgencyComment): string {
-    return "processComment not implemented";
+    throw new Error("processComment not implemented");
   }
 
   protected processMultiLineComment(node: AgencyMultiLineComment): string {
-    return "processMultiLineComment not implemented";
+    throw new Error("processMultiLineComment not implemented");
   }
 
   protected processReturnStatement(node: ReturnStatement): string {
-    return "processReturnStatement not implemented";
+    throw new Error("processReturnStatement not implemented");
   }
 
   protected processValueAccess(node: ValueAccess): string {
-    return "processValueAccess not implemented";
+    throw new Error("processValueAccess not implemented");
   }
 
   protected processMatchBlock(node: MatchBlock): string {
-    return "processMatchBlock not implemented";
+    throw new Error("processMatchBlock not implemented");
   }
 
   protected processAssignment(node: Assignment): string {
-    return "processAssignment not implemented";
+    throw new Error("processAssignment not implemented");
   }
 
   protected processPromptLiteral(
@@ -367,27 +362,27 @@ export class BaseGenerator {
     typeHint: VariableType | undefined,
     node: PromptLiteral,
   ): string {
-    return "processPromptLiteral not implemented";
+    throw new Error("processPromptLiteral not implemented");
   }
 
   protected processFunctionDefinition(node: FunctionDefinition): string {
-    return "processFunctionDefinition not implemented";
+    throw new Error("processFunctionDefinition not implemented");
   }
 
   protected processFunctionCall(node: FunctionCall): string {
-    return "processFunctionCall not implemented";
+    throw new Error("processFunctionCall not implemented");
   }
 
   protected generateFunctionCallExpression(node: FunctionCall): string {
-    return "generateFunctionCallExpression not implemented";
+    throw new Error("generateFunctionCallExpression not implemented");
   }
 
   protected generateLiteral(literal: Literal): string {
-    return "generateLiteral not implemented";
+    throw new Error("generateLiteral not implemented");
   }
 
   protected generateImports(): string {
-    return "generateImports not implemented";
+    throw new Error("generateImports not implemented");
   }
 
   protected preprocess(): string {

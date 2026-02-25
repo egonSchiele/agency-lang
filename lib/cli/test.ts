@@ -16,7 +16,7 @@ import { color } from "@/utils/termcolors.js";
 import { AgencyConfig } from "@/config.js";
 import path from "path";
 import { compile } from "./commands.js";
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 type Exact = { type: "exact" };
 type LLMJudge = {
   type: "llmJudge";
@@ -530,7 +530,7 @@ export async function testTs(config: AgencyConfig, inputPaths: string[]) {
       // Execute test.js
       const testFile = "test.js";
       try {
-        execSync(`node ${testFile}`, {
+        execFileSync("node", [testFile], {
           cwd: dir,
           stdio: "inherit",
         });

@@ -5,7 +5,7 @@ const onCancel = () => {
 };
 import fs, { readFileSync } from "fs";
 import path from "path";
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import {
   AgencyProgram,
   GraphNodeDefinition,
@@ -180,7 +180,7 @@ export function executeNode({
   });
   const evaluateFile = "__evaluate.js";
   fs.writeFileSync(evaluateFile, evaluateScript);
-  execSync(`node ${evaluateFile}`, { stdio: "inherit" });
+  execFileSync("node", [evaluateFile], { stdio: "inherit" });
   const results = readFileSync("__evaluate.json", "utf-8");
   return JSON.parse(results);
 }
@@ -203,6 +203,8 @@ export function formatTypeHint(vt: VariableType): string {
       return `{ ${vt.properties.map((p) => `${p.key}: ${formatTypeHint(p.value)}`).join(", ")} }`;
     case "typeAliasVariable":
       return vt.aliasName;
+    default:
+      throw new Error(`Unknown variable type: ${(vt as any).type}`);
   }
 }
 
@@ -244,7 +246,7 @@ export function executeJudge(
 
   const judgeEvaluateFile = "__judge_evaluate.js";
   fs.writeFileSync(judgeEvaluateFile, judgeScript);
-  execSync(`node ${judgeEvaluateFile}`, { stdio: "inherit" });
+  execFileSync("node", [judgeEvaluateFile], { stdio: "inherit" });
   const results = readFileSync("__judge_evaluate.json", "utf-8");
   return JSON.parse(results).data;
 }
@@ -267,6 +269,9 @@ export function* findRecursively(
 
   for (const file of filesToProcess) {
     const fullPath = path.join(dirName, file);
+    if (fs.lstatSync(fullPath).isSymbolicLink()) {
+      continue;
+    }
     if (fs.statSync(fullPath).isDirectory()) {
       if (!searched.includes(path.resolve(fullPath))) {
         yield* findRecursively(fullPath, ext, searched);

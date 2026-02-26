@@ -1,0 +1,12 @@
+greeting = ""
+def greet(name: string): string {
+  return interrupt("Are you sure you want to greet someone?")
+  greeting = "Kya chal raha jai, ${name}!"
+}
+
+node foo() {
+  greet("AI World")
+  return { 
+    greeting: greeting
+  }
+}

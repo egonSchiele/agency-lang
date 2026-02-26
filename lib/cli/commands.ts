@@ -156,7 +156,7 @@ export function compile(
         console.error(formatErrors(errors));
         process.exit(1);
       } else {
-        console.warn(formatErrors(errors));
+        console.warn(formatErrors(errors, "warning"));
       }
     }
   }
@@ -168,7 +168,10 @@ export function compile(
     const absPath = path.resolve(inputDir, importPath);
     if (config.restrictImports) {
       const projectRoot = process.cwd();
-      if (!absPath.startsWith(projectRoot + path.sep) && absPath !== projectRoot) {
+      if (
+        !absPath.startsWith(projectRoot + path.sep) &&
+        absPath !== projectRoot
+      ) {
         throw new Error(
           `Import path '${importPath}' resolves to '${absPath}' which is outside the project directory '${projectRoot}'.`,
         );
@@ -217,7 +220,9 @@ export function run(
   console.log(`Running ${output}...`);
   console.log("---");
 
-  const env = resumeFile ? { ...process.env, AGENCY_RESUME_FILE: resumeFile } : process.env;
+  const env = resumeFile
+    ? { ...process.env, AGENCY_RESUME_FILE: resumeFile }
+    : process.env;
 
   const nodeProcess = spawn("node", [output], {
     stdio: "inherit",

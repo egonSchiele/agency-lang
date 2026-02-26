@@ -337,7 +337,12 @@ export class TypeChecker {
             });
           }
           // Check that the assigned value is compatible with the annotation
-          this.checkType(node.value, newType, vars, `assignment to '${node.variableName}'`);
+          this.checkType(
+            node.value,
+            newType,
+            vars,
+            `assignment to '${node.variableName}'`,
+          );
           vars[node.variableName] = newType;
         } else if (existingType) {
           // Variable being reassigned without a new type annotation
@@ -378,10 +383,7 @@ export class TypeChecker {
       } else if (node.type === "forLoop") {
         // Infer item variable type from the iterable's array element type
         const iterableType = this.synthType(node.iterable, vars);
-        if (
-          iterableType !== "any" &&
-          iterableType.type === "arrayType"
-        ) {
+        if (iterableType !== "any" && iterableType.type === "arrayType") {
           vars[node.itemVar] = iterableType.elementType;
         } else {
           vars[node.itemVar] = "any";
@@ -489,7 +491,12 @@ export class TypeChecker {
 
     for (const { node } of walkNodes(scope.body)) {
       if (node.type === "returnStatement") {
-        this.checkType(node.value, scope.returnType, scope.variableTypes, `return in '${scope.name}'`);
+        this.checkType(
+          node.value,
+          scope.returnType,
+          scope.variableTypes,
+          `return in '${scope.name}'`,
+        );
       }
     }
   }
@@ -564,7 +571,16 @@ export class TypeChecker {
         return { type: "primitiveType", value: "string" };
       case "binOpExpression": {
         const op = expr.operator;
-        if (op === "==" || op === "!=" || op === "<" || op === ">" || op === "<=" || op === ">=" || op === "&&" || op === "||") {
+        if (
+          op === "==" ||
+          op === "!=" ||
+          op === "<" ||
+          op === ">" ||
+          op === "<=" ||
+          op === ">=" ||
+          op === "&&" ||
+          op === "||"
+        ) {
           return { type: "primitiveType", value: "boolean" };
         }
         // Arithmetic operators: +, -, *, /, +=, -=, *=, /=
@@ -601,7 +617,11 @@ export class TypeChecker {
         return "any";
       }
       case "agencyArray": {
-        if (expr.items.length === 0) return { type: "arrayType", elementType: { type: "primitiveType", value: "any" } };
+        if (expr.items.length === 0)
+          return {
+            type: "arrayType",
+            elementType: { type: "primitiveType", value: "any" },
+          };
         // Synth each item; if all share a type, return that array type
         const itemTypes: (VariableType | "any")[] = [];
         for (const item of expr.items) {
@@ -615,8 +635,8 @@ export class TypeChecker {
         const concreteTypes = itemTypes.filter((t) => t !== "any");
         if (concreteTypes.length === 0) return "any";
         const first = concreteTypes[0];
-        const allSame = concreteTypes.every((t) =>
-          this.isAssignable(t, first) && this.isAssignable(first, t)
+        const allSame = concreteTypes.every(
+          (t) => this.isAssignable(t, first) && this.isAssignable(first, t),
         );
         if (allSame) {
           return { type: "arrayType", elementType: first };
@@ -686,7 +706,9 @@ export class TypeChecker {
               return "any";
             }
           } else if (resolved.type === "objectType") {
-            const prop = resolved.properties.find((p) => p.key === element.name);
+            const prop = resolved.properties.find(
+              (p) => p.key === element.name,
+            );
             if (prop) {
               currentType = prop.value;
             } else {
@@ -695,7 +717,10 @@ export class TypeChecker {
               });
               return "any";
             }
-          } else if (resolved.type === "arrayType" && element.name === "length") {
+          } else if (
+            resolved.type === "arrayType" &&
+            element.name === "length"
+          ) {
             currentType = { type: "primitiveType", value: "number" };
           } else {
             this.errors.push({
@@ -879,10 +904,14 @@ export function typeCheck(
   return checker.check();
 }
 
-export function formatErrors(errors: TypeCheckError[]): string {
+export function formatErrors(
+  errors: TypeCheckError[],
+  errorType: "warning" | "error" = "error",
+): string {
   return errors
     .map((err) => {
-      return `${color.red("error")}: ${err.message}`;
+      const colorFunc = errorType === "warning" ? color.yellow : color.red;
+      return `${colorFunc(errorType)}: ${err.message}`;
     })
     .join("\n");
 }

@@ -7,7 +7,8 @@ export const template = `import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode } from "agency-lang";
+import { goToNode, color } from "agency-lang";
+import * as smoltalk from "agency-lang";
 import path from "path";
 import {
   RuntimeContext, MessageThread, ThreadStore,

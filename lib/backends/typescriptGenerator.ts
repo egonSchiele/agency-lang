@@ -437,6 +437,42 @@ export class TypeScriptGenerator extends BaseGenerator {
   }
 
   /**
+   * Process a function call used as a statement (not assigned to a variable).
+   * When the called function is a user-defined agency function, the return value
+   * must be checked for interrupts and propagated upward.
+   */
+  protected processFunctionCallAsStatement(node: FunctionCall): string {
+    const code = this.processFunctionCall(node);
+    const scope = this.getCurrentScope();
+
+    if (
+      this.isAgencyFunction(node.functionName) &&
+      !this.isGraphNode(node.functionName) &&
+      scope.type !== "global"
+    ) {
+      const tempVar = "__funcResult";
+      const nodeContext = scope.type === "node";
+      const returnStmt = nodeContext
+        ? `return { ...state, data: ${tempVar} };`
+        : `return { data: ${tempVar} };`;
+      return `const ${tempVar} = ${code};\nif (isInterrupt(${tempVar})) {\n  ${returnStmt}\n}\n`;
+    }
+
+    return `${code};\n`;
+  }
+
+  /**
+   * Process a node as a statement (not an expression). Handles function calls
+   * specially to propagate any interrupts they may return.
+   */
+  protected processStatement(node: AgencyNode): string {
+    if (node.type === "functionCall") {
+      return this.processFunctionCallAsStatement(node);
+    }
+    return this.processNode(node);
+  }
+
+  /**
    * Process a function call node
    */
   protected processFunctionCall(node: FunctionCall): string {
@@ -784,7 +820,7 @@ export class TypeScriptGenerator extends BaseGenerator {
 
     const bodyCodes: string[] = [];
     for (const stmt of node.body) {
-      bodyCodes.push(this.processNode(stmt));
+      bodyCodes.push(this.processStatement(stmt));
     }
     const bodyCodeStr = bodyCodes.join("\n");
 
@@ -825,7 +861,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     const conditionCode = this.processNode(node.condition);
     const bodyCodes: string[] = [];
     for (const stmt of node.body) {
-      bodyCodes.push(this.processNode(stmt));
+      bodyCodes.push(this.processStatement(stmt));
     }
     const bodyCodeStr = bodyCodes.join("\n");
     return `while (${conditionCode}) {\n${bodyCodeStr}\n}\n`;
@@ -836,7 +872,7 @@ export class TypeScriptGenerator extends BaseGenerator {
 
     const thenBodyCodes: string[] = [];
     for (const stmt of node.thenBody) {
-      thenBodyCodes.push(this.processNode(stmt));
+      thenBodyCodes.push(this.processStatement(stmt));
     }
     const thenBodyStr = thenBodyCodes.join("\n");
 
@@ -852,7 +888,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       } else {
         const elseBodyCodes: string[] = [];
         for (const stmt of node.elseBody) {
-          elseBodyCodes.push(this.processNode(stmt));
+          elseBodyCodes.push(this.processStatement(stmt));
         }
         const elseBodyStr = elseBodyCodes.join("\n");
         result += ` else {\n${elseBodyStr}\n}`;
@@ -1124,7 +1160,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type)) {
         parts.push([]);
       }
-      parts[parts.length - 1].push(this.processNode(stmt));
+      parts[parts.length - 1].push(this.processStatement(stmt));
     }
     const bodyCode: string[] = [];
     let partNum = 0;

@@ -10,7 +10,7 @@ export const template = `if (process.argv[1] === fileURLToPath(import.meta.url))
     let result = await _resumeFromState({ ctx: __ctx, stateJSON: __stateJSON });
     while (isInterrupt(result.data)) {
       const interruptData = result.data;
-      const userResponse = await _builtinInput(\`Agent interrupted: "\${interruptData.data}". Approve? (yes/no) \`);
+      const userResponse = await _builtinInput(\`(builtin handler) Agent interrupted: "\${interruptData.data}". Approve? (yes/no) \`);
       if (userResponse.toLowerCase() === 'yes') {
         result = await _approveInterrupt({ ctx: __ctx, interruptObj: interruptData });
       } else {
@@ -28,7 +28,7 @@ export const template = `if (process.argv[1] === fileURLToPath(import.meta.url))
       console.error(\`\nAgent crashed: \${__error.message}\`);
       console.error(\`State saved to: \${__stateFile}\`);
       console.error(\`Resume with: agency run <file>.agency --resume \${__stateFile}\`);
-      process.exit(1);
+      throw __error;
     }
   }
 }

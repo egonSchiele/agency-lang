@@ -115,3 +115,39 @@ export async function resolveInterrupt(args: {
     metadata: args.metadata,
   });
 }
+
+export async function resumeFromState(args: {
+  ctx: RuntimeContext;
+  stateJSON: any;
+  metadata?: Record<string, any>;
+}): Promise<any> {
+  const { ctx, metadata = {} } = args;
+
+  ctx.stateStack = StateStack.fromJSON(args.stateJSON.__state || {});
+  ctx.stateStack.deserializeMode();
+
+  const messages = (ctx.stateStack.interruptData.messages || []).map(
+    (json: any) => smoltalk.messageFromJSON(json),
+  );
+  ctx.stateStack.interruptData.messages = messages;
+
+  const nodesTraversed = ctx.stateStack.interruptData.nodesTraversed || [];
+  const nodeName = nodesTraversed[nodesTraversed.length - 1];
+
+  if (!nodeName) {
+    throw new Error("No resumable node found in state file.");
+  }
+
+  const result = await ctx.graph.run(nodeName, {
+    messages,
+    __metadata: {
+      graph: ctx.graph,
+      statelogClient: ctx.statelogClient,
+      __stateStack: ctx.stateStack,
+      __callbacks: metadata.callbacks,
+    },
+    data: "<from-stack>",
+  });
+
+  return createReturnObject({ result, stateStack: ctx.stateStack });
+}

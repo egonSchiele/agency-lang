@@ -61,9 +61,10 @@ program
   .command("run")
   .description("Compile and run .agency file(s)")
   .argument("[input]", "Paths to .agency input file")
-  .action((input: string) => {
+  .option("--resume <statefile>", "Resume execution from a saved state file")
+  .action((input: string, options: { resume?: string }) => {
     const config = getConfig();
-    run(config, input);
+    run(config, input, undefined, options.resume);
   });
 
 program

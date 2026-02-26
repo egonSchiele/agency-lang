@@ -44,6 +44,7 @@ export {
   rejectInterrupt,
   modifyInterrupt,
   resolveInterrupt,
+  resumeFromState,
 } from "./interrupts.js";
 
 export { isGenerator, handleStreamingResponse } from "./streaming.js";

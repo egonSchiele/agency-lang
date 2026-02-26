@@ -204,6 +204,7 @@ export function run(
   config: AgencyConfig,
   inputFile: string,
   outputFile?: string,
+  resumeFile?: string,
 ): void {
   // Compile the file
   const output = compile(config, inputFile, outputFile);
@@ -216,9 +217,12 @@ export function run(
   console.log(`Running ${output}...`);
   console.log("---");
 
+  const env = resumeFile ? { ...process.env, AGENCY_RESUME_FILE: resumeFile } : process.env;
+
   const nodeProcess = spawn("node", [output], {
     stdio: "inherit",
     shell: false,
+    env,
   });
 
   nodeProcess.on("error", (error) => {

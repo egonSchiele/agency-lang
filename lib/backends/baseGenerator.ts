@@ -411,7 +411,7 @@ export class BaseGenerator {
     }
     switch (scope) {
       case "global":
-        return "__stateStack.globals";
+        return "__ctx.stateStack.globals";
       case "function":
       case "node":
         return "__stack.locals";

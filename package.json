@@ -40,6 +40,11 @@
       "types": "./dist/lib/index.d.ts",
       "import": "./dist/lib/index.js",
       "require": "./dist/lib/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/lib/runtime/index.d.ts",
+      "import": "./dist/lib/runtime/index.js",
+      "require": "./dist/lib/runtime/index.js"
     }
   },
   "type": "module",

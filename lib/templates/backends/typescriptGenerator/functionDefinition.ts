@@ -5,16 +5,8 @@ import { apply } from "typestache";
 
 export const template = `
 export async function {{{functionName:string}}}({{{paramList:string}}}__metadata={}) {
-    const __stack = __stateStack.getNewState();
-    const __step = __stack.step;
-    const __self = __stack.locals;
-    const __graph = __metadata?.graph || graph;
-    const statelogClient = __metadata?.statelogClient || __statelogClient;
-
-    // if being called from a node, we'll pass in threads.
-    // if being called as a tool, we won't have threads, but we'll create an empty ThreadStore here.
-    // obv none of these messages will connect to a thread the user can see.
-    const __threads = __metadata?.threads || new ThreadStore();
+    const { stack: __stack, step: __step, self: __self, threads: __threads, statelogClient, graph: __graph } =
+      setupFunction({ ctx: __ctx, metadata: __metadata });
 
     {{{paramAssignments:string}}}
 

@@ -23,7 +23,7 @@ import { SpecialVar } from "@/types/specialVar.js";
 import { TimeBlock } from "@/types/timeBlock.js";
 import * as renderSpecialVar from "../templates/backends/typescriptGenerator/specialVar.js";
 import * as renderTime from "../templates/backends/typescriptGenerator/builtinFunctions/time.js";
-import * as builtinTools from "../templates/backends/typescriptGenerator/builtinTools.js";
+// builtinTools now handled by runtime library
 import * as renderConditionalEdge from "../templates/backends/typescriptGenerator/conditionalEdge.js";
 import * as renderFunctionDefinition from "../templates/backends/typescriptGenerator/functionDefinition.js";
 import * as renderInternalFunctionCall from "../templates/backends/typescriptGenerator/internalFunctionCall.js";
@@ -38,7 +38,7 @@ import * as promptFunction from "../templates/backends/typescriptGenerator/promp
 import * as renderRunNodeFunction from "../templates/backends/typescriptGenerator/runNodeFunction.js";
 import * as renderStartNode from "../templates/backends/typescriptGenerator/startNode.js";
 import * as renderTool from "../templates/backends/typescriptGenerator/tool.js";
-import * as renderToolCall from "../templates/backends/typescriptGenerator/toolCall.js";
+// toolCall template replaced by data-driven dispatch in runPrompt
 import * as renderSkillPrompt from "@/templates/prompts/skill.js";
 import * as renderBuiltinFunctionsSystem from "@/templates/backends/typescriptGenerator/builtinFunctions/system.js";
 
@@ -220,11 +220,11 @@ export class TypeScriptGenerator extends BaseGenerator {
         nodeContext: this.getCurrentScope().type === "node",
       });
     } else if (node.value.type === "prompt") {
-      return `${returnCode}\n__stateStack.pop();\nreturn __self.${DEFAULT_PROMPT_NAME};\n`;
+      return `${returnCode}\n__ctx.stateStack.pop();\nreturn __self.${DEFAULT_PROMPT_NAME};\n`;
     }
     /* Pop the state off the stack, we won't be coming back.
     Doesn't matter if we update the step or not, since we won't be coming back here. */
-    return `__stateStack.pop();\nreturn ${returnCode}\n`;
+    return `__ctx.stateStack.pop();\nreturn ${returnCode}\n`;
   }
 
   protected processValueAccess(node: ValueAccess): string {
@@ -561,9 +561,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       clientGoogleApiKey: this.agencyConfig.client?.googleApiKey || undefined,
     };
 
-    const arr = [renderImports.default(args)];
-    arr.push(builtinTools.default({}));
-    return arr.join("\n");
+    return renderImports.default(args);
   }
 
   buildPromptString({
@@ -674,33 +672,24 @@ export class TypeScriptGenerator extends BaseGenerator {
     }
     const tools = _tools.length > 0 ? `[${_tools}]` : "undefined";
 
-    const functionCalls = (
+    const toolHandlerEntries = (
       prompt.tools || { type: "usesTool", toolNames: [] }
-    ).toolNames
-      .map((toolName) => {
-        if (BUILTIN_TOOLS.includes(toolName)) {
-          const internalName = BUILTIN_FUNCTIONS[toolName] || toolName;
-          return renderToolCall.default({
-            name: toolName,
-            internalName,
-            isBuiltin: true,
-          });
-        }
-        if (
-          !this.functionDefinitions[toolName] &&
-          !this.isImportedTool(toolName)
-        ) {
-          throw new Error(
-            `Tool '${toolName}' is being used but no function definition found for it. Make sure to define a function for this tool.`,
-          );
-        }
+    ).toolNames.map((toolName) => {
+      if (BUILTIN_TOOLS.includes(toolName)) {
+        const internalName = BUILTIN_FUNCTIONS[toolName] || toolName;
+        return `{ name: "${toolName}", params: __${toolName}ToolParams, execute: ${internalName}, isBuiltin: true }`;
+      }
+      if (
+        !this.functionDefinitions[toolName] &&
+        !this.isImportedTool(toolName)
+      ) {
+        throw new Error(
+          `Tool '${toolName}' is being used but no function definition found for it. Make sure to define a function for this tool.`,
+        );
+      }
 
-        return renderToolCall.default({
-          name: toolName,
-          isBuiltin: false,
-        });
-      })
-      .join("\n");
+      return `{ name: "${toolName}", params: __${toolName}ToolParams, execute: ${toolName}, isBuiltin: false }`;
+    });
 
     const clientConfig = prompt.config ? this.processNode(prompt.config) : "{}";
     let threadExpr: string;
@@ -741,7 +730,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       hasResponseFormat: zodSchema !== DEFAULT_SCHEMA,
       zodSchema,
       tools,
-      functionCalls,
+      toolHandlers: toolHandlerEntries.join(", "),
       clientConfig,
       nodeContext: this.getCurrentScope().type === "node",
       isStreaming: prompt.isStreaming || false,
@@ -856,7 +845,9 @@ export class TypeScriptGenerator extends BaseGenerator {
     if (node.elseBody && node.elseBody.length > 0) {
       if (node.elseBody.length === 1 && node.elseBody[0].type === "ifElse") {
         // Emit "else if" instead of "else { if }"
-        const elseIfCode = this.processIfElse(node.elseBody[0] as IfElse).trimEnd();
+        const elseIfCode = this.processIfElse(
+          node.elseBody[0] as IfElse,
+        ).trimEnd();
         result += ` else ${elseIfCode}`;
       } else {
         const elseBodyCodes: string[] = [];

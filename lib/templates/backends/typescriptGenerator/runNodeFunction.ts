@@ -9,13 +9,7 @@ export async function {{{nodeName:string}}}({{{argsStr:string}}}, { messages, ca
 {{^hasArgs}}
 export async function {{{nodeName:string}}}({ messages, callbacks } = {}) {
 {{/hasArgs}}
-  const __data = { {{{argsStr:string}}} };
-  __callbacks = callbacks || {};
-  await __callHook("onAgentStart", { nodeName: "{{{nodeName:string}}}", args: __data, messages: messages || [] });
-  const __result = await graph.run("{{{nodeName:string}}}", { messages: messages || [], data: __data });
-  const __returnObject = __createReturnObject(__result);
-  await __callHook("onAgentEnd", { nodeName: "{{{nodeName:string}}}", result: __returnObject });
-  return __returnObject;
+  return runNode({ ctx: __ctx, nodeName: "{{{nodeName:string}}}", data: { {{{argsStr:string}}} }, messages, callbacks });
 }
 `;
 

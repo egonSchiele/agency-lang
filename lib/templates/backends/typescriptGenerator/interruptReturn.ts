@@ -3,24 +3,24 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `if (__stateStack.interruptData?.interruptResponse?.type === "approve") {
-  __stateStack.interruptData.interruptResponse = null;
-} else if (__stateStack.interruptData?.interruptResponse?.type === "resolve") {
-  const __resolvedValue = __stateStack.interruptData.interruptResponse.value;
-  __stateStack.interruptData.interruptResponse = null;
+export const template = `if (__ctx.stateStack.interruptData?.interruptResponse?.type === "approve") {
+  __ctx.stateStack.interruptData.interruptResponse = null;
+} else if (__ctx.stateStack.interruptData?.interruptResponse?.type === "resolve") {
+  const __resolvedValue = __ctx.stateStack.interruptData.interruptResponse.value;
+  __ctx.stateStack.interruptData.interruptResponse = null;
   {{#nodeContext}}
   return { messages: __threads, data: __resolvedValue };
   {{/nodeContext}}
   {{^nodeContext}}
-  __stateStack.pop();
+  __ctx.stateStack.pop();
   return __resolvedValue;
   {{/nodeContext}}
 } else {
   const __interruptResult = interrupt({{{interruptArgs}}});
-  __stateStack.interruptData = {
+  __ctx.stateStack.interruptData = {
     nodesTraversed: __graph.getNodesTraversed(),
   };
-  __interruptResult.__state = __stateStack.toJSON();
+  __interruptResult.__state = __ctx.stateStack.toJSON();
   {{#nodeContext}}
   return { messages: __threads, data: __interruptResult };
   {{/nodeContext}}

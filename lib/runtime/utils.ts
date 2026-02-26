@@ -4,6 +4,7 @@ export function deepClone(obj: any): any {
   return JSON.parse(JSON.stringify(obj));
 }
 
+// not as necessary, smoltalk does this, though only when strict = true
 export function extractResponse(rawValue: any, schema: any): any {
   // 1. Direct match — try parsing as-is
   const direct = schema.safeParse(rawValue);

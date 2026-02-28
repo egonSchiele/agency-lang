@@ -3,12 +3,10 @@ import { nanoid } from "nanoid";
 
 export class MessageThread {
   messages: any[] = [];
-  children: MessageThread[] = [];
   id: string;
 
   constructor(messages: any[] = []) {
     this.messages = messages;
-    this.children = [];
     this.id = nanoid();
   }
 
@@ -45,7 +43,6 @@ export class MessageThread {
   toJSON(): any {
     return {
       messages: this.messages.map((m) => m.toJSON()),
-      children: this.children.map((child) => child.toJSON()),
     };
   }
 
@@ -53,7 +50,6 @@ export class MessageThread {
     if (json instanceof MessageThread) return json;
     const thread = new MessageThread();
     thread.messages = (json.messages || []).map((m: any) => smoltalk.messageFromJSON(m));
-    thread.children = (json.children || []).map((child: any) => MessageThread.fromJSON(child));
     return thread;
   }
 }

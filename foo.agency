@@ -1,7 +1,12 @@
-node plan() {
+def greet(name: string) {
+  return "Hello, ${name}!"
+}
 
-      if (nextAction.type == `askUser`) {
-        userMsg = input("${nextAction.question} ")
-      }
-  
+node printGreeting(greeting: string) {
+  print(greeting)
+}
+
+node plan() {
+  greeting = greet("Alice")
+  return printGreeting(greeting)
 }

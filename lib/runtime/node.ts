@@ -2,19 +2,24 @@ import { ThreadStore } from "./state/threadStore.js";
 import { callHook } from "./hooks.js";
 import { createReturnObject } from "./utils.js";
 import type { RuntimeContext } from "./state/context.js";
+import { StateStack } from "./state/stateStack.js";
+import { StatelogClient } from "@/statelogClient.js";
+import { SimpleMachine } from "@/simplemachine/graph.js";
+import { GraphState, RunNodeResult } from "./types.js";
+import { MessageJSON } from "smoltalk";
 
 export function setupNode(args: {
-  ctx: RuntimeContext;
+  ctx: RuntimeContext<GraphState>;
   state: any;
   nodeName: string;
 }): {
-  graph: any;
-  statelogClient: any;
-  stack: any;
+  graph: SimpleMachine<GraphState>;
+  statelogClient: StatelogClient;
+  stack: StateStack;
   step: number;
-  self: any;
+  self: Record<string, any>;
   threads: ThreadStore;
-  globalState: any;
+  globalState: Record<string, any> | null;
 } {
   const { ctx, state } = args;
 
@@ -56,13 +61,16 @@ export function setupNode(args: {
   return { graph, statelogClient, stack, step, self, threads, globalState };
 }
 
-export function setupFunction(args: { ctx: RuntimeContext; metadata: any }): {
-  stack: any;
+export function setupFunction(args: {
+  ctx: RuntimeContext<GraphState>;
+  metadata: any;
+}): {
+  stack: StateStack;
   step: number;
-  self: any;
+  self: Record<string, any>;
   threads: ThreadStore;
-  statelogClient: any;
-  graph: any;
+  statelogClient: StatelogClient;
+  graph: SimpleMachine<GraphState>;
 } {
   const { ctx, metadata = {} } = args;
 
@@ -79,22 +87,33 @@ export function setupFunction(args: { ctx: RuntimeContext; metadata: any }): {
   return { stack, step, self, threads, statelogClient, graph };
 }
 
-export async function runNode(args: {
-  ctx: RuntimeContext;
+export async function runNode({
+  ctx,
+  nodeName,
+  data,
+  messages,
+}: {
+  // global execution context
+  ctx: RuntimeContext<GraphState>;
+
+  // name of node to run
   nodeName: string;
+
+  // arbitrary data to pass to the node
   data: Record<string, any>;
-  messages?: any[];
-  callbacks?: Record<string, Function>;
-}): Promise<any> {
-  const { ctx, nodeName, data, messages, callbacks } = args;
-  ctx.callbacks = callbacks || {};
+
+  // any message history to pass to the node
+  // tbd how this gets used. Which message thread does it get added to?
+  messages?: MessageJSON[];
+}): Promise<RunNodeResult<any>> {
   await callHook({
     callbacks: ctx.callbacks,
     name: "onAgentStart",
     data: { nodeName, args: data, messages: messages || [] },
   });
+  const threadStore = new ThreadStore();
   const result = await ctx.graph.run(nodeName, {
-    messages: messages || [],
+    messages: threadStore,
     data,
   });
   const returnObject = createReturnObject({

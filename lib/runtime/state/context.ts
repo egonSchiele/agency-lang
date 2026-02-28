@@ -4,13 +4,13 @@ import { SimpleMachine } from "../../simplemachine/index.js";
 import { nanoid } from "nanoid";
 import { SmolPromptConfig } from "@/index.js";
 
-export class RuntimeContext {
+export class RuntimeContext<T> {
   // this is the part of the runtime context that gets
   // serialized/deserialized to support durable execution
   stateStack: StateStack;
   callbacks: Record<string, Function>;
   onStreamLock: boolean;
-  graph: SimpleMachine<any>;
+  graph: SimpleMachine<T>;
 
   // we need a single statelog client instance that can be used across the entire execution of the graph,
   // so that all the logs share the same traceId, so they all show up in the same trace in the Statelog dashboard.
@@ -41,7 +41,7 @@ export class RuntimeContext {
       },
       statelog: statelogConfig,
     };
-    this.graph = new SimpleMachine(graphConfig);
+    this.graph = new SimpleMachine<T>(graphConfig);
 
     this.smoltalkDefaults = args.smoltalkDefaults;
   }

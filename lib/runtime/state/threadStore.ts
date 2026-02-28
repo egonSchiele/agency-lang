@@ -1,9 +1,17 @@
-import { MessageThread } from "./messageThread.js";
+import { MessageThread, MessageThreadJSON } from "./messageThread.js";
+
+export type ThreadStoreJSON = {
+  threads: Record<string, MessageThreadJSON>;
+  counter: number;
+  activeStack: string[];
+};
+
+export type MessageThreadID = string;
 
 export class ThreadStore {
-  threads: Record<string, MessageThread> = {};
+  threads: Record<MessageThreadID, MessageThread> = {};
   counter: number = 0;
-  activeStack: string[] = [];
+  activeStack: MessageThreadID[] = [];
 
   constructor() {
     this.threads = {};
@@ -12,14 +20,14 @@ export class ThreadStore {
   }
 
   // Create a new empty thread, return its ID
-  create(): string {
+  create(): MessageThreadID {
     const id = (this.counter++).toString();
     this.threads[id] = new MessageThread();
     return id;
   }
 
   // Create a subthread that inherits from the current active thread
-  createSubthread(): string {
+  createSubthread(): MessageThreadID {
     const parentId = this.activeId();
     const id = (this.counter++).toString();
     this.threads[id] = this.threads[parentId!].newSubthreadChild();
@@ -27,22 +35,22 @@ export class ThreadStore {
   }
 
   // Get a thread by ID
-  get(id: string): MessageThread {
+  get(id: MessageThreadID): MessageThread {
     return this.threads[id];
   }
 
   // Push a thread ID onto the active stack
-  pushActive(id: string): void {
+  pushActive(id: MessageThreadID): void {
     this.activeStack.push(id);
   }
 
   // Pop the active stack (thread stays in store!)
-  popActive(): string | undefined {
+  popActive(): MessageThreadID | undefined {
     return this.activeStack.pop();
   }
 
   // Get the currently active thread ID
-  activeId(): string | undefined {
+  activeId(): MessageThreadID | undefined {
     return this.activeStack[this.activeStack.length - 1];
   }
 
@@ -62,8 +70,8 @@ export class ThreadStore {
   }
 
   // Serialize all threads for interrupt handling / state return
-  toJSON(): any {
-    const threadsJson: Record<string, any> = {};
+  toJSON(): ThreadStoreJSON {
+    const threadsJson: Record<MessageThreadID, MessageThreadJSON> = {};
     for (const [id, thread] of Object.entries(this.threads)) {
       threadsJson[id] = thread.toJSON();
     }
@@ -74,7 +82,7 @@ export class ThreadStore {
     };
   }
 
-  static fromJSON(json: any): ThreadStore {
+  static fromJSON(json: ThreadStoreJSON | ThreadStore): ThreadStore {
     if (json instanceof ThreadStore) return json;
     const store = new ThreadStore();
     if (json.threads) {

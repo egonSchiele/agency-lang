@@ -1,32 +1,38 @@
 import * as smoltalk from "smoltalk";
 import { nanoid } from "nanoid";
 
+export type MessageThreadJSON = {
+  messages: smoltalk.MessageJSON[];
+};
+
 export class MessageThread {
-  messages: any[] = [];
+  messages: smoltalk.Message[] = [];
   id: string;
 
-  constructor(messages: any[] = []) {
+  constructor(messages: smoltalk.Message[] = []) {
     this.messages = messages;
     this.id = nanoid();
   }
 
-  addMessage(message: any): void {
+  addMessage(message: smoltalk.Message): void {
     this.messages.push(message);
   }
 
-  cloneMessages(): any[] {
-    return this.messages.map((m) => m.toJSON()).map((m) => smoltalk.messageFromJSON(m));
+  cloneMessages(): smoltalk.Message[] {
+    return this.messages
+      .map((m) => m.toJSON())
+      .map((m) => smoltalk.messageFromJSON(m));
   }
 
-  getMessages(): any[] {
+  getMessages(): smoltalk.Message[] {
     return this.messages;
   }
 
-  setMessages(messages: any[]): void {
+  setMessages(messages: smoltalk.Message[]): void {
     this.messages = messages;
   }
 
-  push(message: any): void {
+  push(message: smoltalk.Message): void {
     this.messages.push(message);
   }
 
@@ -40,16 +46,18 @@ export class MessageThread {
     return child;
   }
 
-  toJSON(): any {
+  toJSON(): MessageThreadJSON {
     return {
       messages: this.messages.map((m) => m.toJSON()),
     };
   }
 
-  static fromJSON(json: any): MessageThread {
+  static fromJSON(json: MessageThreadJSON | MessageThread): MessageThread {
     if (json instanceof MessageThread) return json;
     const thread = new MessageThread();
-    thread.messages = (json.messages || []).map((m: any) => smoltalk.messageFromJSON(m));
+    thread.messages = (json.messages || []).map((m: smoltalk.MessageJSON) =>
+      smoltalk.messageFromJSON(m),
+    );
     return thread;
   }
 }

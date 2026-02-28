@@ -33,8 +33,8 @@ importers:
         specifier: ^2.4.2
         version: 2.4.2
       smoltalk:
-        specifier: ^0.0.29
-        version: 0.0.29(ws@8.19.0)(zod@4.3.5)
+        specifier: ^0.0.30
+        version: 0.0.30(ws@8.19.0)(zod@4.3.5)
       tarsec:
         specifier: ^0.1.8
         version: 0.1.8
@@ -995,8 +995,8 @@ packages:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}
     engines: {node: '>=8'}
 
-  smoltalk@0.0.29:
-    resolution: {integrity: sha512-0bm7N/kS75V3fKQX4c4JFtK0TyLaN8LTUMXdSz4ZzrUw7o8MZCZ75KyQaBfHlNygAe2WV6VHuVCerbPNg7cVDw==}
+  smoltalk@0.0.30:
+    resolution: {integrity: sha512-V2bM+16c2H0YVDmQqjEwpAC+/HMs4iBt7qVr11dA/tXf3eZXuSLjCTTMCVFTa25EcU+JjxKLz/GZ+ceZTeKfdw==}
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -2047,7 +2047,7 @@ snapshots:
 
   slash@3.0.0: {}
 
-  smoltalk@0.0.29(ws@8.19.0)(zod@4.3.5):
+  smoltalk@0.0.30(ws@8.19.0)(zod@4.3.5):
     dependencies:
       '@google/genai': 1.43.0
       egonlog: 0.0.2

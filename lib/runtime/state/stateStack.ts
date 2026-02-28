@@ -70,6 +70,7 @@ export class StateStack {
     return stateStack;
   }
 
+  // tokens should be tracked on runtime context
   static createWithTokenStats(): StateStack {
     const stateStack = new StateStack();
     stateStack.globals.__tokenStats = {

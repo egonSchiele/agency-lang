@@ -6,6 +6,7 @@ import { callHook } from "./hooks.js";
 import { handleStreamingResponse, isGenerator } from "./streaming.js";
 import type { RuntimeContext } from "./state/context.js";
 import { color } from "@/utils/termcolors.js";
+import { GraphState } from "./types.js";
 
 export interface ToolHandler {
   name: string;
@@ -15,7 +16,7 @@ export interface ToolHandler {
 }
 
 export async function runPrompt(args: {
-  ctx: RuntimeContext;
+  ctx: RuntimeContext<GraphState>;
   statelogClient: any;
   graph: any;
   prompt: string;

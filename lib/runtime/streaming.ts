@@ -1,5 +1,6 @@
 import { builtinSleep } from "./builtins.js";
 import type { RuntimeContext } from "./state/context.js";
+import { GraphState } from "./types.js";
 
 export function isGenerator(variable: any): boolean {
   const toString = Object.prototype.toString.call(variable);
@@ -9,7 +10,7 @@ export function isGenerator(variable: any): boolean {
 }
 
 export async function handleStreamingResponse(args: {
-  ctx: RuntimeContext;
+  ctx: RuntimeContext<GraphState>;
   completion: any;
   statelogClient: any;
   prompt: string;

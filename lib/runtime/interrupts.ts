@@ -2,7 +2,8 @@ import { deepClone } from "./utils.js";
 import { createReturnObject } from "./utils.js";
 import { StateStack } from "./state/stateStack.js";
 import * as smoltalk from "smoltalk";
-import type { RuntimeContext } from "./state/context.js";
+import { RuntimeContext } from "./state/context.js";
+import { GraphState } from "./types.js";
 
 export function interrupt(data: any): any {
   return {
@@ -16,7 +17,7 @@ export function isInterrupt(obj: any): boolean {
 }
 
 export async function respondToInterrupt(args: {
-  ctx: RuntimeContext;
+  ctx: RuntimeContext<GraphState>;
   interruptObj: any;
   interruptResponse: any;
   metadata?: Record<string, any>;
@@ -51,19 +52,19 @@ export async function respondToInterrupt(args: {
   const nodeName = nodesTraversed[nodesTraversed.length - 1];
   const result = await ctx.graph.run(nodeName, {
     messages: messages,
-    __metadata: {
+    /* __metadata: {
       graph: ctx.graph,
       statelogClient: ctx.statelogClient,
       __stateStack: ctx.stateStack,
       __callbacks: metadata.callbacks,
-    },
+    }, */
     data: "<from-stack>",
   });
   return createReturnObject({ result, stateStack: ctx.stateStack });
 }
 
 export async function approveInterrupt(args: {
-  ctx: RuntimeContext;
+  ctx: RuntimeContext<GraphState>;
   interruptObj: any;
   metadata?: Record<string, any>;
 }): Promise<any> {
@@ -76,7 +77,7 @@ export async function approveInterrupt(args: {
 }
 
 export async function modifyInterrupt(args: {
-  ctx: RuntimeContext;
+  ctx: RuntimeContext<GraphState>;
   interruptObj: any;
   newArguments: any;
   metadata?: Record<string, any>;
@@ -90,7 +91,7 @@ export async function modifyInterrupt(args: {
 }
 
 export async function rejectInterrupt(args: {
-  ctx: RuntimeContext;
+  ctx: RuntimeContext<GraphState>;
   interruptObj: any;
   metadata?: Record<string, any>;
 }): Promise<any> {
@@ -103,7 +104,7 @@ export async function rejectInterrupt(args: {
 }
 
 export async function resolveInterrupt(args: {
-  ctx: RuntimeContext;
+  ctx: RuntimeContext<GraphState>;
   interruptObj: any;
   value: any;
   metadata?: Record<string, any>;
@@ -117,7 +118,7 @@ export async function resolveInterrupt(args: {
 }
 
 export async function resumeFromState(args: {
-  ctx: RuntimeContext;
+  ctx: RuntimeContext<GraphState>;
   stateJSON: any;
   metadata?: Record<string, any>;
 }): Promise<any> {
@@ -140,12 +141,12 @@ export async function resumeFromState(args: {
 
   const result = await ctx.graph.run(nodeName, {
     messages,
-    __metadata: {
+    /* __metadata: {
       graph: ctx.graph,
       statelogClient: ctx.statelogClient,
       __stateStack: ctx.stateStack,
       __callbacks: metadata.callbacks,
-    },
+    }, */
     data: "<from-stack>",
   });
 

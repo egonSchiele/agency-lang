@@ -2,7 +2,7 @@ import { deepClone } from "./utils.js";
 import { createReturnObject } from "./utils.js";
 import { StateStack } from "./stateStack.js";
 import * as smoltalk from "smoltalk";
-import type { RuntimeContext } from "./context.js";
+import type { RuntimeContext } from "./state/context.js";
 
 export function interrupt(data: any): any {
   return {

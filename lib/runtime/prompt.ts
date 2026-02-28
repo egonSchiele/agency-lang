@@ -1,10 +1,10 @@
 import * as smoltalk from "smoltalk";
-import { MessageThread } from "./messageThread.js";
+import { MessageThread } from "./state/messageThread.js";
 import { isInterrupt } from "./interrupts.js";
 import { updateTokenStats, extractResponse } from "./utils.js";
 import { callHook } from "./hooks.js";
 import { handleStreamingResponse, isGenerator } from "./streaming.js";
-import type { RuntimeContext } from "./context.js";
+import type { RuntimeContext } from "./state/context.js";
 import { color } from "@/utils/termcolors.js";
 
 export interface ToolHandler {

@@ -1,7 +1,7 @@
 import { ThreadStore } from "./threadStore.js";
 import { callHook } from "./hooks.js";
 import { createReturnObject } from "./utils.js";
-import type { RuntimeContext } from "./context.js";
+import type { RuntimeContext } from "./state/context.js";
 
 export function setupNode(args: {
   ctx: RuntimeContext;
@@ -56,10 +56,7 @@ export function setupNode(args: {
   return { graph, statelogClient, stack, step, self, threads, globalState };
 }
 
-export function setupFunction(args: {
-  ctx: RuntimeContext;
-  metadata: any;
-}): {
+export function setupFunction(args: { ctx: RuntimeContext; metadata: any }): {
   stack: any;
   step: number;
   self: any;

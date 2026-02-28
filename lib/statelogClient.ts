@@ -12,6 +12,14 @@ export type UploadResult = Result<{
   endpointUrls: string[];
 }>;
 
+export type StatelogConfig = {
+  host: string;
+  traceId?: string;
+  apiKey: string;
+  projectId: string;
+  debugMode: boolean;
+};
+
 export function mergeUploadResults(_results: UploadResult[]): UploadResult {
   const results = mergeResults(_results);
   if (!results.success) {
@@ -30,13 +38,7 @@ export class StatelogClient {
   private apiKey: string;
   private projectId: string;
 
-  constructor(config: {
-    host: string;
-    apiKey: string;
-    projectId: string;
-    traceId?: string;
-    debugMode?: boolean;
-  }) {
+  constructor(config: StatelogConfig) {
     const { host, apiKey, projectId, traceId, debugMode } = config;
     this.host = host;
     this.apiKey = apiKey;

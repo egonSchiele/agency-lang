@@ -1,5 +1,5 @@
 import { builtinSleep } from "./builtins.js";
-import type { RuntimeContext } from "./context.js";
+import type { RuntimeContext } from "./state/context.js";
 
 export function isGenerator(variable: any): boolean {
   const toString = Object.prototype.toString.call(variable);

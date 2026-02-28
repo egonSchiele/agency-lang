@@ -1,4 +1,4 @@
-import { MessageThread } from "./messageThread.js";
+import { MessageThread } from "./state/messageThread.js";
 
 export class ThreadStore {
   threads: Record<string, MessageThread> = {};

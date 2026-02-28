@@ -1,4 +1,4 @@
-import { StateStack } from "../stateStack.js";
+import { StateStack } from "../state/stateStack.js";
 import { StatelogClient, StatelogConfig } from "../../statelogClient.js";
 import { SimpleMachine } from "../../simplemachine/index.js";
 import { nanoid } from "nanoid";

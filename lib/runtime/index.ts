@@ -1,7 +1,7 @@
 export { RuntimeContext } from "./state/context.js";
-export { StateStack } from "./stateStack.js";
+export { StateStack } from "./state/stateStack.js";
 export { MessageThread } from "./state/messageThread.js";
-export { ThreadStore } from "./threadStore.js";
+export { ThreadStore } from "./state/threadStore.js";
 
 export {
   deepClone,

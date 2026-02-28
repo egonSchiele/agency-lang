@@ -1,4 +1,4 @@
-import { deepClone } from "./utils.js";
+import { deepClone } from "../utils.js";
 
 export class StateStack {
   stack: any[] = [];
@@ -8,7 +8,10 @@ export class StateStack {
   interruptData: Record<string, any> = {};
   deserializeStackLength: number = 0;
 
-  constructor(stack: any[] = [], mode: "serialize" | "deserialize" = "serialize") {
+  constructor(
+    stack: any[] = [],
+    mode: "serialize" | "deserialize" = "serialize",
+  ) {
     this.stack = stack;
     this.mode = mode;
   }

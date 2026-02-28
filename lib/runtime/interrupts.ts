@@ -1,6 +1,6 @@
 import { deepClone } from "./utils.js";
 import { createReturnObject } from "./utils.js";
-import { StateStack } from "./stateStack.js";
+import { StateStack } from "./state/stateStack.js";
 import * as smoltalk from "smoltalk";
 import type { RuntimeContext } from "./state/context.js";
 

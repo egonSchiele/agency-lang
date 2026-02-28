@@ -1,4 +1,4 @@
-import { ThreadStore } from "./threadStore.js";
+import { ThreadStore } from "./state/threadStore.js";
 import { callHook } from "./hooks.js";
 import { createReturnObject } from "./utils.js";
 import type { RuntimeContext } from "./state/context.js";

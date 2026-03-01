@@ -5,6 +5,7 @@ import * as smoltalk from "smoltalk";
 import { RuntimeContext } from "./state/context.js";
 import { GraphState } from "./types.js";
 import { ThreadStore } from "./state/threadStore.js";
+import { color } from "termcolors";
 
 export type InterruptApprove = {
   type: "approve";
@@ -65,6 +66,7 @@ export async function respondToInterrupt(args: {
   interruptResponse: InterruptResponse;
   metadata?: Record<string, any>;
 }): Promise<any> {
+  //console.log(color.green(JSON.stringify({ args }, null, 2)));
   //const { interrupt, interruptResponse, metadata = {} } = args;
   const interrupt = deepClone(args.interrupt);
   const interruptResponse = deepClone(args.interruptResponse);

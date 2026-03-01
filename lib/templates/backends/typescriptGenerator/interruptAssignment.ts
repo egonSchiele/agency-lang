@@ -3,9 +3,9 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `if (__ctx.stateStack.interruptData?.interruptResponse?.type === "resolve") {
-  {{{variableName}}} = __ctx.stateStack.interruptData.interruptResponse.value;
-  __ctx.stateStack.interruptData.interruptResponse = null;
+export const template = `if (__state.interruptData?.interruptResponse?.type === "resolve") {
+  {{{variableName}}} = __state.interruptData.interruptResponse.value;
+  __state.interruptData.interruptResponse = null;
 } else {
   const __interruptResult = interrupt({{{interruptArgs}}});
   __ctx.stateStack.nodesTraversed = __graph.getNodesTraversed();

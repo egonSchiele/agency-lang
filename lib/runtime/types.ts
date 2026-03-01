@@ -26,6 +26,7 @@ export type GraphState = {
 export type InternalFunctionState = {
   threads: ThreadStore;
   ctx: RuntimeContext<GraphState>;
+  interruptData?: InterruptData;
 };
 
 export type NodeReturnValue<T> = {

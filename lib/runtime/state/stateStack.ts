@@ -22,6 +22,11 @@ export type StateStackJSON = {
 export class StateStack {
   stack: State[] = [];
   mode: "serialize" | "deserialize" = "serialize";
+
+  // a statestack almost never keeps track of globals...
+  // those live on the global state stack.
+  // but it might temporarily store them for an interrupt,
+  // so it can later restore them.
   globals: Record<string, any> = {};
   other: Record<string, any> = {};
   deserializeStackLength: number = 0;

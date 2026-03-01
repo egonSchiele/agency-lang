@@ -193,7 +193,7 @@ export class StatelogClient {
   }: {
     messages: any[];
     completion: any;
-    model?: string;
+    model?: ModelName | ModelConfig | string;
     timeTaken?: number;
     tools?: {
       name: string;

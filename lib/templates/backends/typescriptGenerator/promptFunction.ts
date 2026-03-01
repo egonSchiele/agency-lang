@@ -7,8 +7,6 @@ export const template = `
 async function _{{{variableName:string}}}({{{argsStr:string}}}) {
   return runPrompt({
     ctx: __ctx,
-    statelogClient: statelogClient,
-    graph: __graph,
     prompt: {{{promptCode:string}}},
     messages: __metadata?.messages || new MessageThread(),
     {{#hasResponseFormat}}
@@ -21,6 +19,7 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}) {
     clientConfig: {{{clientConfig:string}}},
     stream: {{{isStreaming:boolean}}},
     maxToolCallRounds: {{{maxToolCallRounds:number}}},
+    interruptData: __state?.interruptData
   });
 }
 

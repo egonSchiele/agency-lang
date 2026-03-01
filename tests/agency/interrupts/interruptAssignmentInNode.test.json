@@ -12,9 +12,9 @@
       ],
       "interruptHandlers": [
         {
-          "action": "modify",
+          "action": "resolve",
           "expectedMessage": "What's the new name?",
-          "modifiedArgs": "hermione"
+          "resolvedValue": "hermione"
         }
       ]
     }

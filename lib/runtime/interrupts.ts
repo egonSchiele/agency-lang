@@ -12,17 +12,23 @@ export type InterruptApprove = {
 };
 export type InterruptModify = {
   type: "modify";
-  value: any;
+  newArguments: any;
 };
 
 export type InterruptReject = {
   type: "reject";
 };
 
+export type InterruptResolve = {
+  type: "resolve";
+  value: any;
+};
+
 export type InterruptResponse =
   | InterruptApprove
   | InterruptModify
-  | InterruptReject;
+  | InterruptReject
+  | InterruptResolve;
 
 export type InterruptData = {
   // messages that have been exchanged in the prompt function
@@ -88,7 +94,7 @@ export async function respondToInterrupt(args: {
   if (interruptResponse.type === "modify") {
     interruptData.toolCall!.arguments = {
       ...interruptData.toolCall!.arguments,
-      ...interruptResponse.value,
+      ...interruptResponse.newArguments,
     };
   }
 
@@ -127,18 +133,18 @@ export async function approveInterrupt({
 export async function modifyInterrupt({
   ctx,
   interrupt,
-  value,
+  newArguments,
   metadata,
 }: {
   ctx: RuntimeContext<GraphState>;
   interrupt: Interrupt;
-  value: any;
+  newArguments: any;
   metadata?: Record<string, any>;
 }): Promise<any> {
   return await respondToInterrupt({
     ctx,
     interrupt,
-    interruptResponse: { type: "modify", value },
+    interruptResponse: { type: "modify", newArguments },
     metadata,
   });
 }
@@ -156,6 +162,25 @@ export async function rejectInterrupt({
     ctx,
     interrupt,
     interruptResponse: { type: "reject" },
+    metadata,
+  });
+}
+
+export async function resolveInterrupt({
+  ctx,
+  interrupt,
+  value,
+  metadata,
+}: {
+  ctx: RuntimeContext<GraphState>;
+  interrupt: Interrupt;
+  value: any;
+  metadata?: Record<string, any>;
+}): Promise<any> {
+  return await respondToInterrupt({
+    ctx,
+    interrupt,
+    interruptResponse: { type: "resolve", value },
     metadata,
   });
 }

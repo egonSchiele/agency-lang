@@ -17,7 +17,6 @@ import renderJudgeEvaluate from "@/templates/cli/judgeEvaluate.js";
 import { compile } from "./commands.js";
 import { AgencyConfig } from "@/config.js";
 import { parseAgency } from "@/parser.js";
-import { InterruptResponse } from "@/runtime/interrupts.js";
 export function parseTarget(target: string): {
   filename: string;
   nodeName: string;
@@ -161,8 +160,9 @@ export function executeNode({
   hasArgs: boolean;
   argsString: string;
   interruptHandlers?: Array<{
-    action: InterruptResponse["type"];
-    modifiedArgs?: any;
+    action: "approve" | "reject" | "modify" | "resolve";
+    modifiedArgs?: Record<string, any>;
+    resolvedValue?: any;
     expectedMessage?: string;
   }>;
 }): { data: any; [key: string]: any } {
@@ -220,8 +220,9 @@ export function executeJudge(
   expectedOutput: string,
   judgePrompt: string,
   interruptHandlers?: Array<{
-    action: InterruptResponse["type"];
-    modifiedArgs?: any;
+    action: "approve" | "reject" | "modify" | "resolve";
+    modifiedArgs?: Record<string, any>;
+    resolvedValue?: any;
     expectedMessage?: string;
   }>,
 ): { score: number; reasoning: string } {

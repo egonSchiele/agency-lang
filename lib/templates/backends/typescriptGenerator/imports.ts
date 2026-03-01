@@ -17,6 +17,7 @@ import {
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
   rejectInterrupt as _rejectInterrupt,
+  resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
   deepClone as __deepClone,
@@ -113,7 +114,8 @@ export { interrupt, isInterrupt };
 export const respondToInterrupt = (i, r, m) => _respondToInterrupt({ ctx: __globalCtx, interrupt: i, interruptResponse: r, metadata: m });
 export const approveInterrupt = (i, m) => _approveInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
 export const rejectInterrupt = (i, m) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
-export const modifyInterrupt = (i, a, m) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, value: a, metadata: m });`;
+export const modifyInterrupt = (i, a, m) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
+export const resolveInterrupt = (i, v, m) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });`;
 
 export type TemplateType = {
   logHost: string;

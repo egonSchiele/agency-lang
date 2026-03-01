@@ -1,7 +1,9 @@
 import { fileURLToPath } from "url";
 import process from "process";
+import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode } from "agency-lang";
+import { goToNode, color } from "agency-lang";
+import * as smoltalk from "agency-lang";
 import path from "path";
 import {
   RuntimeContext, MessageThread, ThreadStore,
@@ -12,6 +14,7 @@ import {
   rejectInterrupt as _rejectInterrupt,
   resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
+  resumeFromState as _resumeFromState,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
@@ -55,7 +58,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const __ctx = new RuntimeContext({
+const __globalCtx = new RuntimeContext({
   statelogConfig: {
     host: "https://agency-lang.com",
     
@@ -79,7 +82,7 @@ const __ctx = new RuntimeContext({
   },
   dirname: __dirname,
 });
-const graph = __ctx.graph;
+const graph = __globalCtx.graph;
 
 // Path-dependent builtin wrappers
 function _builtinRead(filename) {
@@ -97,46 +100,31 @@ export function readSkill({filepath}) {
 
 // Interrupt re-exports bound to this module's context
 export { interrupt, isInterrupt };
-export const respondToInterrupt = (i, r, m) => _respondToInterrupt({ ctx: __ctx, interruptObj: i, interruptResponse: r, metadata: m });
-export const approveInterrupt = (i, m) => _approveInterrupt({ ctx: __ctx, interruptObj: i, metadata: m });
-export const rejectInterrupt = (i, m) => _rejectInterrupt({ ctx: __ctx, interruptObj: i, metadata: m });
-export const modifyInterrupt = (i, a, m) => _modifyInterrupt({ ctx: __ctx, interruptObj: i, newArguments: a, metadata: m });
-export const resolveInterrupt = (i, v, m) => _resolveInterrupt({ ctx: __ctx, interruptObj: i, value: v, metadata: m });
-
-// Re-export builtin tools
-export { __readSkillTool, __readSkillToolParams };
-export { __printTool, __printToolParams };
-export { __printJSONTool, __printJSONToolParams };
-export { __inputTool, __inputToolParams };
-export { __readTool, __readToolParams };
-export { __readImageTool, __readImageToolParams };
-export { __writeTool, __writeToolParams };
-export { __fetchTool, __fetchToolParams };
-export { __fetchJSONTool, __fetchJSONToolParams };
-export { __fetchJsonTool, __fetchJsonToolParams };
-export { __sleepTool, __sleepToolParams };
-export { __roundTool, __roundToolParams };
-export { __deepClone };
+export const respondToInterrupt = (i, r, m) => _respondToInterrupt({ ctx: __globalCtx, interrupt: i, interruptResponse: r, metadata: m });
+export const approveInterrupt = (i, m) => _approveInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
+export const rejectInterrupt = (i, m) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
+export const modifyInterrupt = (i, a, m) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
+export const resolveInterrupt = (i, v, m) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
 //  Test arrays and objects
 //  Simple array
-__ctx.stateStack.globals.nums = [1, 2, 3, 4, 5];
-await _print(__ctx.stateStack.globals.nums)//  Array with strings
-__ctx.stateStack.globals.names = [`Alice`, `Bob`, `Charlie`];
-await _print(__ctx.stateStack.globals.names)//  Nested arrays
-__ctx.stateStack.globals.matrix = [[1, 2], [3, 4], [5, 6]];
-await _print(__ctx.stateStack.globals.matrix)//  Simple object
-__ctx.stateStack.globals.person = {"name": `Alice`, "age": 30};
-await _print(__ctx.stateStack.globals.person)//  Object with nested structure
-__ctx.stateStack.globals.address = {"street": `123 Main St`, "city": `NYC`, "zip": `10001`};
-await _print(__ctx.stateStack.globals.address)//  Object with array property
-__ctx.stateStack.globals.user = {"name": `Bob`, "tags": [`admin`, `developer`]};
-await _print(__ctx.stateStack.globals.user)//  Array of objects
-__ctx.stateStack.globals.users = [{"name": `Alice`, "age": 30}, {"name": `Bob`, "age": 25}];
-await _print(__ctx.stateStack.globals.users)//  Nested object
-__ctx.stateStack.globals.config = {"server": {"host": `localhost`, "port": 8080}, "debug": true};
-await _print(__ctx.stateStack.globals.config)//  Array access
-__ctx.stateStack.globals.firstNum = __ctx.stateStack.globals.nums[0];
-await _print(__ctx.stateStack.globals.firstNum)//  Object property access
-__ctx.stateStack.globals.personName = __ctx.stateStack.globals.person.name;
-await _print(__ctx.stateStack.globals.personName)
+__globalCtx.stateStack.globals.nums = [1, 2, 3, 4, 5];
+await _print(__globalCtx.stateStack.globals.nums)//  Array with strings
+__globalCtx.stateStack.globals.names = [`Alice`, `Bob`, `Charlie`];
+await _print(__globalCtx.stateStack.globals.names)//  Nested arrays
+__globalCtx.stateStack.globals.matrix = [[1, 2], [3, 4], [5, 6]];
+await _print(__globalCtx.stateStack.globals.matrix)//  Simple object
+__globalCtx.stateStack.globals.person = {"name": `Alice`, "age": 30};
+await _print(__globalCtx.stateStack.globals.person)//  Object with nested structure
+__globalCtx.stateStack.globals.address = {"street": `123 Main St`, "city": `NYC`, "zip": `10001`};
+await _print(__globalCtx.stateStack.globals.address)//  Object with array property
+__globalCtx.stateStack.globals.user = {"name": `Bob`, "tags": [`admin`, `developer`]};
+await _print(__globalCtx.stateStack.globals.user)//  Array of objects
+__globalCtx.stateStack.globals.users = [{"name": `Alice`, "age": 30}, {"name": `Bob`, "age": 25}];
+await _print(__globalCtx.stateStack.globals.users)//  Nested object
+__globalCtx.stateStack.globals.config = {"server": {"host": `localhost`, "port": 8080}, "debug": true};
+await _print(__globalCtx.stateStack.globals.config)//  Array access
+__globalCtx.stateStack.globals.firstNum = __globalCtx.stateStack.globals.nums[0];
+await _print(__globalCtx.stateStack.globals.firstNum)//  Object property access
+__globalCtx.stateStack.globals.personName = __globalCtx.stateStack.globals.person.name;
+await _print(__globalCtx.stateStack.globals.personName)
 export default graph;

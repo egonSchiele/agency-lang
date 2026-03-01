@@ -1,7 +1,9 @@
 import { fileURLToPath } from "url";
 import process from "process";
+import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode } from "agency-lang";
+import { goToNode, color } from "agency-lang";
+import * as smoltalk from "agency-lang";
 import path from "path";
 import {
   RuntimeContext, MessageThread, ThreadStore,
@@ -12,6 +14,7 @@ import {
   rejectInterrupt as _rejectInterrupt,
   resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
+  resumeFromState as _resumeFromState,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
@@ -55,7 +58,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const __ctx = new RuntimeContext({
+const __globalCtx = new RuntimeContext({
   statelogConfig: {
     host: "https://agency-lang.com",
     
@@ -79,7 +82,7 @@ const __ctx = new RuntimeContext({
   },
   dirname: __dirname,
 });
-const graph = __ctx.graph;
+const graph = __globalCtx.graph;
 
 // Path-dependent builtin wrappers
 function _builtinRead(filename) {
@@ -97,26 +100,11 @@ export function readSkill({filepath}) {
 
 // Interrupt re-exports bound to this module's context
 export { interrupt, isInterrupt };
-export const respondToInterrupt = (i, r, m) => _respondToInterrupt({ ctx: __ctx, interruptObj: i, interruptResponse: r, metadata: m });
-export const approveInterrupt = (i, m) => _approveInterrupt({ ctx: __ctx, interruptObj: i, metadata: m });
-export const rejectInterrupt = (i, m) => _rejectInterrupt({ ctx: __ctx, interruptObj: i, metadata: m });
-export const modifyInterrupt = (i, a, m) => _modifyInterrupt({ ctx: __ctx, interruptObj: i, newArguments: a, metadata: m });
-export const resolveInterrupt = (i, v, m) => _resolveInterrupt({ ctx: __ctx, interruptObj: i, value: v, metadata: m });
-
-// Re-export builtin tools
-export { __readSkillTool, __readSkillToolParams };
-export { __printTool, __printToolParams };
-export { __printJSONTool, __printJSONToolParams };
-export { __inputTool, __inputToolParams };
-export { __readTool, __readToolParams };
-export { __readImageTool, __readImageToolParams };
-export { __writeTool, __writeToolParams };
-export { __fetchTool, __fetchToolParams };
-export { __fetchJSONTool, __fetchJSONToolParams };
-export { __fetchJsonTool, __fetchJsonToolParams };
-export { __sleepTool, __sleepToolParams };
-export { __roundTool, __roundToolParams };
-export { __deepClone };
+export const respondToInterrupt = (i, r, m) => _respondToInterrupt({ ctx: __globalCtx, interrupt: i, interruptResponse: r, metadata: m });
+export const approveInterrupt = (i, m) => _approveInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
+export const rejectInterrupt = (i, m) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
+export const modifyInterrupt = (i, a, m) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
+export const resolveInterrupt = (i, v, m) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
 export const __testTool = {
   name: "test",
   description: `No description provided.`,
@@ -125,10 +113,17 @@ export const __testTool = {
 
 export const __testToolParams = [];
 
-export async function test(__metadata={}) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads, statelogClient, graph: __graph } =
-      setupFunction({ ctx: __ctx, metadata: __metadata });
+export async function test(__state=undefined) {
+    const { stack: __stack, step: __step, self: __self, threads: __threads } =
+      setupFunction({ state: __state });
 
+    // __state will be undefined if this function is
+    // being called as a tool by an llm
+    const __ctx = __state?.ctx || __globalCtx;
+    const statelogClient = __ctx.statelogClient;
+    const __graph = __ctx.graph;
+    
+    // put all args on the state stack
     
 
     
@@ -145,12 +140,17 @@ export async function test(__metadata={}) {
       
 }
 
-graph.node("main", async (state) => {
-    const { graph: __graph, statelogClient, stack: __stack, step: __step, self: __self, threads: __threads, globalState: __globalState } =
-      setupNode({ ctx: __ctx, state, nodeName: "main" });
-    if (__globalState) __global = __globalState;
-
+graph.node("main", async (__state) => {
+    const { stack: __stack, step: __step, self: __self, threads: __threads } =
+      setupNode({ state: __state });
+    const __ctx = __state.ctx;
+    const statelogClient = __ctx.statelogClient;
+    const __graph = __ctx.graph;
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeStart", data: { nodeName: "main" } });
+
+    if (__state.isResume) {
+      __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+    }
 
     
     
@@ -162,20 +162,27 @@ graph.node("main", async (state) => {
 
       if (__step <= 1) {
         await _print(test({
-    statelogClient: statelogClient,
-    graph: __graph,
-    threads: __threads
-}))
+    ctx: __ctx,
+    threads: __threads,
+    interruptData: __state?.interruptData
+}));
         __stack.step++;
       }
       
 
       if (__step <= 2) {
         
-export async function add(a, b, __metadata={}) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads, statelogClient, graph: __graph } =
-      setupFunction({ ctx: __ctx, metadata: __metadata });
+export async function add(a, b, __state=undefined) {
+    const { stack: __stack, step: __step, self: __self, threads: __threads } =
+      setupFunction({ state: __state });
 
+    // __state will be undefined if this function is
+    // being called as a tool by an llm
+    const __ctx = __state?.ctx || __globalCtx;
+    const statelogClient = __ctx.statelogClient;
+    const __graph = __ctx.graph;
+    
+    // put all args on the state stack
     __stack.args["a"] = a;
     __stack.args["b"] = b;
 
@@ -198,12 +205,47 @@ export async function add(a, b, __metadata={}) {
 
 export async function main({ messages, callbacks } = {}) {
 
-  return runNode({ ctx: __ctx, nodeName: "main", data: {  }, messages, callbacks });
+  return runNode({
+    ctx: __globalCtx,
+    nodeName: "main",
+    data: {  },
+    messages,
+    callbacks,
+  });
 }
 
 export const __mainNodeParams = [];
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-    const initialState = { messages: [], data: {} };
-    await main(initialState);
+  const __resumeFile = process.env.AGENCY_RESUME_FILE;
+
+  // todo rethink
+  if (__resumeFile) {
+    const __stateJSON = JSON.parse(readFileSync(__resumeFile, 'utf-8'));
+    let result = await _resumeFromState({ ctx: __ctx, stateJSON: __stateJSON });
+    while (isInterrupt(result.data)) {
+      const interruptData = result.data;
+      const userResponse = await _builtinInput(`(builtin handler) Agent interrupted: "${interruptData.data}". Approve? (yes/no) `);
+      if (userResponse.toLowerCase() === 'yes') {
+        result = await _approveInterrupt({ ctx: __ctx, interruptObj: interruptData });
+      } else {
+        result = await _rejectInterrupt({ ctx: __ctx, interruptObj: interruptData });
+      }
+    }
+  } else {
+    try {
+      const initialState = { messages: new ThreadStore(), data: {} };
+      await main(initialState);
+    } catch (__error) {
+      __ctx.stateStack.nodesTraversed = __ctx.graph.getNodesTraversed();
+      const __stateFile = __filename.replace(/.js$/, '.state.json');
+      writeFileSync(__stateFile, JSON.stringify({ __state: __ctx.stateStack.toJSON(), errorMessage: __error.message }, null, 2));
+      console.error(`
+Agent crashed: ${__error.message}`);
+      console.error(`State saved to: ${__stateFile}`);
+      console.error(`Resume with: agency run <file>.agency --resume ${__stateFile}`);
+      throw __error;
+    }
+  }
 }
+
 export default graph;

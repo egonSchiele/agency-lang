@@ -1,7 +1,9 @@
 import { fileURLToPath } from "url";
 import process from "process";
+import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode } from "agency-lang";
+import { goToNode, color } from "agency-lang";
+import * as smoltalk from "agency-lang";
 import path from "path";
 import {
   RuntimeContext, MessageThread, ThreadStore,
@@ -12,6 +14,7 @@ import {
   rejectInterrupt as _rejectInterrupt,
   resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
+  resumeFromState as _resumeFromState,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
@@ -55,7 +58,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const __ctx = new RuntimeContext({
+const __globalCtx = new RuntimeContext({
   statelogConfig: {
     host: "https://agency-lang.com",
     
@@ -79,7 +82,7 @@ const __ctx = new RuntimeContext({
   },
   dirname: __dirname,
 });
-const graph = __ctx.graph;
+const graph = __globalCtx.graph;
 
 // Path-dependent builtin wrappers
 function _builtinRead(filename) {
@@ -97,33 +100,23 @@ export function readSkill({filepath}) {
 
 // Interrupt re-exports bound to this module's context
 export { interrupt, isInterrupt };
-export const respondToInterrupt = (i, r, m) => _respondToInterrupt({ ctx: __ctx, interruptObj: i, interruptResponse: r, metadata: m });
-export const approveInterrupt = (i, m) => _approveInterrupt({ ctx: __ctx, interruptObj: i, metadata: m });
-export const rejectInterrupt = (i, m) => _rejectInterrupt({ ctx: __ctx, interruptObj: i, metadata: m });
-export const modifyInterrupt = (i, a, m) => _modifyInterrupt({ ctx: __ctx, interruptObj: i, newArguments: a, metadata: m });
-export const resolveInterrupt = (i, v, m) => _resolveInterrupt({ ctx: __ctx, interruptObj: i, value: v, metadata: m });
+export const respondToInterrupt = (i, r, m) => _respondToInterrupt({ ctx: __globalCtx, interrupt: i, interruptResponse: r, metadata: m });
+export const approveInterrupt = (i, m) => _approveInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
+export const rejectInterrupt = (i, m) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
+export const modifyInterrupt = (i, a, m) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
+export const resolveInterrupt = (i, v, m) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
 
-// Re-export builtin tools
-export { __readSkillTool, __readSkillToolParams };
-export { __printTool, __printToolParams };
-export { __printJSONTool, __printJSONToolParams };
-export { __inputTool, __inputToolParams };
-export { __readTool, __readToolParams };
-export { __readImageTool, __readImageToolParams };
-export { __writeTool, __writeToolParams };
-export { __fetchTool, __fetchToolParams };
-export { __fetchJSONTool, __fetchJSONToolParams };
-export { __fetchJsonTool, __fetchJsonToolParams };
-export { __sleepTool, __sleepToolParams };
-export { __roundTool, __roundToolParams };
-export { __deepClone };
-
-graph.node("foo", async (state) => {
-    const { graph: __graph, statelogClient, stack: __stack, step: __step, self: __self, threads: __threads, globalState: __globalState } =
-      setupNode({ ctx: __ctx, state, nodeName: "foo" });
-    if (__globalState) __global = __globalState;
-
+graph.node("foo", async (__state) => {
+    const { stack: __stack, step: __step, self: __self, threads: __threads } =
+      setupNode({ state: __state });
+    const __ctx = __state.ctx;
+    const statelogClient = __ctx.statelogClient;
+    const __graph = __ctx.graph;
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeStart", data: { nodeName: "foo" } });
+
+    if (__state.isResume) {
+      __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+    }
 
     
     
@@ -134,7 +127,7 @@ graph.node("foo", async (state) => {
       
 
       if (__step <= 1) {
-        await _print(`What is your name?`)
+        await _print(`What is your name?`);
         __stack.step++;
       }
       
@@ -145,7 +138,7 @@ graph.node("foo", async (state) => {
 
 if (isInterrupt(__stack.locals.name)) {
   
-  return { ...state, data: __stack.locals.name };
+  return { ...__state, data: __stack.locals.name };
   
    
 }
@@ -154,7 +147,7 @@ if (isInterrupt(__stack.locals.name)) {
       
 
       if (__step <= 3) {
-        await _print(`Hello, ${__stack.locals.name}!`)
+        await _print(`Hello, ${__stack.locals.name}!`);
         __stack.step++;
       }
       
@@ -167,7 +160,13 @@ if (isInterrupt(__stack.locals.name)) {
 
 export async function foo({ messages, callbacks } = {}) {
 
-  return runNode({ ctx: __ctx, nodeName: "foo", data: {  }, messages, callbacks });
+  return runNode({
+    ctx: __globalCtx,
+    nodeName: "foo",
+    data: {  },
+    messages,
+    callbacks,
+  });
 }
 
 export const __fooNodeParams = [];

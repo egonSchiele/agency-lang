@@ -1,7 +1,9 @@
 import { fileURLToPath } from "url";
 import process from "process";
+import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode } from "agency-lang";
+import { goToNode, color } from "agency-lang";
+import * as smoltalk from "agency-lang";
 import path from "path";
 import {
   RuntimeContext, MessageThread, ThreadStore,
@@ -12,6 +14,7 @@ import {
   rejectInterrupt as _rejectInterrupt,
   resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
+  resumeFromState as _resumeFromState,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
@@ -55,7 +58,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const __ctx = new RuntimeContext({
+const __globalCtx = new RuntimeContext({
   statelogConfig: {
     host: "https://agency-lang.com",
     
@@ -79,7 +82,7 @@ const __ctx = new RuntimeContext({
   },
   dirname: __dirname,
 });
-const graph = __ctx.graph;
+const graph = __globalCtx.graph;
 
 // Path-dependent builtin wrappers
 function _builtinRead(filename) {
@@ -97,26 +100,11 @@ export function readSkill({filepath}) {
 
 // Interrupt re-exports bound to this module's context
 export { interrupt, isInterrupt };
-export const respondToInterrupt = (i, r, m) => _respondToInterrupt({ ctx: __ctx, interruptObj: i, interruptResponse: r, metadata: m });
-export const approveInterrupt = (i, m) => _approveInterrupt({ ctx: __ctx, interruptObj: i, metadata: m });
-export const rejectInterrupt = (i, m) => _rejectInterrupt({ ctx: __ctx, interruptObj: i, metadata: m });
-export const modifyInterrupt = (i, a, m) => _modifyInterrupt({ ctx: __ctx, interruptObj: i, newArguments: a, metadata: m });
-export const resolveInterrupt = (i, v, m) => _resolveInterrupt({ ctx: __ctx, interruptObj: i, value: v, metadata: m });
-
-// Re-export builtin tools
-export { __readSkillTool, __readSkillToolParams };
-export { __printTool, __printToolParams };
-export { __printJSONTool, __printJSONToolParams };
-export { __inputTool, __inputToolParams };
-export { __readTool, __readToolParams };
-export { __readImageTool, __readImageToolParams };
-export { __writeTool, __writeToolParams };
-export { __fetchTool, __fetchToolParams };
-export { __fetchJSONTool, __fetchJSONToolParams };
-export { __fetchJsonTool, __fetchJsonToolParams };
-export { __sleepTool, __sleepToolParams };
-export { __roundTool, __roundToolParams };
-export { __deepClone };
+export const respondToInterrupt = (i, r, m) => _respondToInterrupt({ ctx: __globalCtx, interrupt: i, interruptResponse: r, metadata: m });
+export const approveInterrupt = (i, m) => _approveInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
+export const rejectInterrupt = (i, m) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
+export const modifyInterrupt = (i, a, m) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
+export const resolveInterrupt = (i, v, m) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
 export const __greetTool = {
   name: "greet",
   description: `No description provided.`,
@@ -132,10 +120,17 @@ export const __foo2Tool = {
 
 export const __foo2ToolParams = ["name","age"];
 
-export async function greet(name, age, __metadata={}) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads, statelogClient, graph: __graph } =
-      setupFunction({ ctx: __ctx, metadata: __metadata });
+export async function greet(name, age, __state=undefined) {
+    const { stack: __stack, step: __step, self: __self, threads: __threads } =
+      setupFunction({ state: __state });
 
+    // __state will be undefined if this function is
+    // being called as a tool by an llm
+    const __ctx = __state?.ctx || __globalCtx;
+    const statelogClient = __ctx.statelogClient;
+    const __graph = __ctx.graph;
+    
+    // put all args on the state stack
     __stack.args["name"] = name;
     __stack.args["age"] = age;
 
@@ -147,11 +142,31 @@ export async function greet(name, age, __metadata={}) {
       
 
       if (__step <= 1) {
-        if (__ctx.stateStack.interruptData?.interruptResponse?.type === "approve") {
-  __ctx.stateStack.interruptData.interruptResponse = null;
-} else if (__ctx.stateStack.interruptData?.interruptResponse?.type === "resolve") {
-  const __resolvedValue = __ctx.stateStack.interruptData.interruptResponse.value;
-  __ctx.stateStack.interruptData.interruptResponse = null;
+        // Remember this will be called both in a tool call context
+// and when the user is simply calling a function.
+
+if (__state.interruptData?.interruptResponse?.type === "approve") {
+  // approved, clear interrupt response and continue execution
+  __state.interruptData.interruptResponse = null;
+} else if (__state.interruptData?.interruptResponse?.type === "reject" && !__state.isToolCall) {
+  // rejected, clear interrupt response and return early
+  // tool calls will instead tell the llm that the call was rejected
+  __state.interruptData.interruptResponse = null;
+  
+  
+  __ctx.stateStack.pop();
+  return null;
+  
+} else if (__state.interruptData?.interruptResponse?.type === "modify") {
+  if (__state.isToolCall) {
+    // continue, args will get modified in the tool call handler
+  } else {
+    throw new Error("Interrupt response of type 'modify' is not supported outside of tool calls yet.");
+  }
+} else if (__state.interruptData?.interruptResponse?.type === "resolve") {
+  console.log(JSON.stringify(__state.interruptData, null, 2));
+  throw new Error("Interrupt response of type 'resolve' cannot be returned from an interrupt call. It can only be assigned to a variable.");
+  const __resolvedValue = __state.interruptData.interruptResponse.value;
   
   
   __ctx.stateStack.pop();
@@ -159,10 +174,8 @@ export async function greet(name, age, __metadata={}) {
   
 } else {
   const __interruptResult = interrupt(`Agent wants to call the greet function with name: ${__stack.args.name} and age: ${__stack.args.age}`);
-  __ctx.stateStack.interruptData = {
-    nodesTraversed: __graph.getNodesTraversed(),
-  };
-  __interruptResult.__state = __ctx.stateStack.toJSON();
+  __ctx.stateStack.nodesTraversed = __graph.getNodesTraversed();
+  __interruptResult.state = __ctx.stateStack.toJSON();
   
   
   return __interruptResult;
@@ -180,10 +193,17 @@ return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} yea
       
 }
 
-export async function foo2(name, age, __metadata={}) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads, statelogClient, graph: __graph } =
-      setupFunction({ ctx: __ctx, metadata: __metadata });
+export async function foo2(name, age, __state=undefined) {
+    const { stack: __stack, step: __step, self: __self, threads: __threads } =
+      setupFunction({ state: __state });
 
+    // __state will be undefined if this function is
+    // being called as a tool by an llm
+    const __ctx = __state?.ctx || __globalCtx;
+    const statelogClient = __ctx.statelogClient;
+    const __graph = __ctx.graph;
+    
+    // put all args on the state stack
     __stack.args["name"] = name;
     __stack.args["age"] = age;
 
@@ -195,7 +215,7 @@ export async function foo2(name, age, __metadata={}) {
       
 
       if (__step <= 1) {
-        await _print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`)
+        await _print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`);
         __stack.step++;
       }
       
@@ -205,8 +225,6 @@ export async function foo2(name, age, __metadata={}) {
 async function _response(name, age, __metadata) {
   return runPrompt({
     ctx: __ctx,
-    statelogClient: statelogClient,
-    graph: __graph,
     prompt: `Greet the user with their name: ${name} and age ${age} using the greet function.`,
     messages: __metadata?.messages || new MessageThread(),
     
@@ -215,6 +233,7 @@ async function _response(name, age, __metadata) {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
+    interruptData: __state?.interruptData
   });
 }
 
@@ -237,7 +256,7 @@ if (isInterrupt(__self.response)) {
       
 
       if (__step <= 3) {
-        await _print(`Greeted, age is still ${__stack.args.age}...`)
+        await _print(`Greeted, age is still ${__stack.args.age}...`);
         __stack.step++;
       }
       
@@ -250,16 +269,21 @@ return __stack.locals.response
       
 }
 
-graph.node("sayHi", async (state) => {
-    const { graph: __graph, statelogClient, stack: __stack, step: __step, self: __self, threads: __threads, globalState: __globalState } =
-      setupNode({ ctx: __ctx, state, nodeName: "sayHi" });
-    if (__globalState) __global = __globalState;
-
+graph.node("sayHi", async (__state) => {
+    const { stack: __stack, step: __step, self: __self, threads: __threads } =
+      setupNode({ state: __state });
+    const __ctx = __state.ctx;
+    const statelogClient = __ctx.statelogClient;
+    const __graph = __ctx.graph;
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeStart", data: { nodeName: "sayHi" } });
 
+    if (__state.isResume) {
+      __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+    }
+
     
-    if (state.data !== "<from-stack>") {
-      __stack.args["name"] = state.data.name;
+    if (!__state.isResume) {
+      __stack.args["name"] = __state.data.name;
     }
     
     
@@ -270,7 +294,7 @@ graph.node("sayHi", async (state) => {
       
 
       if (__step <= 1) {
-        await _print(`Saying hi to ${__stack.args.name}...`)
+        await _print(`Saying hi to ${__stack.args.name}...`);
         __stack.step++;
       }
       
@@ -283,15 +307,15 @@ graph.node("sayHi", async (state) => {
 
       if (__step <= 3) {
         __stack.locals.response = foo2(__stack.args.name, __stack.args.age, {
-    statelogClient: statelogClient,
-    graph: __graph,
-    threads: __threads
+    ctx: __ctx,
+    threads: __threads,
+    interruptData: __state?.interruptData
 });
 
 
 if (isInterrupt(__stack.locals.response)) {
   
-  return { ...state, data: __stack.locals.response };
+  return { ...__state, data: __stack.locals.response };
   
    
 }
@@ -306,13 +330,13 @@ if (isInterrupt(__stack.locals.response)) {
       
 
       if (__step <= 5) {
-        await _print(__stack.locals.response)
+        await _print(__stack.locals.response);
         __stack.step++;
       }
       
 
       if (__step <= 6) {
-        await _print(`Greeting sent.`)
+        await _print(`Greeting sent.`);
         __stack.step++;
       }
       
@@ -331,7 +355,13 @@ if (isInterrupt(__stack.locals.response)) {
 export async function sayHi(name, { messages, callbacks } = {}) {
 
 
-  return runNode({ ctx: __ctx, nodeName: "sayHi", data: { name }, messages, callbacks });
+  return runNode({
+    ctx: __globalCtx,
+    nodeName: "sayHi",
+    data: { name },
+    messages,
+    callbacks,
+  });
 }
 
 export const __sayHiNodeParams = ["name"];

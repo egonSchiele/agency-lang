@@ -1,7 +1,9 @@
 import { fileURLToPath } from "url";
 import process from "process";
+import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode } from "agency-lang";
+import { goToNode, color } from "agency-lang";
+import * as smoltalk from "agency-lang";
 import path from "path";
 import {
   RuntimeContext, MessageThread, ThreadStore,
@@ -12,6 +14,7 @@ import {
   rejectInterrupt as _rejectInterrupt,
   resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
+  resumeFromState as _resumeFromState,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
@@ -55,7 +58,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const __ctx = new RuntimeContext({
+const __globalCtx = new RuntimeContext({
   statelogConfig: {
     host: "https://agency-lang.com",
     
@@ -79,7 +82,7 @@ const __ctx = new RuntimeContext({
   },
   dirname: __dirname,
 });
-const graph = __ctx.graph;
+const graph = __globalCtx.graph;
 
 // Path-dependent builtin wrappers
 function _builtinRead(filename) {
@@ -97,26 +100,11 @@ export function readSkill({filepath}) {
 
 // Interrupt re-exports bound to this module's context
 export { interrupt, isInterrupt };
-export const respondToInterrupt = (i, r, m) => _respondToInterrupt({ ctx: __ctx, interruptObj: i, interruptResponse: r, metadata: m });
-export const approveInterrupt = (i, m) => _approveInterrupt({ ctx: __ctx, interruptObj: i, metadata: m });
-export const rejectInterrupt = (i, m) => _rejectInterrupt({ ctx: __ctx, interruptObj: i, metadata: m });
-export const modifyInterrupt = (i, a, m) => _modifyInterrupt({ ctx: __ctx, interruptObj: i, newArguments: a, metadata: m });
-export const resolveInterrupt = (i, v, m) => _resolveInterrupt({ ctx: __ctx, interruptObj: i, value: v, metadata: m });
-
-// Re-export builtin tools
-export { __readSkillTool, __readSkillToolParams };
-export { __printTool, __printToolParams };
-export { __printJSONTool, __printJSONToolParams };
-export { __inputTool, __inputToolParams };
-export { __readTool, __readToolParams };
-export { __readImageTool, __readImageToolParams };
-export { __writeTool, __writeToolParams };
-export { __fetchTool, __fetchToolParams };
-export { __fetchJSONTool, __fetchJSONToolParams };
-export { __fetchJsonTool, __fetchJsonToolParams };
-export { __sleepTool, __sleepToolParams };
-export { __roundTool, __roundToolParams };
-export { __deepClone };
+export const respondToInterrupt = (i, r, m) => _respondToInterrupt({ ctx: __globalCtx, interrupt: i, interruptResponse: r, metadata: m });
+export const approveInterrupt = (i, m) => _approveInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
+export const rejectInterrupt = (i, m) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
+export const modifyInterrupt = (i, a, m) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
+export const resolveInterrupt = (i, v, m) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
 export const __addTool = {
   name: "add",
   description: `Adds two numbers together`,
@@ -153,10 +141,17 @@ export const __flexibleTool = {
 
 export const __flexibleToolParams = ["value"];
 
-export async function add(x, y, __metadata={}) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads, statelogClient, graph: __graph } =
-      setupFunction({ ctx: __ctx, metadata: __metadata });
+export async function add(x, y, __state=undefined) {
+    const { stack: __stack, step: __step, self: __self, threads: __threads } =
+      setupFunction({ state: __state });
 
+    // __state will be undefined if this function is
+    // being called as a tool by an llm
+    const __ctx = __state?.ctx || __globalCtx;
+    const statelogClient = __ctx.statelogClient;
+    const __graph = __ctx.graph;
+    
+    // put all args on the state stack
     __stack.args["x"] = x;
     __stack.args["y"] = y;
 
@@ -172,8 +167,6 @@ export async function add(x, y, __metadata={}) {
 async function _result(x, y, __metadata) {
   return runPrompt({
     ctx: __ctx,
-    statelogClient: statelogClient,
-    graph: __graph,
     prompt: `add ${x} and ${y}`,
     messages: __metadata?.messages || new MessageThread(),
     
@@ -182,6 +175,7 @@ async function _result(x, y, __metadata) {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
+    interruptData: __state?.interruptData
   });
 }
 
@@ -207,10 +201,17 @@ return __stack.locals.result
       
 }
 
-export async function greet(name, __metadata={}) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads, statelogClient, graph: __graph } =
-      setupFunction({ ctx: __ctx, metadata: __metadata });
+export async function greet(name, __state=undefined) {
+    const { stack: __stack, step: __step, self: __self, threads: __threads } =
+      setupFunction({ state: __state });
 
+    // __state will be undefined if this function is
+    // being called as a tool by an llm
+    const __ctx = __state?.ctx || __globalCtx;
+    const statelogClient = __ctx.statelogClient;
+    const __graph = __ctx.graph;
+    
+    // put all args on the state stack
     __stack.args["name"] = name;
 
     
@@ -225,8 +226,6 @@ export async function greet(name, __metadata={}) {
 async function _message(name, __metadata) {
   return runPrompt({
     ctx: __ctx,
-    statelogClient: statelogClient,
-    graph: __graph,
     prompt: `Hello ${name}!`,
     messages: __metadata?.messages || new MessageThread(),
     
@@ -235,6 +234,7 @@ async function _message(name, __metadata) {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
+    interruptData: __state?.interruptData
   });
 }
 
@@ -260,10 +260,17 @@ return __stack.locals.message
       
 }
 
-export async function mixed(count, label, __metadata={}) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads, statelogClient, graph: __graph } =
-      setupFunction({ ctx: __ctx, metadata: __metadata });
+export async function mixed(count, label, __state=undefined) {
+    const { stack: __stack, step: __step, self: __self, threads: __threads } =
+      setupFunction({ state: __state });
 
+    // __state will be undefined if this function is
+    // being called as a tool by an llm
+    const __ctx = __state?.ctx || __globalCtx;
+    const statelogClient = __ctx.statelogClient;
+    const __graph = __ctx.graph;
+    
+    // put all args on the state stack
     __stack.args["count"] = count;
     __stack.args["label"] = label;
 
@@ -279,8 +286,6 @@ export async function mixed(count, label, __metadata={}) {
 async function _output(label, count, __metadata) {
   return runPrompt({
     ctx: __ctx,
-    statelogClient: statelogClient,
-    graph: __graph,
     prompt: `${label}: ${count}`,
     messages: __metadata?.messages || new MessageThread(),
     
@@ -289,6 +294,7 @@ async function _output(label, count, __metadata) {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
+    interruptData: __state?.interruptData
   });
 }
 
@@ -314,10 +320,17 @@ return __stack.locals.output
       
 }
 
-export async function processArray(items, __metadata={}) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads, statelogClient, graph: __graph } =
-      setupFunction({ ctx: __ctx, metadata: __metadata });
+export async function processArray(items, __state=undefined) {
+    const { stack: __stack, step: __step, self: __self, threads: __threads } =
+      setupFunction({ state: __state });
 
+    // __state will be undefined if this function is
+    // being called as a tool by an llm
+    const __ctx = __state?.ctx || __globalCtx;
+    const statelogClient = __ctx.statelogClient;
+    const __graph = __ctx.graph;
+    
+    // put all args on the state stack
     __stack.args["items"] = items;
 
     
@@ -332,8 +345,6 @@ export async function processArray(items, __metadata={}) {
 async function _result(items, __metadata) {
   return runPrompt({
     ctx: __ctx,
-    statelogClient: statelogClient,
-    graph: __graph,
     prompt: `Processing array with ${items} items`,
     messages: __metadata?.messages || new MessageThread(),
     
@@ -342,6 +353,7 @@ async function _result(items, __metadata) {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
+    interruptData: __state?.interruptData
   });
 }
 
@@ -367,10 +379,17 @@ return __stack.locals.result
       
 }
 
-export async function flexible(value, __metadata={}) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads, statelogClient, graph: __graph } =
-      setupFunction({ ctx: __ctx, metadata: __metadata });
+export async function flexible(value, __state=undefined) {
+    const { stack: __stack, step: __step, self: __self, threads: __threads } =
+      setupFunction({ state: __state });
 
+    // __state will be undefined if this function is
+    // being called as a tool by an llm
+    const __ctx = __state?.ctx || __globalCtx;
+    const statelogClient = __ctx.statelogClient;
+    const __graph = __ctx.graph;
+    
+    // put all args on the state stack
     __stack.args["value"] = value;
 
     
@@ -385,8 +404,6 @@ export async function flexible(value, __metadata={}) {
 async function _result(value, __metadata) {
   return runPrompt({
     ctx: __ctx,
-    statelogClient: statelogClient,
-    graph: __graph,
     prompt: `Received value: ${value}`,
     messages: __metadata?.messages || new MessageThread(),
     
@@ -395,6 +412,7 @@ async function _result(value, __metadata) {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
+    interruptData: __state?.interruptData
   });
 }
 
@@ -420,12 +438,17 @@ return __stack.locals.result
       
 }
 
-graph.node("foo", async (state) => {
-    const { graph: __graph, statelogClient, stack: __stack, step: __step, self: __self, threads: __threads, globalState: __globalState } =
-      setupNode({ ctx: __ctx, state, nodeName: "foo" });
-    if (__globalState) __global = __globalState;
-
+graph.node("foo", async (__state) => {
+    const { stack: __stack, step: __step, self: __self, threads: __threads } =
+      setupNode({ state: __state });
+    const __ctx = __state.ctx;
+    const statelogClient = __ctx.statelogClient;
+    const __graph = __ctx.graph;
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeStart", data: { nodeName: "foo" } });
+
+    if (__state.isResume) {
+      __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+    }
 
     
     
@@ -436,7 +459,7 @@ graph.node("foo", async (state) => {
       
 
       if (__step <= 1) {
-        await _print(`This is a node with a return type`)
+        await _print(`This is a node with a return type`);
         __stack.step++;
       }
       
@@ -451,12 +474,17 @@ graph.node("foo", async (state) => {
     return { messages: __threads, data: undefined };
 });
 
-graph.node("main", async (state) => {
-    const { graph: __graph, statelogClient, stack: __stack, step: __step, self: __self, threads: __threads, globalState: __globalState } =
-      setupNode({ ctx: __ctx, state, nodeName: "main" });
-    if (__globalState) __global = __globalState;
-
+graph.node("main", async (__state) => {
+    const { stack: __stack, step: __step, self: __self, threads: __threads } =
+      setupNode({ state: __state });
+    const __ctx = __state.ctx;
+    const statelogClient = __ctx.statelogClient;
+    const __graph = __ctx.graph;
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeStart", data: { nodeName: "main" } });
+
+    if (__state.isResume) {
+      __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+    }
 
     
     
@@ -468,15 +496,15 @@ graph.node("main", async (state) => {
 
       if (__step <= 1) {
         __stack.locals.sum = add(5, 10, {
-    statelogClient: statelogClient,
-    graph: __graph,
-    threads: __threads
+    ctx: __ctx,
+    threads: __threads,
+    interruptData: __state?.interruptData
 });
 
 
 if (isInterrupt(__stack.locals.sum)) {
   
-  return { ...state, data: __stack.locals.sum };
+  return { ...__state, data: __stack.locals.sum };
   
    
 }
@@ -486,15 +514,15 @@ if (isInterrupt(__stack.locals.sum)) {
 
       if (__step <= 2) {
         __stack.locals.greeting = greet(`Alice`, {
-    statelogClient: statelogClient,
-    graph: __graph,
-    threads: __threads
+    ctx: __ctx,
+    threads: __threads,
+    interruptData: __state?.interruptData
 });
 
 
 if (isInterrupt(__stack.locals.greeting)) {
   
-  return { ...state, data: __stack.locals.greeting };
+  return { ...__state, data: __stack.locals.greeting };
   
    
 }
@@ -504,15 +532,15 @@ if (isInterrupt(__stack.locals.greeting)) {
 
       if (__step <= 3) {
         __stack.locals.labeled = mixed(42, `Answer`, {
-    statelogClient: statelogClient,
-    graph: __graph,
-    threads: __threads
+    ctx: __ctx,
+    threads: __threads,
+    interruptData: __state?.interruptData
 });
 
 
 if (isInterrupt(__stack.locals.labeled)) {
   
-  return { ...state, data: __stack.locals.labeled };
+  return { ...__state, data: __stack.locals.labeled };
   
    
 }
@@ -522,15 +550,15 @@ if (isInterrupt(__stack.locals.labeled)) {
 
       if (__step <= 4) {
         __stack.locals.processed = processArray([1, 2, 3, 4, 5], {
-    statelogClient: statelogClient,
-    graph: __graph,
-    threads: __threads
+    ctx: __ctx,
+    threads: __threads,
+    interruptData: __state?.interruptData
 });
 
 
 if (isInterrupt(__stack.locals.processed)) {
   
-  return { ...state, data: __stack.locals.processed };
+  return { ...__state, data: __stack.locals.processed };
   
    
 }
@@ -540,15 +568,15 @@ if (isInterrupt(__stack.locals.processed)) {
 
       if (__step <= 5) {
         __stack.locals.flexResult = flexible(`test`, {
-    statelogClient: statelogClient,
-    graph: __graph,
-    threads: __threads
+    ctx: __ctx,
+    threads: __threads,
+    interruptData: __state?.interruptData
 });
 
 
 if (isInterrupt(__stack.locals.flexResult)) {
   
-  return { ...state, data: __stack.locals.flexResult };
+  return { ...__state, data: __stack.locals.flexResult };
   
    
 }
@@ -564,7 +592,13 @@ if (isInterrupt(__stack.locals.flexResult)) {
 
 export async function foo({ messages, callbacks } = {}) {
 
-  return runNode({ ctx: __ctx, nodeName: "foo", data: {  }, messages, callbacks });
+  return runNode({
+    ctx: __globalCtx,
+    nodeName: "foo",
+    data: {  },
+    messages,
+    callbacks,
+  });
 }
 
 export const __fooNodeParams = [];
@@ -572,12 +606,47 @@ export const __fooNodeParams = [];
 
 export async function main({ messages, callbacks } = {}) {
 
-  return runNode({ ctx: __ctx, nodeName: "main", data: {  }, messages, callbacks });
+  return runNode({
+    ctx: __globalCtx,
+    nodeName: "main",
+    data: {  },
+    messages,
+    callbacks,
+  });
 }
 
 export const __mainNodeParams = [];
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-    const initialState = { messages: [], data: {} };
-    await main(initialState);
+  const __resumeFile = process.env.AGENCY_RESUME_FILE;
+
+  // todo rethink
+  if (__resumeFile) {
+    const __stateJSON = JSON.parse(readFileSync(__resumeFile, 'utf-8'));
+    let result = await _resumeFromState({ ctx: __ctx, stateJSON: __stateJSON });
+    while (isInterrupt(result.data)) {
+      const interruptData = result.data;
+      const userResponse = await _builtinInput(`(builtin handler) Agent interrupted: "${interruptData.data}". Approve? (yes/no) `);
+      if (userResponse.toLowerCase() === 'yes') {
+        result = await _approveInterrupt({ ctx: __ctx, interruptObj: interruptData });
+      } else {
+        result = await _rejectInterrupt({ ctx: __ctx, interruptObj: interruptData });
+      }
+    }
+  } else {
+    try {
+      const initialState = { messages: new ThreadStore(), data: {} };
+      await main(initialState);
+    } catch (__error) {
+      __ctx.stateStack.nodesTraversed = __ctx.graph.getNodesTraversed();
+      const __stateFile = __filename.replace(/.js$/, '.state.json');
+      writeFileSync(__stateFile, JSON.stringify({ __state: __ctx.stateStack.toJSON(), errorMessage: __error.message }, null, 2));
+      console.error(`
+Agent crashed: ${__error.message}`);
+      console.error(`State saved to: ${__stateFile}`);
+      console.error(`Resume with: agency run <file>.agency --resume ${__stateFile}`);
+      throw __error;
+    }
+  }
 }
+
 export default graph;

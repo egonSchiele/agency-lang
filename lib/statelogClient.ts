@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 import { JSONEdge } from "./types.js";
 import { failure, Result, success } from "./types/result.js";
-import { mergeResults } from "smoltalk";
+import { mergeResults, ModelConfig, ModelName } from "smoltalk";
 
 export type AgencyFile = {
   name: string;
@@ -11,6 +11,14 @@ export type AgencyFile = {
 export type UploadResult = Result<{
   endpointUrls: string[];
 }>;
+
+export type StatelogConfig = {
+  host: string;
+  traceId?: string;
+  apiKey: string;
+  projectId: string;
+  debugMode: boolean;
+};
 
 export function mergeUploadResults(_results: UploadResult[]): UploadResult {
   const results = mergeResults(_results);
@@ -30,13 +38,7 @@ export class StatelogClient {
   private apiKey: string;
   private projectId: string;
 
-  constructor(config: {
-    host: string;
-    apiKey: string;
-    projectId: string;
-    traceId?: string;
-    debugMode?: boolean;
-  }) {
+  constructor(config: StatelogConfig) {
     const { host, apiKey, projectId, traceId, debugMode } = config;
     this.host = host;
     this.apiKey = apiKey;
@@ -191,7 +193,7 @@ export class StatelogClient {
   }: {
     messages: any[];
     completion: any;
-    model?: string;
+    model?: ModelName | ModelConfig | string;
     timeTaken?: number;
     tools?: {
       name: string;
@@ -221,7 +223,7 @@ export class StatelogClient {
     toolName: string;
     args: any;
     output: any;
-    model?: string;
+    model?: ModelName | ModelConfig;
     timeTaken?: number;
   }): Promise<void> {
     await this.post({

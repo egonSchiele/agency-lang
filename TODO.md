@@ -104,3 +104,8 @@ thoroughly read the code in lib/typeChecker.ts
 read code in lib/runtime
 
 event log for replays?
+
+- do message threads get restored after interrupts?
+- should tool calls have message threads passed in to them?
+- users passing initial messages to node calls from ts
+- is thread id retained after an interrupt?

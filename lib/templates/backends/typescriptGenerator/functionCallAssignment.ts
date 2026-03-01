@@ -8,7 +8,7 @@ export const template = `{{{variableName:string}}} = {{{functionCode:string}}};
 {{^globalScope}}
 if (isInterrupt({{{variableName:string}}})) {
   {{#nodeContext}}
-  return { ...state, data: {{{variableName:string}}} };
+  return { ...__state, data: {{{variableName:string}}} };
   {{/nodeContext}}
    {{^nodeContext}}
    return { data: {{{variableName:string}}} };

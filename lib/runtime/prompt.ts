@@ -1,11 +1,20 @@
 import * as smoltalk from "smoltalk";
-import { MessageThread } from "./messageThread.js";
-import { isInterrupt } from "./interrupts.js";
+import { MessageThread } from "./state/messageThread.js";
+import {
+  interrupt,
+  Interrupt,
+  InterruptData,
+  isInterrupt,
+} from "./interrupts.js";
 import { updateTokenStats, extractResponse } from "./utils.js";
 import { callHook } from "./hooks.js";
 import { handleStreamingResponse, isGenerator } from "./streaming.js";
-import type { RuntimeContext } from "./context.js";
+import type { RuntimeContext } from "./state/context.js";
 import { color } from "@/utils/termcolors.js";
+import { GraphState } from "./types.js";
+import { PromptResult, Result, StreamChunk, ToolCallJSON } from "smoltalk";
+import { ZodType } from "zod/v3";
+import { ThreadStore } from "./state/threadStore.js";
 
 export interface ToolHandler {
   name: string;
@@ -14,54 +23,39 @@ export interface ToolHandler {
   isBuiltin: boolean;
 }
 
-export async function runPrompt(args: {
-  ctx: RuntimeContext;
-  statelogClient: any;
-  graph: any;
-  prompt: string;
-  messages: MessageThread;
-  responseFormat?: any;
-  tools?: any[];
-  toolHandlers?: ToolHandler[];
-  clientConfig?: Record<string, any>;
-  stream?: boolean;
-  maxToolCallRounds?: number;
-}): Promise<any> {
-  const {
-    ctx,
-    statelogClient,
-    graph,
-    prompt,
-    responseFormat,
-    tools,
-    toolHandlers = [],
-    stream = false,
-    maxToolCallRounds = 10,
-  } = args;
-  const messages = args.messages || new MessageThread();
-  const clientConfig = ctx.getSmoltalkConfig(args.clientConfig || {});
+type Tool = {
+  name: string;
+  description?: string;
+  schema: any;
+};
 
+async function _runPrompt({
+  ctx,
+  messages,
+  tools,
+  prompt,
+  responseFormat,
+  stream,
+  clientConfig,
+}: {
+  ctx: RuntimeContext<GraphState>;
+  messages: MessageThread;
+  tools: Tool[];
+  prompt: string;
+  responseFormat?: any;
+  stream?: boolean;
+  clientConfig: Partial<smoltalk.SmolPromptConfig>;
+}): Promise<{ messages: MessageThread; toolCalls: smoltalk.ToolCallJSON[] }> {
   const startTime = performance.now();
 
-  // Restore state after interrupt
-  let toolCalls = ctx.stateStack.interruptData?.toolCall
-    ? [ctx.stateStack.interruptData.toolCall]
-    : [];
-  const interruptResponse =
-    ctx.stateStack.interruptData?.interruptResponse || null;
+  await callHook({
+    callbacks: ctx.callbacks,
+    name: "onLLMCallStart",
+    data: { prompt, tools, model: clientConfig.model },
+  });
 
-  let responseMessage: any;
-
-  if (toolCalls.length === 0) {
-    messages.push(smoltalk.userMessage(prompt));
-
-    await callHook({
-      callbacks: ctx.callbacks,
-      name: "onLLMCallStart",
-      data: { prompt, tools, model: clientConfig.model },
-    });
-
-    let completion: any = await (smoltalk.text as Function)({
+  let _completion: AsyncGenerator<StreamChunk> | Promise<Result<PromptResult>> =
+    await (smoltalk.text as Function)({
       messages: messages.getMessages(),
       tools,
       responseFormat,
@@ -69,61 +63,270 @@ export async function runPrompt(args: {
       ...clientConfig,
     });
 
-    const endTime = performance.now();
+  const endTime = performance.now();
+  let completion: PromptResult;
+  let toolCalls: ToolCallJSON[] = [];
 
-    if (stream) {
-      completion = await handleStreamingResponse({
-        ctx,
-        completion,
-        statelogClient,
-        prompt,
-        toolCalls,
-      });
-    }
-
-    const modelName = completion.model || clientConfig.model || "unknown model";
-
-    statelogClient.promptCompletion({
-      messages: messages.getMessages(),
-      completion,
-      model: modelName,
-      timeTaken: endTime - startTime,
-      tools,
-      responseFormat,
+  if (stream) {
+    const response = await handleStreamingResponse({
+      ctx,
+      completion: _completion as AsyncGenerator<StreamChunk>,
+      prompt,
     });
-
-    if (!completion.success) {
+    if (!response) {
       throw new Error(
-        `Error getting response from ${modelName}: ${completion.error}`,
+        `No completion returned from streaming LLM call! This shouldn't happen.`,
       );
     }
+    if (!response.success) {
+      throw new Error(
+        `Error getting completion from streaming response: ${response.error}`,
+      );
+    }
+    completion = response.value.completion;
+    toolCalls = response.value.toolCalls;
+  } else {
+    const response = await (_completion as Promise<Result<PromptResult>>);
+    if (!response.success) {
+      throw new Error(`Error getting completion: ${response.error}`);
+    }
+    completion = response.value;
+    toolCalls = completion.toolCalls || [];
+  }
 
-    responseMessage = completion.value;
-    toolCalls = responseMessage.toolCalls || [];
+  const modelName = completion.model || clientConfig.model || "unknown model";
 
-    if (toolCalls.length > 0) {
+  ctx.statelogClient.promptCompletion({
+    messages: messages.getMessages(),
+    completion,
+    model: modelName,
+    timeTaken: endTime - startTime,
+    tools,
+    responseFormat,
+  });
+
+  if (toolCalls.length > 0) {
+    messages.push(
+      smoltalk.assistantMessage(completion.output, {
+        toolCalls,
+      }),
+    );
+  } else {
+    messages.push(smoltalk.assistantMessage(completion.output));
+  }
+
+  updateTokenStats({
+    stateStack: ctx.stateStack,
+    usage: completion.usage,
+    cost: completion.cost,
+  });
+  await callHook({
+    callbacks: ctx.callbacks,
+    name: "onLLMCallEnd",
+    data: {
+      result: completion,
+      usage: completion.usage,
+      cost: completion.cost,
+      timeTaken: endTime - startTime,
+    },
+  });
+
+  return { messages, toolCalls };
+}
+
+type ExecuteToolCallsResult =
+  | {
+      isInterrupt: true;
+      interrupt: Interrupt;
+      messages: MessageThread;
+    }
+  | { isInterrupt: false; messages: MessageThread };
+
+async function executeToolCalls({
+  toolCalls,
+  toolHandlers,
+  messages,
+  ctx,
+  clientConfig,
+  interruptData,
+}: {
+  toolCalls: smoltalk.ToolCallJSON[];
+  toolHandlers: ToolHandler[];
+  messages: MessageThread;
+  ctx: RuntimeContext<GraphState>;
+  clientConfig: Partial<smoltalk.SmolPromptConfig>;
+  interruptData?: InterruptData;
+}): Promise<ExecuteToolCallsResult> {
+  for (const toolCall of toolCalls) {
+    const handler = toolHandlers.find((h) => h.name === toolCall.name);
+    if (!handler) {
+      console.error(
+        `No handler found for tool call: ${toolCall.name}. This error will be sent back to the LLM.`,
+      );
       messages.push(
-        smoltalk.assistantMessage(responseMessage.output, {
-          toolCalls,
+        smoltalk.toolMessage(
+          `Error: No handler found for tool call ${toolCall.name}`,
+          {
+            tool_call_id: toolCall.id,
+            name: toolCall.name,
+          },
+        ),
+      );
+      continue;
+    }
+
+    const params = handler.params.map(
+      (param: string) => toolCall.arguments[param],
+    );
+
+    let result: any;
+    if (
+      interruptData &&
+      interruptData.interruptResponse &&
+      interruptData.interruptResponse.type === "reject"
+    ) {
+      const toolCallData = {
+        tool_call_id: toolCall.id,
+        name: toolCall.name,
+      };
+      messages.push(smoltalk.toolMessage("tool call rejected", toolCallData));
+      ctx.statelogClient.debug(`Tool call rejected`, toolCallData);
+    } else {
+      if (
+        interruptData &&
+        interruptData.interruptResponse &&
+        interruptData.interruptResponse.type === "modify"
+      ) {
+        const iResponse = interruptData.interruptResponse;
+        Object.keys(iResponse.newArguments).forEach((argName) => {
+          const index = handler.params.indexOf(argName);
+          if (index !== -1) {
+            params[index] = iResponse.newArguments[argName];
+          }
+        });
+      }
+      await callHook({
+        callbacks: ctx.callbacks,
+        name: "onToolCallStart",
+        data: { toolName: handler.name, args: params },
+      });
+
+      // todo do we want to pass an existing message thread
+      // into tool calls
+      params.push({
+        ctx,
+        threads: new ThreadStore(),
+        interruptData,
+        isToolCall: true,
+      });
+
+      const toolCallStartTime = performance.now();
+      result = await handler.execute(...params);
+      result =
+        result || `${handler.name} ran successfully but did not return a value`;
+
+      const toolCallEndTime = performance.now();
+      await callHook({
+        callbacks: ctx.callbacks,
+        name: "onToolCallEnd",
+        data: {
+          toolName: handler.name,
+          result,
+          timeTaken: toolCallEndTime - toolCallStartTime,
+        },
+      });
+
+      ctx.statelogClient.toolCall({
+        toolName: handler.name,
+        args: params,
+        output: result,
+        model: clientConfig.model,
+        timeTaken: toolCallEndTime - toolCallStartTime,
+      });
+
+      if (isInterrupt(result)) {
+        return {
+          isInterrupt: true,
+          interrupt: {
+            ...result,
+            interruptData: {
+              messages: messages.toJSON().messages,
+              toolCall,
+            },
+          },
+          messages,
+        };
+      }
+
+      messages.push(
+        smoltalk.toolMessage(result, {
+          tool_call_id: toolCall.id,
+          name: toolCall.name,
         }),
       );
     }
+  }
 
-    updateTokenStats({
-      stateStack: ctx.stateStack,
-      usage: responseMessage.usage,
-      cost: responseMessage.cost,
+  return { isInterrupt: false, messages };
+}
+
+export async function runPrompt(args: {
+  ctx: RuntimeContext<GraphState>;
+  prompt: string;
+  messages: MessageThread;
+  responseFormat?: any;
+  tools?: Tool[];
+  toolHandlers?: ToolHandler[];
+  clientConfig: Partial<smoltalk.SmolPromptConfig>;
+  stream?: boolean;
+  maxToolCallRounds?: number;
+  interruptData?: InterruptData;
+}): Promise<any> {
+  const {
+    ctx,
+    prompt,
+    responseFormat,
+    tools,
+    toolHandlers = [],
+    stream = false,
+    maxToolCallRounds = 10,
+  } = args;
+  const clientConfig = ctx.getSmoltalkConfig(args.clientConfig || {});
+
+  /* in order, either:
+  1. restore messages from interruptData if present (resuming after an interrupt)
+  2. use messages passed in as argument (add onto message thread)
+  3. create an empty message thread just for this prompt
+  */
+  let messages = args.interruptData?.messages
+    ? MessageThread.fromJSON(args.interruptData.messages)
+    : args.messages || new MessageThread();
+
+  // Restore state after interrupt
+  let toolCalls: smoltalk.ToolCallJSON[] = [];
+
+  if (args.interruptData === undefined) {
+    // not resuming after an interrupt
+    messages.push(smoltalk.userMessage(prompt));
+
+    const result = await _runPrompt({
+      ctx,
+      messages,
+      tools: tools || [],
+      prompt,
+      responseFormat,
+      stream,
+      clientConfig,
     });
-    await callHook({
-      callbacks: ctx.callbacks,
-      name: "onLLMCallEnd",
-      data: {
-        result: responseMessage,
-        usage: responseMessage.usage,
-        cost: responseMessage.cost,
-        timeTaken: endTime - startTime,
-      },
-    });
+    messages = result.messages;
+    toolCalls = result.toolCalls;
+  } else {
+    if (!args.interruptData.toolCall) {
+      throw new Error(
+        `Interrupt data is present but no tool call found. This shouldn't happen: ${JSON.stringify(args.interruptData)}`,
+      );
+    }
+    toolCalls = [args.interruptData.toolCall];
   }
 
   // Handle tool calls
@@ -134,181 +337,71 @@ export async function runPrompt(args: {
         `Exceeded maximum tool call rounds (${maxToolCallRounds})`,
       );
     }
-    let haltExecution = false;
-    let haltToolCall: any = {};
-    let haltInterrupt: any = null;
 
-    for (const toolCall of toolCalls) {
-      const handler = toolHandlers.find((h) => h.name === toolCall.name);
-      if (!handler) continue;
+    const executeToolCallsResult = await executeToolCalls({
+      toolCalls,
+      toolHandlers,
+      messages,
+      ctx,
+      clientConfig,
+      interruptData: args.interruptData,
+    });
 
-      const params = handler.params.map(
-        (param: string) => toolCall.arguments[param],
-      );
-      const toolCallStartTime = performance.now();
+    messages = executeToolCallsResult.messages;
+    if (executeToolCallsResult.isInterrupt) {
+      const { interrupt } = executeToolCallsResult;
 
-      let result: any;
-      if (interruptResponse && interruptResponse.type === "reject") {
-        messages.push(
-          smoltalk.toolMessage("tool call rejected", {
-            tool_call_id: toolCall.id,
-            name: toolCall.name,
-          }),
-        );
-        statelogClient.debug(`Tool call rejected`, {
-          tool_call_id: toolCall.id,
-          name: toolCall.name,
-        });
-      } else {
-        await callHook({
-          callbacks: ctx.callbacks,
-          name: "onToolCallStart",
-          data: { toolName: handler.name, args: params },
-        });
-
-        result = await handler.execute(...params);
-        result =
-          result ||
-          `${handler.name} ran successfully but did not return a value`;
-
-        const toolCallEndTime = performance.now();
-        await callHook({
-          callbacks: ctx.callbacks,
-          name: "onToolCallEnd",
-          data: {
-            toolName: handler.name,
-            result,
-            timeTaken: toolCallEndTime - toolCallStartTime,
-          },
-        });
-
-        statelogClient.toolCall({
-          toolName: handler.name,
-          params,
-          output: result,
-          model: clientConfig.model,
-          timeTaken: toolCallEndTime - toolCallStartTime,
-        });
-
-        if (isInterrupt(result)) {
-          haltInterrupt = result;
-          haltToolCall = {
-            id: toolCall.id,
-            name: toolCall.name,
-            arguments: toolCall.arguments,
-          };
-          haltExecution = true;
-          break;
-        }
-
-        messages.push(
-          smoltalk.toolMessage(result, {
-            tool_call_id: toolCall.id,
-            name: toolCall.name,
-          }),
-        );
-      }
-    }
-
-    if (haltExecution) {
-      statelogClient.debug(`Tool call interrupted execution.`, {
+      ctx.statelogClient.debug(`Tool call interrupted execution.`, {
         messages: messages.getMessages(),
         model: clientConfig.model,
       });
 
-      ctx.stateStack.interruptData = {
-        messages: messages.toJSON().messages,
-        nodesTraversed: graph.getNodesTraversed(),
-        toolCall: haltToolCall,
-      };
-      haltInterrupt.__state = ctx.stateStack.toJSON();
-      return haltInterrupt;
+      // @ts-ignore
+      ctx.stateStack.nodesTraversed = ctx.graph.getNodesTraversed();
+      interrupt.state = ctx.stateStack.toJSON();
+      return interrupt;
     }
 
-    const nextStartTime = performance.now();
-    await callHook({
-      callbacks: ctx.callbacks,
-      name: "onLLMCallStart",
-      data: { prompt, tools, model: clientConfig.model, toolCalls },
-    });
-
-    let completion: any = await (smoltalk.text as Function)({
-      messages: messages.getMessages(),
-      tools,
+    const result = await _runPrompt({
+      ctx,
+      messages,
+      tools: tools || [],
+      prompt,
       responseFormat,
       stream,
-      ...clientConfig,
+      clientConfig,
     });
-
-    const nextEndTime = performance.now();
-
-    if (stream) {
-      completion = await handleStreamingResponse({
-        ctx,
-        completion,
-        statelogClient,
-        prompt,
-        toolCalls,
-      });
-    }
-
-    const modelName = completion.model || clientConfig.model || "unknown model";
-
-    statelogClient.promptCompletion({
-      messages: messages.getMessages(),
-      completion,
-      model: modelName,
-      timeTaken: nextEndTime - nextStartTime,
-      tools,
-      responseFormat,
-    });
-
-    if (!completion.success) {
-      throw new Error(
-        `Error getting response from ${modelName}: ${completion.error}`,
-      );
-    }
-    responseMessage = completion.value;
-    toolCalls = responseMessage.toolCalls || [];
-
-    if (toolCalls.length > 0) {
-      messages.push(
-        smoltalk.assistantMessage(responseMessage.output, {
-          toolCalls,
-        }),
-      );
-    }
-
-    updateTokenStats({
-      stateStack: ctx.stateStack,
-      usage: responseMessage.usage,
-      cost: responseMessage.cost,
-    });
-    await callHook({
-      callbacks: ctx.callbacks,
-      name: "onLLMCallEnd",
-      data: {
-        result: responseMessage,
-        usage: responseMessage.usage,
-        cost: responseMessage.cost,
-        timeTaken: nextEndTime - nextStartTime,
-      },
-    });
+    messages = result.messages;
+    toolCalls = result.toolCalls;
   }
 
-  // Add final assistant response to history
-  messages.push(smoltalk.assistantMessage(responseMessage.output));
+  const responseMessage = messages.getMessages().at(-1);
+
+  if (!responseMessage) {
+    throw new Error(
+      `No response message found after running prompt! This shouldn't happen. Messages: ${JSON.stringify(
+        messages.getMessages(),
+      )}`,
+    );
+  }
 
   if (responseFormat) {
     try {
-      const rawResult = JSON.parse(responseMessage.output || "");
+      const rawResult = JSON.parse(responseMessage.content || "");
       const extracted = extractResponse(rawResult, responseFormat);
       return extracted;
     } catch (e) {
-      const extracted = extractResponse(responseMessage.output, responseFormat);
-      return extracted;
+      try {
+        const extracted = extractResponse(
+          responseMessage.content,
+          responseFormat,
+        );
+        return extracted;
+      } catch (e) {
+        return responseMessage.content;
+      }
     }
   }
 
-  return responseMessage.output;
+  return responseMessage.content;
 }

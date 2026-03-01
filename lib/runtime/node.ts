@@ -1,45 +1,27 @@
-import { ThreadStore } from "./threadStore.js";
+import { MessageJSON } from "smoltalk";
 import { callHook } from "./hooks.js";
+import type { RuntimeContext } from "./state/context.js";
+import { State, StateStack } from "./state/stateStack.js";
+import { ThreadStore } from "./state/threadStore.js";
+import { GraphState, InternalFunctionState, RunNodeResult } from "./types.js";
 import { createReturnObject } from "./utils.js";
-import type { RuntimeContext } from "./context.js";
+import { color } from "termcolors";
 
-export function setupNode(args: {
-  ctx: RuntimeContext;
-  state: any;
-  nodeName: string;
-}): {
-  graph: any;
-  statelogClient: any;
-  stack: any;
+export function setupNode(args: { state: GraphState }): {
+  stack: State;
   step: number;
-  self: any;
+  self: Record<string, any>;
   threads: ThreadStore;
-  globalState: any;
 } {
-  const { ctx, state } = args;
-
-  const graph = state.__metadata?.graph || ctx.graph;
-  const statelogClient = state.__metadata?.statelogClient || ctx.statelogClient;
-
-  let globalState: any = null;
-
-  // if `state.__metadata?.__stateStack` is set, that means we are resuming execution
-  // at this node after an interrupt. In that case, this is the line that restores the state.
-  if (state.__metadata?.__stateStack) {
-    ctx.stateStack = state.__metadata.__stateStack;
-
+  let { state } = args;
+  const ctx = state.ctx;
+  /* 
+  if (state.isResume) {
     // restore global state
-    if (state.__metadata?.__stateStack?.global) {
-      globalState = state.__metadata.__stateStack.global;
-    }
-
+    // to to restore data that was saved on the state stack for this node
     // clear the state stack from metadata so it doesn't propagate to other nodes.
-    state.__metadata.__stateStack = undefined;
-  }
-
-  if (state.__metadata?.callbacks) {
-    ctx.callbacks = state.__metadata.callbacks;
-  }
+    //state.__metadata.__stateStack = undefined;
+  } */
 
   // either creates a new stack for this node,
   // or restores the stack if we're resuming after an interrupt
@@ -53,52 +35,70 @@ export function setupNode(args: {
     : new ThreadStore();
   stack.threads = threads;
 
-  return { graph, statelogClient, stack, step, self, threads, globalState };
+  return { stack, step, self, threads };
 }
 
-export function setupFunction(args: {
-  ctx: RuntimeContext;
-  metadata: any;
-}): {
-  stack: any;
+export function setupFunction(args: { state?: InternalFunctionState }): {
+  stack: State;
   step: number;
-  self: any;
+  self: Record<string, any>;
   threads: ThreadStore;
-  statelogClient: any;
-  graph: any;
 } {
-  const { ctx, metadata = {} } = args;
+  const { state } = args;
+  if (state === undefined) {
+    // this means the function got called as a tool by the llm
+    const stateStack = new StateStack();
+    const stack = stateStack.getNewState();
+    return {
+      stack,
+      step: 0,
+      self: stack.locals,
+      threads: new ThreadStore(),
+    };
+  }
 
+  const ctx = state.ctx;
   const stack = ctx.stateStack.getNewState();
   const step = stack.step;
   const self = stack.locals;
-  const graph = metadata?.graph || ctx.graph;
-  const statelogClient = metadata?.statelogClient || ctx.statelogClient;
 
   // if being called from a node, we'll pass in threads.
   // if being called as a tool, we won't have threads, but we'll create an empty ThreadStore here.
-  const threads = metadata?.threads || new ThreadStore();
+  const threads = state.threads || new ThreadStore();
 
-  return { stack, step, self, threads, statelogClient, graph };
+  return { stack, step, self, threads };
 }
 
-export async function runNode(args: {
-  ctx: RuntimeContext;
+export async function runNode({
+  ctx,
+  nodeName,
+  data,
+  messages,
+}: {
+  // global execution context
+  ctx: RuntimeContext<GraphState>;
+
+  // name of node to run
   nodeName: string;
+
+  // arbitrary data to pass to the node
   data: Record<string, any>;
-  messages?: any[];
-  callbacks?: Record<string, Function>;
-}): Promise<any> {
-  const { ctx, nodeName, data, messages, callbacks } = args;
-  ctx.callbacks = callbacks || {};
+
+  // any message history to pass to the node
+  // tbd how this gets used. Which message thread does it get added to?
+  messages?: MessageJSON[];
+}): Promise<RunNodeResult<any>> {
   await callHook({
     callbacks: ctx.callbacks,
     name: "onAgentStart",
     data: { nodeName, args: data, messages: messages || [] },
   });
+  const threadStore = new ThreadStore();
   const result = await ctx.graph.run(nodeName, {
-    messages: messages || [],
+    messages: threadStore,
     data,
+    ctx,
+    isResume: false,
   });
   const returnObject = createReturnObject({
     result,

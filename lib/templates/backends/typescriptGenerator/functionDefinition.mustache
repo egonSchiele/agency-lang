@@ -1,8 +1,15 @@
 
-export async function {{{functionName:string}}}({{{paramList:string}}}__metadata={}) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads, statelogClient, graph: __graph } =
-      setupFunction({ ctx: __ctx, metadata: __metadata });
+export async function {{{functionName:string}}}({{{paramList:string}}}__state=undefined) {
+    const { stack: __stack, step: __step, self: __self, threads: __threads } =
+      setupFunction({ state: __state });
 
+    // __state will be undefined if this function is
+    // being called as a tool by an llm
+    const __ctx = __state?.ctx || __globalCtx;
+    const statelogClient = __ctx.statelogClient;
+    const __graph = __ctx.graph;
+    
+    // put all args on the state stack
     {{{paramAssignments:string}}}
 
     {{{functionBody}}}

@@ -1,6 +1,9 @@
 import { color } from "termcolors";
+import { StateStack } from "./state/stateStack.js";
+import { ThreadStore } from "./index.js";
+import { RunNodeResult } from "./types.js";
 
-export function deepClone(obj: any): any {
+export function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj));
 }
 
@@ -62,11 +65,13 @@ export function extractResponse(rawValue: any, schema: any): any {
   return rawValue;
 }
 
-export function createReturnObject(args: {
-  result: any;
-  stateStack: any;
-}): any {
-  const { result, stateStack } = args;
+export function createReturnObject<T>({
+  result,
+  stateStack,
+}: {
+  result: { data: T; messages: ThreadStore };
+  stateStack: StateStack;
+}): RunNodeResult<T> {
   // Note: we're *not* using structuredClone here because structuredClone
   // doesn't call `toJSON`, so it's not cloning our message objects correctly.
   return JSON.parse(
@@ -79,7 +84,7 @@ export function createReturnObject(args: {
 }
 
 export function updateTokenStats(args: {
-  stateStack: any;
+  stateStack: StateStack;
   usage: any;
   cost: any;
 }): void {

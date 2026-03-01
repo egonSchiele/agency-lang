@@ -264,7 +264,10 @@ export class BaseGenerator {
     return PRECEDENCE[child.operator] < PRECEDENCE[parentOp];
   }
 
-  protected needsParensRight(child: BinOpArgument, parentOp: Operator): boolean {
+  protected needsParensRight(
+    child: BinOpArgument,
+    parentOp: Operator,
+  ): boolean {
     if (child.type !== "binOpExpression") return false;
     return PRECEDENCE[child.operator] <= PRECEDENCE[parentOp];
   }
@@ -411,7 +414,7 @@ export class BaseGenerator {
     }
     switch (scope) {
       case "global":
-        return "__ctx.stateStack.globals";
+        return "__globalCtx.stateStack.globals";
       case "function":
       case "node":
         return "__stack.locals";

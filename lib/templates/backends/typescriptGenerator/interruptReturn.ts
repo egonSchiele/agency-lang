@@ -17,9 +17,7 @@ export const template = `if (__state.interruptData?.interruptResponse?.type === 
   {{/nodeContext}}
 } else {
   const __interruptResult = interrupt({{{interruptArgs}}});
-  __state.interruptData = {
-    nodesTraversed: __graph.getNodesTraversed(),
-  };
+  __ctx.stateStack.nodesTraversed = __graph.getNodesTraversed();
   __interruptResult.state = __ctx.stateStack.toJSON();
   {{#nodeContext}}
   return { messages: __threads, data: __interruptResult };

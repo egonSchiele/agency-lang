@@ -212,6 +212,8 @@ export class TypeScriptGenerator extends BaseGenerator {
       node.value.type === "functionCall" &&
       node.value.functionName === "interrupt"
     ) {
+      /* special case for `return interrupt(...)` syntax */
+
       const interruptArgs = node.value.arguments
         .map((arg) => this.processNode(arg))
         .join(", ");
@@ -220,6 +222,7 @@ export class TypeScriptGenerator extends BaseGenerator {
         nodeContext: this.getCurrentScope().type === "node",
       });
     } else if (node.value.type === "prompt") {
+      // special case for `return llm(...)` syntax
       return `${returnCode}\n__ctx.stateStack.pop();\nreturn __self.${DEFAULT_PROMPT_NAME};\n`;
     }
     /* Pop the state off the stack, we won't be coming back.

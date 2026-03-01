@@ -1,8 +1,8 @@
 if (__state.interruptData?.interruptResponse?.type === "approve") {
+  // approved, clear interrupt response and continue execution
   __state.interruptData.interruptResponse = null;
 } else if (__state.interruptData?.interruptResponse?.type === "resolve") {
   const __resolvedValue = __state.interruptData.interruptResponse.value;
-  __state.interruptData.interruptResponse = null;
   {{#nodeContext}}
   return { messages: __threads, data: __resolvedValue };
   {{/nodeContext}}
@@ -12,9 +12,7 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   {{/nodeContext}}
 } else {
   const __interruptResult = interrupt({{{interruptArgs}}});
-  __state.interruptData = {
-    nodesTraversed: __graph.getNodesTraversed(),
-  };
+  __ctx.stateStack.nodesTraversed = __graph.getNodesTraversed();
   __interruptResult.state = __ctx.stateStack.toJSON();
   {{#nodeContext}}
   return { messages: __threads, data: __interruptResult };

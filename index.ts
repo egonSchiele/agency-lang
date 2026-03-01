@@ -51,10 +51,10 @@ async function main() {
   let result = finalState.data;
   while (isInterrupt(result)) {
     console.log("Execution interrupted with message:", result.data);
-    const response = await input("Give a name: ");
+    /*     const response = await input("Give a name: ");
     finalState = await resolveInterrupt(result, response, { callbacks });
     result = finalState.data;
-    /*     const response = await input("Do you want to approve? (yes/no) ");
+ */ const response = await input("Do you want to approve? (yes/no) ");
     if (response.toLowerCase() === "yes" || response.toLowerCase() === "y") {
       finalState = await approveInterrupt(result, { callbacks });
       result = finalState.data;
@@ -70,10 +70,12 @@ async function main() {
         result,
         { name: response },
         { callbacks },
-      ); 
+      ); */
       result = finalState.data;
-    } */
+    }
   }
+
+  console.log("\nFinal result:", JSON.stringify(result, null, 2));
 }
 
 main();

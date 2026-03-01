@@ -3,10 +3,18 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `if (__state.interruptData?.interruptResponse?.type === "resolve") {
+export const template = `if (__state.interruptData?.interruptResponse?.type === "modify") {
   {{{variableName}}} = __state.interruptData.interruptResponse.value;
   __state.interruptData.interruptResponse = null;
+} else if (__state.interruptData?.interruptResponse?.type === "approve") {
+  // todo: what's the best way to handle approve/reject responses?
+  {{{variableName}}} = true;
+  __state.interruptData.interruptResponse = null;
+} else if (__state.interruptData?.interruptResponse?.type === "reject") {
+  {{{variableName}}} = false;
+  __state.interruptData.interruptResponse = null;
 } else {
+  // there's no interrupt response, which means this is the first time we're hitting the interrupt.
   const __interruptResult = interrupt({{{interruptArgs}}});
   __ctx.stateStack.nodesTraversed = __graph.getNodesTraversed();
   __interruptResult.state = __ctx.stateStack.toJSON();

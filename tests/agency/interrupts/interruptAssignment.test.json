@@ -12,9 +12,9 @@
       ],
       "interruptHandlers": [
         {
-          "action": "resolve",
+          "action": "modify",
           "expectedMessage": "Who do you want to say hi to?",
-          "resolvedValue": "michaelangelo"
+          "modifiedArgs": "michaelangelo"
         }
       ]
     }

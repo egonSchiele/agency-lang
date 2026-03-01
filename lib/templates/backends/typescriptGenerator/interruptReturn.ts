@@ -4,18 +4,25 @@
 import { apply } from "typestache";
 
 export const template = `if (__state.interruptData?.interruptResponse?.type === "approve") {
+  // approved, clear interrupt response and continue execution
   __state.interruptData.interruptResponse = null;
-} else if (__state.interruptData?.interruptResponse?.type === "resolve") {
-  const __resolvedValue = __state.interruptData.interruptResponse.value;
-  __state.interruptData.interruptResponse = null;
+} else if (__state.interruptData?.interruptResponse?.type === "reject") {
+  // todo: what happens if an interrupt inside a function is rejected?
+  // current plan is to return \`null\` from the function.
+  console.error("User rejected the interrupt", JSON.stringify(__state.interruptData, null, 2));
+  const __returnValue = null;
   {{#nodeContext}}
-  return { messages: __threads, data: __resolvedValue };
+  return { messages: __threads, data: __returnValue };
   {{/nodeContext}}
   {{^nodeContext}}
   __ctx.stateStack.pop();
-  return __resolvedValue;
+  return __returnValue;
   {{/nodeContext}}
+} else if (__state.interruptData?.interruptResponse?.type === "modify") {
+    throw new Error("Modify interrupt responses dont make sense in this context, since there is no value to modify.");
 } else {
+  // there's no interrupt response, which means this is the first time we're hitting the interrupt.
+  // We need to return the interrupt object so that it can be handled by the caller.
   const __interruptResult = interrupt({{{interruptArgs}}});
   __ctx.stateStack.nodesTraversed = __graph.getNodesTraversed();
   __interruptResult.state = __ctx.stateStack.toJSON();

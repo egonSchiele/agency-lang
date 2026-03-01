@@ -17,6 +17,7 @@ import { AgencyConfig } from "@/config.js";
 import path from "path";
 import { compile } from "./commands.js";
 import { execFileSync } from "child_process";
+import { InterruptResponse } from "@/runtime/interrupts.js";
 type Exact = { type: "exact" };
 type LLMJudge = {
   type: "llmJudge";
@@ -25,9 +26,8 @@ type LLMJudge = {
 };
 type Criteria = Exact | LLMJudge;
 type InterruptHandler = {
-  action: "approve" | "reject" | "modify" | "resolve";
+  action: InterruptResponse["type"];
   modifiedArgs?: Record<string, any>;
-  resolvedValue?: any;
   expectedMessage?: string;
 };
 type TestCase = {
@@ -143,8 +143,7 @@ export async function fixtures(config: AgencyConfig, target?: string) {
         choices: [
           { title: "Approve", value: "approve" },
           { title: "Reject", value: "reject" },
-          { title: "Modify arguments", value: "modify" },
-          { title: "Resolve (provide value)", value: "resolve" },
+          { title: "Modify value", value: "modify" },
         ],
       },
       { onCancel },
@@ -160,25 +159,7 @@ export async function fixtures(config: AgencyConfig, target?: string) {
       expectedMessage: json.data.data, // Capture the actual message
     };
 
-    if (actionResponse.action === "resolve") {
-      const resolveResponse = await prompts(
-        {
-          type: "text",
-          name: "value",
-          message: "Enter the resolved value (JSON or plain string):",
-        },
-        { onCancel },
-      );
-      if (resolveResponse.value === undefined) {
-        console.log("Interrupt handling cancelled.");
-        return;
-      }
-      try {
-        handler.resolvedValue = JSON.parse(resolveResponse.value);
-      } catch {
-        handler.resolvedValue = resolveResponse.value;
-      }
-    } else if (actionResponse.action === "modify") {
+    if (actionResponse.action === "modify") {
       let invalidJSON = true;
       while (invalidJSON) {
         const modifyResponse = await prompts(

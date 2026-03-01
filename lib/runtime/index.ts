@@ -72,7 +72,6 @@ export {
   approveInterrupt,
   rejectInterrupt,
   modifyInterrupt,
-  resolveInterrupt,
   resumeFromState,
 } from "./interrupts.js";
 

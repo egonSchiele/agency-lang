@@ -52,11 +52,13 @@ export class MessageThread {
     };
   }
 
-  static fromJSON(json: MessageThreadJSON | MessageThread): MessageThread {
+  static fromJSON(
+    json: MessageThreadJSON | MessageThread | smoltalk.MessageJSON[],
+  ): MessageThread {
     if (json instanceof MessageThread) return json;
     const thread = new MessageThread();
-    thread.messages = (json.messages || []).map((m: smoltalk.MessageJSON) =>
-      smoltalk.messageFromJSON(m),
+    thread.messages = (Array.isArray(json) ? json : json.messages || []).map(
+      (m: smoltalk.MessageJSON) => smoltalk.messageFromJSON(m),
     );
     return thread;
   }

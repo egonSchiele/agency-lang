@@ -4,6 +4,8 @@ import { SimpleMachine } from "../../simplemachine/index.js";
 import { nanoid } from "nanoid";
 import { SmolPromptConfig } from "@/index.js";
 
+/* bunch of stuff that every node/function in the runtime needs access to,
+that we don't want to pass as individual arguments everywhere */
 export class RuntimeContext<T> {
   // this is the part of the runtime context that gets
   // serialized/deserialized to support durable execution
@@ -16,6 +18,8 @@ export class RuntimeContext<T> {
   // so that all the logs share the same traceId, so they all show up in the same trace in the Statelog dashboard.
   statelogClient: StatelogClient;
   smoltalkDefaults: Partial<SmolPromptConfig>;
+
+  // this is the directory that the runtime is running in. We need this to be able to read files relative to the runtime.
   dirname: string;
 
   constructor(args: {

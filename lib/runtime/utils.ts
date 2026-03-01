@@ -3,7 +3,7 @@ import { StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./index.js";
 import { RunNodeResult } from "./types.js";
 
-export function deepClone(obj: any): any {
+export function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj));
 }
 

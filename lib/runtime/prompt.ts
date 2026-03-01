@@ -1,6 +1,6 @@
 import * as smoltalk from "smoltalk";
 import { MessageThread } from "./state/messageThread.js";
-import { isInterrupt } from "./interrupts.js";
+import { Interrupt, InterruptData, isInterrupt } from "./interrupts.js";
 import { updateTokenStats, extractResponse } from "./utils.js";
 import { callHook } from "./hooks.js";
 import { handleStreamingResponse, isGenerator } from "./streaming.js";
@@ -17,8 +17,6 @@ export interface ToolHandler {
 
 export async function runPrompt(args: {
   ctx: RuntimeContext<GraphState>;
-  statelogClient: any;
-  graph: any;
   prompt: string;
   messages: MessageThread;
   responseFormat?: any;
@@ -27,11 +25,10 @@ export async function runPrompt(args: {
   clientConfig?: Record<string, any>;
   stream?: boolean;
   maxToolCallRounds?: number;
+  interruptData?: InterruptData;
 }): Promise<any> {
   const {
     ctx,
-    statelogClient,
-    graph,
     prompt,
     responseFormat,
     tools,
@@ -39,21 +36,28 @@ export async function runPrompt(args: {
     stream = false,
     maxToolCallRounds = 10,
   } = args;
-  const messages = args.messages || new MessageThread();
   const clientConfig = ctx.getSmoltalkConfig(args.clientConfig || {});
 
-  const startTime = performance.now();
+  /* in order, either:
+  1. restore messages from interruptData if present (resuming after an interrupt)
+  2. use messages passed in as argument (add onto message thread)
+  3. create an empty message thread just for this prompt
+  */
+  const messages = args.interruptData?.messages
+    ? MessageThread.fromJSON(args.interruptData.messages)
+    : args.messages || new MessageThread();
 
   // Restore state after interrupt
-  let toolCalls = ctx.stateStack.interruptData?.toolCall
-    ? [ctx.stateStack.interruptData.toolCall]
+  let toolCalls = args.interruptData?.toolCall
+    ? [args.interruptData.toolCall]
     : [];
-  const interruptResponse =
-    ctx.stateStack.interruptData?.interruptResponse || null;
+  const interruptResponse = args.interruptData?.interruptResponse || null;
 
   let responseMessage: any;
 
-  if (toolCalls.length === 0) {
+  const startTime = performance.now();
+  if (args.interruptData === undefined) {
+    // not resuming after an interrupt
     messages.push(smoltalk.userMessage(prompt));
 
     await callHook({
@@ -76,7 +80,6 @@ export async function runPrompt(args: {
       completion = await handleStreamingResponse({
         ctx,
         completion,
-        statelogClient,
         prompt,
         toolCalls,
       });
@@ -84,7 +87,7 @@ export async function runPrompt(args: {
 
     const modelName = completion.model || clientConfig.model || "unknown model";
 
-    statelogClient.promptCompletion({
+    ctx.statelogClient.promptCompletion({
       messages: messages.getMessages(),
       completion,
       model: modelName,
@@ -136,8 +139,8 @@ export async function runPrompt(args: {
       );
     }
     let haltExecution = false;
-    let haltToolCall: any = {};
-    let haltInterrupt: any = null;
+    let haltToolCall: smoltalk.ToolCallJSON | null = null;
+    let haltInterrupt: Interrupt | null = null;
 
     for (const toolCall of toolCalls) {
       const handler = toolHandlers.find((h) => h.name === toolCall.name);
@@ -156,7 +159,7 @@ export async function runPrompt(args: {
             name: toolCall.name,
           }),
         );
-        statelogClient.debug(`Tool call rejected`, {
+        ctx.statelogClient.debug(`Tool call rejected`, {
           tool_call_id: toolCall.id,
           name: toolCall.name,
         });
@@ -183,9 +186,9 @@ export async function runPrompt(args: {
           },
         });
 
-        statelogClient.toolCall({
+        ctx.statelogClient.toolCall({
           toolName: handler.name,
-          params,
+          args: params,
           output: result,
           model: clientConfig.model,
           timeTaken: toolCallEndTime - toolCallStartTime,
@@ -212,17 +215,19 @@ export async function runPrompt(args: {
     }
 
     if (haltExecution) {
-      statelogClient.debug(`Tool call interrupted execution.`, {
+      ctx.statelogClient.debug(`Tool call interrupted execution.`, {
         messages: messages.getMessages(),
         model: clientConfig.model,
       });
 
-      ctx.stateStack.interruptData = {
+      haltInterrupt!.interruptData = {
         messages: messages.toJSON().messages,
-        nodesTraversed: graph.getNodesTraversed(),
-        toolCall: haltToolCall,
+        toolCall: haltToolCall as smoltalk.ToolCallJSON,
       };
-      haltInterrupt.__state = ctx.stateStack.toJSON();
+
+      // @ts-ignore
+      ctx.stateStack.nodesTraversed = ctx.graph.getNodesTraversed();
+      haltInterrupt!.state = ctx.stateStack.toJSON();
       return haltInterrupt;
     }
 
@@ -247,7 +252,6 @@ export async function runPrompt(args: {
       completion = await handleStreamingResponse({
         ctx,
         completion,
-        statelogClient,
         prompt,
         toolCalls,
       });
@@ -255,7 +259,7 @@ export async function runPrompt(args: {
 
     const modelName = completion.model || clientConfig.model || "unknown model";
 
-    statelogClient.promptCompletion({
+    ctx.statelogClient.promptCompletion({
       messages: messages.getMessages(),
       completion,
       model: modelName,

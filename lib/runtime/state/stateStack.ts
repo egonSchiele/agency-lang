@@ -1,22 +1,41 @@
+import { MessageJSON, ToolCallJSON, ToolMessageJSON } from "smoltalk";
 import { deepClone } from "../utils.js";
+import { ThreadStoreJSON } from "./threadStore.js";
+
+// the state for each frame (a node, or a function call)
+export type State = {
+  args: Record<string, any>;
+  locals: Record<string, any>;
+  threads: ThreadStoreJSON | null;
+  step: number;
+};
+
+export type StateStackJSON = {
+  stack: State[];
+  mode: "serialize" | "deserialize";
+  globals: Record<string, any>;
+  other: Record<string, any>;
+  deserializeStackLength: number;
+  nodesTraversed: string[];
+};
 
 export class StateStack {
-  stack: any[] = [];
+  stack: State[] = [];
   mode: "serialize" | "deserialize" = "serialize";
   globals: Record<string, any> = {};
   other: Record<string, any> = {};
-  interruptData: Record<string, any> = {};
   deserializeStackLength: number = 0;
+  nodesTraversed: string[] = [];
 
   constructor(
-    stack: any[] = [],
+    stack: State[] = [],
     mode: "serialize" | "deserialize" = "serialize",
   ) {
     this.stack = stack;
     this.mode = mode;
   }
 
-  getNewState(): any {
+  getNewState(): State {
     if (this.mode === "deserialize" && this.deserializeStackLength <= 0) {
       console.log("Forcing mode to serialize, nothing left to deserialize");
       this.mode = "serialize";
@@ -33,10 +52,15 @@ export class StateStack {
     } else if (this.mode === "deserialize") {
       this.deserializeStackLength -= 1;
       const item = this.stack.shift();
+      if (item === undefined) {
+        throw new Error(
+          `Tried to deserialize state but stack is empty. This likely means there is a bug in the serialization/deserialization logic. Stack: ${JSON.stringify(this.toJSON())}`,
+        );
+      }
       this.stack.push(item);
       return item;
     }
-    return null;
+    throw new Error(`Invalid mode: ${this.mode}`);
   }
 
   deserializeMode(): void {
@@ -44,27 +68,27 @@ export class StateStack {
     this.deserializeStackLength = this.stack.length;
   }
 
-  pop(): any {
+  pop(): State | undefined {
     return this.stack.pop();
   }
 
-  toJSON(): any {
+  toJSON(): StateStackJSON {
     return deepClone({
       stack: this.stack,
       globals: this.globals,
       other: this.other,
-      interruptData: this.interruptData,
       mode: this.mode,
       deserializeStackLength: this.deserializeStackLength,
+      nodesTraversed: this.nodesTraversed,
     });
   }
 
-  static fromJSON(json: any): StateStack {
+  static fromJSON(json: StateStackJSON): StateStack {
     const stateStack = new StateStack([], "serialize");
     stateStack.stack = json.stack || [];
+    stateStack.nodesTraversed = json.nodesTraversed || [];
     stateStack.globals = json.globals || {};
     stateStack.other = json.other || {};
-    stateStack.interruptData = json.interruptData || {};
     stateStack.mode = json.mode || "serialize";
     stateStack.deserializeStackLength = json.deserializeStackLength || 0;
     return stateStack;

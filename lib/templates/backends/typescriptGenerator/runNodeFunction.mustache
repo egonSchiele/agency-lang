@@ -4,5 +4,11 @@ export async function {{{nodeName:string}}}({{{argsStr:string}}}, { messages, ca
 {{^hasArgs}}
 export async function {{{nodeName:string}}}({ messages, callbacks } = {}) {
 {{/hasArgs}}
-  return runNode({ ctx: __ctx, nodeName: "{{{nodeName:string}}}", data: { {{{argsStr:string}}} }, messages, callbacks });
+  return runNode({
+    ctx: __ctx,
+    nodeName: "{{{nodeName:string}}}",
+    data: { {{{argsStr:string}}} },
+    messages,
+    callbacks,
+  });
 }

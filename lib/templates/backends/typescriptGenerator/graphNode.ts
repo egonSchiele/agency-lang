@@ -4,15 +4,16 @@
 import { apply } from "typestache";
 
 export const template = `
-graph.node("{{{name}}}", async (state) => {
-    const { graph: __graph, statelogClient, stack: __stack, step: __step, self: __self, threads: __threads, globalState: __globalState } =
-      setupNode({ ctx: __ctx, state, nodeName: "{{{name}}}" });
-    if (__globalState) __global = __globalState;
-
+graph.node("{{{name}}}", async (__state) => {
+    const { stack: __stack, step: __step, self: __self, threads: __threads } =
+      setupNode({ state: __state });
+    const __ctx = __state.ctx;
+    const statelogClient = __ctx.statelogClient;
+    const __graph = __ctx.graph;
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeStart", data: { nodeName: "{{{name}}}" } });
 
     {{#hasParam}}
-    if (state.data !== "<from-stack>") {
+    if (!__state.isResume) {
       {{{paramAssignments}}}
     }
     {{/hasParam}}

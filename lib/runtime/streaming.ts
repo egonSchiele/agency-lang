@@ -12,18 +12,17 @@ export function isGenerator(variable: any): boolean {
 export async function handleStreamingResponse(args: {
   ctx: RuntimeContext<GraphState>;
   completion: any;
-  statelogClient: any;
   prompt: string;
   toolCalls: any[];
 }): Promise<any> {
-  const { ctx, completion, statelogClient, prompt, toolCalls } = args;
+  const { ctx, completion, prompt, toolCalls } = args;
 
   if (isGenerator(completion)) {
     if (!ctx.callbacks.onStream) {
       console.log(
         "No onStream callback provided for streaming response, returning response synchronously",
       );
-      statelogClient.debug(
+      ctx.statelogClient.debug(
         "Got streaming response but no onStream callback provided, returning response synchronously",
         {
           prompt,

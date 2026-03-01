@@ -1,138 +1,199 @@
 import { deepClone } from "./utils.js";
 import { createReturnObject } from "./utils.js";
-import { StateStack } from "./state/stateStack.js";
+import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import * as smoltalk from "smoltalk";
 import { RuntimeContext } from "./state/context.js";
 import { GraphState } from "./types.js";
+import { ThreadStore } from "./state/threadStore.js";
 
-export function interrupt(data: any): any {
+export type InterruptApprove = {
+  type: "approve";
+};
+export type InterruptModify = {
+  type: "modify";
+  newArguments: any;
+};
+
+export type InterruptReject = {
+  type: "reject";
+};
+
+export type InterruptResolve = {
+  type: "resolve";
+  value: any;
+};
+
+export type InterruptResponse =
+  | InterruptApprove
+  | InterruptModify
+  | InterruptReject
+  | InterruptResolve;
+
+export type InterruptData = {
+  // messages that have been exchanged in the prompt function
+  // up till this interrupt was triggered. This is needed to restore
+  // the message history for this specific prompt
+  messages?: smoltalk.MessageJSON[];
+
+  // which tool call caused the interrupt?
+  toolCall?: smoltalk.ToolCallJSON;
+
+  interruptResponse?: InterruptResponse;
+};
+
+export type Interrupt<T = any> = {
+  type: "interrupt";
+  data: T;
+  interruptData?: InterruptData;
+  state?: StateStackJSON;
+};
+
+export function interrupt<T = any>(data: T): Interrupt<T> {
   return {
     type: "interrupt",
     data,
   };
 }
 
-export function isInterrupt(obj: any): boolean {
+export function isInterrupt(obj: any): obj is Interrupt {
   return obj && obj.type === "interrupt";
 }
 
 export async function respondToInterrupt(args: {
   ctx: RuntimeContext<GraphState>;
-  interruptObj: any;
-  interruptResponse: any;
+  interrupt: Interrupt;
+  interruptResponse: InterruptResponse;
   metadata?: Record<string, any>;
 }): Promise<any> {
-  const { ctx, metadata = {} } = args;
-  const interruptObj = deepClone(args.interruptObj);
+  //const { interrupt, interruptResponse, metadata = {} } = args;
+  const interrupt = deepClone(args.interrupt);
   const interruptResponse = deepClone(args.interruptResponse);
+  const { ctx, metadata = {} } = args;
 
-  ctx.stateStack = StateStack.fromJSON(interruptObj.__state || {});
+  // this needs to be cleaned up
+  ctx.stateStack = StateStack.fromJSON(interrupt.state!);
   ctx.stateStack.deserializeMode();
 
-  const messages = (ctx.stateStack.interruptData.messages || []).map(
+  if (metadata.callbacks) {
+    ctx.callbacks = metadata.callbacks;
+  }
+
+  const interruptData = interrupt.interruptData || {};
+
+  /*   const messages: smoltalk.Message[] = (interruptData.messages || []).map(
     (json: any) => {
       return smoltalk.messageFromJSON(json);
     },
   );
-  ctx.stateStack.interruptData.messages = messages;
-  ctx.stateStack.interruptData.interruptResponse = interruptResponse;
+  interruptData.messages = messages; */
+  interruptData.interruptResponse = interruptResponse;
 
-  if (interruptResponse.type === "approve" && interruptResponse.newArguments) {
-    ctx.stateStack.interruptData.toolCall = {
-      ...ctx.stateStack.interruptData.toolCall,
-      arguments: {
-        ...ctx.stateStack.interruptData.toolCall.arguments,
-        ...interruptResponse.newArguments,
-      },
+  // not sure we should be saving interrupt data on state stack?
+  if (interruptResponse.type === "modify") {
+    interruptData.toolCall!.arguments = {
+      ...interruptData.toolCall!.arguments,
+      ...interruptResponse.newArguments,
     };
   }
 
   // start at the last node we visited
-  const nodesTraversed = ctx.stateStack.interruptData.nodesTraversed || [];
+  const nodesTraversed = ctx.stateStack.nodesTraversed || [];
   const nodeName = nodesTraversed[nodesTraversed.length - 1];
   const result = await ctx.graph.run(nodeName, {
-    messages: messages,
-    /* __metadata: {
-      graph: ctx.graph,
-      statelogClient: ctx.statelogClient,
-      __stateStack: ctx.stateStack,
-      __callbacks: metadata.callbacks,
-    }, */
-    data: "<from-stack>",
+    // todo user should be able to pass messages
+    // in metadata
+    messages: new ThreadStore(),
+    data: {},
+    ctx,
+    isResume: true,
+    interruptData,
   });
   return createReturnObject({ result, stateStack: ctx.stateStack });
 }
 
-export async function approveInterrupt(args: {
+export async function approveInterrupt({
+  ctx,
+  interrupt,
+  metadata,
+}: {
   ctx: RuntimeContext<GraphState>;
-  interruptObj: any;
+  interrupt: Interrupt;
   metadata?: Record<string, any>;
 }): Promise<any> {
   return await respondToInterrupt({
-    ctx: args.ctx,
-    interruptObj: args.interruptObj,
+    ctx,
+    interrupt,
     interruptResponse: { type: "approve" },
-    metadata: args.metadata,
+    metadata,
   });
 }
 
-export async function modifyInterrupt(args: {
+export async function modifyInterrupt({
+  ctx,
+  interrupt,
+  newArguments,
+  metadata,
+}: {
   ctx: RuntimeContext<GraphState>;
-  interruptObj: any;
+  interrupt: Interrupt;
   newArguments: any;
   metadata?: Record<string, any>;
 }): Promise<any> {
   return await respondToInterrupt({
-    ctx: args.ctx,
-    interruptObj: args.interruptObj,
-    interruptResponse: { type: "approve", newArguments: args.newArguments },
-    metadata: args.metadata,
+    ctx,
+    interrupt,
+    interruptResponse: { type: "modify", newArguments },
+    metadata,
   });
 }
 
-export async function rejectInterrupt(args: {
+export async function rejectInterrupt({
+  ctx,
+  interrupt,
+  metadata,
+}: {
   ctx: RuntimeContext<GraphState>;
-  interruptObj: any;
+  interrupt: Interrupt;
   metadata?: Record<string, any>;
 }): Promise<any> {
   return await respondToInterrupt({
-    ctx: args.ctx,
-    interruptObj: args.interruptObj,
+    ctx,
+    interrupt,
     interruptResponse: { type: "reject" },
-    metadata: args.metadata,
+    metadata,
   });
 }
 
-export async function resolveInterrupt(args: {
+export async function resolveInterrupt({
+  ctx,
+  interrupt,
+  value,
+  metadata,
+}: {
   ctx: RuntimeContext<GraphState>;
-  interruptObj: any;
+  interrupt: Interrupt;
   value: any;
   metadata?: Record<string, any>;
 }): Promise<any> {
   return await respondToInterrupt({
-    ctx: args.ctx,
-    interruptObj: args.interruptObj,
-    interruptResponse: { type: "resolve", value: args.value },
-    metadata: args.metadata,
+    ctx,
+    interrupt,
+    interruptResponse: { type: "resolve", value },
+    metadata,
   });
 }
 
 export async function resumeFromState(args: {
   ctx: RuntimeContext<GraphState>;
-  stateJSON: any;
+  state: StateStackJSON;
   metadata?: Record<string, any>;
 }): Promise<any> {
   const { ctx, metadata = {} } = args;
 
-  ctx.stateStack = StateStack.fromJSON(args.stateJSON.__state || {});
+  ctx.stateStack = StateStack.fromJSON(args.state || {});
   ctx.stateStack.deserializeMode();
 
-  const messages = (ctx.stateStack.interruptData.messages || []).map(
-    (json: any) => smoltalk.messageFromJSON(json),
-  );
-  ctx.stateStack.interruptData.messages = messages;
-
-  const nodesTraversed = ctx.stateStack.interruptData.nodesTraversed || [];
+  const nodesTraversed = ctx.stateStack.nodesTraversed || [];
   const nodeName = nodesTraversed[nodesTraversed.length - 1];
 
   if (!nodeName) {
@@ -140,14 +201,11 @@ export async function resumeFromState(args: {
   }
 
   const result = await ctx.graph.run(nodeName, {
-    messages,
-    /* __metadata: {
-      graph: ctx.graph,
-      statelogClient: ctx.statelogClient,
-      __stateStack: ctx.stateStack,
-      __callbacks: metadata.callbacks,
-    }, */
-    data: "<from-stack>",
+    // todo: is this correct? Do we need to pass messages here?
+    messages: new ThreadStore(),
+    ctx,
+    isResume: true,
+    data: {},
   });
 
   return createReturnObject({ result, stateStack: ctx.stateStack });

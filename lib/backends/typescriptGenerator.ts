@@ -184,7 +184,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     this.isInsideGraphNode = false;
     this.endScope();
     const paramAssignments = parameters
-      .map((p) => `__stack.args["${p.name}"] = state.data.${p.name};`)
+      .map((p) => `__stack.args["${p.name}"] = __state.data.${p.name};`)
       .join("\n      ");
 
     return renderGraphNode.default({

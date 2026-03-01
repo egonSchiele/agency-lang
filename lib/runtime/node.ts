@@ -1,50 +1,26 @@
-import { ThreadStore } from "./state/threadStore.js";
-import { callHook } from "./hooks.js";
-import { createReturnObject } from "./utils.js";
-import type { RuntimeContext } from "./state/context.js";
-import { StateStack } from "./state/stateStack.js";
-import { StatelogClient } from "@/statelogClient.js";
-import { SimpleMachine } from "@/simplemachine/graph.js";
-import { GraphState, RunNodeResult } from "./types.js";
 import { MessageJSON } from "smoltalk";
+import { callHook } from "./hooks.js";
+import type { RuntimeContext } from "./state/context.js";
+import { State } from "./state/stateStack.js";
+import { ThreadStore } from "./state/threadStore.js";
+import { GraphState, RunNodeResult } from "./types.js";
+import { createReturnObject } from "./utils.js";
 
-export function setupNode(args: {
-  ctx: RuntimeContext<GraphState>;
-  state: any;
-  nodeName: string;
-}): {
-  graph: SimpleMachine<GraphState>;
-  statelogClient: StatelogClient;
-  stack: StateStack;
+export function setupNode(args: { state: GraphState }): {
+  stack: State;
   step: number;
   self: Record<string, any>;
   threads: ThreadStore;
-  globalState: Record<string, any> | null;
 } {
-  const { ctx, state } = args;
-
-  const graph = state.__metadata?.graph || ctx.graph;
-  const statelogClient = state.__metadata?.statelogClient || ctx.statelogClient;
-
-  let globalState: any = null;
-
-  // if `state.__metadata?.__stateStack` is set, that means we are resuming execution
-  // at this node after an interrupt. In that case, this is the line that restores the state.
-  if (state.__metadata?.__stateStack) {
-    ctx.stateStack = state.__metadata.__stateStack;
-
+  let { state } = args;
+  const ctx = state.ctx;
+  /* 
+  if (state.isResume) {
     // restore global state
-    if (state.__metadata?.__stateStack?.global) {
-      globalState = state.__metadata.__stateStack.global;
-    }
-
+    // to to restore data that was saved on the state stack for this node
     // clear the state stack from metadata so it doesn't propagate to other nodes.
-    state.__metadata.__stateStack = undefined;
-  }
-
-  if (state.__metadata?.callbacks) {
-    ctx.callbacks = state.__metadata.callbacks;
-  }
+    //state.__metadata.__stateStack = undefined;
+  } */
 
   // either creates a new stack for this node,
   // or restores the stack if we're resuming after an interrupt
@@ -58,33 +34,29 @@ export function setupNode(args: {
     : new ThreadStore();
   stack.threads = threads;
 
-  return { graph, statelogClient, stack, step, self, threads, globalState };
+  return { stack, step, self, threads };
 }
 
 export function setupFunction(args: {
   ctx: RuntimeContext<GraphState>;
   metadata: any;
 }): {
-  stack: StateStack;
+  stack: State;
   step: number;
   self: Record<string, any>;
   threads: ThreadStore;
-  statelogClient: StatelogClient;
-  graph: SimpleMachine<GraphState>;
 } {
   const { ctx, metadata = {} } = args;
 
   const stack = ctx.stateStack.getNewState();
   const step = stack.step;
   const self = stack.locals;
-  const graph = metadata?.graph || ctx.graph;
-  const statelogClient = metadata?.statelogClient || ctx.statelogClient;
 
   // if being called from a node, we'll pass in threads.
   // if being called as a tool, we won't have threads, but we'll create an empty ThreadStore here.
   const threads = metadata?.threads || new ThreadStore();
 
-  return { stack, step, self, threads, statelogClient, graph };
+  return { stack, step, self, threads };
 }
 
 export async function runNode({
@@ -115,6 +87,8 @@ export async function runNode({
   const result = await ctx.graph.run(nodeName, {
     messages: threadStore,
     data,
+    ctx,
+    isResume: false,
   });
   const returnObject = createReturnObject({
     result,

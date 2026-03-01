@@ -1,4 +1,7 @@
+bar = 1
+
 def greet(name: string) {
+  bar = 2
   return "Hello, ${name}!"
 }
 
@@ -6,7 +9,7 @@ node printGreeting(greeting: string) {
   print(greeting)
 }
 
-node plan() {
+node main() {
   greeting = greet("Alice")
   return printGreeting(greeting)
 }

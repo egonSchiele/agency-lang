@@ -6,11 +6,7 @@ import { apply } from "typestache";
 export const template = `goToNode("{{{nodeName:string}}}",
   {
     messages: __stack.messages,
-    __metadata: {
-      graph: __graph,
-      statelogClient,
-      callbacks: __ctx.callbacks,
-    },
+    ctx: __ctx,
     {{#hasData}}
     data: {{{data:string}}}
     {{/hasData}}

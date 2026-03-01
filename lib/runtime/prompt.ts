@@ -192,6 +192,19 @@ async function executeToolCalls({
       messages.push(smoltalk.toolMessage("tool call rejected", toolCallData));
       ctx.statelogClient.debug(`Tool call rejected`, toolCallData);
     } else {
+      if (
+        interruptData &&
+        interruptData.interruptResponse &&
+        interruptData.interruptResponse.type === "modify"
+      ) {
+        const iResponse = interruptData.interruptResponse;
+        Object.keys(iResponse.newArguments).forEach((argName) => {
+          const index = handler.params.indexOf(argName);
+          if (index !== -1) {
+            params[index] = iResponse.newArguments[argName];
+          }
+        });
+      }
       await callHook({
         callbacks: ctx.callbacks,
         name: "onToolCallStart",
@@ -204,6 +217,7 @@ async function executeToolCalls({
         ctx,
         threads: new ThreadStore(),
         interruptData,
+        isToolCall: true,
       });
 
       const toolCallStartTime = performance.now();

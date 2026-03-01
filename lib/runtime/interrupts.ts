@@ -10,15 +10,20 @@ import { color } from "termcolors";
 export type InterruptApprove = {
   type: "approve";
 };
+
+// modify = modify the args for a tool call
 export type InterruptModify = {
   type: "modify";
-  newArguments: any;
+  newArguments: Record<string, any>;
 };
 
 export type InterruptReject = {
   type: "reject";
 };
 
+// resolve = assign a specific value to a variable
+// eg
+// x = interrupt("What value should x have?")
 export type InterruptResolve = {
   type: "resolve";
   value: any;
@@ -66,7 +71,7 @@ export async function respondToInterrupt(args: {
   interruptResponse: InterruptResponse;
   metadata?: Record<string, any>;
 }): Promise<any> {
-  //console.log(color.green(JSON.stringify({ args }, null, 2)));
+  // console.log(color.green(JSON.stringify({ args }, null, 2)));
   //const { interrupt, interruptResponse, metadata = {} } = args;
   const interrupt = deepClone(args.interrupt);
   const interruptResponse = deepClone(args.interruptResponse);
@@ -90,7 +95,6 @@ export async function respondToInterrupt(args: {
   interruptData.messages = messages; */
   interruptData.interruptResponse = interruptResponse;
 
-  // not sure we should be saving interrupt data on state stack?
   if (interruptResponse.type === "modify") {
     interruptData.toolCall!.arguments = {
       ...interruptData.toolCall!.arguments,
@@ -138,7 +142,7 @@ export async function modifyInterrupt({
 }: {
   ctx: RuntimeContext<GraphState>;
   interrupt: Interrupt;
-  newArguments: any;
+  newArguments: Record<string, any>;
   metadata?: Record<string, any>;
 }): Promise<any> {
   return await respondToInterrupt({

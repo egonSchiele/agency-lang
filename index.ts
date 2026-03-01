@@ -65,7 +65,11 @@ async function main() {
       finalState = await rejectInterrupt(result, { callbacks });
       result = finalState.data;
     } else {
-      finalState = await resolveInterrupt(result, response, { callbacks });
+      finalState = await modifyInterrupt(
+        result,
+        { name: response },
+        { callbacks },
+      );
       /* finalState = await modifyInterrupt(
         result,
         { name: response },

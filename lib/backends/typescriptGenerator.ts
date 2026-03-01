@@ -517,8 +517,6 @@ export class TypeScriptGenerator extends BaseGenerator {
         functionName,
         argsString,
         hasArgs: parts.length > 0,
-        statelogClient: "statelogClient",
-        graph: "__graph",
         awaitPrefix: node.async ? "" : "await ",
       });
     } else if (node.functionName === "system") {

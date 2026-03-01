@@ -23,6 +23,11 @@ export type GraphState = {
   interruptData?: InterruptData;
 };
 
+export type InternalFunctionState = {
+  threads: ThreadStore;
+  ctx: RuntimeContext<GraphState>;
+};
+
 export type NodeReturnValue<T> = {
   data: T;
   messages: ThreadStore;

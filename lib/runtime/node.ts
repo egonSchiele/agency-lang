@@ -1,10 +1,11 @@
 import { MessageJSON } from "smoltalk";
 import { callHook } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
-import { State } from "./state/stateStack.js";
+import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
-import { GraphState, RunNodeResult } from "./types.js";
+import { GraphState, InternalFunctionState, RunNodeResult } from "./types.js";
 import { createReturnObject } from "./utils.js";
+import { color } from "termcolors";
 
 export function setupNode(args: { state: GraphState }): {
   stack: State;
@@ -37,24 +38,33 @@ export function setupNode(args: { state: GraphState }): {
   return { stack, step, self, threads };
 }
 
-export function setupFunction(args: {
-  ctx: RuntimeContext<GraphState>;
-  metadata: any;
-}): {
+export function setupFunction(args: { state?: InternalFunctionState }): {
   stack: State;
   step: number;
   self: Record<string, any>;
   threads: ThreadStore;
 } {
-  const { ctx, metadata = {} } = args;
+  const { state } = args;
+  if (state === undefined) {
+    // this means the function got called as a tool by the llm
+    const stateStack = new StateStack();
+    const stack = stateStack.getNewState();
+    return {
+      stack,
+      step: 0,
+      self: stack.locals,
+      threads: new ThreadStore(),
+    };
+  }
 
+  const ctx = state.ctx;
   const stack = ctx.stateStack.getNewState();
   const step = stack.step;
   const self = stack.locals;
 
   // if being called from a node, we'll pass in threads.
   // if being called as a tool, we won't have threads, but we'll create an empty ThreadStore here.
-  const threads = metadata?.threads || new ThreadStore();
+  const threads = state.threads || new ThreadStore();
 
   return { stack, step, self, threads };
 }

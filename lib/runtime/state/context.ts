@@ -50,6 +50,17 @@ export class RuntimeContext<T> {
     this.smoltalkDefaults = args.smoltalkDefaults;
   }
 
+  toJSON() {
+    return {
+      stateStack: this.stateStack.toJSON(),
+      callbacks: Object.keys(this.callbacks),
+      onStreamLock: this.onStreamLock,
+      graph: this.graph.toJSON(),
+      statelogClient: "redacted",
+      smoltalkDefaults: "redacted",
+      dirname: this.dirname,
+    };
+  }
   /* Get smoltalk config with missing keys populated with defaults */
   getSmoltalkConfig(
     config: Partial<SmolPromptConfig> = {},

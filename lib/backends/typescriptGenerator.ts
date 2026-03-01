@@ -453,7 +453,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       const tempVar = "__funcResult";
       const nodeContext = scope.type === "node";
       const returnStmt = nodeContext
-        ? `return { ...state, data: ${tempVar} };`
+        ? `return { ...__state, data: ${tempVar} };`
         : `return { data: ${tempVar} };`;
       return `const ${tempVar} = ${code};\nif (isInterrupt(${tempVar})) {\n  ${returnStmt}\n}\n`;
     }

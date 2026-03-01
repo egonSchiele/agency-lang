@@ -208,6 +208,7 @@ export async function resumeFromState(args: {
     ctx,
     isResume: true,
     data: {},
+    //interruptData
   });
 
   return createReturnObject({ result, stateStack: ctx.stateStack });

@@ -5,7 +5,8 @@ import { apply } from "typestache";
 
 export const template = `{{{awaitPrefix:string}}}{{{functionName:string}}}({{{argsString:string}}}{{#hasArgs}}, {{/hasArgs}}{
     ctx: __ctx,
-    threads: __threads
+    threads: __threads,
+    interruptData: __state?.interruptData
 })`;
 
 export type TemplateType = {

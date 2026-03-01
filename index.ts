@@ -7,7 +7,7 @@ import {
 } from "./foo.js";
 import readline from "readline";
 import type { StreamChunk } from "smoltalk";
-import { color } from "@/utils/termcolors.js";
+import { color } from "termcolors";
 
 function input(prompt: string): Promise<string> {
   const rl = readline.createInterface({
@@ -51,7 +51,10 @@ async function main() {
   let result = finalState.data;
   while (isInterrupt(result)) {
     console.log("Execution interrupted with message:", result.data);
-    const response = await input("Do you want to approve? (yes/no) ");
+    /*     const response = await input("Give a name: ");
+    finalState = await resolveInterrupt(result, response, { callbacks });
+    result = finalState.data;
+ */ const response = await input("Do you want to approve? (yes/no) ");
     if (response.toLowerCase() === "yes" || response.toLowerCase() === "y") {
       finalState = await approveInterrupt(result, { callbacks });
       result = finalState.data;
@@ -62,7 +65,11 @@ async function main() {
       finalState = await rejectInterrupt(result, { callbacks });
       result = finalState.data;
     } else {
-      finalState = await resolveInterrupt(result, response, { callbacks });
+      finalState = await modifyInterrupt(
+        result,
+        { name: response },
+        { callbacks },
+      );
       /* finalState = await modifyInterrupt(
         result,
         { name: response },
@@ -71,6 +78,8 @@ async function main() {
       result = finalState.data;
     }
   }
+
+  console.log("\nFinal result:", JSON.stringify(result, null, 2));
 }
 
 main();

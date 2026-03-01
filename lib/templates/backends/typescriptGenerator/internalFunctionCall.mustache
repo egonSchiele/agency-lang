@@ -1,5 +1,5 @@
 {{{awaitPrefix:string}}}{{{functionName:string}}}({{{argsString:string}}}{{#hasArgs}}, {{/hasArgs}}{
-    statelogClient: {{{statelogClient:string}}},
-    graph: {{{graph:string}}},
-    threads: __threads
+    ctx: __ctx,
+    threads: __threads,
+    interruptData: __state?.interruptData
 })

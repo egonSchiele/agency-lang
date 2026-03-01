@@ -5,6 +5,8 @@ import { apply } from "typestache";
 
 export const template = `if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const __resumeFile = process.env.AGENCY_RESUME_FILE;
+
+  // todo rethink
   if (__resumeFile) {
     const __stateJSON = JSON.parse(readFileSync(__resumeFile, 'utf-8'));
     let result = await _resumeFromState({ ctx: __ctx, stateJSON: __stateJSON });
@@ -19,10 +21,10 @@ export const template = `if (process.argv[1] === fileURLToPath(import.meta.url))
     }
   } else {
     try {
-      const initialState = { messages: [], data: {} };
+      const initialState = { messages: new ThreadStore(), data: {} };
       await main(initialState);
     } catch (__error) {
-      __ctx.stateStack.interruptData.nodesTraversed = __ctx.graph.getNodesTraversed();
+      __ctx.stateStack.nodesTraversed = __ctx.graph.getNodesTraversed();
       const __stateFile = __filename.replace(/\.js$/, '.state.json');
       writeFileSync(__stateFile, JSON.stringify({ __state: __ctx.stateStack.toJSON(), errorMessage: __error.message }, null, 2));
       console.error(\`\nAgent crashed: \${__error.message}\`);

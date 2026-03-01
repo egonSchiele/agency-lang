@@ -11,7 +11,12 @@ planPrompt = read("./prompts/plan.md")
 type NextAction = { type: "askUser"; question: string } | { type: "done" } | { type: "start" }
 
 config = { 
-  model: "gpt-4o-mini"
+  model: "gpt-4o-mini",
+  responseFormatOptions: { 
+    strict: true,
+    numRetries: 4,
+    allowExtraKeys: true
+  }
 }
 /* config = {
 model: {

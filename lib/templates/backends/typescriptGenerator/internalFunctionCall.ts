@@ -4,9 +4,9 @@
 import { apply } from "typestache";
 
 export const template = `{{{awaitPrefix:string}}}{{{functionName:string}}}({{{argsString:string}}}{{#hasArgs}}, {{/hasArgs}}{
-    statelogClient: {{{statelogClient:string}}},
-    graph: {{{graph:string}}},
-    threads: __threads
+    ctx: __ctx,
+    threads: __threads,
+    interruptData: __state?.interruptData
 })`;
 
 export type TemplateType = {
@@ -14,8 +14,6 @@ export type TemplateType = {
   functionName: string;
   argsString: string;
   hasArgs: boolean;
-  statelogClient: string;
-  graph: string;
 };
 
 const render = (args: TemplateType) => {

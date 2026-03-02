@@ -11,7 +11,7 @@ export {
 } from "./utils.js";
 
 export { callHook } from "./hooks.js";
-export type { AgencyCallbacks, CallbackMap } from "./hooks.js";
+export type { AgencyCallbacks, CallbackMap, CallbackReturn } from "./hooks.js";
 
 export {
   not,

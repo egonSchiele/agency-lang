@@ -48,11 +48,19 @@ async function _runPrompt({
 }): Promise<{ messages: MessageThread; toolCalls: smoltalk.ToolCallJSON[] }> {
   const startTime = performance.now();
 
-  await callHook({
+  const startHookResult = await callHook({
     callbacks: ctx.callbacks,
     name: "onLLMCallStart",
-    data: { prompt, tools, model: clientConfig.model },
+    data: {
+      prompt,
+      tools,
+      model: clientConfig.model,
+      messages: messages.toJSON().messages,
+    },
   });
+  if (startHookResult) {
+    messages = MessageThread.fromJSON(startHookResult);
+  }
 
   let _completion: AsyncGenerator<StreamChunk> | Promise<Result<PromptResult>> =
     await (smoltalk.text as Function)({
@@ -120,7 +128,7 @@ async function _runPrompt({
     usage: completion.usage,
     cost: completion.cost,
   });
-  await callHook({
+  const endHookResult = await callHook({
     callbacks: ctx.callbacks,
     name: "onLLMCallEnd",
     data: {
@@ -129,8 +137,12 @@ async function _runPrompt({
       usage: completion.usage,
       cost: completion.cost,
       timeTaken: endTime - startTime,
+      messages: messages.toJSON().messages,
     },
   });
+  if (endHookResult) {
+    messages = MessageThread.fromJSON(endHookResult);
+  }
 
   return { messages, toolCalls };
 }

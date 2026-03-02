@@ -22,6 +22,7 @@ export type CallbackMap = {
     prompt: string;
     tools: { name: string; description?: string; schema: any }[];
     model: ModelName | ModelConfig | undefined;
+    messages: MessageJSON[];
   };
   onLLMCallEnd: {
     model: string | ModelConfig;
@@ -29,6 +30,7 @@ export type CallbackMap = {
     usage: TokenUsage | undefined;
     cost: CostEstimate | undefined;
     timeTaken: number;
+    messages: MessageJSON[];
   };
   onFunctionStart: {
     functionName: string;
@@ -45,18 +47,26 @@ export type CallbackMap = {
     | { type: "error"; error: any };
 };
 
+export type CallbackReturn<K extends keyof CallbackMap> =
+  K extends "onLLMCallStart" | "onLLMCallEnd"
+    ? MessageJSON[] | void
+    : void;
+
 export type AgencyCallbacks = {
-  [K in keyof CallbackMap]?: (data: CallbackMap[K]) => void | Promise<void>;
+  [K in keyof CallbackMap]?: (
+    data: CallbackMap[K],
+  ) => CallbackReturn<K> | Promise<CallbackReturn<K>>;
 };
 
 export async function callHook<K extends keyof CallbackMap>(args: {
   callbacks: AgencyCallbacks;
   name: K;
   data: CallbackMap[K];
-}): Promise<void> {
+}): Promise<CallbackReturn<K> | undefined> {
   const { callbacks, name, data } = args;
   const hook = callbacks[name];
   if (hook) {
-    await hook(data);
+    return (await hook(data)) as CallbackReturn<K>;
   }
+  return undefined;
 }

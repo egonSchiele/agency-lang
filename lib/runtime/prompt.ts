@@ -292,7 +292,6 @@ export async function runPrompt(args: {
     maxToolCallRounds = 10,
   } = args;
   const clientConfig = ctx.getSmoltalkConfig(args.clientConfig || {});
-
   /* in order, either:
   1. restore messages from interruptData if present (resuming after an interrupt)
   2. use messages passed in as argument (add onto message thread)

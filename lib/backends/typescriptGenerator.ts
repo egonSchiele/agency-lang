@@ -201,7 +201,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       if (node.value.type === "functionCall") {
         if (this.isGraphNode(node.value.functionName)) {
           // we're going to return a goToNode call, so just return that directly
-          return `return ${returnCode}\n`;
+          return returnCode;
         }
       }
       return `return { messages: __threads, data: ${returnCode}}\n`;

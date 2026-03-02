@@ -3,7 +3,8 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `goToNode("{{{nodeName:string}}}",
+export const template = `__ctx.stateStack.pop();
+return goToNode("{{{nodeName:string}}}",
   {
     messages: __stack.messages,
     ctx: __ctx,

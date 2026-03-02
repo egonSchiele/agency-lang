@@ -30,6 +30,12 @@ export type CallbackMap = {
     cost: CostEstimate | undefined;
     timeTaken: number;
   };
+  onFunctionStart: {
+    functionName: string;
+    args: Record<string, any>;
+    isBuiltin: boolean;
+  };
+  onFunctionEnd: { functionName: string; timeTaken: number };
   onToolCallStart: { toolName: string; args: any[] };
   onToolCallEnd: { toolName: string; result: any; timeTaken: number };
   onStream:

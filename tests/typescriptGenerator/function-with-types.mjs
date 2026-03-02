@@ -150,7 +150,9 @@ export async function add(x, y, __state=undefined) {
     const __ctx = __state?.ctx || __globalCtx;
     const statelogClient = __ctx.statelogClient;
     const __graph = __ctx.graph;
-    
+    const __funcStartTime = performance.now();
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "add", args: { x, y }, isBuiltin: false } });
+
     // put all args on the state stack
     __stack.args["x"] = x;
     __stack.args["y"] = y;
@@ -199,6 +201,8 @@ return __stack.locals.result
         __stack.step++;
       }
       
+
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "add", timeTaken: performance.now() - __funcStartTime } });
 }
 
 export async function greet(name, __state=undefined) {
@@ -210,7 +214,9 @@ export async function greet(name, __state=undefined) {
     const __ctx = __state?.ctx || __globalCtx;
     const statelogClient = __ctx.statelogClient;
     const __graph = __ctx.graph;
-    
+    const __funcStartTime = performance.now();
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "greet", args: { name }, isBuiltin: false } });
+
     // put all args on the state stack
     __stack.args["name"] = name;
 
@@ -258,6 +264,8 @@ return __stack.locals.message
         __stack.step++;
       }
       
+
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "greet", timeTaken: performance.now() - __funcStartTime } });
 }
 
 export async function mixed(count, label, __state=undefined) {
@@ -269,7 +277,9 @@ export async function mixed(count, label, __state=undefined) {
     const __ctx = __state?.ctx || __globalCtx;
     const statelogClient = __ctx.statelogClient;
     const __graph = __ctx.graph;
-    
+    const __funcStartTime = performance.now();
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "mixed", args: { count, label }, isBuiltin: false } });
+
     // put all args on the state stack
     __stack.args["count"] = count;
     __stack.args["label"] = label;
@@ -318,6 +328,8 @@ return __stack.locals.output
         __stack.step++;
       }
       
+
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "mixed", timeTaken: performance.now() - __funcStartTime } });
 }
 
 export async function processArray(items, __state=undefined) {
@@ -329,7 +341,9 @@ export async function processArray(items, __state=undefined) {
     const __ctx = __state?.ctx || __globalCtx;
     const statelogClient = __ctx.statelogClient;
     const __graph = __ctx.graph;
-    
+    const __funcStartTime = performance.now();
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "processArray", args: { items }, isBuiltin: false } });
+
     // put all args on the state stack
     __stack.args["items"] = items;
 
@@ -377,6 +391,8 @@ return __stack.locals.result
         __stack.step++;
       }
       
+
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "processArray", timeTaken: performance.now() - __funcStartTime } });
 }
 
 export async function flexible(value, __state=undefined) {
@@ -388,7 +404,9 @@ export async function flexible(value, __state=undefined) {
     const __ctx = __state?.ctx || __globalCtx;
     const statelogClient = __ctx.statelogClient;
     const __graph = __ctx.graph;
-    
+    const __funcStartTime = performance.now();
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "flexible", args: { value }, isBuiltin: false } });
+
     // put all args on the state stack
     __stack.args["value"] = value;
 
@@ -436,6 +454,8 @@ return __stack.locals.result
         __stack.step++;
       }
       
+
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "flexible", timeTaken: performance.now() - __funcStartTime } });
 }
 
 graph.node("foo", async (__state) => {

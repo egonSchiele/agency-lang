@@ -136,7 +136,9 @@ export async function openai(msg, __state=undefined) {
     const __ctx = __state?.ctx || __globalCtx;
     const statelogClient = __ctx.statelogClient;
     const __graph = __ctx.graph;
-    
+    const __funcStartTime = performance.now();
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "openai", args: { msg }, isBuiltin: false } });
+
     // put all args on the state stack
     __stack.args["msg"] = msg;
 
@@ -194,6 +196,8 @@ return `OpenAI response: ${__stack.locals.response}`
         __stack.step++;
       }
       
+
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "openai", timeTaken: performance.now() - __funcStartTime } });
 }
 
 export async function google(msg, __state=undefined) {
@@ -205,7 +209,9 @@ export async function google(msg, __state=undefined) {
     const __ctx = __state?.ctx || __globalCtx;
     const statelogClient = __ctx.statelogClient;
     const __graph = __ctx.graph;
-    
+    const __funcStartTime = performance.now();
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "google", args: { msg }, isBuiltin: false } });
+
     // put all args on the state stack
     __stack.args["msg"] = msg;
 
@@ -269,6 +275,8 @@ return `Google response: ${__stack.locals.response}`
         __stack.step++;
       }
       
+
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "google", timeTaken: performance.now() - __funcStartTime } });
 }
 
 export async function fibs(__state=undefined) {
@@ -280,7 +288,9 @@ export async function fibs(__state=undefined) {
     const __ctx = __state?.ctx || __globalCtx;
     const statelogClient = __ctx.statelogClient;
     const __graph = __ctx.graph;
-    
+    const __funcStartTime = performance.now();
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "fibs", args: {}, isBuiltin: false } });
+
     // put all args on the state stack
     
 
@@ -332,6 +342,8 @@ return __self.__promptVar;
         __stack.step++;
       }
       
+
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "fibs", timeTaken: performance.now() - __funcStartTime } });
 }
 
 graph.node("main", async (__state) => {

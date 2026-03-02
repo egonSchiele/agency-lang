@@ -122,7 +122,9 @@ export async function foo(__state=undefined) {
     const __ctx = __state?.ctx || __globalCtx;
     const statelogClient = __ctx.statelogClient;
     const __graph = __ctx.graph;
-    
+    const __funcStartTime = performance.now();
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "foo", args: {}, isBuiltin: false } });
+
     // put all args on the state stack
     
 
@@ -415,6 +417,8 @@ __threads.popActive();
         __stack.step++;
       }
       
+
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "foo", timeTaken: performance.now() - __funcStartTime } });
 }
 
 graph.node("main", async (__state) => {

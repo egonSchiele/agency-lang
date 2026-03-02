@@ -8,9 +8,13 @@ export async function {{{functionName:string}}}({{{paramList:string}}}__state=un
     const __ctx = __state?.ctx || __globalCtx;
     const statelogClient = __ctx.statelogClient;
     const __graph = __ctx.graph;
-    
+    const __funcStartTime = performance.now();
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "{{{functionName}}}", args: {{{argsObject:string}}}, isBuiltin: false } });
+
     // put all args on the state stack
     {{{paramAssignments:string}}}
 
     {{{functionBody}}}
+
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "{{{functionName}}}", timeTaken: performance.now() - __funcStartTime } });
 }

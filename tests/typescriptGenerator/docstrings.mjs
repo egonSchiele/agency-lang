@@ -151,7 +151,9 @@ export async function add(a, b, __state=undefined) {
     const __ctx = __state?.ctx || __globalCtx;
     const statelogClient = __ctx.statelogClient;
     const __graph = __ctx.graph;
-    
+    const __funcStartTime = performance.now();
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "add", args: { a, b }, isBuiltin: false } });
+
     // put all args on the state stack
     __stack.args["a"] = a;
     __stack.args["b"] = b;
@@ -162,6 +164,8 @@ export async function add(a, b, __state=undefined) {
         __stack.step++;
       }
       
+
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "add", timeTaken: performance.now() - __funcStartTime } });
 }
 
 export async function greet(name, __state=undefined) {
@@ -173,7 +177,9 @@ export async function greet(name, __state=undefined) {
     const __ctx = __state?.ctx || __globalCtx;
     const statelogClient = __ctx.statelogClient;
     const __graph = __ctx.graph;
-    
+    const __funcStartTime = performance.now();
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "greet", args: { name }, isBuiltin: false } });
+
     // put all args on the state stack
     __stack.args["name"] = name;
 
@@ -183,6 +189,8 @@ export async function greet(name, __state=undefined) {
         __stack.step++;
       }
       
+
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "greet", timeTaken: performance.now() - __funcStartTime } });
 }
 
 export async function calculateArea(width, height, __state=undefined) {
@@ -194,7 +202,9 @@ export async function calculateArea(width, height, __state=undefined) {
     const __ctx = __state?.ctx || __globalCtx;
     const statelogClient = __ctx.statelogClient;
     const __graph = __ctx.graph;
-    
+    const __funcStartTime = performance.now();
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "calculateArea", args: { width, height }, isBuiltin: false } });
+
     // put all args on the state stack
     __stack.args["width"] = width;
     __stack.args["height"] = height;
@@ -205,6 +215,8 @@ export async function calculateArea(width, height, __state=undefined) {
         __stack.step++;
       }
       
+
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "calculateArea", timeTaken: performance.now() - __funcStartTime } });
 }
 
 export async function processData(__state=undefined) {
@@ -216,7 +228,9 @@ export async function processData(__state=undefined) {
     const __ctx = __state?.ctx || __globalCtx;
     const statelogClient = __ctx.statelogClient;
     const __graph = __ctx.graph;
-    
+    const __funcStartTime = performance.now();
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "processData", args: {}, isBuiltin: false } });
+
     // put all args on the state stack
     
 
@@ -226,6 +240,8 @@ export async function processData(__state=undefined) {
         __stack.step++;
       }
       
+
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "processData", timeTaken: performance.now() - __funcStartTime } });
 }
 
 export default graph;

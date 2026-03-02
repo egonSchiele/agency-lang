@@ -122,7 +122,9 @@ export async function greet(name, age, __state=undefined) {
     const __ctx = __state?.ctx || __globalCtx;
     const statelogClient = __ctx.statelogClient;
     const __graph = __ctx.graph;
-    
+    const __funcStartTime = performance.now();
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "greet", args: { name, age }, isBuiltin: false } });
+
     // put all args on the state stack
     __stack.args["name"] = name;
     __stack.args["age"] = age;
@@ -184,6 +186,8 @@ return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} yea
         __stack.step++;
       }
       
+
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "greet", timeTaken: performance.now() - __funcStartTime } });
 }
 
 graph.node("foo2", async (__state) => {
@@ -305,7 +309,8 @@ graph.node("sayHi", async (__state) => {
       
 
       if (__step <= 3) {
-        return goToNode("foo2",
+        __ctx.stateStack.pop();
+return goToNode("foo2",
   {
     messages: __stack.messages,
     ctx: __ctx,

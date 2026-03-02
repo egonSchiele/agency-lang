@@ -122,7 +122,9 @@ export async function test(__state=undefined) {
     const __ctx = __state?.ctx || __globalCtx;
     const statelogClient = __ctx.statelogClient;
     const __graph = __ctx.graph;
-    
+    const __funcStartTime = performance.now();
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "test", args: {}, isBuiltin: false } });
+
     // put all args on the state stack
     
 
@@ -138,6 +140,8 @@ export async function test(__state=undefined) {
         __stack.step++;
       }
       
+
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "test", timeTaken: performance.now() - __funcStartTime } });
 }
 
 graph.node("main", async (__state) => {
@@ -181,7 +185,9 @@ export async function add(a, b, __state=undefined) {
     const __ctx = __state?.ctx || __globalCtx;
     const statelogClient = __ctx.statelogClient;
     const __graph = __ctx.graph;
-    
+    const __funcStartTime = performance.now();
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "add", args: { a, b }, isBuiltin: false } });
+
     // put all args on the state stack
     __stack.args["a"] = a;
     __stack.args["b"] = b;
@@ -192,6 +198,8 @@ export async function add(a, b, __state=undefined) {
         __stack.step++;
       }
       
+
+    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "add", timeTaken: performance.now() - __funcStartTime } });
 }
         __stack.step++;
       }

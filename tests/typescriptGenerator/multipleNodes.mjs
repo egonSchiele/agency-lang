@@ -158,7 +158,8 @@ __self.greeting = _greeting({
       
 
       if (__step <= 3) {
-        return goToNode("processGreeting",
+        __ctx.stateStack.pop();
+return goToNode("processGreeting",
   {
     messages: __stack.messages,
     ctx: __ctx,
@@ -261,7 +262,8 @@ graph.node("main", async (__state) => {
       
 
       if (__step <= 1) {
-        return goToNode("greet",
+        __ctx.stateStack.pop();
+return goToNode("greet",
   {
     messages: __stack.messages,
     ctx: __ctx,

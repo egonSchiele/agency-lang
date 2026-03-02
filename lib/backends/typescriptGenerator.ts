@@ -431,10 +431,13 @@ export class TypeScriptGenerator extends BaseGenerator {
     const paramAssignments = args
       .map((arg) => `__stack.args["${arg}"] = ${arg};`)
       .join("\n    ");
+    const argsObject =
+      args.length > 0 ? `{ ${args.join(", ")} }` : "{}";
     return renderFunctionDefinition.default({
       functionName,
       paramList,
       paramAssignments,
+      argsObject,
       functionBody: bodyCode.join("\n"),
     });
   }

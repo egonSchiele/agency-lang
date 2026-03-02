@@ -2,7 +2,7 @@
   "sourceFile": "interruptReturnInFunc.agency",
   "tests": [
     {
-      "nodeName": "foo",
+      "nodeName": "bar",
       "input": "",
       "expectedOutput": "{\"greeting\":\"Kya chal raha jai, AI World!\"}",
       "evaluationCriteria": [

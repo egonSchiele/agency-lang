@@ -9,3 +9,10 @@ node foo() {
     greeting: greeting
   }
 }
+
+// also testing going to a second node
+// this catches a regression where gotonode
+// calls weren't popping a frame off the stack first
+node bar() {
+  return foo()
+}

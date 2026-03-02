@@ -74,6 +74,7 @@ export async function runNode({
   nodeName,
   data,
   messages,
+  callbacks,
 }: {
   // global execution context
   ctx: RuntimeContext<GraphState>;
@@ -87,7 +88,10 @@ export async function runNode({
   // any message history to pass to the node
   // tbd how this gets used. Which message thread does it get added to?
   messages?: MessageJSON[];
+
+  callbacks?: Record<string, (args: any) => Promise<any>>;
 }): Promise<RunNodeResult<any>> {
+  ctx.callbacks = callbacks || ctx.callbacks || {};
   await callHook({
     callbacks: ctx.callbacks,
     name: "onAgentStart",

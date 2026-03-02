@@ -11,7 +11,7 @@ planPrompt = read("./prompts/plan.md")
 type NextAction = { type: "askUser"; question: string } | { type: "done" } | { type: "start" }
 
 config = { 
-  model: "gpt-4o-mini",
+  model: "gpt-4o",
   responseFormatOptions: { 
     strict: true,
     numRetries: 4,
@@ -113,7 +113,10 @@ node design(plan) {
     nextAction: DesignAction = { 
       type: "start"
     }
+    i = 0
     while (nextAction.type != "done") {
+      i += 1
+      print(color.blue("Design iteration ${i}"))
       uses print, printCode
       nextAction: DesignAction = llm("${userMsg}", config)
       if (nextAction.type == "askUser") {
@@ -121,6 +124,7 @@ node design(plan) {
       }
     }
   }
+  print(color.green("Great! We've designed the agent. Now let's write the code for it."))
   printJSON(color.magenta(nextAction))
   nextAction.filename = nextAction.filename || "agent.agency"
   writeCodeWithConfirm(nextAction.filename, nextAction.finalCode)

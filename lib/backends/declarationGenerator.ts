@@ -40,6 +40,7 @@ export class DeclarationGenerator {
 
     this.emitHeader();
     this.emitImports();
+    this.emitRuntimeImports();
     this.emitTypeAliases();
     this.emitReturnObjectType();
     this.emitFunctions();
@@ -128,6 +129,18 @@ export class DeclarationGenerator {
     this.emit(`import { ${toolExports} } from "${modulePath}";`);
   }
 
+  // --- Runtime Imports ---
+
+  private emitRuntimeImports(): void {
+    const hasNodes = this.program.nodes.some((n) => n.type === "graphNode");
+    if (!hasNodes) return;
+
+    this.emit(
+      'import type { AgencyCallbacks } from "agency-lang/runtime";',
+    );
+    this.emit("");
+  }
+
   // --- Type Aliases ---
 
   private emitTypeAliases(): void {
@@ -173,7 +186,7 @@ export class DeclarationGenerator {
     this.emit("");
     this.emit("export interface NodeOptions {");
     this.emit("  messages?: any[];");
-    this.emit("  callbacks?: Record<string, (...args: any[]) => any>;");
+    this.emit("  callbacks?: AgencyCallbacks;");
     this.emit("}");
     this.emit("");
   }

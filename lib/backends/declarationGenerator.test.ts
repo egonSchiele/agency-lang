@@ -62,7 +62,11 @@ describe("DeclarationGenerator", () => {
     );
     expect(result).toContain("export interface ReturnObject<T = any>");
     expect(result).toContain("export interface NodeOptions");
+    expect(result).toContain("  callbacks?: AgencyCallbacks;");
     expect(result).toContain("export interface TokenStats");
+    expect(result).toContain(
+      'import type { AgencyCallbacks } from "agency-lang/runtime";',
+    );
     expect(result).toContain("export default graph;");
   });
 
@@ -263,6 +267,7 @@ describe("DeclarationGenerator", () => {
     const result = generateDeclarations(program);
     expect(result).not.toContain("ReturnObject");
     expect(result).not.toContain("NodeOptions");
+    expect(result).not.toContain("AgencyCallbacks");
     expect(result).not.toContain("export default");
   });
 

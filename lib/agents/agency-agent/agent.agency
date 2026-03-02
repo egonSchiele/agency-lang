@@ -11,7 +11,13 @@ planPrompt = read("./prompts/plan.md")
 type NextAction = { type: "askUser"; question: string } | { type: "done" } | { type: "start" }
 
 config = { 
-  model: "gpt-4o",
+  model: { 
+    optimizeFor: ["speed", "cost"],
+    providers: ["anthropic", "google"],
+    limit: { 
+      cost: 20
+    }
+  },
   responseFormatOptions: { 
     strict: true,
     numRetries: 4,
@@ -45,7 +51,7 @@ def writeCodeWithConfirm(filename: string, content: string): string {
   Use this tool to write code to a file to the filesystem. The filename should include the path and extension (e.g., 'lib/agents/myAgent.agency').
   """
   print(color.yellow())
-  message = "You're about to write to the file ${filename} with the following content"
+  message = "\nYou're about to write to the file ${filename} with the following content\n\n"
   return interrupt({ 
     tool: "writeCodeWithConfirm",
     message: message,

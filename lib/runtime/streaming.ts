@@ -49,6 +49,7 @@ export async function handleStreamingResponse(args: {
     }
     return { success: true, value: { completion: syncResult!, toolCalls } };
   } else {
+    const onStream = ctx.callbacks.onStream;
     // try to acquire lock
     let count = 0;
     // wait 60 seconds to acquire lock
@@ -64,23 +65,23 @@ export async function handleStreamingResponse(args: {
     for await (const chunk of completion) {
       switch (chunk.type) {
         case "text":
-          ctx.callbacks.onStream({ type: "text", text: chunk.text });
+          onStream({ type: "text", text: chunk.text });
           break;
         case "tool_call":
           toolCalls.push(chunk.toolCall);
-          ctx.callbacks.onStream({
+          onStream({
             type: "tool_call",
             toolCall: chunk.toolCall,
           });
           break;
         case "done":
-          ctx.callbacks.onStream({ type: "done", result: chunk.result });
+          onStream({ type: "done", result: chunk.result });
           return {
             success: true,
             value: { completion: chunk.result, toolCalls },
           };
         case "error":
-          ctx.callbacks.onStream({ type: "error", error: chunk.error });
+          onStream({ type: "error", error: chunk.error });
           break;
       }
     }

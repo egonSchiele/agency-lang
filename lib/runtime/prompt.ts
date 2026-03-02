@@ -124,6 +124,7 @@ async function _runPrompt({
     callbacks: ctx.callbacks,
     name: "onLLMCallEnd",
     data: {
+      model: modelName,
       result: completion,
       usage: completion.usage,
       cost: completion.cost,
@@ -136,10 +137,10 @@ async function _runPrompt({
 
 type ExecuteToolCallsResult =
   | {
-      isInterrupt: true;
-      interrupt: Interrupt;
-      messages: MessageThread;
-    }
+    isInterrupt: true;
+    interrupt: Interrupt;
+    messages: MessageThread;
+  }
   | { isInterrupt: false; messages: MessageThread };
 
 async function executeToolCalls({

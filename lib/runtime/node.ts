@@ -1,5 +1,6 @@
 import { MessageJSON } from "smoltalk";
 import { callHook } from "./hooks.js";
+import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -89,7 +90,7 @@ export async function runNode({
   // tbd how this gets used. Which message thread does it get added to?
   messages?: MessageJSON[];
 
-  callbacks?: Record<string, (args: any) => Promise<any>>;
+  callbacks?: AgencyCallbacks;
 }): Promise<RunNodeResult<any>> {
   ctx.callbacks = callbacks || ctx.callbacks || {};
   await callHook({

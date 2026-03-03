@@ -236,6 +236,23 @@ export class StatelogClient {
     });
   }
 
+  async diff({
+    itemA,
+    itemB,
+    message,
+  }: {
+    itemA: any;
+    itemB: any;
+    message?: string;
+  }): Promise<void> {
+    await this.post({
+      type: "diff",
+      itemA,
+      itemB,
+      message,
+    });
+  }
+
   async upload({
     projectId,
     entrypoint,

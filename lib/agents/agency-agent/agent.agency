@@ -11,17 +11,16 @@ planPrompt = read("./prompts/plan.md")
 type NextAction = { type: "askUser"; question: string } | { type: "done" } | { type: "start" }
 
 config = { 
-  model: { 
-    optimizeFor: ["speed", "cost"],
-    providers: ["anthropic", "google"],
-    limit: { 
-      cost: 20
-    }
-  },
+  model: "gpt-4o-mini",
   responseFormatOptions: { 
     strict: true,
     numRetries: 4,
     allowExtraKeys: true
+  },
+  statelog: { 
+    host: "http://localhost:1065",
+    projectId: "smoltalk",
+    apiKey: ""
   }
 }
 /* config = {

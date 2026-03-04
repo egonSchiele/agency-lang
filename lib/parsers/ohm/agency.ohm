@@ -1,0 +1,150 @@
+Agency {
+  Exp = BinOp
+
+  // Binary operations with precedence (lowest to highest)
+  BinOp = OrExp
+
+  OrExp
+    = OrExp "||" AndExp  -- or
+    | AndExp
+
+  AndExp
+    = AndExp "&&" CmpExp  -- and
+    | CmpExp
+
+  CmpExp
+    = CmpExp "==" AddExp  -- eq
+    | CmpExp "!=" AddExp  -- neq
+    | CmpExp "<=" AddExp  -- lte
+    | CmpExp ">=" AddExp  -- gte
+    | CmpExp "<" AddExp   -- lt
+    | CmpExp ">" AddExp   -- gt
+    | AddExp
+
+  AddExp
+    = AddExp "+" MulExp   -- add
+    | AddExp "-" MulExp   -- sub
+    | MulExp
+
+  MulExp
+    = MulExp "*" UnaryExp -- mul
+    | MulExp "/" UnaryExp -- div
+    | UnaryExp
+
+  UnaryExp
+    = "-" PriExp          -- neg
+    | PriExp
+
+  PriExp
+    = ValueAccess
+    | FunctionCall
+    | ArrayLiteral
+    | ObjectLiteral
+    | "(" Exp ")"         -- paren
+    | Literal
+
+  // Function calls
+  FunctionCall
+    = ident "(" ListOf<Exp, ","> ")"
+
+  // Value access chains (left-recursive)
+  ValueAccess
+    = ValueAccess "." ident "(" ListOf<Exp, ","> ")"  -- methodCall
+    | ValueAccess "." ident                             -- prop
+    | ValueAccess "[" Exp "]"                           -- index
+    | AccessBase "." ident "(" ListOf<Exp, ","> ")"    -- baseMethodCall
+    | AccessBase "." ident                              -- baseProp
+    | AccessBase "[" Exp "]"                            -- baseIndex
+
+  AccessBase
+    = FunctionCall
+    | "(" Exp ")"   -- paren
+    | ident          -- ident
+
+  // Literals
+  Literal
+    = multiLineString
+    | stringLiteral
+    | numberLiteral
+    | booleanLiteral
+    | ident          -- variable
+
+  numberLiteral
+    = "-"? digit+ "." digit+  -- float
+    | "-"? digit+              -- int
+
+  booleanLiteral
+    = "true"  -- true
+    | "false" -- false
+
+  // String with double quotes
+  stringLiteral
+    = "\"" stringSegment* "\""   -- double
+    | "'" singleStringSegment* "'"  -- single
+
+  stringSegment
+    = interpolation
+    | doubleStringChar+          -- text
+
+  singleStringSegment
+    = interpolation
+    | singleStringChar+          -- text
+
+  doubleStringChar
+    = "\\\"" | "\\n" | "\\t" | "\\\\" | "\\$" | ~("\"" | "${") any
+
+  singleStringChar
+    = "\\'" | "\\n" | "\\t" | "\\\\" | "\\$" | ~("'" | "${") any
+
+  // Interpolation — lexical rule, only supports variable names and dot-access chains
+  interpolation
+    = "${" interpAccess "}"   -- access
+    | "${" interpIdent "}"    -- ident
+
+  interpAccess
+    = interpAccess "." interpIdent  -- chain
+    | interpIdent "." interpIdent   -- base
+
+  interpIdent = identStart identPart*
+
+  // Multiline string with triple quotes
+  multiLineString
+    = "\"\"\"" multiLineSegment* "\"\"\""
+
+  multiLineSegment
+    = interpolation
+    | multiLineChar+             -- text
+
+  multiLineChar
+    = ~("\"\"\"" | "${") any
+
+  // Arrays
+  ArrayLiteral
+    = "[" ListOf<ArrayElement, ","> ","? "]"
+
+  ArrayElement
+    = SplatExp
+    | Exp
+
+  SplatExp
+    = "..." Exp
+
+  // Objects
+  ObjectLiteral
+    = "{" ListOf<ObjectEntry, ","> ","? "}"
+
+  ObjectEntry
+    = SplatExp                            -- splat
+    | objectKey ":" Exp                   -- kv
+
+  objectKey
+    = "\"" doubleStringChar* "\""  -- quoted
+    | ident                        -- bare
+
+  // Identifiers
+  ident = ~reserved identStart identPart*
+  identStart = letter | "_"
+  identPart = alnum | "_"
+
+  reserved = ("true" | "false") ~identPart
+}

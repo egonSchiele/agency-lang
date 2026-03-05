@@ -10,11 +10,34 @@ planPrompt = read("./prompts/plan.md")
 
 type NextAction = { type: "askUser"; question: string } | { type: "done" } | { type: "start" }
 
+strategy = { 
+  type: "race",
+  params: { 
+    strategies: [{ 
+      type: "fallback",
+      params: { 
+        strategies: ["gemini-2.5-flash", "gemini-2.5-pro"],
+        config: { 
+          fallbackOn: ["error"]
+        }
+      }
+    }, { 
+      type: "fallback",
+      params: { 
+        strategies: ["gemini-2.5-flash-lite", "gemini-2.5-pro"],
+        config: { 
+          fallbackOn: ["error"]
+        }
+      }
+    }]
+  }
+}
+
 config = { 
-  model: "gpt-4o-mini",
+  strategy: strategy,
   responseFormatOptions: { 
     strict: true,
-    numRetries: 4,
+    numRetries: 2,
     allowExtraKeys: true
   },
   statelog: { 
@@ -122,7 +145,6 @@ node design(plan) {
     while (nextAction.type != "done") {
       i += 1
       print(color.blue("Design iteration ${i}"))
-      uses print, printCode
       nextAction: DesignAction = llm("${userMsg}", config)
       if (nextAction.type == "askUser") {
         userMsg = input("\n${nextAction.question} ")

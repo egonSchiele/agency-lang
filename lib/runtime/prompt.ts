@@ -54,7 +54,7 @@ async function _runPrompt({
     data: {
       prompt,
       tools,
-      model: clientConfig.model,
+      model: clientConfig.strategy ? clientConfig.strategy : clientConfig.model,
       messages: messages.toJSON().messages,
     },
   });
@@ -149,10 +149,10 @@ async function _runPrompt({
 
 type ExecuteToolCallsResult =
   | {
-    isInterrupt: true;
-    interrupt: Interrupt;
-    messages: MessageThread;
-  }
+      isInterrupt: true;
+      interrupt: Interrupt;
+      messages: MessageThread;
+    }
   | { isInterrupt: false; messages: MessageThread };
 
 async function executeToolCalls({
@@ -305,6 +305,7 @@ export async function runPrompt(args: {
     maxToolCallRounds = 10,
   } = args;
   const clientConfig = ctx.getSmoltalkConfig(args.clientConfig || {});
+  // console.log(color.magenta(JSON.stringify(clientConfig, null, 2)) + "\n");
   /* in order, either:
   1. restore messages from interruptData if present (resuming after an interrupt)
   2. use messages passed in as argument (add onto message thread)

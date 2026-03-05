@@ -6,6 +6,8 @@ import type {
   ToolCallJSON,
   ModelConfig,
   ModelName,
+  Strategy,
+  StrategyJSON,
 } from "smoltalk";
 import type { RunNodeResult } from "./types.js";
 
@@ -21,7 +23,7 @@ export type CallbackMap = {
   onLLMCallStart: {
     prompt: string;
     tools: { name: string; description?: string; schema: any }[];
-    model: ModelName | ModelConfig | undefined;
+    model: ModelName | ModelConfig | Strategy | StrategyJSON | undefined;
     messages: MessageJSON[];
   };
   onLLMCallEnd: {
@@ -47,10 +49,11 @@ export type CallbackMap = {
     | { type: "error"; error: any };
 };
 
-export type CallbackReturn<K extends keyof CallbackMap> =
-  K extends "onLLMCallStart" | "onLLMCallEnd"
-    ? MessageJSON[] | void
-    : void;
+export type CallbackReturn<K extends keyof CallbackMap> = K extends
+  | "onLLMCallStart"
+  | "onLLMCallEnd"
+  ? MessageJSON[] | void
+  : void;
 
 export type AgencyCallbacks = {
   [K in keyof CallbackMap]?: (

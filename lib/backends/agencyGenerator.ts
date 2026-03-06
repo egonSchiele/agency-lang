@@ -305,7 +305,12 @@ export class AgencyGenerator extends BaseGenerator {
       }
       return this.processNode(item).trim();
     });
-    return `[${items.join(", ")}]`;
+    const inline = `[${items.join(", ")}]`;
+    if (inline.length <= 80) return inline;
+    this.increaseIndent();
+    const indented = items.map((item) => this.indentStr(item));
+    this.decreaseIndent();
+    return `[\n${indented.join(",\n")}\n${this.indentStr("]")}`;
   }
 
   protected processAgencyObject(node: AgencyObject): string {

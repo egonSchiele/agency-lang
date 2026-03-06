@@ -8,12 +8,14 @@ import { syntaxHighlight } from "../../utils/agentUtils.js"
 systemPrompt = read("./prompts/system.md")
 planPrompt = read("./prompts/plan.md")
 
+type Mode = "create" | "modify"
 type NextAction = { type: "askUser"; question: string } | { type: "done" } | { type: "start" }
 
 strategy = { 
   type: "race",
   params: { 
-    strategies: [{ 
+    strategies: [
+      { 
       type: "fallback",
       params: { 
         strategies: ["gemini-2.5-flash", "gemini-2.5-pro"],
@@ -21,7 +23,8 @@ strategy = {
           fallbackOn: ["error"]
         }
       }
-    }, { 
+    },
+      { 
       type: "fallback",
       params: { 
         strategies: ["gemini-2.5-flash-lite", "gemini-2.5-pro"],
@@ -29,7 +32,8 @@ strategy = {
           fallbackOn: ["error"]
         }
       }
-    }]
+    }
+    ]
   }
 }
 
@@ -83,13 +87,25 @@ def writeCodeWithConfirm(filename: string, content: string): string {
 }
 
 node main() {
-  // return plan()
-  //return printSample()
-  plan = { 
-    overallGoal: "Help with meal planning by generating meal plans with recipe imports and database interactions.",
-    desiredActions: ["Scrape recipe data from a provided URL.", "Create ingredients in the database based on scraped data.", "Create meals in the database based on scraped recipe data."]
+  print(color.cyan("Welcome to the Agency Agent!"))
+  print(color.cyan("Would you like to create a new agent or modify an existing one?"))
+  userinput = input("(create/modify) ")
+  thread {
+    mode: Mode = llm("format this user response: ${userinput}", config)
   }
-  return design(plan)
+  print(color.cyan("Great! Let's ${mode} an agent."))
+  match(mode) {
+    "create" => return plan("create", "")
+    "modify" => return readExisting()
+  }
+}
+
+node readExisting() {
+  filepath = input("Enter the path to the .agency file you want to modify: ")
+  existingCode = read(filepath)
+  print(color.cyan("Here's the existing code:"))
+  printCode(existingCode)
+  return plan("modify", existingCode)
 }
 
 node printSample() {
@@ -98,10 +114,22 @@ node printSample() {
   printCode(codeSample)
 }
 
-node plan() {
+node plan(mode, existingCode) {
   print(color.cyan("Let's start by coming up with a plan for what you want to accomplish."))
+  modeContext = ""
+  if (mode == "modify") {
+    modeContext = """
+    You are in MODIFY mode. The user has an existing agent they want to modify. Here is the existing code:
+    
+    ```
+    ${existingCode}
+    ```
+    
+    Focus on understanding what changes the user wants to make to this existing agent.
+    """
+  }
   thread {
-    system("${systemPrompt}\n\n${planPrompt}")
+    system("${systemPrompt}\n\n${planPrompt}${modeContext}")
     userMsg = input("What would you like to accomplish today? ")
     nextAction: NextAction = { 
       type: "start"
@@ -118,7 +146,7 @@ node plan() {
     print(color.cyan("Here's the plan we've come up with"))
     printJSON(plan)
   }
-  return design(plan)
+  return design(plan, mode, existingCode)
 }
 
 type Plan = {
@@ -128,13 +156,31 @@ type Plan = {
 
 type DesignAction = { type: "askUser"; question: string } | { type: "done"; finalCode: string; filename: string } | { type: "start" }
 
-node design(plan) {
-  print(color.cyan("Now let's design an agent to accomplish that plan."))
+node design(plan, mode, existingCode) {
   designPrompt = read("./prompts/design.md")
-  prompt = """
-  Help the user design an agent that can accomplish the following goal: ${plan.overallGoal}
-  with the following actions: ${plan.desiredActions}.
-  """
+  prompt = ""
+  if (mode == "modify") {
+    print(color.cyan("Now let's modify the existing agent based on the plan."))
+    prompt = """
+    You are in MODIFY mode. Here is the existing agent code:
+    
+    ```
+    ${existingCode}
+    ```
+    
+    The user wants to make the following modifications:
+    Goal: ${plan.overallGoal}
+    Desired changes: ${plan.desiredActions}
+    
+    Modify the existing code to accomplish these changes. Preserve the existing style and structure where possible.
+    """
+  } else {
+    print(color.cyan("Now let's design an agent to accomplish that plan."))
+    prompt = """
+    Help the user design an agent that can accomplish the following goal: ${plan.overallGoal}
+    with the following actions: ${plan.desiredActions}.
+    """
+  }
   thread {
     system(designPrompt)
     userMsg = prompt

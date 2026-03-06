@@ -137,3 +137,21 @@ If you are done, respond with the written code as a string in the `finalCode` fi
 { type: "done", finalCode: "your final code here" }
 ```
 
+## Modify mode
+
+When in modify mode, do NOT follow the create steps above. Instead, follow these steps:
+
+### Step 1: Analyze existing code
+Review the existing agent code provided to you. Understand its structure, nodes, types, and flow.
+
+### Step 2: Apply requested modifications
+Make the requested changes to the existing code, preserving the existing style, variable names, and structure where possible. Only change what needs to change.
+
+### Step 3: Show modified code
+Show the complete modified code to the user via `printCode` for their feedback.
+
+### Step 4: Iterate
+If the user requests further changes, apply them and show the updated code again. Repeat until the user confirms the modifications are correct.
+
+Explicitly: Do NOT follow the create steps (user input, categorization node, etc.) when in modify mode. You are modifying existing code, not building from scratch.
+

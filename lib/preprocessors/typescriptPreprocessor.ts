@@ -1191,42 +1191,14 @@ export class TypescriptPreprocessor {
    * will have a `scope` property indicating whether the variable is global, local, or args.
    */
   protected resolveVariableScopes(): void {
-    const varNameToScope: Record<string, ScopeType> = {};
+    const globalVars = new Set<string>();
+    const funcOrNodeArgs: Record<string, string[]> = {};
+    /* const functionSpecificVarNameToScope: Record<
+      string,
+      Record<string, ScopeType>
+    > = {}; */
 
-    const setScope = (varName: string, scope: ScopeType) => {
-      const nodeNames = Object.keys(this.graphNodeDefinitions);
-      const functionNames = Object.keys(this.functionDefinitions);
-      /*  if (nodeNames.includes(varName)) {
-        throw new Error(
-          `Variable name "${varName}" conflicts with a graph node name. Variable names cannot be the same as graph node names. All graph node names: ${nodeNames.join(", ")}`,
-        );
-      }
-      if (functionNames.includes(varName)) {
-        throw new Error(
-          `Variable name "${varName}" conflicts with a function name. Variable names cannot be the same as function names. All function names: ${functionNames.join(", ")}`,
-        );
-      } */
-      if (!varNameToScope[varName]) {
-        varNameToScope[varName] = scope;
-      }
-    };
-
-    // first, make sure all args are scoped correctly.
-    for (const { node, scopes } of walkNodesArray(this.program.nodes)) {
-      if (scopes.length === 0) {
-        throw new Error(
-          `Top-level nodes should have at least the global scope in their scopes array. Node: ${JSON.stringify({ node })}, scopes: ${JSON.stringify({ scopes })}`,
-        );
-      }
-      if (node.type === "function" || node.type === "graphNode") {
-        // Parameters are in the function's scope
-        for (const param of node.parameters) {
-          setScope(param.name, "args");
-        }
-      }
-    }
-
-    // First, for each variable name, we try to collect its scope.
+    // First, we collect all global variables
     for (const { node, scopes } of walkNodesArray(this.program.nodes)) {
       if (scopes.length === 0) {
         throw new Error(
@@ -1234,51 +1206,97 @@ export class TypescriptPreprocessor {
         );
       }
       if (node.type === "assignment") {
-        setScope(node.variableName, scopes.at(-1)?.type || "global");
-      } else if (node.type === "function" || node.type === "graphNode") {
-        // Parameters are in the function's scope
-        for (const param of node.parameters) {
-          setScope(param.name, "args");
+        if (scopes.length === 0 || scopes.at(-1)?.type === "global") {
+          globalVars.add(node.variableName);
+        }
+      } else if (node.type === "variableName") {
+        if (scopes.length === 0 || scopes.at(-1)?.type === "global") {
+          globalVars.add(node.value);
         }
       } else if (node.type === "importStatement") {
         const importedNames = node.importedNames.map(getImportedNames).flat();
         importedNames.forEach((n) => {
-          setScope(n, "global");
+          globalVars.add(n);
         });
       } else if (node.type === "importNodeStatement") {
         node.importedNodes.forEach((n) => {
-          setScope(n, "global");
+          globalVars.add(n);
         });
       } else if (node.type === "importToolStatement") {
         node.importedTools.forEach((t) => {
-          setScope(t, "global");
+          globalVars.add(t);
         });
-      } else if (node.type === "variableName") {
-        setScope(node.value, scopes.at(-1)?.type || "global");
       }
     }
 
-    const lookupScope = (varName: string): Scope["type"] | "args" => {
-      if (varName in varNameToScope) {
-        return varNameToScope[varName];
+    const lookupScope = (
+      funcName: string,
+      varName: string,
+    ): ScopeType | null => {
+      if (globalVars.has(varName)) {
+        return "global";
       }
-      return "global";
-      // TODO enable this
-      /* throw new Error(
-        `Variable "${varName}" is referenced but not defined in any scope.`,
-      ); */
+      if (
+        funcOrNodeArgs[funcName] &&
+        funcOrNodeArgs[funcName].includes(varName)
+      ) {
+        return "args";
+      }
+      return null;
     };
 
-    // Then, whenever we see a variable being referenced,
-    // we try to look up its scope and set it on that variable.
-    // Note: segment expressions are now walked by walkNodes/getAllVariablesInBody,
-    // so the base VariableNameLiteral inside interpolation segments gets its scope
-    // set via the node.type === "variableName" branch below.
+    // second, make sure all args are scoped correctly.
+    // and all vars defined within a function or graph node are scoped to that function or graph node.
+    for (const { node, scopes } of walkNodesArray(this.program.nodes)) {
+      if (scopes.length === 0) {
+        throw new Error(
+          `Top-level nodes should have at least the global scope in their scopes array. Node: ${JSON.stringify({ node })}, scopes: ${JSON.stringify({ scopes })}`,
+        );
+      }
+      if (node.type === "function") {
+        // Parameters are in the function's scope
+        funcOrNodeArgs[node.functionName] = [
+          ...node.parameters.map((p) => p.name),
+        ];
+
+        // Then, whenever we see a variable being referenced,
+        // we try to look up its scope and set it on that variable.
+        // Note: segment expressions are now walked by walkNodes/getAllVariablesInBody,
+        // so the base VariableNameLiteral inside interpolation segments gets its scope
+        // set via the node.type === "variableName" branch below.
+        const varsDefinedInFunction = getAllVariablesInBodyArray(node.body);
+        for (const { node: varNode } of varsDefinedInFunction) {
+          if (varNode.type === "assignment") {
+            varNode.scope =
+              lookupScope(node.functionName, varNode.variableName) ||
+              "function";
+          } else if (varNode.type === "variableName") {
+            varNode.scope =
+              lookupScope(node.functionName, varNode.value) || "function";
+          }
+        }
+      } else if (node.type === "graphNode") {
+        // Parameters are in the function's scope
+        funcOrNodeArgs[node.nodeName] = [...node.parameters.map((p) => p.name)];
+        const varsDefinedInNode = getAllVariablesInBodyArray(node.body);
+        for (const { node: varNode } of varsDefinedInNode) {
+          if (varNode.type === "assignment") {
+            varNode.scope =
+              lookupScope(node.nodeName, varNode.variableName) || "function";
+          } else if (varNode.type === "variableName") {
+            varNode.scope =
+              lookupScope(node.nodeName, varNode.value) || "function";
+          }
+        }
+      }
+    }
+
+    // global scope for everything else
     for (const { node } of getAllVariablesInBodyArray(this.program.nodes)) {
-      if (node.type === "assignment") {
-        node.scope = lookupScope(node.variableName);
-      } else if (node.type === "variableName") {
-        node.scope = lookupScope(node.value);
+      if (node.type === "variableName" || node.type === "assignment") {
+        if (!node.scope) {
+          node.scope = "global";
+        }
       }
     }
   }

@@ -36,7 +36,7 @@
             "skills": [],
             "async": true
           },
-          "scope": "node"
+          "scope": "function"
         },
         {
           "type": "newLine"
@@ -52,7 +52,7 @@
             {
               "type": "variableName",
               "value": "used",
-              "scope": "node"
+              "scope": "function"
             }
           ],
           "async": false

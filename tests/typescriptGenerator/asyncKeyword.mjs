@@ -367,12 +367,12 @@ graph.node("main", async (__state) => {
       
 
       if (__step <= 1) {
-        __stack.args.msg = await _builtinInput(`> `);
+        __stack.locals.msg = await _builtinInput(`> `);
 
 
-if (isInterrupt(__stack.args.msg)) {
+if (isInterrupt(__stack.locals.msg)) {
   
-  return { ...__state, data: __stack.args.msg };
+  return { ...__state, data: __stack.locals.msg };
   
    
 }
@@ -381,7 +381,7 @@ if (isInterrupt(__stack.args.msg)) {
       
 
       if (__step <= 2) {
-        __stack.locals.res2 = google(__stack.args.msg, {
+        __stack.locals.res2 = google(__stack.locals.msg, {
     ctx: __ctx,
     threads: __threads,
     interruptData: __state?.interruptData
@@ -399,7 +399,7 @@ if (isInterrupt(__stack.locals.res2)) {
       
 
       if (__step <= 3) {
-        __stack.locals.res1 = openai(__stack.args.msg, {
+        __stack.locals.res1 = openai(__stack.locals.msg, {
     ctx: __ctx,
     threads: __threads,
     interruptData: __state?.interruptData
@@ -453,36 +453,14 @@ export async function main({ messages, callbacks } = {}) {
 
 export const __mainNodeParams = [];
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const __resumeFile = process.env.AGENCY_RESUME_FILE;
-
-  // todo rethink
-  if (__resumeFile) {
-    const __stateJSON = JSON.parse(readFileSync(__resumeFile, 'utf-8'));
-    let result = await _resumeFromState({ ctx: __ctx, stateJSON: __stateJSON });
-    while (isInterrupt(result.data)) {
-      const interruptData = result.data;
-      const userResponse = await _builtinInput(`(builtin handler) Agent interrupted: "${interruptData.data}". Approve? (yes/no) `);
-      if (userResponse.toLowerCase() === 'yes') {
-        result = await _approveInterrupt({ ctx: __ctx, interruptObj: interruptData });
-      } else {
-        result = await _rejectInterrupt({ ctx: __ctx, interruptObj: interruptData });
-      }
-    }
-  } else {
     try {
       const initialState = { messages: new ThreadStore(), data: {} };
       await main(initialState);
     } catch (__error) {
-      __ctx.stateStack.nodesTraversed = __ctx.graph.getNodesTraversed();
-      const __stateFile = __filename.replace(/.js$/, '.state.json');
-      writeFileSync(__stateFile, JSON.stringify({ __state: __ctx.stateStack.toJSON(), errorMessage: __error.message }, null, 2));
       console.error(`
 Agent crashed: ${__error.message}`);
-      console.error(`State saved to: ${__stateFile}`);
-      console.error(`Resume with: agency run <file>.agency --resume ${__stateFile}`);
       throw __error;
     }
-  }
 }
 
 export default graph;

@@ -168,7 +168,7 @@
             "skills": [],
             "async": false
           },
-          "scope": "node"
+          "scope": "function"
         },
         {
           "type": "newLine"
@@ -180,7 +180,7 @@
             {
               "type": "variableName",
               "value": "result",
-              "scope": "node"
+              "scope": "function"
             }
           ],
           "async": false

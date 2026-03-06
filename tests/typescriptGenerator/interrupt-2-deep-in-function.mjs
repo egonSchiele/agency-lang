@@ -308,13 +308,13 @@ graph.node("sayHi", async (__state) => {
       
 
       if (__step <= 2) {
-        __stack.args.age = 30;
+        __stack.locals.age = 30;
         __stack.step++;
       }
       
 
       if (__step <= 3) {
-        __stack.locals.response = foo2(__stack.args.name, __stack.args.age, {
+        __stack.locals.response = foo2(__stack.args.name, __stack.locals.age, {
     ctx: __ctx,
     threads: __threads,
     interruptData: __state?.interruptData

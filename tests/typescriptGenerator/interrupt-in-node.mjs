@@ -303,7 +303,7 @@ graph.node("sayHi", async (__state) => {
       
 
       if (__step <= 2) {
-        __stack.args.age = 30;
+        __stack.locals.age = 30;
         __stack.step++;
       }
       
@@ -315,7 +315,7 @@ return goToNode("foo2",
     messages: __stack.messages,
     ctx: __ctx,
     
-    data: { name: __stack.args.name, age: __stack.args.age }
+    data: { name: __stack.args.name, age: __stack.locals.age }
     
     
   });

@@ -132,7 +132,7 @@
               }
             ]
           },
-          "scope": "node"
+          "scope": "function"
         },
         {
           "type": "newLine"
@@ -147,12 +147,12 @@
               {
                 "type": "variableName",
                 "value": "nodeLocal",
-                "scope": "node"
+                "scope": "function"
               }
             ],
             "async": true
           },
-          "scope": "node"
+          "scope": "function"
         },
         {
           "type": "newLine"
@@ -168,7 +168,7 @@
             {
               "type": "variableName",
               "value": "output",
-              "scope": "node"
+              "scope": "function"
             }
           ],
           "async": false

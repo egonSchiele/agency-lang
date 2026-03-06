@@ -1,0 +1,9 @@
+def double(x: number): number {
+  result = x * 2
+  return result
+}
+
+node compute(n: number) {
+  doubled = double(n)
+  return doubled
+}

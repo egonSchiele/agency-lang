@@ -1,0 +1,46 @@
+{
+  "hookNames": [
+    "onAgentStart",
+    "onNodeStart",
+    "onLLMCallStart",
+    "onLLMCallEnd",
+    "onAgentEnd"
+  ],
+  "hookLog": [
+    {
+      "hook": "onAgentStart",
+      "nodeName": "classify",
+      "hasArgs": true
+    },
+    {
+      "hook": "onNodeStart",
+      "nodeName": "classify"
+    },
+    {
+      "hook": "onLLMCallStart",
+      "hasPrompt": true,
+      "hasMessages": true,
+      "messages": [
+        {
+          "role": "user",
+          "content": "Classify this text as 'positive' or 'negative': 'I love this product'"
+        }
+      ],
+      "hasModel": true
+    },
+    {
+      "hook": "onLLMCallEnd",
+      "hasResult": true,
+      "hasMessages": true,
+      "hasModel": true,
+      "timeTakenIsNumber": true,
+      "hasUsage": true,
+      "hasCost": true
+    },
+    {
+      "hook": "onAgentEnd",
+      "nodeName": "classify",
+      "hasResult": true
+    }
+  ]
+}

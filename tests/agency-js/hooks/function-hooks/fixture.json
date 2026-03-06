@@ -1,0 +1,31 @@
+{
+  "hookNames": [
+    "onAgentStart",
+    "onNodeStart",
+    "onFunctionStart",
+    "onAgentEnd"
+  ],
+  "hookLog": [
+    {
+      "hook": "onAgentStart",
+      "nodeName": "compute"
+    },
+    {
+      "hook": "onNodeStart",
+      "nodeName": "compute"
+    },
+    {
+      "hook": "onFunctionStart",
+      "functionName": "double",
+      "args": {
+        "x": 5
+      },
+      "isBuiltin": false
+    },
+    {
+      "hook": "onAgentEnd",
+      "nodeName": "compute"
+    }
+  ],
+  "data": 10
+}

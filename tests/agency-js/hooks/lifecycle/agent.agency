@@ -1,0 +1,4 @@
+node classify(text: string) {
+  label: string = llm("Classify this text as 'positive' or 'negative': '${text}'")
+  return label
+}

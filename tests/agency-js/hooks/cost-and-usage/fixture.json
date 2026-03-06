@@ -1,0 +1,15 @@
+{
+  "usageCheck": {
+    "exists": true,
+    "inputTokensNonZero": true,
+    "outputTokensNonZero": true,
+    "totalTokensNonZero": true
+  },
+  "costCheck": {
+    "exists": true,
+    "inputCostNonZero": true,
+    "outputCostNonZero": true,
+    "totalCostNonZero": true,
+    "hasCurrency": true
+  }
+}

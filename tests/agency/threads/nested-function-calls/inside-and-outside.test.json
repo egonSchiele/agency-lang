@@ -4,6 +4,7 @@
     {
       "nodeName": "main",
       "input": "",
+      "retry": 2,
       "expectedOutput": "{\"res1\":\"I don't have access to previous conversations, so I can't recall my last message to you or anyone else. However, I'm here to help with any questions or topics you'd like to discuss! What can I assist you with today?\",\"res2\":[101],\"res3\":\"The last message from me indicated that the first prime number greater than 100 is 101.\",\"res4\":\"I don't have the ability to recall previous interactions or messages in this chat. Each session is independent, so I don't retain any memory of past conversations. However, I'm here to help with any questions or topics you want to discuss now!\"}",
       "evaluationCriteria": [
         {

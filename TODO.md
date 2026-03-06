@@ -109,3 +109,6 @@ event log for replays?
 - should tool calls have message threads passed in to them?
 - users passing initial messages to node calls from ts
 - is thread id retained after an interrupt?
+
+
+onNodeEnd and onFunctionEnd hooks don't fire if the user returns early from the function or node

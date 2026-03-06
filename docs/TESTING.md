@@ -228,10 +228,10 @@ You control everything: what arguments to pass, whether to pass `messages` betwe
 
 ```bash
 # Run all tests in the directory
-agency test --ts tests/agency-ts
+agency test --js tests/agency-js
 
 # Run a specific test directory
-agency test --ts tests/agency-ts/my-test
+agency test --js tests/agency-js/my-test
 ```
 
 The runner will:

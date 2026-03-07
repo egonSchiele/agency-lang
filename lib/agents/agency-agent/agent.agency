@@ -43,11 +43,6 @@ config = {
     strict: true,
     numRetries: 2,
     allowExtraKeys: true
-  },
-  statelog: { 
-    host: "http://localhost:1065",
-    projectId: "smoltalk",
-    apiKey: ""
   }
 }
 /* config = {

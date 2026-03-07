@@ -103,6 +103,11 @@ export class TypeScriptGenerator extends BaseGenerator {
       client: {
         logLevel: "warn",
         defaultModel: "gpt-4o-mini",
+        statelog: {
+          host: "http://localhost:1065",
+          projectId: "smoltalk",
+          apiKey: process.env.STATELOG_SMOLTALK_API_KEY || "",
+        },
       },
     };
   }
@@ -431,8 +436,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     const paramAssignments = args
       .map((arg) => `__stack.args["${arg}"] = ${arg};`)
       .join("\n    ");
-    const argsObject =
-      args.length > 0 ? `{ ${args.join(", ")} }` : "{}";
+    const argsObject = args.length > 0 ? `{ ${args.join(", ")} }` : "{}";
     return renderFunctionDefinition.default({
       functionName,
       paramList,
@@ -586,7 +590,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     }
   }
   protected generateImports(): string {
-    const args = {
+    return renderImports.default({
       logHost: this.agencyConfig.log?.host || "",
       logProjectId: this.agencyConfig.log?.projectId || "",
       hasApiKey: !!this.agencyConfig.log?.apiKey,
@@ -599,9 +603,11 @@ export class TypeScriptGenerator extends BaseGenerator {
       clientOpenAiApiKey: this.agencyConfig.client?.openAiApiKey || undefined,
       hasGoogleApiKey: !!this.agencyConfig.client?.googleApiKey,
       clientGoogleApiKey: this.agencyConfig.client?.googleApiKey || undefined,
-    };
-
-    return renderImports.default(args);
+      clientStatelogHost: this.agencyConfig.client?.statelog?.host || "",
+      clientStatelogProjectId:
+        this.agencyConfig.client?.statelog?.projectId || "",
+      clientStatelogApiKey: this.agencyConfig.client?.statelog?.apiKey || "",
+    });
   }
 
   buildPromptString({

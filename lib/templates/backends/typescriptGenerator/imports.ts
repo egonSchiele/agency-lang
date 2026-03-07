@@ -7,7 +7,7 @@ export const template = `import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode, color } from "agency-lang";
+import { goToNode, color, nanoid } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
 import {
@@ -62,6 +62,7 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const __cwd = process.cwd();
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -90,6 +91,12 @@ const __globalCtx = new RuntimeContext({
     {{/hasGoogleApiKey}}
     model: "{{{clientDefaultModel:string}}}",
     logLevel: "{{{clientLogLevel:string}}}",
+    statelog: { 
+      host: "{{{clientStatelogHost:string}}}",
+      projectId: "{{{clientStatelogProjectId:string}}}",
+      apiKey: "{{{clientStatelogApiKey:string}}}",
+      traceId: nanoid()
+    }
   },
   dirname: __dirname,
 });
@@ -129,6 +136,9 @@ export type TemplateType = {
   clientGoogleApiKey?: string;
   clientDefaultModel: string;
   clientLogLevel: string;
+  clientStatelogHost: string;
+  clientStatelogProjectId: string;
+  clientStatelogApiKey: string;
 };
 
 const render = (args: TemplateType) => {

@@ -33,8 +33,8 @@ importers:
         specifier: ^2.4.2
         version: 2.4.2
       smoltalk:
-        specifier: ^0.0.43
-        version: 0.0.43(ws@8.19.0)(zod@4.3.5)
+        specifier: ^0.0.46
+        version: 0.0.46(ws@8.19.0)(zod@4.3.5)
       tarsec:
         specifier: ^0.1.8
         version: 0.1.8
@@ -871,8 +871,8 @@ packages:
     resolution: {integrity: sha512-VXJjc87FScF88uafS3JllDgvAm+c/Slfz06lorj2uAY34rlUu0Nt+v8wreiImcrgAjjIHp1rXpTDlLOGw29WwQ==}
     engines: {node: '>=18'}
 
-  openai@6.25.0:
-    resolution: {integrity: sha512-mEh6VZ2ds2AGGokWARo18aPISI1OhlgdEIC1ewhkZr8pSIT31dec0ecr9Nhxx0JlybyOgoAT1sWeKtwPZzJyww==}
+  openai@6.27.0:
+    resolution: {integrity: sha512-osTKySlrdYrLYTt0zjhY8yp0JUBmWDCN+Q+QxsV4xMQnnoVFpylgKGgxwN8sSdTNw0G4y+WUXs4eCMWpyDNWZQ==}
     hasBin: true
     peerDependencies:
       ws: ^8.18.0
@@ -1012,8 +1012,8 @@ packages:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}
     engines: {node: '>=8'}
 
-  smoltalk@0.0.43:
-    resolution: {integrity: sha512-hNks4+rkhVuB8LkUN3un5jaRK8m9yklJ88oUdZpkdUGRdjCHsV3yYJhTq//Sdn8a+TDcI4NQ2m520YbVfWLrEw==}
+  smoltalk@0.0.46:
+    resolution: {integrity: sha512-R2a4Al8YAoGRC8h5+nSSMc0UqvISg4kAF84Onhb6oxJ0gQ61fpKXmPqlm/AMSDgMJByt4ut8df4TXHUnWIbjUg==}
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -1926,7 +1926,7 @@ snapshots:
     dependencies:
       mimic-function: 5.0.1
 
-  openai@6.25.0(ws@8.19.0)(zod@4.3.5):
+  openai@6.27.0(ws@8.19.0)(zod@4.3.5):
     optionalDependencies:
       ws: 8.19.0
       zod: 4.3.5
@@ -2080,14 +2080,14 @@ snapshots:
 
   slash@3.0.0: {}
 
-  smoltalk@0.0.43(ws@8.19.0)(zod@4.3.5):
+  smoltalk@0.0.46(ws@8.19.0)(zod@4.3.5):
     dependencies:
       '@anthropic-ai/sdk': 0.78.0(zod@4.3.5)
       '@google/genai': 1.44.0
       egonlog: 0.0.2
       nanoid: 5.1.6
       ollama: 0.6.3
-      openai: 6.25.0(ws@8.19.0)(zod@4.3.5)
+      openai: 6.27.0(ws@8.19.0)(zod@4.3.5)
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
       - bufferutil

@@ -118,6 +118,11 @@ export interface AgencyConfig {
     defaultModel: string;
     openAiApiKey: string;
     googleApiKey: string;
+    statelog?: Partial<{
+      host: string;
+      projectId: string;
+      apiKey: string;
+    }>;
   }>;
 
   /**

@@ -89,7 +89,7 @@ const __globalCtx = new RuntimeContext({
     statelog: { 
       host: "{{{clientStatelogHost:string}}}",
       projectId: "{{{clientStatelogProjectId:string}}}",
-      apiKey: "{{{clientStatelogApiKey:string}}}",
+      apiKey: process.env.STATELOG_SMOLTALK_API_KEY || "",
       traceId: nanoid()
     }
   },

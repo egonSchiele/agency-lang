@@ -104,9 +104,8 @@ export class TypeScriptGenerator extends BaseGenerator {
         logLevel: "warn",
         defaultModel: "gpt-4o-mini",
         statelog: {
-          host: "http://localhost:1065",
+          host: "https://agency-lang.com",
           projectId: "smoltalk",
-          apiKey: process.env.STATELOG_SMOLTALK_API_KEY || "",
         },
       },
     };
@@ -606,7 +605,6 @@ export class TypeScriptGenerator extends BaseGenerator {
       clientStatelogHost: this.agencyConfig.client?.statelog?.host || "",
       clientStatelogProjectId:
         this.agencyConfig.client?.statelog?.projectId || "",
-      clientStatelogApiKey: this.agencyConfig.client?.statelog?.apiKey || "",
     });
   }
 

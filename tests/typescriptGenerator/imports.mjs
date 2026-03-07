@@ -13,7 +13,7 @@ import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode, color } from "agency-lang";
+import { goToNode, color, nanoid } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
 import {
@@ -68,6 +68,7 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const __cwd = process.cwd();
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -90,6 +91,12 @@ const __globalCtx = new RuntimeContext({
     
     model: "gpt-4o-mini",
     logLevel: "warn",
+    statelog: { 
+      host: "https://agency-lang.com",
+      projectId: "smoltalk",
+      apiKey: process.env.STATELOG_SMOLTALK_API_KEY || "",
+      traceId: nanoid()
+    }
   },
   dirname: __dirname,
 });

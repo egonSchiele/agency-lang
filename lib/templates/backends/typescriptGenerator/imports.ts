@@ -94,7 +94,7 @@ const __globalCtx = new RuntimeContext({
     statelog: { 
       host: "{{{clientStatelogHost:string}}}",
       projectId: "{{{clientStatelogProjectId:string}}}",
-      apiKey: "{{{clientStatelogApiKey:string}}}",
+      apiKey: process.env.STATELOG_SMOLTALK_API_KEY || "",
       traceId: nanoid()
     }
   },
@@ -138,7 +138,6 @@ export type TemplateType = {
   clientLogLevel: string;
   clientStatelogHost: string;
   clientStatelogProjectId: string;
-  clientStatelogApiKey: string;
 };
 
 const render = (args: TemplateType) => {

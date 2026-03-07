@@ -86,11 +86,11 @@ node main() {
   print(color.cyan("Would you like to create a new agent or modify an existing one?"))
   userinput = input("(create/modify) ")
   thread {
-    mode: Mode = llm("format this user response: ${userinput}", config)
+    mode: Mode = llm("categorize this user response as 'create' or 'modify': ${userinput}", config)
   }
   print(color.cyan("Great! Let's ${mode} an agent."))
   match(mode) {
-    "create" => return plan("create", "")
+    "create" => return plan("create", "", null)
     "modify" => return readExisting()
   }
 }
@@ -100,7 +100,7 @@ node readExisting() {
   existingCode = read(filepath)
   print(color.cyan("Here's the existing code:"))
   printCode(existingCode)
-  return plan("modify", existingCode)
+  return plan("modify", existingCode, filepath)
 }
 
 node printSample() {
@@ -109,7 +109,7 @@ node printSample() {
   printCode(codeSample)
 }
 
-node plan(mode, existingCode) {
+node plan(mode, existingCode, existingFilename: string | null) {
   print(color.cyan("Let's start by coming up with a plan for what you want to accomplish."))
   modeContext = ""
   if (mode == "modify") {
@@ -141,7 +141,7 @@ node plan(mode, existingCode) {
     print(color.cyan("Here's the plan we've come up with"))
     printJSON(plan)
   }
-  return design(plan, mode, existingCode)
+  return design(plan, mode, existingCode, existingFilename)
 }
 
 type Plan = {
@@ -151,7 +151,7 @@ type Plan = {
 
 type DesignAction = { type: "askUser"; question: string } | { type: "done"; finalCode: string; filename: string } | { type: "start" }
 
-node design(plan, mode, existingCode) {
+node design(plan, mode, existingCode, existingFilename: string | null) {
   designPrompt = read("./prompts/design.md")
   prompt = ""
   if (mode == "modify") {
@@ -195,5 +195,5 @@ node design(plan, mode, existingCode) {
   print(color.green("Great! We've designed the agent. Now let's write the code for it."))
   printJSON(color.magenta(nextAction))
   nextAction.filename = nextAction.filename || "agent.agency"
-  writeCodeWithConfirm(nextAction.filename, nextAction.finalCode)
+  writeCodeWithConfirm(existingFilename || nextAction.filename, nextAction.finalCode)
 }

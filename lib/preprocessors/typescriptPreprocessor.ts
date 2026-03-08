@@ -283,6 +283,16 @@ export class TypescriptPreprocessor {
       );
 
       if (node.type === "functionCall") {
+        // Skip method calls on objects (e.g. planner.newPlan()) —
+        // these are part of a valueAccess chain and should not have
+        // async/await applied to them individually.
+        const isPartOfValueAccess = ancestors.some(
+          (a) => a.type === "valueAccess",
+        );
+        if (isPartOfValueAccess) {
+          continue;
+        }
+
         // if in return, this is the last line of execution,
         // so we need to wait for it to finish
         if (isInReturnStatement) {
@@ -379,28 +389,43 @@ export class TypescriptPreprocessor {
       return this.functionNameToUsesInterrupt[node.functionName];
     }
 
-    for (const { node: subnode } of walkNodesArray(node.body)) {
+    // Default to true (has interrupt) before recursing. This breaks infinite
+    // loops from mutual recursion: if A calls B and B calls A, when we recurse
+    // into B and it tries to check A again, it will hit this cached value and
+    // return true instead of recursing forever. We err on the side of caution
+    // (true = has interrupt = not async) since marking a function as sync when
+    // it should be async is safer than the reverse.
+    this.functionNameToUsesInterrupt[node.functionName] = true;
+
+    for (const { node: subnode, ancestors } of walkNodesArray(node.body)) {
       if (subnode.type === "functionCall") {
         if (subnode.functionName === "interrupt") {
-          this.functionNameToUsesInterrupt[node.functionName] = true;
           return true;
+        }
+        // Skip method calls on objects (e.g. planner.updateActions()) —
+        // these are nested inside a valueAccess node and should not be
+        // resolved against top-level function definitions.
+        const isPartOfValueAccess = ancestors.some(
+          (a) => a.type === "valueAccess",
+        );
+        if (isPartOfValueAccess) {
+          continue;
         }
         const func = this.functionDefinitions[subnode.functionName];
         if (func && this.containsInterrupt(func)) {
-          this.functionNameToUsesInterrupt[node.functionName] = true;
           return true;
         }
       } else if (subnode.type === "usesTool") {
         for (const toolName of subnode.toolNames) {
           const func = this.functionDefinitions[toolName];
           if (func && this.containsInterrupt(func)) {
-            this.functionNameToUsesInterrupt[node.functionName] = true;
             return true;
           }
         }
       }
     }
 
+    this.functionNameToUsesInterrupt[node.functionName] = false;
     return false;
   }
 
@@ -1192,6 +1217,7 @@ export class TypescriptPreprocessor {
    */
   protected resolveVariableScopes(): void {
     const globalVars = new Set<string>();
+    const importedVars = new Set<string>();
     const funcOrNodeArgs: Record<string, string[]> = {};
     /* const functionSpecificVarNameToScope: Record<
       string,
@@ -1216,15 +1242,15 @@ export class TypescriptPreprocessor {
       } else if (node.type === "importStatement") {
         const importedNames = node.importedNames.map(getImportedNames).flat();
         importedNames.forEach((n) => {
-          globalVars.add(n);
+          importedVars.add(n);
         });
       } else if (node.type === "importNodeStatement") {
         node.importedNodes.forEach((n) => {
-          globalVars.add(n);
+          importedVars.add(n);
         });
       } else if (node.type === "importToolStatement") {
         node.importedTools.forEach((t) => {
-          globalVars.add(t);
+          importedVars.add(t);
         });
       }
     }
@@ -1233,6 +1259,10 @@ export class TypescriptPreprocessor {
       funcName: string,
       varName: string,
     ): ScopeType | null => {
+      // imported takes precedence over global
+      if (importedVars.has(varName)) {
+        return "imported";
+      }
       if (globalVars.has(varName)) {
         return "global";
       }
@@ -1295,7 +1325,13 @@ export class TypescriptPreprocessor {
     for (const { node } of getAllVariablesInBodyArray(this.program.nodes)) {
       if (node.type === "variableName" || node.type === "assignment") {
         if (!node.scope) {
-          node.scope = "global";
+          const name =
+            node.type === "variableName" ? node.value : node.variableName;
+          if (importedVars.has(name)) {
+            node.scope = "imported";
+          } else {
+            node.scope = "global";
+          }
         }
       }
     }

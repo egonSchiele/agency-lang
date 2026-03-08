@@ -41,7 +41,7 @@ export * from "./types/typeHints.js";
 export * from "./types/whileLoop.js";
 export * from "./types/forLoop.js";
 
-export type Scope = GlobalScope | FunctionScope | NodeScope;
+export type Scope = GlobalScope | FunctionScope | NodeScope | ImportedScope;
 export type ScopeType = Scope["type"] | "args";
 export type GlobalScope = {
   type: "global";
@@ -57,6 +57,11 @@ export type NodeScope = {
   type: "node";
   nodeName: string;
   args?: boolean;
+};
+
+// imported via an import statement
+export type ImportedScope = {
+  type: "imported";
 };
 
 export type Assignment = {

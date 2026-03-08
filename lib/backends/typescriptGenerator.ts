@@ -245,7 +245,7 @@ export class TypeScriptGenerator extends BaseGenerator {
           code += `[${this.processNode(element.index)}]`;
           break;
         case "methodCall":
-          code += `.${this.generateFunctionCallExpression(element.functionCall)}`;
+          code += `.${this.generateFunctionCallExpression(element.functionCall, "valueAccess")}`;
           break;
       }
     }
@@ -284,7 +284,7 @@ export class TypeScriptGenerator extends BaseGenerator {
           case "index":
             return `[${this.processNode(el.index)}]`;
           case "methodCall":
-            return `.${this.generateFunctionCallExpression(el.functionCall)}`;
+            return `.${this.generateFunctionCallExpression(el.functionCall, "valueAccess")}`;
         }
       })
       .join("");
@@ -455,7 +455,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     const scope = this.getCurrentScope();
 
     if (
-      this.isAgencyFunction(node.functionName) &&
+      this.isAgencyFunction(node.functionName, "topLevelStatement") &&
       !this.isGraphNode(node.functionName) &&
       scope.type !== "global"
     ) {
@@ -493,7 +493,10 @@ export class TypeScriptGenerator extends BaseGenerator {
     }
 
     this.functionsUsed.add(node.functionName);
-    const functionCallCode = this.generateFunctionCallExpression(node);
+    const functionCallCode = this.generateFunctionCallExpression(
+      node,
+      "topLevelStatement",
+    );
 
     // Check if this is a built-in function that needs await
     const mappedName = mapFunctionName(node.functionName);
@@ -508,25 +511,33 @@ export class TypeScriptGenerator extends BaseGenerator {
   /**
    * Generates TypeScript expression for a function call (without semicolon)
    */
-  protected generateFunctionCallExpression(node: FunctionCall): string {
-    const functionName = mapFunctionName(node.functionName);
+  protected generateFunctionCallExpression(
+    node: FunctionCall,
+    context: "valueAccess" | "functionArg" | "topLevelStatement",
+  ): string {
+    const functionName =
+      context === "valueAccess"
+        ? node.functionName
+        : mapFunctionName(node.functionName);
     const args = node.arguments;
     const parts = args.map((arg) => {
       if (arg.type === "functionCall") {
         this.functionsUsed.add(arg.functionName);
-        return this.generateFunctionCallExpression(arg);
+        return this.generateFunctionCallExpression(arg, "functionArg");
       } else {
         return this.processNode(arg);
       }
     });
     let argsString = "";
-    if (this.isAgencyFunction(node.functionName)) {
+    if (this.isAgencyFunction(node.functionName, context)) {
       argsString = parts.join(", ");
       return renderInternalFunctionCall.default({
         functionName,
         argsString,
         hasArgs: parts.length > 0,
-        awaitPrefix: node.async ? "" : "await ",
+        // in value access (eg foo.bar()) we never want to add an await
+        // (eg foo.await bar())
+        awaitPrefix: node.async || context === "valueAccess" ? "" : "await ",
       });
     } else if (node.functionName === "system") {
       return renderBuiltinFunctionsSystem.default({
@@ -1042,7 +1053,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     const parts = args.map((arg) => {
       if (arg.type === "functionCall") {
         this.functionsUsed.add(arg.functionName);
-        return this.generateFunctionCallExpression(arg);
+        return this.generateFunctionCallExpression(arg, "functionArg");
       } else {
         return this.processNode(arg);
       }

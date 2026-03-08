@@ -376,7 +376,10 @@ export class BaseGenerator {
     throw new Error("processFunctionCall not implemented");
   }
 
-  protected generateFunctionCallExpression(node: FunctionCall): string {
+  protected generateFunctionCallExpression(
+    node: FunctionCall,
+    context: "valueAccess" | "functionArg" | "topLevelStatement",
+  ): string {
     throw new Error("generateFunctionCallExpression not implemented");
   }
 
@@ -420,6 +423,8 @@ export class BaseGenerator {
         return "__stack.locals";
       case "args":
         return "__stack.args";
+      case "imported":
+        return "";
       default:
         throw new Error(`Unknown scope type: ${scope} for varName: ${varName}`);
     }
@@ -435,7 +440,13 @@ export class BaseGenerator {
   /* Agency function means the user defined this function in an Agency file,
     as opposed to an external function, which was defined in an external TypeScript file
     and imported into Agency. */
-  protected isAgencyFunction(functionName: string): boolean {
+  protected isAgencyFunction(
+    functionName: string,
+    context: "valueAccess" | "functionArg" | "topLevelStatement",
+  ): boolean {
+    if (context === "valueAccess") {
+      return false;
+    }
     return (
       !!this.functionDefinitions[functionName] ||
       this.isImportedTool(functionName)

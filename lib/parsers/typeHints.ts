@@ -247,13 +247,14 @@ export const unionItemParser: Parser<VariableType> = trace(
   ),
 );
 
-const pipe = seqR(optionalSpaces, str("|"), optionalSpaces);
+const pipe = seqR(optionalSpacesOrNewline, str("|"), optionalSpacesOrNewline);
 
 export const _unionTypeParser: Parser<UnionType> = (
   input: string,
 ): ParserResult<UnionType> => {
   const parser = seqC(
     set("type", "unionType"),
+    optional(pipe),
     capture(sepBy(pipe, unionItemParser), "types"),
   );
   const result = parser(input);

@@ -279,11 +279,14 @@ export class AgencyGenerator extends BaseGenerator {
   }
 
   protected processFunctionCall(node: FunctionCall): string {
-    const expr = this.generateFunctionCallExpression(node);
+    const expr = this.generateFunctionCallExpression(node, "topLevelStatement");
     return this.indentStr(`${expr}`);
   }
 
-  protected generateFunctionCallExpression(node: FunctionCall): string {
+  protected generateFunctionCallExpression(
+    node: FunctionCall,
+    context: "valueAccess" | "functionArg" | "topLevelStatement",
+  ): string {
     const args = node.arguments.map((arg) => {
       return this.processNode(arg).trim();
     });
@@ -587,11 +590,13 @@ export class AgencyGenerator extends BaseGenerator {
   protected processBinOpExpression(node: BinOpExpression): string {
     const left = this.processNode(node.left).trim();
     const right = this.processNode(node.right).trim();
-    const wrappedLeft = this.needsParensLeft(node.left, node.operator) ? `(${left})` : left;
-    const wrappedRight = this.needsParensRight(node.right, node.operator) ? `(${right})` : right;
-    return this.indentStr(
-      `${wrappedLeft} ${node.operator} ${wrappedRight}`,
-    );
+    const wrappedLeft = this.needsParensLeft(node.left, node.operator)
+      ? `(${left})`
+      : left;
+    const wrappedRight = this.needsParensRight(node.right, node.operator)
+      ? `(${right})`
+      : right;
+    return this.indentStr(`${wrappedLeft} ${node.operator} ${wrappedRight}`);
   }
 
   protected processAccessChainElement(node: AccessChainElement): string {
@@ -601,9 +606,11 @@ export class AgencyGenerator extends BaseGenerator {
       case "index":
         return `[${this.processNode(node.index).trim()}]`;
       case "methodCall":
-        return `.${this.generateFunctionCallExpression(node.functionCall)}`;
+        return `.${this.generateFunctionCallExpression(node.functionCall, "valueAccess")}`;
       default:
-        throw new Error(`Unknown access chain element kind: ${(node as any).kind}`);
+        throw new Error(
+          `Unknown access chain element kind: ${(node as any).kind}`,
+        );
     }
   }
 

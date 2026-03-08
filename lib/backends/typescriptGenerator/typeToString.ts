@@ -1,11 +1,13 @@
 import { VariableType } from "../../types.js";
 
+const MAX_LENGTH = 50;
+
 /**
  * Converts a VariableType to a string representation for naming/logging
  */
 export function variableTypeToString(
   variableType: VariableType,
-  typeAliases: Record<string, VariableType>
+  typeAliases: Record<string, VariableType>,
 ): string {
   if (variableType.type === "primitiveType") {
     return variableType.value;
@@ -19,14 +21,19 @@ export function variableTypeToString(
   } else if (variableType.type === "booleanLiteralType") {
     return `${variableType.value}`;
   } else if (variableType.type === "unionType") {
-    return variableType.types
+    const str = variableType.types
       .map((t) => variableTypeToString(t, typeAliases))
       .join(" | ");
+    if (str.length > MAX_LENGTH) {
+      const arr = str.split(" | ");
+      return "\n  | " + arr.join("\n  | ");
+    }
+    return str;
   } else if (variableType.type === "objectType") {
     const props = variableType.properties
       .map(
         (prop) =>
-          `${prop.key}: ${variableTypeToString(prop.value, typeAliases)}`
+          `${prop.key}: ${variableTypeToString(prop.value, typeAliases)}`,
       )
       .join("; ");
     return `{ ${props} }`;

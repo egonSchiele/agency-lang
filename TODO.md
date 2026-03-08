@@ -112,3 +112,9 @@ event log for replays?
 
 
 onNodeEnd and onFunctionEnd hooks don't fire if the user returns early from the function or node
+
+in preprocessor, verify that system() calls are only happening inside threads.
+
+things that aren't supported:
+- modifying an imported value (eg `import { foo } from "file.agency"; foo = 5` doesn't work yet)
+- first class functions (eg `obj.key = funcName`)

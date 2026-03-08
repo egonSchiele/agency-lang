@@ -1,62 +1,16 @@
 import tool { addTask, listTasks, markTaskDone } from "./subagents/task.agency"
-import tool { writeToPlan, readPlan } from "./subagents/plan.agency"
+import tool { newPlan, getCurrentPlan, listPlans, updateCurrentPlan, updateGoal, updateActions } from "./subagents/plan.agency"
 import tool { writeCode, appendCode, readCode } from "./subagents/code.agency"
 import { syntaxHighlight } from "../../utils/agentUtils.js"
+import { config } from "./lib/utils.js"
+
 // todo allow this
 // import { Plan } from "./subagents/plan.agency"
 
-systemPrompt = read("./prompts/system.md")
-planPrompt = read("./prompts/plan.md")
-
 type Mode = "create" | "modify"
-type NextAction = { type: "askUser"; question: string } | { type: "done" } | { type: "start" }
-
-strategy = { 
-  type: "race",
-  params: { 
-    strategies: [
-      { 
-      type: "fallback",
-      params: { 
-        strategies: ["gemini-2.5-flash", "gemini-2.5-pro"],
-        config: { 
-          fallbackOn: ["error"]
-        }
-      }
-    },
-      { 
-      type: "fallback",
-      params: { 
-        strategies: ["gemini-2.5-flash-lite", "gemini-2.5-pro"],
-        config: { 
-          fallbackOn: ["error"]
-        }
-      }
-    }
-    ]
-  }
-}
-
-config = { 
-  strategy: strategy,
-  responseFormatOptions: { 
-    strict: true,
-    numRetries: 2,
-    allowExtraKeys: true
-  }
-}
-/* config = {
-model: {
-optimizeFor: ["reasoning", "speed", "cost"],
-providers: ["openai", "google"],
-limit: {
-cost: 40
-}
-},
-responseFormatOptions: {
-strict: true
-}
-} */
+type NextAction = 
+  | { type: "askUser"; question: string }
+  | { type: "done" }
 
 def printCode(code: string): string {
   """
@@ -81,17 +35,26 @@ def writeCodeWithConfirm(filename: string, content: string): string {
   write(filename, content)
 }
 
+systemPrompt = read("./prompts/system.md")
+planPrompt = read("./prompts/plan.md")
+
 node main() {
   print(color.cyan("Welcome to the Agency Agent!"))
-  print(color.cyan("Would you like to create a new agent or modify an existing one?"))
-  userinput = input("(create/modify) ")
-  thread {
-    mode: Mode = llm("categorize this user response as 'create' or 'modify': ${userinput}", config)
+  action: NextAction = { 
+    type: "askUser",
+    question: "What would you like to do?"
   }
-  print(color.cyan("Great! Let's ${mode} an agent."))
-  match(mode) {
-    "create" => return plan("create", "", null)
-    "modify" => return readExisting()
+  thread {
+    system("""
+    ${systemPrompt}
+    ${planPrompt}
+    """)
+
+    while (action.type != "done") {
+      userMsg = input("\n${action.question} ")
+      uses newPlan, getCurrentPlan, listPlans, updateCurrentPlan, updateGoal, updateActions, print, read, writeCodeWithConfirm
+      action: NextAction = llm("Respond to the user's message and decide on the next action that helps them with their agent. User message: ${userMsg}", config)
+    }
   }
 }
 
@@ -101,12 +64,6 @@ node readExisting() {
   print(color.cyan("Here's the existing code:"))
   printCode(existingCode)
   return plan("modify", existingCode, filepath)
-}
-
-node printSample() {
-  codeSample = read("./prompts/codeSample.agency")
-  print(color.cyan("Here's a sample of how you might structure your code in the agency language:"))
-  printCode(codeSample)
 }
 
 node plan(mode, existingCode, existingFilename: string | null) {
@@ -130,7 +87,7 @@ node plan(mode, existingCode, existingFilename: string | null) {
       type: "start"
     }
     while (nextAction.type != "done") {
-      uses writeToPlan, readPlan, print
+      uses print
       nextAction: NextAction = llm("${userMsg}", config)
       if (nextAction.type == "askUser") {
         userMsg = input("${nextAction.question} ")
@@ -149,7 +106,10 @@ type Plan = {
   desiredActions: string[] # array of descriptions of each action
 }
 
-type DesignAction = { type: "askUser"; question: string } | { type: "done"; finalCode: string; filename: string } | { type: "start" }
+type DesignAction = 
+  | { type: "askUser"; question: string }
+  | { type: "done"; finalCode: string; filename: string }
+  | { type: "start" }
 
 node design(plan, mode, existingCode, existingFilename: string | null) {
   designPrompt = read("./prompts/design.md")

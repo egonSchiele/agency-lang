@@ -1,34 +1,49 @@
+import { planner } from "../lib/plan.js"
+
 // fields that get filled out over time
 type Plan = {
   overallGoal: string;
   desiredActions: string[] # array of descriptions of each action
 }
 
-userPlan: Plan = { 
-  overallGoal: "",
-  desiredActions: []
+def newPlan(): Plan {
+  """
+  Create a new plan with empty goal and actions, set it as the current plan, and return it.
+  """
+  return planner.newPlan()
 }
 
-def writeToPlan(fieldName: string, content: string | string[]): Plan {
+def getCurrentPlan(): Plan | null {
   """
-  Use this tool to incrementally fill out the Plan object and build a plan. The structure of the Plan object is as follows:
-  
-  type Plan = {
-  overallGoal: string; # a description of the overall goal that the user wants to achieve
-  desiredActions: string[]; # array of descriptions of each action
-  }
-  
-  Call this tool, one field at a time, passing in the field name you want to modify and the new content for that field. The tool returns the current plan after your modification.
+  Return the current plan, or null if there is no current plan.
   """
-  userPlan[fieldName] = content
-  // print(color.green("Updated plan ${fieldName}"))
-  // printJSON(userPlan)
-  return userPlan
+  return planner.getCurrentPlan()
 }
 
-def readPlan() {
+def listPlans(): Plan[] {
   """
-  Use this tool to read the current state of the plan. This is useful to keep track of the plan as you build it out over multiple steps.
+  Return all plans stored in the planner.
   """
-  return userPlan
+  return planner.listPlans()
+}
+
+def updateCurrentPlan(overallGoal: string, desiredActions: string[]): Plan | null {
+  """
+  Update the current plan with a new goal and actions, return the updated plan or null if no current plan.
+  """
+  return planner.updateCurrentPlan(overallGoal, desiredActions)
+}
+
+def updateGoal(overallGoal: string): Plan | null {
+  """
+  Update the overall goal of the current plan, return the updated plan or null if no current plan.
+  """
+  return planner.updateGoal(overallGoal)
+}
+
+def updateActions(desiredActions: string[]): Plan | null {
+  """
+  Update the actions of the current plan, return the updated plan or null if no current plan.
+  """
+  return planner.updateActions(desiredActions)
 }

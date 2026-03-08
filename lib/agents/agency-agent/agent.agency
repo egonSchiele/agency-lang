@@ -2,6 +2,8 @@ import tool { addTask, listTasks, markTaskDone } from "./subagents/task.agency"
 import tool { newPlan, getCurrentPlan, listPlans, updateCurrentPlan, updateGoal, updateActions } from "./subagents/plan.agency"
 import tool { writeCode, appendCode, readCode } from "./subagents/code.agency"
 import { syntaxHighlight } from "../../utils/agentUtils.js"
+import { config } from "./lib/utils.js"
+
 // todo allow this
 // import { Plan } from "./subagents/plan.agency"
 
@@ -9,41 +11,6 @@ type Mode = "create" | "modify"
 type NextAction = 
   | { type: "askUser"; question: string }
   | { type: "done" }
-
-strategy = { 
-  type: "race",
-  params: { 
-    strategies: [
-      { 
-      type: "fallback",
-      params: { 
-        strategies: ["gemini-2.5-flash", "gemini-2.5-pro"],
-        config: { 
-          fallbackOn: ["error"]
-        }
-      }
-    },
-      { 
-      type: "fallback",
-      params: { 
-        strategies: ["gemini-2.5-flash-lite", "gemini-2.5-pro"],
-        config: { 
-          fallbackOn: ["error"]
-        }
-      }
-    }
-    ]
-  }
-}
-
-config = { 
-  strategy: strategy,
-  responseFormatOptions: { 
-    strict: true,
-    numRetries: 2,
-    allowExtraKeys: true
-  }
-}
 
 def printCode(code: string): string {
   """
@@ -86,7 +53,7 @@ node main() {
     while (action.type != "done") {
       userMsg = input("\n${action.question} ")
       uses newPlan, getCurrentPlan, listPlans, updateCurrentPlan, updateGoal, updateActions, print, read, writeCodeWithConfirm
-      response: NextAction = llm("Respond to the user's message and decide on the next action. User message: ${userMsg}", config)
+      action: NextAction = llm("Respond to the user's message and decide on the next action that helps them with their agent. User message: ${userMsg}", config)
     }
   }
 }

@@ -51,23 +51,35 @@ export function builtinInput(prompt: string): Promise<string> {
 }
 
 export function builtinRead(args: { filename: string; dirname: string }): string {
-  const filePath = path.resolve(args.dirname, args.filename);
-  const data = fs.readFileSync(filePath);
-  const contents = data.toString("utf8");
-  return contents;
+  try {
+    const filePath = path.resolve(args.dirname, args.filename);
+    const data = fs.readFileSync(filePath);
+    const contents = data.toString("utf8");
+    return contents;
+  } catch (e) {
+    return `Error reading file ${args.filename}: ${e}`;
+  }
 }
 
-export function builtinWrite(args: { filename: string; content: string; dirname: string }): boolean {
-  const filePath = path.resolve(args.dirname, args.filename);
-  fs.writeFileSync(filePath, args.content, "utf8");
-  return true;
+export function builtinWrite(args: { filename: string; content: string; dirname: string }): string {
+  try {
+    const filePath = path.resolve(args.dirname, args.filename);
+    fs.writeFileSync(filePath, args.content, "utf8");
+    return `Successfully wrote to file ${args.filename}`;
+  } catch (e) {
+    return `Error writing to file ${args.filename}: ${e}`;
+  }
 }
 
 export function builtinReadImage(args: { filename: string; dirname: string }): string {
-  const filePath = path.resolve(args.dirname, args.filename);
-  const data = fs.readFileSync(filePath);
-  const base64String = data.toString("base64");
-  return base64String;
+  try {
+    const filePath = path.resolve(args.dirname, args.filename);
+    const data = fs.readFileSync(filePath);
+    const base64String = data.toString("base64");
+    return base64String;
+  } catch (e) {
+    return `Error reading image file ${args.filename}: ${e}`;
+  }
 }
 
 export function builtinSleep(seconds: number): Promise<void> {

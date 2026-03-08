@@ -7,7 +7,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:agency": "node ./dist/scripts/agency.js test tests/agency",
-    "build": "rm -rf dist/ && tsc && tsc-alias && cp -r lib/agents dist/lib/agents",
+    "build": "rm -rf dist/ && tsc && tsc-alias && cp -r lib/agents dist/lib",
     "start": "node dist/index.js",
     "templates": "typestache ./lib/templates",
     "typecheck": "tsc --noEmit",

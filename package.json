@@ -66,7 +66,7 @@
     "nanoid": "^5.1.6",
     "ora": "^9.3.0",
     "prompts": "^2.4.2",
-    "smoltalk": "^0.0.52",
+    "smoltalk": "^0.0.60",
     "tarsec": "^0.1.8",
     "termcolors": "github:egonSchiele/termcolors",
     "typestache": "^0.4.4",

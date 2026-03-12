@@ -118,3 +118,7 @@ in preprocessor, verify that system() calls are only happening inside threads.
 things that aren't supported:
 - modifying an imported value (eg `import { foo } from "file.agency"; foo = 5` doesn't work yet)
 - first class functions (eg `obj.key = funcName`)
+
+parallel agents
+memory layer
+ability to switch to other packages instead of smoltalk for LLM calls, other packages for memory layer.

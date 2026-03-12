@@ -547,7 +547,7 @@ export class TypeScriptGenerator extends BaseGenerator {
       // must be a builtin function or imported function
       argsString = parts.join(", ");
       const awaitStr = node.async ? "await " : "";
-      return `${awaitStr}${functionName}(${argsString})`;
+      return `${awaitStr}${functionName}(${argsString})\n`;
     }
   }
 

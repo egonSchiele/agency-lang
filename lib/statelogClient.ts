@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 import { JSONEdge } from "./types.js";
 import { failure, Result, success } from "./types/result.js";
-import { mergeResults, ModelConfig, ModelName } from "smoltalk";
+import { mergeResults, ModelName } from "smoltalk";
 
 export type AgencyFile = {
   name: string;
@@ -193,7 +193,7 @@ export class StatelogClient {
   }: {
     messages: any[];
     completion: any;
-    model?: ModelName | ModelConfig | string;
+    model?: ModelName | string;
     timeTaken?: number;
     tools?: {
       name: string;
@@ -223,7 +223,7 @@ export class StatelogClient {
     toolName: string;
     args: any;
     output: any;
-    model?: ModelName | ModelConfig;
+    model?: ModelName;
     timeTaken?: number;
   }): Promise<void> {
     await this.post({

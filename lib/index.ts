@@ -5,7 +5,7 @@ export * from "./simplemachine/index.js";
 export * from "./statelogClient.js";
 export * from "smoltalk";
 export type { StreamChunk } from "smoltalk";
-export * from "nanoid";
+export { nanoid } from "nanoid";
 export { AgencyConfig } from "./config.js";
 export { color } from "@/utils/termcolors.js";
 export * from "./runtime/index.js";

@@ -4,7 +4,6 @@ import type {
   TokenUsage,
   CostEstimate,
   ToolCallJSON,
-  ModelConfig,
   ModelName,
   Strategy,
   StrategyJSON,
@@ -23,11 +22,11 @@ export type CallbackMap = {
   onLLMCallStart: {
     prompt: string;
     tools: { name: string; description?: string; schema: any }[];
-    model: ModelName | ModelConfig | Strategy | StrategyJSON | undefined;
+    model: ModelName | Strategy | StrategyJSON | undefined;
     messages: MessageJSON[];
   };
   onLLMCallEnd: {
-    model: string | ModelConfig;
+    model: string;
     result: PromptResult;
     usage: TokenUsage | undefined;
     cost: CostEstimate | undefined;

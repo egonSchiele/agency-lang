@@ -54,7 +54,7 @@ async function _runPrompt({
     data: {
       prompt,
       tools,
-      model: clientConfig.strategy ? clientConfig.strategy : clientConfig.model,
+      model: clientConfig.model,
       messages: messages.toJSON().messages,
     },
   });
@@ -107,7 +107,7 @@ async function _runPrompt({
   ctx.statelogClient.promptCompletion({
     messages: messages.getMessages(),
     completion,
-    model: modelName,
+    model: JSON.stringify(modelName),
     timeTaken: endTime - startTime,
     tools,
     responseFormat,
@@ -132,7 +132,7 @@ async function _runPrompt({
     callbacks: ctx.callbacks,
     name: "onLLMCallEnd",
     data: {
-      model: modelName,
+      model: JSON.stringify(modelName),
       result: completion,
       usage: completion.usage,
       cost: completion.cost,
@@ -253,7 +253,7 @@ async function executeToolCalls({
         toolName: handler.name,
         args: params,
         output: result,
-        model: clientConfig.model,
+        model: JSON.stringify(clientConfig.model),
         timeTaken: toolCallEndTime - toolCallStartTime,
       });
 

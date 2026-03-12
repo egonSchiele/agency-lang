@@ -2,7 +2,7 @@ import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode, color, nanoid } from "agency-lang";
+import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
 import {
@@ -212,7 +212,8 @@ if (isInterrupt(__stack.locals.result)) {
       
 
       if (__step <= 3) {
-        await _print(__stack.locals.result);
+        await _print(__stack.locals.result)
+;
 //  Testing comments in different contexts
 //  1. Before type hints
         __stack.step++;
@@ -237,6 +238,7 @@ if (isInterrupt(__stack.locals.result)) {
   //  Comment in match block    "active" => print("Running")
   case `inactive`:
 await _print(`Stopped`)
+
     break;
   //  Default case comment    _ => print("Unknown")
 }//  Final comment at end of file

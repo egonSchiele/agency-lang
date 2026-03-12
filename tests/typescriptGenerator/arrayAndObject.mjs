@@ -2,7 +2,7 @@ import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode, color, nanoid } from "agency-lang";
+import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
 import {
@@ -115,23 +115,33 @@ export const resolveInterrupt = (i, v, m) => _resolveInterrupt({ ctx: __globalCt
 //  Test arrays and objects
 //  Simple array
 __globalCtx.stateStack.globals.nums = [1, 2, 3, 4, 5];
-await _print(__globalCtx.stateStack.globals.nums)//  Array with strings
+await _print(__globalCtx.stateStack.globals.nums)
+//  Array with strings
 __globalCtx.stateStack.globals.names = [`Alice`, `Bob`, `Charlie`];
-await _print(__globalCtx.stateStack.globals.names)//  Nested arrays
+await _print(__globalCtx.stateStack.globals.names)
+//  Nested arrays
 __globalCtx.stateStack.globals.matrix = [[1, 2], [3, 4], [5, 6]];
-await _print(__globalCtx.stateStack.globals.matrix)//  Simple object
+await _print(__globalCtx.stateStack.globals.matrix)
+//  Simple object
 __globalCtx.stateStack.globals.person = {"name": `Alice`, "age": 30};
-await _print(__globalCtx.stateStack.globals.person)//  Object with nested structure
+await _print(__globalCtx.stateStack.globals.person)
+//  Object with nested structure
 __globalCtx.stateStack.globals.address = {"street": `123 Main St`, "city": `NYC`, "zip": `10001`};
-await _print(__globalCtx.stateStack.globals.address)//  Object with array property
+await _print(__globalCtx.stateStack.globals.address)
+//  Object with array property
 __globalCtx.stateStack.globals.user = {"name": `Bob`, "tags": [`admin`, `developer`]};
-await _print(__globalCtx.stateStack.globals.user)//  Array of objects
+await _print(__globalCtx.stateStack.globals.user)
+//  Array of objects
 __globalCtx.stateStack.globals.users = [{"name": `Alice`, "age": 30}, {"name": `Bob`, "age": 25}];
-await _print(__globalCtx.stateStack.globals.users)//  Nested object
+await _print(__globalCtx.stateStack.globals.users)
+//  Nested object
 __globalCtx.stateStack.globals.config = {"server": {"host": `localhost`, "port": 8080}, "debug": true};
-await _print(__globalCtx.stateStack.globals.config)//  Array access
+await _print(__globalCtx.stateStack.globals.config)
+//  Array access
 __globalCtx.stateStack.globals.firstNum = __globalCtx.stateStack.globals.nums[0];
-await _print(__globalCtx.stateStack.globals.firstNum)//  Object property access
+await _print(__globalCtx.stateStack.globals.firstNum)
+//  Object property access
 __globalCtx.stateStack.globals.personName = __globalCtx.stateStack.globals.person.name;
 await _print(__globalCtx.stateStack.globals.personName)
+
 export default graph;

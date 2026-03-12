@@ -2,7 +2,7 @@ import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode, color, nanoid } from "agency-lang";
+import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
 import {
@@ -396,31 +396,36 @@ __threads.popActive();
       
 
       if (__step <= 2) {
-        await _print(`res1`, __stack.locals.res1);
+        await _print(`res1`, __stack.locals.res1)
+;
         __stack.step++;
       }
       
 
       if (__step <= 3) {
-        await _print(`res2`, __stack.locals.res2);
+        await _print(`res2`, __stack.locals.res2)
+;
         __stack.step++;
       }
       
 
       if (__step <= 4) {
-        await _print(`res3`, __stack.locals.res3);
+        await _print(`res3`, __stack.locals.res3)
+;
         __stack.step++;
       }
       
 
       if (__step <= 5) {
-        await _print(`res4`, __stack.locals.res4);
+        await _print(`res4`, __stack.locals.res4)
+;
         __stack.step++;
       }
       
 
       if (__step <= 6) {
-        await _print(`res5`, __stack.locals.res5);
+        await _print(`res5`, __stack.locals.res5)
+;
         __stack.step++;
       }
       
@@ -702,31 +707,36 @@ __threads.popActive();
       
 
       if (__step <= 2) {
-        await _print(`res1`, __stack.locals.res1);
+        await _print(`res1`, __stack.locals.res1)
+;
         __stack.step++;
       }
       
 
       if (__step <= 3) {
-        await _print(`res2`, __stack.locals.res2);
+        await _print(`res2`, __stack.locals.res2)
+;
         __stack.step++;
       }
       
 
       if (__step <= 4) {
-        await _print(`res3`, __stack.locals.res3);
+        await _print(`res3`, __stack.locals.res3)
+;
         __stack.step++;
       }
       
 
       if (__step <= 5) {
-        await _print(`res4`, __stack.locals.res4);
+        await _print(`res4`, __stack.locals.res4)
+;
         __stack.step++;
       }
       
 
       if (__step <= 6) {
-        await _print(`res5`, __stack.locals.res5);
+        await _print(`res5`, __stack.locals.res5)
+;
         __stack.step++;
       }
       

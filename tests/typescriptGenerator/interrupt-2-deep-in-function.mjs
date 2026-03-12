@@ -2,7 +2,7 @@ import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode, color, nanoid } from "agency-lang";
+import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
 import {
@@ -228,7 +228,8 @@ export async function foo2(name, age, __state=undefined) {
       
 
       if (__step <= 1) {
-        await _print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`);
+        await _print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`)
+;
         __stack.step++;
       }
       
@@ -269,7 +270,8 @@ if (isInterrupt(__self.response)) {
       
 
       if (__step <= 3) {
-        await _print(`Greeted, age is still ${__stack.args.age}...`);
+        await _print(`Greeted, age is still ${__stack.args.age}...`)
+;
         __stack.step++;
       }
       
@@ -309,7 +311,8 @@ graph.node("sayHi", async (__state) => {
       
 
       if (__step <= 1) {
-        await _print(`Saying hi to ${__stack.args.name}...`);
+        await _print(`Saying hi to ${__stack.args.name}...`)
+;
         __stack.step++;
       }
       
@@ -345,13 +348,15 @@ if (isInterrupt(__stack.locals.response)) {
       
 
       if (__step <= 5) {
-        await _print(__stack.locals.response);
+        await _print(__stack.locals.response)
+;
         __stack.step++;
       }
       
 
       if (__step <= 6) {
-        await _print(`Greeting sent.`);
+        await _print(`Greeting sent.`)
+;
         __stack.step++;
       }
       

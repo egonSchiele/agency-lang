@@ -2,7 +2,7 @@ import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode, color, nanoid } from "agency-lang";
+import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
 import {
@@ -165,7 +165,8 @@ __self.response = _response({
       
 
       if (__step <= 3) {
-        await _print(__stack.locals.response);
+        await _print(__stack.locals.response)
+;
         __stack.step++;
       }
       
@@ -202,7 +203,8 @@ __self.response2 = _response2({
       
 
       if (__step <= 6) {
-        await _print(__stack.locals.response2);
+        await _print(__stack.locals.response2)
+;
         __stack.step++;
       }
       

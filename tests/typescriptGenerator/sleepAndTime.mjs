@@ -2,7 +2,7 @@ import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode, color, nanoid } from "agency-lang";
+import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
 import {
@@ -140,11 +140,15 @@ graph.node("main", async (__state) => {
 
 await _print(`Starting...`)
 
+
 await _print(`Sleeping for 2.5 seconds...`)
+
 
 await _builtinSleep(2.5)
 
+
 await _print(`Done sleeping!`)
+
 
 let x_endTime = performance.now();
 let x = x_endTime - x_startTime;
@@ -153,7 +157,8 @@ let x = x_endTime - x_startTime;
       
 
       if (__step <= 2) {
-        await _print(__stack.locals.x);
+        await _print(__stack.locals.x)
+;
         __stack.step++;
       }
       

@@ -2,7 +2,7 @@ import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode, color, nanoid } from "agency-lang";
+import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
 import {
@@ -436,7 +436,8 @@ if (isInterrupt(__stack.locals.res1)) {
       
 
       if (__step <= 6) {
-        await _printJSON(__stack.locals.results);
+        await _printJSON(__stack.locals.results)
+;
         __stack.step++;
       }
       

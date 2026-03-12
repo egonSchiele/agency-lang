@@ -2,7 +2,7 @@ import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode, color, nanoid } from "agency-lang";
+import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
 import {
@@ -134,7 +134,8 @@ graph.node("foo", async (__state) => {
       
 
       if (__step <= 1) {
-        await _print(`What is your name?`);
+        await _print(`What is your name?`)
+;
         __stack.step++;
       }
       
@@ -154,7 +155,8 @@ if (isInterrupt(__stack.locals.name)) {
       
 
       if (__step <= 3) {
-        await _print(`Hello, ${__stack.locals.name}!`);
+        await _print(`Hello, ${__stack.locals.name}!`)
+;
         __stack.step++;
       }
       

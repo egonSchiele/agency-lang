@@ -2,7 +2,7 @@ import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode, color, nanoid } from "agency-lang";
+import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
 import {
@@ -144,15 +144,19 @@ graph.node("main", async (__state) => {
         switch (__stack.locals.action) {
   case `start`:
 await _print(`Starting...`)
+
     break;
   case `stop`:
 await _print(`Stopping...`)
+
     break;
   case `restart`:
 await _print(`Restarting...`)
+
     break;
   default:
 await _print(`Unknown action`)
+
     break;
 }//  Match with number literals
         __stack.step++;
@@ -169,15 +173,19 @@ await _print(`Unknown action`)
         switch (__stack.locals.statusCode) {
   case 200:
 await _print(`OK`)
+
     break;
   case 404:
 await _print(`Not Found`)
+
     break;
   case 500:
 await _print(`Internal Server Error`)
+
     break;
   default:
 await _print(`Unknown status`)
+
     break;
 }//  Match with variable assignment in body
         __stack.step++;
@@ -233,15 +241,19 @@ __stack.locals.e = 0;
         switch (__stack.locals.level) {
   case `debug`:
 await _print(`Debug mode enabled`)
+
     break;
   case `info`:
 await _print(`Info level logging`)
+
     break;
   case `warn`:
 await _print(`Warning level`)
+
     break;
   case `error`:
 await _print(`Error level`)
+
     break;
 }//  Match with array results
         __stack.step++;

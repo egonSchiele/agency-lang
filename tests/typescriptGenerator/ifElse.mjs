@@ -150,7 +150,7 @@ __stack.locals.result = `condition was true`;
       
 
       if (__step <= 3) {
-        if (isReady()
+        if (await isReady()
 ) {
 __stack.locals.status = `ready`;
 

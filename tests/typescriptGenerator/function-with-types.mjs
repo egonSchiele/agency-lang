@@ -486,7 +486,7 @@ graph.node("foo", async (__state) => {
       
 
       if (__step <= 1) {
-        await _print(`This is a node with a return type`)
+        await await _print(`This is a node with a return type`)
 ;
         __stack.step++;
       }

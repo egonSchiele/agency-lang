@@ -143,19 +143,19 @@ graph.node("main", async (__state) => {
       if (__step <= 2) {
         switch (__stack.locals.action) {
   case `start`:
-await _print(`Starting...`)
+await await _print(`Starting...`)
 
     break;
   case `stop`:
-await _print(`Stopping...`)
+await await _print(`Stopping...`)
 
     break;
   case `restart`:
-await _print(`Restarting...`)
+await await _print(`Restarting...`)
 
     break;
   default:
-await _print(`Unknown action`)
+await await _print(`Unknown action`)
 
     break;
 }//  Match with number literals
@@ -172,19 +172,19 @@ await _print(`Unknown action`)
       if (__step <= 4) {
         switch (__stack.locals.statusCode) {
   case 200:
-await _print(`OK`)
+await await _print(`OK`)
 
     break;
   case 404:
-await _print(`Not Found`)
+await await _print(`Not Found`)
 
     break;
   case 500:
-await _print(`Internal Server Error`)
+await await _print(`Internal Server Error`)
 
     break;
   default:
-await _print(`Unknown status`)
+await await _print(`Unknown status`)
 
     break;
 }//  Match with variable assignment in body
@@ -240,19 +240,19 @@ __stack.locals.e = 0;
       if (__step <= 9) {
         switch (__stack.locals.level) {
   case `debug`:
-await _print(`Debug mode enabled`)
+await await _print(`Debug mode enabled`)
 
     break;
   case `info`:
-await _print(`Info level logging`)
+await await _print(`Info level logging`)
 
     break;
   case `warn`:
-await _print(`Warning level`)
+await await _print(`Warning level`)
 
     break;
   case `error`:
-await _print(`Error level`)
+await await _print(`Error level`)
 
     break;
 }//  Match with array results

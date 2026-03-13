@@ -138,16 +138,16 @@ graph.node("main", async (__state) => {
 //  Test the sleep built-in function
 
 
-await _print(`Starting...`)
+await await _print(`Starting...`)
 
 
-await _print(`Sleeping for 2.5 seconds...`)
+await await _print(`Sleeping for 2.5 seconds...`)
 
 
-await _builtinSleep(2.5)
+await await _builtinSleep(2.5)
 
 
-await _print(`Done sleeping!`)
+await await _print(`Done sleeping!`)
 
 
 let x_endTime = performance.now();
@@ -157,7 +157,7 @@ let x = x_endTime - x_startTime;
       
 
       if (__step <= 2) {
-        await _print(__stack.locals.x)
+        await await _print(__stack.locals.x)
 ;
         __stack.step++;
       }

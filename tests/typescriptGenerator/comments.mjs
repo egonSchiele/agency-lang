@@ -212,7 +212,7 @@ if (isInterrupt(__stack.locals.result)) {
       
 
       if (__step <= 3) {
-        await _print(__stack.locals.result)
+        await await _print(__stack.locals.result)
 ;
 //  Testing comments in different contexts
 //  1. Before type hints
@@ -237,7 +237,7 @@ if (isInterrupt(__stack.locals.result)) {
         switch (__stack.locals.status) {
   //  Comment in match block    "active" => print("Running")
   case `inactive`:
-await _print(`Stopped`)
+await await _print(`Stopped`)
 
     break;
   //  Default case comment    _ => print("Unknown")

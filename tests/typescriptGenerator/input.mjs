@@ -134,7 +134,7 @@ graph.node("main", async (__state) => {
       
 
       if (__step <= 1) {
-        __stack.locals.message = await _builtinInput(`Please enter a message: `);
+        __stack.locals.message = await await _builtinInput(`Please enter a message: `);
 
 
 if (isInterrupt(__stack.locals.message)) {
@@ -183,7 +183,7 @@ __self.sentiment = _sentiment(__stack.locals.message, {
       
 
       if (__step <= 4) {
-        await _print(__stack.locals.sentiment)
+        await await _print(__stack.locals.sentiment)
 ;
         __stack.step++;
       }

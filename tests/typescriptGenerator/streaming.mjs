@@ -165,7 +165,7 @@ __self.response = _response({
       
 
       if (__step <= 3) {
-        await _print(__stack.locals.response)
+        await await _print(__stack.locals.response)
 ;
         __stack.step++;
       }
@@ -203,7 +203,7 @@ __self.response2 = _response2({
       
 
       if (__step <= 6) {
-        await _print(__stack.locals.response2)
+        await await _print(__stack.locals.response2)
 ;
         __stack.step++;
       }

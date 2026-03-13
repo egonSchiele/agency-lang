@@ -175,7 +175,7 @@ __self.response = _response(__stack.locals.person, {
       
 
       if (__step <= 4) {
-        await _print(__stack.locals.response)
+        await await _print(__stack.locals.response)
 ;
         __stack.step++;
       }

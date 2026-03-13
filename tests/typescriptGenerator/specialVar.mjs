@@ -134,14 +134,14 @@ graph.node("main", async (__state) => {
       
 
       if (__step <= 1) {
-        await _print(`lets race!`)
+        await await _print(`lets race!`)
 ;
         __stack.step++;
       }
       
 
       if (__step <= 2) {
-        __stack.locals.msg = await _builtinInput(`> `);
+        __stack.locals.msg = await await _builtinInput(`> `);
 
 
 if (isInterrupt(__stack.locals.msg)) {
@@ -186,7 +186,7 @@ __self.response1 = _response1(__stack.locals.msg, {
       
 
       if (__step <= 5) {
-        await _print(__stack.locals.response1)
+        await await _print(__stack.locals.response1)
 ;
         __stack.step++;
       }
@@ -230,7 +230,7 @@ __self.response2 = _response2(__stack.locals.msg, {
       
 
       if (__step <= 9) {
-        await _print(__stack.locals.response2)
+        await await _print(__stack.locals.response2)
 ;
         __stack.step++;
       }

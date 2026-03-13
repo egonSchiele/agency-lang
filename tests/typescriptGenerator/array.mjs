@@ -169,7 +169,7 @@ __self.numbers = _numbers({
       
 
       if (__step <= 3) {
-        await _print(__stack.locals.numbers)
+        await await _print(__stack.locals.numbers)
 ;
         __stack.step++;
       }
@@ -211,7 +211,7 @@ __self.greetings = _greetings({
       
 
       if (__step <= 6) {
-        await _print(__stack.locals.greetings)
+        await await _print(__stack.locals.greetings)
 ;
         __stack.step++;
       }

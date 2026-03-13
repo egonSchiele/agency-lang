@@ -169,7 +169,7 @@ __self.url = _url({
       
 
       if (__step <= 3) {
-        await _print(__stack.locals.url)
+        await await _print(__stack.locals.url)
 ;
         __stack.step++;
       }

@@ -194,7 +194,7 @@ __self.message = _message({
       
 
       if (__step <= 4) {
-        await _print(__stack.locals.count)
+        await await _print(__stack.locals.count)
 ;
         __stack.step++;
       }
@@ -207,7 +207,7 @@ __self.message = _message({
       
 
       if (__step <= 6) {
-        await _print(__stack.locals.message)
+        await await _print(__stack.locals.message)
 ;
         __stack.step++;
       }

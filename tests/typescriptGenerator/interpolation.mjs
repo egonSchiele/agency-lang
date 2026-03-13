@@ -171,7 +171,7 @@ __self.greeting = _greeting(__stack.locals.name, {
       
 
       if (__step <= 4) {
-        await _print(__stack.locals.greeting)
+        await await _print(__stack.locals.greeting)
 ;
         __stack.step++;
       }

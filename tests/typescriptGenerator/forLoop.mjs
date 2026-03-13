@@ -141,7 +141,7 @@ graph.node("main", async (__state) => {
 
       if (__step <= 2) {
         for (const item of __stack.locals.items) {
-await _print(item)
+await await _print(item)
 ;
 
 
@@ -153,7 +153,7 @@ await _print(item)
 
       if (__step <= 3) {
         for (let i = 0; i < 5; i++) {
-await _print(i)
+await await _print(i)
 ;
 
 
@@ -172,11 +172,11 @@ await _print(i)
       if (__step <= 5) {
         for (let index = 0; index < __stack.locals.names.length; index++) {
 const name = __stack.locals.names[index];
-await _print(name)
+await await _print(name)
 ;
 
 
-await _print(index)
+await await _print(index)
 ;
 
 

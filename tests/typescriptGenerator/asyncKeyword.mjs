@@ -374,7 +374,7 @@ graph.node("main", async (__state) => {
       
 
       if (__step <= 1) {
-        __stack.locals.msg = await _builtinInput(`> `);
+        __stack.locals.msg = await await _builtinInput(`> `);
 
 
 if (isInterrupt(__stack.locals.msg)) {
@@ -436,7 +436,7 @@ if (isInterrupt(__stack.locals.res1)) {
       
 
       if (__step <= 6) {
-        await _printJSON(__stack.locals.results)
+        await await _printJSON(__stack.locals.results)
 ;
         __stack.step++;
       }

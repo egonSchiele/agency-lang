@@ -115,33 +115,33 @@ export const resolveInterrupt = (i, v, m) => _resolveInterrupt({ ctx: __globalCt
 //  Test arrays and objects
 //  Simple array
 __globalCtx.stateStack.globals.nums = [1, 2, 3, 4, 5];
-await _print(__globalCtx.stateStack.globals.nums)
+await await _print(__globalCtx.stateStack.globals.nums)
 //  Array with strings
 __globalCtx.stateStack.globals.names = [`Alice`, `Bob`, `Charlie`];
-await _print(__globalCtx.stateStack.globals.names)
+await await _print(__globalCtx.stateStack.globals.names)
 //  Nested arrays
 __globalCtx.stateStack.globals.matrix = [[1, 2], [3, 4], [5, 6]];
-await _print(__globalCtx.stateStack.globals.matrix)
+await await _print(__globalCtx.stateStack.globals.matrix)
 //  Simple object
 __globalCtx.stateStack.globals.person = {"name": `Alice`, "age": 30};
-await _print(__globalCtx.stateStack.globals.person)
+await await _print(__globalCtx.stateStack.globals.person)
 //  Object with nested structure
 __globalCtx.stateStack.globals.address = {"street": `123 Main St`, "city": `NYC`, "zip": `10001`};
-await _print(__globalCtx.stateStack.globals.address)
+await await _print(__globalCtx.stateStack.globals.address)
 //  Object with array property
 __globalCtx.stateStack.globals.user = {"name": `Bob`, "tags": [`admin`, `developer`]};
-await _print(__globalCtx.stateStack.globals.user)
+await await _print(__globalCtx.stateStack.globals.user)
 //  Array of objects
 __globalCtx.stateStack.globals.users = [{"name": `Alice`, "age": 30}, {"name": `Bob`, "age": 25}];
-await _print(__globalCtx.stateStack.globals.users)
+await await _print(__globalCtx.stateStack.globals.users)
 //  Nested object
 __globalCtx.stateStack.globals.config = {"server": {"host": `localhost`, "port": 8080}, "debug": true};
-await _print(__globalCtx.stateStack.globals.config)
+await await _print(__globalCtx.stateStack.globals.config)
 //  Array access
 __globalCtx.stateStack.globals.firstNum = __globalCtx.stateStack.globals.nums[0];
-await _print(__globalCtx.stateStack.globals.firstNum)
+await await _print(__globalCtx.stateStack.globals.firstNum)
 //  Object property access
 __globalCtx.stateStack.globals.personName = __globalCtx.stateStack.globals.person.name;
-await _print(__globalCtx.stateStack.globals.personName)
+await await _print(__globalCtx.stateStack.globals.personName)
 
 export default graph;

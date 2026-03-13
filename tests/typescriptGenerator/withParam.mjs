@@ -169,7 +169,7 @@ __self.result = _result(__stack.args.input, {
       
 
       if (__step <= 3) {
-        await _print(__stack.locals.result)
+        await await _print(__stack.locals.result)
 ;
         __stack.step++;
       }

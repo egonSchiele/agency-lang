@@ -223,7 +223,7 @@ graph.node("foo2", async (__state) => {
       
 
       if (__step <= 1) {
-        await _print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`)
+        await await _print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`)
 ;
         __stack.step++;
       }
@@ -265,7 +265,7 @@ if (isInterrupt(__self.response)) {
       
 
       if (__step <= 3) {
-        await _print(`Greeted, age is still ${__stack.args.age}...`)
+        await await _print(`Greeted, age is still ${__stack.args.age}...`)
 ;
         __stack.step++;
       }
@@ -306,7 +306,7 @@ graph.node("sayHi", async (__state) => {
       
 
       if (__step <= 1) {
-        await _print(`Saying hi to ${__stack.args.name}...`)
+        await await _print(`Saying hi to ${__stack.args.name}...`)
 ;
         __stack.step++;
       }

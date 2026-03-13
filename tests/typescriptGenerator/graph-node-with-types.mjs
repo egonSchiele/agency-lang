@@ -170,7 +170,7 @@ __self.greeting = _greeting(__stack.args.name, {
       
 
       if (__step <= 3) {
-        await _print(__stack.locals.greeting)
+        await await _print(__stack.locals.greeting)
 ;
         __stack.step++;
       }

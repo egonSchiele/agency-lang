@@ -177,7 +177,7 @@ __self.result = _result(__stack.locals.user, {
       
 
       if (__step <= 5) {
-        await _print(__stack.locals.result)
+        await await _print(__stack.locals.result)
 ;
         __stack.step++;
       }

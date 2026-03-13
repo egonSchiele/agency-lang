@@ -172,7 +172,7 @@ graph.node("main", async (__state) => {
       
 
       if (__step <= 1) {
-        await _print(test({
+        await await _print(test({
     ctx: __ctx,
     threads: __threads,
     interruptData: __state?.interruptData

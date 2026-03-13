@@ -134,14 +134,14 @@ graph.node("foo", async (__state) => {
       
 
       if (__step <= 1) {
-        await _print(`What is your name?`)
+        await await _print(`What is your name?`)
 ;
         __stack.step++;
       }
       
 
       if (__step <= 2) {
-        __stack.locals.name = await _builtinInput(`> `);
+        __stack.locals.name = await await _builtinInput(`> `);
 
 
 if (isInterrupt(__stack.locals.name)) {
@@ -155,7 +155,7 @@ if (isInterrupt(__stack.locals.name)) {
       
 
       if (__step <= 3) {
-        await _print(`Hello, ${__stack.locals.name}!`)
+        await await _print(`Hello, ${__stack.locals.name}!`)
 ;
         __stack.step++;
       }

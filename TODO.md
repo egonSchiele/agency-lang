@@ -122,3 +122,8 @@ things that aren't supported:
 parallel agents
 memory layer
 ability to switch to other packages instead of smoltalk for LLM calls, other packages for memory layer.
+
+failing tests:
+ - FAIL  tests/agency/streaming/noCallback.test.json
+ - FAIL  tests/agency/threads/nested-function-calls/inside-and-outside.test.json
+ - FAIL  tests/agency/threads/parallel-with-func.test.json

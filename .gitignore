@@ -8,3 +8,4 @@ __judge*
 *.js
 skills/*
 *__result.json
+docs/local/

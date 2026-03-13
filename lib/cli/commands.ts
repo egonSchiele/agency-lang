@@ -115,20 +115,22 @@ export function compile(
   config: AgencyConfig,
   inputFile: string,
   _outputFile?: string,
+  options?: { ts?: boolean },
 ): string | null {
   // Check if the input is a directory
   const stats = fs.statSync(inputFile);
   const verbose = config.verbose ?? false;
   if (stats.isDirectory()) {
     for (const { path } of findRecursively(inputFile)) {
-      compile(config, path, undefined);
+      compile(config, path, undefined, options);
     }
     return null;
   }
 
   // Resolve the absolute path of the input file to avoid duplicates
   const absoluteInputFile = path.resolve(inputFile);
-  let outputFile = _outputFile || inputFile.replace(".agency", ".js");
+  const ext = options?.ts ? ".ts" : ".js";
+  let outputFile = _outputFile || inputFile.replace(".agency", ext);
   if (config.outDir && !_outputFile) {
     const outputDir = path.resolve(config.outDir);
 
@@ -177,23 +179,26 @@ export function compile(
         );
       }
     }
-    compile(config, absPath, undefined);
+    compile(config, absPath, undefined, options);
   }
 
   // Update the import path in the AST to reference the new .ts file
   parsedProgram.nodes.forEach((node) => {
     if (node.type === "importStatement") {
-      node.modulePath = node.modulePath.replace(".agency", ".js");
+      node.modulePath = node.modulePath.replace(".agency", ext);
     }
   });
 
-  const generatedCode = generateTypeScript(parsedProgram, config);
+  let generatedCode = generateTypeScript(parsedProgram, config);
+  if (options?.ts) {
+    generatedCode = "//@ts-nocheck\n" + generatedCode;
+  }
   fs.writeFileSync(outputFile, generatedCode, "utf-8");
 
   // Generate .d.ts declarations if enabled
   if (config.declarations) {
     const declarations = generateDeclarations(parsedProgram, config);
-    const dtsFile = outputFile.replace(/\.js$/, ".d.ts");
+    const dtsFile = outputFile.replace(/\.(js|ts)$/, ".d.ts");
     fs.writeFileSync(dtsFile, declarations, "utf-8");
     console.log(`${inputFile} → ${dtsFile}`);
   }

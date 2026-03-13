@@ -50,10 +50,11 @@ program
   .alias("build")
   .description("Compile .agency file(s) or directory(s) to JavaScript")
   .argument("<inputs...>", "Paths to .agency input files or directories")
-  .action(async (inputs: string[]) => {
+  .option("--ts", "Output .ts files with // @no-check header")
+  .action(async (inputs: string[], opts: { ts?: boolean }) => {
     const config = getConfig();
     for (const input of inputs) {
-      compile(config, input);
+      compile(config, input, undefined, { ts: opts.ts });
     }
   });
 

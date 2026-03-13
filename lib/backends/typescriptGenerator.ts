@@ -537,7 +537,8 @@ export class TypeScriptGenerator extends BaseGenerator {
         hasArgs: parts.length > 0,
         // in value access (eg foo.bar()) we never want to add an await
         // (eg foo.await bar())
-        awaitPrefix: node.async || context === "valueAccess" ? "" : "await ",
+        awaitPrefix: node.async ? "" : "await ",
+        isAsync: node.async || false,
       });
     } else if (node.functionName === "system") {
       return renderBuiltinFunctionsSystem.default({
@@ -546,7 +547,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     } else {
       // must be a builtin function or imported function
       argsString = parts.join(", ");
-      const awaitStr = node.async || context === "valueAccess" ? "" : "await ";
+      const awaitStr = node.async || false ? "" : "await ";
       return `${awaitStr}${functionName}(${argsString})\n`;
     }
   }
@@ -706,9 +707,9 @@ export class TypeScriptGenerator extends BaseGenerator {
     // Generate async function for prompt-based assignment
     const _variableType = variableType ||
       this.typeHints[variableName] || {
-        type: "primitiveType" as const,
-        value: "string",
-      };
+      type: "primitiveType" as const,
+      value: "string",
+    };
 
     const zodSchema = mapTypeToZodSchema(_variableType, this.typeAliases);
 

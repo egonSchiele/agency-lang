@@ -3,7 +3,8 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `__threads.active().push(smoltalk.systemMessage({{{systemMessage:string}}}));
+export const template = `// crashes if no active thread
+__threads.active().push(smoltalk.systemMessage({{{systemMessage:string}}}));
 `;
 
 export type TemplateType = {

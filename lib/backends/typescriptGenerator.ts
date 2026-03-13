@@ -537,7 +537,7 @@ export class TypeScriptGenerator extends BaseGenerator {
         hasArgs: parts.length > 0,
         // in value access (eg foo.bar()) we never want to add an await
         // (eg foo.await bar())
-        awaitPrefix: node.async ? "" : "await ",
+        awaitPrefix: node.async || context === "valueAccess" ? "" : "await ",
         isAsync: node.async || false,
       });
     } else if (node.functionName === "system") {
@@ -547,7 +547,7 @@ export class TypeScriptGenerator extends BaseGenerator {
     } else {
       // must be a builtin function or imported function
       argsString = parts.join(", ");
-      const awaitStr = node.async || false ? "" : "await ";
+      const awaitStr = node.async || context === "valueAccess" ? "" : "await ";
       return `${awaitStr}${functionName}(${argsString})\n`;
     }
   }

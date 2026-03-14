@@ -159,11 +159,54 @@ export const objectPropertyParser: Parser<ObjectProperty> = trace(
     const parser = seqC(
       capture(many1WithJoin(varNameChar), "key"),
       optionalSpaces,
+      capture(optional(char("?")), "isOptional"),
       char(":"),
       optionalSpaces,
       capture(variableTypeParser, "value"),
     );
-    return parser(input);
+    const result = parser(input);
+    if (!result.success) {
+      return result;
+    }
+    const { key, isOptional, value } = result.result;
+    if (!isOptional) {
+      return success(
+        {
+          key,
+          value,
+        },
+        result.rest,
+      );
+    }
+
+    if (value.type === "unionType") {
+      // If it's already a union, just add undefined to the list of types
+      return success(
+        {
+          key,
+          value: {
+            type: "unionType",
+            types: [
+              ...value.types,
+              { type: "primitiveType", value: "undefined" },
+            ],
+          },
+        },
+        result.rest,
+      );
+    }
+
+    // If it's not a union, create a new union with the original type and undefined
+    return success(
+      {
+        key,
+        value: {
+          type: "unionType",
+          types: [value, { type: "primitiveType", value: "undefined" }],
+        },
+      },
+      result.rest,
+    );
   },
 );
 

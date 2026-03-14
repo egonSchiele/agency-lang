@@ -1,3 +1,4 @@
+import { color } from "termcolors";
 import { VariableType } from "../../types.js";
 import { escape } from "../../utils.js";
 
@@ -8,8 +9,15 @@ export const DEFAULT_SCHEMA = "z.string()";
  */
 export function mapTypeToZodSchema(
   variableType: VariableType,
-  typeAliases: Record<string, VariableType>
+  typeAliases: Record<string, VariableType>,
 ): string {
+  /* console.log(
+    color.yellow(
+      `Variable type is`,
+      JSON.stringify(variableType),
+    ),
+  );
+ */
   if (variableType.type === "primitiveType") {
     switch (variableType.value.toLowerCase()) {
       case "number":
@@ -18,6 +26,11 @@ export function mapTypeToZodSchema(
         return DEFAULT_SCHEMA;
       case "boolean":
         return "z.boolean()";
+      case "null":
+        return "z.null()";
+      case "undefined":
+        // Undefined cannot be represented in JSON Schema
+        return "z.null()";
       default:
         // Default to string for unknown types
         return DEFAULT_SCHEMA;
@@ -26,7 +39,7 @@ export function mapTypeToZodSchema(
     // Recursively handle array element type
     const elementSchema = mapTypeToZodSchema(
       variableType.elementType,
-      typeAliases
+      typeAliases,
     );
     return `z.array(${elementSchema})`;
   } else if (variableType.type === "stringLiteralType") {
@@ -37,7 +50,7 @@ export function mapTypeToZodSchema(
     return `z.literal(${variableType.value})`;
   } else if (variableType.type === "unionType") {
     const unionSchemas = variableType.types.map((t) =>
-      mapTypeToZodSchema(t, typeAliases)
+      mapTypeToZodSchema(t, typeAliases),
     );
     return `z.union([${unionSchemas.join(", ")}])`;
   } else if (variableType.type === "objectType") {
@@ -45,7 +58,7 @@ export function mapTypeToZodSchema(
       .map((prop) => {
         let str = `"${prop.key.replace(/"/g, '\\"')}": ${mapTypeToZodSchema(
           prop.value,
-          typeAliases
+          typeAliases,
         )}`;
         if (prop.description) {
           str += `.describe("${escape(prop.description)}")`;

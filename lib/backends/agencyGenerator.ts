@@ -80,17 +80,26 @@ export class AgencyGenerator extends BaseGenerator {
 
   protected aliasedTypeToString(aliasedType: VariableType): string {
     if (aliasedType.type === "objectType") {
-      const props = aliasedType.properties
-        .map((prop) => {
-          let str = `${this.indent(this.indentLevel + 1)}`;
-          str += `${prop.key}: ${this.aliasedTypeToString(prop.value)}`;
-          if (prop.description) {
-            str += ` # ${prop.description}`;
-          }
-          return str;
-        })
-        .join(";\n");
-      return `{\n${props}\n}`;
+      this.increaseIndent();
+      let result =
+        "{\n" +
+        aliasedType.properties
+          .map((prop) => {
+            let str = "";
+            str += this.indentStr(
+              `${prop.key}: ${this.aliasedTypeToString(prop.value)}`,
+            );
+            if (prop.description) {
+              str += ` # ${prop.description}`;
+            }
+            return str;
+          })
+          .join(";\n") +
+        "\n";
+
+      this.decreaseIndent();
+      result += this.indentStr("}");
+      return result;
     }
     return variableTypeToString(aliasedType, this.typeAliases);
   }

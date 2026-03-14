@@ -39,7 +39,7 @@
       "evaluationCriteria": [
         {
           "type": "llmJudge",
-          "judgePrompt": "The response text should make it clear that the interrupt was rejected. Any of the following or their variations are valid responses and should result in a perfect score:\n\n\"I'm unable to process the request at the moment.\"",
+          "judgePrompt": "The response text should make it clear that the interrupt was rejected. Any of the following or their variations are valid responses and should result in a perfect score:\n\n\"I'm unable to process the request at the moment.\"\n\"The tool call was rejected.\" etc",
           "desiredAccuracy": 75
         }
       ],

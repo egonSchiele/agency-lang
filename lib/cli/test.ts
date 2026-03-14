@@ -81,22 +81,13 @@ const onCancel = () => {
   process.exit(0);
 };
 
-let interrupted = false;
-process.on("SIGINT", () => {
-  interrupted = true;
-});
-
-function isSignalError(e: unknown): boolean {
-  return (
+function exitIfSignal(e: unknown): void {
+  if (
     e instanceof Error &&
     "signal" in e &&
     ((e as any).signal === "SIGINT" || (e as any).signal === "SIGTERM")
-  );
-}
-
-function checkInterrupt(e: unknown): void {
-  if (isSignalError(e)) {
-    interrupted = true;
+  ) {
+    process.exit(1);
   }
 }
 
@@ -420,7 +411,6 @@ export async function test(
   if (fileStats.isDirectory()) {
     let stats = emptyStats();
     for (const { path } of findRecursively(testFile, ".test.json")) {
-      if (interrupted) break;
       const childStats = await test(config, path);
       stats = mergeStats(stats, childStats);
     }
@@ -434,7 +424,6 @@ export async function test(
   const total = tests.tests.length;
 
   for (let i = 0; i < total; i++) {
-    if (interrupted) break;
     const testCase = tests.tests[i];
     const interruptInfo = testCase.interruptHandlers
       ? ` interrupts=${testCase.interruptHandlers.length}`
@@ -460,8 +449,7 @@ export async function test(
         testPassed = runSingleTest(config, testFile, tests, testCase);
         if (testPassed) break;
       } catch (e) {
-        checkInterrupt(e);
-        if (interrupted) break;
+        exitIfSignal(e);
         console.log(color.red(`  ✗ Test error: ${e}`));
         testPassed = false;
       }
@@ -530,7 +518,6 @@ export async function testTs(config: AgencyConfig, inputPaths: string[]) {
     }
 
     for (const dir of testDirs) {
-      if (interrupted) break;
       const dirName = path.basename(dir);
       console.log(color.yellow(`\nRunning TS test: ${dirName}`));
 
@@ -559,8 +546,7 @@ export async function testTs(config: AgencyConfig, inputPaths: string[]) {
           stdio: "inherit",
         });
       } catch (e) {
-        checkInterrupt(e);
-        if (interrupted) break;
+        exitIfSignal(e);
         console.log(color.red(`  ✗ Test script execution failed: ${e}`));
         failures.push(dir);
         continue;

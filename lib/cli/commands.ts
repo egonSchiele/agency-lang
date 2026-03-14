@@ -2,6 +2,7 @@ import { generateAgency } from "@/backends/agencyGenerator.js";
 import { generateDeclarations } from "@/backends/declarationGenerator.js";
 import { AgencyConfig } from "@/config.js";
 import { AgencyProgram, generateTypeScript } from "@/index.js";
+import { transformSync } from "esbuild";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { typeCheck, formatErrors } from "@/typeChecker.js";
 import { ImportStatement } from "@/types/importStatement.js";
@@ -189,11 +190,18 @@ export function compile(
     }
   });
 
-  let generatedCode = generateTypeScript(parsedProgram, config);
+  const generatedCode = generateTypeScript(parsedProgram, config);
   if (options?.ts) {
-    generatedCode = "//@ts-nocheck\n" + generatedCode;
+    // TypeScript output — write as-is with proper types
+    fs.writeFileSync(outputFile, generatedCode, "utf-8");
+  } else {
+    // JavaScript output — strip types with esbuild
+    const result = transformSync(generatedCode, {
+      loader: "ts",
+      format: "esm",
+    });
+    fs.writeFileSync(outputFile, result.code, "utf-8");
   }
-  fs.writeFileSync(outputFile, generatedCode, "utf-8");
 
   // Generate .d.ts declarations if enabled
   if (config.declarations) {

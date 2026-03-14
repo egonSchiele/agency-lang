@@ -7,7 +7,7 @@ export const template = `if (process.argv[1] === fileURLToPath(import.meta.url))
     try {
       const initialState = { messages: new ThreadStore(), data: {} };
       await main(initialState);
-    } catch (__error) {
+    } catch (__error: any) {
       console.error(\`\nAgent crashed: \${__error.message}\`);
       throw __error;
     }

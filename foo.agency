@@ -1,19 +1,22 @@
-def canYouRepeatThat() {
-  return llm("What was the last message from you?")
+type IngredientEdit = {
+  ingredientId: string;
+  updates: {
+    name: string | undefined;
+    serving_size: number | undefined;
+    unit: string | undefined;
+    calories: number | undefined;
+    protein: number | undefined;
+    fat: number | undefined;
+    carbohydrates: number | undefined;
+    fiber: number | undefined;
+    sugar: number | undefined;
+    calcium: number | undefined;
+    sodium: number | undefined;
+    public: boolean | undefined
+  }
 }
 
 node main() {
-  res1 = canYouRepeatThat()
-  msgs = thread {
-    res2: number[] = llm("What is the first prime number > 100?")
-    res3 = canYouRepeatThat()
-  }
-  res4 = canYouRepeatThat()
-
-  return { 
-    res1: res1,
-    res2: res2,
-    res3: res3,
-    res4: res4
-  }
+  ingredient: IngredientEdit = llm("Format this as an IngredientEdit object: I want to update the ingredient with id '123' to have a new name 'Tomato', a serving size of 100 grams, and 20 calories per serving.")
+  print(ingredient)
 }

@@ -1,4 +1,4 @@
-async function _builtinFetch(url, args = {}) {
+async function _builtinFetch(url: string, args: RequestInit = {}): Promise<string> {
   const result = await fetch(url, args);
   try {
     const text = await result.text();

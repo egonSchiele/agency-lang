@@ -4,10 +4,10 @@
 import { apply } from "typestache";
 
 export const template = `{{#hasArgs}}
-export async function {{{nodeName:string}}}({{{argsStr:string}}}, { messages, callbacks } = {}) {
+export async function {{{nodeName:string}}}({{{argsStr:string}}}, { messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
 {{/hasArgs}}
 {{^hasArgs}}
-export async function {{{nodeName:string}}}({ messages, callbacks } = {}) {
+export async function {{{nodeName:string}}}({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
 {{/hasArgs}}
   return runNode({
     ctx: __globalCtx,

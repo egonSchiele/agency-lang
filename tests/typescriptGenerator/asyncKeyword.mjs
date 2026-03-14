@@ -5,6 +5,7 @@ import { z } from "zod";
 import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
+import type { GraphState, InternalFunctionState, Interrupt } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore,
   setupNode, setupFunction, runNode, runPrompt, callHook,
@@ -92,26 +93,26 @@ const __globalCtx = new RuntimeContext({
 const graph = __globalCtx.graph;
 
 // Path-dependent builtin wrappers
-function _builtinRead(filename) {
+function _builtinRead(filename: string): string {
   return _builtinReadRaw({ filename, dirname: __dirname });
 }
-function _builtinWrite(filename, content) {
-  return _builtinWriteRaw({ filename, content, dirname: __dirname });
+function _builtinWrite(filename: string, content: string): void {
+  _builtinWriteRaw({ filename, content, dirname: __dirname });
 }
-function _builtinReadImage(filename) {
+function _builtinReadImage(filename: string): string {
   return _builtinReadImageRaw({ filename, dirname: __dirname });
 }
-export function readSkill({filepath}) {
+export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
 // Interrupt re-exports bound to this module's context
 export { interrupt, isInterrupt };
-export const respondToInterrupt = (i, r, m) => _respondToInterrupt({ ctx: __globalCtx, interrupt: i, interruptResponse: r, metadata: m });
-export const approveInterrupt = (i, m) => _approveInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
-export const rejectInterrupt = (i, m) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
-export const modifyInterrupt = (i, a, m) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
-export const resolveInterrupt = (i, v, m) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
+export const respondToInterrupt = (i: Interrupt, r: any, m?: any) => _respondToInterrupt({ ctx: __globalCtx, interrupt: i, interruptResponse: r, metadata: m });
+export const approveInterrupt = (i: Interrupt, m?: any) => _approveInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
+export const rejectInterrupt = (i: Interrupt, m?: any) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
+export const modifyInterrupt = (i: Interrupt, a: any, m?: any) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
+export const resolveInterrupt = (i: Interrupt, v: any, m?: any) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
 export const __openaiTool = {
   name: "openai",
   description: `No description provided.`,
@@ -134,7 +135,7 @@ export const __fibsTool = {
 
 export const __fibsToolParams = [];
 
-export async function openai(msg, __state=undefined) {
+export async function openai(msg: string, __state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupFunction({ state: __state });
 
@@ -157,9 +158,9 @@ export async function openai(msg, __state=undefined) {
       
 
       if (__step <= 1) {
-        let __defaultTimeblockName_startTime = performance.now();
+        let __defaultTimeblockName_startTime: number = performance.now();
 
-async function _response(msg, __metadata) {
+async function _response(msg, __metadata): Promise<any> {
   return runPrompt({
     ctx: __ctx,
     prompt: `Respond to this user message: ${msg}`,
@@ -182,8 +183,8 @@ __self.response = _response(__stack.args.msg, {
 
 
 
-let __defaultTimeblockName_endTime = performance.now();
-let __defaultTimeblockName = __defaultTimeblockName_endTime - __defaultTimeblockName_startTime;
+let __defaultTimeblockName_endTime: number = performance.now();
+let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultTimeblockName_startTime;
 
 
 console.log("Time taken:", __defaultTimeblockName, "ms");
@@ -207,7 +208,7 @@ return `OpenAI response: ${__stack.locals.response}`
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "openai", timeTaken: performance.now() - __funcStartTime } });
 }
 
-export async function google(msg, __state=undefined) {
+export async function google(msg: string, __state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupFunction({ state: __state });
 
@@ -236,9 +237,9 @@ export async function google(msg, __state=undefined) {
       
 
       if (__step <= 2) {
-        let __defaultTimeblockName_startTime = performance.now();
+        let __defaultTimeblockName_startTime: number = performance.now();
 
-async function _response(msg, __metadata) {
+async function _response(msg, __metadata): Promise<any> {
   return runPrompt({
     ctx: __ctx,
     prompt: `Respond to this user message: ${msg}`,
@@ -261,8 +262,8 @@ __self.response = _response(__stack.args.msg, {
 
 
 
-let __defaultTimeblockName_endTime = performance.now();
-let __defaultTimeblockName = __defaultTimeblockName_endTime - __defaultTimeblockName_startTime;
+let __defaultTimeblockName_endTime: number = performance.now();
+let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultTimeblockName_startTime;
 
 
 console.log("Time taken:", __defaultTimeblockName, "ms");
@@ -286,7 +287,7 @@ return `Google response: ${__stack.locals.response}`
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "google", timeTaken: performance.now() - __funcStartTime } });
 }
 
-export async function fibs(__state=undefined) {
+export async function fibs(__state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupFunction({ state: __state });
 
@@ -310,7 +311,7 @@ export async function fibs(__state=undefined) {
 
       if (__step <= 1) {
         
-async function ___promptVar(__metadata) {
+async function ___promptVar(__metadata): Promise<any> {
   return runPrompt({
     ctx: __ctx,
     prompt: `Generate the first 10 Fibonacci numbers`,
@@ -353,7 +354,7 @@ return __self.__promptVar;
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "fibs", timeTaken: performance.now() - __funcStartTime } });
 }
 
-graph.node("main", async (__state) => {
+graph.node("main", async (__state: GraphState) => {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupNode({ state: __state });
     const __ctx = __state.ctx;
@@ -454,7 +455,7 @@ if (isInterrupt(__stack.locals.res1)) {
 
 
 
-export async function main({ messages, callbacks } = {}) {
+export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
 
   return runNode({
     ctx: __globalCtx,
@@ -470,7 +471,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     try {
       const initialState = { messages: new ThreadStore(), data: {} };
       await main(initialState);
-    } catch (__error) {
+    } catch (__error: any) {
       console.error(`
 Agent crashed: ${__error.message}`);
       throw __error;

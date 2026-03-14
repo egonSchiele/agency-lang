@@ -4,7 +4,7 @@
 import { apply } from "typestache";
 
 export const template = `
-graph.node("{{{name}}}", async (__state) => {
+graph.node("{{{name}}}", async (__state: GraphState) => {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupNode({ state: __state });
     const __ctx = __state.ctx;

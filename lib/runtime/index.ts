@@ -1,3 +1,5 @@
+export type { GraphState, InternalFunctionState } from "./types.js";
+export type { Interrupt } from "./interrupts.js";
 export { RuntimeContext } from "./state/context.js";
 export { StateStack } from "./state/stateStack.js";
 export { MessageThread } from "./state/messageThread.js";

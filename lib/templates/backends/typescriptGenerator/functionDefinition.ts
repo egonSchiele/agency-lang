@@ -4,7 +4,7 @@
 import { apply } from "typestache";
 
 export const template = `
-export async function {{{functionName:string}}}({{{paramList:string}}}__state=undefined) {
+export async function {{{functionName:string}}}({{{paramList:string}}}__state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupFunction({ state: __state });
 

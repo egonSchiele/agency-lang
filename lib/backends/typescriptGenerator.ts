@@ -21,6 +21,7 @@ import {
 } from "@/config.js";
 import { SpecialVar } from "@/types/specialVar.js";
 import { TimeBlock } from "@/types/timeBlock.js";
+import { formatTypeHint } from "@/cli/util.js";
 import * as renderSpecialVar from "../templates/backends/typescriptGenerator/specialVar.js";
 import * as renderTime from "../templates/backends/typescriptGenerator/builtinFunctions/time.js";
 // builtinTools now handled by runtime library
@@ -427,11 +428,17 @@ export class TypeScriptGenerator extends BaseGenerator {
     this.startScope({ type: "function", functionName: node.functionName });
     const { functionName, body, parameters } = node;
     const args = parameters.map((p) => p.name);
+    const typedArgs = parameters.map((p) => {
+      if (p.typeHint) {
+        return `${p.name}: ${formatTypeHint(p.typeHint)}`;
+      }
+      return `${p.name}: any`;
+    });
 
     const bodyCode = this.processBodyAsParts(body);
 
     this.endScope();
-    const paramList = args.length > 0 ? args.join(", ") + ", " : "";
+    const paramList = typedArgs.length > 0 ? typedArgs.join(", ") + ", " : "";
     const paramAssignments = args
       .map((arg) => `__stack.args["${arg}"] = ${arg};`)
       .join("\n    ");
@@ -1136,7 +1143,12 @@ export class TypeScriptGenerator extends BaseGenerator {
 
     for (const node of this.graphNodes) {
       const args = node.parameters;
-      const argsStr = args.map((arg) => arg.name).join(", ");
+      const argsStr = args.map((arg) => {
+        if (arg.typeHint) {
+          return `${arg.name}: ${formatTypeHint(arg.typeHint)}`;
+        }
+        return `${arg.name}: any`;
+      }).join(", ");
       lines.push(
         renderRunNodeFunction.default({
           nodeName: node.nodeName,

@@ -81,6 +81,16 @@ const onCancel = () => {
   process.exit(0);
 };
 
+function exitIfSignal(e: unknown): void {
+  if (
+    e instanceof Error &&
+    "signal" in e &&
+    ((e as any).signal === "SIGINT" || (e as any).signal === "SIGTERM")
+  ) {
+    process.exit(1);
+  }
+}
+
 export async function fixtures(config: AgencyConfig, target?: string) {
   let { filename, nodeName } = target
     ? parseTarget(target)
@@ -439,6 +449,7 @@ export async function test(
         testPassed = runSingleTest(config, testFile, tests, testCase);
         if (testPassed) break;
       } catch (e) {
+        exitIfSignal(e);
         console.log(color.red(`  ✗ Test error: ${e}`));
         testPassed = false;
       }
@@ -535,6 +546,7 @@ export async function testTs(config: AgencyConfig, inputPaths: string[]) {
           stdio: "inherit",
         });
       } catch (e) {
+        exitIfSignal(e);
         console.log(color.red(`  ✗ Test script execution failed: ${e}`));
         failures.push(dir);
         continue;

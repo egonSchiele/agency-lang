@@ -7,6 +7,7 @@ import {
   Literal,
   MultiLineStringLiteral,
   NewLine,
+  ObjectProperty,
   PromptLiteral,
   StringLiteral,
   TypeAlias,
@@ -78,6 +79,37 @@ export class AgencyGenerator extends BaseGenerator {
     return "";
   }
 
+  private stringifyProp(prop: ObjectProperty): string {
+    // if value is a union containing undefined, render as ?:
+    const isUnionWithUndefined =
+      prop.value.type === "unionType" &&
+      prop.value.types.some(
+        (t) => t.type === "primitiveType" && t.value === "undefined",
+      );
+
+    if (isUnionWithUndefined) {
+      const nonUndefinedTypes = (prop.value as any).types.filter(
+        (t: VariableType) =>
+          !(t.type === "primitiveType" && t.value === "undefined"),
+      );
+      const unionWithoutUndefined: VariableType =
+        nonUndefinedTypes.length === 1
+          ? nonUndefinedTypes[0]
+          : { type: "unionType", types: nonUndefinedTypes };
+      let str = `${prop.key}?: ${variableTypeToString(unionWithoutUndefined, this.typeAliases)}`;
+      if (prop.description) {
+        str += ` # ${prop.description}`;
+      }
+      return str;
+    }
+
+    let str = `${prop.key}: ${variableTypeToString(prop.value, this.typeAliases)}`;
+    if (prop.description) {
+      str += ` # ${prop.description}`;
+    }
+    return str;
+  }
+
   protected aliasedTypeToString(aliasedType: VariableType): string {
     if (aliasedType.type === "objectType") {
       this.increaseIndent();
@@ -85,14 +117,7 @@ export class AgencyGenerator extends BaseGenerator {
         "{\n" +
         aliasedType.properties
           .map((prop) => {
-            let str = "";
-            str += this.indentStr(
-              `${prop.key}: ${this.aliasedTypeToString(prop.value)}`,
-            );
-            if (prop.description) {
-              str += ` # ${prop.description}`;
-            }
-            return str;
+            return this.indentStr(this.stringifyProp(prop));
           })
           .join(";\n") +
         "\n";

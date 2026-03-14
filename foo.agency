@@ -1,3 +1,7 @@
+type Foo = {
+  bar?: string
+}
+
 def canYouRepeatThat() {
   return llm("What was the last message from you?")
 }

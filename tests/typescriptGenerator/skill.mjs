@@ -149,7 +149,7 @@ export async function analyzeData(input: string, { messages, callbacks }: { mess
   return runNode({
     ctx: __globalCtx,
     nodeName: "analyzeData",
-    data: { input: string },
+    data: { input },
     messages,
     callbacks,
   });

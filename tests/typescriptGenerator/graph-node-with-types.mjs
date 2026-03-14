@@ -188,7 +188,7 @@ export async function greet(name: string, { messages, callbacks }: { messages?: 
   return runNode({
     ctx: __globalCtx,
     nodeName: "greet",
-    data: { name: string },
+    data: { name },
     messages,
     callbacks,
   });

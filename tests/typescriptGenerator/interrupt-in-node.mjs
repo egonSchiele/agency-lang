@@ -347,7 +347,7 @@ export async function foo2(name: string, age: number, { messages, callbacks }: {
   return runNode({
     ctx: __globalCtx,
     nodeName: "foo2",
-    data: { name: string, age: number },
+    data: { name, age },
     messages,
     callbacks,
   });
@@ -361,7 +361,7 @@ export async function sayHi(name: any, { messages, callbacks }: { messages?: any
   return runNode({
     ctx: __globalCtx,
     nodeName: "sayHi",
-    data: { name: any },
+    data: { name },
     messages,
     callbacks,
   });

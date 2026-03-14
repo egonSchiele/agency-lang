@@ -382,7 +382,7 @@ export async function sayHi(name: any, { messages, callbacks }: { messages?: any
   return runNode({
     ctx: __globalCtx,
     nodeName: "sayHi",
-    data: { name: any },
+    data: { name },
     messages,
     callbacks,
   });

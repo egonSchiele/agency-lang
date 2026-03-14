@@ -1143,7 +1143,8 @@ export class TypeScriptGenerator extends BaseGenerator {
 
     for (const node of this.graphNodes) {
       const args = node.parameters;
-      const argsStr = args.map((arg) => {
+      const argsStr = args.map((arg) => arg.name).join(", ");
+      const typedArgsStr = args.map((arg) => {
         if (arg.typeHint) {
           return `${arg.name}: ${formatTypeHint(arg.typeHint)}`;
         }
@@ -1154,6 +1155,7 @@ export class TypeScriptGenerator extends BaseGenerator {
           nodeName: node.nodeName,
           hasArgs: args.length > 0,
           argsStr,
+          typedArgsStr,
         }),
       );
       // Export node parameter names so imported nodes can build correct data objects

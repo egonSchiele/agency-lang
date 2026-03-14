@@ -187,7 +187,7 @@ export async function main(input: any, { messages, callbacks }: { messages?: any
   return runNode({
     ctx: __globalCtx,
     nodeName: "main",
-    data: { input: any },
+    data: { input },
     messages,
     callbacks,
   });

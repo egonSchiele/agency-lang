@@ -4,7 +4,7 @@
 import { apply } from "typestache";
 
 export const template = `{{#hasArgs}}
-export async function {{{nodeName:string}}}({{{argsStr:string}}}, { messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
+export async function {{{nodeName:string}}}({{{typedArgsStr:string}}}, { messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
 {{/hasArgs}}
 {{^hasArgs}}
 export async function {{{nodeName:string}}}({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
@@ -22,6 +22,7 @@ export async function {{{nodeName:string}}}({ messages, callbacks }: { messages?
 export type TemplateType = {
   hasArgs: boolean;
   nodeName: string;
+  typedArgsStr: string;
   argsStr: string;
 };
 

@@ -82,6 +82,9 @@ const onCancel = () => {
 };
 
 let interrupted = false;
+process.on("SIGINT", () => {
+  interrupted = true;
+});
 
 function isSignalError(e: unknown): boolean {
   return (

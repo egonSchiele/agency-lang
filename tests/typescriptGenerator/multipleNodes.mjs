@@ -314,7 +314,7 @@ export async function processGreeting(msg: any, { messages, callbacks }: { messa
   return runNode({
     ctx: __globalCtx,
     nodeName: "processGreeting",
-    data: { msg: any },
+    data: { msg },
     messages,
     callbacks,
   });

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
+import type { GraphState, InternalFunctionState, Interrupt } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore,
   setupNode, setupFunction, runNode, runPrompt, callHook,
@@ -92,26 +93,26 @@ const __globalCtx = new RuntimeContext({
 const graph = __globalCtx.graph;
 
 // Path-dependent builtin wrappers
-function _builtinRead(filename) {
+function _builtinRead(filename: string): string {
   return _builtinReadRaw({ filename, dirname: __dirname });
 }
-function _builtinWrite(filename, content) {
-  return _builtinWriteRaw({ filename, content, dirname: __dirname });
+function _builtinWrite(filename: string, content: string): void {
+  _builtinWriteRaw({ filename, content, dirname: __dirname });
 }
-function _builtinReadImage(filename) {
+function _builtinReadImage(filename: string): string {
   return _builtinReadImageRaw({ filename, dirname: __dirname });
 }
-export function readSkill({filepath}) {
+export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
 // Interrupt re-exports bound to this module's context
 export { interrupt, isInterrupt };
-export const respondToInterrupt = (i, r, m) => _respondToInterrupt({ ctx: __globalCtx, interrupt: i, interruptResponse: r, metadata: m });
-export const approveInterrupt = (i, m) => _approveInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
-export const rejectInterrupt = (i, m) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
-export const modifyInterrupt = (i, a, m) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
-export const resolveInterrupt = (i, v, m) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
+export const respondToInterrupt = (i: Interrupt, r: any, m?: any) => _respondToInterrupt({ ctx: __globalCtx, interrupt: i, interruptResponse: r, metadata: m });
+export const approveInterrupt = (i: Interrupt, m?: any) => _approveInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
+export const rejectInterrupt = (i: Interrupt, m?: any) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
+export const modifyInterrupt = (i: Interrupt, a: any, m?: any) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
+export const resolveInterrupt = (i: Interrupt, v: any, m?: any) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
 export const __greetTool = {
   name: "greet",
   description: `No description provided.`,
@@ -127,7 +128,7 @@ export const __foo2Tool = {
 
 export const __foo2ToolParams = ["name","age"];
 
-export async function greet(name, age, __state=undefined) {
+export async function greet(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupFunction({ state: __state });
 
@@ -204,7 +205,7 @@ return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} yea
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "greet", timeTaken: performance.now() - __funcStartTime } });
 }
 
-export async function foo2(name, age, __state=undefined) {
+export async function foo2(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupFunction({ state: __state });
 
@@ -236,7 +237,7 @@ export async function foo2(name, age, __state=undefined) {
 
       if (__step <= 2) {
         
-async function _response(name, age, __metadata) {
+async function _response(name, age, __metadata): Promise<any> {
   return runPrompt({
     ctx: __ctx,
     prompt: `Greet the user with their name: ${name} and age ${age} using the greet function.`,
@@ -286,7 +287,7 @@ return __stack.locals.response
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "foo2", timeTaken: performance.now() - __funcStartTime } });
 }
 
-graph.node("sayHi", async (__state) => {
+graph.node("sayHi", async (__state: GraphState) => {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupNode({ state: __state });
     const __ctx = __state.ctx;
@@ -375,7 +376,7 @@ if (isInterrupt(__stack.locals.response)) {
 });
 
 
-export async function sayHi(name, { messages, callbacks } = {}) {
+export async function sayHi(name: any, { messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
 
 
   return runNode({

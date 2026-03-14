@@ -5,6 +5,7 @@ import { z } from "zod";
 import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
+import type { GraphState, InternalFunctionState, Interrupt } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore,
   setupNode, setupFunction, runNode, runPrompt, callHook,
@@ -92,26 +93,26 @@ const __globalCtx = new RuntimeContext({
 const graph = __globalCtx.graph;
 
 // Path-dependent builtin wrappers
-function _builtinRead(filename) {
+function _builtinRead(filename: string): string {
   return _builtinReadRaw({ filename, dirname: __dirname });
 }
-function _builtinWrite(filename, content) {
-  return _builtinWriteRaw({ filename, content, dirname: __dirname });
+function _builtinWrite(filename: string, content: string): void {
+  _builtinWriteRaw({ filename, content, dirname: __dirname });
 }
-function _builtinReadImage(filename) {
+function _builtinReadImage(filename: string): string {
   return _builtinReadImageRaw({ filename, dirname: __dirname });
 }
-export function readSkill({filepath}) {
+export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
 // Interrupt re-exports bound to this module's context
 export { interrupt, isInterrupt };
-export const respondToInterrupt = (i, r, m) => _respondToInterrupt({ ctx: __globalCtx, interrupt: i, interruptResponse: r, metadata: m });
-export const approveInterrupt = (i, m) => _approveInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
-export const rejectInterrupt = (i, m) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
-export const modifyInterrupt = (i, a, m) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
-export const resolveInterrupt = (i, v, m) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
+export const respondToInterrupt = (i: Interrupt, r: any, m?: any) => _respondToInterrupt({ ctx: __globalCtx, interrupt: i, interruptResponse: r, metadata: m });
+export const approveInterrupt = (i: Interrupt, m?: any) => _approveInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
+export const rejectInterrupt = (i: Interrupt, m?: any) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
+export const modifyInterrupt = (i: Interrupt, a: any, m?: any) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
+export const resolveInterrupt = (i: Interrupt, v: any, m?: any) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
 export const __fooTool = {
   name: "foo",
   description: `No description provided.`,
@@ -120,7 +121,7 @@ export const __fooTool = {
 
 export const __fooToolParams = [];
 
-export async function foo(__state=undefined) {
+export async function foo(__state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupFunction({ state: __state });
 
@@ -152,7 +153,7 @@ const __tid = __threads.create();
 __threads.pushActive(__tid);
 
 
-async function _res1(__metadata) {
+async function _res1(__metadata): Promise<any> {
   return runPrompt({
     ctx: __ctx,
     prompt: `What are the first 5 prime numbers?`,
@@ -196,7 +197,7 @@ const __tid = __threads.createSubthread();
 __threads.pushActive(__tid);
 
 
-async function _res2(__metadata) {
+async function _res2(__metadata): Promise<any> {
   return runPrompt({
     ctx: __ctx,
     prompt: `What are the next 2 prime numbers after those?`,
@@ -240,7 +241,7 @@ const __tid = __threads.createSubthread();
 __threads.pushActive(__tid);
 
 
-async function _res3(__metadata) {
+async function _res3(__metadata): Promise<any> {
   return runPrompt({
     ctx: __ctx,
     prompt: `And what is the sum of all those numbers combined?`,
@@ -290,7 +291,7 @@ const __tid = __threads.create();
 __threads.pushActive(__tid);
 
 
-async function _res5(__metadata) {
+async function _res5(__metadata): Promise<any> {
   return runPrompt({
     ctx: __ctx,
     prompt: `And what is the sum of all those numbers combined?`,
@@ -346,7 +347,7 @@ const __tid = __threads.createSubthread();
 __threads.pushActive(__tid);
 
 
-async function _res4(__metadata) {
+async function _res4(__metadata): Promise<any> {
   return runPrompt({
     ctx: __ctx,
     prompt: `And what is the sum of all those numbers combined?`,
@@ -433,7 +434,7 @@ __threads.popActive();
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "foo", timeTaken: performance.now() - __funcStartTime } });
 }
 
-graph.node("main", async (__state) => {
+graph.node("main", async (__state: GraphState) => {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupNode({ state: __state });
     const __ctx = __state.ctx;
@@ -463,7 +464,7 @@ const __tid = __threads.create();
 __threads.pushActive(__tid);
 
 
-async function _res1(__metadata) {
+async function _res1(__metadata): Promise<any> {
   return runPrompt({
     ctx: __ctx,
     prompt: `What are the first 5 prime numbers?`,
@@ -507,7 +508,7 @@ const __tid = __threads.createSubthread();
 __threads.pushActive(__tid);
 
 
-async function _res2(__metadata) {
+async function _res2(__metadata): Promise<any> {
   return runPrompt({
     ctx: __ctx,
     prompt: `What are the next 2 prime numbers after those?`,
@@ -551,7 +552,7 @@ const __tid = __threads.createSubthread();
 __threads.pushActive(__tid);
 
 
-async function _res3(__metadata) {
+async function _res3(__metadata): Promise<any> {
   return runPrompt({
     ctx: __ctx,
     prompt: `And what is the sum of all those numbers combined?`,
@@ -601,7 +602,7 @@ const __tid = __threads.create();
 __threads.pushActive(__tid);
 
 
-async function _res5(__metadata) {
+async function _res5(__metadata): Promise<any> {
   return runPrompt({
     ctx: __ctx,
     prompt: `And what is the sum of all those numbers combined?`,
@@ -657,7 +658,7 @@ const __tid = __threads.createSubthread();
 __threads.pushActive(__tid);
 
 
-async function _res4(__metadata) {
+async function _res4(__metadata): Promise<any> {
   return runPrompt({
     ctx: __ctx,
     prompt: `And what is the sum of all those numbers combined?`,
@@ -747,7 +748,7 @@ __threads.popActive();
 
 
 
-export async function main({ messages, callbacks } = {}) {
+export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
 
   return runNode({
     ctx: __globalCtx,
@@ -763,7 +764,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     try {
       const initialState = { messages: new ThreadStore(), data: {} };
       await main(initialState);
-    } catch (__error) {
+    } catch (__error: any) {
       console.error(`
 Agent crashed: ${__error.message}`);
       throw __error;

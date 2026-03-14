@@ -5,6 +5,7 @@ import { z } from "zod";
 import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
+import type { GraphState, InternalFunctionState, Interrupt } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore,
   setupNode, setupFunction, runNode, runPrompt, callHook,
@@ -92,26 +93,26 @@ const __globalCtx = new RuntimeContext({
 const graph = __globalCtx.graph;
 
 // Path-dependent builtin wrappers
-function _builtinRead(filename) {
+function _builtinRead(filename: string): string {
   return _builtinReadRaw({ filename, dirname: __dirname });
 }
-function _builtinWrite(filename, content) {
-  return _builtinWriteRaw({ filename, content, dirname: __dirname });
+function _builtinWrite(filename: string, content: string): void {
+  _builtinWriteRaw({ filename, content, dirname: __dirname });
 }
-function _builtinReadImage(filename) {
+function _builtinReadImage(filename: string): string {
   return _builtinReadImageRaw({ filename, dirname: __dirname });
 }
-export function readSkill({filepath}) {
+export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
 // Interrupt re-exports bound to this module's context
 export { interrupt, isInterrupt };
-export const respondToInterrupt = (i, r, m) => _respondToInterrupt({ ctx: __globalCtx, interrupt: i, interruptResponse: r, metadata: m });
-export const approveInterrupt = (i, m) => _approveInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
-export const rejectInterrupt = (i, m) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
-export const modifyInterrupt = (i, a, m) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
-export const resolveInterrupt = (i, v, m) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
+export const respondToInterrupt = (i: Interrupt, r: any, m?: any) => _respondToInterrupt({ ctx: __globalCtx, interrupt: i, interruptResponse: r, metadata: m });
+export const approveInterrupt = (i: Interrupt, m?: any) => _approveInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
+export const rejectInterrupt = (i: Interrupt, m?: any) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
+export const modifyInterrupt = (i: Interrupt, a: any, m?: any) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
+export const resolveInterrupt = (i: Interrupt, v: any, m?: any) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
 export const __addTool = {
   name: "add",
   description: `Adds two numbers together`,
@@ -148,7 +149,7 @@ export const __flexibleTool = {
 
 export const __flexibleToolParams = ["value"];
 
-export async function add(x, y, __state=undefined) {
+export async function add(x: number, y: number, __state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupFunction({ state: __state });
 
@@ -173,7 +174,7 @@ export async function add(x, y, __state=undefined) {
 
       if (__step <= 1) {
         
-async function _result(x, y, __metadata) {
+async function _result(x, y, __metadata): Promise<any> {
   return runPrompt({
     ctx: __ctx,
     prompt: `add ${x} and ${y}`,
@@ -212,7 +213,7 @@ return __stack.locals.result
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "add", timeTaken: performance.now() - __funcStartTime } });
 }
 
-export async function greet(name, __state=undefined) {
+export async function greet(name: string, __state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupFunction({ state: __state });
 
@@ -236,7 +237,7 @@ export async function greet(name, __state=undefined) {
 
       if (__step <= 1) {
         
-async function _message(name, __metadata) {
+async function _message(name, __metadata): Promise<any> {
   return runPrompt({
     ctx: __ctx,
     prompt: `Hello ${name}!`,
@@ -275,7 +276,7 @@ return __stack.locals.message
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "greet", timeTaken: performance.now() - __funcStartTime } });
 }
 
-export async function mixed(count, label, __state=undefined) {
+export async function mixed(count: number, label: any, __state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupFunction({ state: __state });
 
@@ -300,7 +301,7 @@ export async function mixed(count, label, __state=undefined) {
 
       if (__step <= 1) {
         
-async function _output(label, count, __metadata) {
+async function _output(label, count, __metadata): Promise<any> {
   return runPrompt({
     ctx: __ctx,
     prompt: `${label}: ${count}`,
@@ -339,7 +340,7 @@ return __stack.locals.output
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "mixed", timeTaken: performance.now() - __funcStartTime } });
 }
 
-export async function processArray(items, __state=undefined) {
+export async function processArray(items: number[], __state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupFunction({ state: __state });
 
@@ -363,7 +364,7 @@ export async function processArray(items, __state=undefined) {
 
       if (__step <= 1) {
         
-async function _result(items, __metadata) {
+async function _result(items, __metadata): Promise<any> {
   return runPrompt({
     ctx: __ctx,
     prompt: `Processing array with ${items} items`,
@@ -402,7 +403,7 @@ return __stack.locals.result
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "processArray", timeTaken: performance.now() - __funcStartTime } });
 }
 
-export async function flexible(value, __state=undefined) {
+export async function flexible(value: string | number, __state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupFunction({ state: __state });
 
@@ -426,7 +427,7 @@ export async function flexible(value, __state=undefined) {
 
       if (__step <= 1) {
         
-async function _result(value, __metadata) {
+async function _result(value, __metadata): Promise<any> {
   return runPrompt({
     ctx: __ctx,
     prompt: `Received value: ${value}`,
@@ -465,7 +466,7 @@ return __stack.locals.result
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "flexible", timeTaken: performance.now() - __funcStartTime } });
 }
 
-graph.node("foo", async (__state) => {
+graph.node("foo", async (__state: GraphState) => {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupNode({ state: __state });
     const __ctx = __state.ctx;
@@ -502,7 +503,7 @@ graph.node("foo", async (__state) => {
     return { messages: __threads, data: undefined };
 });
 
-graph.node("main", async (__state) => {
+graph.node("main", async (__state: GraphState) => {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupNode({ state: __state });
     const __ctx = __state.ctx;
@@ -633,7 +634,7 @@ if (isInterrupt(__stack.locals.flexResult)) {
 
 
 
-export async function foo({ messages, callbacks } = {}) {
+export async function foo({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
 
   return runNode({
     ctx: __globalCtx,
@@ -647,7 +648,7 @@ export async function foo({ messages, callbacks } = {}) {
 export const __fooNodeParams = [];
 
 
-export async function main({ messages, callbacks } = {}) {
+export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
 
   return runNode({
     ctx: __globalCtx,
@@ -663,7 +664,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     try {
       const initialState = { messages: new ThreadStore(), data: {} };
       await main(initialState);
-    } catch (__error) {
+    } catch (__error: any) {
       console.error(`
 Agent crashed: ${__error.message}`);
       throw __error;

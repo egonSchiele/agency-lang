@@ -141,10 +141,6 @@ export interface AgencyConfig {
    */
   typeCheckStrict?: boolean;
 
-  /**
-   * If true, generate .d.ts declaration files alongside .js output.
-   */
-  declarations?: boolean;
 
   /**
    * If true, validate that import paths resolve within the project directory.

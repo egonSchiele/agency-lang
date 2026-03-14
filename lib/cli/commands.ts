@@ -1,5 +1,4 @@
 import { generateAgency } from "@/backends/agencyGenerator.js";
-import { generateDeclarations } from "@/backends/declarationGenerator.js";
 import { AgencyConfig } from "@/config.js";
 import { AgencyProgram, generateTypeScript } from "@/index.js";
 import { transformSync } from "esbuild";
@@ -203,13 +202,6 @@ export function compile(
     fs.writeFileSync(outputFile, result.code, "utf-8");
   }
 
-  // Generate .d.ts declarations if enabled
-  if (config.declarations) {
-    const declarations = generateDeclarations(parsedProgram, config);
-    const dtsFile = outputFile.replace(/\.(js|ts)$/, ".d.ts");
-    fs.writeFileSync(dtsFile, declarations, "utf-8");
-    console.log(`${inputFile} → ${dtsFile}`);
-  }
 
   console.log(`${inputFile} → ${outputFile}`);
 

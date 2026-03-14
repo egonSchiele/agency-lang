@@ -3,10 +3,10 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `let {{{timingVarName:string}}}_startTime = performance.now();
+export const template = `let {{{timingVarName:string}}}_startTime: number = performance.now();
 {{{bodyCodeStr:string}}}
-let {{{timingVarName}}}_endTime = performance.now();
-let {{{timingVarName}}} = {{{timingVarName}}}_endTime - {{{timingVarName}}}_startTime;
+let {{{timingVarName}}}_endTime: number = performance.now();
+let {{{timingVarName}}}: number = {{{timingVarName}}}_endTime - {{{timingVarName}}}_startTime;
 
 {{#printTime}}
 console.log("Time taken:", {{{timingVarName}}}, "ms");

@@ -4,7 +4,7 @@
 import { apply } from "typestache";
 
 export const template = `
-async function _{{{variableName:string}}}({{{argsStr:string}}}) {
+async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<any> {
   return runPrompt({
     ctx: __ctx,
     prompt: {{{promptCode:string}}},

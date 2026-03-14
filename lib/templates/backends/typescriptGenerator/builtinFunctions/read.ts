@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `function _builtinRead(filename) {
+export const template = `function _builtinRead(filename: string): string {
   const data = fs.readFileSync(filename);
   const contents = data.toString('utf8');
   return contents;

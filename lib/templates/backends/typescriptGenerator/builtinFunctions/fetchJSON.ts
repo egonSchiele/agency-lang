@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `async function _builtinFetchJSON(url, args = {}) {
+export const template = `async function _builtinFetchJSON(url: string, args: RequestInit = {}): Promise<any> {
   const result = await fetch(url, args);
   try {
     const json = await result.json();

@@ -1,0 +1,13 @@
+node foo() {
+  msgs = thread {
+    res1: string = llm("My favorite number is 3435.")
+  }
+  return msgs
+}
+
+node bar(msgs) {
+  res2: number = llm("What is my favorite number? Reply with just the number, nothing else.", {
+    messages: msgs
+  })
+  return res2
+}

@@ -53,13 +53,35 @@ export class MessageThread {
   }
 
   static fromJSON(
-    json: MessageThreadJSON | MessageThread | smoltalk.MessageJSON[],
+    json:
+      | MessageThreadJSON
+      | MessageThread
+      | smoltalk.MessageJSON[]
+      | smoltalk.Message[],
   ): MessageThread {
     if (json instanceof MessageThread) return json;
     const thread = new MessageThread();
-    thread.messages = (Array.isArray(json) ? json : json.messages || []).map(
-      (m: smoltalk.MessageJSON) => smoltalk.messageFromJSON(m),
+
+    let _messages: any[] = [];
+    if (Array.isArray(json)) {
+      _messages = json;
+    } else if ("messages" in json) {
+      _messages = json.messages;
+    } else {
+      throw new Error("Invalid input for MessageThread.fromJSON");
+    }
+
+    const messagesToJSON = _messages.map(
+      (m: smoltalk.MessageJSON | smoltalk.Message) =>
+        "toJSON" in m ? m.toJSON() : m,
     );
+
+    const smoltalkMessages = messagesToJSON.map((m: smoltalk.MessageJSON) =>
+      smoltalk.messageFromJSON(m),
+    );
+
+    thread.setMessages(smoltalkMessages);
+
     return thread;
   }
 }

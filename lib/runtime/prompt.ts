@@ -316,11 +316,7 @@ export async function runPrompt(args: {
   if (args.interruptData?.messages) {
     messages = MessageThread.fromJSON(args.interruptData.messages);
   } else if (clientConfig.messages) {
-    messages = MessageThread.fromJSON(
-      clientConfig.messages
-        .map((m) => m.toJSON())
-        .map((m) => smoltalk.messageFromJSON(m)),
-    );
+    messages = MessageThread.fromJSON(clientConfig.messages);
   } else if (args.messages) {
     messages = args.messages;
   } else {

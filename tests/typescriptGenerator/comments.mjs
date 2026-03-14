@@ -190,7 +190,10 @@ graph.node("main", async (__state) => {
       if (__step <= 1) {
         __stack.locals.result = greet({
     ctx: __ctx,
-    threads: __threads,
+    
+    
+    threads: new ThreadStore(),
+    
     interruptData: __state?.interruptData
 });
 

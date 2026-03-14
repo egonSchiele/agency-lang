@@ -390,7 +390,10 @@ if (isInterrupt(__stack.locals.msg)) {
       if (__step <= 2) {
         __stack.locals.res2 = google(__stack.locals.msg, {
     ctx: __ctx,
-    threads: __threads,
+    
+    
+    threads: new ThreadStore(),
+    
     interruptData: __state?.interruptData
 });
 
@@ -408,7 +411,10 @@ if (isInterrupt(__stack.locals.res2)) {
       if (__step <= 3) {
         __stack.locals.res1 = openai(__stack.locals.msg, {
     ctx: __ctx,
-    threads: __threads,
+    
+    
+    threads: new ThreadStore(),
+    
     interruptData: __state?.interruptData
 });
 

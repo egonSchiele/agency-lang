@@ -525,7 +525,10 @@ graph.node("main", async (__state) => {
       if (__step <= 1) {
         __stack.locals.sum = add(5, 10, {
     ctx: __ctx,
-    threads: __threads,
+    
+    
+    threads: new ThreadStore(),
+    
     interruptData: __state?.interruptData
 });
 
@@ -543,7 +546,10 @@ if (isInterrupt(__stack.locals.sum)) {
       if (__step <= 2) {
         __stack.locals.greeting = greet(`Alice`, {
     ctx: __ctx,
-    threads: __threads,
+    
+    
+    threads: new ThreadStore(),
+    
     interruptData: __state?.interruptData
 });
 
@@ -561,7 +567,10 @@ if (isInterrupt(__stack.locals.greeting)) {
       if (__step <= 3) {
         __stack.locals.labeled = mixed(42, `Answer`, {
     ctx: __ctx,
-    threads: __threads,
+    
+    
+    threads: new ThreadStore(),
+    
     interruptData: __state?.interruptData
 });
 
@@ -579,7 +588,10 @@ if (isInterrupt(__stack.locals.labeled)) {
       if (__step <= 4) {
         __stack.locals.processed = processArray([1, 2, 3, 4, 5], {
     ctx: __ctx,
-    threads: __threads,
+    
+    
+    threads: new ThreadStore(),
+    
     interruptData: __state?.interruptData
 });
 
@@ -597,7 +609,10 @@ if (isInterrupt(__stack.locals.processed)) {
       if (__step <= 5) {
         __stack.locals.flexResult = flexible(`test`, {
     ctx: __ctx,
-    threads: __threads,
+    
+    
+    threads: new ThreadStore(),
+    
     interruptData: __state?.interruptData
 });
 

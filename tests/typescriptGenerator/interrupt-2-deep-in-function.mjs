@@ -326,7 +326,10 @@ graph.node("sayHi", async (__state) => {
       if (__step <= 3) {
         __stack.locals.response = foo2(__stack.args.name, __stack.locals.age, {
     ctx: __ctx,
-    threads: __threads,
+    
+    
+    threads: new ThreadStore(),
+    
     interruptData: __state?.interruptData
 });
 

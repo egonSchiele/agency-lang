@@ -1,0 +1,15 @@
+// Test getting messages from a thread and verifying they can be used for recall.
+// The first call establishes context, and the second call within the same thread
+// should be able to recall what was said earlier.
+node main() {
+  msgs = thread {
+    res1: string = llm("My favorite number is 3435.")
+  }
+  res2: number = llm("What is my favorite number? Reply with just the single word, nothing else.", { 
+    messages: msgs
+  })
+  print(res2)
+  return { 
+    secret: res2
+  }
+}

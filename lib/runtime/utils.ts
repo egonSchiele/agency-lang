@@ -11,12 +11,16 @@ export function deepClone<T>(obj: T): T {
 export function extractResponse(rawValue: any, schema: any): any {
   // 1. Direct match — try parsing as-is
   const direct = schema.safeParse(rawValue);
-
   if (direct.success) {
     if ("response" in direct.data) {
       return direct.data.response;
     }
     return direct.data;
+  }
+
+  // 1.5 Look for { type: "object", properties: { response: { ... } } } pattern
+  if (rawValue.type === "object" && rawValue.properties) {
+    return extractResponse(rawValue.properties, schema);
   }
 
   // 2. String → try JSON.parse, then recurse

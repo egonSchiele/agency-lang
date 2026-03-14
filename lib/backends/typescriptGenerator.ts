@@ -707,11 +707,12 @@ export class TypeScriptGenerator extends BaseGenerator {
     // Generate async function for prompt-based assignment
     const _variableType = variableType ||
       this.typeHints[variableName] || {
-      type: "primitiveType" as const,
-      value: "string",
-    };
+        type: "primitiveType" as const,
+        value: "string",
+      };
 
     const zodSchema = mapTypeToZodSchema(_variableType, this.typeAliases);
+    const clientConfig = prompt.config ? this.processNode(prompt.config) : "{}";
 
     // Build prompt construction code
     const promptCode = this.buildPromptString({
@@ -747,7 +748,6 @@ export class TypeScriptGenerator extends BaseGenerator {
       return `{ name: "${toolName}", params: __${toolName}ToolParams, execute: ${toolName}, isBuiltin: false }`;
     });
 
-    const clientConfig = prompt.config ? this.processNode(prompt.config) : "{}";
     let threadExpr: string;
     if (this.parallelThreadVars[variableName]) {
       threadExpr = `__threads.get(${this.parallelThreadVars[variableName]})`;

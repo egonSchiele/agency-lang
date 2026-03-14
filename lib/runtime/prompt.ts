@@ -311,10 +311,21 @@ export async function runPrompt(args: {
   2. use messages passed in as argument (add onto message thread)
   3. create an empty message thread just for this prompt
   */
-  let messages = args.interruptData?.messages
-    ? MessageThread.fromJSON(args.interruptData.messages)
-    : args.messages || new MessageThread();
+  let messages: MessageThread;
 
+  if (args.interruptData?.messages) {
+    messages = MessageThread.fromJSON(args.interruptData.messages);
+  } else if (clientConfig.messages) {
+    messages = MessageThread.fromJSON(
+      clientConfig.messages
+        .map((m) => m.toJSON())
+        .map((m) => smoltalk.messageFromJSON(m)),
+    );
+  } else if (args.messages) {
+    messages = args.messages;
+  } else {
+    messages = new MessageThread();
+  }
   // Restore state after interrupt
   let toolCalls: smoltalk.ToolCallJSON[] = [];
 

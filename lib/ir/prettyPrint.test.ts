@@ -49,11 +49,11 @@ describe("prettyPrint", () => {
   });
 
   it("TsVarDecl const with initializer", () => {
-    expect(printTs(ts.varDecl("const", "x", ts.num(5)))).toBe("const x = 5;");
+    expect(printTs(ts.constDecl("x", ts.num(5)))).toBe("const x = 5;");
   });
 
   it("TsVarDecl with type annotation", () => {
-    expect(printTs(ts.varDecl("let", "x", undefined, "number"))).toBe(
+    expect(printTs(ts.letDecl("x", undefined, "number"))).toBe(
       "let x: number;",
     );
   });
@@ -188,7 +188,7 @@ describe("prettyPrint", () => {
 
   it("TsFor c-style", () => {
     const node = ts.forC(
-      ts.varDecl("let", "i", ts.num(0)),
+      ts.letDecl("i", ts.num(0)),
       ts.binOp(ts.id("i"), "<", ts.num(10)),
       ts.assign(ts.id("i"), ts.binOp(ts.id("i"), "+", ts.num(1))),
       ts.call(ts.prop(ts.id("console"), "log"), [ts.id("i")]),
@@ -255,7 +255,7 @@ describe("prettyPrint", () => {
   });
 
   it("TsExport declaration", () => {
-    const node = ts.export(ts.varDecl("const", "x", ts.num(1)));
+    const node = ts.export(ts.constDecl("x", ts.num(1)));
     expect(printTs(node)).toBe("export const x = 1;");
   });
 
@@ -307,8 +307,8 @@ describe("prettyPrint", () => {
 
   it("TsStatements", () => {
     const node = ts.statements([
-      ts.varDecl("const", "x", ts.num(1)),
-      ts.varDecl("const", "y", ts.num(2)),
+      ts.constDecl("x", ts.num(1)),
+      ts.constDecl("y", ts.num(2)),
     ]);
     expect(printTs(node)).toBe("const x = 1;\nconst y = 2;");
   });

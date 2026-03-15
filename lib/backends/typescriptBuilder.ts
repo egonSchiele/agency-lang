@@ -24,21 +24,12 @@ import {
 import { SpecialVar } from "@/types/specialVar.js";
 import { TimeBlock } from "@/types/timeBlock.js";
 import { formatTypeHint } from "@/cli/util.js";
-import * as renderSpecialVar from "../templates/backends/typescriptGenerator/specialVar.js";
-import * as renderTime from "../templates/backends/typescriptGenerator/builtinFunctions/time.js";
-import * as renderConditionalEdge from "../templates/backends/typescriptGenerator/conditionalEdge.js";
 import * as renderFunctionDefinition from "../templates/backends/typescriptGenerator/functionDefinition.js";
-import * as renderFunctionCallAssignment from "../templates/backends/typescriptGenerator/functionCallAssignment.js";
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
 import * as renderInterruptReturn from "../templates/backends/typescriptGenerator/interruptReturn.js";
 import * as renderGraphNode from "../templates/backends/typescriptGenerator/graphNode.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
-import * as renderMessageThread from "../templates/backends/typescriptGenerator/messageThread.js";
 import * as promptFunction from "../templates/backends/typescriptGenerator/promptFunction.js";
-import * as renderRunNodeFunction from "../templates/backends/typescriptGenerator/runNodeFunction.js";
-import * as renderStartNode from "../templates/backends/typescriptGenerator/startNode.js";
-import * as renderTool from "../templates/backends/typescriptGenerator/tool.js";
-import * as renderSkillPrompt from "@/templates/prompts/skill.js";
 
 import { AccessChainElement, ValueAccess } from "../types/access.js";
 import {
@@ -338,9 +329,9 @@ export class TypeScriptBuilder {
 
     sections.push(ts.statements(this.generatedStatements));
 
-    const postprocessResult = this.postprocess();
-    if (postprocessResult.trim() !== "") {
-      sections.push(ts.raw(postprocessResult));
+    const postprocessNodes = this.postprocess();
+    if (postprocessNodes.length > 0) {
+      sections.push(ts.statements(postprocessNodes));
     }
 
     return ts.statements(sections);
@@ -540,8 +531,14 @@ export class TypeScriptBuilder {
             "valueAccess",
           );
           // The call node is ts.call(ts.id(name), args) — extract callee name and args
-          if (callNode.kind === "call" && callNode.callee.kind === "identifier") {
-            result = $(result).prop(callNode.callee.name).call(callNode.arguments).done();
+          if (
+            callNode.kind === "call" &&
+            callNode.callee.kind === "identifier"
+          ) {
+            result = $(result)
+              .prop(callNode.callee.name)
+              .call(callNode.arguments)
+              .done();
           } else {
             // Fallback for complex cases (e.g. await-wrapped)
             result = ts.raw(`${this.str(result)}.${this.str(callNode)}`);
@@ -564,7 +561,9 @@ export class TypeScriptBuilder {
 
   private processIfElse(node: IfElse): TsNode {
     const condition = this.processNode(node.condition);
-    const body = ts.statements(node.thenBody.map((stmt) => this.processStatement(stmt)));
+    const body = ts.statements(
+      node.thenBody.map((stmt) => this.processStatement(stmt)),
+    );
 
     const elseIfs: TsElseIf[] = [];
     let elseBody: TsNode | undefined;
@@ -579,9 +578,14 @@ export class TypeScriptBuilder {
     while (current) {
       elseIfs.push({
         condition: this.processNode(current.condition),
-        body: ts.statements(current.thenBody.map((stmt) => this.processStatement(stmt))),
+        body: ts.statements(
+          current.thenBody.map((stmt) => this.processStatement(stmt)),
+        ),
       });
-      if (current.elseBody?.length === 1 && current.elseBody[0].type === "ifElse") {
+      if (
+        current.elseBody?.length === 1 &&
+        current.elseBody[0].type === "ifElse"
+      ) {
         current = current.elseBody[0] as IfElse;
       } else {
         remainingElse = current.elseBody;
@@ -590,10 +594,16 @@ export class TypeScriptBuilder {
     }
 
     if (remainingElse && remainingElse.length > 0) {
-      elseBody = ts.statements(remainingElse.map((stmt) => this.processStatement(stmt)));
+      elseBody = ts.statements(
+        remainingElse.map((stmt) => this.processStatement(stmt)),
+      );
     }
 
-    return ts.if(condition, body, elseIfs.length > 0 || elseBody ? { elseIfs, elseBody } : undefined);
+    return ts.if(
+      condition,
+      body,
+      elseIfs.length > 0 || elseBody ? { elseIfs, elseBody } : undefined,
+    );
   }
 
   private processForLoop(node: ForLoop): TsNode {
@@ -617,10 +627,14 @@ export class TypeScriptBuilder {
       node.iterable.functionName === "range"
     ) {
       const args = node.iterable.arguments;
-      const startNode = args.length >= 2 ? this.processNode(args[0]) : ts.num(0);
-      const endNode = args.length >= 2 ? this.processNode(args[1]) : this.processNode(args[0]);
+      const startNode =
+        args.length >= 2 ? this.processNode(args[0]) : ts.num(0);
+      const endNode =
+        args.length >= 2
+          ? this.processNode(args[1])
+          : this.processNode(args[0]);
       return ts.forC(
-        ts.varDecl("let", node.itemVar, startNode),
+        ts.letDecl(node.itemVar, startNode),
         ts.binOp(ts.id(node.itemVar), "<", endNode),
         ts.postfix(ts.id(node.itemVar), "++"),
         body,
@@ -632,11 +646,15 @@ export class TypeScriptBuilder {
     // Indexed form: for (item, index in collection)
     if (node.indexVar) {
       const indexedBody = ts.statements([
-        ts.varDecl("const", node.itemVar, ts.index(iterableNode, ts.id(node.indexVar))),
+        ts.varDecl(
+          "const",
+          node.itemVar,
+          ts.index(iterableNode, ts.id(node.indexVar)),
+        ),
         ...bodyStmts,
       ]);
       return ts.forC(
-        ts.varDecl("let", node.indexVar, ts.num(0)),
+        ts.letDecl(node.indexVar, ts.num(0)),
         ts.binOp(ts.id(node.indexVar), "<", ts.prop(iterableNode, "length")),
         ts.postfix(ts.id(node.indexVar), "++"),
         indexedBody,
@@ -659,8 +677,14 @@ export class TypeScriptBuilder {
       .filter((c) => c.type !== "comment")
       .map((c) => {
         const caseItem = c as MatchBlockCase;
-        const test = caseItem.caseValue === "_" ? undefined : this.processNode(caseItem.caseValue);
-        const body = ts.statements([this.processNode(caseItem.body), ts.break()]);
+        const test =
+          caseItem.caseValue === "_"
+            ? undefined
+            : this.processNode(caseItem.caseValue);
+        const body = ts.statements([
+          this.processNode(caseItem.body),
+          ts.break(),
+        ]);
         return { test, body };
       });
     return ts.switch(this.processNode(node.expression), cases);
@@ -685,17 +709,29 @@ export class TypeScriptBuilder {
     const imports = node.importedNames.map((nameType) => {
       switch (nameType.type) {
         case "namedImport":
-          return ts.importDecl({ importKind: "named", names: nameType.importedNames, from });
+          return ts.importDecl({
+            importKind: "named",
+            names: nameType.importedNames,
+            from,
+          });
         case "namespaceImport":
-          return ts.importDecl({ importKind: "namespace", namespaceName: nameType.importedNames, from });
+          return ts.importDecl({
+            importKind: "namespace",
+            namespaceName: nameType.importedNames,
+            from,
+          });
         case "defaultImport":
-          return ts.importDecl({ importKind: "default", defaultName: nameType.importedNames, from });
+          return ts.importDecl({
+            importKind: "default",
+            defaultName: nameType.importedNames,
+            from,
+          });
       }
     });
     return imports.length === 1 ? imports[0] : ts.statements(imports);
   }
 
-private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
+  private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
     return ts.empty(); // handled in preprocess
   }
 
@@ -753,14 +789,32 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
       schema += `"${key.replace(/"/g, '\\"')}": ${value}, `;
     }
 
-    return ts.raw(
-      renderTool.default({
-        name: functionName,
-        description: node.docString?.value || "No description provided.",
-        schema: Object.keys(properties).length > 0 ? `{${schema}}` : "{}",
-        parameters: JSON.stringify(parameters.map((p) => p.name)),
-      }),
-    );
+    const schemaArg = Object.keys(properties).length > 0 ? `{${schema}}` : "{}";
+    return ts.statements([
+      ts.export(
+        ts.varDecl(
+          "const",
+          `__${functionName}Tool`,
+          ts.obj({
+            name: ts.str(functionName),
+            description: ts.raw(
+              `\`${node.docString?.value || "No description provided."}\``,
+            ),
+            schema: $(ts.id("z"))
+              .prop("object")
+              .call([ts.raw(schemaArg)])
+              .done(),
+          }),
+        ),
+      ),
+      ts.export(
+        ts.varDecl(
+          "const",
+          `__${functionName}ToolParams`,
+          ts.raw(JSON.stringify(parameters.map((p) => p.name))),
+        ),
+      ),
+    ]);
   }
 
   private processFunctionDefinition(node: FunctionDefinition): TsNode {
@@ -788,7 +842,7 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
         paramList,
         paramAssignments,
         argsObject,
-        functionBody: bodyCode.map(n => this.str(n)).join("\n"),
+        functionBody: bodyCode.map((n) => this.str(n)).join("\n"),
       }),
     );
   }
@@ -812,13 +866,15 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
       const tempVar = "__funcResult";
       const nodeContext = scope.type === "node";
       const returnBody = nodeContext
-        ? ts.return(ts.obj([
-            { spread: true, expr: ts.runtime.state },
-            { spread: false, key: "data", value: ts.id(tempVar) },
-          ]))
+        ? ts.return(
+            ts.obj([
+              { spread: true, expr: ts.runtime.state },
+              { spread: false, key: "data", value: ts.id(tempVar) },
+            ]),
+          )
         : ts.return(ts.obj({ data: ts.id(tempVar) }));
       return ts.statements([
-        ts.varDecl("const", tempVar, callNode),
+        ts.constDecl(tempVar, callNode),
         ts.if(ts.call(ts.id("isInterrupt"), [ts.id(tempVar)]), returnBody),
       ]);
     }
@@ -876,9 +932,10 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
       return shouldAwait ? ts.await(call) : call;
     } else if (node.functionName === "system") {
       // __threads.active().push(smoltalk.systemMessage(msg))
-      return $(ts.threads.active()).prop("push").call([
-        $.id("smoltalk").prop("systemMessage").call(argNodes).done(),
-      ]).done();
+      return $(ts.threads.active())
+        .prop("push")
+        .call([$.id("smoltalk").prop("systemMessage").call(argNodes).done()])
+        .done();
     } else {
       const call = ts.call(ts.id(functionName), argNodes);
       return shouldAwait ? ts.await(call) : call;
@@ -900,16 +957,18 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
     let dataNode: TsNode;
     if (targetNode && targetNode.parameters.length > 0) {
       const entries: Record<string, TsNode> = {};
-      targetNode.parameters.forEach((p, i) => { entries[p.name] = argNodes[i]; });
+      targetNode.parameters.forEach((p, i) => {
+        entries[p.name] = argNodes[i];
+      });
       dataNode = ts.obj(entries);
     } else if (argNodes.length > 0) {
-      dataNode = ts.call(
-        ts.prop(ts.id("Object"), "fromEntries"),
-        [ts.call(
-          ts.prop(ts.id(`__${functionName}NodeParams`), "map"),
-          [ts.raw(`(k, i) => [k, [${argNodes.map(n => this.str(n)).join(", ")}][i]]`)],
-        )],
-      );
+      dataNode = ts.call(ts.prop(ts.id("Object"), "fromEntries"), [
+        ts.call(ts.prop(ts.id(`__${functionName}NodeParams`), "map"), [
+          ts.raw(
+            `(k, i) => [k, [${argNodes.map((n) => this.str(n)).join(", ")}][i]]`,
+          ),
+        ]),
+      ]);
     } else {
       dataNode = ts.obj({});
     }
@@ -921,7 +980,9 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
     });
 
     return ts.statements([
-      ts.functionReturn(ts.call(ts.id("goToNode"), [ts.str(functionName), goToArgs])),
+      ts.functionReturn(
+        ts.call(ts.id("goToNode"), [ts.str(functionName), goToArgs]),
+      ),
     ]);
   }
 
@@ -952,7 +1013,7 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
     return ts.raw(
       renderGraphNode.default({
         name: nodeName,
-        body: bodyCode.map(n => this.str(n)).join("\n"),
+        body: bodyCode.map((n) => this.str(n)).join("\n"),
         hasParam: parameters.length > 0,
         paramAssignments,
       }),
@@ -962,7 +1023,10 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
   private processReturnStatement(node: ReturnStatement): TsNode {
     if (this.isInsideGraphNode) {
       const valueNode = this.processNode(node.value);
-      if (node.value.type === "functionCall" && this.isGraphNode(node.value.functionName)) {
+      if (
+        node.value.type === "functionCall" &&
+        this.isGraphNode(node.value.functionName)
+      ) {
         return valueNode;
       }
       return ts.nodeResult(valueNode);
@@ -1013,22 +1077,35 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
         }),
       );
     } else if (value.type === "functionCall") {
-      const code = this.str(this.processNode(value));
-      return ts.raw(
-        renderFunctionCallAssignment.default({
-          variableName: `${scopeVar}.${variableName}${chainStr}`,
-          functionCode: code.trim(),
-          nodeContext: this.getCurrentScope().type === "node",
-          globalScope: this.getCurrentScope().type === "global",
-        }),
-      );
+      const varRef = ts.raw(`${scopeVar}.${variableName}${chainStr}`);
+      const stmts: TsNode[] = [ts.assign(varRef, this.processNode(value))];
+      if (this.getCurrentScope().type !== "global") {
+        const returnObj =
+          this.getCurrentScope().type === "node"
+            ? ts.obj([
+                { spread: true, expr: ts.runtime.state },
+                { spread: false as const, key: "data", value: varRef },
+              ])
+            : ts.obj({ data: varRef });
+        stmts.push(
+          ts.if(
+            $(ts.id("isInterrupt")).call([varRef]).done(),
+            ts.return(returnObj),
+          ),
+        );
+      }
+      return ts.statements(stmts);
     } else if (value.type === "timeBlock") {
       return this.processTimeBlock(value, variableName);
     } else if (value.type === "messageThread") {
       const varName = `${scopeVar}.${variableName}${chainStr}`;
       return this.processMessageThread(value, varName);
     } else {
-      const lhs = this.buildAssignmentLhs(node.scope!, variableName, node.accessChain);
+      const lhs = this.buildAssignmentLhs(
+        node.scope!,
+        variableName,
+        node.accessChain,
+      );
       return ts.assign(lhs, this.processNode(value));
     }
   }
@@ -1061,9 +1138,18 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
           result = ts.index(result, this.processNode(el.index));
           break;
         case "methodCall": {
-          const callNode = this.generateFunctionCallExpression(el.functionCall, "valueAccess");
-          if (callNode.kind === "call" && callNode.callee.kind === "identifier") {
-            result = $(result).prop(callNode.callee.name).call(callNode.arguments).done();
+          const callNode = this.generateFunctionCallExpression(
+            el.functionCall,
+            "valueAccess",
+          );
+          if (
+            callNode.kind === "call" &&
+            callNode.callee.kind === "identifier"
+          ) {
+            result = $(result)
+              .prop(callNode.callee.name)
+              .call(callNode.arguments)
+              .done();
           } else {
             result = ts.raw(`${this.str(result)}.${this.str(callNode)}`);
           }
@@ -1074,7 +1160,11 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
     return result;
   }
 
-  private buildAssignmentLhs(scope: ScopeType, variableName: string, chain?: AccessChainElement[]): TsNode {
+  private buildAssignmentLhs(
+    scope: ScopeType,
+    variableName: string,
+    chain?: AccessChainElement[],
+  ): TsNode {
     return this.buildAccessChain(ts.scopedVar(variableName, scope), chain);
   }
 
@@ -1240,9 +1330,7 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
       });
 
       promptParts.push(
-        renderSkillPrompt.default({
-          skills: skillsArr.join("\n"),
-        }),
+        `\nYou can also read a skill file to augment your capabilities for a specific task using the "readSkill" tool. This allows you to access specialized knowledge and instructions that are relevant to particular scenarios.\n\n\nAvailable skills:\n${skillsArr.join("\n")}`,
       );
     }
 
@@ -1253,32 +1341,53 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
     const value = this.str(this.processNode(node.value));
     switch (node.name) {
       case "model":
-        return ts.raw(
-          renderSpecialVar.default({
-            name: "model",
-            value,
-          }),
+        return ts.assign(
+          ts.id("__client"),
+          ts.call(ts.id("__getClientWithConfig"), [
+            ts.obj({ model: ts.raw(value) }),
+          ]),
         );
       case "messages":
-        return $(ts.threads.active()).prop("setMessages").call([this.processNode(node.value)]).done();
+        return $(ts.threads.active())
+          .prop("setMessages")
+          .call([this.processNode(node.value)])
+          .done();
       default:
         throw new Error(`Unhandled SpecialVar name: ${node.name}`);
     }
   }
 
   private processTimeBlock(node: TimeBlock, timingVarName: string): TsNode {
-    const bodyCodes: string[] = [];
-    for (const stmt of node.body) {
-      bodyCodes.push(this.str(this.processNode(stmt)));
-    }
-    const bodyCodeStr = bodyCodes.join("\n");
-    return ts.raw(
-      renderTime.default({
+    const bodyNodes = node.body.map((stmt) => this.processNode(stmt));
+    const stmts: TsNode[] = [
+      ts.letDecl(
+        `${timingVarName}_startTime`,
+        $(ts.id("performance")).prop("now").call().done(),
+        "number",
+      ),
+      ...bodyNodes,
+      ts.letDecl(
+        `${timingVarName}_endTime`,
+        $(ts.id("performance")).prop("now").call().done(),
+        "number",
+      ),
+      ts.letDecl(
         timingVarName,
-        bodyCodeStr,
-        printTime: node.printTime || false,
-      }),
-    );
+        $(ts.id(`${timingVarName}_endTime`))
+          .minus(ts.id(`${timingVarName}_startTime`))
+          .done(),
+        "number",
+      ),
+    ];
+    if (node.printTime) {
+      stmts.push(
+        $(ts.id("console"))
+          .prop("log")
+          .call([ts.str("Time taken:"), ts.id(timingVarName), ts.str("ms")])
+          .done(),
+      );
+    }
+    return ts.statements(stmts);
   }
 
   private processMessageThread(node: MessageThread, varName?: string): TsNode {
@@ -1286,20 +1395,31 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
       return this.processParallelThread(node, varName);
     }
 
-    const bodyCodes: string[] = [];
-    for (const stmt of node.body) {
-      bodyCodes.push(this.str(this.processNode(stmt)));
+    const bodyNodes = node.body.map((stmt) => this.processNode(stmt));
+    const createMethod =
+      node.threadType === "subthread" ? "createSubthread" : "create";
+    const stmts: TsNode[] = [
+      ts.varDecl(
+        "const",
+        "__tid",
+        $(ts.runtime.threads).prop(createMethod).call().done(),
+      ),
+      $(ts.runtime.threads)
+        .prop("pushActive")
+        .call([ts.id("__tid")])
+        .done(),
+      ...bodyNodes,
+    ];
+    if (varName) {
+      stmts.push(
+        ts.assign(
+          ts.raw(varName),
+          $(ts.threads.active()).prop("cloneMessages").call().done(),
+        ),
+      );
     }
-    const bodyCodeStr = bodyCodes.join("\n");
-
-    return ts.raw(
-      renderMessageThread.default({
-        bodyCode: bodyCodeStr,
-        hasVar: !!varName,
-        varName,
-        isSubthread: node.threadType === "subthread",
-      }),
-    );
+    stmts.push($(ts.runtime.threads).prop("popActive").call().done());
+    return ts.raw(`{\n${this.str(ts.statements(stmts))}\n}`);
   }
 
   private processParallelThread(node: MessageThread, varName?: string): TsNode {
@@ -1314,7 +1434,7 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
 
     for (const [name] of assignmentVarNames) {
       const threadVarName = `__ptid_${name}`;
-      stmts.push(ts.varDecl("const", threadVarName, ts.threads.create()));
+      stmts.push(ts.constDecl(threadVarName, ts.threads.create()));
       this.parallelThreadVars[name] = threadVarName;
     }
 
@@ -1322,21 +1442,30 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
       stmts.push(this.processNode(stmt));
     }
 
-    const scopedVarNodes = assignmentVarNames.map(
-      ([name, scope]) => ts.scopedVar(name, scope),
+    const scopedVarNodes = assignmentVarNames.map(([name, scope]) =>
+      ts.scopedVar(name, scope),
     );
 
-    stmts.push(ts.assign(
-      ts.arr(scopedVarNodes),
-      $.id("Promise").prop("all").call([ts.arr(scopedVarNodes)]).await().done(),
-    ));
+    stmts.push(
+      ts.assign(
+        ts.arr(scopedVarNodes),
+        $.id("Promise")
+          .prop("all")
+          .call([ts.arr(scopedVarNodes)])
+          .await()
+          .done(),
+      ),
+    );
 
     if (varName) {
       const entries: TsObjectEntry[] = assignmentVarNames.map(([name]) => ({
         spread: false,
         key: name,
         value: ts.call(
-          ts.prop(ts.threads.get(ts.id(this.parallelThreadVars[name])), "cloneMessages"),
+          ts.prop(
+            ts.threads.get(ts.id(this.parallelThreadVars[name])),
+            "cloneMessages",
+          ),
         ),
       }));
       stmts.push(ts.assign(ts.raw(varName), ts.obj(entries)));
@@ -1347,7 +1476,7 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
     }
 
     // Bare block for scoping the const declarations
-    return ts.raw(`{\n${stmts.map(s => this.str(s)).join("\n")}\n}`);
+    return ts.raw(`{\n${stmts.map((s) => this.str(s)).join("\n")}\n}`);
   }
 
   private processBodyAsParts(body: AgencyNode[]): TsNode[] {
@@ -1357,7 +1486,9 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
         parts.push([]);
       }
       if (this.containsImpureCall(stmt)) {
-        parts[parts.length - 1].push(ts.assign(ts.prop(ts.runtime.self, "__retryable"), ts.bool(false)));
+        parts[parts.length - 1].push(
+          ts.assign(ts.prop(ts.runtime.self, "__retryable"), ts.bool(false)),
+        );
       }
       parts[parts.length - 1].push(this.processStatement(stmt));
     }
@@ -1397,25 +1528,39 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
       const defaultImportName = this.agencyFileToDefaultImportName(
         importNode.agencyFile,
       );
-      nodes.push(ts.importDecl({ importKind: "default", defaultName: defaultImportName, from }));
-      const nodeParamNames = importNode.importedNodes.map((name) => `__${name}NodeParams`);
-      nodes.push(ts.importDecl({ importKind: "named", names: nodeParamNames, from }));
+      nodes.push(
+        ts.importDecl({
+          importKind: "default",
+          defaultName: defaultImportName,
+          from,
+        }),
+      );
+      const nodeParamNames = importNode.importedNodes.map(
+        (name) => `__${name}NodeParams`,
+      );
+      nodes.push(
+        ts.importDecl({ importKind: "named", names: nodeParamNames, from }),
+      );
     });
     return nodes;
   }
 
-  private postprocess(): string {
-    const lines: string[] = [];
-    Object.keys(this.adjacentNodes).forEach((node) => {
-      const adjacent = this.adjacentNodes[node];
+  private postprocess(): TsNode[] {
+    const result: TsNode[] = [];
+
+    Object.keys(this.adjacentNodes).forEach((nodeName) => {
+      const adjacent = this.adjacentNodes[nodeName];
       if (adjacent.length === 0) {
         return;
       }
-      lines.push(
-        renderConditionalEdge.default({
-          fromNode: node,
-          toNodes: JSON.stringify(adjacent),
-        }),
+      result.push(
+        $(ts.id("graph"))
+          .prop("conditionalEdge")
+          .call([
+            ts.str(nodeName),
+            ts.arr(adjacent.map((a: string) => ts.str(a))),
+          ])
+          .done(),
       );
     });
 
@@ -1423,44 +1568,101 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
       const defaultImportName = this.agencyFileToDefaultImportName(
         importNode.agencyFile,
       );
-      lines.push(`graph.merge(${defaultImportName});`);
+      result.push(
+        $(ts.id("graph"))
+          .prop("merge")
+          .call([ts.id(defaultImportName)])
+          .done(),
+      );
     });
 
     for (const node of this.graphNodes) {
       const args = node.parameters;
-      const argsStr = args.map((arg) => arg.name).join(", ");
-      const typedArgsStr = args
-        .map((arg) => {
-          if (arg.typeHint) {
-            return `${arg.name}: ${formatTypeHint(arg.typeHint)}`;
-          }
-          return `${arg.name}: any`;
-        })
-        .join(", ");
-      lines.push(
-        renderRunNodeFunction.default({
-          nodeName: node.nodeName,
-          hasArgs: args.length > 0,
-          argsStr,
-          typedArgsStr,
-        }),
+      const fnParams: {
+        name: string;
+        typeAnnotation?: string;
+        defaultValue?: TsNode;
+      }[] = [];
+      if (args.length > 0) {
+        for (const arg of args) {
+          const typeHint = arg.typeHint ? formatTypeHint(arg.typeHint) : "any";
+          fnParams.push({ name: arg.name, typeAnnotation: typeHint });
+        }
+      }
+      fnParams.push({
+        name: "{ messages, callbacks }",
+        typeAnnotation: "{ messages?: any; callbacks?: any }",
+        defaultValue: ts.raw("{}"),
+      });
+      const dataObj: Record<string, TsNode> = {};
+      for (const arg of args) {
+        dataObj[arg.name] = ts.id(arg.name);
+      }
+      result.push(
+        ts.functionDecl(
+          node.nodeName,
+          fnParams,
+          ts.return(
+            $(ts.id("runNode"))
+              .call([
+                ts.obj({
+                  ctx: ts.id("__globalCtx"),
+                  nodeName: ts.str(node.nodeName),
+                  data: ts.obj(dataObj),
+                  messages: ts.id("messages"),
+                  callbacks: ts.id("callbacks"),
+                }),
+              ])
+              .done(),
+          ),
+          { async: true, export: true },
+        ),
       );
-      const paramNames = args.map((arg) => `"${arg.name}"`).join(", ");
-      lines.push(
-        `export const __${node.nodeName}NodeParams = [${paramNames}];`,
+      result.push(
+        ts.export(
+          ts.varDecl(
+            "const",
+            `__${node.nodeName}NodeParams`,
+            ts.arr(args.map((arg) => ts.str(arg.name))),
+          ),
+        ),
       );
     }
 
     if (this.graphNodes.map((n) => n.nodeName).includes("main")) {
-      lines.push(
-        renderStartNode.default({
-          startNode: "main",
-        }),
+      result.push(
+        ts.if(
+          ts.binOp(
+            $(ts.id("process")).prop("argv").index(ts.num(1)).done(),
+            "===",
+            ts.call(ts.id("fileURLToPath"), [
+              $(ts.id("import")).prop("meta").prop("url").done(),
+            ]),
+          ),
+          ts.tryCatch(
+            ts.statements([
+              ts.varDecl(
+                "const",
+                "initialState",
+                ts.obj({
+                  messages: ts.new(ts.id("ThreadStore")),
+                  data: ts.raw("{}"),
+                }),
+              ),
+              ts.await(ts.call(ts.id("main"), [ts.id("initialState")])),
+            ]),
+            ts.statements([
+              ts.raw("console.error(`\\nAgent crashed: ${__error.message}`)"),
+              ts.raw("throw __error"),
+            ]),
+            "__error: any",
+          ),
+        ),
       );
     }
 
-    lines.push("export default graph;");
+    result.push(ts.raw("export default graph"));
 
-    return lines.join("\n");
+    return result;
   }
 }

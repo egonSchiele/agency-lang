@@ -40,6 +40,21 @@ export class TsChain {
     return new TsChain(ts.spread(this.node));
   }
 
+  /** Binary minus: .minus(rhs) → ts.binOp(this, "-", rhs) */
+  minus(rhs: TsNode): TsChain {
+    return new TsChain(ts.binOp(this.node, "-", rhs));
+  }
+
+  /** Binary plus: .plus(rhs) → ts.binOp(this, "+", rhs) */
+  plus(rhs: TsNode): TsChain {
+    return new TsChain(ts.binOp(this.node, "+", rhs));
+  }
+
+  /** Binary equals: .equal(rhs) → ts.binOp(this, "===", rhs) */
+  equal(rhs: TsNode): TsChain {
+    return new TsChain(ts.binOp(this.node, "===", rhs));
+  }
+
   /** Unwrap to plain TsNode */
   done(): TsNode {
     return this.node;

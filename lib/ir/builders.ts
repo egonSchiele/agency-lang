@@ -80,6 +80,22 @@ export const ts = {
     return { kind: "varDecl", declKind, name, typeAnnotation, initializer };
   },
 
+  letDecl(
+    name: string,
+    initializer?: TsNode,
+    typeAnnotation?: string,
+  ): TsVarDecl {
+    return ts.letDecl(name, initializer, typeAnnotation);
+  },
+
+  constDecl(
+    name: string,
+    initializer?: TsNode,
+    typeAnnotation?: string,
+  ): TsVarDecl {
+    return ts.constDecl(name, initializer, typeAnnotation);
+  },
+
   assign(lhs: TsNode, rhs: TsNode): TsAssign {
     return { kind: "assign", lhs, rhs };
   },
@@ -133,7 +149,11 @@ export const ts = {
     }
     return {
       kind: "objectLiteral",
-      entries: Object.entries(entries).map(([key, value]) => ({ spread: false, key, value })),
+      entries: Object.entries(entries).map(([key, value]) => ({
+        spread: false,
+        key,
+        value,
+      })),
     };
   },
 
@@ -183,8 +203,20 @@ export const ts = {
     return { kind: "tryCatch", tryBody, catchParam, catchBody };
   },
 
-  binOp(left: TsNode, op: string, right: TsNode, opts?: { parenLeft?: boolean; parenRight?: boolean }): TsBinOp {
-    return { kind: "binOp", left, op, right, parenLeft: opts?.parenLeft, parenRight: opts?.parenRight };
+  binOp(
+    left: TsNode,
+    op: string,
+    right: TsNode,
+    opts?: { parenLeft?: boolean; parenRight?: boolean },
+  ): TsBinOp {
+    return {
+      kind: "binOp",
+      left,
+      op,
+      right,
+      parenLeft: opts?.parenLeft,
+      parenRight: opts?.parenRight,
+    };
   },
 
   prop(object: TsNode, property: string): TsPropertyAccess {
@@ -271,6 +303,7 @@ export const ts = {
     step: { kind: "identifier", name: "__step" } as TsIdentifier,
     state: { kind: "identifier", name: "__state" } as TsIdentifier,
     globalCtx: { kind: "identifier", name: "__globalCtx" } as TsIdentifier,
+    client: { kind: "identifier", name: "__client" } as TsIdentifier,
   },
 
   /** Thread operations */

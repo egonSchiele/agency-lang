@@ -188,6 +188,8 @@ export interface TsBinOp {
   left: TsNode;
   op: string;
   right: TsNode;
+  parenLeft?: boolean;
+  parenRight?: boolean;
 }
 
 export interface TsPropertyAccess {

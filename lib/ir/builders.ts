@@ -169,8 +169,8 @@ export const ts = {
     return { kind: "tryCatch", tryBody, catchParam, catchBody };
   },
 
-  binOp(left: TsNode, op: string, right: TsNode): TsBinOp {
-    return { kind: "binOp", left, op, right };
+  binOp(left: TsNode, op: string, right: TsNode, opts?: { parenLeft?: boolean; parenRight?: boolean }): TsBinOp {
+    return { kind: "binOp", left, op, right, parenLeft: opts?.parenLeft, parenRight: opts?.parenRight };
   },
 
   prop(object: TsNode, property: string): TsPropertyAccess {

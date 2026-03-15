@@ -170,8 +170,11 @@ export function printTs(node: TsNode, indent = 0): string {
       return `try {\n${printBody(node.tryBody, indent)}\n${ind(indent)}} ${catchClause} {\n${printBody(node.catchBody, indent)}\n${ind(indent)}}`;
     }
 
-    case "binOp":
-      return `${printTs(node.left, indent)} ${node.op} ${printTs(node.right, indent)}`;
+    case "binOp": {
+      const left = node.parenLeft ? `(${printTs(node.left, indent)})` : printTs(node.left, indent);
+      const right = node.parenRight ? `(${printTs(node.right, indent)})` : printTs(node.right, indent);
+      return `${left} ${node.op} ${right}`;
+    }
 
     case "propertyAccess": {
       const obj = printTs(node.object, indent);

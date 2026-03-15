@@ -34,6 +34,7 @@ import type {
   TsComment,
   TsExport,
   TsNewExpr,
+  TsScopedVar,
 } from "./tsIR.js";
 
 export const ts = {
@@ -215,5 +216,9 @@ export const ts = {
 
   new(callee: TsNode, args: TsNode[] = []): TsNewExpr {
     return { kind: "newExpr", callee, arguments: args };
+  },
+
+  scopedVar(name: string, scope: TsScopedVar["scope"]): TsScopedVar {
+    return { kind: "scopedVar", name, scope };
   },
 };

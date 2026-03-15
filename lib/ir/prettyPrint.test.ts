@@ -321,4 +321,32 @@ describe("prettyPrint", () => {
       'function greet(name: string = "world") {\n  return name;\n}'
     );
   });
+
+  it("TsScopedVar global", () => {
+    expect(printTs(ts.scopedVar("x", "global"))).toBe(
+      "__globalCtx.stateStack.globals.x"
+    );
+  });
+
+  it("TsScopedVar function", () => {
+    expect(printTs(ts.scopedVar("count", "function"))).toBe(
+      "__stack.locals.count"
+    );
+  });
+
+  it("TsScopedVar node", () => {
+    expect(printTs(ts.scopedVar("result", "node"))).toBe(
+      "__stack.locals.result"
+    );
+  });
+
+  it("TsScopedVar args", () => {
+    expect(printTs(ts.scopedVar("name", "args"))).toBe(
+      "__stack.args.name"
+    );
+  });
+
+  it("TsScopedVar imported", () => {
+    expect(printTs(ts.scopedVar("helper", "imported"))).toBe("helper");
+  });
 });

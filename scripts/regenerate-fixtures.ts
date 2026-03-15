@@ -4,6 +4,8 @@ import path, { dirname } from "path";
 import fs from "fs";
 import { generateTypeScript } from "../lib/backends/typescriptGenerator.js";
 import { TypescriptPreprocessor } from "../lib/preprocessors/typescriptPreprocessor.js";
+import { TypeScriptBuilder } from "../lib/backends/typescriptBuilder.js";
+import { printTs } from "../lib/ir/prettyPrint.js";
 import { parseAgency } from "../lib/parser.js";
 import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
@@ -14,6 +16,7 @@ const preprocessorFixturesDir = path.join(
   __dirname,
   "../../tests/typescriptPreprocessor"
 );
+const builderFixturesDir = path.join(__dirname, "../../tests/typescriptBuilder");
 
 function regenerateFixtures(dir: string, relativePath = "") {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -77,6 +80,37 @@ function regeneratePreprocessorFixtures(dir: string, relativePath = "") {
   }
 }
 
+function regenerateBuilderFixtures(dir: string, relativePath = "") {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+
+    if (entry.isDirectory()) {
+      regenerateBuilderFixtures(fullPath, path.join(relativePath, entry.name));
+    } else if (entry.isFile() && entry.name.endsWith(".agency")) {
+      const baseName = entry.name.replace(".agency", "");
+      const mtsPath = path.join(dir, `${baseName}.mjs`);
+
+      const agencyContent = fs.readFileSync(fullPath, "utf-8");
+      const parseResult = parseAgency(agencyContent);
+
+      if (parseResult.success) {
+        const preprocessor = new TypescriptPreprocessor(parseResult.result);
+        const preprocessedProgram = preprocessor.preprocess();
+        const builder = new TypeScriptBuilder();
+        const ir = builder.build(preprocessedProgram);
+        const tsCode = printTs(ir);
+        fs.writeFileSync(mtsPath, tsCode, "utf-8");
+        const fixtureRelPath = path.join(relativePath, baseName) || baseName;
+        console.log(`✓ Updated ${fixtureRelPath}.mjs`);
+      } else {
+        console.error(`✗ Failed to parse ${fullPath}: ${parseResult.message}`);
+      }
+    }
+  }
+}
+
 console.log("Regenerating fixture files...\n");
 
 console.log("--- TypeScript Generator Fixtures ---");
@@ -84,5 +118,8 @@ regenerateFixtures(fixturesDir);
 
 console.log("\n--- TypeScript Preprocessor Fixtures ---");
 regeneratePreprocessorFixtures(preprocessorFixturesDir);
+
+console.log("\n--- TypeScript Builder Fixtures ---");
+regenerateBuilderFixtures(builderFixturesDir);
 
 console.log("\nDone!");

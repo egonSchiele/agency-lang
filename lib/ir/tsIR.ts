@@ -29,7 +29,8 @@ export type TsNode =
   | TsBooleanLiteral
   | TsComment
   | TsExport
-  | TsNewExpr;
+  | TsNewExpr
+  | TsScopedVar;
 
 /** Escape hatch: verbatim string */
 export interface TsRaw {
@@ -237,4 +238,11 @@ export interface TsNewExpr {
   kind: "newExpr";
   callee: TsNode;
   arguments: TsNode[];
+}
+
+/** Scoped variable reference — lowered to TsPropertyAccess by lowerScopes */
+export interface TsScopedVar {
+  kind: "scopedVar";
+  name: string;
+  scope: "global" | "function" | "node" | "args" | "imported";
 }

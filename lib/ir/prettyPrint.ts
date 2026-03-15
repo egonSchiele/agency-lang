@@ -1,6 +1,20 @@
-import type { TsNode, TsParam } from "./tsIR.js";
+import type { TsNode, TsParam, TsScopedVar } from "./tsIR.js";
 
 const INDENT = "  ";
+
+function scopeToPrefix(scope: TsScopedVar["scope"]): string {
+  switch (scope) {
+    case "global":
+      return "__globalCtx.stateStack.globals";
+    case "function":
+    case "node":
+      return "__stack.locals";
+    case "args":
+      return "__stack.args";
+    case "imported":
+      return "";
+  }
+}
 
 function ind(depth: number): string {
   return INDENT.repeat(depth);
@@ -193,6 +207,12 @@ export function printTs(node: TsNode, indent = 0): string {
       const callee = printTs(node.callee, indent);
       const args = node.arguments.map((a) => printTs(a, indent)).join(", ");
       return `new ${callee}(${args})`;
+    }
+
+    case "scopedVar": {
+      const prefix = scopeToPrefix(node.scope);
+      if (prefix === "") return node.name;
+      return `${prefix}.${node.name}`;
     }
 
     default: {

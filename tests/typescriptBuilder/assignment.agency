@@ -1,0 +1,4 @@
+node main() {
+  bar :: number
+  bar = llm("the number 1")
+}

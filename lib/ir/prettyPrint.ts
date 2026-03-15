@@ -1,6 +1,20 @@
-import type { TsNode, TsParam } from "./tsIR.js";
+import type { TsNode, TsParam, TsScopedVar } from "./tsIR.js";
 
 const INDENT = "  ";
+
+function scopeToPrefix(scope: TsScopedVar["scope"]): string {
+  switch (scope) {
+    case "global":
+      return "__globalCtx.stateStack.globals";
+    case "function":
+    case "node":
+      return "__stack.locals";
+    case "args":
+      return "__stack.args";
+    case "imported":
+      return "";
+  }
+}
 
 function ind(depth: number): string {
   return INDENT.repeat(depth);
@@ -88,7 +102,8 @@ export function printTs(node: TsNode, indent = 0): string {
     case "objectLiteral": {
       if (node.entries.length === 0) return "{}";
       const inner = node.entries.map((e) => {
-        if (e.spread) return `${ind(indent + 1)}...${printTs(e.expr, indent + 1)}`;
+        if (e.spread)
+          return `${ind(indent + 1)}...${printTs(e.expr, indent + 1)}`;
         return `${ind(indent + 1)}${e.key}: ${printTs(e.value, indent + 1)}`;
       });
       return `{\n${inner.join(",\n")}\n${ind(indent)}}`;
@@ -149,7 +164,9 @@ export function printTs(node: TsNode, indent = 0): string {
     }
 
     case "tryCatch": {
-      const catchClause = node.catchParam ? `catch (${node.catchParam})` : "catch";
+      const catchClause = node.catchParam
+        ? `catch (${node.catchParam})`
+        : "catch";
       return `try {\n${printBody(node.tryBody, indent)}\n${ind(indent)}} ${catchClause} {\n${printBody(node.catchBody, indent)}\n${ind(indent)}}`;
     }
 
@@ -193,6 +210,12 @@ export function printTs(node: TsNode, indent = 0): string {
       const callee = printTs(node.callee, indent);
       const args = node.arguments.map((a) => printTs(a, indent)).join(", ");
       return `new ${callee}(${args})`;
+    }
+
+    case "scopedVar": {
+      const prefix = scopeToPrefix(node.scope);
+      if (prefix === "") return node.name;
+      return `${prefix}.${node.name}`;
     }
 
     default: {

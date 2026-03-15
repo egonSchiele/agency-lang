@@ -5,7 +5,7 @@ import { printTs } from "./prettyPrint.js";
 describe("prettyPrint", () => {
   it("TsRaw passes through verbatim", () => {
     expect(printTs(ts.raw("console.log('hello');"))).toBe(
-      "console.log('hello');"
+      "console.log('hello');",
     );
   });
 
@@ -36,7 +36,7 @@ describe("prettyPrint", () => {
 
   it("TsAwait", () => {
     expect(printTs(ts.await(ts.call(ts.id("fetch"), [ts.str("url")])))).toBe(
-      'await fetch("url")'
+      'await fetch("url")',
     );
   });
 
@@ -54,7 +54,7 @@ describe("prettyPrint", () => {
 
   it("TsVarDecl with type annotation", () => {
     expect(printTs(ts.varDecl("let", "x", undefined, "number"))).toBe(
-      "let x: number;"
+      "let x: number;",
     );
   });
 
@@ -76,7 +76,7 @@ describe("prettyPrint", () => {
 
   it("TsArrayLiteral", () => {
     expect(printTs(ts.arr([ts.num(1), ts.num(2), ts.num(3)]))).toBe(
-      "[1, 2, 3]"
+      "[1, 2, 3]",
     );
   });
 
@@ -101,9 +101,13 @@ describe("prettyPrint", () => {
   });
 
   it("TsFunctionDecl basic", () => {
-    const fn = ts.functionDecl("greet", [{ name: "name", typeAnnotation: "string" }], ts.return(ts.id("name")));
+    const fn = ts.functionDecl(
+      "greet",
+      [{ name: "name", typeAnnotation: "string" }],
+      ts.return(ts.id("name")),
+    );
     expect(printTs(fn)).toBe(
-      "function greet(name: string) {\n  return name;\n}"
+      "function greet(name: string) {\n  return name;\n}",
     );
   });
 
@@ -112,22 +116,25 @@ describe("prettyPrint", () => {
       "fetchData",
       [],
       ts.statements([ts.return(ts.call(ts.id("fetch"), []))]),
-      { async: true, export: true }
+      { async: true, export: true },
     );
     expect(printTs(fn)).toBe(
-      "export async function fetchData() {\n  return fetch();\n}"
+      "export async function fetchData() {\n  return fetch();\n}",
     );
   });
 
   it("TsArrowFn expression body", () => {
-    const fn = ts.arrowFn([{ name: "x" }], ts.binOp(ts.id("x"), "+", ts.num(1)));
+    const fn = ts.arrowFn(
+      [{ name: "x" }],
+      ts.binOp(ts.id("x"), "+", ts.num(1)),
+    );
     expect(printTs(fn)).toBe("(x) => x + 1");
   });
 
   it("TsArrowFn block body", () => {
     const fn = ts.arrowFn(
       [{ name: "x" }],
-      ts.statements([ts.return(ts.binOp(ts.id("x"), "+", ts.num(1)))])
+      ts.statements([ts.return(ts.binOp(ts.id("x"), "+", ts.num(1)))]),
     );
     expect(printTs(fn)).toBe("(x) => {\n  return x + 1;\n}");
   });
@@ -154,16 +161,16 @@ describe("prettyPrint", () => {
           },
         ],
         elseBody: ts.return(ts.str("zero")),
-      }
+      },
     );
     const expected = [
-      'if (x > 0) {',
+      "if (x > 0) {",
       '  return "positive";',
-      '} else if (x < 0) {',
+      "} else if (x < 0) {",
       '  return "negative";',
-      '} else {',
+      "} else {",
       '  return "zero";',
-      '}',
+      "}",
     ].join("\n");
     expect(printTs(node)).toBe(expected);
   });
@@ -172,10 +179,10 @@ describe("prettyPrint", () => {
     const node = ts.forOf(
       "item",
       ts.id("items"),
-      ts.call(ts.prop(ts.id("console"), "log"), [ts.id("item")])
+      ts.call(ts.prop(ts.id("console"), "log"), [ts.id("item")]),
     );
     expect(printTs(node)).toBe(
-      "for (const item of items) {\n  console.log(item)\n}"
+      "for (const item of items) {\n  console.log(item)\n}",
     );
   });
 
@@ -184,10 +191,10 @@ describe("prettyPrint", () => {
       ts.varDecl("let", "i", ts.num(0)),
       ts.binOp(ts.id("i"), "<", ts.num(10)),
       ts.assign(ts.id("i"), ts.binOp(ts.id("i"), "+", ts.num(1))),
-      ts.call(ts.prop(ts.id("console"), "log"), [ts.id("i")])
+      ts.call(ts.prop(ts.id("console"), "log"), [ts.id("i")]),
     );
     expect(printTs(node)).toBe(
-      "for (let i = 0; i < 10; i = i + 1) {\n  console.log(i)\n}"
+      "for (let i = 0; i < 10; i = i + 1) {\n  console.log(i)\n}",
     );
   });
 
@@ -198,7 +205,10 @@ describe("prettyPrint", () => {
 
   it("TsSwitch with cases and default", () => {
     const node = ts.switch(ts.id("x"), [
-      { test: ts.num(1), body: ts.statements([ts.raw("doA();"), ts.raw("break;")]) },
+      {
+        test: ts.num(1),
+        body: ts.statements([ts.raw("doA();"), ts.raw("break;")]),
+      },
       { test: ts.num(2), body: ts.raw("break;") },
       { test: undefined, body: ts.raw("break;") },
     ]);
@@ -220,16 +230,16 @@ describe("prettyPrint", () => {
     const node = ts.tryCatch(
       ts.call(ts.id("riskyOp"), []),
       ts.call(ts.prop(ts.id("console"), "error"), [ts.id("e")]),
-      "e"
+      "e",
     );
     expect(printTs(node)).toBe(
-      "try {\n  riskyOp()\n} catch (e) {\n  console.error(e)\n}"
+      "try {\n  riskyOp()\n} catch (e) {\n  console.error(e)\n}",
     );
   });
 
   it("TsTemplateLit with interpolations", () => {
     const node = ts.template([
-      { text: "Hello, " , expr: ts.id("name") },
+      { text: "Hello, ", expr: ts.id("name") },
       { text: "! You are ", expr: ts.id("age") },
       { text: " years old." },
     ]);
@@ -260,22 +270,38 @@ describe("prettyPrint", () => {
   });
 
   it("TsImport named", () => {
-    const node = ts.import({ importKind: "named", names: ["foo", "bar"], from: "./mod" });
+    const node = ts.import({
+      importKind: "named",
+      names: ["foo", "bar"],
+      from: "./mod",
+    });
     expect(printTs(node)).toBe('import { foo, bar } from "./mod";');
   });
 
   it("TsImport default", () => {
-    const node = ts.import({ importKind: "default", defaultName: "React", from: "react" });
+    const node = ts.import({
+      importKind: "default",
+      defaultName: "React",
+      from: "react",
+    });
     expect(printTs(node)).toBe('import React from "react";');
   });
 
   it("TsImport namespace", () => {
-    const node = ts.import({ importKind: "namespace", namespaceName: "path", from: "path" });
+    const node = ts.import({
+      importKind: "namespace",
+      namespaceName: "path",
+      from: "path",
+    });
     expect(printTs(node)).toBe('import * as path from "path";');
   });
 
   it("TsImport type", () => {
-    const node = ts.import({ importKind: "type", names: ["Foo"], from: "./types" });
+    const node = ts.import({
+      importKind: "type",
+      names: ["Foo"],
+      from: "./types",
+    });
     expect(printTs(node)).toBe('import type { Foo } from "./types";');
   });
 
@@ -298,8 +324,8 @@ describe("prettyPrint", () => {
             key: "result",
             value: ts.call(ts.id("compute"), [ts.num(42)]),
           },
-        ])
-      )
+        ]),
+      ),
     );
     const expected = [
       "function build() {",
@@ -314,11 +340,43 @@ describe("prettyPrint", () => {
   it("param with default value", () => {
     const fn = ts.functionDecl(
       "greet",
-      [{ name: "name", typeAnnotation: "string", defaultValue: ts.str("world") }],
-      ts.return(ts.id("name"))
+      [
+        {
+          name: "name",
+          typeAnnotation: "string",
+          defaultValue: ts.str("world"),
+        },
+      ],
+      ts.return(ts.id("name")),
     );
     expect(printTs(fn)).toBe(
-      'function greet(name: string = "world") {\n  return name;\n}'
+      'function greet(name: string = "world") {\n  return name;\n}',
     );
+  });
+
+  it("TsScopedVar global", () => {
+    expect(printTs(ts.scopedVar("x", "global"))).toBe(
+      "__globalCtx.stateStack.globals.x",
+    );
+  });
+
+  it("TsScopedVar function", () => {
+    expect(printTs(ts.scopedVar("count", "function"))).toBe(
+      "__stack.locals.count",
+    );
+  });
+
+  it("TsScopedVar node", () => {
+    expect(printTs(ts.scopedVar("result", "node"))).toBe(
+      "__stack.locals.result",
+    );
+  });
+
+  it("TsScopedVar args", () => {
+    expect(printTs(ts.scopedVar("name", "args"))).toBe("__stack.args.name");
+  });
+
+  it("TsScopedVar imported", () => {
+    expect(printTs(ts.scopedVar("helper", "imported"))).toBe("helper");
   });
 });

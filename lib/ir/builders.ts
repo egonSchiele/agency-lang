@@ -34,6 +34,7 @@ import type {
   TsComment,
   TsExport,
   TsNewExpr,
+  TsScopedVar,
 } from "./tsIR.js";
 
 export const ts = {
@@ -66,7 +67,7 @@ export const ts = {
     declKind: "const" | "let",
     name: string,
     initializer?: TsNode,
-    typeAnnotation?: string
+    typeAnnotation?: string,
   ): TsVarDecl {
     return { kind: "varDecl", declKind, name, typeAnnotation, initializer };
   },
@@ -79,7 +80,7 @@ export const ts = {
     name: string,
     params: TsParam[],
     body: TsNode,
-    opts?: { async?: boolean; export?: boolean; returnType?: string }
+    opts?: { async?: boolean; export?: boolean; returnType?: string },
   ): TsFunctionDecl {
     return {
       kind: "functionDecl",
@@ -95,7 +96,7 @@ export const ts = {
   arrowFn(
     params: TsParam[],
     body: TsNode,
-    opts?: { async?: boolean; returnType?: string }
+    opts?: { async?: boolean; returnType?: string },
   ): TsArrowFn {
     return {
       kind: "arrowFn",
@@ -133,7 +134,7 @@ export const ts = {
   if(
     condition: TsNode,
     body: TsNode,
-    opts?: { elseIfs?: TsElseIf[]; elseBody?: TsNode }
+    opts?: { elseIfs?: TsElseIf[]; elseBody?: TsNode },
   ): TsIf {
     return {
       kind: "if",
@@ -148,12 +149,7 @@ export const ts = {
     return { kind: "for", variant: "of", varName, iterable, body };
   },
 
-  forC(
-    init: TsNode,
-    condition: TsNode,
-    update: TsNode,
-    body: TsNode
-  ): TsFor {
+  forC(init: TsNode, condition: TsNode, update: TsNode, body: TsNode): TsFor {
     return { kind: "for", variant: "cStyle", init, condition, update, body };
   },
 
@@ -168,7 +164,7 @@ export const ts = {
   tryCatch(
     tryBody: TsNode,
     catchBody: TsNode,
-    catchParam?: string
+    catchParam?: string,
   ): TsTryCatch {
     return { kind: "tryCatch", tryBody, catchParam, catchBody };
   },
@@ -215,5 +211,9 @@ export const ts = {
 
   new(callee: TsNode, args: TsNode[] = []): TsNewExpr {
     return { kind: "newExpr", callee, arguments: args };
+  },
+
+  scopedVar(name: string, scope: TsScopedVar["scope"]): TsScopedVar {
+    return { kind: "scopedVar", name, scope };
   },
 };

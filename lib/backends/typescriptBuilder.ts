@@ -482,16 +482,21 @@ export class TypeScriptBuilder {
   }
 
   private processAgencyObject(node: AgencyObject): TsNode {
-    const kvCodes = node.entries.map((entry) => {
-      if ("type" in entry && entry.type === "splat") {
-        return `...${this.str(this.processNode(entry.value)).trim()}`;
-      }
-      const kv = entry as import("../types/dataStructures.js").AgencyObjectKV;
-      const keyCode = kv.key.replace(/"/g, '\\"');
-      const valueCode = this.str(this.processNode(kv.value)).trim();
-      return `"${keyCode}": ${valueCode}`;
-    });
-    return ts.raw(`{${kvCodes.join(", ")}}`);
+    const entries = node.entries.map(
+      (entry): import("../ir/tsIR.js").TsObjectEntry => {
+        if ("type" in entry && entry.type === "splat") {
+          return { spread: true, expr: this.processNode(entry.value) };
+        }
+        const kv = entry as import("../types/dataStructures.js").AgencyObjectKV;
+        const keyCode = kv.key.replace(/"/g, '\\"');
+        return {
+          spread: false,
+          key: `"${keyCode}"`,
+          value: this.processNode(kv.value),
+        };
+      },
+    );
+    return ts.obj(entries);
   }
 
   private processAgencyArray(node: AgencyArray): TsNode {

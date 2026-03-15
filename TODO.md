@@ -123,4 +123,5 @@ parallel agents
 memory layer
 ability to switch to other packages instead of smoltalk for LLM calls, other packages for memory layer.
 
-passing an "undefined" type to zod for zodToJSONSchema results in an explosion, not sure why.
+## Derive safe-ness
+Currently only TypeScript functions can be marked safe. We should be able to derive whether an agency-defined function is safe by looking at whether it calls any unsafe functions, such as those imported from TypeScript and not marked safe, or certain built-in functions like write.

@@ -128,15 +128,12 @@ graph.node("main", async (__state: GraphState) => {
     }
 
     
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        __stack.locals.message = await await _builtinInput(`Please enter a message: `);
+  __stack.step++;
+}
+if (__step <= 1) {
+  __stack.locals.message = await await _builtinInput(`Please enter a message: `);
 
 
 if (isInterrupt(__stack.locals.message)) {
@@ -145,12 +142,13 @@ if (isInterrupt(__stack.locals.message)) {
   
    
 }
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        
+  
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  
 async function _sentiment(message, __metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -176,22 +174,23 @@ async function _sentiment(message, __metadata): Promise<any> {
 __self.sentiment = _sentiment(__stack.locals.message, {
       messages: new MessageThread()
     });
-        __stack.step++;
-      }
-      
 
-      if (__step <= 3) {
-        [__self.sentiment] = await Promise.all([__self.sentiment]);
-        __stack.step++;
-      }
-      
 
-      if (__step <= 4) {
-        await await _print(__stack.locals.sentiment)
+
+  
+  __stack.step++;
+}
+if (__step <= 3) {
+  [__self.sentiment] = await Promise.all([__self.sentiment]);
+  __stack.step++;
+}
+if (__step <= 4) {
+  await await _print(__stack.locals.sentiment)
 ;
-        __stack.step++;
-      }
-      
+
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
     return { messages: __threads, data: undefined };

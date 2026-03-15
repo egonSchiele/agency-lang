@@ -132,12 +132,12 @@ graph.node("analyzeData", async (__state: GraphState) => {
       __stack.args["input"] = __state.data.input;
     }
     
-    
-      if (__step <= 0) {
-        // Removed unused LLM call "Analyzing: {input}", was assigned to variable 'result' but variable was never used.
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
+  
+  // Removed unused LLM call "Analyzing: {input}", was assigned to variable 'result' but variable was never used.
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "analyzeData", data: undefined } });
     return { messages: __threads, data: undefined };

@@ -2,9 +2,11 @@ import __graph___foo from "./foo.js";
 import { __fooNodeParams } from "./foo.js";
 import foo from "./foo.ts";
 import { foo } from "./foo.ts";
-import foo, { bar } from "./foo.ts";
+import foo from "./foo.ts";
+import { bar } from "./foo.ts";
 import * as foo from "./foo.ts";
-import foo, * as bar from "./foo.ts";
+import foo from "./foo.ts";
+import * as bar from "./foo.ts";
 import foo from "./foo.js";
 import { foo } from "./foo.js";
 
@@ -125,6 +127,14 @@ export const approveInterrupt = (i: Interrupt, m?: any) => _approveInterrupt({ c
 export const rejectInterrupt = (i: Interrupt, m?: any) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
 export const modifyInterrupt = (i: Interrupt, a: any, m?: any) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
 export const resolveInterrupt = (i: Interrupt, v: any, m?: any) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
+
+
+
+
+
+
+
+
 
 graph.merge(__graph___foo);
 export default graph;

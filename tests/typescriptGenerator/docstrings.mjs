@@ -122,6 +122,7 @@ This is a simple addition function.`,
 };
 
 export const __addToolParams = ["a","b"];
+
 export const __greetTool = {
   name: "greet",
   description: `Generate a greeting message for the given name.`,
@@ -129,6 +130,7 @@ export const __greetTool = {
 };
 
 export const __greetToolParams = ["name"];
+
 export const __calculateAreaTool = {
   name: "calculateArea",
   description: `Calculate the area of a rectangle.
@@ -142,6 +144,7 @@ Returns: the area as a number`,
 };
 
 export const __calculateAreaToolParams = ["width","height"];
+
 export const __processDataTool = {
   name: "processData",
   description: `Single line docstring`,
@@ -149,7 +152,10 @@ export const __processDataTool = {
 };
 
 export const __processDataToolParams = [];
+
 //  Test docstrings in functions
+
+
 
 export async function add(a: any, b: any, __state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
@@ -170,12 +176,10 @@ export async function add(a: any, b: any, __state: InternalFunctionState | undef
     __self.__retryable = __self.__retryable ?? true;
 
     try {
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
+
+  __stack.step++;
+}
     } catch (__error) {
       if (__error instanceof ToolCallError) throw __error;
       throw new ToolCallError(__error, { retryable: __self.__retryable });
@@ -183,6 +187,9 @@ export async function add(a: any, b: any, __state: InternalFunctionState | undef
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "add", timeTaken: performance.now() - __funcStartTime } });
 }
+
+
+
 
 export async function greet(name: any, __state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
@@ -202,12 +209,10 @@ export async function greet(name: any, __state: InternalFunctionState | undefine
     __self.__retryable = __self.__retryable ?? true;
 
     try {
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
+
+  __stack.step++;
+}
     } catch (__error) {
       if (__error instanceof ToolCallError) throw __error;
       throw new ToolCallError(__error, { retryable: __self.__retryable });
@@ -215,6 +220,9 @@ export async function greet(name: any, __state: InternalFunctionState | undefine
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "greet", timeTaken: performance.now() - __funcStartTime } });
 }
+
+
+
 
 export async function calculateArea(width: any, height: any, __state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
@@ -235,12 +243,10 @@ export async function calculateArea(width: any, height: any, __state: InternalFu
     __self.__retryable = __self.__retryable ?? true;
 
     try {
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
+
+  __stack.step++;
+}
     } catch (__error) {
       if (__error instanceof ToolCallError) throw __error;
       throw new ToolCallError(__error, { retryable: __self.__retryable });
@@ -248,6 +254,9 @@ export async function calculateArea(width: any, height: any, __state: InternalFu
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "calculateArea", timeTaken: performance.now() - __funcStartTime } });
 }
+
+
+
 
 export async function processData(__state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
@@ -267,12 +276,10 @@ export async function processData(__state: InternalFunctionState | undefined = u
     __self.__retryable = __self.__retryable ?? true;
 
     try {
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
+
+  __stack.step++;
+}
     } catch (__error) {
       if (__error instanceof ToolCallError) throw __error;
       throw new ToolCallError(__error, { retryable: __self.__retryable });
@@ -280,5 +287,7 @@ export async function processData(__state: InternalFunctionState | undefined = u
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "processData", timeTaken: performance.now() - __funcStartTime } });
 }
+
+
 
 export default graph;

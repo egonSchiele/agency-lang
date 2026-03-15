@@ -114,7 +114,10 @@ export const approveInterrupt = (i: Interrupt, m?: any) => _approveInterrupt({ c
 export const rejectInterrupt = (i: Interrupt, m?: any) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
 export const modifyInterrupt = (i: Interrupt, a: any, m?: any) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
 export const resolveInterrupt = (i: Interrupt, v: any, m?: any) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
-__globalCtx.stateStack.globals.config = {"model": `gemini-2.5-flash-lite`};
+__globalCtx.stateStack.globals.config = {
+  "model": `gemini-2.5-flash-lite`
+};
+
 
 graph.node("main", async (__state: GraphState) => {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
@@ -129,15 +132,12 @@ graph.node("main", async (__state: GraphState) => {
     }
 
     
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        
+  __stack.step++;
+}
+if (__step <= 1) {
+  
 async function _foo(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -163,12 +163,14 @@ async function _foo(__metadata): Promise<any> {
 __self.foo = _foo({
       messages: new MessageThread()
     });
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        
+
+
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  
 async function _foo2(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -182,7 +184,9 @@ async function _foo2(__metadata): Promise<any> {
     
     tools: undefined,
     toolHandlers: [],
-    clientConfig: {"maxTokens": 100},
+    clientConfig: {
+  "maxTokens": 100
+},
     stream: false,
     maxToolCallRounds: 10,
     interruptData: __state?.interruptData,
@@ -194,22 +198,23 @@ async function _foo2(__metadata): Promise<any> {
 __self.foo2 = _foo2({
       messages: new MessageThread()
     });
-        __stack.step++;
-      }
-      
 
-      if (__step <= 3) {
-        [__self.foo, __self.foo2] = await Promise.all([__self.foo, __self.foo2]);
-        __stack.step++;
-      }
-      
 
-      if (__step <= 4) {
-        await await _print(__stack.locals.foo, __stack.locals.foo2)
+
+  
+  __stack.step++;
+}
+if (__step <= 3) {
+  [__self.foo, __self.foo2] = await Promise.all([__self.foo, __self.foo2]);
+  __stack.step++;
+}
+if (__step <= 4) {
+  await await _print(__stack.locals.foo, __stack.locals.foo2)
 ;
-        __stack.step++;
-      }
-      
+
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
     return { messages: __threads, data: undefined };

@@ -121,7 +121,16 @@ export const __greetTool = {
 };
 
 export const __greetToolParams = [];
+
+
+
+
 __globalCtx.stateStack.globals.x = 42;
+
+
+
+
+
 
 export async function greet(__state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
@@ -141,19 +150,16 @@ export async function greet(__state: InternalFunctionState | undefined = undefin
     __self.__retryable = __self.__retryable ?? true;
 
     try {
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        __ctx.stateStack.pop();
+  __stack.step++;
+}
+if (__step <= 1) {
+  __ctx.stateStack.pop();
 return `hello`
-        __stack.step++;
-      }
-      
+  
+  __stack.step++;
+}
     } catch (__error) {
       if (__error instanceof ToolCallError) throw __error;
       throw new ToolCallError(__error, { retryable: __self.__retryable });
@@ -161,5 +167,6 @@ return `hello`
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "greet", timeTaken: performance.now() - __funcStartTime } });
 }
+
 
 export default graph;

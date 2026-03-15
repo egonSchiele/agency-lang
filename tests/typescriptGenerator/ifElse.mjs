@@ -128,163 +128,154 @@ graph.node("main", async (__state: GraphState) => {
     }
 
     
+    if (__step <= 0) {
+  //  Basic if statement with boolean variable
+  
+  __stack.step++;
+}
+if (__step <= 1) {
+  __stack.locals.flag = true;
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  if (__stack.locals.flag) {
+    __stack.locals.result = `condition was true`;
     
-      if (__step <= 0) {
-        //  Basic if statement with boolean variable
-        __stack.step++;
-      }
-      
-
-      if (__step <= 1) {
-        __stack.locals.flag = true;
-        __stack.step++;
-      }
-      
-
-      if (__step <= 2) {
-        if (__stack.locals.flag) {
-__stack.locals.result = `condition was true`;
-
-
+  }
+  
+  
+  __stack.step++;
 }
-        __stack.step++;
-      }
-      
-
-      if (__step <= 3) {
-        if (await isReady()
+if (__step <= 3) {
+  if (await isReady()
 ) {
-__stack.locals.status = `ready`;
-
-
+    __stack.locals.status = `ready`;
+    
+  }
+  
+  
+  //  If statement with property access
+  
+  __stack.step++;
 }
-//  If statement with property access
-        __stack.step++;
-      }
-      
-
-      if (__step <= 4) {
-        __stack.locals.obj = {"active": true};
-        __stack.step++;
-      }
-      
-
-      if (__step <= 5) {
-        if (__stack.locals.obj.active) {
-__stack.locals.message = `object is active`;
-
-
+if (__step <= 4) {
+  __stack.locals.obj = {
+    "active": true
+  };
+  
+  __stack.step++;
 }
-//  Nested if statements
-        __stack.step++;
-      }
-      
-
-      if (__step <= 6) {
-        __stack.locals.outer = true;
-        __stack.step++;
-      }
-      
-
-      if (__step <= 7) {
-        if (__stack.locals.outer) {
-__stack.locals.inner = false;
-
-
-if (__stack.locals.inner) {
-__stack.locals.nested = `both true`;
-
-
+if (__step <= 5) {
+  if (__stack.locals.obj.active) {
+    __stack.locals.message = `object is active`;
+    
+  }
+  
+  
+  //  Nested if statements
+  
+  __stack.step++;
 }
-
-
+if (__step <= 6) {
+  __stack.locals.outer = true;
+  
+  __stack.step++;
 }
-//  TODO fix
-//  If with index access
-//  arr = [1, 2, 3]
-//  if (arr[0]) {
-//    firstElement = "exists"
-//  }
-//  Multiple statements in then body
-        __stack.step++;
-      }
+if (__step <= 7) {
+  if (__stack.locals.outer) {
+    __stack.locals.inner = false;
+    
+    if (__stack.locals.inner) {
+      __stack.locals.nested = `both true`;
       
-
-      if (__step <= 8) {
-        __stack.locals.condition = true;
-        __stack.step++;
-      }
-      
-
-      if (__step <= 9) {
-        if (__stack.locals.condition) {
-__stack.locals.a = 1;
-
-
-__stack.locals.b = 2;
-
-
-__stack.locals.c = 3;
-
-
+    }
+    
+  }
+  
+  
+  //  TODO fix
+  
+  //  If with index access
+  
+  //  arr = [1, 2, 3]
+  
+  //  if (arr[0]) {
+  
+  //    firstElement = "exists"
+  
+  //  }
+  
+  //  Multiple statements in then body
+  
+  __stack.step++;
 }
-//  Multiple statements in both then and else bodies
-        __stack.step++;
-      }
-      
-
-      if (__step <= 10) {
-        __stack.locals.value = false;
-        __stack.step++;
-      }
-      
-
-      if (__step <= 11) {
-        if (__stack.locals.value) {
-__stack.locals.x = 10;
-
-
-__stack.locals.y = 20;
-
-
+if (__step <= 8) {
+  __stack.locals.condition = true;
+  
+  __stack.step++;
 }
-//  Basic else
-        __stack.step++;
-      }
-      
-
-      if (__step <= 12) {
-        if (__stack.locals.flag) {
-__stack.locals.result = `yes`;
-
-
-} else {
-__stack.locals.result = `no`;
-
-
+if (__step <= 9) {
+  if (__stack.locals.condition) {
+    __stack.locals.a = 1;
+    
+    __stack.locals.b = 2;
+    
+    __stack.locals.c = 3;
+    
+  }
+  
+  
+  //  Multiple statements in both then and else bodies
+  
+  __stack.step++;
 }
-//  else if chain
-        __stack.step++;
-      }
-      
-
-      if (__step <= 13) {
-        if (__stack.locals.a == 1) {
-__stack.locals.result = `one`;
-
-
-} else if (__stack.locals.a == 2) {
-__stack.locals.result = `two`;
-
-
-} else {
-__stack.locals.result = `other`;
-
-
+if (__step <= 10) {
+  __stack.locals.value = false;
+  
+  __stack.step++;
 }
-        __stack.step++;
-      }
-      
+if (__step <= 11) {
+  if (__stack.locals.value) {
+    __stack.locals.x = 10;
+    
+    __stack.locals.y = 20;
+    
+  }
+  
+  
+  //  Basic else
+  
+  __stack.step++;
+}
+if (__step <= 12) {
+  if (__stack.locals.flag) {
+    __stack.locals.result = `yes`;
+    
+  } else {
+    __stack.locals.result = `no`;
+    
+  }
+  
+  
+  //  else if chain
+  
+  __stack.step++;
+}
+if (__step <= 13) {
+  if (__stack.locals.a == 1) {
+    __stack.locals.result = `one`;
+    
+  } else if (__stack.locals.a == 2) {
+    __stack.locals.result = `two`;
+    
+  } else {
+    __stack.locals.result = `other`;
+    
+  }
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
     return { messages: __threads, data: undefined };

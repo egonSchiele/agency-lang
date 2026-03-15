@@ -128,17 +128,13 @@ graph.node("main", async (__state: GraphState) => {
     }
 
     
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        let x_startTime: number = performance.now();
+  __stack.step++;
+}
+if (__step <= 1) {
+  let x_startTime: number = performance.now();
 //  Test the sleep built-in function
-
 
 await await _print(`Starting...`)
 
@@ -154,16 +150,18 @@ await await _print(`Done sleeping!`)
 
 let x_endTime: number = performance.now();
 let x: number = x_endTime - x_startTime;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        await await _print(__stack.locals.x)
+
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  await await _print(__stack.locals.x)
 ;
-        __stack.step++;
-      }
-      
+
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
     return { messages: __threads, data: undefined };

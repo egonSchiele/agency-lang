@@ -128,18 +128,15 @@ graph.node("main", async (__state: GraphState) => {
     }
 
     
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        __stack.locals.greeting = `Hello, my name is ${__stack.locals.name} and I am ${__stack.locals.age} years old.`;
-        __stack.step++;
-      }
-      
+  __stack.step++;
+}
+if (__step <= 1) {
+  __stack.locals.greeting = `Hello, my name is ${__stack.locals.name} and I am ${__stack.locals.age} years old.`;
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
     return { messages: __threads, data: undefined };

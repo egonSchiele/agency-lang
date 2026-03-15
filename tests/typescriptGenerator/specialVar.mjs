@@ -128,22 +128,19 @@ graph.node("main", async (__state: GraphState) => {
     }
 
     
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        await await _print(`lets race!`)
+  __stack.step++;
+}
+if (__step <= 1) {
+  await await _print(`lets race!`)
 ;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        __stack.locals.msg = await await _builtinInput(`> `);
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  __stack.locals.msg = await await _builtinInput(`> `);
 
 
 if (isInterrupt(__stack.locals.msg)) {
@@ -152,12 +149,13 @@ if (isInterrupt(__stack.locals.msg)) {
   
    
 }
-        __stack.step++;
-      }
-      
 
-      if (__step <= 3) {
-        
+  
+  
+  __stack.step++;
+}
+if (__step <= 3) {
+  
 async function _response1(msg, __metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -179,31 +177,31 @@ async function _response1(msg, __metadata): Promise<any> {
 __self.response1 = _response1(__stack.locals.msg, {
       messages: new MessageThread()
     });
-        __stack.step++;
-      }
-      
 
-      if (__step <= 4) {
-        [__self.response1] = await Promise.all([__self.response1]);
-        __stack.step++;
-      }
-      
 
-      if (__step <= 5) {
-        await await _print(__stack.locals.response1)
+
+  
+  
+  __stack.step++;
+}
+if (__step <= 4) {
+  [__self.response1] = await Promise.all([__self.response1]);
+  __stack.step++;
+}
+if (__step <= 5) {
+  await await _print(__stack.locals.response1)
 ;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 6) {
-        __client = __getClientWithConfig({ model: `gemini-2.5-flash-lite` });
-        __stack.step++;
-      }
-      
-
-      if (__step <= 7) {
-        
+  
+  __stack.step++;
+}
+if (__step <= 6) {
+  __client = __getClientWithConfig({ model: `gemini-2.5-flash-lite` });
+  
+  __stack.step++;
+}
+if (__step <= 7) {
+  
 async function _response2(msg, __metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -225,28 +223,32 @@ async function _response2(msg, __metadata): Promise<any> {
 __self.response2 = _response2(__stack.locals.msg, {
       messages: new MessageThread()
     });
-        __stack.step++;
-      }
-      
 
-      if (__step <= 8) {
-        [__self.response2] = await Promise.all([__self.response2]);
-        __stack.step++;
-      }
-      
 
-      if (__step <= 9) {
-        await await _print(__stack.locals.response2)
+
+  
+  
+  __stack.step++;
+}
+if (__step <= 8) {
+  [__self.response2] = await Promise.all([__self.response2]);
+  __stack.step++;
+}
+if (__step <= 9) {
+  await await _print(__stack.locals.response2)
 ;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 10) {
-        return { messages: __threads, data: [__stack.locals.response1, __stack.locals.response2]}
-        __stack.step++;
-      }
-      
+  
+  __stack.step++;
+}
+if (__step <= 10) {
+  return {
+    messages: __threads,
+    data: [__stack.locals.response1, __stack.locals.response2]
+  };
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
     return { messages: __threads, data: undefined };

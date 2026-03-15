@@ -128,193 +128,199 @@ graph.node("main", async (__state: GraphState) => {
     }
 
     
-    
-      if (__step <= 0) {
-        //  Test match blocks (pattern matching)
-//  Simple match with string literals
-        __stack.step++;
-      }
-      
-
-      if (__step <= 1) {
-        __stack.locals.action = `start`;
-        __stack.step++;
-      }
-      
-
-      if (__step <= 2) {
-        switch (__stack.locals.action) {
-  case `start`:
-await await _print(`Starting...`)
-
-    break;
-  case `stop`:
-await await _print(`Stopping...`)
-
-    break;
-  case `restart`:
-await await _print(`Restarting...`)
-
-    break;
-  default:
-await await _print(`Unknown action`)
-
-    break;
-}//  Match with number literals
-        __stack.step++;
-      }
-      
-
-      if (__step <= 3) {
-        __stack.locals.statusCode = 200;
-        __stack.step++;
-      }
-      
-
-      if (__step <= 4) {
-        switch (__stack.locals.statusCode) {
-  case 200:
-await await _print(`OK`)
-
-    break;
-  case 404:
-await await _print(`Not Found`)
-
-    break;
-  case 500:
-await await _print(`Internal Server Error`)
-
-    break;
-  default:
-await await _print(`Unknown status`)
-
-    break;
-}//  Match with variable assignment in body
-        __stack.step++;
-      }
-      
-
-      if (__step <= 5) {
-        __stack.locals.grade = `A`;
-        __stack.step++;
-      }
-      
-
-      if (__step <= 6) {
-        __stack.locals.points = 0;
-        __stack.step++;
-      }
-      
-
-      if (__step <= 7) {
-        switch (__stack.locals.grade) {
-  case `A`:
-__stack.locals.a = 100;
-
-    break;
-  case `B`:
-__stack.locals.b = 85;
-
-    break;
-  case `C`:
-__stack.locals.c = 70;
-
-    break;
-  case `D`:
-__stack.locals.d = 55;
-
-    break;
-  default:
-__stack.locals.e = 0;
-
-    break;
-}//  Match with function calls in body
-        __stack.step++;
-      }
-      
-
-      if (__step <= 8) {
-        __stack.locals.level = `debug`;
-        __stack.step++;
-      }
-      
-
-      if (__step <= 9) {
-        switch (__stack.locals.level) {
-  case `debug`:
-await await _print(`Debug mode enabled`)
-
-    break;
-  case `info`:
-await await _print(`Info level logging`)
-
-    break;
-  case `warn`:
-await await _print(`Warning level`)
-
-    break;
-  case `error`:
-await await _print(`Error level`)
-
-    break;
-}//  Match with array results
-        __stack.step++;
-      }
-      
-
-      if (__step <= 10) {
-        __stack.locals.resultType = `array`;
-        __stack.step++;
-      }
-      
-
-      if (__step <= 11) {
-        switch (__stack.locals.resultType) {
-  case `array`:
-__stack.locals.data1 = [1, 2, 3];
-
-    break;
-  case `object`:
-__stack.locals.data2 = {"x": 1, "y": 2};
-
-    break;
-  default:
-__stack.locals.data3 = [];
-
-    break;
-}//  Match with object results
-        __stack.step++;
-      }
-      
-
-      if (__step <= 12) {
-        __stack.locals.format = `json`;
-        __stack.step++;
-      }
-      
-
-      if (__step <= 13) {
-        switch (__stack.locals.format) {
-  case `xml`:
-__stack.locals.output1 = {"type": `xml`, "ext": `.xml`};
-
-    break;
-  case `json`:
-__stack.locals.output2 = {"type": `json`, "ext": `.json`};
-
-    break;
-  case `csv`:
-__stack.locals.output3 = {"type": `csv`, "ext": `.csv`};
-
-    break;
-  default:
-__stack.locals.output4 = {"type": `unknown`, "ext": ``};
-
-    break;
+    if (__step <= 0) {
+  //  Test match blocks (pattern matching)
+  
+  
+  //  Simple match with string literals
+  
+  __stack.step++;
 }
-        __stack.step++;
-      }
-      
+if (__step <= 1) {
+  __stack.locals.action = `start`;
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  switch (__stack.locals.action) {
+    case `start`:
+      await await _print(`Starting...`)
+
+      break;
+    case `stop`:
+      await await _print(`Stopping...`)
+
+      break;
+    case `restart`:
+      await await _print(`Restarting...`)
+
+      break;
+    default:
+      await await _print(`Unknown action`)
+
+      break;
+  }
+  
+  
+  //  Match with number literals
+  
+  __stack.step++;
+}
+if (__step <= 3) {
+  __stack.locals.statusCode = 200;
+  
+  __stack.step++;
+}
+if (__step <= 4) {
+  switch (__stack.locals.statusCode) {
+    case 200:
+      await await _print(`OK`)
+
+      break;
+    case 404:
+      await await _print(`Not Found`)
+
+      break;
+    case 500:
+      await await _print(`Internal Server Error`)
+
+      break;
+    default:
+      await await _print(`Unknown status`)
+
+      break;
+  }
+  
+  
+  //  Match with variable assignment in body
+  
+  __stack.step++;
+}
+if (__step <= 5) {
+  __stack.locals.grade = `A`;
+  
+  __stack.step++;
+}
+if (__step <= 6) {
+  __stack.locals.points = 0;
+  
+  __stack.step++;
+}
+if (__step <= 7) {
+  switch (__stack.locals.grade) {
+    case `A`:
+      __stack.locals.a = 100;
+      break;
+    case `B`:
+      __stack.locals.b = 85;
+      break;
+    case `C`:
+      __stack.locals.c = 70;
+      break;
+    case `D`:
+      __stack.locals.d = 55;
+      break;
+    default:
+      __stack.locals.e = 0;
+      break;
+  }
+  
+  
+  //  Match with function calls in body
+  
+  __stack.step++;
+}
+if (__step <= 8) {
+  __stack.locals.level = `debug`;
+  
+  __stack.step++;
+}
+if (__step <= 9) {
+  switch (__stack.locals.level) {
+    case `debug`:
+      await await _print(`Debug mode enabled`)
+
+      break;
+    case `info`:
+      await await _print(`Info level logging`)
+
+      break;
+    case `warn`:
+      await await _print(`Warning level`)
+
+      break;
+    case `error`:
+      await await _print(`Error level`)
+
+      break;
+  }
+  
+  
+  //  Match with array results
+  
+  __stack.step++;
+}
+if (__step <= 10) {
+  __stack.locals.resultType = `array`;
+  
+  __stack.step++;
+}
+if (__step <= 11) {
+  switch (__stack.locals.resultType) {
+    case `array`:
+      __stack.locals.data1 = [1, 2, 3];
+      break;
+    case `object`:
+      __stack.locals.data2 = {
+        "x": 1,
+        "y": 2
+      };
+      break;
+    default:
+      __stack.locals.data3 = [];
+      break;
+  }
+  
+  
+  //  Match with object results
+  
+  __stack.step++;
+}
+if (__step <= 12) {
+  __stack.locals.format = `json`;
+  
+  __stack.step++;
+}
+if (__step <= 13) {
+  switch (__stack.locals.format) {
+    case `xml`:
+      __stack.locals.output1 = {
+        "type": `xml`,
+        "ext": `.xml`
+      };
+      break;
+    case `json`:
+      __stack.locals.output2 = {
+        "type": `json`,
+        "ext": `.json`
+      };
+      break;
+    case `csv`:
+      __stack.locals.output3 = {
+        "type": `csv`,
+        "ext": `.csv`
+      };
+      break;
+    default:
+      __stack.locals.output4 = {
+        "type": `unknown`,
+        "ext": ``
+      };
+      break;
+  }
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
     return { messages: __threads, data: undefined };

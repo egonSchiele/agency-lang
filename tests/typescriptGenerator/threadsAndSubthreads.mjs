@@ -122,6 +122,7 @@ export const __fooTool = {
 
 export const __fooToolParams = [];
 
+
 export async function foo(__state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupFunction({ state: __state });
@@ -140,15 +141,12 @@ export async function foo(__state: InternalFunctionState | undefined = undefined
     __self.__retryable = __self.__retryable ?? true;
 
     try {
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        
+  __stack.step++;
+}
+if (__step <= 1) {
+  
 {
 
 
@@ -406,44 +404,45 @@ __threads.popActive();
 
 __threads.popActive();
 }
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        await await _print(`res1`, __stack.locals.res1)
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  await await _print(`res1`, __stack.locals.res1)
 ;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 3) {
-        await await _print(`res2`, __stack.locals.res2)
+  
+  __stack.step++;
+}
+if (__step <= 3) {
+  await await _print(`res2`, __stack.locals.res2)
 ;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 4) {
-        await await _print(`res3`, __stack.locals.res3)
+  
+  __stack.step++;
+}
+if (__step <= 4) {
+  await await _print(`res3`, __stack.locals.res3)
 ;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 5) {
-        await await _print(`res4`, __stack.locals.res4)
+  
+  __stack.step++;
+}
+if (__step <= 5) {
+  await await _print(`res4`, __stack.locals.res4)
 ;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 6) {
-        await await _print(`res5`, __stack.locals.res5)
+  
+  __stack.step++;
+}
+if (__step <= 6) {
+  await await _print(`res5`, __stack.locals.res5)
 ;
-        __stack.step++;
-      }
-      
+
+  
+  __stack.step++;
+}
     } catch (__error) {
       if (__error instanceof ToolCallError) throw __error;
       throw new ToolCallError(__error, { retryable: __self.__retryable });
@@ -451,6 +450,9 @@ __threads.popActive();
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "foo", timeTaken: performance.now() - __funcStartTime } });
 }
+
+
+
 
 graph.node("main", async (__state: GraphState) => {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
@@ -465,15 +467,12 @@ graph.node("main", async (__state: GraphState) => {
     }
 
     
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        
+  __stack.step++;
+}
+if (__step <= 1) {
+  
 {
 
 
@@ -731,44 +730,45 @@ __threads.popActive();
 
 __threads.popActive();
 }
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        await await _print(`res1`, __stack.locals.res1)
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  await await _print(`res1`, __stack.locals.res1)
 ;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 3) {
-        await await _print(`res2`, __stack.locals.res2)
+  
+  __stack.step++;
+}
+if (__step <= 3) {
+  await await _print(`res2`, __stack.locals.res2)
 ;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 4) {
-        await await _print(`res3`, __stack.locals.res3)
+  
+  __stack.step++;
+}
+if (__step <= 4) {
+  await await _print(`res3`, __stack.locals.res3)
 ;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 5) {
-        await await _print(`res4`, __stack.locals.res4)
+  
+  __stack.step++;
+}
+if (__step <= 5) {
+  await await _print(`res4`, __stack.locals.res4)
 ;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 6) {
-        await await _print(`res5`, __stack.locals.res5)
+  
+  __stack.step++;
+}
+if (__step <= 6) {
+  await await _print(`res5`, __stack.locals.res5)
 ;
-        __stack.step++;
-      }
-      
+
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
     return { messages: __threads, data: undefined };

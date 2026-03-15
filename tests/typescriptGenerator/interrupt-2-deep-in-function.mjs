@@ -121,6 +121,7 @@ export const __greetTool = {
 };
 
 export const __greetToolParams = ["name","age"];
+
 export const __foo2Tool = {
   name: "foo2",
   description: `No description provided.`,
@@ -128,6 +129,7 @@ export const __foo2Tool = {
 };
 
 export const __foo2ToolParams = ["name","age"];
+
 
 export async function greet(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
@@ -148,15 +150,12 @@ export async function greet(name: string, age: number, __state: InternalFunction
     __self.__retryable = __self.__retryable ?? true;
 
     try {
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        // Remember this will be called both in a tool call context
+  __stack.step++;
+}
+if (__step <= 1) {
+  // Remember this will be called both in a tool call context
 // and when the user is simply calling a function.
 
 if (__state.interruptData?.interruptResponse?.type === "approve") {
@@ -195,16 +194,16 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   return __interruptResult;
   
 }
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        __ctx.stateStack.pop();
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  __ctx.stateStack.pop();
 return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`
-        __stack.step++;
-      }
-      
+  
+  __stack.step++;
+}
     } catch (__error) {
       if (__error instanceof ToolCallError) throw __error;
       throw new ToolCallError(__error, { retryable: __self.__retryable });
@@ -212,6 +211,9 @@ return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} yea
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "greet", timeTaken: performance.now() - __funcStartTime } });
 }
+
+
+
 
 export async function foo2(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
@@ -232,22 +234,20 @@ export async function foo2(name: string, age: number, __state: InternalFunctionS
     __self.__retryable = __self.__retryable ?? true;
 
     try {
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        await await _print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`)
+  __stack.step++;
+}
+if (__step <= 1) {
+  await await _print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`)
 ;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        
+  
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  
 async function _response(name, age, __metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -279,23 +279,23 @@ if (isInterrupt(__self.response)) {
    return  __self.response;
    
 }
-        __stack.step++;
-      }
-      
 
-      if (__step <= 3) {
-        await await _print(`Greeted, age is still ${__stack.args.age}...`)
+  
+  __stack.step++;
+}
+if (__step <= 3) {
+  await await _print(`Greeted, age is still ${__stack.args.age}...`)
 ;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 4) {
-        __ctx.stateStack.pop();
+  
+  __stack.step++;
+}
+if (__step <= 4) {
+  __ctx.stateStack.pop();
 return __stack.locals.response
-        __stack.step++;
-      }
-      
+  
+  __stack.step++;
+}
     } catch (__error) {
       if (__error instanceof ToolCallError) throw __error;
       throw new ToolCallError(__error, { retryable: __self.__retryable });
@@ -303,6 +303,9 @@ return __stack.locals.response
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "foo2", timeTaken: performance.now() - __funcStartTime } });
 }
+
+
+
 
 graph.node("sayHi", async (__state: GraphState) => {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
@@ -321,28 +324,24 @@ graph.node("sayHi", async (__state: GraphState) => {
       __stack.args["name"] = __state.data.name;
     }
     
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        await await _print(`Saying hi to ${__stack.args.name}...`)
+  __stack.step++;
+}
+if (__step <= 1) {
+  await await _print(`Saying hi to ${__stack.args.name}...`)
 ;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        __stack.locals.age = 30;
-        __stack.step++;
-      }
-      
-
-      if (__step <= 3) {
-        __stack.locals.response = foo2(__stack.args.name, __stack.locals.age, {
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  __stack.locals.age = 30;
+  
+  __stack.step++;
+}
+if (__step <= 3) {
+  __stack.locals.response = foo2(__stack.args.name, __stack.locals.age, {
     ctx: __ctx,
     
     
@@ -358,35 +357,36 @@ if (isInterrupt(__stack.locals.response)) {
   
    
 }
-        __stack.step++;
-      }
-      
 
-      if (__step <= 4) {
-        [__self.response] = await Promise.all([__self.response]);
-        __stack.step++;
-      }
-      
-
-      if (__step <= 5) {
-        await await _print(__stack.locals.response)
+  
+  __stack.step++;
+}
+if (__step <= 4) {
+  [__self.response] = await Promise.all([__self.response]);
+  __stack.step++;
+}
+if (__step <= 5) {
+  await await _print(__stack.locals.response)
 ;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 6) {
-        await await _print(`Greeting sent.`)
+  
+  __stack.step++;
+}
+if (__step <= 6) {
+  await await _print(`Greeting sent.`)
 ;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 7) {
-        return { messages: __threads, data: __stack.locals.response}
-        __stack.step++;
-      }
-      
+  
+  __stack.step++;
+}
+if (__step <= 7) {
+  return {
+    messages: __threads,
+    data: __stack.locals.response
+  };
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "sayHi", data: undefined } });
     return { messages: __threads, data: undefined };

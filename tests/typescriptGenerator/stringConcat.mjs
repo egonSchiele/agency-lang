@@ -128,22 +128,19 @@ graph.node("foo", async (__state: GraphState) => {
     }
 
     
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        await await _print(`What is your name?`)
+  __stack.step++;
+}
+if (__step <= 1) {
+  await await _print(`What is your name?`)
 ;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        __stack.locals.name = await await _builtinInput(`> `);
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  __stack.locals.name = await await _builtinInput(`> `);
 
 
 if (isInterrupt(__stack.locals.name)) {
@@ -152,20 +149,22 @@ if (isInterrupt(__stack.locals.name)) {
   
    
 }
-        __stack.step++;
-      }
-      
 
-      if (__step <= 3) {
-        await await _print(`Hello, ${__stack.locals.name}!`)
+  
+  __stack.step++;
+}
+if (__step <= 3) {
+  await await _print(`Hello, ${__stack.locals.name}!`)
 ;
-        __stack.step++;
-      }
-      
+
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "foo", data: undefined } });
     return { messages: __threads, data: undefined };
 });
+
 
 
 

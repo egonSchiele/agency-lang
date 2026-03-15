@@ -116,6 +116,8 @@ export const modifyInterrupt = (i: Interrupt, a: any, m?: any) => _modifyInterru
 export const resolveInterrupt = (i: Interrupt, v: any, m?: any) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
 //  Test graph nodes with typed parameters
 
+
+
 graph.node("greet", async (__state: GraphState) => {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupNode({ state: __state });
@@ -133,15 +135,12 @@ graph.node("greet", async (__state: GraphState) => {
       __stack.args["name"] = __state.data.name;
     }
     
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        
+  __stack.step++;
+}
+if (__step <= 1) {
+  
 async function _greeting(name, __metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -163,22 +162,23 @@ async function _greeting(name, __metadata): Promise<any> {
 __self.greeting = _greeting(__stack.args.name, {
       messages: new MessageThread()
     });
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        [__self.greeting] = await Promise.all([__self.greeting]);
-        __stack.step++;
-      }
-      
 
-      if (__step <= 3) {
-        await await _print(__stack.locals.greeting)
+
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  [__self.greeting] = await Promise.all([__self.greeting]);
+  __stack.step++;
+}
+if (__step <= 3) {
+  await await _print(__stack.locals.greeting)
 ;
-        __stack.step++;
-      }
-      
+
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "greet", data: undefined } });
     return { messages: __threads, data: undefined };

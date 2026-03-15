@@ -122,6 +122,7 @@ export const __testTool = {
 
 export const __testToolParams = [];
 
+
 export async function test(__state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupFunction({ state: __state });
@@ -140,18 +141,15 @@ export async function test(__state: InternalFunctionState | undefined = undefine
     __self.__retryable = __self.__retryable ?? true;
 
     try {
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        __stack.locals.foo = 1;
-        __stack.step++;
-      }
-      
+  __stack.step++;
+}
+if (__step <= 1) {
+  __stack.locals.foo = 1;
+  
+  __stack.step++;
+}
     } catch (__error) {
       if (__error instanceof ToolCallError) throw __error;
       throw new ToolCallError(__error, { retryable: __self.__retryable });
@@ -159,6 +157,9 @@ export async function test(__state: InternalFunctionState | undefined = undefine
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "test", timeTaken: performance.now() - __funcStartTime } });
 }
+
+
+
 
 graph.node("main", async (__state: GraphState) => {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
@@ -173,15 +174,12 @@ graph.node("main", async (__state: GraphState) => {
     }
 
     
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        await await _print(test({
+  __stack.step++;
+}
+if (__step <= 1) {
+  await await _print(test({
     ctx: __ctx,
     
     
@@ -190,12 +188,13 @@ graph.node("main", async (__state: GraphState) => {
     interruptData: __state?.interruptData
 }))
 ;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        
+  
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  
 export async function add(a: any, b: any, __state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupFunction({ state: __state });
@@ -215,12 +214,11 @@ export async function add(a: any, b: any, __state: InternalFunctionState | undef
     __self.__retryable = __self.__retryable ?? true;
 
     try {
-    
-      if (__step <= 0) {
-        //  multi-param function
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
+  //  multi-param function
+  
+  __stack.step++;
+}
     } catch (__error) {
       if (__error instanceof ToolCallError) throw __error;
       throw new ToolCallError(__error, { retryable: __self.__retryable });
@@ -228,9 +226,10 @@ export async function add(a: any, b: any, __state: InternalFunctionState | undef
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "add", timeTaken: performance.now() - __funcStartTime } });
 }
-        __stack.step++;
-      }
-      
+
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
     return { messages: __threads, data: undefined };

@@ -122,6 +122,7 @@ export const __fooTool = {
 
 export const __fooToolParams = [];
 
+
 export async function foo(__state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupFunction({ state: __state });
@@ -140,15 +141,12 @@ export async function foo(__state: InternalFunctionState | undefined = undefined
     __self.__retryable = __self.__retryable ?? true;
 
     try {
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        
+  __stack.step++;
+}
+if (__step <= 1) {
+  
 {
 
 
@@ -265,9 +263,10 @@ __self.res3 = _res3({
 
 __threads.popActive();
 }
-        __stack.step++;
-      }
-      
+
+  
+  __stack.step++;
+}
     } catch (__error) {
       if (__error instanceof ToolCallError) throw __error;
       throw new ToolCallError(__error, { retryable: __self.__retryable });
@@ -275,5 +274,6 @@ __threads.popActive();
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "foo", timeTaken: performance.now() - __funcStartTime } });
 }
+
 
 export default graph;

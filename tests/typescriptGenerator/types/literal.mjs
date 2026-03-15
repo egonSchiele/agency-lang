@@ -128,14 +128,23 @@ graph.node("main", async (__state: GraphState) => {
     }
 
     
-    
-      if (__step <= 0) {
-        // Removed unused LLM call "the string hi", was assigned to variable 'foo' but variable was never used.
-// Removed unused LLM call "the number 42", was assigned to variable 'bar' but variable was never used.
-// Removed unused LLM call "the boolean true", was assigned to variable 'baz' but variable was never used.
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
+  
+  
+  // Removed unused LLM call "the string hi", was assigned to variable 'foo' but variable was never used.
+  
+  
+  
+  
+  // Removed unused LLM call "the number 42", was assigned to variable 'bar' but variable was never used.
+  
+  
+  
+  
+  // Removed unused LLM call "the boolean true", was assigned to variable 'baz' but variable was never used.
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
     return { messages: __threads, data: undefined };

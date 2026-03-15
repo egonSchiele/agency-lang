@@ -115,6 +115,8 @@ export const rejectInterrupt = (i: Interrupt, m?: any) => _rejectInterrupt({ ctx
 export const modifyInterrupt = (i: Interrupt, a: any, m?: any) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
 export const resolveInterrupt = (i: Interrupt, v: any, m?: any) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
 
+
+
 graph.node("main", async (__state: GraphState) => {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
       setupNode({ state: __state });
@@ -128,15 +130,12 @@ graph.node("main", async (__state: GraphState) => {
     }
 
     
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        
+  __stack.step++;
+}
+if (__step <= 1) {
+  
 async function _foo(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -162,22 +161,23 @@ async function _foo(__metadata): Promise<any> {
 __self.foo = _foo({
       messages: new MessageThread()
     });
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        [__self.foo] = await Promise.all([__self.foo]);
-        __stack.step++;
-      }
-      
 
-      if (__step <= 3) {
-        await await _print(__stack.locals.foo)
+
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  [__self.foo] = await Promise.all([__self.foo]);
+  __stack.step++;
+}
+if (__step <= 3) {
+  await await _print(__stack.locals.foo)
 ;
-        __stack.step++;
-      }
-      
+
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
     return { messages: __threads, data: undefined };

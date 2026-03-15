@@ -128,15 +128,13 @@ graph.node("greet", async (__state: GraphState) => {
     }
 
     
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
-
-      if (__step <= 1) {
-        
+    if (__step <= 0) {
+  
+  
+  __stack.step++;
+}
+if (__step <= 1) {
+  
 async function _greeting(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -158,18 +156,18 @@ async function _greeting(__metadata): Promise<any> {
 __self.greeting = _greeting({
       messages: new MessageThread()
     });
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        [__self.greeting] = await Promise.all([__self.greeting]);
-        __stack.step++;
-      }
-      
 
-      if (__step <= 3) {
-        __ctx.stateStack.pop();
+
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  [__self.greeting] = await Promise.all([__self.greeting]);
+  __stack.step++;
+}
+if (__step <= 3) {
+  __ctx.stateStack.pop();
 return goToNode("processGreeting",
   {
     messages: __stack.messages,
@@ -179,13 +177,16 @@ return goToNode("processGreeting",
     
     
   });
-        __stack.step++;
-      }
-      
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "greet", data: undefined } });
     return { messages: __threads, data: undefined };
 });
+
+
+
 
 graph.node("processGreeting", async (__state: GraphState) => {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
@@ -204,15 +205,13 @@ graph.node("processGreeting", async (__state: GraphState) => {
       __stack.args["msg"] = __state.data.msg;
     }
     
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
-
-      if (__step <= 1) {
-        
+    if (__step <= 0) {
+  
+  
+  __stack.step++;
+}
+if (__step <= 1) {
+  
 async function _result(msg, __metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -234,26 +233,30 @@ async function _result(msg, __metadata): Promise<any> {
 __self.result = _result(__stack.args.msg, {
       messages: new MessageThread()
     });
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        [__self.result] = await Promise.all([__self.result]);
-        __stack.step++;
-      }
-      
 
-      if (__step <= 3) {
-        await await _print(__stack.locals.result)
+
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  [__self.result] = await Promise.all([__self.result]);
+  __stack.step++;
+}
+if (__step <= 3) {
+  await await _print(__stack.locals.result)
 ;
-        __stack.step++;
-      }
-      
+
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "processGreeting", data: undefined } });
     return { messages: __threads, data: undefined };
 });
+
+
+
 
 graph.node("main", async (__state: GraphState) => {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
@@ -268,15 +271,12 @@ graph.node("main", async (__state: GraphState) => {
     }
 
     
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        __ctx.stateStack.pop();
+  __stack.step++;
+}
+if (__step <= 1) {
+  __ctx.stateStack.pop();
 return goToNode("greet",
   {
     messages: __stack.messages,
@@ -286,13 +286,14 @@ return goToNode("greet",
     data: null
     
   });
-        __stack.step++;
-      }
-      
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
     return { messages: __threads, data: undefined };
 });
+
 
 graph.conditionalEdge("greet", ["processGreeting"]);
 

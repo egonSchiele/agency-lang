@@ -128,68 +128,67 @@ graph.node("main", async (__state: GraphState) => {
     }
 
     
+    if (__step <= 0) {
+  //  Basic for-of loop
+  
+  __stack.step++;
+}
+if (__step <= 1) {
+  __stack.locals.items = [`a`, `b`, `c`];
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  for (const item of __stack.locals.items) {
+    await await _print(item)
+;
+
     
-      if (__step <= 0) {
-        //  Basic for-of loop
-        __stack.step++;
-      }
-      
-
-      if (__step <= 1) {
-        __stack.locals.items = [`a`, `b`, `c`];
-        __stack.step++;
-      }
-      
-
-      if (__step <= 2) {
-        for (const item of __stack.locals.items) {
-await await _print(item)
-;
-
-
+  }
+  
+  
+  //  Range-based for loop
+  
+  __stack.step++;
 }
-//  Range-based for loop
-        __stack.step++;
-      }
-      
-
-      if (__step <= 3) {
-        for (let i = 0; i < 5; i++) {
-await await _print(i)
+if (__step <= 3) {
+  for (let i = 0; i < 5; i++) {
+    await await _print(i)
 ;
 
-
+    
+  }
+  
+  
+  //  Indexed for loop
+  
+  __stack.step++;
 }
-//  Indexed for loop
-        __stack.step++;
-      }
-      
-
-      if (__step <= 4) {
-        __stack.locals.names = [`alice`, `bob`];
-        __stack.step++;
-      }
-      
-
-      if (__step <= 5) {
-        for (let index = 0; index < __stack.locals.names.length; index++) {
-const name = __stack.locals.names[index];
-await await _print(name)
-;
-
-
-await await _print(index)
-;
-
-
+if (__step <= 4) {
+  __stack.locals.names = [`alice`, `bob`];
+  
+  __stack.step++;
 }
-        __stack.step++;
-      }
-      
+if (__step <= 5) {
+  for (let index = 0; index < __stack.locals.names.length; index++) {
+    const name = __stack.locals.names[index];
+    await await _print(name)
+;
+
+    
+    await await _print(index)
+;
+
+    
+  }
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
     return { messages: __threads, data: undefined };
 });
+
 
 
 

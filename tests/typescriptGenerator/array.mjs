@@ -128,15 +128,13 @@ graph.node("main", async (__state: GraphState) => {
     }
 
     
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
-
-      if (__step <= 1) {
-        
+    if (__step <= 0) {
+  
+  
+  __stack.step++;
+}
+if (__step <= 1) {
+  
 async function _numbers(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -162,25 +160,28 @@ async function _numbers(__metadata): Promise<any> {
 __self.numbers = _numbers({
       messages: new MessageThread()
     });
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        [__self.numbers] = await Promise.all([__self.numbers]);
-        __stack.step++;
-      }
-      
 
-      if (__step <= 3) {
-        await await _print(__stack.locals.numbers)
+
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  [__self.numbers] = await Promise.all([__self.numbers]);
+  __stack.step++;
+}
+if (__step <= 3) {
+  await await _print(__stack.locals.numbers)
 ;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 4) {
-        
+  
+  
+  
+  
+  __stack.step++;
+}
+if (__step <= 4) {
+  
 async function _greetings(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -206,22 +207,23 @@ async function _greetings(__metadata): Promise<any> {
 __self.greetings = _greetings({
       messages: new MessageThread()
     });
-        __stack.step++;
-      }
-      
 
-      if (__step <= 5) {
-        [__self.greetings] = await Promise.all([__self.greetings]);
-        __stack.step++;
-      }
-      
 
-      if (__step <= 6) {
-        await await _print(__stack.locals.greetings)
+
+  
+  __stack.step++;
+}
+if (__step <= 5) {
+  [__self.greetings] = await Promise.all([__self.greetings]);
+  __stack.step++;
+}
+if (__step <= 6) {
+  await await _print(__stack.locals.greetings)
 ;
-        __stack.step++;
-      }
-      
+
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
     return { messages: __threads, data: undefined };

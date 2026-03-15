@@ -121,14 +121,26 @@ export const __greetTool = {
 };
 
 export const __greetToolParams = [];
+
 //  This is a single line comment at the top of the file
+
+
 //  Variable assignment with comment above
+
 __globalCtx.stateStack.globals.x = 42;
+
+
 //  Multiple comments
+
 //  can be placed
+
 //  on consecutive lines
+
 __globalCtx.stateStack.globals.y = `hello`;
+
+
 //  Comment before function definition
+
 
 export async function greet(__state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
@@ -148,26 +160,24 @@ export async function greet(__state: InternalFunctionState | undefined = undefin
     __self.__retryable = __self.__retryable ?? true;
 
     try {
-    
-      if (__step <= 0) {
-        //  Comment inside function
-        __stack.step++;
-      }
-      
-
-      if (__step <= 1) {
-        __stack.locals.message = `Hello, World!`;
-//  Another comment
-        __stack.step++;
-      }
-      
-
-      if (__step <= 2) {
-        __ctx.stateStack.pop();
+    if (__step <= 0) {
+  //  Comment inside function
+  
+  __stack.step++;
+}
+if (__step <= 1) {
+  __stack.locals.message = `Hello, World!`;
+  
+  //  Another comment
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  __ctx.stateStack.pop();
 return __stack.locals.message
-        __stack.step++;
-      }
-      
+  
+  __stack.step++;
+}
     } catch (__error) {
       if (__error instanceof ToolCallError) throw __error;
       throw new ToolCallError(__error, { retryable: __self.__retryable });
@@ -175,6 +185,9 @@ return __stack.locals.message
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "greet", timeTaken: performance.now() - __funcStartTime } });
 }
+
+
+
 
 graph.node("main", async (__state: GraphState) => {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
@@ -189,15 +202,13 @@ graph.node("main", async (__state: GraphState) => {
     }
 
     
-    
-      if (__step <= 0) {
-        //  Comment before function call
-        __stack.step++;
-      }
-      
-
-      if (__step <= 1) {
-        __stack.locals.result = greet({
+    if (__step <= 0) {
+  //  Comment before function call
+  
+  __stack.step++;
+}
+if (__step <= 1) {
+  __stack.locals.result = greet({
     ctx: __ctx,
     
     
@@ -213,50 +224,54 @@ if (isInterrupt(__stack.locals.result)) {
   
    
 }
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        [__self.result] = await Promise.all([__self.result]);
-        __stack.step++;
-      }
-      
-
-      if (__step <= 3) {
-        await await _print(__stack.locals.result)
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  [__self.result] = await Promise.all([__self.result]);
+  __stack.step++;
+}
+if (__step <= 3) {
+  await await _print(__stack.locals.result)
 ;
-//  Testing comments in different contexts
-//  1. Before type hints
-        __stack.step++;
-      }
-      
 
-      if (__step <= 4) {
-        __stack.locals.age = 25;
-//  2. Before conditionals
-        __stack.step++;
-      }
-      
+  
+  
+  //  Testing comments in different contexts
+  
+  //  1. Before type hints
+  
+  
+  
+  __stack.step++;
+}
+if (__step <= 4) {
+  __stack.locals.age = 25;
+  
+  
+  //  2. Before conditionals
+  
+  __stack.step++;
+}
+if (__step <= 5) {
+  __stack.locals.status = `active`;
+  
+  __stack.step++;
+}
+if (__step <= 6) {
+  switch (__stack.locals.status) {
+    case `inactive`:
+      await await _print(`Stopped`)
 
-      if (__step <= 5) {
-        __stack.locals.status = `active`;
-        __stack.step++;
-      }
-      
-
-      if (__step <= 6) {
-        switch (__stack.locals.status) {
-  //  Comment in match block    "active" => print("Running")
-  case `inactive`:
-await await _print(`Stopped`)
-
-    break;
-  //  Default case comment    _ => print("Unknown")
-}//  Final comment at end of file
-        __stack.step++;
-      }
-      
+      break;
+  }
+  
+  
+  //  Final comment at end of file
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
     return { messages: __threads, data: undefined };

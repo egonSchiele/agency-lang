@@ -128,27 +128,25 @@ graph.node("main", async (__state: GraphState) => {
     }
 
     
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        __stack.locals.user = {"name": `Alice`, "age": 30};
-        __stack.step++;
-      }
-      
-
-      if (__step <= 2) {
-        __stack.locals.greeting = `Hello, ${__stack.locals.user.name}!`;
-        __stack.step++;
-      }
-      
-
-      if (__step <= 3) {
-        
+  __stack.step++;
+}
+if (__step <= 1) {
+  __stack.locals.user = {
+    "name": `Alice`,
+    "age": 30
+  };
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  __stack.locals.greeting = `Hello, ${__stack.locals.user.name}!`;
+  
+  __stack.step++;
+}
+if (__step <= 3) {
+  
 async function _result(user, __metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -170,26 +168,28 @@ async function _result(user, __metadata): Promise<any> {
 __self.result = _result(__stack.locals.user, {
       messages: new MessageThread()
     });
-        __stack.step++;
-      }
-      
 
-      if (__step <= 4) {
-        [__self.result] = await Promise.all([__self.result]);
-        __stack.step++;
-      }
-      
 
-      if (__step <= 5) {
-        await await _print(__stack.locals.result)
+
+  
+  __stack.step++;
+}
+if (__step <= 4) {
+  [__self.result] = await Promise.all([__self.result]);
+  __stack.step++;
+}
+if (__step <= 5) {
+  await await _print(__stack.locals.result)
 ;
-        __stack.step++;
-      }
-      
+
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
     return { messages: __threads, data: undefined };
 });
+
 
 
 

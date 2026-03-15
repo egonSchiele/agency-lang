@@ -115,12 +115,30 @@ export const rejectInterrupt = (i: Interrupt, m?: any) => _rejectInterrupt({ ctx
 export const modifyInterrupt = (i: Interrupt, a: any, m?: any) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
 export const resolveInterrupt = (i: Interrupt, v: any, m?: any) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
 __globalCtx.stateStack.globals.arr1 = [1, 2];
+
 __globalCtx.stateStack.globals.arr2 = [3, 4];
+
 __globalCtx.stateStack.globals.combined = [...__globalCtx.stateStack.globals.arr1, ...__globalCtx.stateStack.globals.arr2];
+
 __globalCtx.stateStack.globals.withExtra = [...__globalCtx.stateStack.globals.arr1, 5, 6];
-__globalCtx.stateStack.globals.obj1 = {"a": 1};
-__globalCtx.stateStack.globals.obj2 = {"b": 2};
-__globalCtx.stateStack.globals.merged = {...__globalCtx.stateStack.globals.obj1, ...__globalCtx.stateStack.globals.obj2};
-__globalCtx.stateStack.globals.withKey = {...__globalCtx.stateStack.globals.obj1, "c": 3};
+
+
+__globalCtx.stateStack.globals.obj1 = {
+  "a": 1
+};
+
+__globalCtx.stateStack.globals.obj2 = {
+  "b": 2
+};
+
+__globalCtx.stateStack.globals.merged = {
+  ...__globalCtx.stateStack.globals.obj1,
+  ...__globalCtx.stateStack.globals.obj2
+};
+
+__globalCtx.stateStack.globals.withKey = {
+  ...__globalCtx.stateStack.globals.obj1,
+  "c": 3
+};
 
 export default graph;

@@ -128,15 +128,12 @@ graph.node("main", async (__state: GraphState) => {
     }
 
     
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        
+  __stack.step++;
+}
+if (__step <= 1) {
+  
 async function _response1(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -158,22 +155,23 @@ async function _response1(__metadata): Promise<any> {
 __self.response1 = _response1({
       messages: new MessageThread()
     });
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        [__self.response1] = await Promise.all([__self.response1]);
-        __stack.step++;
-      }
-      
 
-      if (__step <= 3) {
-        await await _print(__stack.locals.response1)
+
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  [__self.response1] = await Promise.all([__self.response1]);
+  __stack.step++;
+}
+if (__step <= 3) {
+  await await _print(__stack.locals.response1)
 ;
-        __stack.step++;
-      }
-      
+
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
     return { messages: __threads, data: undefined };

@@ -128,15 +128,13 @@ graph.node("main", async (__state: GraphState) => {
     }
 
     
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
-
-      if (__step <= 1) {
-        
+    if (__step <= 0) {
+  
+  
+  __stack.step++;
+}
+if (__step <= 1) {
+  
 async function _count(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -162,12 +160,17 @@ async function _count(__metadata): Promise<any> {
 __self.count = _count({
       messages: new MessageThread()
     });
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        
+
+
+  
+  
+  
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  
 async function _message(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -189,39 +192,40 @@ async function _message(__metadata): Promise<any> {
 __self.message = _message({
       messages: new MessageThread()
     });
-        __stack.step++;
-      }
-      
 
-      if (__step <= 3) {
-        [__self.count] = await Promise.all([__self.count]);
-        __stack.step++;
-      }
-      
 
-      if (__step <= 4) {
-        await await _print(__stack.locals.count)
+
+  
+  
+  __stack.step++;
+}
+if (__step <= 3) {
+  [__self.count] = await Promise.all([__self.count]);
+  __stack.step++;
+}
+if (__step <= 4) {
+  await await _print(__stack.locals.count)
 ;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 5) {
-        [__self.message] = await Promise.all([__self.message]);
-        __stack.step++;
-      }
-      
-
-      if (__step <= 6) {
-        await await _print(__stack.locals.message)
+  
+  __stack.step++;
+}
+if (__step <= 5) {
+  [__self.message] = await Promise.all([__self.message]);
+  __stack.step++;
+}
+if (__step <= 6) {
+  await await _print(__stack.locals.message)
 ;
-        __stack.step++;
-      }
-      
+
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
     return { messages: __threads, data: undefined };
 });
+
 
 
 

@@ -128,15 +128,12 @@ graph.node("foo", async (__state: GraphState) => {
     }
 
     
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        
+  __stack.step++;
+}
+if (__step <= 1) {
+  
 async function _response(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -158,25 +155,26 @@ async function _response(__metadata): Promise<any> {
 __self.response = _response({
       messages: new MessageThread()
     });
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        [__self.response] = await Promise.all([__self.response]);
-        __stack.step++;
-      }
-      
 
-      if (__step <= 3) {
-        await await _print(__stack.locals.response)
+
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  [__self.response] = await Promise.all([__self.response]);
+  __stack.step++;
+}
+if (__step <= 3) {
+  await await _print(__stack.locals.response)
 ;
-        __stack.step++;
-      }
-      
 
-      if (__step <= 4) {
-        
+  
+  
+  __stack.step++;
+}
+if (__step <= 4) {
+  
 async function _response2(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -186,7 +184,9 @@ async function _response2(__metadata): Promise<any> {
     
     tools: undefined,
     toolHandlers: [],
-    clientConfig: {"model": `gemini-2.5-flash-lite`},
+    clientConfig: {
+  "model": `gemini-2.5-flash-lite`
+},
     stream: true,
     maxToolCallRounds: 10,
     interruptData: __state?.interruptData,
@@ -198,22 +198,23 @@ async function _response2(__metadata): Promise<any> {
 __self.response2 = _response2({
       messages: new MessageThread()
     });
-        __stack.step++;
-      }
-      
 
-      if (__step <= 5) {
-        [__self.response2] = await Promise.all([__self.response2]);
-        __stack.step++;
-      }
-      
 
-      if (__step <= 6) {
-        await await _print(__stack.locals.response2)
+
+  
+  __stack.step++;
+}
+if (__step <= 5) {
+  [__self.response2] = await Promise.all([__self.response2]);
+  __stack.step++;
+}
+if (__step <= 6) {
+  await await _print(__stack.locals.response2)
 ;
-        __stack.step++;
-      }
-      
+
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "foo", data: undefined } });
     return { messages: __threads, data: undefined };

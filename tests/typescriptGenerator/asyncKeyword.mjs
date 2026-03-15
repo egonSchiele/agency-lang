@@ -121,6 +121,7 @@ export const __openaiTool = {
 };
 
 export const __openaiToolParams = ["msg"];
+
 export const __googleTool = {
   name: "google",
   description: `No description provided.`,
@@ -128,6 +129,7 @@ export const __googleTool = {
 };
 
 export const __googleToolParams = ["msg"];
+
 export const __fibsTool = {
   name: "fibs",
   description: `No description provided.`,
@@ -135,6 +137,7 @@ export const __fibsTool = {
 };
 
 export const __fibsToolParams = [];
+
 
 export async function openai(msg: string, __state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
@@ -154,15 +157,12 @@ export async function openai(msg: string, __state: InternalFunctionState | undef
     __self.__retryable = __self.__retryable ?? true;
 
     try {
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        let __defaultTimeblockName_startTime: number = performance.now();
+  __stack.step++;
+}
+if (__step <= 1) {
+  let __defaultTimeblockName_startTime: number = performance.now();
 
 async function _response(msg, __metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
@@ -194,22 +194,21 @@ let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultT
 
 
 console.log("Time taken:", __defaultTimeblockName, "ms");
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        [__self.response] = await Promise.all([__self.response]);
-        __stack.step++;
-      }
-      
-
-      if (__step <= 3) {
-        __ctx.stateStack.pop();
+  
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  [__self.response] = await Promise.all([__self.response]);
+  __stack.step++;
+}
+if (__step <= 3) {
+  __ctx.stateStack.pop();
 return `OpenAI response: ${__stack.locals.response}`
-        __stack.step++;
-      }
-      
+  
+  __stack.step++;
+}
     } catch (__error) {
       if (__error instanceof ToolCallError) throw __error;
       throw new ToolCallError(__error, { retryable: __self.__retryable });
@@ -217,6 +216,9 @@ return `OpenAI response: ${__stack.locals.response}`
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "openai", timeTaken: performance.now() - __funcStartTime } });
 }
+
+
+
 
 export async function google(msg: string, __state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
@@ -236,21 +238,18 @@ export async function google(msg: string, __state: InternalFunctionState | undef
     __self.__retryable = __self.__retryable ?? true;
 
     try {
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        __threads.active().setMessages([]);
-        __stack.step++;
-      }
-      
+  __stack.step++;
+}
+if (__step <= 1) {
+  __threads.active().setMessages([]);
 
-      if (__step <= 2) {
-        let __defaultTimeblockName_startTime: number = performance.now();
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  let __defaultTimeblockName_startTime: number = performance.now();
 
 async function _response(msg, __metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
@@ -261,7 +260,9 @@ async function _response(msg, __metadata): Promise<any> {
     
     tools: undefined,
     toolHandlers: [],
-    clientConfig: {"model": `gemini-2.5-flash-lite`},
+    clientConfig: {
+  "model": `gemini-2.5-flash-lite`
+},
     stream: false,
     maxToolCallRounds: 10,
     interruptData: __state?.interruptData,
@@ -282,22 +283,20 @@ let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultT
 
 
 console.log("Time taken:", __defaultTimeblockName, "ms");
-        __stack.step++;
-      }
-      
 
-      if (__step <= 3) {
-        [__self.response] = await Promise.all([__self.response]);
-        __stack.step++;
-      }
-      
-
-      if (__step <= 4) {
-        __ctx.stateStack.pop();
+  
+  __stack.step++;
+}
+if (__step <= 3) {
+  [__self.response] = await Promise.all([__self.response]);
+  __stack.step++;
+}
+if (__step <= 4) {
+  __ctx.stateStack.pop();
 return `Google response: ${__stack.locals.response}`
-        __stack.step++;
-      }
-      
+  
+  __stack.step++;
+}
     } catch (__error) {
       if (__error instanceof ToolCallError) throw __error;
       throw new ToolCallError(__error, { retryable: __self.__retryable });
@@ -305,6 +304,9 @@ return `Google response: ${__stack.locals.response}`
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "google", timeTaken: performance.now() - __funcStartTime } });
 }
+
+
+
 
 export async function fibs(__state: InternalFunctionState | undefined = undefined) {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
@@ -324,15 +326,12 @@ export async function fibs(__state: InternalFunctionState | undefined = undefine
     __self.__retryable = __self.__retryable ?? true;
 
     try {
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        
+  __stack.step++;
+}
+if (__step <= 1) {
+  
 async function ___promptVar(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -370,10 +369,10 @@ if (isInterrupt(__self.__promptVar)) {
 }
 
 __ctx.stateStack.pop();
-return __self.__promptVar;
-        __stack.step++;
-      }
-      
+return __self.__promptVar
+  
+  __stack.step++;
+}
     } catch (__error) {
       if (__error instanceof ToolCallError) throw __error;
       throw new ToolCallError(__error, { retryable: __self.__retryable });
@@ -381,6 +380,9 @@ return __self.__promptVar;
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "fibs", timeTaken: performance.now() - __funcStartTime } });
 }
+
+
+
 
 graph.node("main", async (__state: GraphState) => {
     const { stack: __stack, step: __step, self: __self, threads: __threads } =
@@ -395,15 +397,12 @@ graph.node("main", async (__state: GraphState) => {
     }
 
     
-    
-      if (__step <= 0) {
-        
-        __stack.step++;
-      }
-      
+    if (__step <= 0) {
 
-      if (__step <= 1) {
-        __stack.locals.msg = await await _builtinInput(`> `);
+  __stack.step++;
+}
+if (__step <= 1) {
+  __stack.locals.msg = await await _builtinInput(`> `);
 
 
 if (isInterrupt(__stack.locals.msg)) {
@@ -412,12 +411,12 @@ if (isInterrupt(__stack.locals.msg)) {
   
    
 }
-        __stack.step++;
-      }
-      
 
-      if (__step <= 2) {
-        __stack.locals.res2 = google(__stack.locals.msg, {
+  
+  __stack.step++;
+}
+if (__step <= 2) {
+  __stack.locals.res2 = google(__stack.locals.msg, {
     ctx: __ctx,
     
     
@@ -433,12 +432,12 @@ if (isInterrupt(__stack.locals.res2)) {
   
    
 }
-        __stack.step++;
-      }
-      
 
-      if (__step <= 3) {
-        __stack.locals.res1 = openai(__stack.locals.msg, {
+  
+  __stack.step++;
+}
+if (__step <= 3) {
+  __stack.locals.res1 = openai(__stack.locals.msg, {
     ctx: __ctx,
     
     
@@ -454,28 +453,27 @@ if (isInterrupt(__stack.locals.res1)) {
   
    
 }
-        __stack.step++;
-      }
-      
 
-      if (__step <= 4) {
-        [__self.res2, __self.res1] = await Promise.all([__self.res2, __self.res1]);
-        __stack.step++;
-      }
-      
-
-      if (__step <= 5) {
-        __stack.locals.results = __stack.locals.Promise.race([__stack.locals.res1, __stack.locals.res2]);
-        __stack.step++;
-      }
-      
-
-      if (__step <= 6) {
-        await await _printJSON(__stack.locals.results)
+  
+  __stack.step++;
+}
+if (__step <= 4) {
+  [__self.res2, __self.res1] = await Promise.all([__self.res2, __self.res1]);
+  __stack.step++;
+}
+if (__step <= 5) {
+  __stack.locals.results = __stack.locals.Promise.race([__stack.locals.res1, __stack.locals.res2])
 ;
-        __stack.step++;
-      }
-      
+  
+  __stack.step++;
+}
+if (__step <= 6) {
+  await await _printJSON(__stack.locals.results)
+;
+
+  
+  __stack.step++;
+}
 
     await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
     return { messages: __threads, data: undefined };

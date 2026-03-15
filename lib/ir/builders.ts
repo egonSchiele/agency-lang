@@ -46,7 +46,7 @@ export const ts = {
     return { kind: "statements", body };
   },
 
-  import(opts: {
+  importDecl(opts: {
     importKind: TsImportKind;
     names?: string[];
     defaultName?: string;

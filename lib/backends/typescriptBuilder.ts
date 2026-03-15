@@ -44,7 +44,11 @@ import * as renderSkillPrompt from "@/templates/prompts/skill.js";
 import * as renderBuiltinFunctionsSystem from "@/templates/backends/typescriptGenerator/builtinFunctions/system.js";
 
 import { AccessChainElement, ValueAccess } from "../types/access.js";
-import { AgencyArray, AgencyObject } from "../types/dataStructures.js";
+import {
+  AgencyArray,
+  AgencyObject,
+  AgencyObjectKV,
+} from "../types/dataStructures.js";
 import {
   FunctionCall,
   FunctionDefinition,
@@ -53,12 +57,11 @@ import {
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { IfElse } from "../types/ifElse.js";
 import {
-  ImportNameType,
   ImportNodeStatement,
   ImportStatement,
   ImportToolStatement,
 } from "../types/importStatement.js";
-import { MatchBlock } from "../types/matchBlock.js";
+import { MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { ForLoop } from "../types/forLoop.js";
@@ -75,7 +78,7 @@ import {
 import { AgencyConfig } from "@/config.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
-import path from "path";
+import path, { parse } from "path";
 import {
   BinOpArgument,
   BinOpExpression,
@@ -84,7 +87,7 @@ import {
 } from "@/types/binop.js";
 import { expressionToString, getBaseVarName } from "@/utils/node.js";
 
-import type { TsNode } from "../ir/tsIR.js";
+import type { TsNode, TsObjectEntry, TsElseIf } from "../ir/tsIR.js";
 import { ts } from "../ir/builders.js";
 import { printTs } from "../ir/prettyPrint.js";
 
@@ -478,24 +481,22 @@ export class TypeScriptBuilder {
   // ------- Proper IR node methods -------
 
   private processComment(node: AgencyComment): TsNode {
-    return ts.raw(`// ${node.content}\n`);
+    return ts.comment(node.content);
   }
 
   private processAgencyObject(node: AgencyObject): TsNode {
-    const entries = node.entries.map(
-      (entry): import("../ir/tsIR.js").TsObjectEntry => {
-        if ("type" in entry && entry.type === "splat") {
-          return { spread: true, expr: this.processNode(entry.value) };
-        }
-        const kv = entry as import("../types/dataStructures.js").AgencyObjectKV;
-        const keyCode = kv.key.replace(/"/g, '\\"');
-        return {
-          spread: false,
-          key: `"${keyCode}"`,
-          value: this.processNode(kv.value),
-        };
-      },
-    );
+    const entries = node.entries.map((entry): TsObjectEntry => {
+      if ("type" in entry && entry.type === "splat") {
+        return { spread: true, expr: this.processNode(entry.value) };
+      }
+      const kv = entry as AgencyObjectKV;
+      const keyCode = kv.key.replace(/"/g, '\\"');
+      return {
+        spread: false,
+        key: `"${keyCode}"`,
+        value: this.processNode(kv.value),
+      };
+    });
     return ts.obj(entries);
   }
 
@@ -512,19 +513,17 @@ export class TypeScriptBuilder {
   private generateLiteral(literal: Literal): TsNode {
     switch (literal.type) {
       case "number":
-        return ts.raw(literal.value);
+        return ts.num(parseFloat(literal.value));
       case "string":
         return this.generateStringLiteralNode(literal.segments);
       case "multiLineString":
         return this.generateStringLiteralNode(literal.segments);
       case "variableName": {
-        if (literal.scope === "imported" || !literal.scope) {
-          return ts.id(literal.value);
-        }
-        if (BUILTIN_VARIABLES.includes(literal.value)) {
-          return ts.id(literal.value);
-        }
-        if (this.loopVars.includes(literal.value)) {
+        const importedOrUnknownScope =
+          literal.scope === "imported" || !literal.scope;
+        const isBuiltinVar = BUILTIN_VARIABLES.includes(literal.value);
+        const isLoopVar = this.loopVars.includes(literal.value);
+        if (importedOrUnknownScope || isBuiltinVar || isLoopVar) {
           return ts.id(literal.value);
         }
         return ts.scopedVar(literal.value, literal.scope!);
@@ -606,37 +605,41 @@ export class TypeScriptBuilder {
     const wrappedRight = this.needsParensRight(node.right, node.operator)
       ? `(${rightStr})`
       : rightStr;
-    return ts.raw(`${wrappedLeft} ${node.operator} ${wrappedRight}`);
+    return ts.binOp(ts.raw(wrappedLeft), node.operator, ts.raw(wrappedRight));
   }
 
   private processIfElse(node: IfElse): TsNode {
-    const conditionStr = this.str(this.processNode(node.condition));
+    const condition = this.processNode(node.condition);
+    const body = ts.statements(node.thenBody.map((stmt) => this.processStatement(stmt)));
 
-    const thenBodyCodes: string[] = [];
-    for (const stmt of node.thenBody) {
-      thenBodyCodes.push(this.str(this.processStatement(stmt)));
-    }
-    const thenBodyStr = thenBodyCodes.join("\n");
+    const elseIfs: TsElseIf[] = [];
+    let elseBody: TsNode | undefined;
 
-    let result = `if (${conditionStr}) {\n${thenBodyStr}\n}`;
+    // Flatten the else-if chain into elseIfs[], leaving only the final else as elseBody
+    let current: IfElse | undefined =
+      node.elseBody?.length === 1 && node.elseBody[0].type === "ifElse"
+        ? (node.elseBody[0] as IfElse)
+        : undefined;
+    let remainingElse = current ? undefined : node.elseBody;
 
-    if (node.elseBody && node.elseBody.length > 0) {
-      if (node.elseBody.length === 1 && node.elseBody[0].type === "ifElse") {
-        const elseIfCode = this.str(
-          this.processIfElse(node.elseBody[0] as IfElse),
-        ).trimEnd();
-        result += ` else ${elseIfCode}`;
+    while (current) {
+      elseIfs.push({
+        condition: this.processNode(current.condition),
+        body: ts.statements(current.thenBody.map((stmt) => this.processStatement(stmt))),
+      });
+      if (current.elseBody?.length === 1 && current.elseBody[0].type === "ifElse") {
+        current = current.elseBody[0] as IfElse;
       } else {
-        const elseBodyCodes: string[] = [];
-        for (const stmt of node.elseBody) {
-          elseBodyCodes.push(this.str(this.processStatement(stmt)));
-        }
-        const elseBodyStr = elseBodyCodes.join("\n");
-        result += ` else {\n${elseBodyStr}\n}`;
+        remainingElse = current.elseBody;
+        current = undefined;
       }
     }
 
-    return ts.raw(result + "\n");
+    if (remainingElse && remainingElse.length > 0) {
+      elseBody = ts.statements(remainingElse.map((stmt) => this.processStatement(stmt)));
+    }
+
+    return ts.if(condition, body, elseIfs.length > 0 || elseBody ? { elseIfs, elseBody } : undefined);
   }
 
   private processForLoop(node: ForLoop): TsNode {
@@ -646,11 +649,8 @@ export class TypeScriptBuilder {
       this.loopVars.push(node.indexVar);
     }
 
-    const bodyCodes: string[] = [];
-    for (const stmt of node.body) {
-      bodyCodes.push(this.str(this.processStatement(stmt)));
-    }
-    const bodyCodeStr = bodyCodes.join("\n");
+    const bodyStmts = node.body.map((stmt) => this.processStatement(stmt));
+    const body = ts.statements(bodyStmts);
 
     // Unregister loop variables
     this.loopVars = this.loopVars.filter(
@@ -663,65 +663,54 @@ export class TypeScriptBuilder {
       node.iterable.functionName === "range"
     ) {
       const args = node.iterable.arguments;
-      const start =
-        args.length >= 1 ? this.str(this.processNode(args[0])) : "0";
-      const end =
-        args.length >= 2
-          ? this.str(this.processNode(args[1]))
-          : this.str(this.processNode(args[0]));
-      const actualStart = args.length >= 2 ? start : "0";
-      const actualEnd = args.length >= 2 ? end : start;
-      return ts.raw(
-        `for (let ${node.itemVar} = ${actualStart}; ${node.itemVar} < ${actualEnd}; ${node.itemVar}++) {\n${bodyCodeStr}\n}\n`,
+      const startNode = args.length >= 2 ? this.processNode(args[0]) : ts.raw("0");
+      const endNode = args.length >= 2 ? this.processNode(args[1]) : this.processNode(args[0]);
+      return ts.forC(
+        ts.varDecl("let", node.itemVar, startNode),
+        ts.binOp(ts.id(node.itemVar), "<", endNode),
+        ts.raw(`${node.itemVar}++`),
+        body,
       );
     }
 
-    const iterableCode = this.str(this.processNode(node.iterable));
+    const iterableNode = this.processNode(node.iterable);
 
     // Indexed form: for (item, index in collection)
     if (node.indexVar) {
-      const indexedBody = `const ${node.itemVar} = ${iterableCode}[${node.indexVar}];\n${bodyCodeStr}`;
-      return ts.raw(
-        `for (let ${node.indexVar} = 0; ${node.indexVar} < ${iterableCode}.length; ${node.indexVar}++) {\n${indexedBody}\n}\n`,
+      const iterableStr = this.str(iterableNode);
+      const indexedBody = ts.statements([
+        ts.varDecl("const", node.itemVar, ts.raw(`${iterableStr}[${node.indexVar}]`)),
+        ...bodyStmts,
+      ]);
+      return ts.forC(
+        ts.varDecl("let", node.indexVar, ts.raw("0")),
+        ts.binOp(ts.id(node.indexVar), "<", ts.raw(`${iterableStr}.length`)),
+        ts.raw(`${node.indexVar}++`),
+        indexedBody,
       );
     }
 
     // Basic form: for (item in collection)
-    return ts.raw(
-      `for (const ${node.itemVar} of ${iterableCode}) {\n${bodyCodeStr}\n}\n`,
-    );
+    return ts.forOf(node.itemVar, iterableNode, body);
   }
 
   private processWhileLoop(node: WhileLoop): TsNode {
-    const conditionCode = this.str(this.processNode(node.condition));
-    const bodyCodes: string[] = [];
-    for (const stmt of node.body) {
-      bodyCodes.push(this.str(this.processStatement(stmt)));
-    }
-    const bodyCodeStr = bodyCodes.join("\n");
-    return ts.raw(`while (${conditionCode}) {\n${bodyCodeStr}\n}\n`);
+    return ts.while(
+      this.processNode(node.condition),
+      ts.statements(node.body.map((stmt) => this.processStatement(stmt))),
+    );
   }
 
   private processMatchBlock(node: MatchBlock): TsNode {
-    const lines = [`switch (${this.str(this.processNode(node.expression))}) {`];
-
-    for (const caseItem of node.cases) {
-      if (caseItem.type === "comment") {
-        lines.push(`  // ${caseItem.content}`);
-        continue;
-      } else if (caseItem.caseValue === "_") {
-        lines.push(`  default:`);
-      } else {
-        const caseValueCode = this.str(this.processNode(caseItem.caseValue));
-        lines.push(`  case ${caseValueCode.trim()}:`);
-      }
-      const caseBodyCode = this.str(this.processNode(caseItem.body));
-      lines.push(caseBodyCode);
-      lines.push("    break;");
-    }
-
-    lines.push("}");
-    return ts.raw(lines.join("\n"));
+    const cases = node.cases
+      .filter((c) => c.type !== "comment")
+      .map((c) => {
+        const caseItem = c as MatchBlockCase;
+        const test = caseItem.caseValue === "_" ? undefined : this.processNode(caseItem.caseValue);
+        const body = ts.statements([this.processNode(caseItem.body), ts.raw("break;")]);
+        return { test, body };
+      });
+    return ts.switch(this.processNode(node.expression), cases);
   }
 
   private processImportStatement(node: ImportStatement): TsNode {
@@ -739,29 +728,21 @@ export class TypeScriptBuilder {
       }
     }
 
-    const importedNames = node.importedNames.map((name) =>
-      this.processImportNameType(name),
-    );
-
-    return ts.raw(
-      `import ${importedNames.join(", ")} from "${node.modulePath.replace(/\.agency$/, ".js")}";`,
-    );
+    const from = node.modulePath.replace(/\.agency$/, ".js");
+    const imports = node.importedNames.map((nameType) => {
+      switch (nameType.type) {
+        case "namedImport":
+          return ts.importDecl({ importKind: "named", names: nameType.importedNames, from });
+        case "namespaceImport":
+          return ts.importDecl({ importKind: "namespace", namespaceName: nameType.importedNames, from });
+        case "defaultImport":
+          return ts.importDecl({ importKind: "default", defaultName: nameType.importedNames, from });
+      }
+    });
+    return imports.length === 1 ? imports[0] : ts.statements(imports);
   }
 
-  private processImportNameType(node: ImportNameType): string {
-    switch (node.type) {
-      case "namedImport":
-        return `{ ${node.importedNames.join(", ")} }`;
-      case "namespaceImport":
-        return `* as ${node.importedNames}`;
-      case "defaultImport":
-        return `${node.importedNames}`;
-      default:
-        throw new Error(`Unknown import name type: ${(node as any).type}`);
-    }
-  }
-
-  private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
+private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
     return ts.raw(""); // handled in preprocess
   }
 

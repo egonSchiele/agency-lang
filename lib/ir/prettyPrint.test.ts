@@ -270,7 +270,7 @@ describe("prettyPrint", () => {
   });
 
   it("TsImport named", () => {
-    const node = ts.import({
+    const node = ts.importDecl({
       importKind: "named",
       names: ["foo", "bar"],
       from: "./mod",
@@ -279,7 +279,7 @@ describe("prettyPrint", () => {
   });
 
   it("TsImport default", () => {
-    const node = ts.import({
+    const node = ts.importDecl({
       importKind: "default",
       defaultName: "React",
       from: "react",
@@ -288,7 +288,7 @@ describe("prettyPrint", () => {
   });
 
   it("TsImport namespace", () => {
-    const node = ts.import({
+    const node = ts.importDecl({
       importKind: "namespace",
       namespaceName: "path",
       from: "path",
@@ -297,7 +297,7 @@ describe("prettyPrint", () => {
   });
 
   it("TsImport type", () => {
-    const node = ts.import({
+    const node = ts.importDecl({
       importKind: "type",
       names: ["Foo"],
       from: "./types",

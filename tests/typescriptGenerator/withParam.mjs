@@ -16,6 +16,7 @@ import {
   resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
+  ToolCallError,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
@@ -141,6 +142,7 @@ graph.node("main", async (__state: GraphState) => {
       if (__step <= 1) {
         
 async function _result(input, __metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `process this input: ${input}`,
@@ -151,7 +153,8 @@ async function _result(input, __metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 

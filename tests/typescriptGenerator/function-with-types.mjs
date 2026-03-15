@@ -16,6 +16,7 @@ import {
   resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
+  ToolCallError,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
@@ -165,6 +166,9 @@ export async function add(x: number, y: number, __state: InternalFunctionState |
     __stack.args["x"] = x;
     __stack.args["y"] = y;
 
+    __self.__retryable = __self.__retryable ?? true;
+
+    try {
     
       if (__step <= 0) {
         
@@ -175,6 +179,7 @@ export async function add(x: number, y: number, __state: InternalFunctionState |
       if (__step <= 1) {
         
 async function _result(x, y, __metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `add ${x} and ${y}`,
@@ -185,7 +190,8 @@ async function _result(x, y, __metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 
@@ -209,6 +215,10 @@ return __stack.locals.result
         __stack.step++;
       }
       
+    } catch (__error) {
+      if (__error instanceof ToolCallError) throw __error;
+      throw new ToolCallError(__error, { retryable: __self.__retryable });
+    }
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "add", timeTaken: performance.now() - __funcStartTime } });
 }
@@ -228,6 +238,9 @@ export async function greet(name: string, __state: InternalFunctionState | undef
     // put all args on the state stack
     __stack.args["name"] = name;
 
+    __self.__retryable = __self.__retryable ?? true;
+
+    try {
     
       if (__step <= 0) {
         
@@ -238,6 +251,7 @@ export async function greet(name: string, __state: InternalFunctionState | undef
       if (__step <= 1) {
         
 async function _message(name, __metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `Hello ${name}!`,
@@ -248,7 +262,8 @@ async function _message(name, __metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 
@@ -272,6 +287,10 @@ return __stack.locals.message
         __stack.step++;
       }
       
+    } catch (__error) {
+      if (__error instanceof ToolCallError) throw __error;
+      throw new ToolCallError(__error, { retryable: __self.__retryable });
+    }
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "greet", timeTaken: performance.now() - __funcStartTime } });
 }
@@ -292,6 +311,9 @@ export async function mixed(count: number, label: any, __state: InternalFunction
     __stack.args["count"] = count;
     __stack.args["label"] = label;
 
+    __self.__retryable = __self.__retryable ?? true;
+
+    try {
     
       if (__step <= 0) {
         
@@ -302,6 +324,7 @@ export async function mixed(count: number, label: any, __state: InternalFunction
       if (__step <= 1) {
         
 async function _output(label, count, __metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `${label}: ${count}`,
@@ -312,7 +335,8 @@ async function _output(label, count, __metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 
@@ -336,6 +360,10 @@ return __stack.locals.output
         __stack.step++;
       }
       
+    } catch (__error) {
+      if (__error instanceof ToolCallError) throw __error;
+      throw new ToolCallError(__error, { retryable: __self.__retryable });
+    }
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "mixed", timeTaken: performance.now() - __funcStartTime } });
 }
@@ -355,6 +383,9 @@ export async function processArray(items: number[], __state: InternalFunctionSta
     // put all args on the state stack
     __stack.args["items"] = items;
 
+    __self.__retryable = __self.__retryable ?? true;
+
+    try {
     
       if (__step <= 0) {
         
@@ -365,6 +396,7 @@ export async function processArray(items: number[], __state: InternalFunctionSta
       if (__step <= 1) {
         
 async function _result(items, __metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `Processing array with ${items} items`,
@@ -375,7 +407,8 @@ async function _result(items, __metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 
@@ -399,6 +432,10 @@ return __stack.locals.result
         __stack.step++;
       }
       
+    } catch (__error) {
+      if (__error instanceof ToolCallError) throw __error;
+      throw new ToolCallError(__error, { retryable: __self.__retryable });
+    }
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "processArray", timeTaken: performance.now() - __funcStartTime } });
 }
@@ -418,6 +455,9 @@ export async function flexible(value: string | number, __state: InternalFunction
     // put all args on the state stack
     __stack.args["value"] = value;
 
+    __self.__retryable = __self.__retryable ?? true;
+
+    try {
     
       if (__step <= 0) {
         
@@ -428,6 +468,7 @@ export async function flexible(value: string | number, __state: InternalFunction
       if (__step <= 1) {
         
 async function _result(value, __metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `Received value: ${value}`,
@@ -438,7 +479,8 @@ async function _result(value, __metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 
@@ -462,6 +504,10 @@ return __stack.locals.result
         __stack.step++;
       }
       
+    } catch (__error) {
+      if (__error instanceof ToolCallError) throw __error;
+      throw new ToolCallError(__error, { retryable: __self.__retryable });
+    }
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "flexible", timeTaken: performance.now() - __funcStartTime } });
 }

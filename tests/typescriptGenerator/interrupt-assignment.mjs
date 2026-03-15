@@ -16,6 +16,7 @@ import {
   resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
+  ToolCallError,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
@@ -166,6 +167,7 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
       if (__step <= 2) {
         
 async function _greeting(__metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `Say hello to {name}`,
@@ -176,7 +178,8 @@ async function _greeting(__metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 

@@ -16,6 +16,7 @@ import {
   resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
+  ToolCallError,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
@@ -166,12 +167,19 @@ export async function add(a: any, b: any, __state: InternalFunctionState | undef
     __stack.args["a"] = a;
     __stack.args["b"] = b;
 
+    __self.__retryable = __self.__retryable ?? true;
+
+    try {
     
       if (__step <= 0) {
         
         __stack.step++;
       }
       
+    } catch (__error) {
+      if (__error instanceof ToolCallError) throw __error;
+      throw new ToolCallError(__error, { retryable: __self.__retryable });
+    }
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "add", timeTaken: performance.now() - __funcStartTime } });
 }
@@ -191,12 +199,19 @@ export async function greet(name: any, __state: InternalFunctionState | undefine
     // put all args on the state stack
     __stack.args["name"] = name;
 
+    __self.__retryable = __self.__retryable ?? true;
+
+    try {
     
       if (__step <= 0) {
         
         __stack.step++;
       }
       
+    } catch (__error) {
+      if (__error instanceof ToolCallError) throw __error;
+      throw new ToolCallError(__error, { retryable: __self.__retryable });
+    }
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "greet", timeTaken: performance.now() - __funcStartTime } });
 }
@@ -217,12 +232,19 @@ export async function calculateArea(width: any, height: any, __state: InternalFu
     __stack.args["width"] = width;
     __stack.args["height"] = height;
 
+    __self.__retryable = __self.__retryable ?? true;
+
+    try {
     
       if (__step <= 0) {
         
         __stack.step++;
       }
       
+    } catch (__error) {
+      if (__error instanceof ToolCallError) throw __error;
+      throw new ToolCallError(__error, { retryable: __self.__retryable });
+    }
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "calculateArea", timeTaken: performance.now() - __funcStartTime } });
 }
@@ -242,12 +264,19 @@ export async function processData(__state: InternalFunctionState | undefined = u
     // put all args on the state stack
     
 
+    __self.__retryable = __self.__retryable ?? true;
+
+    try {
     
       if (__step <= 0) {
         
         __stack.step++;
       }
       
+    } catch (__error) {
+      if (__error instanceof ToolCallError) throw __error;
+      throw new ToolCallError(__error, { retryable: __self.__retryable });
+    }
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "processData", timeTaken: performance.now() - __funcStartTime } });
 }

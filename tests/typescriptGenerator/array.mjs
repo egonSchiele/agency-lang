@@ -16,6 +16,7 @@ import {
   resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
+  ToolCallError,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
@@ -137,6 +138,7 @@ graph.node("main", async (__state: GraphState) => {
       if (__step <= 1) {
         
 async function _numbers(__metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `the first 5 prime numbers`,
@@ -151,7 +153,8 @@ async function _numbers(__metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 
@@ -179,6 +182,7 @@ __self.numbers = _numbers({
       if (__step <= 4) {
         
 async function _greetings(__metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `a list of 3 common greetings in different languages`,
@@ -193,7 +197,8 @@ async function _greetings(__metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 

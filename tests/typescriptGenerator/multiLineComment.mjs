@@ -16,6 +16,7 @@ import {
   resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
+  ToolCallError,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
@@ -137,6 +138,9 @@ export async function greet(__state: InternalFunctionState | undefined = undefin
     // put all args on the state stack
     
 
+    __self.__retryable = __self.__retryable ?? true;
+
+    try {
     
       if (__step <= 0) {
         
@@ -150,6 +154,10 @@ return `hello`
         __stack.step++;
       }
       
+    } catch (__error) {
+      if (__error instanceof ToolCallError) throw __error;
+      throw new ToolCallError(__error, { retryable: __self.__retryable });
+    }
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "greet", timeTaken: performance.now() - __funcStartTime } });
 }

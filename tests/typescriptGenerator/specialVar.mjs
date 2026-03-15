@@ -16,6 +16,7 @@ import {
   resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
+  ToolCallError,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
@@ -158,6 +159,7 @@ if (isInterrupt(__stack.locals.msg)) {
       if (__step <= 3) {
         
 async function _response1(msg, __metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `${msg}`,
@@ -168,7 +170,8 @@ async function _response1(msg, __metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 
@@ -202,6 +205,7 @@ __self.response1 = _response1(__stack.locals.msg, {
       if (__step <= 7) {
         
 async function _response2(msg, __metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `${msg}`,
@@ -212,7 +216,8 @@ async function _response2(msg, __metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 

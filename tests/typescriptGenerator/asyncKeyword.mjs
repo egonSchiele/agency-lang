@@ -16,6 +16,7 @@ import {
   resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
+  ToolCallError,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
@@ -150,6 +151,9 @@ export async function openai(msg: string, __state: InternalFunctionState | undef
     // put all args on the state stack
     __stack.args["msg"] = msg;
 
+    __self.__retryable = __self.__retryable ?? true;
+
+    try {
     
       if (__step <= 0) {
         
@@ -161,6 +165,7 @@ export async function openai(msg: string, __state: InternalFunctionState | undef
         let __defaultTimeblockName_startTime: number = performance.now();
 
 async function _response(msg, __metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `Respond to this user message: ${msg}`,
@@ -171,7 +176,8 @@ async function _response(msg, __metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 
@@ -204,6 +210,10 @@ return `OpenAI response: ${__stack.locals.response}`
         __stack.step++;
       }
       
+    } catch (__error) {
+      if (__error instanceof ToolCallError) throw __error;
+      throw new ToolCallError(__error, { retryable: __self.__retryable });
+    }
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "openai", timeTaken: performance.now() - __funcStartTime } });
 }
@@ -223,6 +233,9 @@ export async function google(msg: string, __state: InternalFunctionState | undef
     // put all args on the state stack
     __stack.args["msg"] = msg;
 
+    __self.__retryable = __self.__retryable ?? true;
+
+    try {
     
       if (__step <= 0) {
         
@@ -240,6 +253,7 @@ export async function google(msg: string, __state: InternalFunctionState | undef
         let __defaultTimeblockName_startTime: number = performance.now();
 
 async function _response(msg, __metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `Respond to this user message: ${msg}`,
@@ -250,7 +264,8 @@ async function _response(msg, __metadata): Promise<any> {
     clientConfig: {"model": `gemini-2.5-flash-lite`},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 
@@ -283,6 +298,10 @@ return `Google response: ${__stack.locals.response}`
         __stack.step++;
       }
       
+    } catch (__error) {
+      if (__error instanceof ToolCallError) throw __error;
+      throw new ToolCallError(__error, { retryable: __self.__retryable });
+    }
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "google", timeTaken: performance.now() - __funcStartTime } });
 }
@@ -302,6 +321,9 @@ export async function fibs(__state: InternalFunctionState | undefined = undefine
     // put all args on the state stack
     
 
+    __self.__retryable = __self.__retryable ?? true;
+
+    try {
     
       if (__step <= 0) {
         
@@ -312,6 +334,7 @@ export async function fibs(__state: InternalFunctionState | undefined = undefine
       if (__step <= 1) {
         
 async function ___promptVar(__metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `Generate the first 10 Fibonacci numbers`,
@@ -326,7 +349,8 @@ async function ___promptVar(__metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 
@@ -350,6 +374,10 @@ return __self.__promptVar;
         __stack.step++;
       }
       
+    } catch (__error) {
+      if (__error instanceof ToolCallError) throw __error;
+      throw new ToolCallError(__error, { retryable: __self.__retryable });
+    }
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "fibs", timeTaken: performance.now() - __funcStartTime } });
 }

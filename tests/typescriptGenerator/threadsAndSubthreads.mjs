@@ -16,6 +16,7 @@ import {
   resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
+  ToolCallError,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
@@ -136,6 +137,9 @@ export async function foo(__state: InternalFunctionState | undefined = undefined
     // put all args on the state stack
     
 
+    __self.__retryable = __self.__retryable ?? true;
+
+    try {
     
       if (__step <= 0) {
         
@@ -154,6 +158,7 @@ __threads.pushActive(__tid);
 
 
 async function _res1(__metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `What are the first 5 prime numbers?`,
@@ -168,7 +173,8 @@ async function _res1(__metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 
@@ -198,6 +204,7 @@ __threads.pushActive(__tid);
 
 
 async function _res2(__metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `What are the next 2 prime numbers after those?`,
@@ -212,7 +219,8 @@ async function _res2(__metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 
@@ -242,6 +250,7 @@ __threads.pushActive(__tid);
 
 
 async function _res3(__metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `And what is the sum of all those numbers combined?`,
@@ -256,7 +265,8 @@ async function _res3(__metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 
@@ -292,6 +302,7 @@ __threads.pushActive(__tid);
 
 
 async function _res5(__metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `And what is the sum of all those numbers combined?`,
@@ -306,7 +317,8 @@ async function _res5(__metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 
@@ -348,6 +360,7 @@ __threads.pushActive(__tid);
 
 
 async function _res4(__metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `And what is the sum of all those numbers combined?`,
@@ -362,7 +375,8 @@ async function _res4(__metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 
@@ -430,6 +444,10 @@ __threads.popActive();
         __stack.step++;
       }
       
+    } catch (__error) {
+      if (__error instanceof ToolCallError) throw __error;
+      throw new ToolCallError(__error, { retryable: __self.__retryable });
+    }
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "foo", timeTaken: performance.now() - __funcStartTime } });
 }
@@ -465,6 +483,7 @@ __threads.pushActive(__tid);
 
 
 async function _res1(__metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `What are the first 5 prime numbers?`,
@@ -479,7 +498,8 @@ async function _res1(__metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 
@@ -509,6 +529,7 @@ __threads.pushActive(__tid);
 
 
 async function _res2(__metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `What are the next 2 prime numbers after those?`,
@@ -523,7 +544,8 @@ async function _res2(__metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 
@@ -553,6 +575,7 @@ __threads.pushActive(__tid);
 
 
 async function _res3(__metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `And what is the sum of all those numbers combined?`,
@@ -567,7 +590,8 @@ async function _res3(__metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 
@@ -603,6 +627,7 @@ __threads.pushActive(__tid);
 
 
 async function _res5(__metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `And what is the sum of all those numbers combined?`,
@@ -617,7 +642,8 @@ async function _res5(__metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 
@@ -659,6 +685,7 @@ __threads.pushActive(__tid);
 
 
 async function _res4(__metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `And what is the sum of all those numbers combined?`,
@@ -673,7 +700,8 @@ async function _res4(__metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 

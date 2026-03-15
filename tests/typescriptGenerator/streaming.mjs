@@ -16,6 +16,7 @@ import {
   resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
+  ToolCallError,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
@@ -137,6 +138,7 @@ graph.node("foo", async (__state: GraphState) => {
       if (__step <= 1) {
         
 async function _response(__metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `Generate a response word by word`,
@@ -147,7 +149,8 @@ async function _response(__metadata): Promise<any> {
     clientConfig: {},
     stream: true,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 
@@ -175,6 +178,7 @@ __self.response = _response({
       if (__step <= 4) {
         
 async function _response2(__metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `Generate a response word by word, but with a different model`,
@@ -185,7 +189,8 @@ async function _response2(__metadata): Promise<any> {
     clientConfig: {"model": `gemini-2.5-flash-lite`},
     stream: true,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 

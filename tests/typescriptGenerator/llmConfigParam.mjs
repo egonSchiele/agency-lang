@@ -16,6 +16,7 @@ import {
   resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
+  ToolCallError,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
@@ -138,6 +139,7 @@ graph.node("main", async (__state: GraphState) => {
       if (__step <= 1) {
         
 async function _foo(__metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `What are 5 numbers?`,
@@ -152,7 +154,8 @@ async function _foo(__metadata): Promise<any> {
     clientConfig: __globalCtx.stateStack.globals.config,
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 
@@ -167,6 +170,7 @@ __self.foo = _foo({
       if (__step <= 2) {
         
 async function _foo2(__metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `What are 5 numbers?`,
@@ -181,7 +185,8 @@ async function _foo2(__metadata): Promise<any> {
     clientConfig: {"maxTokens": 100},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 

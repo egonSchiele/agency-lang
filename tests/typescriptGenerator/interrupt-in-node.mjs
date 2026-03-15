@@ -16,6 +16,7 @@ import {
   resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
+  ToolCallError,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
@@ -137,6 +138,9 @@ export async function greet(name: string, age: number, __state: InternalFunction
     __stack.args["name"] = name;
     __stack.args["age"] = age;
 
+    __self.__retryable = __self.__retryable ?? true;
+
+    try {
     
       if (__step <= 0) {
         
@@ -194,6 +198,10 @@ return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} yea
         __stack.step++;
       }
       
+    } catch (__error) {
+      if (__error instanceof ToolCallError) throw __error;
+      throw new ToolCallError(__error, { retryable: __self.__retryable });
+    }
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "greet", timeTaken: performance.now() - __funcStartTime } });
 }
@@ -233,6 +241,7 @@ graph.node("foo2", async (__state: GraphState) => {
       if (__step <= 2) {
         
 async function _response(name, age, __metadata): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `Greet the user with their name: ${name} and age ${age} using the greet function.`,
@@ -243,7 +252,8 @@ async function _response(name, age, __metadata): Promise<any> {
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 

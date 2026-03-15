@@ -1,0 +1,17 @@
+{
+  "safeRetry": {
+    "toolCallCount": 2,
+    "toolCalls": [
+      "lookupTool",
+      "lookupTool"
+    ],
+    "succeeded": true
+  },
+  "unsafeNoRetry": {
+    "toolCallCount": 1,
+    "toolCalls": [
+      "saveAndLookupTool"
+    ],
+    "hasResult": true
+  }
+}

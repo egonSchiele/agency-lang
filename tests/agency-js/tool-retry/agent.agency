@@ -1,0 +1,29 @@
+import { safe lookupItem, saveItem, resetCounters } from "./tools.js"
+
+def lookupTool(id: string) {
+  return lookupItem(id)
+}
+
+def saveAndLookupTool(id: string) {
+  saveItem(id)
+  item = lookupItem(id)
+  return item
+}
+
+def resetCountersTool() {
+  return resetCounters()
+}
+
+node testSafeRetry() {
+  resetCountersTool()
+  uses lookupTool
+  result = llm("Look up item with id 'abc'. Use the lookupTool. If you get a temporary error, retry the same tool call.")
+  return result
+}
+
+node testUnsafeNoRetry() {
+  resetCountersTool()
+  uses saveAndLookupTool
+  result = llm("Save and look up item 'xyz'. Use the saveAndLookupTool.")
+  return result
+}

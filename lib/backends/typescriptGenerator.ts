@@ -90,6 +90,8 @@ export class TypeScriptGenerator extends BaseGenerator {
   protected isInsideGraphNode: boolean = false;
   private parallelThreadVars: Record<string, string> = {};
   private loopVars: string[] = [];
+  protected safeFunctions: Record<string, boolean> = {};
+  protected importedFunctions: Record<string, boolean> = {};
 
   constructor(args: { config?: AgencyConfig } = {}) {
     super(args);
@@ -803,6 +805,20 @@ export class TypeScriptGenerator extends BaseGenerator {
   }
 
   protected processImportStatement(node: ImportStatement): string {
+    // Track safe and imported functions from named imports
+    for (const nameType of node.importedNames) {
+      if (nameType.type === "namedImport") {
+        for (const name of nameType.importedNames) {
+          this.importedFunctions[name] = true;
+        }
+        if (nameType.safeNames) {
+          for (const safeName of nameType.safeNames) {
+            this.safeFunctions[safeName] = true;
+          }
+        }
+      }
+    }
+
     const importedNames = node.importedNames.map((name) =>
       this.processImportNameType(name),
     );
@@ -1178,6 +1194,34 @@ export class TypeScriptGenerator extends BaseGenerator {
     return lines.join("\n");
   }
 
+  /**
+   * Check if a function name refers to an impure imported function
+   * (imported from TS, not marked safe).
+   */
+  protected isImpureImportedFunction(functionName: string): boolean {
+    return (
+      !!this.importedFunctions[functionName] &&
+      !this.safeFunctions[functionName]
+    );
+  }
+
+  /**
+   * Check if an AST node (or its children) contains a call to an impure imported function.
+   */
+  protected containsImpureCall(node: AgencyNode): boolean {
+    if (node.type === "functionCall") {
+      if (this.isImpureImportedFunction(node.functionName)) {
+        return true;
+      }
+    }
+    if (node.type === "assignment" && node.value) {
+      if (this.containsImpureCall(node.value as AgencyNode)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /* This generates the body of a node or function separated into multiple parts.
   You can think of a part as roughly corresponding to a single statement
   (although some statements don't need their own parts, such as a newlines or type definitions).
@@ -1193,6 +1237,10 @@ export class TypeScriptGenerator extends BaseGenerator {
     for (const stmt of body) {
       if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type)) {
         parts.push([]);
+      }
+      // Inject __self.__retryable = false before impure imported function calls
+      if (this.containsImpureCall(stmt)) {
+        parts[parts.length - 1].push("__self.__retryable = false;\n");
       }
       parts[parts.length - 1].push(this.processStatement(stmt));
     }

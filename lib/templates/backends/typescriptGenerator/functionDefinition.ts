@@ -19,7 +19,14 @@ export async function {{{functionName:string}}}({{{paramList:string}}}__state: I
     // put all args on the state stack
     {{{paramAssignments:string}}}
 
+    __self.__retryable = __self.__retryable ?? true;
+
+    try {
     {{{functionBody}}}
+    } catch (__error) {
+      if (__error instanceof ToolCallError) throw __error;
+      throw new ToolCallError(__error, { retryable: __self.__retryable });
+    }
 
     await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "{{{functionName}}}", timeTaken: performance.now() - __funcStartTime } });
 }

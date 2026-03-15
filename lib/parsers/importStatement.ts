@@ -104,15 +104,38 @@ export const importToolStatmentParser: Parser<ImportToolStatement> = trace(
   ),
 );
 
+const safeNameItem = or(
+  map(seqC(str("safe "), capture(many1WithJoin(alphanum), "name")), (r) => ({
+    name: r.name,
+    isSafe: true,
+  })),
+  map(seqC(capture(many1WithJoin(alphanum), "name")), (r) => ({
+    name: r.name,
+    isSafe: false,
+  })),
+);
+
 const namedImportParser: Parser<NamedImport> = trace(
   "namedImportParser",
-  seqC(
-    char("{"),
-    optionalSpaces,
-    capture(sepBy1(comma, many1WithJoin(alphanum)), "importedNames"),
-    optionalSpaces,
-    char("}"),
-    set("type", "namedImport"),
+  map(
+    seqC(
+      char("{"),
+      optionalSpaces,
+      capture(sepBy1(comma, safeNameItem), "items"),
+      optionalSpaces,
+      char("}"),
+    ),
+    (result) => {
+      const importedNames: string[] = [];
+      const safeNames: string[] = [];
+      for (const item of result.items) {
+        importedNames.push(item.name);
+        if (item.isSafe) {
+          safeNames.push(item.name);
+        }
+      }
+      return { type: "namedImport" as const, importedNames, safeNames };
+    },
   ),
 );
 

@@ -5,6 +5,7 @@ import { apply } from "typestache";
 
 export const template = `
 async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<any> {
+  __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: {{{promptCode:string}}},
@@ -19,7 +20,8 @@ async function _{{{variableName:string}}}({{{argsStr:string}}}): Promise<any> {
     clientConfig: {{{clientConfig:string}}},
     stream: {{{isStreaming:boolean}}},
     maxToolCallRounds: {{{maxToolCallRounds:number}}},
-    interruptData: __state?.interruptData
+    interruptData: __state?.interruptData,
+    removedTools: __self.__removedTools,
   });
 }
 

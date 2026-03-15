@@ -26,7 +26,9 @@ describe("importStatmentParser", () => {
     if (result.success) {
       expect(result.result).toEqual({
         type: "importStatement",
-        importedNames: [{ type: "namedImport", importedNames: ["foo"] }],
+        importedNames: [
+          { type: "namedImport", importedNames: ["foo"], safeNames: [] },
+        ],
         modulePath: "./foo.ts",
       });
     }
@@ -41,7 +43,7 @@ describe("importStatmentParser", () => {
         type: "importStatement",
         importedNames: [
           { type: "defaultImport", importedNames: "foo" },
-          { type: "namedImport", importedNames: ["bar"] },
+          { type: "namedImport", importedNames: ["bar"], safeNames: [] },
         ],
         modulePath: "./foo.ts",
       });
@@ -98,7 +100,9 @@ describe("importStatmentParser", () => {
     if (result.success) {
       expect(result.result).toEqual({
         type: "importStatement",
-        importedNames: [{ type: "namedImport", importedNames: ["foo"] }],
+        importedNames: [
+          { type: "namedImport", importedNames: ["foo"], safeNames: [] },
+        ],
         modulePath: "./foo.agency",
       });
     }
@@ -127,9 +131,74 @@ describe("importStatmentParser", () => {
       expect(result.result).toEqual({
         type: "importStatement",
         importedNames: [
-          { type: "namedImport", importedNames: ["foo", "bar", "baz"] },
+          {
+            type: "namedImport",
+            importedNames: ["foo", "bar", "baz"],
+            safeNames: [],
+          },
         ],
         modulePath: "myModule",
+      });
+    }
+  });
+
+  // Safe imports
+  it('should parse: import { safe foo, bar } from "./tools.js"', () => {
+    const result = importStatmentParser(
+      'import { safe foo, bar } from "./tools.js"',
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "importStatement",
+        importedNames: [
+          {
+            type: "namedImport",
+            importedNames: ["foo", "bar"],
+            safeNames: ["foo"],
+          },
+        ],
+        modulePath: "./tools.js",
+      });
+    }
+  });
+
+  it('should parse: import { safe foo, safe bar, baz } from "./tools.js"', () => {
+    const result = importStatmentParser(
+      'import { safe foo, safe bar, baz } from "./tools.js"',
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "importStatement",
+        importedNames: [
+          {
+            type: "namedImport",
+            importedNames: ["foo", "bar", "baz"],
+            safeNames: ["foo", "bar"],
+          },
+        ],
+        modulePath: "./tools.js",
+      });
+    }
+  });
+
+  it('should parse: import { safe foo } from "./tools.js"', () => {
+    const result = importStatmentParser(
+      'import { safe foo } from "./tools.js"',
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "importStatement",
+        importedNames: [
+          {
+            type: "namedImport",
+            importedNames: ["foo"],
+            safeNames: ["foo"],
+          },
+        ],
+        modulePath: "./tools.js",
       });
     }
   });

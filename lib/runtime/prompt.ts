@@ -15,6 +15,7 @@ import { GraphState } from "./types.js";
 import { PromptResult, Result, StreamChunk, ToolCallJSON } from "smoltalk";
 import { ZodType } from "zod/v3";
 import { ThreadStore } from "./state/threadStore.js";
+import { ToolCallError } from "./errors.js";
 
 export interface ToolHandler {
   name: string;
@@ -162,6 +163,8 @@ async function executeToolCalls({
   ctx,
   clientConfig,
   interruptData,
+  removedTools,
+  toolErrorCounts,
 }: {
   toolCalls: smoltalk.ToolCallJSON[];
   toolHandlers: ToolHandler[];
@@ -169,6 +172,8 @@ async function executeToolCalls({
   ctx: RuntimeContext<GraphState>;
   clientConfig: Partial<smoltalk.SmolPromptConfig>;
   interruptData?: InterruptData;
+  removedTools: string[];
+  toolErrorCounts: Record<string, number>;
 }): Promise<ExecuteToolCallsResult> {
   for (const toolCall of toolCalls) {
     const handler = toolHandlers.find((h) => h.name === toolCall.name);
@@ -234,7 +239,51 @@ async function executeToolCalls({
       });
 
       const toolCallStartTime = performance.now();
-      result = await handler.execute(...params);
+      try {
+        result = await handler.execute(...params);
+      } catch (error: unknown) {
+        const retryable =
+          error instanceof ToolCallError ? error.retryable : false;
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+
+        toolErrorCounts[handler.name] = (toolErrorCounts[handler.name] || 0) + 1;
+
+        if (retryable && toolErrorCounts[handler.name] < 5) {
+          messages.push(
+            smoltalk.toolMessage(
+              `Error: ${errorMessage}. You may retry this tool call with corrected arguments.`,
+              {
+                tool_call_id: toolCall.id,
+                name: toolCall.name,
+              },
+            ),
+          );
+        } else if (retryable) {
+          messages.push(
+            smoltalk.toolMessage(
+              `Error: ${errorMessage}. This tool has failed too many times and can no longer be called.`,
+              {
+                tool_call_id: toolCall.id,
+                name: toolCall.name,
+              },
+            ),
+          );
+          removedTools.push(handler.name);
+        } else {
+          messages.push(
+            smoltalk.toolMessage(
+              `Error: ${errorMessage}. This tool failed after performing side effects and cannot be retried.`,
+              {
+                tool_call_id: toolCall.id,
+                name: toolCall.name,
+              },
+            ),
+          );
+          removedTools.push(handler.name);
+        }
+        continue;
+      }
       result =
         result || `${handler.name} ran successfully but did not return a value`;
 
@@ -294,16 +343,20 @@ export async function runPrompt(args: {
   stream?: boolean;
   maxToolCallRounds?: number;
   interruptData?: InterruptData;
+  removedTools?: string[];
 }): Promise<any> {
   const {
     ctx,
     prompt,
     responseFormat,
-    tools,
-    toolHandlers = [],
     stream = false,
     maxToolCallRounds = 10,
+    removedTools = [],
   } = args;
+  let tools = (args.tools || []).filter((t) => !removedTools.includes(t.name));
+  let toolHandlers = (args.toolHandlers || []).filter(
+    (h) => !removedTools.includes(h.name),
+  );
   const clientConfig = ctx.getSmoltalkConfig(args.clientConfig || {});
   // console.log(color.magenta(JSON.stringify(clientConfig, null, 2)) + "\n");
   /* in order, either:
@@ -350,6 +403,7 @@ export async function runPrompt(args: {
   }
 
   // Handle tool calls
+  const toolErrorCounts: Record<string, number> = {};
   let toolCallRound = 0;
   while (toolCalls.length > 0) {
     if (toolCallRound++ >= maxToolCallRounds) {
@@ -365,9 +419,20 @@ export async function runPrompt(args: {
       ctx,
       clientConfig,
       interruptData: args.interruptData,
+      removedTools,
+      toolErrorCounts,
     });
 
     messages = executeToolCallsResult.messages;
+
+    // Filter out tools that failed after side effects
+    if (removedTools.length > 0) {
+      tools = tools.filter((t) => !removedTools.includes(t.name));
+      toolHandlers = toolHandlers.filter(
+        (h) => !removedTools.includes(h.name),
+      );
+    }
+
     if (executeToolCallsResult.isInterrupt) {
       const { interrupt } = executeToolCallsResult;
 

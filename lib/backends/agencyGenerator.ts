@@ -519,8 +519,12 @@ export class AgencyGenerator extends BaseGenerator {
 
   protected processImportNameType(node: ImportNameType): string {
     switch (node.type) {
-      case "namedImport":
-        return `{ ${node.importedNames.join(", ")} }`;
+      case "namedImport": {
+        const names = node.importedNames.map((name) =>
+          node.safeNames?.includes(name) ? `safe ${name}` : name,
+        );
+        return `{ ${names.join(", ")} }`;
+      }
       case "namespaceImport":
         return `* as ${node.importedNames}`;
       case "defaultImport":

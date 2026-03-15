@@ -84,4 +84,6 @@ export { isGenerator, handleStreamingResponse } from "./streaming.js";
 export { runPrompt } from "./prompt.js";
 export type { ToolHandler } from "./prompt.js";
 
+export { ToolCallError } from "./errors.js";
+
 export { setupNode, setupFunction, runNode } from "./node.js";

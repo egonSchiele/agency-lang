@@ -9,6 +9,7 @@ export type ImportNameType = NamedImport | NamespaceImport | DefaultImport;
 export type NamedImport = {
   type: "namedImport";
   importedNames: string[];
+  safeNames: string[];
 };
 
 export type NamespaceImport = {

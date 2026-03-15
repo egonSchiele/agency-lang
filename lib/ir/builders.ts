@@ -43,6 +43,8 @@ import type {
   TsPostfixOp,
 } from "./tsIR.js";
 
+export { $, TsChain } from "./fluent.js";
+
 export const ts = {
   raw(code: string): TsRaw {
     return { kind: "raw", code };

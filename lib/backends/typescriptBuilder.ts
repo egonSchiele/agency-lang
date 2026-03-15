@@ -85,7 +85,7 @@ import {
 import { expressionToString, getBaseVarName } from "@/utils/node.js";
 
 import type { TsNode, TsObjectEntry, TsElseIf } from "../ir/tsIR.js";
-import { ts } from "../ir/builders.js";
+import { ts, $ } from "../ir/builders.js";
 import { printTs } from "../ir/prettyPrint.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
@@ -577,7 +577,7 @@ export class TypeScriptBuilder {
           );
           // The call node is ts.call(ts.id(name), args) — extract callee name and args
           if (callNode.kind === "call" && callNode.callee.kind === "identifier") {
-            result = ts.call(ts.prop(result, callNode.callee.name), callNode.arguments);
+            result = $(result).prop(callNode.callee.name).call(callNode.arguments).done();
           } else {
             // Fallback for complex cases (e.g. await-wrapped)
             result = ts.raw(`${this.str(result)}.${this.str(callNode)}`);
@@ -912,10 +912,9 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
       return shouldAwait ? ts.await(call) : call;
     } else if (node.functionName === "system") {
       // __threads.active().push(smoltalk.systemMessage(msg))
-      return ts.call(
-        ts.prop(ts.threads.active(), "push"),
-        [ts.call(ts.prop(ts.id("smoltalk"), "systemMessage"), argNodes)],
-      );
+      return $(ts.threads.active()).prop("push").call([
+        $.id("smoltalk").prop("systemMessage").call(argNodes).done(),
+      ]).done();
     } else {
       const call = ts.call(ts.id(functionName), argNodes);
       return shouldAwait ? ts.await(call) : call;
@@ -1100,7 +1099,7 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
         case "methodCall": {
           const callNode = this.generateFunctionCallExpression(el.functionCall, "valueAccess");
           if (callNode.kind === "call" && callNode.callee.kind === "identifier") {
-            result = ts.call(ts.prop(result, callNode.callee.name), callNode.arguments);
+            result = $(result).prop(callNode.callee.name).call(callNode.arguments).done();
           } else {
             result = ts.raw(`${this.str(result)}.${this.str(callNode)}`);
           }
@@ -1297,7 +1296,7 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
           }),
         );
       case "messages":
-        return ts.call(ts.prop(ts.threads.active(), "setMessages"), [this.processNode(node.value)]);
+        return $(ts.threads.active()).prop("setMessages").call([this.processNode(node.value)]).done();
       default:
         throw new Error(`Unhandled SpecialVar name: ${node.name}`);
     }
@@ -1365,7 +1364,7 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
 
     stmts.push(ts.assign(
       ts.arr(scopedVarNodes),
-      ts.await(ts.call(ts.prop(ts.id("Promise"), "all"), [ts.arr(scopedVarNodes)])),
+      $.id("Promise").prop("all").call([ts.arr(scopedVarNodes)]).await().done(),
     ));
 
     if (varName) {

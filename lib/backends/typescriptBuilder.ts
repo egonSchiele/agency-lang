@@ -821,7 +821,7 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
         paramList,
         paramAssignments,
         argsObject,
-        functionBody: bodyCode.join("\n"),
+        functionBody: bodyCode.map(n => this.str(n)).join("\n"),
       }),
     );
   }
@@ -978,7 +978,7 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
     return ts.raw(
       renderGraphNode.default({
         name: nodeName,
-        body: bodyCode.join("\n"),
+        body: bodyCode.map(n => this.str(n)).join("\n"),
         hasParam: parameters.length > 0,
         paramAssignments,
       }),
@@ -991,10 +991,7 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
       if (node.value.type === "functionCall" && this.isGraphNode(node.value.functionName)) {
         return valueNode;
       }
-      return ts.return(ts.obj([
-        { spread: false, key: "messages", value: ts.id("__threads") },
-        { spread: false, key: "data", value: valueNode },
-      ]));
+      return ts.nodeResult(valueNode);
     }
 
     const valueNode = this.processNode(node.value);
@@ -1014,14 +1011,10 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
     } else if (node.value.type === "prompt") {
       return ts.statements([
         valueNode,
-        ts.raw(`__ctx.stateStack.pop();\n`),
-        ts.return(ts.prop(ts.id("__self"), DEFAULT_PROMPT_NAME)),
+        ts.functionReturn(ts.prop(ts.runtime.self, DEFAULT_PROMPT_NAME)),
       ]);
     }
-    return ts.statements([
-      ts.raw(`__ctx.stateStack.pop();\n`),
-      ts.return(valueNode),
-    ]);
+    return ts.functionReturn(valueNode);
   }
 
   private processAssignment(node: Assignment): TsNode {
@@ -1341,7 +1334,7 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
 
     for (const [name] of assignmentVarNames) {
       const threadVarName = `__ptid_${name}`;
-      stmts.push(ts.varDecl("const", threadVarName, ts.call(ts.prop(ts.id("__threads"), "create"))));
+      stmts.push(ts.varDecl("const", threadVarName, ts.threads.create()));
       this.parallelThreadVars[name] = threadVarName;
     }
 
@@ -1363,10 +1356,7 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
         spread: false,
         key: name,
         value: ts.call(
-          ts.prop(
-            ts.call(ts.prop(ts.id("__threads"), "get"), [ts.id(this.parallelThreadVars[name])]),
-            "cloneMessages",
-          ),
+          ts.prop(ts.threads.get(ts.id(this.parallelThreadVars[name])), "cloneMessages"),
         ),
       }));
       stmts.push(ts.assign(ts.raw(varName), ts.obj(entries)));
@@ -1379,30 +1369,18 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
     return ts.raw(`{\n${stmts.map(s => this.str(s)).join("\n")}\n}`);
   }
 
-  private processBodyAsParts(body: AgencyNode[]): string[] {
-    const parts: string[][] = [[]];
+  private processBodyAsParts(body: AgencyNode[]): TsNode[] {
+    const parts: TsNode[][] = [[]];
     for (const stmt of body) {
       if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type)) {
         parts.push([]);
       }
       if (this.containsImpureCall(stmt)) {
-        parts[parts.length - 1].push("__self.__retryable = false;\n");
+        parts[parts.length - 1].push(ts.assign(ts.prop(ts.runtime.self, "__retryable"), ts.bool(false)));
       }
-      parts[parts.length - 1].push(this.str(this.processStatement(stmt)));
+      parts[parts.length - 1].push(this.processStatement(stmt));
     }
-    const bodyCode: string[] = [];
-    let partNum = 0;
-    for (const part of parts) {
-      const partCode = `
-      if (__step <= ${partNum}) {
-        ${part.join("").trimEnd()}
-        __stack.step++;
-      }
-      `;
-      bodyCode.push(partCode);
-      partNum++;
-    }
-    return bodyCode;
+    return parts.map((part, i) => ts.stepBlock(i, ts.statements(part)));
   }
 
   // ------- Imports and pre/post processing -------

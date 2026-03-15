@@ -221,6 +221,14 @@ export function printTs(node: TsNode, indent = 0): string {
       return `${prefix}.${node.name}`;
     }
 
+    case "functionReturn":
+      return `__ctx.stateStack.pop();\nreturn ${printTs(node.value, indent)}`;
+
+    case "stepBlock": {
+      const stepBody = printBody(node.body, indent);
+      return `if (__step <= ${node.stepIndex}) {\n${stepBody}\n${ind(indent + 1)}__stack.step++;\n${ind(indent)}}`;
+    }
+
     default: {
       const _exhaustive: never = node;
       throw new Error(`Unknown node kind: ${(_exhaustive as any).kind}`);

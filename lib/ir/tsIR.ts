@@ -30,7 +30,9 @@ export type TsNode =
   | TsComment
   | TsExport
   | TsNewExpr
-  | TsScopedVar;
+  | TsScopedVar
+  | TsFunctionReturn
+  | TsStepBlock;
 
 /** Escape hatch: verbatim string */
 export interface TsRaw {
@@ -247,4 +249,17 @@ export interface TsScopedVar {
   kind: "scopedVar";
   name: string;
   scope: "global" | "function" | "node" | "args" | "imported";
+}
+
+/** Return from a function scope — pops the state stack, then returns the value */
+export interface TsFunctionReturn {
+  kind: "functionReturn";
+  value: TsNode;
+}
+
+/** A resumable step block — wraps body in `if (__step <= N) { ... __stack.step++; }` */
+export interface TsStepBlock {
+  kind: "stepBlock";
+  stepIndex: number;
+  body: TsNode;
 }

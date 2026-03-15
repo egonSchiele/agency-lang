@@ -35,6 +35,8 @@ import type {
   TsExport,
   TsNewExpr,
   TsScopedVar,
+  TsFunctionReturn,
+  TsStepBlock,
 } from "./tsIR.js";
 
 export const ts = {
@@ -119,8 +121,14 @@ export const ts = {
     return { kind: "return", expr };
   },
 
-  obj(entries: TsObjectEntry[]): TsObjectLiteral {
-    return { kind: "objectLiteral", entries };
+  obj(entries: TsObjectEntry[] | Record<string, TsNode>): TsObjectLiteral {
+    if (Array.isArray(entries)) {
+      return { kind: "objectLiteral", entries };
+    }
+    return {
+      kind: "objectLiteral",
+      entries: Object.entries(entries).map(([key, value]) => ({ spread: false, key, value })),
+    };
   },
 
   arr(items: TsNode[]): TsArrayLiteral {
@@ -215,5 +223,47 @@ export const ts = {
 
   scopedVar(name: string, scope: TsScopedVar["scope"]): TsScopedVar {
     return { kind: "scopedVar", name, scope };
+  },
+
+  functionReturn(value: TsNode): TsFunctionReturn {
+    return { kind: "functionReturn", value };
+  },
+
+  stepBlock(stepIndex: number, body: TsNode): TsStepBlock {
+    return { kind: "stepBlock", stepIndex, body };
+  },
+
+  // --- Semantic convenience builders (no new IR types) ---
+
+  /** Return { messages: __threads, data: value } from a graph node */
+  nodeResult(value: TsNode): TsReturn {
+    return ts.return(ts.obj({ messages: ts.runtime.threads, data: value }));
+  },
+
+  /** Predefined runtime identifiers */
+  runtime: {
+    self: { kind: "identifier", name: "__self" } as TsIdentifier,
+    ctx: { kind: "identifier", name: "__ctx" } as TsIdentifier,
+    threads: { kind: "identifier", name: "__threads" } as TsIdentifier,
+    stack: { kind: "identifier", name: "__stack" } as TsIdentifier,
+    step: { kind: "identifier", name: "__step" } as TsIdentifier,
+    state: { kind: "identifier", name: "__state" } as TsIdentifier,
+    globalCtx: { kind: "identifier", name: "__globalCtx" } as TsIdentifier,
+  },
+
+  /** Thread operations */
+  threads: {
+    create(): TsCall {
+      return ts.call(ts.prop(ts.runtime.threads, "create"));
+    },
+    get(id: TsNode): TsCall {
+      return ts.call(ts.prop(ts.runtime.threads, "get"), [id]);
+    },
+    active(): TsCall {
+      return ts.call(ts.prop(ts.runtime.threads, "active"));
+    },
+    getOrCreateActive(): TsCall {
+      return ts.call(ts.prop(ts.runtime.threads, "getOrCreateActive"));
+    },
   },
 };

@@ -36,8 +36,8 @@ importers:
         specifier: ^2.4.2
         version: 2.4.2
       smoltalk:
-        specifier: ^0.0.62
-        version: 0.0.62(typescript@5.9.3)(ws@8.19.0)
+        specifier: ^0.0.64
+        version: 0.0.64(typescript@5.9.3)(ws@8.19.0)
       tarsec:
         specifier: ^0.1.8
         version: 0.1.8
@@ -1344,8 +1344,8 @@ packages:
     resolution: {integrity: sha512-stxByr12oeeOyY2BlviTNQlYV5xOj47GirPr4yA1hE9JCtxfQN0+tVbkxwCtYDQWhEKWFHsEK48ORg5jrouCAg==}
     engines: {node: '>=20'}
 
-  smoltalk@0.0.62:
-    resolution: {integrity: sha512-pvNkjQoODiqI5UNLCOyMz1ZCkMg4aIjw33bjBVKKcPp8zF02ADZ3vTo/PU6fbvlikU316MFJs6GL+X+gNRkuNA==}
+  smoltalk@0.0.64:
+    resolution: {integrity: sha512-IbaPYDf0zPJ0mP1I0p/Syg8b4apuWSd0YSTJNBYEqf21j7rIAk8sTAHZlqREpLFVTwEoAer/uauRn7uZueQI0Q==}
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -2775,7 +2775,7 @@ snapshots:
       ansi-styles: 6.2.3
       is-fullwidth-code-point: 5.1.0
 
-  smoltalk@0.0.62(typescript@5.9.3)(ws@8.19.0):
+  smoltalk@0.0.64(typescript@5.9.3)(ws@8.19.0):
     dependencies:
       '@anthropic-ai/sdk': 0.78.0(zod@4.3.6)
       '@google/genai': 1.45.0

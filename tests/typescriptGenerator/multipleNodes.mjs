@@ -168,15 +168,13 @@ if (__step <= 2) {
 }
 if (__step <= 3) {
   __ctx.stateStack.pop();
-return goToNode("processGreeting",
-  {
+return goToNode("processGreeting", {
     messages: __stack.messages,
     ctx: __ctx,
-    
-    data: { msg: __stack.locals.greeting }
-    
-    
-  });
+    data: {
+      msg: __stack.locals.greeting
+    }
+  })
   
   __stack.step++;
 }
@@ -245,8 +243,6 @@ if (__step <= 2) {
 }
 if (__step <= 3) {
   await await _print(__stack.locals.result)
-;
-
   
   __stack.step++;
 }
@@ -277,15 +273,11 @@ graph.node("main", async (__state: GraphState) => {
 }
 if (__step <= 1) {
   __ctx.stateStack.pop();
-return goToNode("greet",
-  {
+return goToNode("greet", {
     messages: __stack.messages,
     ctx: __ctx,
-    
-    
-    data: null
-    
-  });
+    data: {}
+  })
   
   __stack.step++;
 }

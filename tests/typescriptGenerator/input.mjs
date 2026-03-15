@@ -186,8 +186,6 @@ if (__step <= 3) {
 }
 if (__step <= 4) {
   await await _print(__stack.locals.sentiment)
-;
-
   
   __stack.step++;
 }

@@ -148,8 +148,7 @@ if (__step <= 2) {
   __stack.step++;
 }
 if (__step <= 3) {
-  if (await isReady()
-) {
+  if (await isReady()) {
     __stack.locals.status = `ready`;
     
   }

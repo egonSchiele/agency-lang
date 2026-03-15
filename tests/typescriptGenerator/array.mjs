@@ -172,8 +172,6 @@ if (__step <= 2) {
 }
 if (__step <= 3) {
   await await _print(__stack.locals.numbers)
-;
-
   
   
   
@@ -219,8 +217,6 @@ if (__step <= 5) {
 }
 if (__step <= 6) {
   await await _print(__stack.locals.greetings)
-;
-
   
   __stack.step++;
 }

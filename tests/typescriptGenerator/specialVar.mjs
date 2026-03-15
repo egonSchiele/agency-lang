@@ -134,8 +134,6 @@ graph.node("main", async (__state: GraphState) => {
 }
 if (__step <= 1) {
   await await _print(`lets race!`)
-;
-
   
   __stack.step++;
 }
@@ -190,8 +188,6 @@ if (__step <= 4) {
 }
 if (__step <= 5) {
   await await _print(__stack.locals.response1)
-;
-
   
   __stack.step++;
 }
@@ -236,8 +232,6 @@ if (__step <= 8) {
 }
 if (__step <= 9) {
   await await _print(__stack.locals.response2)
-;
-
   
   __stack.step++;
 }

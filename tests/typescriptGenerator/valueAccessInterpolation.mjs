@@ -180,8 +180,6 @@ if (__step <= 4) {
 }
 if (__step <= 5) {
   await await _print(__stack.locals.result)
-;
-
   
   __stack.step++;
 }

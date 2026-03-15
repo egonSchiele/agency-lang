@@ -410,36 +410,26 @@ __threads.popActive();
 }
 if (__step <= 2) {
   await await _print(`res1`, __stack.locals.res1)
-;
-
   
   __stack.step++;
 }
 if (__step <= 3) {
   await await _print(`res2`, __stack.locals.res2)
-;
-
   
   __stack.step++;
 }
 if (__step <= 4) {
   await await _print(`res3`, __stack.locals.res3)
-;
-
   
   __stack.step++;
 }
 if (__step <= 5) {
   await await _print(`res4`, __stack.locals.res4)
-;
-
   
   __stack.step++;
 }
 if (__step <= 6) {
   await await _print(`res5`, __stack.locals.res5)
-;
-
   
   __stack.step++;
 }
@@ -736,36 +726,26 @@ __threads.popActive();
 }
 if (__step <= 2) {
   await await _print(`res1`, __stack.locals.res1)
-;
-
   
   __stack.step++;
 }
 if (__step <= 3) {
   await await _print(`res2`, __stack.locals.res2)
-;
-
   
   __stack.step++;
 }
 if (__step <= 4) {
   await await _print(`res3`, __stack.locals.res3)
-;
-
   
   __stack.step++;
 }
 if (__step <= 5) {
   await await _print(`res4`, __stack.locals.res4)
-;
-
   
   __stack.step++;
 }
 if (__step <= 6) {
   await await _print(`res5`, __stack.locals.res5)
-;
-
   
   __stack.step++;
 }

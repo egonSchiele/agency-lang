@@ -181,14 +181,9 @@ graph.node("main", async (__state: GraphState) => {
 if (__step <= 1) {
   await await _print(test({
     ctx: __ctx,
-    
-    
     threads: new ThreadStore(),
-    
     interruptData: __state?.interruptData
-}))
-;
-
+  }))
   
   
   __stack.step++;

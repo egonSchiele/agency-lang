@@ -138,15 +138,11 @@ if (__step <= 1) {
 
 await await _print(`Starting...`)
 
-
 await await _print(`Sleeping for 2.5 seconds...`)
-
 
 await await _builtinSleep(2.5)
 
-
 await await _print(`Done sleeping!`)
-
 
 let x_endTime: number = performance.now();
 let x: number = x_endTime - x_startTime;
@@ -157,8 +153,6 @@ let x: number = x_endTime - x_startTime;
 }
 if (__step <= 2) {
   await await _print(__stack.locals.x)
-;
-
   
   __stack.step++;
 }

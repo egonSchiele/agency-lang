@@ -210,8 +210,6 @@ if (__step <= 3) {
 }
 if (__step <= 4) {
   await await _print(__stack.locals.foo, __stack.locals.foo2)
-;
-
   
   __stack.step++;
 }

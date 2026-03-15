@@ -145,19 +145,15 @@ if (__step <= 2) {
   switch (__stack.locals.action) {
     case `start`:
       await await _print(`Starting...`)
-
       break;
     case `stop`:
       await await _print(`Stopping...`)
-
       break;
     case `restart`:
       await await _print(`Restarting...`)
-
       break;
     default:
       await await _print(`Unknown action`)
-
       break;
   }
   
@@ -175,19 +171,15 @@ if (__step <= 4) {
   switch (__stack.locals.statusCode) {
     case 200:
       await await _print(`OK`)
-
       break;
     case 404:
       await await _print(`Not Found`)
-
       break;
     case 500:
       await await _print(`Internal Server Error`)
-
       break;
     default:
       await await _print(`Unknown status`)
-
       break;
   }
   
@@ -239,19 +231,15 @@ if (__step <= 9) {
   switch (__stack.locals.level) {
     case `debug`:
       await await _print(`Debug mode enabled`)
-
       break;
     case `info`:
       await await _print(`Info level logging`)
-
       break;
     case `warn`:
       await await _print(`Warning level`)
-
       break;
     case `error`:
       await await _print(`Error level`)
-
       break;
   }
   

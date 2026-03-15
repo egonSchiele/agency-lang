@@ -134,8 +134,6 @@ graph.node("foo", async (__state: GraphState) => {
 }
 if (__step <= 1) {
   await await _print(`What is your name?`)
-;
-
   
   __stack.step++;
 }
@@ -155,8 +153,6 @@ if (isInterrupt(__stack.locals.name)) {
 }
 if (__step <= 3) {
   await await _print(`Hello, ${__stack.locals.name}!`)
-;
-
   
   __stack.step++;
 }

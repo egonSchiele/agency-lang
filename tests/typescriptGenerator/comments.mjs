@@ -209,12 +209,9 @@ graph.node("main", async (__state: GraphState) => {
 }
 if (__step <= 1) {
   __stack.locals.result = greet({
-    ctx: __ctx,
-    
-    
-    threads: new ThreadStore(),
-    
-    interruptData: __state?.interruptData
+  ctx: __ctx,
+  threads: new ThreadStore(),
+  interruptData: __state?.interruptData
 });
 
 
@@ -234,8 +231,6 @@ if (__step <= 2) {
 }
 if (__step <= 3) {
   await await _print(__stack.locals.result)
-;
-
   
   
   //  Testing comments in different contexts
@@ -263,7 +258,6 @@ if (__step <= 6) {
   switch (__stack.locals.status) {
     case `inactive`:
       await await _print(`Stopped`)
-
       break;
   }
   

@@ -179,8 +179,6 @@ if (__step <= 3) {
 }
 if (__step <= 4) {
   await await _print(__stack.locals.response)
-;
-
   
   __stack.step++;
 }

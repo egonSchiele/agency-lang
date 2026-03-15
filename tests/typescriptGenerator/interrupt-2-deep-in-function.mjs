@@ -240,8 +240,6 @@ export async function foo2(name: string, age: number, __state: InternalFunctionS
 }
 if (__step <= 1) {
   await await _print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`)
-;
-
   
   
   __stack.step++;
@@ -285,8 +283,6 @@ if (isInterrupt(__self.response)) {
 }
 if (__step <= 3) {
   await await _print(`Greeted, age is still ${__stack.args.age}...`)
-;
-
   
   __stack.step++;
 }
@@ -330,8 +326,6 @@ graph.node("sayHi", async (__state: GraphState) => {
 }
 if (__step <= 1) {
   await await _print(`Saying hi to ${__stack.args.name}...`)
-;
-
   
   __stack.step++;
 }
@@ -342,12 +336,9 @@ if (__step <= 2) {
 }
 if (__step <= 3) {
   __stack.locals.response = foo2(__stack.args.name, __stack.locals.age, {
-    ctx: __ctx,
-    
-    
-    threads: new ThreadStore(),
-    
-    interruptData: __state?.interruptData
+  ctx: __ctx,
+  threads: new ThreadStore(),
+  interruptData: __state?.interruptData
 });
 
 
@@ -367,15 +358,11 @@ if (__step <= 4) {
 }
 if (__step <= 5) {
   await await _print(__stack.locals.response)
-;
-
   
   __stack.step++;
 }
 if (__step <= 6) {
   await await _print(`Greeting sent.`)
-;
-
   
   __stack.step++;
 }

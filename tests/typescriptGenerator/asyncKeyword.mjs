@@ -243,8 +243,7 @@ export async function google(msg: string, __state: InternalFunctionState | undef
   __stack.step++;
 }
 if (__step <= 1) {
-  __threads.active().setMessages([]);
-
+  __threads.active().setMessages([])
   
   __stack.step++;
 }
@@ -417,12 +416,9 @@ if (isInterrupt(__stack.locals.msg)) {
 }
 if (__step <= 2) {
   __stack.locals.res2 = google(__stack.locals.msg, {
-    ctx: __ctx,
-    
-    
-    threads: new ThreadStore(),
-    
-    interruptData: __state?.interruptData
+  ctx: __ctx,
+  threads: new ThreadStore(),
+  interruptData: __state?.interruptData
 });
 
 
@@ -438,12 +434,9 @@ if (isInterrupt(__stack.locals.res2)) {
 }
 if (__step <= 3) {
   __stack.locals.res1 = openai(__stack.locals.msg, {
-    ctx: __ctx,
-    
-    
-    threads: new ThreadStore(),
-    
-    interruptData: __state?.interruptData
+  ctx: __ctx,
+  threads: new ThreadStore(),
+  interruptData: __state?.interruptData
 });
 
 
@@ -462,15 +455,12 @@ if (__step <= 4) {
   __stack.step++;
 }
 if (__step <= 5) {
-  __stack.locals.results = __stack.locals.Promise.race([__stack.locals.res1, __stack.locals.res2])
-;
+  __stack.locals.results = __stack.locals.Promise.race([__stack.locals.res1, __stack.locals.res2]);
   
   __stack.step++;
 }
 if (__step <= 6) {
   await await _printJSON(__stack.locals.results)
-;
-
   
   __stack.step++;
 }

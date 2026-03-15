@@ -536,8 +536,6 @@ graph.node("foo", async (__state: GraphState) => {
 }
 if (__step <= 1) {
   await await _print(`This is a node with a return type`)
-;
-
   
   __stack.step++;
 }
@@ -577,12 +575,9 @@ graph.node("main", async (__state: GraphState) => {
 }
 if (__step <= 1) {
   __stack.locals.sum = add(5, 10, {
-    ctx: __ctx,
-    
-    
-    threads: new ThreadStore(),
-    
-    interruptData: __state?.interruptData
+  ctx: __ctx,
+  threads: new ThreadStore(),
+  interruptData: __state?.interruptData
 });
 
 
@@ -598,12 +593,9 @@ if (isInterrupt(__stack.locals.sum)) {
 }
 if (__step <= 2) {
   __stack.locals.greeting = greet(`Alice`, {
-    ctx: __ctx,
-    
-    
-    threads: new ThreadStore(),
-    
-    interruptData: __state?.interruptData
+  ctx: __ctx,
+  threads: new ThreadStore(),
+  interruptData: __state?.interruptData
 });
 
 
@@ -619,12 +611,9 @@ if (isInterrupt(__stack.locals.greeting)) {
 }
 if (__step <= 3) {
   __stack.locals.labeled = mixed(42, `Answer`, {
-    ctx: __ctx,
-    
-    
-    threads: new ThreadStore(),
-    
-    interruptData: __state?.interruptData
+  ctx: __ctx,
+  threads: new ThreadStore(),
+  interruptData: __state?.interruptData
 });
 
 
@@ -640,12 +629,9 @@ if (isInterrupt(__stack.locals.labeled)) {
 }
 if (__step <= 4) {
   __stack.locals.processed = processArray([1, 2, 3, 4, 5], {
-    ctx: __ctx,
-    
-    
-    threads: new ThreadStore(),
-    
-    interruptData: __state?.interruptData
+  ctx: __ctx,
+  threads: new ThreadStore(),
+  interruptData: __state?.interruptData
 });
 
 
@@ -661,12 +647,9 @@ if (isInterrupt(__stack.locals.processed)) {
 }
 if (__step <= 5) {
   __stack.locals.flexResult = flexible(`test`, {
-    ctx: __ctx,
-    
-    
-    threads: new ThreadStore(),
-    
-    interruptData: __state?.interruptData
+  ctx: __ctx,
+  threads: new ThreadStore(),
+  interruptData: __state?.interruptData
 });
 
 

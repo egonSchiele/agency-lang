@@ -205,8 +205,6 @@ if (__step <= 3) {
 }
 if (__step <= 4) {
   await await _print(__stack.locals.count)
-;
-
   
   __stack.step++;
 }
@@ -216,8 +214,6 @@ if (__step <= 5) {
 }
 if (__step <= 6) {
   await await _print(__stack.locals.message)
-;
-
   
   __stack.step++;
 }

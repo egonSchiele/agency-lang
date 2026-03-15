@@ -126,7 +126,6 @@ __globalCtx.stateStack.globals.nums = [1, 2, 3, 4, 5];
 await await _print(__globalCtx.stateStack.globals.nums)
 
 
-
 //  Array with strings
 
 
@@ -136,7 +135,6 @@ __globalCtx.stateStack.globals.names = [`Alice`, `Bob`, `Charlie`];
 await await _print(__globalCtx.stateStack.globals.names)
 
 
-
 //  Nested arrays
 
 
@@ -144,7 +142,6 @@ await await _print(__globalCtx.stateStack.globals.names)
 __globalCtx.stateStack.globals.matrix = [[1, 2], [3, 4], [5, 6]];
 
 await await _print(__globalCtx.stateStack.globals.matrix)
-
 
 
 //  Simple object
@@ -157,7 +154,6 @@ __globalCtx.stateStack.globals.person = {
 };
 
 await await _print(__globalCtx.stateStack.globals.person)
-
 
 
 //  Object with nested structure
@@ -173,7 +169,6 @@ __globalCtx.stateStack.globals.address = {
 await await _print(__globalCtx.stateStack.globals.address)
 
 
-
 //  Object with array property
 
 
@@ -184,7 +179,6 @@ __globalCtx.stateStack.globals.user = {
 };
 
 await await _print(__globalCtx.stateStack.globals.user)
-
 
 
 //  Array of objects
@@ -202,7 +196,6 @@ __globalCtx.stateStack.globals.users = [{
 await await _print(__globalCtx.stateStack.globals.users)
 
 
-
 //  Nested object
 
 
@@ -218,7 +211,6 @@ __globalCtx.stateStack.globals.config = {
 await await _print(__globalCtx.stateStack.globals.config)
 
 
-
 //  Array access
 
 __globalCtx.stateStack.globals.firstNum = __globalCtx.stateStack.globals.nums[0];
@@ -226,12 +218,10 @@ __globalCtx.stateStack.globals.firstNum = __globalCtx.stateStack.globals.nums[0]
 await await _print(__globalCtx.stateStack.globals.firstNum)
 
 
-
 //  Object property access
 
 __globalCtx.stateStack.globals.personName = __globalCtx.stateStack.globals.person.name;
 
 await await _print(__globalCtx.stateStack.globals.personName)
-
 
 export default graph;

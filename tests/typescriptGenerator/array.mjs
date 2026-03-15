@@ -142,10 +142,6 @@ async function _numbers(__metadata): Promise<any> {
     prompt: `the first 5 prime numbers`,
     messages: __metadata?.messages || new MessageThread(),
     
-    responseFormat: z.object({
-      response: z.array(z.number())
-    }),
-    
     tools: undefined,
     toolHandlers: [],
     clientConfig: {},
@@ -186,10 +182,6 @@ async function _greetings(__metadata): Promise<any> {
     ctx: __ctx,
     prompt: `a list of 3 common greetings in different languages`,
     messages: __metadata?.messages || new MessageThread(),
-    
-    responseFormat: z.object({
-      response: z.array(z.string())
-    }),
     
     tools: undefined,
     toolHandlers: [],

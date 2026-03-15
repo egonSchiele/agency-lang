@@ -142,10 +142,6 @@ async function _count(__metadata): Promise<any> {
     prompt: `the number 42`,
     messages: __metadata?.messages || new MessageThread(),
     
-    responseFormat: z.object({
-      response: z.number()
-    }),
-    
     tools: undefined,
     toolHandlers: [],
     clientConfig: {},

@@ -1,3 +1,6 @@
+// @deprecated — TypeScriptGenerator and BaseGenerator are superseded by TypeScriptBuilder.
+// The generateTypeScript() entry point at the bottom of this file now delegates to the builder.
+
 import {
   AgencyComment,
   AgencyNode,
@@ -74,6 +77,7 @@ import {
   mapTypeToZodSchema,
 } from "./typescriptGenerator/typeToZodSchema.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
+import { collectProgramInfo, type ProgramInfo } from "@/programInfo.js";
 import { AgencyConfig } from "@/config.js";
 import { TypeScriptBuilder } from "./typescriptBuilder.js";
 import { printTs } from "../ir/prettyPrint.js";
@@ -1273,13 +1277,19 @@ export class TypeScriptGenerator extends BaseGenerator {
   }
 }
 
+/**
+ * @deprecated The TypeScriptGenerator class is deprecated. Use TypeScriptBuilder instead.
+ * This function remains as the main entry point for compilation.
+ */
 export function generateTypeScript(
   program: AgencyProgram,
   config?: AgencyConfig,
+  info?: ProgramInfo,
 ): string {
-  const preprocessor = new TypescriptPreprocessor(program, config);
+  const programInfo = info ?? collectProgramInfo(program);
+  const preprocessor = new TypescriptPreprocessor(program, config, programInfo);
   const preprocessedProgram = preprocessor.preprocess();
-  const builder = new TypeScriptBuilder(config);
+  const builder = new TypeScriptBuilder(config, programInfo);
   const ir = builder.build(preprocessedProgram);
   return printTs(ir);
 }

@@ -15,6 +15,7 @@ import { fixtures, test, testTs, TestStats, mergeStats } from "@/cli/test.js";
 import { AgencyConfig } from "@/config.js";
 import { _parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
+import { collectProgramInfo } from "@/programInfo.js";
 import { formatErrors, typeCheck } from "@/typeChecker.js";
 import { Command } from "commander";
 import * as fs from "fs";
@@ -142,7 +143,8 @@ program
 
     const process = (contents: string) => {
       const parsedProgram = parse(contents, config);
-      const preprocessor = new TypescriptPreprocessor(parsedProgram, config);
+      const info = collectProgramInfo(parsedProgram);
+      const preprocessor = new TypescriptPreprocessor(parsedProgram, config, info);
       preprocessor.preprocess();
       console.log(JSON.stringify(preprocessor.program, null, 2));
     };
@@ -283,7 +285,8 @@ program
     let hasErrors = false;
     const runTypeCheck = (contents: string) => {
       const parsedProgram = parse(contents, config);
-      const { errors } = typeCheck(parsedProgram, config);
+      const info = collectProgramInfo(parsedProgram);
+      const { errors } = typeCheck(parsedProgram, config, info);
       if (errors.length > 0) {
         console.error(formatErrors(errors));
         hasErrors = true;

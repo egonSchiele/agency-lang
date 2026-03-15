@@ -7,6 +7,7 @@ import { TypescriptPreprocessor } from "../lib/preprocessors/typescriptPreproces
 import { TypeScriptBuilder } from "../lib/backends/typescriptBuilder.js";
 import { printTs } from "../lib/ir/prettyPrint.js";
 import { parseAgency } from "../lib/parser.js";
+import { collectProgramInfo } from "../lib/programInfo.js";
 import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -64,7 +65,8 @@ function regeneratePreprocessorFixtures(dir: string, relativePath = "") {
       const parseResult = parseAgency(agencyContent);
 
       if (parseResult.success) {
-        const preprocessor = new TypescriptPreprocessor(parseResult.result);
+        const info = collectProgramInfo(parseResult.result);
+        const preprocessor = new TypescriptPreprocessor(parseResult.result, {}, info);
         const preprocessed = preprocessor.preprocess();
         fs.writeFileSync(
           jsonPath,
@@ -96,9 +98,10 @@ function regenerateBuilderFixtures(dir: string, relativePath = "") {
       const parseResult = parseAgency(agencyContent);
 
       if (parseResult.success) {
-        const preprocessor = new TypescriptPreprocessor(parseResult.result);
+        const info = collectProgramInfo(parseResult.result);
+        const preprocessor = new TypescriptPreprocessor(parseResult.result, {}, info);
         const preprocessedProgram = preprocessor.preprocess();
-        const builder = new TypeScriptBuilder();
+        const builder = new TypeScriptBuilder(undefined, info);
         const ir = builder.build(preprocessedProgram);
         const tsCode = printTs(ir);
         fs.writeFileSync(mtsPath, tsCode, "utf-8");

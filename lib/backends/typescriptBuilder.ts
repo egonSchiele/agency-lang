@@ -87,11 +87,12 @@ import { expressionToString, getBaseVarName } from "@/utils/node.js";
 import type { TsNode, TsObjectEntry, TsElseIf } from "../ir/tsIR.js";
 import { ts, $ } from "../ir/builders.js";
 import { printTs } from "../ir/prettyPrint.js";
+import type { ProgramInfo } from "../programInfo.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
 export class TypeScriptBuilder {
-  // Type system tracking
+  // Type system tracking (seeded from ProgramInfo)
   private typeHints: TypeHintMap = {};
   private typeAliases: Record<string, VariableType> = {};
   private graphNodes: GraphNodeDefinition[] = [];
@@ -100,12 +101,12 @@ export class TypeScriptBuilder {
   private generatedStatements: TsNode[] = [];
   private generatedTypeAliases: TsNode[] = [];
 
-  // Import tracking
+  // Import tracking (seeded from ProgramInfo)
   private importStatements: TsNode[] = [];
   private importedNodes: ImportNodeStatement[] = [];
   private importedTools: ImportToolStatement[] = [];
 
-  // Function tracking
+  // Function tracking (seeded from ProgramInfo)
   private functionDefinitions: Record<string, FunctionDefinition> = {};
   private functionsUsed: Set<string> = new Set();
 
@@ -128,8 +129,11 @@ export class TypeScriptBuilder {
   private safeFunctions: Record<string, boolean> = {};
   private importedFunctions: Record<string, boolean> = {};
 
-  constructor(config?: AgencyConfig) {
+  private programInfo: ProgramInfo;
+
+  constructor(config: AgencyConfig | undefined, info: ProgramInfo) {
     this.agencyConfig = mergeDeep(this.configDefaults(), config || {});
+    this.programInfo = info;
   }
 
   private configDefaults(): Partial<AgencyConfig> {
@@ -222,10 +226,6 @@ export class TypeScriptBuilder {
     );
   }
 
-  private collectFunctionSignature(node: FunctionDefinition): void {
-    this.functionDefinitions[node.functionName] = node;
-  }
-
   private isImpureImportedFunction(functionName: string): boolean {
     return (
       !!this.importedFunctions[functionName] &&
@@ -292,41 +292,18 @@ export class TypeScriptBuilder {
   // ------- Main entry point -------
 
   build(program: AgencyProgram): TsNode {
-    // Pass 1: Collect all type aliases
-    for (const node of program.nodes) {
-      if (node.type === "typeAlias") {
-        this.processTypeAlias(node);
-      }
-    }
-
-    // Pass 2: Collect all type hints
-    for (const node of program.nodes) {
-      if (node.type === "typeHint") {
-        this.processTypeHint(node);
-      }
-    }
-
-    // Pass 3: Collect all node names
-    for (const node of program.nodes) {
-      if (node.type === "graphNode") {
-        this.processGraphNodeName(node);
-      }
-    }
-
-    // Pass 4: Collect all node and tool imports
-    for (const node of program.nodes) {
-      if (node.type === "importNodeStatement") {
-        this.importedNodes.push(node);
-      } else if (node.type === "importToolStatement") {
-        this.importedTools.push(node);
-      }
-    }
+    // Seed metadata from ProgramInfo (replaces passes 1-4)
+    this.typeAliases = this.programInfo.typeAliases;
+    this.typeHints = this.programInfo.typeHints;
+    this.graphNodes = this.programInfo.graphNodes;
+    this.importedNodes = this.programInfo.importedNodes;
+    this.importedTools = this.programInfo.importedTools;
+    this.functionDefinitions = this.programInfo.functionDefinitions;
 
     // Pass 5: Generate code for tools
     for (const node of program.nodes) {
       if (node.type === "function") {
         this.generatedStatements.push(this.processTool(node));
-        this.collectFunctionSignature(node);
       }
     }
 
@@ -446,25 +423,12 @@ export class TypeScriptBuilder {
 
   // ------- Type system (side effects only) -------
 
-  private processTypeAlias(node: TypeAlias): TsNode {
-    this.typeAliases[node.aliasName] = node.aliasedType;
+  private processTypeAlias(_node: TypeAlias): TsNode {
     return ts.empty();
   }
 
-  private processTypeHint(node: TypeHint): TsNode {
-    if (node.variableType.type === "typeAliasVariable") {
-      if (!(node.variableType.aliasName in this.typeAliases)) {
-        throw new Error(
-          `Type alias '${node.variableType.aliasName}' not defined for variable '${node.variableName}'.`,
-        );
-      }
-    }
-    this.typeHints[node.variableName] = node.variableType;
+  private processTypeHint(_node: TypeHint): TsNode {
     return ts.empty();
-  }
-
-  private processGraphNodeName(node: GraphNodeDefinition): void {
-    this.graphNodes.push(node);
   }
 
   // ------- Proper IR node methods -------

@@ -1,4 +1,5 @@
 import { color } from "@/utils/termcolors.js";
+import type { ProgramInfo } from "./programInfo.js";
 import { AgencyConfig } from "./config.js";
 import {
   AgencyNode,
@@ -101,15 +102,31 @@ export class TypeChecker {
   private inferredReturnTypes: Record<string, VariableType | "any"> = {};
   private inferringReturnType = new Set<string>();
 
-  constructor(program: AgencyProgram, config: AgencyConfig = {}) {
+  constructor(program: AgencyProgram, config: AgencyConfig = {}, info?: ProgramInfo) {
     this.program = program;
     this.config = config;
+    if (info) {
+      this.typeAliases = { ...info.typeAliases };
+      this.functionDefs = { ...info.functionDefinitions };
+      this.nodeDefs = Object.fromEntries(
+        info.graphNodes.map((n) => [n.nodeName, n]),
+      );
+    }
   }
 
   check(): TypeCheckResult {
     this.errors = [];
-    this.collectTypeAliases();
-    this.collectFunctionDefs();
+    if (Object.keys(this.typeAliases).length === 0) {
+      this.collectTypeAliases();
+    } else {
+      // Still validate type references even when seeded from ProgramInfo
+      for (const [name, aliasedType] of Object.entries(this.typeAliases)) {
+        this.validateTypeReferences(aliasedType, name);
+      }
+    }
+    if (Object.keys(this.functionDefs).length === 0 && Object.keys(this.nodeDefs).length === 0) {
+      this.collectFunctionDefs();
+    }
     this.inferReturnTypes();
     this.checkScopes();
     return { errors: this.deduplicateErrors() };
@@ -899,8 +916,9 @@ export class TypeChecker {
 export function typeCheck(
   program: AgencyProgram,
   config: AgencyConfig = {},
+  info?: ProgramInfo,
 ): TypeCheckResult {
-  const checker = new TypeChecker(program, config);
+  const checker = new TypeChecker(program, config, info);
   return checker.check();
 }
 

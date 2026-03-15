@@ -3,6 +3,7 @@ import { AgencyConfig } from "@/config.js";
 import { AgencyProgram, generateTypeScript } from "@/index.js";
 import { transformSync } from "esbuild";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
+import { collectProgramInfo } from "@/programInfo.js";
 import { typeCheck, formatErrors } from "@/typeChecker.js";
 import { ImportStatement } from "@/types/importStatement.js";
 import { renderMermaidAscii } from "beautiful-mermaid";
@@ -91,7 +92,8 @@ export function readFile(inputFile: string): string {
 
 export function renderGraph(contents: string, config: AgencyConfig): void {
   const parsedProgram = parse(contents, config);
-  const preprocessor = new TypescriptPreprocessor(parsedProgram, config);
+  const info = collectProgramInfo(parsedProgram);
+  const preprocessor = new TypescriptPreprocessor(parsedProgram, config, info);
   preprocessor.preprocess();
   const mermaid = preprocessor.renderMermaid();
   console.log("Program Mermaid Diagram:\n");
@@ -149,10 +151,11 @@ export function compile(
 
   const contents = readFile(inputFile);
   const parsedProgram = parse(contents, config);
+  const info = collectProgramInfo(parsedProgram);
 
   // Run type checking if enabled via config
   if (config.typeCheck || config.typeCheckStrict) {
-    const { errors } = typeCheck(parsedProgram, config);
+    const { errors } = typeCheck(parsedProgram, config, info);
     if (errors.length > 0) {
       if (config.typeCheckStrict) {
         console.error(formatErrors(errors));
@@ -189,7 +192,7 @@ export function compile(
     }
   });
 
-  const generatedCode = generateTypeScript(parsedProgram, config);
+  const generatedCode = generateTypeScript(parsedProgram, config, info);
   if (options?.ts) {
     // TypeScript output — add @ts-nocheck so type errors don't block compilation
     fs.writeFileSync(outputFile, "// @ts-nocheck\n" + generatedCode, "utf-8");

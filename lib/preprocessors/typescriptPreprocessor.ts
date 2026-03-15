@@ -26,6 +26,7 @@ import {
   getAllVariablesInBodyArray,
   walkNodesArray,
 } from "@/utils/node.js";
+import type { ProgramInfo } from "@/programInfo.js";
 import { color } from "@/utils/termcolors.js";
 
 export class TypescriptPreprocessor {
@@ -36,15 +37,28 @@ export class TypescriptPreprocessor {
   protected functionDefinitions: Record<string, FunctionDefinition> = {};
   protected graphNodeDefinitions: Record<string, AgencyNode> = {};
   protected importedTools: string[] = [];
-  constructor(program: AgencyProgram, config: AgencyConfig = {}) {
-    this.program = structuredClone(program);
+  constructor(program: AgencyProgram, config: AgencyConfig = {}, info?: ProgramInfo) {
+    this.program = program;
     this.config = config;
+    if (info) {
+      this.functionDefinitions = { ...info.functionDefinitions };
+      this.graphNodeDefinitions = Object.fromEntries(
+        info.graphNodes.map((n) => [n.nodeName, n]),
+      );
+      this.importedTools = info.importedTools.flatMap((s) => s.importedTools);
+    }
   }
 
   preprocess(): AgencyProgram {
-    this.getFunctionDefinitions();
-    this.getGraphNodeDefinitions();
-    this.getImportedTools();
+    if (Object.keys(this.functionDefinitions).length === 0) {
+      this.getFunctionDefinitions();
+    }
+    if (Object.keys(this.graphNodeDefinitions).length === 0) {
+      this.getGraphNodeDefinitions();
+    }
+    if (this.importedTools.length === 0) {
+      this.getImportedTools();
+    }
     this.collectTools();
     this.collectSkills();
     this.markFunctionsAsync();

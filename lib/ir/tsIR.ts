@@ -32,7 +32,11 @@ export type TsNode =
   | TsNewExpr
   | TsScopedVar
   | TsFunctionReturn
-  | TsStepBlock;
+  | TsStepBlock
+  | TsEmpty
+  | TsBreak
+  | TsContinue
+  | TsPostfixOp;
 
 /** Escape hatch: verbatim string */
 export interface TsRaw {
@@ -262,4 +266,24 @@ export interface TsStepBlock {
   kind: "stepBlock";
   stepIndex: number;
   body: TsNode;
+}
+
+/** No-op node — produces no output. Used for AST nodes handled elsewhere (e.g. imports collected in a separate pass). */
+export interface TsEmpty {
+  kind: "empty";
+}
+
+export interface TsBreak {
+  kind: "break";
+}
+
+export interface TsContinue {
+  kind: "continue";
+}
+
+/** Postfix operator (e.g. i++) */
+export interface TsPostfixOp {
+  kind: "postfixOp";
+  operand: TsNode;
+  op: "++" | "--";
 }

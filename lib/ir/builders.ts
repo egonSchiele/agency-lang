@@ -37,6 +37,10 @@ import type {
   TsScopedVar,
   TsFunctionReturn,
   TsStepBlock,
+  TsEmpty,
+  TsBreak,
+  TsContinue,
+  TsPostfixOp,
 } from "./tsIR.js";
 
 export const ts = {
@@ -231,6 +235,22 @@ export const ts = {
 
   stepBlock(stepIndex: number, body: TsNode): TsStepBlock {
     return { kind: "stepBlock", stepIndex, body };
+  },
+
+  empty(): TsEmpty {
+    return { kind: "empty" };
+  },
+
+  break(): TsBreak {
+    return { kind: "break" };
+  },
+
+  continue(): TsContinue {
+    return { kind: "continue" };
+  },
+
+  postfix(operand: TsNode, op: "++" | "--"): TsPostfixOp {
+    return { kind: "postfixOp", operand, op };
   },
 
   // --- Semantic convenience builders (no new IR types) ---

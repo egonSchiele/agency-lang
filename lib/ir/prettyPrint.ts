@@ -229,6 +229,18 @@ export function printTs(node: TsNode, indent = 0): string {
       return `if (__step <= ${node.stepIndex}) {\n${stepBody}\n${ind(indent + 1)}__stack.step++;\n${ind(indent)}}`;
     }
 
+    case "empty":
+      return "";
+
+    case "break":
+      return "break;";
+
+    case "continue":
+      return "continue;";
+
+    case "postfixOp":
+      return `${printTs(node.operand, indent)}${node.op}`;
+
     default: {
       const _exhaustive: never = node;
       throw new Error(`Unknown node kind: ${(_exhaustive as any).kind}`);

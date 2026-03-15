@@ -28,11 +28,9 @@ import * as renderSpecialVar from "../templates/backends/typescriptGenerator/spe
 import * as renderTime from "../templates/backends/typescriptGenerator/builtinFunctions/time.js";
 import * as renderConditionalEdge from "../templates/backends/typescriptGenerator/conditionalEdge.js";
 import * as renderFunctionDefinition from "../templates/backends/typescriptGenerator/functionDefinition.js";
-import * as renderInternalFunctionCall from "../templates/backends/typescriptGenerator/internalFunctionCall.js";
 import * as renderFunctionCallAssignment from "../templates/backends/typescriptGenerator/functionCallAssignment.js";
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
 import * as renderInterruptReturn from "../templates/backends/typescriptGenerator/interruptReturn.js";
-import * as goToNode from "../templates/backends/typescriptGenerator/goToNode.js";
 import * as renderGraphNode from "../templates/backends/typescriptGenerator/graphNode.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as renderMessageThread from "../templates/backends/typescriptGenerator/messageThread.js";
@@ -41,7 +39,6 @@ import * as renderRunNodeFunction from "../templates/backends/typescriptGenerato
 import * as renderStartNode from "../templates/backends/typescriptGenerator/startNode.js";
 import * as renderTool from "../templates/backends/typescriptGenerator/tool.js";
 import * as renderSkillPrompt from "@/templates/prompts/skill.js";
-import * as renderBuiltinFunctionsSystem from "@/templates/backends/typescriptGenerator/builtinFunctions/system.js";
 
 import { AccessChainElement, ValueAccess } from "../types/access.js";
 import {
@@ -391,7 +388,7 @@ export class TypeScriptBuilder {
       case "comment":
         return this.processComment(node);
       case "multiLineComment":
-        return ts.raw("");
+        return ts.empty();
       case "matchBlock":
         return this.processMatchBlock(node);
       case "number":
@@ -413,13 +410,13 @@ export class TypeScriptBuilder {
         return this.processUsesTool(node);
       case "importStatement":
         this.importStatements.push(this.processImportStatement(node));
-        return ts.raw("");
+        return ts.empty();
       case "importNodeStatement":
         this.importStatements.push(this.processImportNodeStatement(node));
-        return ts.raw("");
+        return ts.empty();
       case "importToolStatement":
         this.importStatements.push(this.processImportToolStatement(node));
-        return ts.raw("");
+        return ts.empty();
       case "forLoop":
         return this.processForLoop(node);
       case "whileLoop":
@@ -431,17 +428,17 @@ export class TypeScriptBuilder {
       case "timeBlock":
         return this.processTimeBlock(node, `__defaultTimeblockName`);
       case "newLine":
-        return ts.raw("");
+        return ts.empty();
       case "rawCode":
         return ts.raw(node.value);
       case "messageThread":
         return this.processMessageThread(node);
       case "skill":
-        return ts.raw("");
+        return ts.empty();
       case "binOpExpression":
         return this.processBinOpExpression(node);
       case "keyword":
-        return ts.raw(`${node.value};\n`);
+        return node.value === "break" ? ts.break() : ts.continue();
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
@@ -451,7 +448,7 @@ export class TypeScriptBuilder {
 
   private processTypeAlias(node: TypeAlias): TsNode {
     this.typeAliases[node.aliasName] = node.aliasedType;
-    return ts.raw("");
+    return ts.empty();
   }
 
   private processTypeHint(node: TypeHint): TsNode {
@@ -463,7 +460,7 @@ export class TypeScriptBuilder {
       }
     }
     this.typeHints[node.variableName] = node.variableType;
-    return ts.raw("");
+    return ts.empty();
   }
 
   private processGraphNodeName(node: GraphNodeDefinition): void {
@@ -574,11 +571,17 @@ export class TypeScriptBuilder {
           result = ts.index(result, this.processNode(element.index));
           break;
         case "methodCall": {
-          const callStr = this.generateFunctionCallExpression(
+          const callNode = this.generateFunctionCallExpression(
             element.functionCall,
             "valueAccess",
           );
-          result = ts.raw(`${this.str(result)}.${callStr}`);
+          // The call node is ts.call(ts.id(name), args) — extract callee name and args
+          if (callNode.kind === "call" && callNode.callee.kind === "identifier") {
+            result = ts.call(ts.prop(result, callNode.callee.name), callNode.arguments);
+          } else {
+            // Fallback for complex cases (e.g. await-wrapped)
+            result = ts.raw(`${this.str(result)}.${this.str(callNode)}`);
+          }
           break;
         }
       }
@@ -655,7 +658,7 @@ export class TypeScriptBuilder {
       return ts.forC(
         ts.varDecl("let", node.itemVar, startNode),
         ts.binOp(ts.id(node.itemVar), "<", endNode),
-        ts.raw(`${node.itemVar}++`),
+        ts.postfix(ts.id(node.itemVar), "++"),
         body,
       );
     }
@@ -671,7 +674,7 @@ export class TypeScriptBuilder {
       return ts.forC(
         ts.varDecl("let", node.indexVar, ts.num(0)),
         ts.binOp(ts.id(node.indexVar), "<", ts.prop(iterableNode, "length")),
-        ts.raw(`${node.indexVar}++`),
+        ts.postfix(ts.id(node.indexVar), "++"),
         indexedBody,
       );
     }
@@ -693,7 +696,7 @@ export class TypeScriptBuilder {
       .map((c) => {
         const caseItem = c as MatchBlockCase;
         const test = caseItem.caseValue === "_" ? undefined : this.processNode(caseItem.caseValue);
-        const body = ts.statements([this.processNode(caseItem.body), ts.raw("break;")]);
+        const body = ts.statements([this.processNode(caseItem.body), ts.break()]);
         return { test, body };
       });
     return ts.switch(this.processNode(node.expression), cases);
@@ -729,7 +732,7 @@ export class TypeScriptBuilder {
   }
 
 private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
-    return ts.raw(""); // handled in preprocess
+    return ts.empty(); // handled in preprocess
   }
 
   private processImportToolStatement(node: ImportToolStatement): TsNode {
@@ -761,7 +764,7 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
         );
       }
     });
-    return ts.raw("");
+    return ts.empty();
   }
 
   private processTool(node: FunctionDefinition): TsNode {
@@ -834,7 +837,7 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
   }
 
   private processFunctionCallAsStatement(node: FunctionCall): TsNode {
-    const code = this.str(this.processFunctionCall(node));
+    const callNode = this.processFunctionCall(node);
     const scope = this.getCurrentScope();
 
     if (
@@ -844,26 +847,30 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
     ) {
       const tempVar = "__funcResult";
       const nodeContext = scope.type === "node";
-      const returnStmt = nodeContext
-        ? `return { ...__state, data: ${tempVar} };`
-        : `return { data: ${tempVar} };`;
-      return ts.raw(
-        `const ${tempVar} = ${code};\nif (isInterrupt(${tempVar})) {\n  ${returnStmt}\n}\n`,
-      );
+      const returnBody = nodeContext
+        ? ts.return(ts.obj([
+            { spread: true, expr: ts.runtime.state },
+            { spread: false, key: "data", value: ts.id(tempVar) },
+          ]))
+        : ts.return(ts.obj({ data: ts.id(tempVar) }));
+      return ts.statements([
+        ts.varDecl("const", tempVar, callNode),
+        ts.if(ts.call(ts.id("isInterrupt"), [ts.id(tempVar)]), returnBody),
+      ]);
     }
 
-    return ts.raw(`${code};\n`);
+    return callNode;
   }
 
   private processFunctionCall(node: FunctionCall): TsNode {
     if (this.isGraphNode(node.functionName)) {
       this.currentAdjacentNodes.push(node.functionName);
       this.functionsUsed.add(node.functionName);
-      return ts.raw(this.generateNodeCallExpression(node));
+      return this.generateNodeCallExpression(node);
     }
 
     this.functionsUsed.add(node.functionName);
-    const functionCallCode = this.generateFunctionCallExpression(
+    const callNode = this.generateFunctionCallExpression(
       node,
       "topLevelStatement",
     );
@@ -872,83 +879,87 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
     const isBuiltinFunction = mappedName !== node.functionName;
 
     if (isBuiltinFunction) {
-      return ts.raw(`await ${functionCallCode}`);
+      return ts.await(callNode);
     }
-    return ts.raw(functionCallCode);
+    return callNode;
   }
 
   private generateFunctionCallExpression(
     node: FunctionCall,
     context: "valueAccess" | "functionArg" | "topLevelStatement",
-  ): string {
+  ): TsNode {
     const functionName =
       context === "valueAccess"
         ? node.functionName
         : mapFunctionName(node.functionName);
-    const args = node.arguments;
-    const parts = args.map((arg) => {
+    const argNodes: TsNode[] = node.arguments.map((arg) => {
       if (arg.type === "functionCall") {
         this.functionsUsed.add(arg.functionName);
         return this.generateFunctionCallExpression(arg, "functionArg");
       } else {
-        return this.str(this.processNode(arg));
+        return this.processNode(arg);
       }
     });
-    let argsString = "";
+    const shouldAwait = !node.async && context !== "valueAccess";
+
     if (this.isAgencyFunction(node.functionName, context)) {
-      argsString = parts.join(", ");
-      return renderInternalFunctionCall.default({
-        functionName,
-        argsString,
-        hasArgs: parts.length > 0,
-        awaitPrefix: node.async || context === "valueAccess" ? "" : "await ",
-        isAsync: node.async || false,
+      const configObj = ts.obj({
+        ctx: ts.runtime.ctx,
+        threads: node.async ? ts.new(ts.id("ThreadStore")) : ts.runtime.threads,
+        interruptData: ts.raw("__state?.interruptData"),
       });
+      const call = ts.call(ts.id(functionName), [...argNodes, configObj]);
+      return shouldAwait ? ts.await(call) : call;
     } else if (node.functionName === "system") {
-      return renderBuiltinFunctionsSystem.default({
-        systemMessage: parts[0],
-      });
+      // __threads.active().push(smoltalk.systemMessage(msg))
+      return ts.call(
+        ts.prop(ts.threads.active(), "push"),
+        [ts.call(ts.prop(ts.id("smoltalk"), "systemMessage"), argNodes)],
+      );
     } else {
-      argsString = parts.join(", ");
-      const awaitStr = node.async || context === "valueAccess" ? "" : "await ";
-      return `${awaitStr}${functionName}(${argsString})\n`;
+      const call = ts.call(ts.id(functionName), argNodes);
+      return shouldAwait ? ts.await(call) : call;
     }
   }
 
-  private generateNodeCallExpression(node: FunctionCall): string {
+  private generateNodeCallExpression(node: FunctionCall): TsNode {
     const functionName = mapFunctionName(node.functionName);
-    const args = node.arguments;
-    const parts = args.map((arg) => {
+    const argNodes: TsNode[] = node.arguments.map((arg) => {
       if (arg.type === "functionCall") {
         this.functionsUsed.add(arg.functionName);
         return this.generateFunctionCallExpression(arg, "functionArg");
       } else {
-        return this.str(this.processNode(arg));
+        return this.processNode(arg);
       }
     });
 
     const targetNode = this.graphNodes.find((n) => n.nodeName === functionName);
-    let argsString: string;
+    let dataNode: TsNode;
     if (targetNode && targetNode.parameters.length > 0) {
-      const entries = targetNode.parameters.map(
-        (p, i) => `${p.name}: ${parts[i]}`,
+      const entries: Record<string, TsNode> = {};
+      targetNode.parameters.forEach((p, i) => { entries[p.name] = argNodes[i]; });
+      dataNode = ts.obj(entries);
+    } else if (argNodes.length > 0) {
+      dataNode = ts.call(
+        ts.prop(ts.id("Object"), "fromEntries"),
+        [ts.call(
+          ts.prop(ts.id(`__${functionName}NodeParams`), "map"),
+          [ts.raw(`(k, i) => [k, [${argNodes.map(n => this.str(n)).join(", ")}][i]]`)],
+        )],
       );
-      argsString = "{ " + entries.join(", ") + " }";
-    } else if (parts.length > 0) {
-      argsString = `Object.fromEntries(__${functionName}NodeParams.map((k, i) => [k, [${parts.join(", ")}][i]]))`;
-    } else if (parts.length === 0) {
-      argsString = "{}";
     } else {
-      throw new Error(
-        `Too many arguments provided to node '${functionName}'. Expected 0 but got ${parts.length}.`,
-      );
+      dataNode = ts.obj({});
     }
 
-    return goToNode.default({
-      nodeName: functionName,
-      hasData: parts.length > 0,
-      data: argsString,
+    const goToArgs = ts.obj({
+      messages: ts.prop(ts.runtime.stack, "messages"),
+      ctx: ts.runtime.ctx,
+      data: dataNode,
     });
+
+    return ts.statements([
+      ts.functionReturn(ts.call(ts.id("goToNode"), [ts.str(functionName), goToArgs])),
+    ]);
   }
 
   private processGraphNode(node: GraphNodeDefinition): TsNode {
@@ -1086,9 +1097,15 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
         case "index":
           result = ts.index(result, this.processNode(el.index));
           break;
-        case "methodCall":
-          result = ts.raw(`${this.str(result)}.${this.generateFunctionCallExpression(el.functionCall, "valueAccess")}`);
+        case "methodCall": {
+          const callNode = this.generateFunctionCallExpression(el.functionCall, "valueAccess");
+          if (callNode.kind === "call" && callNode.callee.kind === "identifier") {
+            result = ts.call(ts.prop(result, callNode.callee.name), callNode.arguments);
+          } else {
+            result = ts.raw(`${this.str(result)}.${this.str(callNode)}`);
+          }
           break;
+        }
       }
     }
     return result;
@@ -1280,7 +1297,7 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
           }),
         );
       case "messages":
-        return ts.raw(`__threads.active().setMessages(${value});\n`);
+        return ts.call(ts.prop(ts.threads.active(), "setMessages"), [this.processNode(node.value)]);
       default:
         throw new Error(`Unhandled SpecialVar name: ${node.name}`);
     }
@@ -1366,6 +1383,7 @@ private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
       delete this.parallelThreadVars[name];
     }
 
+    // Bare block for scoping the const declarations
     return ts.raw(`{\n${stmts.map(s => this.str(s)).join("\n")}\n}`);
   }
 

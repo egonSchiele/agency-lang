@@ -75,6 +75,8 @@ import {
 } from "./typescriptGenerator/typeToZodSchema.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { AgencyConfig } from "@/config.js";
+import { TypeScriptBuilder } from "./typescriptBuilder.js";
+import { printTs } from "../ir/prettyPrint.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
 import path from "path";
@@ -1277,6 +1279,7 @@ export function generateTypeScript(
 ): string {
   const preprocessor = new TypescriptPreprocessor(program, config);
   const preprocessedProgram = preprocessor.preprocess();
-  const generator = new TypeScriptGenerator({ config });
-  return generator.generate(preprocessedProgram).output;
+  const builder = new TypeScriptBuilder(config);
+  const ir = builder.build(preprocessedProgram);
+  return printTs(ir);
 }

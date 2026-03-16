@@ -436,15 +436,11 @@ export class TypeScriptBuilder {
   private processAgencyObject(node: AgencyObject): TsNode {
     const entries = node.entries.map((entry): TsObjectEntry => {
       if ("type" in entry && entry.type === "splat") {
-        return { spread: true, expr: this.processNode(entry.value) };
+        return ts.setSpread(this.processNode(entry.value));
       }
       const kv = entry as AgencyObjectKV;
       const keyCode = kv.key.replace(/"/g, '\\"');
-      return {
-        spread: false,
-        key: `"${keyCode}"`,
-        value: this.processNode(kv.value),
-      };
+      return ts.set(`"${keyCode}"`, this.processNode(kv.value));
     });
     return ts.obj(entries);
   }
@@ -803,7 +799,7 @@ export class TypeScriptBuilder {
             description: ts.raw(
               `\`${node.docString?.value || "No description provided."}\``,
             ),
-            schema: $(ts.id("z"))
+            schema: $.z()
               .prop("object")
               .call([ts.raw(schemaArg)])
               .done(),
@@ -863,8 +859,8 @@ export class TypeScriptBuilder {
         self: $(ts.id("__setupData")).prop("self").done(),
         threads: $(ts.id("__setupData")).prop("threads").done(),
         ctx: ts.raw("__state?.ctx || __globalCtx"),
-        statelogClient: $(ts.runtime.ctx).prop("statelogClient").done(),
-        graph: $(ts.runtime.ctx).prop("graph").done(),
+        statelogClient: ts.ctx("statelogClient"),
+        graph: ts.ctx("graph"),
       }),
 
       ts.time("__funcStartTime"),
@@ -1054,7 +1050,7 @@ export class TypeScriptBuilder {
     }
 
     const goToArgs = ts.obj({
-      messages: ts.prop(ts.runtime.stack, "messages"),
+      messages: ts.stack("messages"),
       ctx: ts.runtime.ctx,
       data: dataNode,
     });
@@ -1099,8 +1095,8 @@ export class TypeScriptBuilder {
         self: $(ts.id("__setupData")).prop("self").done(),
         threads: $(ts.id("__setupData")).prop("threads").done(),
         ctx: $(ts.runtime.state).prop("ctx").done(),
-        statelogClient: $(ts.runtime.ctx).prop("statelogClient").done(),
-        graph: $(ts.runtime.ctx).prop("graph").done(),
+        statelogClient: ts.ctx("statelogClient"),
+        graph: ts.ctx("graph"),
       }),
 
       ts.callHook("onNodeStart", { nodeName: ts.str(nodeName) }),
@@ -1122,7 +1118,7 @@ export class TypeScriptBuilder {
     if (parameters.length > 0) {
       const paramStmts = parameters.map((p) =>
         ts.assign(
-          $(ts.runtime.stack).prop("args").index(ts.str(p.name)).done(),
+          $(ts.stack("args")).index(ts.str(p.name)).done(),
           $(ts.runtime.state).prop("data").prop(p.name).done(),
         ),
       );
@@ -1190,7 +1186,7 @@ export class TypeScriptBuilder {
     } else if (node.value.type === "prompt") {
       return ts.statements([
         valueNode,
-        ts.functionReturn(ts.prop(ts.runtime.self, DEFAULT_PROMPT_NAME)),
+        ts.functionReturn(ts.self(DEFAULT_PROMPT_NAME)),
       ]);
     }
     return ts.functionReturn(valueNode);
@@ -1223,10 +1219,7 @@ export class TypeScriptBuilder {
       if (this.getCurrentScope().type !== "global") {
         const returnObj =
           this.getCurrentScope().type === "node"
-            ? ts.obj([
-                { spread: true, expr: ts.runtime.state },
-                { spread: false as const, key: "data", value: varRef },
-              ])
+            ? ts.obj([ts.setSpread(ts.runtime.state), ts.set("data", varRef)])
             : ts.obj({ data: varRef });
         stmts.push(
           ts.if(
@@ -1468,7 +1461,7 @@ export class TypeScriptBuilder {
       .call(callArgs)
       .done();
 
-    const varRef = $(ts.runtime.self).prop(variableName).done();
+    const varRef = ts.self(variableName);
     const stmts: TsNode[] = [innerFn];
 
     if (prompt.async) {
@@ -1679,7 +1672,7 @@ export class TypeScriptBuilder {
       }
       if (this.containsImpureCall(stmt)) {
         parts[parts.length - 1].push(
-          ts.assign(ts.prop(ts.runtime.self, "__retryable"), ts.bool(false)),
+          ts.assign(ts.self("__retryable"), ts.bool(false)),
         );
       }
       parts[parts.length - 1].push(this.processStatement(stmt));
@@ -1826,7 +1819,7 @@ export class TypeScriptBuilder {
             $(ts.id("runNode"))
               .call([
                 ts.obj({
-                  ctx: ts.id("__globalCtx"),
+                  ctx: ts.runtime.globalCtx,
                   nodeName: ts.str(node.nodeName),
                   data: ts.obj(dataObj),
                   messages: ts.id("messages"),
@@ -1865,25 +1858,22 @@ export class TypeScriptBuilder {
                 "const",
                 "initialState",
                 ts.obj({
-                  messages: ts.new(ts.id("ThreadStore")),
+                  messages: ts.newThreadStore(),
                   data: ts.obj({}),
                 }),
               ),
               ts.await(ts.call(ts.id("main"), [ts.id("initialState")])),
             ]),
             ts.statements([
-              $(ts.id("console"))
-                .prop("error")
-                .call([
-                  ts.template([
-                    {
-                      text: "\\nAgent crashed: ",
-                      expr: $(ts.id("__error")).prop("message").done(),
-                    },
-                  ]),
-                ])
-                .done(),
-              ts.raw("throw __error"),
+              ts.consoleError(
+                ts.template([
+                  {
+                    text: "\\nAgent crashed: ",
+                    expr: $(ts.id("__error")).prop("message").done(),
+                  },
+                ]),
+              ),
+              ts.throw("__error"),
             ]),
             "__error: any",
           ),

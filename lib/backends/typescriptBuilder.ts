@@ -806,7 +806,7 @@ export class TypeScriptBuilder {
         ts.varDecl(
           "const",
           `__${functionName}ToolParams`,
-          ts.raw(JSON.stringify(parameters.map((p) => p.name))),
+          ts.arr(parameters.map((p) => ts.str(p.name))),
         ),
       ),
     ]);
@@ -828,7 +828,7 @@ export class TypeScriptBuilder {
     fnParams.push({
       name: "__state",
       typeAnnotation: "InternalFunctionState | undefined",
-      defaultValue: ts.raw("undefined"),
+      defaultValue: ts.id("undefined"),
     });
 
     // Build args object for hook data
@@ -843,7 +843,8 @@ export class TypeScriptBuilder {
         "{ stack: __stack, step: __step, self: __self, threads: __threads }",
         $(ts.id("setupFunction")).call([ts.obj({ state: ts.runtime.state })]).done(),
       ),
-      ts.raw("// __state will be undefined if this function is\n// being called as a tool by an llm"),
+      ts.comment("__state will be undefined if this function is"),
+      ts.comment("being called as a tool by an llm"),
       ts.constDecl("__ctx", ts.raw("__state?.ctx || __globalCtx")),
       ts.constDecl("statelogClient", $(ts.runtime.ctx).prop("statelogClient").done()),
       ts.constDecl("__graph", $(ts.runtime.ctx).prop("graph").done()),
@@ -853,7 +854,7 @@ export class TypeScriptBuilder {
         name: ts.str("onFunctionStart"),
         data: ts.obj({
           functionName: ts.str(functionName),
-          args: args.length > 0 ? ts.obj(argsObj) : ts.raw("{}"),
+          args: args.length > 0 ? ts.obj(argsObj) : ts.obj({}),
           isBuiltin: ts.bool(false),
         }),
       })]).await().done(),
@@ -873,7 +874,7 @@ export class TypeScriptBuilder {
     setupStmts.push(
       ts.assign(
         $(ts.runtime.self).prop("__retryable").done(),
-        ts.raw("__self.__retryable ?? true"),
+        ts.binOp($(ts.runtime.self).prop("__retryable").done(), "??", ts.bool(true)),
       ),
     );
 
@@ -1119,13 +1120,13 @@ export class TypeScriptBuilder {
       $(ts.id("callHook")).call([ts.obj({
         callbacks: $(ts.runtime.ctx).prop("callbacks").done(),
         name: ts.str("onNodeEnd"),
-        data: ts.obj({ nodeName: ts.str(nodeName), data: ts.raw("undefined") }),
+        data: ts.obj({ nodeName: ts.str(nodeName), data: ts.id("undefined") }),
       })]).await().done(),
     );
     stmts.push(
       ts.return(ts.obj({
         messages: ts.runtime.threads,
-        data: ts.raw("undefined"),
+        data: ts.id("undefined"),
       })),
     );
 
@@ -1447,7 +1448,7 @@ export class TypeScriptBuilder {
     } else {
       // Sync: await + interrupt check
       stmts.push(ts.assign(varRef, ts.await(callExpr)));
-      stmts.push(ts.raw("// return early from node if this is an interrupt"));
+      stmts.push(ts.comment("return early from node if this is an interrupt"));
       const isNodeContext = this.getCurrentScope().type === "node";
       const returnExpr = isNodeContext
         ? ts.return(ts.obj({
@@ -1680,22 +1681,50 @@ export class TypeScriptBuilder {
   }
 
   private generateImports(): string {
+    const cfg = this.agencyConfig;
+
+    const statelogConfig = ts.obj({
+      host: ts.str(cfg.log?.host || ""),
+      apiKey: cfg.log?.apiKey
+        ? ts.str(cfg.log.apiKey)
+        : ts.binOp(ts.env("STATELOG_API_KEY"), "||", ts.str("")),
+      projectId: ts.str(cfg.log?.projectId || ""),
+      debugMode: ts.bool(cfg.log?.debugMode || false),
+    });
+
+    const smoltalkDefaults = ts.obj({
+      openAiApiKey: cfg.client?.openAiApiKey
+        ? ts.str(cfg.client.openAiApiKey)
+        : ts.binOp(ts.env("OPENAI_API_KEY"), "||", ts.str("")),
+      googleApiKey: cfg.client?.googleApiKey
+        ? ts.str(cfg.client.googleApiKey)
+        : ts.binOp(ts.env("GEMINI_API_KEY"), "||", ts.str("")),
+      model: ts.str(cfg.client?.defaultModel || "gpt-4o-mini"),
+      logLevel: ts.str(cfg.client?.logLevel || "warn"),
+      statelog: ts.obj({
+        host: ts.str(cfg.client?.statelog?.host || ""),
+        projectId: ts.str(cfg.client?.statelog?.projectId || ""),
+        apiKey: ts.binOp(ts.env("STATELOG_SMOLTALK_API_KEY"), "||", ts.str("")),
+        traceId: $(ts.id("nanoid")).call().done(),
+      }),
+    });
+
+    const runtimeCtx = ts.statements([
+      ts.constDecl(
+        "__globalCtx",
+        ts.new(ts.id("RuntimeContext"), [
+          ts.obj({
+            statelogConfig,
+            smoltalkDefaults,
+            dirname: ts.id("__dirname"),
+          }),
+        ]),
+      ),
+      ts.constDecl("graph", $(ts.runtime.globalCtx).prop("graph").done()),
+    ]);
+
     return renderImports.default({
-      logHost: this.agencyConfig.log?.host || "",
-      logProjectId: this.agencyConfig.log?.projectId || "",
-      hasApiKey: !!this.agencyConfig.log?.apiKey,
-      logApiKey: this.agencyConfig.log?.apiKey || undefined,
-      logDebugMode: this.agencyConfig.log?.debugMode || false,
-      clientLogLevel: this.agencyConfig.client?.logLevel || "warn",
-      clientDefaultModel:
-        this.agencyConfig.client?.defaultModel || "gpt-4o-mini",
-      hasOpenAiApiKey: !!this.agencyConfig.client?.openAiApiKey,
-      clientOpenAiApiKey: this.agencyConfig.client?.openAiApiKey || undefined,
-      hasGoogleApiKey: !!this.agencyConfig.client?.googleApiKey,
-      clientGoogleApiKey: this.agencyConfig.client?.googleApiKey || undefined,
-      clientStatelogHost: this.agencyConfig.client?.statelog?.host || "",
-      clientStatelogProjectId:
-        this.agencyConfig.client?.statelog?.projectId || "",
+      runtimeContextCode: printTs(runtimeCtx),
     });
   }
 
@@ -1770,7 +1799,7 @@ export class TypeScriptBuilder {
       fnParams.push({
         name: "{ messages, callbacks }",
         typeAnnotation: "{ messages?: any; callbacks?: any }",
-        defaultValue: ts.raw("{}"),
+        defaultValue: ts.obj({}),
       });
       const dataObj: Record<string, TsNode> = {};
       for (const arg of args) {
@@ -1824,13 +1853,17 @@ export class TypeScriptBuilder {
                 "initialState",
                 ts.obj({
                   messages: ts.new(ts.id("ThreadStore")),
-                  data: ts.raw("{}"),
+                  data: ts.obj({}),
                 }),
               ),
               ts.await(ts.call(ts.id("main"), [ts.id("initialState")])),
             ]),
             ts.statements([
-              ts.raw("console.error(`\\nAgent crashed: ${__error.message}`)"),
+              $(ts.id("console")).prop("error").call([
+                ts.template([
+                  { text: "\\nAgent crashed: ", expr: $(ts.id("__error")).prop("message").done() },
+                ]),
+              ]).done(),
               ts.raw("throw __error"),
             ]),
             "__error: any",

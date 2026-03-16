@@ -66,43 +66,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const __cwd = process.cwd();
 
-const __globalCtx = new RuntimeContext({
-  statelogConfig: {
-    host: "{{{logHost:string}}}",
-    {{#hasApiKey}}
-    apiKey: "{{{logApiKey?:string}}}",
-    {{/hasApiKey}}
-    {{^hasApiKey}}
-    apiKey: process.env.STATELOG_API_KEY || "",
-    {{/hasApiKey}}
-    projectId: "{{{logProjectId:string}}}",
-    debugMode: {{{logDebugMode:boolean}}},
-  },
-  smoltalkDefaults: {
-    {{#hasOpenAiApiKey}}
-    openAiApiKey: "{{{clientOpenAiApiKey?:string}}}",
-    {{/hasOpenAiApiKey}}
-    {{^hasOpenAiApiKey}}
-    openAiApiKey: process.env.OPENAI_API_KEY || "",
-    {{/hasOpenAiApiKey}}
-    {{#hasGoogleApiKey}}
-    googleApiKey: "{{{clientGoogleApiKey?:string}}}",
-    {{/hasGoogleApiKey}}
-    {{^hasGoogleApiKey}}
-    googleApiKey: process.env.GEMINI_API_KEY || "",
-    {{/hasGoogleApiKey}}
-    model: "{{{clientDefaultModel:string}}}",
-    logLevel: "{{{clientLogLevel:string}}}",
-    statelog: { 
-      host: "{{{clientStatelogHost:string}}}",
-      projectId: "{{{clientStatelogProjectId:string}}}",
-      apiKey: process.env.STATELOG_SMOLTALK_API_KEY || "",
-      traceId: nanoid()
-    }
-  },
-  dirname: __dirname,
-});
-const graph = __globalCtx.graph;
+{{{runtimeContextCode:string}}}
 
 // Path-dependent builtin wrappers
 function _builtinRead(filename: string): string {
@@ -127,19 +91,7 @@ export const modifyInterrupt = (i: Interrupt, a: any, m?: any) => _modifyInterru
 export const resolveInterrupt = (i: Interrupt, v: any, m?: any) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });`;
 
 export type TemplateType = {
-  logHost: string;
-  hasApiKey: boolean;
-  logApiKey?: string;
-  logProjectId: string;
-  logDebugMode: boolean;
-  hasOpenAiApiKey: boolean;
-  clientOpenAiApiKey?: string;
-  hasGoogleApiKey: boolean;
-  clientGoogleApiKey?: string;
-  clientDefaultModel: string;
-  clientLogLevel: string;
-  clientStatelogHost: string;
-  clientStatelogProjectId: string;
+  runtimeContextCode: string;
 };
 
 const render = (args: TemplateType) => {

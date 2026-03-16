@@ -85,7 +85,13 @@ export const ts = {
     initializer?: TsNode,
     typeAnnotation?: string,
   ): TsVarDecl {
-    return { kind: "varDecl", declKind: "let", name, typeAnnotation, initializer };
+    return {
+      kind: "varDecl",
+      declKind: "let",
+      name,
+      typeAnnotation,
+      initializer,
+    };
   },
 
   constDecl(
@@ -93,7 +99,13 @@ export const ts = {
     initializer?: TsNode,
     typeAnnotation?: string,
   ): TsVarDecl {
-    return { kind: "varDecl", declKind: "const", name, typeAnnotation, initializer };
+    return {
+      kind: "varDecl",
+      declKind: "const",
+      name,
+      typeAnnotation,
+      initializer,
+    };
   },
 
   assign(lhs: TsNode, rhs: TsNode): TsAssign {
@@ -292,6 +304,10 @@ export const ts = {
   /** Return { messages: __threads, data: value } from a graph node */
   nodeResult(value: TsNode): TsReturn {
     return ts.return(ts.obj({ messages: ts.runtime.threads, data: value }));
+  },
+
+  env(varName: string): TsRaw {
+    return ts.raw(`process.env[${JSON.stringify(varName)}]`);
   },
 
   /** Predefined runtime identifiers */

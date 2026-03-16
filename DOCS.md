@@ -737,6 +737,108 @@ res7 28
 
 Each subthread forks the message history of its parent thread. This means that if you have two sibling threads, they won't share history with each other, but they will both share history with their parent thread. You can see that the first subthread is correctly getting the next two prime numbers in the sequence, and the second subthread is correctly getting the next two integers in the sequence.
 
+## Scoping
+
+Lets take this agency code as an example.
+
+```ts
+globalVar = 0
+
+node foo() {
+  localVar = "radiohead"
+  globalVar = globalVar + 1
+  return globalVar
+}
+```
+
+`localVar` is scoped to this node and can't be accessed outside it. `globalVar` can be accessed from anywhere inside this agency file, but it cannot be accessed from other agency files.
+
+So far so obvious. What may not be obvious, and may come as a pleasant surprise, is the following.
+
+Agency code is designed to be imported into TypeScript. You can define this code in `foo.agency` and import it into TypeScript code file like so.
+
+```
+import { foo } from "./foo.js"
+
+// now you can call the foo() node as a function in your TypeScript code!
+const result = await foo()
+```
+
+Suppose you call the `foo` function twice. What will happen to `globalVar`? Will `globalVar = 2`?
+Let's take a different example.
+
+```ts
+userId = null
+
+node foo(_userId: string) {
+  userId = _userId
+  sendMoney()
+}
+
+def sendMoney() {
+  sendMoneyToUser(userId)
+}
+```
+
+Now you can call the `foo` node again with a user ID and the agency code will send money to that user:
+
+```ts
+await foo("123")
+```
+
+But what if you call `foo` twice?
+
+```ts
+await foo("123")
+await foo("456")
+```
+
+This could be a disaster, because both calls are concurrent, and are setting the user ID concurrently. So what user will we end up sending money to?
+
+Good news: the entire state is isolated to a specific call. So both calls have their own copy of `userId`:
+
+```ts
+await foo("123") // sends money to user 123
+await foo("456") // sends money to user 456
+```
+
+This is a relief because you can call your agent code concurrently and you don't have to worry about the different calls overriding each other's state!
+
+This also gives you room to spread out a bit. If you're coming from a framework like LangGraph, you may be used to a tighter space, where every node gets and returns the entire state. This can lead to some ugly code, if you need to keep threading your full state through every function call. In Agency, functions just take the inputs and return the values that need to, and anything that is shared state can be stored in a global variable – much more intuitive.
+
+### Shared state
+Sometimes, however, you do want to share state across calls. For example, if you had a global variable where you read the contents of a file, this would cause the file to be read on every invocation of your agent.
+
+```ts
+fileContents = read("someFile.txt")
+```
+
+In this case, you can mark the variable as shared.
+
+```ts
+shared fileContents = read("someFile.txt")
+```
+
+Now `fileContents` will be shared across all calls. It will only be initialized once, and it won't get deserialized and deserialized with the rest of the state during interrupts.
+
+Shared state can also be handy if you do want to share some state across calls, for example, to count how many times a node has been called or to cache some data.
+
+```ts
+shared callCount = 0
+shared cache = {}
+
+node foo() {
+  callCount = callCount + 1
+  if (cache.data) {
+    return cache.data
+  } else {
+    data = read("someFile.txt")
+    cache.data = data
+    return data
+  }
+}
+```
+
 ## A few notes on agent design
 
 As you build more complex agents, a good way to design them is with a decision tree-style approach. Instead of having one big prompt, use several smaller prompts to categorize a user's message and then use the appropriate prompt. This should make your agent faster and more reliable. For example, suppose you are building an agent that a user can use to either report their mood or add an item to their to-do list.

@@ -64,32 +64,23 @@ const __cwd = process.cwd();
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
     host: "https://agency-lang.com",
-    
-    
-    apiKey: process.env.STATELOG_API_KEY || "",
-    
+    apiKey: process.env["STATELOG_API_KEY"] || "",
     projectId: "",
-    debugMode: false,
+    debugMode: false
   },
   smoltalkDefaults: {
-    
-    
-    openAiApiKey: process.env.OPENAI_API_KEY || "",
-    
-    
-    
-    googleApiKey: process.env.GEMINI_API_KEY || "",
-    
+    openAiApiKey: process.env["OPENAI_API_KEY"] || "",
+    googleApiKey: process.env["GEMINI_API_KEY"] || "",
     model: "gpt-4o-mini",
     logLevel: "warn",
-    statelog: { 
+    statelog: {
       host: "https://agency-lang.com",
       projectId: "smoltalk",
-      apiKey: process.env.STATELOG_SMOLTALK_API_KEY || "",
+      apiKey: process.env["STATELOG_SMOLTALK_API_KEY"] || "",
       traceId: nanoid()
     }
   },
-  dirname: __dirname,
+  dirname: __dirname
 });
 const graph = __globalCtx.graph;
 
@@ -119,19 +110,19 @@ export const __greetTool = {
   description: `No description provided.`,
   schema: z.object({"name": z.string(), "age": z.number(), })
 };
-export const __greetToolParams = ["name","age"];
+export const __greetToolParams = ["name", "age"];
 export const __foo2Tool = {
   name: "foo2",
   description: `No description provided.`,
   schema: z.object({"name": z.string(), "age": z.number(), })
 };
-export const __foo2ToolParams = ["name","age"];
+export const __foo2ToolParams = ["name", "age"];
 export async function greet(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
   const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
     state: __state
   });
   // __state will be undefined if this function is
-// being called as a tool by an llm
+  // being called as a tool by an llm
   const __ctx = __state?.ctx || __globalCtx;
   const statelogClient = __ctx.statelogClient;
   const __graph = __ctx.graph;
@@ -228,7 +219,7 @@ export async function foo2(name: string, age: number, __state: InternalFunctionS
     state: __state
   });
   // __state will be undefined if this function is
-// being called as a tool by an llm
+  // being called as a tool by an llm
   const __ctx = __state?.ctx || __globalCtx;
   const statelogClient = __ctx.statelogClient;
   const __graph = __ctx.graph;

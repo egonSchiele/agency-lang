@@ -64,32 +64,23 @@ const __cwd = process.cwd();
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
     host: "https://agency-lang.com",
-    
-    
-    apiKey: process.env.STATELOG_API_KEY || "",
-    
+    apiKey: process.env["STATELOG_API_KEY"] || "",
     projectId: "",
-    debugMode: false,
+    debugMode: false
   },
   smoltalkDefaults: {
-    
-    
-    openAiApiKey: process.env.OPENAI_API_KEY || "",
-    
-    
-    
-    googleApiKey: process.env.GEMINI_API_KEY || "",
-    
+    openAiApiKey: process.env["OPENAI_API_KEY"] || "",
+    googleApiKey: process.env["GEMINI_API_KEY"] || "",
     model: "gpt-4o-mini",
     logLevel: "warn",
-    statelog: { 
+    statelog: {
       host: "https://agency-lang.com",
       projectId: "smoltalk",
-      apiKey: process.env.STATELOG_SMOLTALK_API_KEY || "",
+      apiKey: process.env["STATELOG_SMOLTALK_API_KEY"] || "",
       traceId: nanoid()
     }
   },
-  dirname: __dirname,
+  dirname: __dirname
 });
 const graph = __globalCtx.graph;
 
@@ -120,7 +111,7 @@ export const __addTool = {
 This is a simple addition function.`,
   schema: z.object({"a": z.string(), "b": z.string(), })
 };
-export const __addToolParams = ["a","b"];
+export const __addToolParams = ["a", "b"];
 export const __greetTool = {
   name: "greet",
   description: `Generate a greeting message for the given name.`,
@@ -138,7 +129,7 @@ Parameters:
 Returns: the area as a number`,
   schema: z.object({"width": z.string(), "height": z.string(), })
 };
-export const __calculateAreaToolParams = ["width","height"];
+export const __calculateAreaToolParams = ["width", "height"];
 export const __processDataTool = {
   name: "processData",
   description: `Single line docstring`,
@@ -153,7 +144,7 @@ export async function add(a: any, b: any, __state: InternalFunctionState | undef
     state: __state
   });
   // __state will be undefined if this function is
-// being called as a tool by an llm
+  // being called as a tool by an llm
   const __ctx = __state?.ctx || __globalCtx;
   const statelogClient = __ctx.statelogClient;
   const __graph = __ctx.graph;
@@ -200,7 +191,7 @@ export async function greet(name: any, __state: InternalFunctionState | undefine
     state: __state
   });
   // __state will be undefined if this function is
-// being called as a tool by an llm
+  // being called as a tool by an llm
   const __ctx = __state?.ctx || __globalCtx;
   const statelogClient = __ctx.statelogClient;
   const __graph = __ctx.graph;
@@ -245,7 +236,7 @@ export async function calculateArea(width: any, height: any, __state: InternalFu
     state: __state
   });
   // __state will be undefined if this function is
-// being called as a tool by an llm
+  // being called as a tool by an llm
   const __ctx = __state?.ctx || __globalCtx;
   const statelogClient = __ctx.statelogClient;
   const __graph = __ctx.graph;
@@ -292,7 +283,7 @@ export async function processData(__state: InternalFunctionState | undefined = u
     state: __state
   });
   // __state will be undefined if this function is
-// being called as a tool by an llm
+  // being called as a tool by an llm
   const __ctx = __state?.ctx || __globalCtx;
   const statelogClient = __ctx.statelogClient;
   const __graph = __ctx.graph;

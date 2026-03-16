@@ -64,32 +64,23 @@ const __cwd = process.cwd();
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
     host: "https://agency-lang.com",
-    
-    
-    apiKey: process.env.STATELOG_API_KEY || "",
-    
+    apiKey: process.env["STATELOG_API_KEY"] || "",
     projectId: "",
-    debugMode: false,
+    debugMode: false
   },
   smoltalkDefaults: {
-    
-    
-    openAiApiKey: process.env.OPENAI_API_KEY || "",
-    
-    
-    
-    googleApiKey: process.env.GEMINI_API_KEY || "",
-    
+    openAiApiKey: process.env["OPENAI_API_KEY"] || "",
+    googleApiKey: process.env["GEMINI_API_KEY"] || "",
     model: "gpt-4o-mini",
     logLevel: "warn",
-    statelog: { 
+    statelog: {
       host: "https://agency-lang.com",
       projectId: "smoltalk",
-      apiKey: process.env.STATELOG_SMOLTALK_API_KEY || "",
+      apiKey: process.env["STATELOG_SMOLTALK_API_KEY"] || "",
       traceId: nanoid()
     }
   },
-  dirname: __dirname,
+  dirname: __dirname
 });
 const graph = __globalCtx.graph;
 

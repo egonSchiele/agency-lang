@@ -64,32 +64,23 @@ const __cwd = process.cwd();
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
     host: "https://agency-lang.com",
-    
-    
-    apiKey: process.env.STATELOG_API_KEY || "",
-    
+    apiKey: process.env["STATELOG_API_KEY"] || "",
     projectId: "",
-    debugMode: false,
+    debugMode: false
   },
   smoltalkDefaults: {
-    
-    
-    openAiApiKey: process.env.OPENAI_API_KEY || "",
-    
-    
-    
-    googleApiKey: process.env.GEMINI_API_KEY || "",
-    
+    openAiApiKey: process.env["OPENAI_API_KEY"] || "",
+    googleApiKey: process.env["GEMINI_API_KEY"] || "",
     model: "gpt-4o-mini",
     logLevel: "warn",
-    statelog: { 
+    statelog: {
       host: "https://agency-lang.com",
       projectId: "smoltalk",
-      apiKey: process.env.STATELOG_SMOLTALK_API_KEY || "",
+      apiKey: process.env["STATELOG_SMOLTALK_API_KEY"] || "",
       traceId: nanoid()
     }
   },
-  dirname: __dirname,
+  dirname: __dirname
 });
 const graph = __globalCtx.graph;
 
@@ -119,7 +110,7 @@ export const __addTool = {
   description: `Adds two numbers together`,
   schema: z.object({"x": z.number(), "y": z.number(), })
 };
-export const __addToolParams = ["x","y"];
+export const __addToolParams = ["x", "y"];
 export const __greetTool = {
   name: "greet",
   description: `Greets a person by name`,
@@ -131,7 +122,7 @@ export const __mixedTool = {
   description: `Mixed typed and untyped parameters`,
   schema: z.object({"count": z.number(), "label": z.string(), })
 };
-export const __mixedToolParams = ["count","label"];
+export const __mixedToolParams = ["count", "label"];
 export const __processArrayTool = {
   name: "processArray",
   description: `Processes an array of numbers`,
@@ -149,7 +140,7 @@ export async function add(x: number, y: number, __state: InternalFunctionState |
     state: __state
   });
   // __state will be undefined if this function is
-// being called as a tool by an llm
+  // being called as a tool by an llm
   const __ctx = __state?.ctx || __globalCtx;
   const statelogClient = __ctx.statelogClient;
   const __graph = __ctx.graph;
@@ -228,7 +219,7 @@ export async function greet(name: string, __state: InternalFunctionState | undef
     state: __state
   });
   // __state will be undefined if this function is
-// being called as a tool by an llm
+  // being called as a tool by an llm
   const __ctx = __state?.ctx || __globalCtx;
   const statelogClient = __ctx.statelogClient;
   const __graph = __ctx.graph;
@@ -305,7 +296,7 @@ export async function mixed(count: number, label: any, __state: InternalFunction
     state: __state
   });
   // __state will be undefined if this function is
-// being called as a tool by an llm
+  // being called as a tool by an llm
   const __ctx = __state?.ctx || __globalCtx;
   const statelogClient = __ctx.statelogClient;
   const __graph = __ctx.graph;
@@ -384,7 +375,7 @@ export async function processArray(items: number[], __state: InternalFunctionSta
     state: __state
   });
   // __state will be undefined if this function is
-// being called as a tool by an llm
+  // being called as a tool by an llm
   const __ctx = __state?.ctx || __globalCtx;
   const statelogClient = __ctx.statelogClient;
   const __graph = __ctx.graph;
@@ -461,7 +452,7 @@ export async function flexible(value: string | number, __state: InternalFunction
     state: __state
   });
   // __state will be undefined if this function is
-// being called as a tool by an llm
+  // being called as a tool by an llm
   const __ctx = __state?.ctx || __globalCtx;
   const statelogClient = __ctx.statelogClient;
   const __graph = __ctx.graph;

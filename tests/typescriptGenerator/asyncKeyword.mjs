@@ -162,31 +162,24 @@ export async function openai(msg: string, __state: InternalFunctionState | undef
     }
     if (__step <= 1) {
       let __defaultTimeblockName_startTime: number = performance.now();
-
-async function _response(msg, __metadata): Promise<any> {
-  __self.__removedTools = __self.__removedTools || [];
-  return runPrompt({
-    ctx: __ctx,
-    prompt: `Respond to this user message: ${msg}`,
-    messages: __metadata?.messages || new MessageThread(),
-    
-    tools: undefined,
-    toolHandlers: [],
-    clientConfig: {},
-    stream: false,
-    maxToolCallRounds: 10,
-    interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools,
-  });
-}
-
-
+async function _response(msg, __metadata) {
+        __self.__removedTools = __self.__removedTools || [];
+        return runPrompt({
+          ctx: __ctx,
+          prompt: `Respond to this user message: ${msg}`,
+          messages: __metadata?.messages || new MessageThread(),
+          tools: undefined,
+          toolHandlers: [],
+          clientConfig: {},
+          stream: false,
+          maxToolCallRounds: 10,
+          interruptData: __state?.interruptData,
+          removedTools: __self.__removedTools
+        });
+      }
 __self.response = _response(__stack.args.msg, {
-      messages: new MessageThread()
-    });
-
-
-
+        messages: new MessageThread()
+      });
 
 let __defaultTimeblockName_endTime: number = performance.now();
 let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultTimeblockName_startTime;
@@ -257,33 +250,26 @@ export async function google(msg: string, __state: InternalFunctionState | undef
     }
     if (__step <= 2) {
       let __defaultTimeblockName_startTime: number = performance.now();
-
-async function _response(msg, __metadata): Promise<any> {
-  __self.__removedTools = __self.__removedTools || [];
-  return runPrompt({
-    ctx: __ctx,
-    prompt: `Respond to this user message: ${msg}`,
-    messages: __metadata?.messages || new MessageThread(),
-    
-    tools: undefined,
-    toolHandlers: [],
-    clientConfig: {
-  "model": `gemini-2.5-flash-lite`
-},
-    stream: false,
-    maxToolCallRounds: 10,
-    interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools,
-  });
-}
-
-
+async function _response(msg, __metadata) {
+        __self.__removedTools = __self.__removedTools || [];
+        return runPrompt({
+          ctx: __ctx,
+          prompt: `Respond to this user message: ${msg}`,
+          messages: __metadata?.messages || new MessageThread(),
+          tools: undefined,
+          toolHandlers: [],
+          clientConfig: {
+            "model": `gemini-2.5-flash-lite`
+          },
+          stream: false,
+          maxToolCallRounds: 10,
+          interruptData: __state?.interruptData,
+          removedTools: __self.__removedTools
+        });
+      }
 __self.response = _response(__stack.args.msg, {
-      messages: new MessageThread()
-    });
-
-
-
+        messages: new MessageThread()
+      });
 
 let __defaultTimeblockName_endTime: number = performance.now();
 let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultTimeblockName_startTime;
@@ -344,43 +330,31 @@ export async function fibs(__state: InternalFunctionState | undefined = undefine
       __stack.step++;
     }
     if (__step <= 1) {
-      
-async function ___promptVar(__metadata): Promise<any> {
-  __self.__removedTools = __self.__removedTools || [];
-  return runPrompt({
-    ctx: __ctx,
-    prompt: `Generate the first 10 Fibonacci numbers`,
-    messages: __metadata?.messages || new MessageThread(),
-    
-    responseFormat: z.object({
-      response: z.array(z.number())
-    }),
-    
-    tools: undefined,
-    toolHandlers: [],
-    clientConfig: {},
-    stream: false,
-    maxToolCallRounds: 10,
-    interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools,
-  });
-}
-
-
-
-
+      async function ___promptVar(__metadata) {
+        __self.__removedTools = __self.__removedTools || [];
+        return runPrompt({
+          ctx: __ctx,
+          prompt: `Generate the first 10 Fibonacci numbers`,
+          messages: __metadata?.messages || new MessageThread(),
+          responseFormat: z.object({
+            response: z.array(z.number())
+          }),
+          tools: undefined,
+          toolHandlers: [],
+          clientConfig: {},
+          stream: false,
+          maxToolCallRounds: 10,
+          interruptData: __state?.interruptData,
+          removedTools: __self.__removedTools
+        });
+      }
 __self.__promptVar = await ___promptVar({
-      messages: __threads.getOrCreateActive()
-    });
-
+        messages: __threads.getOrCreateActive()
+      });
 // return early from node if this is an interrupt
 if (isInterrupt(__self.__promptVar)) {
-  
-   
-   return  __self.__promptVar;
-   
-}
-
+        return __self.__promptVar;
+      }
 __ctx.stateStack.pop();
 return __self.__promptVar
       
@@ -403,84 +377,95 @@ return __self.__promptVar
 }
 
 
-
 graph.node("main", async (__state: GraphState) => {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupNode({ state: __state });
-    const __ctx = __state.ctx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeStart", data: { nodeName: "main" } });
-
-    if (__state.isResume) {
-      __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupNode({
+    state: __state
+  });
+  const __ctx = __state.ctx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeStart",
+    data: {
+      nodeName: "main"
     }
+  })
+  if (__state.isResume) {
+    __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+  }
+  if (__step <= 0) {
 
-    
-    if (__step <= 0) {
-
-  __stack.step++;
-}
-if (__step <= 1) {
-  __stack.locals.msg = await await _builtinInput(`> `);
+    __stack.step++;
+  }
+  if (__step <= 1) {
+    __stack.locals.msg = await await _builtinInput(`> `);
 if (isInterrupt(__stack.locals.msg)) {
-    return {
-      ...__state,
-      data: __stack.locals.msg
-    };
+      return {
+        ...__state,
+        data: __stack.locals.msg
+      };
+    }
+    
+    __stack.step++;
   }
-  
-  __stack.step++;
-}
-if (__step <= 2) {
-  __stack.locals.res2 = google(__stack.locals.msg, {
-    ctx: __ctx,
-    threads: new ThreadStore(),
-    interruptData: __state?.interruptData
-  });
+  if (__step <= 2) {
+    __stack.locals.res2 = google(__stack.locals.msg, {
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    });
 if (isInterrupt(__stack.locals.res2)) {
-    return {
-      ...__state,
-      data: __stack.locals.res2
-    };
+      return {
+        ...__state,
+        data: __stack.locals.res2
+      };
+    }
+    
+    __stack.step++;
   }
-  
-  __stack.step++;
-}
-if (__step <= 3) {
-  __stack.locals.res1 = openai(__stack.locals.msg, {
-    ctx: __ctx,
-    threads: new ThreadStore(),
-    interruptData: __state?.interruptData
-  });
+  if (__step <= 3) {
+    __stack.locals.res1 = openai(__stack.locals.msg, {
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    });
 if (isInterrupt(__stack.locals.res1)) {
-    return {
-      ...__state,
-      data: __stack.locals.res1
-    };
+      return {
+        ...__state,
+        data: __stack.locals.res1
+      };
+    }
+    
+    __stack.step++;
   }
-  
-  __stack.step++;
-}
-if (__step <= 4) {
-  [__self.res2, __self.res1] = await Promise.all([__self.res2, __self.res1]);
-  __stack.step++;
-}
-if (__step <= 5) {
-  __stack.locals.results = __stack.locals.Promise.race([__stack.locals.res1, __stack.locals.res2]);
-  
-  __stack.step++;
-}
-if (__step <= 6) {
-  await await _printJSON(__stack.locals.results)
-  
-  __stack.step++;
-}
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
-    return { messages: __threads, data: undefined };
-});
-
+  if (__step <= 4) {
+    [__self.res2, __self.res1] = await Promise.all([__self.res2, __self.res1]);
+    __stack.step++;
+  }
+  if (__step <= 5) {
+    __stack.locals.results = __stack.locals.Promise.race([__stack.locals.res1, __stack.locals.res2]);
+    
+    __stack.step++;
+  }
+  if (__step <= 6) {
+    await await _printJSON(__stack.locals.results)
+    
+    __stack.step++;
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeEnd",
+    data: {
+      nodeName: "main",
+      data: undefined
+    }
+  })
+  return {
+    messages: __threads,
+    data: undefined
+  };
+})
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
     ctx: __globalCtx,

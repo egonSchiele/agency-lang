@@ -114,26 +114,29 @@ export const approveInterrupt = (i: Interrupt, m?: any) => _approveInterrupt({ c
 export const rejectInterrupt = (i: Interrupt, m?: any) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
 export const modifyInterrupt = (i: Interrupt, a: any, m?: any) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
 export const resolveInterrupt = (i: Interrupt, v: any, m?: any) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
-
 graph.node("main", async (__state: GraphState) => {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupNode({ state: __state });
-    const __ctx = __state.ctx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeStart", data: { nodeName: "main" } });
-
-    if (__state.isResume) {
-      __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupNode({
+    state: __state
+  });
+  const __ctx = __state.ctx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeStart",
+    data: {
+      nodeName: "main"
     }
+  })
+  if (__state.isResume) {
+    __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+  }
+  if (__step <= 0) {
 
-    
-    if (__step <= 0) {
-
-  __stack.step++;
-}
-if (__step <= 1) {
-  // Remember this will be called both in a tool call context
+    __stack.step++;
+  }
+  if (__step <= 1) {
+    // Remember this will be called both in a tool call context
 // and when the user is simply calling a function.
 
 if (__state.interruptData?.interruptResponse?.type === "resolve") {
@@ -157,55 +160,56 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
   
   
 }
-  
-  __stack.step++;
-}
-if (__step <= 2) {
-  
-async function _greeting(__metadata): Promise<any> {
-  __self.__removedTools = __self.__removedTools || [];
-  return runPrompt({
-    ctx: __ctx,
-    prompt: `Say hello to {name}`,
-    messages: __metadata?.messages || new MessageThread(),
     
-    tools: undefined,
-    toolHandlers: [],
-    clientConfig: {},
-    stream: false,
-    maxToolCallRounds: 10,
-    interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools,
-  });
-}
-
-
+    __stack.step++;
+  }
+  if (__step <= 2) {
+    async function _greeting(__metadata) {
+      __self.__removedTools = __self.__removedTools || [];
+      return runPrompt({
+        ctx: __ctx,
+        prompt: `Say hello to {name}`,
+        messages: __metadata?.messages || new MessageThread(),
+        tools: undefined,
+        toolHandlers: [],
+        clientConfig: {},
+        stream: false,
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
+      });
+    }
 __self.greeting = _greeting({
       messages: new MessageThread()
     });
-
-
-
-  
-  __stack.step++;
-}
-if (__step <= 3) {
-  [__self.greeting] = await Promise.all([__self.greeting]);
-  __stack.step++;
-}
-if (__step <= 4) {
+    
+    __stack.step++;
+  }
+  if (__step <= 3) {
+    [__self.greeting] = await Promise.all([__self.greeting]);
+    __stack.step++;
+  }
+  if (__step <= 4) {
+    return {
+      messages: __threads,
+      data: __stack.locals.greeting
+    };
+    
+    __stack.step++;
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeEnd",
+    data: {
+      nodeName: "main",
+      data: undefined
+    }
+  })
   return {
     messages: __threads,
-    data: __stack.locals.greeting
+    data: undefined
   };
-  
-  __stack.step++;
-}
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
-    return { messages: __threads, data: undefined };
-});
-
+})
 
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({

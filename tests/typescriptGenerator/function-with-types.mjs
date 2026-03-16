@@ -175,31 +175,24 @@ export async function add(x: number, y: number, __state: InternalFunctionState |
       __stack.step++;
     }
     if (__step <= 1) {
-      
-async function _result(x, y, __metadata): Promise<any> {
-  __self.__removedTools = __self.__removedTools || [];
-  return runPrompt({
-    ctx: __ctx,
-    prompt: `add ${x} and ${y}`,
-    messages: __metadata?.messages || new MessageThread(),
-    
-    tools: undefined,
-    toolHandlers: [],
-    clientConfig: {},
-    stream: false,
-    maxToolCallRounds: 10,
-    interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools,
-  });
-}
-
-
+      async function _result(x, y, __metadata) {
+        __self.__removedTools = __self.__removedTools || [];
+        return runPrompt({
+          ctx: __ctx,
+          prompt: `add ${x} and ${y}`,
+          messages: __metadata?.messages || new MessageThread(),
+          tools: undefined,
+          toolHandlers: [],
+          clientConfig: {},
+          stream: false,
+          maxToolCallRounds: 10,
+          interruptData: __state?.interruptData,
+          removedTools: __self.__removedTools
+        });
+      }
 __self.result = _result(__stack.args.x, __stack.args.y, {
-      messages: new MessageThread()
-    });
-
-
-
+        messages: new MessageThread()
+      });
       
       __stack.step++;
     }
@@ -259,31 +252,24 @@ export async function greet(name: string, __state: InternalFunctionState | undef
       __stack.step++;
     }
     if (__step <= 1) {
-      
-async function _message(name, __metadata): Promise<any> {
-  __self.__removedTools = __self.__removedTools || [];
-  return runPrompt({
-    ctx: __ctx,
-    prompt: `Hello ${name}!`,
-    messages: __metadata?.messages || new MessageThread(),
-    
-    tools: undefined,
-    toolHandlers: [],
-    clientConfig: {},
-    stream: false,
-    maxToolCallRounds: 10,
-    interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools,
-  });
-}
-
-
+      async function _message(name, __metadata) {
+        __self.__removedTools = __self.__removedTools || [];
+        return runPrompt({
+          ctx: __ctx,
+          prompt: `Hello ${name}!`,
+          messages: __metadata?.messages || new MessageThread(),
+          tools: undefined,
+          toolHandlers: [],
+          clientConfig: {},
+          stream: false,
+          maxToolCallRounds: 10,
+          interruptData: __state?.interruptData,
+          removedTools: __self.__removedTools
+        });
+      }
 __self.message = _message(__stack.args.name, {
-      messages: new MessageThread()
-    });
-
-
-
+        messages: new MessageThread()
+      });
       
       __stack.step++;
     }
@@ -345,31 +331,24 @@ export async function mixed(count: number, label: any, __state: InternalFunction
       __stack.step++;
     }
     if (__step <= 1) {
-      
-async function _output(label, count, __metadata): Promise<any> {
-  __self.__removedTools = __self.__removedTools || [];
-  return runPrompt({
-    ctx: __ctx,
-    prompt: `${label}: ${count}`,
-    messages: __metadata?.messages || new MessageThread(),
-    
-    tools: undefined,
-    toolHandlers: [],
-    clientConfig: {},
-    stream: false,
-    maxToolCallRounds: 10,
-    interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools,
-  });
-}
-
-
+      async function _output(label, count, __metadata) {
+        __self.__removedTools = __self.__removedTools || [];
+        return runPrompt({
+          ctx: __ctx,
+          prompt: `${label}: ${count}`,
+          messages: __metadata?.messages || new MessageThread(),
+          tools: undefined,
+          toolHandlers: [],
+          clientConfig: {},
+          stream: false,
+          maxToolCallRounds: 10,
+          interruptData: __state?.interruptData,
+          removedTools: __self.__removedTools
+        });
+      }
 __self.output = _output(__stack.args.label, __stack.args.count, {
-      messages: new MessageThread()
-    });
-
-
-
+        messages: new MessageThread()
+      });
       
       __stack.step++;
     }
@@ -429,31 +408,24 @@ export async function processArray(items: number[], __state: InternalFunctionSta
       __stack.step++;
     }
     if (__step <= 1) {
-      
-async function _result(items, __metadata): Promise<any> {
-  __self.__removedTools = __self.__removedTools || [];
-  return runPrompt({
-    ctx: __ctx,
-    prompt: `Processing array with ${items} items`,
-    messages: __metadata?.messages || new MessageThread(),
-    
-    tools: undefined,
-    toolHandlers: [],
-    clientConfig: {},
-    stream: false,
-    maxToolCallRounds: 10,
-    interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools,
-  });
-}
-
-
+      async function _result(items, __metadata) {
+        __self.__removedTools = __self.__removedTools || [];
+        return runPrompt({
+          ctx: __ctx,
+          prompt: `Processing array with ${items} items`,
+          messages: __metadata?.messages || new MessageThread(),
+          tools: undefined,
+          toolHandlers: [],
+          clientConfig: {},
+          stream: false,
+          maxToolCallRounds: 10,
+          interruptData: __state?.interruptData,
+          removedTools: __self.__removedTools
+        });
+      }
 __self.result = _result(__stack.args.items, {
-      messages: new MessageThread()
-    });
-
-
-
+        messages: new MessageThread()
+      });
       
       __stack.step++;
     }
@@ -513,31 +485,24 @@ export async function flexible(value: string | number, __state: InternalFunction
       __stack.step++;
     }
     if (__step <= 1) {
-      
-async function _result(value, __metadata): Promise<any> {
-  __self.__removedTools = __self.__removedTools || [];
-  return runPrompt({
-    ctx: __ctx,
-    prompt: `Received value: ${value}`,
-    messages: __metadata?.messages || new MessageThread(),
-    
-    tools: undefined,
-    toolHandlers: [],
-    clientConfig: {},
-    stream: false,
-    maxToolCallRounds: 10,
-    interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools,
-  });
-}
-
-
+      async function _result(value, __metadata) {
+        __self.__removedTools = __self.__removedTools || [];
+        return runPrompt({
+          ctx: __ctx,
+          prompt: `Received value: ${value}`,
+          messages: __metadata?.messages || new MessageThread(),
+          tools: undefined,
+          toolHandlers: [],
+          clientConfig: {},
+          stream: false,
+          maxToolCallRounds: 10,
+          interruptData: __state?.interruptData,
+          removedTools: __self.__removedTools
+        });
+      }
 __self.result = _result(__stack.args.value, {
-      messages: new MessageThread()
-    });
-
-
-
+        messages: new MessageThread()
+      });
       
       __stack.step++;
     }
@@ -568,143 +533,165 @@ return __stack.locals.result
 }
 
 
-
 graph.node("foo", async (__state: GraphState) => {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupNode({ state: __state });
-    const __ctx = __state.ctx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeStart", data: { nodeName: "foo" } });
-
-    if (__state.isResume) {
-      __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupNode({
+    state: __state
+  });
+  const __ctx = __state.ctx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeStart",
+    data: {
+      nodeName: "foo"
     }
+  })
+  if (__state.isResume) {
+    __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+  }
+  if (__step <= 0) {
 
+    __stack.step++;
+  }
+  if (__step <= 1) {
+    await await _print(`This is a node with a return type`)
     
-    if (__step <= 0) {
-
-  __stack.step++;
-}
-if (__step <= 1) {
-  await await _print(`This is a node with a return type`)
-  
-  __stack.step++;
-}
-if (__step <= 2) {
+    __stack.step++;
+  }
+  if (__step <= 2) {
+    return {
+      messages: __threads,
+      data: `Node completed`
+    };
+    
+    __stack.step++;
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeEnd",
+    data: {
+      nodeName: "foo",
+      data: undefined
+    }
+  })
   return {
     messages: __threads,
-    data: `Node completed`
+    data: undefined
   };
-  
-  __stack.step++;
-}
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "foo", data: undefined } });
-    return { messages: __threads, data: undefined };
-});
-
-
+})
 
 
 graph.node("main", async (__state: GraphState) => {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupNode({ state: __state });
-    const __ctx = __state.ctx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeStart", data: { nodeName: "main" } });
-
-    if (__state.isResume) {
-      __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupNode({
+    state: __state
+  });
+  const __ctx = __state.ctx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeStart",
+    data: {
+      nodeName: "main"
     }
-
+  })
+  if (__state.isResume) {
+    __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+  }
+  if (__step <= 0) {
+    //  Call the functions
     
-    if (__step <= 0) {
-  //  Call the functions
-  
-  __stack.step++;
-}
-if (__step <= 1) {
-  __stack.locals.sum = add(5, 10, {
-    ctx: __ctx,
-    threads: new ThreadStore(),
-    interruptData: __state?.interruptData
-  });
+    __stack.step++;
+  }
+  if (__step <= 1) {
+    __stack.locals.sum = add(5, 10, {
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    });
 if (isInterrupt(__stack.locals.sum)) {
-    return {
-      ...__state,
-      data: __stack.locals.sum
-    };
+      return {
+        ...__state,
+        data: __stack.locals.sum
+      };
+    }
+    
+    __stack.step++;
   }
-  
-  __stack.step++;
-}
-if (__step <= 2) {
-  __stack.locals.greeting = greet(`Alice`, {
-    ctx: __ctx,
-    threads: new ThreadStore(),
-    interruptData: __state?.interruptData
-  });
+  if (__step <= 2) {
+    __stack.locals.greeting = greet(`Alice`, {
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    });
 if (isInterrupt(__stack.locals.greeting)) {
-    return {
-      ...__state,
-      data: __stack.locals.greeting
-    };
+      return {
+        ...__state,
+        data: __stack.locals.greeting
+      };
+    }
+    
+    __stack.step++;
   }
-  
-  __stack.step++;
-}
-if (__step <= 3) {
-  __stack.locals.labeled = mixed(42, `Answer`, {
-    ctx: __ctx,
-    threads: new ThreadStore(),
-    interruptData: __state?.interruptData
-  });
+  if (__step <= 3) {
+    __stack.locals.labeled = mixed(42, `Answer`, {
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    });
 if (isInterrupt(__stack.locals.labeled)) {
-    return {
-      ...__state,
-      data: __stack.locals.labeled
-    };
+      return {
+        ...__state,
+        data: __stack.locals.labeled
+      };
+    }
+    
+    __stack.step++;
   }
-  
-  __stack.step++;
-}
-if (__step <= 4) {
-  __stack.locals.processed = processArray([1, 2, 3, 4, 5], {
-    ctx: __ctx,
-    threads: new ThreadStore(),
-    interruptData: __state?.interruptData
-  });
+  if (__step <= 4) {
+    __stack.locals.processed = processArray([1, 2, 3, 4, 5], {
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    });
 if (isInterrupt(__stack.locals.processed)) {
-    return {
-      ...__state,
-      data: __stack.locals.processed
-    };
+      return {
+        ...__state,
+        data: __stack.locals.processed
+      };
+    }
+    
+    __stack.step++;
   }
-  
-  __stack.step++;
-}
-if (__step <= 5) {
-  __stack.locals.flexResult = flexible(`test`, {
-    ctx: __ctx,
-    threads: new ThreadStore(),
-    interruptData: __state?.interruptData
-  });
+  if (__step <= 5) {
+    __stack.locals.flexResult = flexible(`test`, {
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    });
 if (isInterrupt(__stack.locals.flexResult)) {
-    return {
-      ...__state,
-      data: __stack.locals.flexResult
-    };
+      return {
+        ...__state,
+        data: __stack.locals.flexResult
+      };
+    }
+    
+    __stack.step++;
   }
-  
-  __stack.step++;
-}
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
-    return { messages: __threads, data: undefined };
-});
-
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeEnd",
+    data: {
+      nodeName: "main",
+      data: undefined
+    }
+  })
+  return {
+    messages: __threads,
+    data: undefined
+  };
+})
 export async function foo({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
     ctx: __globalCtx,

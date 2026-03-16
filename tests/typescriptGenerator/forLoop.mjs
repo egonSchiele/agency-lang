@@ -114,73 +114,84 @@ export const approveInterrupt = (i: Interrupt, m?: any) => _approveInterrupt({ c
 export const rejectInterrupt = (i: Interrupt, m?: any) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
 export const modifyInterrupt = (i: Interrupt, a: any, m?: any) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
 export const resolveInterrupt = (i: Interrupt, v: any, m?: any) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
-
 graph.node("main", async (__state: GraphState) => {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupNode({ state: __state });
-    const __ctx = __state.ctx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeStart", data: { nodeName: "main" } });
-
-    if (__state.isResume) {
-      __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupNode({
+    state: __state
+  });
+  const __ctx = __state.ctx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeStart",
+    data: {
+      nodeName: "main"
     }
-
-    
-    if (__step <= 0) {
-  //  Basic for-of loop
-  
-  __stack.step++;
-}
-if (__step <= 1) {
-  __stack.locals.items = [`a`, `b`, `c`];
-  
-  __stack.step++;
-}
-if (__step <= 2) {
-  for (const item of __stack.locals.items) {
-    await await _print(item)
-    
+  })
+  if (__state.isResume) {
+    __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
   }
-  
-  
-  //  Range-based for loop
-  
-  __stack.step++;
-}
-if (__step <= 3) {
-  for (let i = 0; i < 5; i++) {
-    await await _print(i)
+  if (__step <= 0) {
+    //  Basic for-of loop
     
+    __stack.step++;
   }
-  
-  
-  //  Indexed for loop
-  
-  __stack.step++;
-}
-if (__step <= 4) {
-  __stack.locals.names = [`alice`, `bob`];
-  
-  __stack.step++;
-}
-if (__step <= 5) {
-  for (let index = 0; index < __stack.locals.names.length; index++) {
-    const name = __stack.locals.names[index];
-    await await _print(name)
+  if (__step <= 1) {
+    __stack.locals.items = [`a`, `b`, `c`];
     
-    await await _print(index)
-    
+    __stack.step++;
   }
-  
-  __stack.step++;
-}
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
-    return { messages: __threads, data: undefined };
-});
-
+  if (__step <= 2) {
+    for (const item of __stack.locals.items) {
+      await await _print(item)
+      
+    }
+    
+    
+    //  Range-based for loop
+    
+    __stack.step++;
+  }
+  if (__step <= 3) {
+    for (let i = 0; i < 5; i++) {
+      await await _print(i)
+      
+    }
+    
+    
+    //  Indexed for loop
+    
+    __stack.step++;
+  }
+  if (__step <= 4) {
+    __stack.locals.names = [`alice`, `bob`];
+    
+    __stack.step++;
+  }
+  if (__step <= 5) {
+    for (let index = 0; index < __stack.locals.names.length; index++) {
+      const name = __stack.locals.names[index];
+      await await _print(name)
+      
+      await await _print(index)
+      
+    }
+    
+    __stack.step++;
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeEnd",
+    data: {
+      nodeName: "main",
+      data: undefined
+    }
+  })
+  return {
+    messages: __threads,
+    data: undefined
+  };
+})
 
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({

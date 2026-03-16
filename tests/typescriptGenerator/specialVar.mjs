@@ -114,139 +114,136 @@ export const approveInterrupt = (i: Interrupt, m?: any) => _approveInterrupt({ c
 export const rejectInterrupt = (i: Interrupt, m?: any) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
 export const modifyInterrupt = (i: Interrupt, a: any, m?: any) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
 export const resolveInterrupt = (i: Interrupt, v: any, m?: any) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
-
 graph.node("main", async (__state: GraphState) => {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupNode({ state: __state });
-    const __ctx = __state.ctx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeStart", data: { nodeName: "main" } });
-
-    if (__state.isResume) {
-      __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
-    }
-
-    
-    if (__step <= 0) {
-
-  __stack.step++;
-}
-if (__step <= 1) {
-  await await _print(`lets race!`)
-  
-  __stack.step++;
-}
-if (__step <= 2) {
-  __stack.locals.msg = await await _builtinInput(`> `);
-if (isInterrupt(__stack.locals.msg)) {
-    return {
-      ...__state,
-      data: __stack.locals.msg
-    };
-  }
-  
-  
-  __stack.step++;
-}
-if (__step <= 3) {
-  
-async function _response1(msg, __metadata): Promise<any> {
-  __self.__removedTools = __self.__removedTools || [];
-  return runPrompt({
-    ctx: __ctx,
-    prompt: `${msg}`,
-    messages: __metadata?.messages || new MessageThread(),
-    
-    tools: undefined,
-    toolHandlers: [],
-    clientConfig: {},
-    stream: false,
-    maxToolCallRounds: 10,
-    interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools,
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupNode({
+    state: __state
   });
-}
+  const __ctx = __state.ctx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeStart",
+    data: {
+      nodeName: "main"
+    }
+  })
+  if (__state.isResume) {
+    __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+  }
+  if (__step <= 0) {
 
-
+    __stack.step++;
+  }
+  if (__step <= 1) {
+    await await _print(`lets race!`)
+    
+    __stack.step++;
+  }
+  if (__step <= 2) {
+    __stack.locals.msg = await await _builtinInput(`> `);
+if (isInterrupt(__stack.locals.msg)) {
+      return {
+        ...__state,
+        data: __stack.locals.msg
+      };
+    }
+    
+    
+    __stack.step++;
+  }
+  if (__step <= 3) {
+    async function _response1(msg, __metadata) {
+      __self.__removedTools = __self.__removedTools || [];
+      return runPrompt({
+        ctx: __ctx,
+        prompt: `${msg}`,
+        messages: __metadata?.messages || new MessageThread(),
+        tools: undefined,
+        toolHandlers: [],
+        clientConfig: {},
+        stream: false,
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
+      });
+    }
 __self.response1 = _response1(__stack.locals.msg, {
       messages: new MessageThread()
     });
-
-
-
-  
-  
-  __stack.step++;
-}
-if (__step <= 4) {
-  [__self.response1] = await Promise.all([__self.response1]);
-  __stack.step++;
-}
-if (__step <= 5) {
-  await await _print(__stack.locals.response1)
-  
-  __stack.step++;
-}
-if (__step <= 6) {
-  __client = __getClientWithConfig({
-    model: `gemini-2.5-flash-lite`
-  });
-  
-  __stack.step++;
-}
-if (__step <= 7) {
-  
-async function _response2(msg, __metadata): Promise<any> {
-  __self.__removedTools = __self.__removedTools || [];
-  return runPrompt({
-    ctx: __ctx,
-    prompt: `${msg}`,
-    messages: __metadata?.messages || new MessageThread(),
     
-    tools: undefined,
-    toolHandlers: [],
-    clientConfig: {},
-    stream: false,
-    maxToolCallRounds: 10,
-    interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools,
-  });
-}
-
-
+    
+    __stack.step++;
+  }
+  if (__step <= 4) {
+    [__self.response1] = await Promise.all([__self.response1]);
+    __stack.step++;
+  }
+  if (__step <= 5) {
+    await await _print(__stack.locals.response1)
+    
+    __stack.step++;
+  }
+  if (__step <= 6) {
+    __client = __getClientWithConfig({
+      model: `gemini-2.5-flash-lite`
+    });
+    
+    __stack.step++;
+  }
+  if (__step <= 7) {
+    async function _response2(msg, __metadata) {
+      __self.__removedTools = __self.__removedTools || [];
+      return runPrompt({
+        ctx: __ctx,
+        prompt: `${msg}`,
+        messages: __metadata?.messages || new MessageThread(),
+        tools: undefined,
+        toolHandlers: [],
+        clientConfig: {},
+        stream: false,
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
+      });
+    }
 __self.response2 = _response2(__stack.locals.msg, {
       messages: new MessageThread()
     });
-
-
-
-  
-  
-  __stack.step++;
-}
-if (__step <= 8) {
-  [__self.response2] = await Promise.all([__self.response2]);
-  __stack.step++;
-}
-if (__step <= 9) {
-  await await _print(__stack.locals.response2)
-  
-  __stack.step++;
-}
-if (__step <= 10) {
+    
+    
+    __stack.step++;
+  }
+  if (__step <= 8) {
+    [__self.response2] = await Promise.all([__self.response2]);
+    __stack.step++;
+  }
+  if (__step <= 9) {
+    await await _print(__stack.locals.response2)
+    
+    __stack.step++;
+  }
+  if (__step <= 10) {
+    return {
+      messages: __threads,
+      data: [__stack.locals.response1, __stack.locals.response2]
+    };
+    
+    __stack.step++;
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeEnd",
+    data: {
+      nodeName: "main",
+      data: undefined
+    }
+  })
   return {
     messages: __threads,
-    data: [__stack.locals.response1, __stack.locals.response2]
+    data: undefined
   };
-  
-  __stack.step++;
-}
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
-    return { messages: __threads, data: undefined };
-});
-
+})
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
     ctx: __globalCtx,

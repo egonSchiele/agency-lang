@@ -114,108 +114,105 @@ export const approveInterrupt = (i: Interrupt, m?: any) => _approveInterrupt({ c
 export const rejectInterrupt = (i: Interrupt, m?: any) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
 export const modifyInterrupt = (i: Interrupt, a: any, m?: any) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
 export const resolveInterrupt = (i: Interrupt, v: any, m?: any) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
-
 graph.node("foo", async (__state: GraphState) => {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupNode({ state: __state });
-    const __ctx = __state.ctx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeStart", data: { nodeName: "foo" } });
-
-    if (__state.isResume) {
-      __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
-    }
-
-    
-    if (__step <= 0) {
-
-  __stack.step++;
-}
-if (__step <= 1) {
-  
-async function _response(__metadata): Promise<any> {
-  __self.__removedTools = __self.__removedTools || [];
-  return runPrompt({
-    ctx: __ctx,
-    prompt: `Generate a response word by word`,
-    messages: __metadata?.messages || new MessageThread(),
-    
-    tools: undefined,
-    toolHandlers: [],
-    clientConfig: {},
-    stream: true,
-    maxToolCallRounds: 10,
-    interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools,
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupNode({
+    state: __state
   });
-}
+  const __ctx = __state.ctx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeStart",
+    data: {
+      nodeName: "foo"
+    }
+  })
+  if (__state.isResume) {
+    __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+  }
+  if (__step <= 0) {
 
-
+    __stack.step++;
+  }
+  if (__step <= 1) {
+    async function _response(__metadata) {
+      __self.__removedTools = __self.__removedTools || [];
+      return runPrompt({
+        ctx: __ctx,
+        prompt: `Generate a response word by word`,
+        messages: __metadata?.messages || new MessageThread(),
+        tools: undefined,
+        toolHandlers: [],
+        clientConfig: {},
+        stream: true,
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
+      });
+    }
 __self.response = _response({
       messages: new MessageThread()
     });
-
-
-
-  
-  __stack.step++;
-}
-if (__step <= 2) {
-  [__self.response] = await Promise.all([__self.response]);
-  __stack.step++;
-}
-if (__step <= 3) {
-  await await _print(__stack.locals.response)
-  
-  
-  __stack.step++;
-}
-if (__step <= 4) {
-  
-async function _response2(__metadata): Promise<any> {
-  __self.__removedTools = __self.__removedTools || [];
-  return runPrompt({
-    ctx: __ctx,
-    prompt: `Generate a response word by word, but with a different model`,
-    messages: __metadata?.messages || new MessageThread(),
     
-    tools: undefined,
-    toolHandlers: [],
-    clientConfig: {
-  "model": `gemini-2.5-flash-lite`
-},
-    stream: true,
-    maxToolCallRounds: 10,
-    interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools,
-  });
-}
-
-
+    __stack.step++;
+  }
+  if (__step <= 2) {
+    [__self.response] = await Promise.all([__self.response]);
+    __stack.step++;
+  }
+  if (__step <= 3) {
+    await await _print(__stack.locals.response)
+    
+    
+    __stack.step++;
+  }
+  if (__step <= 4) {
+    async function _response2(__metadata) {
+      __self.__removedTools = __self.__removedTools || [];
+      return runPrompt({
+        ctx: __ctx,
+        prompt: `Generate a response word by word, but with a different model`,
+        messages: __metadata?.messages || new MessageThread(),
+        tools: undefined,
+        toolHandlers: [],
+        clientConfig: {
+          "model": `gemini-2.5-flash-lite`
+        },
+        stream: true,
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
+      });
+    }
 __self.response2 = _response2({
       messages: new MessageThread()
     });
-
-
-
-  
-  __stack.step++;
-}
-if (__step <= 5) {
-  [__self.response2] = await Promise.all([__self.response2]);
-  __stack.step++;
-}
-if (__step <= 6) {
-  await await _print(__stack.locals.response2)
-  
-  __stack.step++;
-}
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "foo", data: undefined } });
-    return { messages: __threads, data: undefined };
-});
-
+    
+    __stack.step++;
+  }
+  if (__step <= 5) {
+    [__self.response2] = await Promise.all([__self.response2]);
+    __stack.step++;
+  }
+  if (__step <= 6) {
+    await await _print(__stack.locals.response2)
+    
+    __stack.step++;
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeEnd",
+    data: {
+      nodeName: "foo",
+      data: undefined
+    }
+  })
+  return {
+    messages: __threads,
+    data: undefined
+  };
+})
 export async function foo({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
     ctx: __globalCtx,

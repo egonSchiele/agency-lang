@@ -149,106 +149,78 @@ export async function foo(__state: InternalFunctionState | undefined = undefined
       {
 const __tid = __threads.create();
 __threads.pushActive(__tid)
-
-async function _res1(__metadata): Promise<any> {
+async function _res1(__metadata) {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `What are the first 5 prime numbers?`,
     messages: __metadata?.messages || new MessageThread(),
-    
     responseFormat: z.object({
       response: z.array(z.number())
     }),
-    
     tools: undefined,
     toolHandlers: [],
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
     interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools,
+    removedTools: __self.__removedTools
   });
 }
-
-
-
-
 __self.res1 = await _res1({
-      messages: __threads.getOrCreateActive()
-    });
-
+  messages: __threads.getOrCreateActive()
+});
 // return early from node if this is an interrupt
 if (isInterrupt(__self.res1)) {
-  
-   
-   return  __self.res1;
-   
+  return __self.res1;
 }
-
 
 {
 const __ptid_res2 = __threads.create();
 const __ptid_res3 = __threads.create();
-
-async function _res2(__metadata): Promise<any> {
+async function _res2(__metadata) {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `What is 2+2?`,
     messages: __metadata?.messages || new MessageThread(),
-    
     responseFormat: z.object({
       response: z.number()
     }),
-    
     tools: undefined,
     toolHandlers: [],
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
     interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools,
+    removedTools: __self.__removedTools
   });
 }
-
-
 __self.res2 = _res2({
-      messages: __threads.get(__ptid_res2)
-    });
+  messages: __threads.get(__ptid_res2)
+});
 
-
-
-
-
-async function _res3(__metadata): Promise<any> {
+async function _res3(__metadata) {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
     ctx: __ctx,
     prompt: `What is 3+3?`,
     messages: __metadata?.messages || new MessageThread(),
-    
     responseFormat: z.object({
       response: z.number()
     }),
-    
     tools: undefined,
     toolHandlers: [],
     clientConfig: {},
     stream: false,
     maxToolCallRounds: 10,
     interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools,
+    removedTools: __self.__removedTools
   });
 }
-
-
 __self.res3 = _res3({
-      messages: __threads.get(__ptid_res3)
-    });
-
-
-
+  messages: __threads.get(__ptid_res3)
+});
 
 [__self.res2, __self.res3] = await Promise.all([__self.res2, __self.res3]);
 [__stack.locals.res2, __stack.locals.res3] = await Promise.all([__stack.locals.res2, __stack.locals.res3]);

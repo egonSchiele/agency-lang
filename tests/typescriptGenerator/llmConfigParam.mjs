@@ -118,106 +118,101 @@ __globalCtx.stateStack.globals.config = {
   "model": `gemini-2.5-flash-lite`
 };
 
-
 graph.node("main", async (__state: GraphState) => {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupNode({ state: __state });
-    const __ctx = __state.ctx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeStart", data: { nodeName: "main" } });
-
-    if (__state.isResume) {
-      __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
-    }
-
-    
-    if (__step <= 0) {
-
-  __stack.step++;
-}
-if (__step <= 1) {
-  
-async function _foo(__metadata): Promise<any> {
-  __self.__removedTools = __self.__removedTools || [];
-  return runPrompt({
-    ctx: __ctx,
-    prompt: `What are 5 numbers?`,
-    messages: __metadata?.messages || new MessageThread(),
-    
-    responseFormat: z.object({
-      response: z.array(z.number())
-    }),
-    
-    tools: undefined,
-    toolHandlers: [],
-    clientConfig: __globalCtx.stateStack.globals.config,
-    stream: false,
-    maxToolCallRounds: 10,
-    interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools,
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupNode({
+    state: __state
   });
-}
+  const __ctx = __state.ctx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeStart",
+    data: {
+      nodeName: "main"
+    }
+  })
+  if (__state.isResume) {
+    __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+  }
+  if (__step <= 0) {
 
-
+    __stack.step++;
+  }
+  if (__step <= 1) {
+    async function _foo(__metadata) {
+      __self.__removedTools = __self.__removedTools || [];
+      return runPrompt({
+        ctx: __ctx,
+        prompt: `What are 5 numbers?`,
+        messages: __metadata?.messages || new MessageThread(),
+        responseFormat: z.object({
+          response: z.array(z.number())
+        }),
+        tools: undefined,
+        toolHandlers: [],
+        clientConfig: __globalCtx.stateStack.globals.config,
+        stream: false,
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
+      });
+    }
 __self.foo = _foo({
       messages: new MessageThread()
     });
-
-
-
-  
-  __stack.step++;
-}
-if (__step <= 2) {
-  
-async function _foo2(__metadata): Promise<any> {
-  __self.__removedTools = __self.__removedTools || [];
-  return runPrompt({
-    ctx: __ctx,
-    prompt: `What are 5 numbers?`,
-    messages: __metadata?.messages || new MessageThread(),
     
-    responseFormat: z.object({
-      response: z.array(z.number())
-    }),
-    
-    tools: undefined,
-    toolHandlers: [],
-    clientConfig: {
-  "maxTokens": 100
-},
-    stream: false,
-    maxToolCallRounds: 10,
-    interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools,
-  });
-}
-
-
+    __stack.step++;
+  }
+  if (__step <= 2) {
+    async function _foo2(__metadata) {
+      __self.__removedTools = __self.__removedTools || [];
+      return runPrompt({
+        ctx: __ctx,
+        prompt: `What are 5 numbers?`,
+        messages: __metadata?.messages || new MessageThread(),
+        responseFormat: z.object({
+          response: z.array(z.number())
+        }),
+        tools: undefined,
+        toolHandlers: [],
+        clientConfig: {
+          "maxTokens": 100
+        },
+        stream: false,
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
+      });
+    }
 __self.foo2 = _foo2({
       messages: new MessageThread()
     });
-
-
-
-  
-  __stack.step++;
-}
-if (__step <= 3) {
-  [__self.foo, __self.foo2] = await Promise.all([__self.foo, __self.foo2]);
-  __stack.step++;
-}
-if (__step <= 4) {
-  await await _print(__stack.locals.foo, __stack.locals.foo2)
-  
-  __stack.step++;
-}
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
-    return { messages: __threads, data: undefined };
-});
-
+    
+    __stack.step++;
+  }
+  if (__step <= 3) {
+    [__self.foo, __self.foo2] = await Promise.all([__self.foo, __self.foo2]);
+    __stack.step++;
+  }
+  if (__step <= 4) {
+    await await _print(__stack.locals.foo, __stack.locals.foo2)
+    
+    __stack.step++;
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeEnd",
+    data: {
+      nodeName: "main",
+      data: undefined
+    }
+  })
+  return {
+    messages: __threads,
+    data: undefined
+  };
+})
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
     ctx: __globalCtx,

@@ -195,86 +195,97 @@ return __stack.locals.message
 }
 
 
-
 graph.node("main", async (__state: GraphState) => {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupNode({ state: __state });
-    const __ctx = __state.ctx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeStart", data: { nodeName: "main" } });
-
-    if (__state.isResume) {
-      __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
-    }
-
-    
-    if (__step <= 0) {
-  //  Comment before function call
-  
-  __stack.step++;
-}
-if (__step <= 1) {
-  __stack.locals.result = greet({
-    ctx: __ctx,
-    threads: new ThreadStore(),
-    interruptData: __state?.interruptData
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupNode({
+    state: __state
   });
+  const __ctx = __state.ctx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeStart",
+    data: {
+      nodeName: "main"
+    }
+  })
+  if (__state.isResume) {
+    __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+  }
+  if (__step <= 0) {
+    //  Comment before function call
+    
+    __stack.step++;
+  }
+  if (__step <= 1) {
+    __stack.locals.result = greet({
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    });
 if (isInterrupt(__stack.locals.result)) {
-    return {
-      ...__state,
-      data: __stack.locals.result
-    };
+      return {
+        ...__state,
+        data: __stack.locals.result
+      };
+    }
+    
+    __stack.step++;
   }
-  
-  __stack.step++;
-}
-if (__step <= 2) {
-  [__self.result] = await Promise.all([__self.result]);
-  __stack.step++;
-}
-if (__step <= 3) {
-  await await _print(__stack.locals.result)
-  
-  
-  //  Testing comments in different contexts
-  
-  //  1. Before type hints
-  
-  
-  
-  __stack.step++;
-}
-if (__step <= 4) {
-  __stack.locals.age = 25;
-  
-  
-  //  2. Before conditionals
-  
-  __stack.step++;
-}
-if (__step <= 5) {
-  __stack.locals.status = `active`;
-  
-  __stack.step++;
-}
-if (__step <= 6) {
-  switch (__stack.locals.status) {
-    case `inactive`:
-      await await _print(`Stopped`)
-      break;
+  if (__step <= 2) {
+    [__self.result] = await Promise.all([__self.result]);
+    __stack.step++;
   }
-  
-  
-  //  Final comment at end of file
-  
-  __stack.step++;
-}
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
-    return { messages: __threads, data: undefined };
-});
-
+  if (__step <= 3) {
+    await await _print(__stack.locals.result)
+    
+    
+    //  Testing comments in different contexts
+    
+    //  1. Before type hints
+    
+    
+    
+    __stack.step++;
+  }
+  if (__step <= 4) {
+    __stack.locals.age = 25;
+    
+    
+    //  2. Before conditionals
+    
+    __stack.step++;
+  }
+  if (__step <= 5) {
+    __stack.locals.status = `active`;
+    
+    __stack.step++;
+  }
+  if (__step <= 6) {
+    switch (__stack.locals.status) {
+      case `inactive`:
+        await await _print(`Stopped`)
+        break;
+    }
+    
+    
+    //  Final comment at end of file
+    
+    __stack.step++;
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeEnd",
+    data: {
+      nodeName: "main",
+      data: undefined
+    }
+  })
+  return {
+    messages: __threads,
+    data: undefined
+  };
+})
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
     ctx: __globalCtx,

@@ -114,178 +114,196 @@ export const approveInterrupt = (i: Interrupt, m?: any) => _approveInterrupt({ c
 export const rejectInterrupt = (i: Interrupt, m?: any) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
 export const modifyInterrupt = (i: Interrupt, a: any, m?: any) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
 export const resolveInterrupt = (i: Interrupt, v: any, m?: any) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
-
 graph.node("greet", async (__state: GraphState) => {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupNode({ state: __state });
-    const __ctx = __state.ctx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeStart", data: { nodeName: "greet" } });
-
-    if (__state.isResume) {
-      __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
-    }
-
-    
-    if (__step <= 0) {
-  
-  
-  __stack.step++;
-}
-if (__step <= 1) {
-  
-async function _greeting(__metadata): Promise<any> {
-  __self.__removedTools = __self.__removedTools || [];
-  return runPrompt({
-    ctx: __ctx,
-    prompt: `say hello`,
-    messages: __metadata?.messages || new MessageThread(),
-    
-    tools: undefined,
-    toolHandlers: [],
-    clientConfig: {},
-    stream: false,
-    maxToolCallRounds: 10,
-    interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools,
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupNode({
+    state: __state
   });
-}
-
-
+  const __ctx = __state.ctx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeStart",
+    data: {
+      nodeName: "greet"
+    }
+  })
+  if (__state.isResume) {
+    __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+  }
+  if (__step <= 0) {
+    
+    
+    __stack.step++;
+  }
+  if (__step <= 1) {
+    async function _greeting(__metadata) {
+      __self.__removedTools = __self.__removedTools || [];
+      return runPrompt({
+        ctx: __ctx,
+        prompt: `say hello`,
+        messages: __metadata?.messages || new MessageThread(),
+        tools: undefined,
+        toolHandlers: [],
+        clientConfig: {},
+        stream: false,
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
+      });
+    }
 __self.greeting = _greeting({
       messages: new MessageThread()
     });
-
-
-
-  
-  __stack.step++;
-}
-if (__step <= 2) {
-  [__self.greeting] = await Promise.all([__self.greeting]);
-  __stack.step++;
-}
-if (__step <= 3) {
-  __ctx.stateStack.pop();
+    
+    __stack.step++;
+  }
+  if (__step <= 2) {
+    [__self.greeting] = await Promise.all([__self.greeting]);
+    __stack.step++;
+  }
+  if (__step <= 3) {
+    __ctx.stateStack.pop();
 return goToNode("processGreeting", {
-    messages: __stack.messages,
-    ctx: __ctx,
+      messages: __stack.messages,
+      ctx: __ctx,
+      data: {
+        msg: __stack.locals.greeting
+      }
+    })
+    
+    __stack.step++;
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeEnd",
     data: {
-      msg: __stack.locals.greeting
+      nodeName: "greet",
+      data: undefined
     }
   })
-  
-  __stack.step++;
-}
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "greet", data: undefined } });
-    return { messages: __threads, data: undefined };
-});
-
-
+  return {
+    messages: __threads,
+    data: undefined
+  };
+})
 
 
 graph.node("processGreeting", async (__state: GraphState) => {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupNode({ state: __state });
-    const __ctx = __state.ctx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeStart", data: { nodeName: "processGreeting" } });
-
-    if (__state.isResume) {
-      __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
-    }
-
-    
-    if (!__state.isResume) {
-      __stack.args["msg"] = __state.data.msg;
-    }
-    
-    if (__step <= 0) {
-  
-  
-  __stack.step++;
-}
-if (__step <= 1) {
-  
-async function _result(msg, __metadata): Promise<any> {
-  __self.__removedTools = __self.__removedTools || [];
-  return runPrompt({
-    ctx: __ctx,
-    prompt: `format this greeting: ${msg}`,
-    messages: __metadata?.messages || new MessageThread(),
-    
-    tools: undefined,
-    toolHandlers: [],
-    clientConfig: {},
-    stream: false,
-    maxToolCallRounds: 10,
-    interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools,
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupNode({
+    state: __state
   });
-}
-
-
+  const __ctx = __state.ctx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeStart",
+    data: {
+      nodeName: "processGreeting"
+    }
+  })
+  if (__state.isResume) {
+    __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+  }
+  if (!__state.isResume) {
+    __stack.args["msg"] = __state.data.msg;
+  }
+  if (__step <= 0) {
+    
+    
+    __stack.step++;
+  }
+  if (__step <= 1) {
+    async function _result(msg, __metadata) {
+      __self.__removedTools = __self.__removedTools || [];
+      return runPrompt({
+        ctx: __ctx,
+        prompt: `format this greeting: ${msg}`,
+        messages: __metadata?.messages || new MessageThread(),
+        tools: undefined,
+        toolHandlers: [],
+        clientConfig: {},
+        stream: false,
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
+      });
+    }
 __self.result = _result(__stack.args.msg, {
       messages: new MessageThread()
     });
-
-
-
-  
-  __stack.step++;
-}
-if (__step <= 2) {
-  [__self.result] = await Promise.all([__self.result]);
-  __stack.step++;
-}
-if (__step <= 3) {
-  await await _print(__stack.locals.result)
-  
-  __stack.step++;
-}
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "processGreeting", data: undefined } });
-    return { messages: __threads, data: undefined };
-});
-
-
+    
+    __stack.step++;
+  }
+  if (__step <= 2) {
+    [__self.result] = await Promise.all([__self.result]);
+    __stack.step++;
+  }
+  if (__step <= 3) {
+    await await _print(__stack.locals.result)
+    
+    __stack.step++;
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeEnd",
+    data: {
+      nodeName: "processGreeting",
+      data: undefined
+    }
+  })
+  return {
+    messages: __threads,
+    data: undefined
+  };
+})
 
 
 graph.node("main", async (__state: GraphState) => {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupNode({ state: __state });
-    const __ctx = __state.ctx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeStart", data: { nodeName: "main" } });
-
-    if (__state.isResume) {
-      __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupNode({
+    state: __state
+  });
+  const __ctx = __state.ctx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeStart",
+    data: {
+      nodeName: "main"
     }
-
-    
-    if (__step <= 0) {
-
-  __stack.step++;
-}
-if (__step <= 1) {
-  __ctx.stateStack.pop();
-return goToNode("greet", {
-    messages: __stack.messages,
-    ctx: __ctx,
-    data: {}
   })
-  
-  __stack.step++;
-}
+  if (__state.isResume) {
+    __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
+  }
+  if (__step <= 0) {
 
-    await callHook({ callbacks: __ctx.callbacks, name: "onNodeEnd", data: { nodeName: "main", data: undefined } });
-    return { messages: __threads, data: undefined };
-});
-
+    __stack.step++;
+  }
+  if (__step <= 1) {
+    __ctx.stateStack.pop();
+return goToNode("greet", {
+      messages: __stack.messages,
+      ctx: __ctx,
+      data: {}
+    })
+    
+    __stack.step++;
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeEnd",
+    data: {
+      nodeName: "main",
+      data: undefined
+    }
+  })
+  return {
+    messages: __threads,
+    data: undefined
+  };
+})
 
 graph.conditionalEdge("greet", ["processGreeting"])
 graph.conditionalEdge("main", ["greet"])

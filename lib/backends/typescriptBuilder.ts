@@ -26,9 +26,7 @@ import { TimeBlock } from "@/types/timeBlock.js";
 import { formatTypeHint } from "@/cli/util.js";
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
 import * as renderInterruptReturn from "../templates/backends/typescriptGenerator/interruptReturn.js";
-import * as renderGraphNode from "../templates/backends/typescriptGenerator/graphNode.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
-import * as promptFunction from "../templates/backends/typescriptGenerator/promptFunction.js";
 
 import { AccessChainElement, ValueAccess } from "../types/access.js";
 import {
@@ -472,12 +470,10 @@ export class TypeScriptBuilder {
         return ts.scopedVar(literal.value, literal.scope!);
       }
       case "prompt":
-        return ts.raw(
-          this.processPromptLiteral(
-            DEFAULT_PROMPT_NAME,
-            this.getScopeReturnType(),
-            literal,
-          ),
+        return this.processPromptLiteral(
+          DEFAULT_PROMPT_NAME,
+          this.getScopeReturnType(),
+          literal,
         );
       case "boolean":
         return ts.bool(literal.value);
@@ -1075,18 +1071,72 @@ export class TypeScriptBuilder {
     this.adjacentNodes[nodeName] = [...this.currentAdjacentNodes];
     this.isInsideGraphNode = false;
     this.endScope();
-    const paramAssignments = parameters
-      .map((p) => `__stack.args["${p.name}"] = __state.data.${p.name};`)
-      .join("\n      ");
+    // Build the arrow function body
+    const stmts: TsNode[] = [
+      ts.constDecl(
+        "{ stack: __stack, step: __step, self: __self, threads: __threads }",
+        $(ts.id("setupNode")).call([ts.obj({ state: ts.runtime.state })]).done(),
+      ),
+      ts.constDecl("__ctx", $(ts.runtime.state).prop("ctx").done()),
+      ts.constDecl("statelogClient", $(ts.runtime.ctx).prop("statelogClient").done()),
+      ts.constDecl("__graph", $(ts.runtime.ctx).prop("graph").done()),
+      $(ts.id("callHook")).call([ts.obj({
+        callbacks: $(ts.runtime.ctx).prop("callbacks").done(),
+        name: ts.str("onNodeStart"),
+        data: ts.obj({ nodeName: ts.str(nodeName) }),
+      })]).await().done(),
+      // Resume: restore globals
+      ts.if(
+        $(ts.runtime.state).prop("isResume").done(),
+        ts.assign(
+          $(ts.runtime.globalCtx).prop("stateStack").prop("globals").done(),
+          $(ts.runtime.state).prop("ctx").prop("stateStack").prop("globals").done(),
+        ),
+      ),
+    ];
 
-    return ts.raw(
-      renderGraphNode.default({
-        name: nodeName,
-        body: bodyCode.map((n) => this.str(n)).join("\n"),
-        hasParam: parameters.length > 0,
-        paramAssignments,
-      }),
+    // Param assignments (only when not resuming)
+    if (parameters.length > 0) {
+      const paramStmts = parameters.map((p) =>
+        ts.assign(
+          $(ts.runtime.stack).prop("args").index(ts.str(p.name)).done(),
+          $(ts.runtime.state).prop("data").prop(p.name).done(),
+        ),
+      );
+      stmts.push(
+        ts.if(
+          ts.raw("!__state.isResume"),
+          ts.statements(paramStmts),
+        ),
+      );
+    }
+
+    // Body
+    stmts.push(...bodyCode);
+
+    // onNodeEnd hook + return
+    stmts.push(
+      $(ts.id("callHook")).call([ts.obj({
+        callbacks: $(ts.runtime.ctx).prop("callbacks").done(),
+        name: ts.str("onNodeEnd"),
+        data: ts.obj({ nodeName: ts.str(nodeName), data: ts.raw("undefined") }),
+      })]).await().done(),
     );
+    stmts.push(
+      ts.return(ts.obj({
+        messages: ts.runtime.threads,
+        data: ts.raw("undefined"),
+      })),
+    );
+
+    return $(ts.id("graph")).prop("node").call([
+      ts.str(nodeName),
+      ts.arrowFn(
+        [{ name: "__state", typeAnnotation: "GraphState" }],
+        ts.statements(stmts),
+        { async: true },
+      ),
+    ]).done();
   }
 
   private processReturnStatement(node: ReturnStatement): TsNode {
@@ -1130,7 +1180,7 @@ export class TypeScriptBuilder {
     const chainStr = this.renderAccessChain(node.accessChain);
 
     if (value.type === "prompt") {
-      return ts.raw(this.processPromptLiteral(variableName, typeHint, value));
+      return this.processPromptLiteral(variableName, typeHint, value);
     } else if (
       value.type === "functionCall" &&
       value.functionName === "interrupt"
@@ -1241,20 +1291,19 @@ export class TypeScriptBuilder {
     variableName: string,
     variableType: VariableType | undefined,
     node: PromptLiteral,
-  ): string {
+  ): TsNode {
     const interpolatedVars = uniq(
       node.segments
         .filter((s) => s.type === "interpolation")
         .map((s) => getBaseVarName(s as InterpolationSegment)),
     );
 
-    const functionCode = this.generatePromptFunction({
+    return this.generatePromptFunction({
       variableName,
       variableType,
       functionArgs: interpolatedVars,
       prompt: node,
     });
-    return functionCode;
   }
 
   private generatePromptFunction({
@@ -1267,7 +1316,7 @@ export class TypeScriptBuilder {
     variableType: VariableType | undefined;
     functionArgs: string[];
     prompt: PromptLiteral;
-  }): string {
+  }): TsNode {
     const _variableType = variableType ||
       this.typeHints[variableName] || {
         type: "primitiveType" as const,
@@ -1276,29 +1325,31 @@ export class TypeScriptBuilder {
 
     const zodSchema = mapTypeToZodSchema(_variableType, this.typeAliases);
     const clientConfig = prompt.config
-      ? this.str(this.processNode(prompt.config))
-      : "{}";
+      ? this.processNode(prompt.config)
+      : ts.obj({});
 
     const promptCode = this.buildPromptString({
       segments: prompt.segments,
       typeHints: this.typeHints,
       skills: prompt.skills || [],
     });
-    const parts = [...functionArgs];
-    parts.push("__metadata");
-    const argsStr = parts.join(", ");
-    let _tools = "";
-    if (prompt.tools) {
-      _tools = prompt.tools.toolNames.map((name) => `__${name}Tool`).join(", ");
-    }
-    const tools = _tools.length > 0 ? `[${_tools}]` : "undefined";
 
-    const toolHandlerEntries = (
-      prompt.tools || { type: "usesTool", toolNames: [] }
-    ).toolNames.map((toolName) => {
+    // Tools array
+    const toolNames = prompt.tools?.toolNames || [];
+    const toolsNode: TsNode = toolNames.length > 0
+      ? ts.arr(toolNames.map((name) => ts.id(`__${name}Tool`)))
+      : ts.id("undefined");
+
+    // Tool handlers
+    const toolHandlerNodes: TsNode[] = toolNames.map((toolName) => {
       if (BUILTIN_TOOLS.includes(toolName)) {
         const internalName = BUILTIN_FUNCTIONS[toolName] || toolName;
-        return `{ name: "${toolName}", params: __${toolName}ToolParams, execute: ${internalName}, isBuiltin: true }`;
+        return ts.obj({
+          name: ts.str(toolName),
+          params: ts.id(`__${toolName}ToolParams`),
+          execute: ts.id(internalName),
+          isBuiltin: ts.bool(true),
+        });
       }
       if (
         !this.functionDefinitions[toolName] &&
@@ -1308,53 +1359,111 @@ export class TypeScriptBuilder {
           `Tool '${toolName}' is being used but no function definition found for it. Make sure to define a function for this tool.`,
         );
       }
-
-      return `{ name: "${toolName}", params: __${toolName}ToolParams, execute: ${toolName}, isBuiltin: false }`;
+      return ts.obj({
+        name: ts.str(toolName),
+        params: ts.id(`__${toolName}ToolParams`),
+        execute: ts.id(toolName),
+        isBuiltin: ts.bool(false),
+      });
     });
 
-    let threadExpr: string;
+    // Thread expression for metadata
+    let threadExpr: TsNode;
     if (this.parallelThreadVars[variableName]) {
-      threadExpr = `__threads.get(${this.parallelThreadVars[variableName]})`;
+      threadExpr = ts.threads.get(ts.id(this.parallelThreadVars[variableName]));
     } else if (prompt.async) {
-      threadExpr = `new MessageThread()`;
+      threadExpr = ts.new(ts.id("MessageThread"));
     } else {
-      threadExpr = `__threads.getOrCreateActive()`;
+      threadExpr = ts.threads.getOrCreateActive();
     }
-    const metadataObj = `{
-      messages: ${threadExpr}
-    }`;
+    const metadataObj = ts.obj({ messages: threadExpr });
 
-    const scopedFunctionArgs = functionArgs.map((arg) => {
+    // Scoped function args for the call site
+    const scopedFunctionArgNodes: TsNode[] = functionArgs.map((arg) => {
       const interpSegment = prompt.segments.find(
         (s) =>
           s.type === "interpolation" &&
           getBaseVarName(s as InterpolationSegment) === arg,
       ) as InterpolationSegment | undefined;
       if (!interpSegment) {
-        return arg;
+        return ts.id(arg);
       }
       const baseExpr =
         interpSegment.expression.type === "variableName"
           ? interpSegment.expression
           : interpSegment.expression.base;
-      return this.str(this.processNode(baseExpr));
+      return this.processNode(baseExpr);
     });
 
-    return promptFunction.default({
-      variableName,
-      argsStr,
-      funcCallParams: [...scopedFunctionArgs, metadataObj].join(", "),
-      promptCode,
-      hasResponseFormat: zodSchema !== DEFAULT_SCHEMA,
-      zodSchema,
-      tools,
-      toolHandlers: toolHandlerEntries.join(", "),
-      clientConfig,
-      nodeContext: this.getCurrentScope().type === "node",
-      isStreaming: prompt.isStreaming || false,
-      isAsync: prompt.async || false,
-      maxToolCallRounds: this.agencyConfig.maxToolCallRounds || 10,
-    });
+    // Build runPrompt config object
+    const runPromptEntries: Record<string, TsNode> = {
+      ctx: ts.runtime.ctx,
+      prompt: ts.raw(promptCode),
+      messages: ts.raw("__metadata?.messages || new MessageThread()"),
+    };
+    if (zodSchema !== DEFAULT_SCHEMA) {
+      runPromptEntries.responseFormat = $(ts.id("z")).prop("object").call([
+        ts.obj({ response: ts.raw(zodSchema) }),
+      ]).done();
+    }
+    runPromptEntries.tools = toolsNode;
+    runPromptEntries.toolHandlers = ts.arr(toolHandlerNodes);
+    runPromptEntries.clientConfig = clientConfig;
+    runPromptEntries.stream = ts.bool(prompt.isStreaming || false);
+    runPromptEntries.maxToolCallRounds = ts.num(this.agencyConfig.maxToolCallRounds || 10);
+    runPromptEntries.interruptData = ts.raw("__state?.interruptData");
+    runPromptEntries.removedTools = $(ts.runtime.self).prop("__removedTools").done();
+
+    // Function params
+    const fnParams: TsParam[] = functionArgs.map((arg) => ({ name: arg }));
+    fnParams.push({ name: "__metadata" });
+
+    // Inner function declaration
+    const innerFn = ts.functionDecl(
+      `_${variableName}`,
+      fnParams,
+      ts.statements([
+        ts.assign(
+          $(ts.runtime.self).prop("__removedTools").done(),
+          ts.binOp($(ts.runtime.self).prop("__removedTools").done(), "||", ts.arr([])),
+        ),
+        ts.return(
+          $(ts.id("runPrompt")).call([ts.obj(runPromptEntries)]).done(),
+        ),
+      ]),
+      { async: true },
+    );
+
+    // Call expression
+    const callArgs: TsNode[] = [...scopedFunctionArgNodes, metadataObj];
+    const callExpr = $(ts.id(`_${variableName}`)).call(callArgs).done();
+
+    const varRef = $(ts.runtime.self).prop(variableName).done();
+    const stmts: TsNode[] = [innerFn];
+
+    if (prompt.async) {
+      // Async: no await, no interrupt check
+      stmts.push(ts.assign(varRef, callExpr));
+    } else {
+      // Sync: await + interrupt check
+      stmts.push(ts.assign(varRef, ts.await(callExpr)));
+      stmts.push(ts.raw("// return early from node if this is an interrupt"));
+      const isNodeContext = this.getCurrentScope().type === "node";
+      const returnExpr = isNodeContext
+        ? ts.return(ts.obj({
+            messages: ts.runtime.threads,
+            data: varRef,
+          }))
+        : ts.return(varRef);
+      stmts.push(
+        ts.if(
+          $(ts.id("isInterrupt")).call([varRef]).done(),
+          returnExpr,
+        ),
+      );
+    }
+
+    return ts.statements(stmts);
   }
 
   private buildPromptString({

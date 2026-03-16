@@ -441,8 +441,6 @@ export async function runPrompt(args: {
         model: clientConfig.model,
       });
 
-      // @ts-ignore
-      ctx.stateStack.nodesTraversed = ctx.graph.getNodesTraversed();
       interrupt.state = ctx.stateStack.toJSON();
       return interrupt;
     }

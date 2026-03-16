@@ -23,6 +23,9 @@ export class RuntimeContext<T> {
   // this is the directory that the runtime is running in. We need this to be able to read files relative to the runtime.
   dirname: string;
 
+  // stored so createExecutionContext can create new StatelogClients
+  private statelogConfig: StatelogConfig;
+
   constructor(args: {
     statelogConfig: StatelogConfig;
     smoltalkDefaults: Partial<SmolPromptConfig>;
@@ -33,6 +36,7 @@ export class RuntimeContext<T> {
       traceId: args.statelogConfig.traceId || nanoid(),
     };
 
+    this.statelogConfig = statelogConfig;
     this.statelogClient = new StatelogClient(statelogConfig);
     this.stateStack = StateStack.createWithTokenStats();
     this.callbacks = {};
@@ -49,6 +53,22 @@ export class RuntimeContext<T> {
     this.graph = new SimpleMachine<T>(graphConfig);
 
     this.smoltalkDefaults = args.smoltalkDefaults;
+  }
+
+  createExecutionContext(): RuntimeContext<T> {
+    const execCtx = Object.create(RuntimeContext.prototype) as RuntimeContext<T>;
+    execCtx.graph = this.graph;
+    execCtx.smoltalkDefaults = this.smoltalkDefaults;
+    execCtx.dirname = this.dirname;
+    execCtx.statelogConfig = this.statelogConfig;
+    execCtx.stateStack = StateStack.createWithTokenStats();
+    execCtx.callbacks = {};
+    execCtx.onStreamLock = false;
+    execCtx.statelogClient = new StatelogClient({
+      ...this.statelogConfig,
+      traceId: nanoid(),
+    });
+    return execCtx;
   }
 
   toJSON() {

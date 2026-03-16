@@ -5,7 +5,7 @@ const INDENT = "  ";
 function scopeToPrefix(scope: TsScopedVar["scope"]): string {
   switch (scope) {
     case "global":
-      return "__globalCtx.stateStack.globals";
+      return "__ctx.stateStack.globals";
     case "function":
     case "node":
       return "__stack.locals";

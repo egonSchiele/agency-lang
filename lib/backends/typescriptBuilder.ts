@@ -175,7 +175,7 @@ export class TypeScriptBuilder {
     }
     switch (scope) {
       case "global":
-        return "__globalCtx.stateStack.globals";
+        return "__ctx.stateStack.globals";
       case "function":
       case "node":
         return "__stack.locals";
@@ -302,9 +302,15 @@ export class TypeScriptBuilder {
     }
 
     // Pass 7: Process all nodes and generate code
+    // Separate global-scope assignments into __initializeGlobals function
+    const globalInitStatements: TsNode[] = [];
     for (const node of program.nodes) {
       const result = this.processNode(node);
-      this.generatedStatements.push(result);
+      if (node.type === "assignment" && node.scope === "global") {
+        globalInitStatements.push(result);
+      } else {
+        this.generatedStatements.push(result);
+      }
     }
 
     // Assemble output
@@ -329,6 +335,15 @@ export class TypeScriptBuilder {
     for (const alias of this.generatedTypeAliases) {
       sections.push(alias);
     }
+
+    // Generate __initializeGlobals function for per-execution global variable initialization
+    sections.push(
+      ts.functionDecl(
+        "__initializeGlobals",
+        [{ name: "__ctx" }],
+        ts.statements(globalInitStatements),
+      ),
+    );
 
     sections.push(ts.statements(this.generatedStatements));
 
@@ -1100,18 +1115,6 @@ export class TypeScriptBuilder {
       }),
 
       ts.callHook("onNodeStart", { nodeName: ts.str(nodeName) }),
-      // Resume: restore globals
-      ts.if(
-        $(ts.runtime.state).prop("isResume").done(),
-        ts.assign(
-          $(ts.runtime.globalCtx).prop("stateStack").prop("globals").done(),
-          $(ts.runtime.state)
-            .prop("ctx")
-            .prop("stateStack")
-            .prop("globals")
-            .done(),
-        ),
-      ),
     ];
 
     // Param assignments (only when not resuming)
@@ -1824,6 +1827,7 @@ export class TypeScriptBuilder {
                   data: ts.obj(dataObj),
                   messages: ts.id("messages"),
                   callbacks: ts.id("callbacks"),
+                  initializeGlobals: ts.id("__initializeGlobals"),
                 }),
               ])
               .done(),

@@ -356,7 +356,7 @@ describe("prettyPrint", () => {
 
   it("TsScopedVar global", () => {
     expect(printTs(ts.scopedVar("x", "global"))).toBe(
-      "__globalCtx.stateStack.globals.x",
+      "__ctx.stateStack.globals.x",
     );
   });
 

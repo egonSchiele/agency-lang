@@ -1,0 +1,9 @@
+globalVar = "unchanged"
+
+node foo(sec: number, newGlobalVar: string | null) {
+  sleep(sec)
+  if (newGlobalVar) {
+    globalVar = newGlobalVar
+  }
+  return globalVar
+}

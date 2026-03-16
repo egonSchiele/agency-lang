@@ -15,7 +15,6 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
   throw new Error("Interrupt response of type 'modify' is used for modifying tool call args. Use resolve instead.");
 } else {
   const __interruptResult = interrupt({{{interruptArgs}}});
-  __ctx.stateStack.nodesTraversed = __graph.getNodesTraversed();
   __interruptResult.state = __ctx.stateStack.toJSON();
   {{#nodeContext}}
   return { messages: __threads, data: __interruptResult };

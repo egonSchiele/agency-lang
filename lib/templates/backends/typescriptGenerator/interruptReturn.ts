@@ -39,7 +39,6 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   {{/nodeContext}}
 } else {
   const __interruptResult = interrupt({{{interruptArgs}}});
-  __ctx.stateStack.nodesTraversed = __graph.getNodesTraversed();
   __interruptResult.state = __ctx.stateStack.toJSON();
   {{#nodeContext}}
   return { messages: __threads, data: __interruptResult };

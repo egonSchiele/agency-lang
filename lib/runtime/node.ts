@@ -76,6 +76,7 @@ export async function runNode({
   data,
   messages,
   callbacks,
+  initializeGlobals,
 }: {
   // global execution context
   ctx: RuntimeContext<GraphState>;
@@ -91,26 +92,33 @@ export async function runNode({
   messages?: MessageJSON[];
 
   callbacks?: AgencyCallbacks;
+
+  // initializes global variables on the execution context
+  initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void;
 }): Promise<RunNodeResult<any>> {
-  ctx.callbacks = callbacks || ctx.callbacks || {};
+  const execCtx = ctx.createExecutionContext();
+  if (initializeGlobals) {
+    initializeGlobals(execCtx);
+  }
+  execCtx.callbacks = callbacks || {};
   await callHook({
-    callbacks: ctx.callbacks,
+    callbacks: execCtx.callbacks,
     name: "onAgentStart",
     data: { nodeName, args: data, messages: messages || [] },
   });
   const threadStore = new ThreadStore();
-  const result = await ctx.graph.run(nodeName, {
+  const result = await execCtx.graph.run(nodeName, {
     messages: threadStore,
     data,
-    ctx,
+    ctx: execCtx,
     isResume: false,
-  });
+  }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
   const returnObject = createReturnObject({
     result,
-    stateStack: ctx.stateStack,
+    stateStack: execCtx.stateStack,
   });
   await callHook({
-    callbacks: ctx.callbacks,
+    callbacks: execCtx.callbacks,
     name: "onAgentEnd",
     data: { nodeName, result: returnObject },
   });

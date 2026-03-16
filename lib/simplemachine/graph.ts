@@ -32,7 +32,6 @@ export class SimpleMachine<T> {
   private edges: Partial<Record<string, Edge<T, string>>> = {};
   private config: SimpleMachineConfig<T>;
   private statelogClient: StatelogClient | null = null;
-  private nodesTraversed: string[] = [];
   constructor(config: SimpleMachineConfig<T> = {}) {
     this.config = config;
     if (config.statelog) {
@@ -85,12 +84,7 @@ export class SimpleMachine<T> {
     //this.statelogClient?.debug(message, data || {});
   }
 
-  getNodesTraversed(): readonly string[] {
-    return this.nodesTraversed;
-  }
-
-  async run(startId: string, input: T): Promise<T> {
-    this.nodesTraversed = [];
+  async run(startId: string, input: T, options?: { onNodeEnter?: (id: string) => void }): Promise<T> {
     const jsonEdges: Record<string, JSONEdge> = {};
     for (const from in this.edges) {
       jsonEdges[from] = edgeToJSON(
@@ -105,7 +99,7 @@ export class SimpleMachine<T> {
     let currentId: string | null = startId;
     let data: T = input;
     while (currentId) {
-      this.nodesTraversed.push(currentId);
+      options?.onNodeEnter?.(currentId);
       const nodeFunc = this.nodes[currentId];
 
       if (!nodeFunc) {

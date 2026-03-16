@@ -1,0 +1,10 @@
+globalVar = "unchanged"
+
+node foo(sec: number, newGlobalVar: string | null) {
+  if (newGlobalVar) {
+    globalVar = newGlobalVar
+  }
+  confirmation = interrupt("confirm")
+  sleep(sec)
+  return globalVar
+}

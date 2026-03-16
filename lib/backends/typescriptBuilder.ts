@@ -72,7 +72,13 @@ import {
 } from "@/types/binop.js";
 import { expressionToString, getBaseVarName } from "@/utils/node.js";
 
-import type { TsNode, TsObjectEntry, TsElseIf, TsParam } from "../ir/tsIR.js";
+import type {
+  TsNode,
+  TsObjectEntry,
+  TsElseIf,
+  TsParam,
+  TsStepBlock,
+} from "../ir/tsIR.js";
 import { ts, $ } from "../ir/builders.js";
 import { printTs } from "../ir/prettyPrint.js";
 import type { ProgramInfo } from "../programInfo.js";
@@ -412,7 +418,9 @@ export class TypeScriptBuilder {
   // ------- Type system (side effects only) -------
 
   private processTypeAlias(node: TypeAlias): TsNode {
-    return ts.raw(`type ${node.aliasName} = ${formatTypeHint(node.aliasedType)};`);
+    return ts.raw(
+      `type ${node.aliasName} = ${formatTypeHint(node.aliasedType)};`,
+    );
   }
 
   private processTypeHint(_node: TypeHint): TsNode {
@@ -840,41 +848,45 @@ export class TypeScriptBuilder {
     // Setup block
     const setupStmts: TsNode[] = [
       ts.constDecl(
-        "{ stack: __stack, step: __step, self: __self, threads: __threads }",
-        $(ts.id("setupFunction")).call([ts.obj({ state: ts.runtime.state })]).done(),
+        "__setupData",
+        $(ts.id("setupFunction"))
+          .call([ts.obj({ state: ts.runtime.state })])
+          .done(),
       ),
-      ts.comment("__state will be undefined if this function is"),
-      ts.comment("being called as a tool by an llm"),
-      ts.constDecl("__ctx", ts.raw("__state?.ctx || __globalCtx")),
-      ts.constDecl("statelogClient", $(ts.runtime.ctx).prop("statelogClient").done()),
-      ts.constDecl("__graph", $(ts.runtime.ctx).prop("graph").done()),
-      ts.constDecl("__funcStartTime", $(ts.id("performance")).prop("now").call().done()),
-      $(ts.id("callHook")).call([ts.obj({
-        callbacks: $(ts.runtime.ctx).prop("callbacks").done(),
-        name: ts.str("onFunctionStart"),
-        data: ts.obj({
-          functionName: ts.str(functionName),
-          args: args.length > 0 ? ts.obj(argsObj) : ts.obj({}),
-          isBuiltin: ts.bool(false),
-        }),
-      })]).await().done(),
+
+      ts.comment(
+        "__state will be undefined if this function is being called as a tool by an llm",
+      ),
+      ts.setupEnv({
+        stack: $(ts.id("__setupData")).prop("stack").done(),
+        step: $(ts.id("__setupData")).prop("step").done(),
+        self: $(ts.id("__setupData")).prop("self").done(),
+        threads: $(ts.id("__setupData")).prop("threads").done(),
+        ctx: ts.raw("__state?.ctx || __globalCtx"),
+        statelogClient: $(ts.runtime.ctx).prop("statelogClient").done(),
+        graph: $(ts.runtime.ctx).prop("graph").done(),
+      }),
+
+      ts.time("__funcStartTime"),
+      ts.callHook("onFunctionStart", {
+        functionName: ts.str(functionName),
+        args: ts.obj(argsObj),
+        isBuiltin: ts.bool(false),
+      }),
     ];
 
     // Param assignments to stack
     for (const arg of args) {
       setupStmts.push(
-        ts.assign(
-          $(ts.runtime.stack).prop("args").index(ts.str(arg)).done(),
-          ts.id(arg),
-        ),
+        ts.assign($(ts.stack("args")).index(ts.str(arg)).done(), ts.id(arg)),
       );
     }
 
     // __self.__retryable
     setupStmts.push(
       ts.assign(
-        $(ts.runtime.self).prop("__retryable").done(),
-        ts.binOp($(ts.runtime.self).prop("__retryable").done(), "??", ts.bool(true)),
+        ts.self("__retryable"),
+        ts.binOp(ts.self("__retryable"), "??", ts.bool(true)),
       ),
     );
 
@@ -885,9 +897,11 @@ export class TypeScriptBuilder {
         ts.statements([
           ts.if(
             ts.raw("__error instanceof ToolCallError"),
-            ts.raw("throw __error"),
+            ts.throw("__error"),
           ),
-          ts.raw("throw new ToolCallError(__error, { retryable: __self.__retryable })"),
+          ts.throw(
+            "new ToolCallError(__error, { retryable: __self.__retryable })",
+          ),
         ]),
         "__error",
       ),
@@ -895,22 +909,20 @@ export class TypeScriptBuilder {
 
     // onFunctionEnd hook
     setupStmts.push(
-      $(ts.id("callHook")).call([ts.obj({
-        callbacks: $(ts.runtime.ctx).prop("callbacks").done(),
-        name: ts.str("onFunctionEnd"),
-        data: ts.obj({
-          functionName: ts.str(functionName),
-          timeTaken: $(ts.id("performance")).prop("now").call().minus(ts.id("__funcStartTime")).done(),
-        }),
-      })]).await().done(),
+      ts.callHook("onFunctionEnd", {
+        functionName: ts.str(functionName),
+        timeTaken: $(ts.id("performance"))
+          .prop("now")
+          .call()
+          .minus(ts.id("__funcStartTime"))
+          .done(),
+      }),
     );
 
-    return ts.functionDecl(
-      functionName,
-      fnParams,
-      ts.statements(setupStmts),
-      { async: true, export: true },
-    );
+    return ts.functionDecl(functionName, fnParams, ts.statements(setupStmts), {
+      async: true,
+      export: true,
+    });
   }
 
   private processStatement(node: AgencyNode): TsNode {
@@ -932,16 +944,17 @@ export class TypeScriptBuilder {
       const tempVar = "__funcResult";
       const nodeContext = scope.type === "node";
       const returnBody = nodeContext
-        ? ts.return(
-            ts.obj([
-              { spread: true, expr: ts.runtime.state },
-              { spread: false, key: "data", value: ts.id(tempVar) },
-            ]),
-          )
-        : ts.return(ts.obj({ data: ts.id(tempVar) }));
+        ? ts.obj([
+            ts.setSpread(ts.runtime.state),
+            ts.set("data", ts.id(tempVar)),
+          ])
+        : ts.obj({ data: ts.id(tempVar) });
       return ts.statements([
         ts.constDecl(tempVar, callNode),
-        ts.if(ts.call(ts.id("isInterrupt"), [ts.id(tempVar)]), returnBody),
+        ts.if(
+          ts.call(ts.id("isInterrupt"), [ts.id(tempVar)]),
+          ts.return(returnBody),
+        ),
       ]);
     }
 
@@ -989,9 +1002,9 @@ export class TypeScriptBuilder {
     const shouldAwait = !node.async && context !== "valueAccess";
 
     if (this.isAgencyFunction(node.functionName, context)) {
-      const configObj = ts.obj({
+      const configObj = ts.functionCallConfig({
         ctx: ts.runtime.ctx,
-        threads: node.async ? ts.new(ts.id("ThreadStore")) : ts.runtime.threads,
+        threads: node.async ? ts.newThreadStore() : ts.runtime.threads,
         interruptData: ts.raw("__state?.interruptData"),
       });
       const call = ts.call(ts.id(functionName), [...argNodes, configObj]);
@@ -1000,10 +1013,10 @@ export class TypeScriptBuilder {
       // __threads.active().push(smoltalk.systemMessage(msg))
       return $(ts.threads.active())
         .prop("push")
-        .call([$.id("smoltalk").prop("systemMessage").call(argNodes).done()])
+        .call([ts.smoltalkSystemMessage(argNodes)])
         .done();
     } else {
-      const call = ts.call(ts.id(functionName), argNodes);
+      const call = $.id(functionName).call(argNodes).done();
       return shouldAwait ? ts.await(call) : call;
     }
   }
@@ -1028,13 +1041,14 @@ export class TypeScriptBuilder {
       });
       dataNode = ts.obj(entries);
     } else if (argNodes.length > 0) {
-      dataNode = ts.call(ts.prop(ts.id("Object"), "fromEntries"), [
-        ts.call(ts.prop(ts.id(`__${functionName}NodeParams`), "map"), [
+      const entries = $(ts.id(`__${functionName}NodeParams`))
+        .map(
           ts.raw(
             `(k, i) => [k, [${argNodes.map((n) => this.str(n)).join(", ")}][i]]`,
           ),
-        ]),
-      ]);
+        )
+        .done();
+      dataNode = $.id("Object").prop("fromEntries").call([entries]).done();
     } else {
       dataNode = ts.obj({});
     }
@@ -1046,9 +1060,7 @@ export class TypeScriptBuilder {
     });
 
     return ts.statements([
-      ts.functionReturn(
-        ts.call(ts.id("goToNode"), [ts.str(functionName), goToArgs]),
-      ),
+      ts.functionReturn(ts.goToNode(functionName, goToArgs)),
     ]);
   }
 
@@ -1075,23 +1087,33 @@ export class TypeScriptBuilder {
     // Build the arrow function body
     const stmts: TsNode[] = [
       ts.constDecl(
-        "{ stack: __stack, step: __step, self: __self, threads: __threads }",
-        $(ts.id("setupNode")).call([ts.obj({ state: ts.runtime.state })]).done(),
+        "__setupData",
+        $(ts.id("setupNode"))
+          .call([ts.obj({ state: ts.runtime.state })])
+          .done(),
       ),
-      ts.constDecl("__ctx", $(ts.runtime.state).prop("ctx").done()),
-      ts.constDecl("statelogClient", $(ts.runtime.ctx).prop("statelogClient").done()),
-      ts.constDecl("__graph", $(ts.runtime.ctx).prop("graph").done()),
-      $(ts.id("callHook")).call([ts.obj({
-        callbacks: $(ts.runtime.ctx).prop("callbacks").done(),
-        name: ts.str("onNodeStart"),
-        data: ts.obj({ nodeName: ts.str(nodeName) }),
-      })]).await().done(),
+
+      ts.setupEnv({
+        stack: $(ts.id("__setupData")).prop("stack").done(),
+        step: $(ts.id("__setupData")).prop("step").done(),
+        self: $(ts.id("__setupData")).prop("self").done(),
+        threads: $(ts.id("__setupData")).prop("threads").done(),
+        ctx: $(ts.runtime.state).prop("ctx").done(),
+        statelogClient: $(ts.runtime.ctx).prop("statelogClient").done(),
+        graph: $(ts.runtime.ctx).prop("graph").done(),
+      }),
+
+      ts.callHook("onNodeStart", { nodeName: ts.str(nodeName) }),
       // Resume: restore globals
       ts.if(
         $(ts.runtime.state).prop("isResume").done(),
         ts.assign(
           $(ts.runtime.globalCtx).prop("stateStack").prop("globals").done(),
-          $(ts.runtime.state).prop("ctx").prop("stateStack").prop("globals").done(),
+          $(ts.runtime.state)
+            .prop("ctx")
+            .prop("stateStack")
+            .prop("globals")
+            .done(),
         ),
       ),
     ];
@@ -1104,12 +1126,7 @@ export class TypeScriptBuilder {
           $(ts.runtime.state).prop("data").prop(p.name).done(),
         ),
       );
-      stmts.push(
-        ts.if(
-          ts.raw("!__state.isResume"),
-          ts.statements(paramStmts),
-        ),
-      );
+      stmts.push(ts.if(ts.raw("!__state.isResume"), ts.statements(paramStmts)));
     }
 
     // Body
@@ -1117,27 +1134,31 @@ export class TypeScriptBuilder {
 
     // onNodeEnd hook + return
     stmts.push(
-      $(ts.id("callHook")).call([ts.obj({
-        callbacks: $(ts.runtime.ctx).prop("callbacks").done(),
-        name: ts.str("onNodeEnd"),
-        data: ts.obj({ nodeName: ts.str(nodeName), data: ts.id("undefined") }),
-      })]).await().done(),
+      ts.callHook("onNodeEnd", {
+        nodeName: ts.str(nodeName),
+        data: ts.id("undefined"),
+      }),
     );
     stmts.push(
-      ts.return(ts.obj({
-        messages: ts.runtime.threads,
-        data: ts.id("undefined"),
-      })),
+      ts.return(
+        ts.obj({
+          messages: ts.runtime.threads,
+          data: ts.id("undefined"),
+        }),
+      ),
     );
 
-    return $(ts.id("graph")).prop("node").call([
-      ts.str(nodeName),
-      ts.arrowFn(
-        [{ name: "__state", typeAnnotation: "GraphState" }],
-        ts.statements(stmts),
-        { async: true },
-      ),
-    ]).done();
+    return $(ts.id("graph"))
+      .prop("node")
+      .call([
+        ts.str(nodeName),
+        ts.arrowFn(
+          [{ name: "__state", typeAnnotation: "GraphState" }],
+          ts.statements(stmts),
+          { async: true },
+        ),
+      ])
+      .done();
   }
 
   private processReturnStatement(node: ReturnStatement): TsNode {
@@ -1337,9 +1358,10 @@ export class TypeScriptBuilder {
 
     // Tools array
     const toolNames = prompt.tools?.toolNames || [];
-    const toolsNode: TsNode = toolNames.length > 0
-      ? ts.arr(toolNames.map((name) => ts.id(`__${name}Tool`)))
-      : ts.id("undefined");
+    const toolsNode: TsNode =
+      toolNames.length > 0
+        ? ts.arr(toolNames.map((name) => ts.id(`__${name}Tool`)))
+        : ts.id("undefined");
 
     // Tool handlers
     const toolHandlerNodes: TsNode[] = toolNames.map((toolName) => {
@@ -1403,17 +1425,20 @@ export class TypeScriptBuilder {
       messages: ts.raw("__metadata?.messages || new MessageThread()"),
     };
     if (zodSchema !== DEFAULT_SCHEMA) {
-      runPromptEntries.responseFormat = $(ts.id("z")).prop("object").call([
-        ts.obj({ response: ts.raw(zodSchema) }),
-      ]).done();
+      runPromptEntries.responseFormat = $.z()
+        .prop("object")
+        .namedArgs({ response: ts.raw(zodSchema) })
+        .done();
     }
     runPromptEntries.tools = toolsNode;
     runPromptEntries.toolHandlers = ts.arr(toolHandlerNodes);
     runPromptEntries.clientConfig = clientConfig;
     runPromptEntries.stream = ts.bool(prompt.isStreaming || false);
-    runPromptEntries.maxToolCallRounds = ts.num(this.agencyConfig.maxToolCallRounds || 10);
+    runPromptEntries.maxToolCallRounds = ts.num(
+      this.agencyConfig.maxToolCallRounds || 10,
+    );
     runPromptEntries.interruptData = ts.raw("__state?.interruptData");
-    runPromptEntries.removedTools = $(ts.runtime.self).prop("__removedTools").done();
+    runPromptEntries.removedTools = ts.self("__removedTools");
 
     // Function params
     const fnParams: TsParam[] = functionArgs.map((arg) => ({ name: arg }));
@@ -1425,11 +1450,13 @@ export class TypeScriptBuilder {
       fnParams,
       ts.statements([
         ts.assign(
-          $(ts.runtime.self).prop("__removedTools").done(),
-          ts.binOp($(ts.runtime.self).prop("__removedTools").done(), "||", ts.arr([])),
+          ts.self("__removedTools"),
+          ts.binOp(ts.self("__removedTools"), "||", ts.arr([])),
         ),
         ts.return(
-          $(ts.id("runPrompt")).call([ts.obj(runPromptEntries)]).done(),
+          $(ts.id("runPrompt"))
+            .call([ts.obj(runPromptEntries)])
+            .done(),
         ),
       ]),
       { async: true },
@@ -1437,7 +1464,9 @@ export class TypeScriptBuilder {
 
     // Call expression
     const callArgs: TsNode[] = [...scopedFunctionArgNodes, metadataObj];
-    const callExpr = $(ts.id(`_${variableName}`)).call(callArgs).done();
+    const callExpr = $(ts.id(`_${variableName}`))
+      .call(callArgs)
+      .done();
 
     const varRef = $(ts.runtime.self).prop(variableName).done();
     const stmts: TsNode[] = [innerFn];
@@ -1451,16 +1480,13 @@ export class TypeScriptBuilder {
       stmts.push(ts.comment("return early from node if this is an interrupt"));
       const isNodeContext = this.getCurrentScope().type === "node";
       const returnExpr = isNodeContext
-        ? ts.return(ts.obj({
+        ? ts.nodeReturn({
             messages: ts.runtime.threads,
             data: varRef,
-          }))
+          })
         : ts.return(varRef);
       stmts.push(
-        ts.if(
-          $(ts.id("isInterrupt")).call([varRef]).done(),
-          returnExpr,
-        ),
+        ts.if($(ts.id("isInterrupt")).call([varRef]).done(), returnExpr),
       );
     }
 
@@ -1522,9 +1548,9 @@ export class TypeScriptBuilder {
       case "model":
         return ts.assign(
           ts.id("__client"),
-          ts.call(ts.id("__getClientWithConfig"), [
-            ts.obj({ model: ts.raw(value) }),
-          ]),
+          $.id("__getClientWithConfig")
+            .namedArgs({ model: ts.str(value) })
+            .done(),
         );
       case "messages":
         return $(ts.threads.active())
@@ -1539,17 +1565,9 @@ export class TypeScriptBuilder {
   private processTimeBlock(node: TimeBlock, timingVarName: string): TsNode {
     const bodyNodes = node.body.map((stmt) => this.processNode(stmt));
     const stmts: TsNode[] = [
-      ts.letDecl(
-        `${timingVarName}_startTime`,
-        $(ts.id("performance")).prop("now").call().done(),
-        "number",
-      ),
+      ts.time(`${timingVarName}_startTime`),
       ...bodyNodes,
-      ts.letDecl(
-        `${timingVarName}_endTime`,
-        $(ts.id("performance")).prop("now").call().done(),
-        "number",
-      ),
+      ts.time(`${timingVarName}_endTime`),
       ts.letDecl(
         timingVarName,
         $(ts.id(`${timingVarName}_endTime`))
@@ -1559,12 +1577,7 @@ export class TypeScriptBuilder {
       ),
     ];
     if (node.printTime) {
-      stmts.push(
-        $(ts.id("console"))
-          .prop("log")
-          .call([ts.str("Time taken:"), ts.id(timingVarName), ts.str("ms")])
-          .done(),
-      );
+      stmts.push(ts.str("Time taken:"), ts.id(timingVarName), ts.str("ms"));
     }
     return ts.statements(stmts);
   }
@@ -1658,7 +1671,7 @@ export class TypeScriptBuilder {
     return ts.raw(`{\n${stmts.map((s) => this.str(s)).join("\n")}\n}`);
   }
 
-  private processBodyAsParts(body: AgencyNode[]): TsNode[] {
+  private processBodyAsParts(body: AgencyNode[]): TsStepBlock[] {
     const parts: TsNode[][] = [[]];
     for (const stmt of body) {
       if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type)) {
@@ -1859,11 +1872,17 @@ export class TypeScriptBuilder {
               ts.await(ts.call(ts.id("main"), [ts.id("initialState")])),
             ]),
             ts.statements([
-              $(ts.id("console")).prop("error").call([
-                ts.template([
-                  { text: "\\nAgent crashed: ", expr: $(ts.id("__error")).prop("message").done() },
-                ]),
-              ]).done(),
+              $(ts.id("console"))
+                .prop("error")
+                .call([
+                  ts.template([
+                    {
+                      text: "\\nAgent crashed: ",
+                      expr: $(ts.id("__error")).prop("message").done(),
+                    },
+                  ]),
+                ])
+                .done(),
               ts.raw("throw __error"),
             ]),
             "__error: any",

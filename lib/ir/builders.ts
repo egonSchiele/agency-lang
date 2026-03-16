@@ -1,3 +1,4 @@
+import { $ } from "./fluent.js";
 import type {
   TsNode,
   TsRaw,
@@ -108,6 +109,56 @@ export const ts = {
     };
   },
 
+  constDeclId(
+    name: TsIdentifier,
+    initializer?: TsNode,
+    typeAnnotation?: string,
+  ): TsVarDecl {
+    return {
+      kind: "varDecl",
+      declKind: "const",
+      name: name.name,
+      typeAnnotation,
+      initializer,
+    };
+  },
+
+  /** `const { key: binding, ... } = initializer` — use shorthand when key === binding */
+  constDestructure(
+    bindings: Record<string, string>,
+    initializer?: TsNode,
+    typeAnnotation?: string,
+  ): TsVarDecl {
+    const parts = Object.entries(bindings).map(([key, binding]) =>
+      key === binding ? key : `${key}: ${binding}`,
+    );
+    return {
+      kind: "varDecl",
+      declKind: "const",
+      name: `{ ${parts.join(", ")} }`,
+      typeAnnotation,
+      initializer,
+    };
+  },
+
+  /** `let { key: binding, ... } = initializer` — use shorthand when key === binding */
+  letDestructure(
+    bindings: Record<string, string>,
+    initializer?: TsNode,
+    typeAnnotation?: string,
+  ): TsVarDecl {
+    const parts = Object.entries(bindings).map(([key, binding]) =>
+      key === binding ? key : `${key}: ${binding}`,
+    );
+    return {
+      kind: "varDecl",
+      declKind: "let",
+      name: `{ ${parts.join(", ")} }`,
+      typeAnnotation,
+      initializer,
+    };
+  },
+
   assign(lhs: TsNode, rhs: TsNode): TsAssign {
     return { kind: "assign", lhs, rhs };
   },
@@ -147,6 +198,10 @@ export const ts = {
     return { kind: "call", callee, arguments: args };
   },
 
+  namedArgs(callee: TsNode, args: Record<string, TsNode>): TsCall {
+    return ts.call(callee, [ts.obj(args)]);
+  },
+
   await(expr: TsNode): TsAwait {
     return { kind: "await", expr };
   },
@@ -167,6 +222,14 @@ export const ts = {
         value,
       })),
     };
+  },
+
+  setSpread(expr: TsNode): TsObjectEntry {
+    return { spread: true, expr };
+  },
+
+  set(key: string, value: TsNode): TsObjectEntry {
+    return { spread: false, key, value };
   },
 
   arr(items: TsNode[]): TsArrayLiteral {
@@ -310,6 +373,138 @@ export const ts = {
     return ts.raw(`process.env[${JSON.stringify(varName)}]`);
   },
 
+  callHook(hookName: string, data: Record<string, TsNode>): TsNode {
+    return $(ts.id("callHook"))
+      .call([
+        ts.obj({
+          callbacks: $(ts.runtime.ctx).prop("callbacks").done(),
+          name: ts.str(hookName),
+          data: ts.obj(data),
+        }),
+      ])
+      .await()
+      .done();
+  },
+
+  setupEnv({
+    stack,
+    step,
+    self,
+    threads,
+    ctx,
+    statelogClient,
+    graph,
+  }: {
+    stack: TsNode;
+    step: TsNode;
+    self: TsNode;
+    threads: TsNode;
+    ctx: TsNode;
+    statelogClient: TsNode;
+    graph: TsNode;
+  }): TsStatements {
+    return ts.statements([
+      ts.constDeclId(ts.runtime.stack, stack),
+      ts.constDeclId(ts.runtime.step, step),
+      ts.constDeclId(ts.runtime.self, self),
+      ts.constDeclId(ts.runtime.threads, threads),
+      ts.constDeclId(ts.runtime.ctx, ctx),
+      ts.constDeclId(ts.runtime.statelogClient, statelogClient),
+      ts.constDeclId(ts.runtime.graph, graph),
+    ]);
+  },
+
+  time(varName: string): TsNode {
+    return ts.letDecl(
+      varName,
+      $(ts.id("performance")).prop("now").call().done(),
+      "number",
+    );
+  },
+
+  stack(varName: string): TsNode {
+    return $(ts.runtime.stack).prop(varName).done();
+  },
+
+  ctx(varName: string): TsNode {
+    return $(ts.runtime.ctx).prop(varName).done();
+  },
+
+  self(varName: string): TsNode {
+    return $(ts.runtime.self).prop(varName).done();
+  },
+
+  throw(code: string): TsNode {
+    return ts.raw(`throw ${code}`);
+  },
+
+  functionCallConfig({
+    ctx,
+    threads,
+    interruptData,
+  }: {
+    ctx: TsNode;
+    threads: TsNode;
+    interruptData: TsNode;
+  }): TsNode {
+    return ts.obj({
+      ctx,
+      threads,
+      interruptData,
+    });
+  },
+
+  newThreadStore(): TsNode {
+    return ts.new(ts.id("ThreadStore"));
+  },
+
+  smoltalkSystemMessage(args: TsNode[]): TsNode {
+    return $.id("smoltalk").prop("systemMessage").call(args).done();
+  },
+
+  smoltalkUserMessage(args: TsNode[]): TsNode {
+    return $.id("smoltalk").prop("userMessage").call(args).done();
+  },
+  smoltalkAssistantMessage(args: TsNode[]): TsNode {
+    return $.id("smoltalk").prop("assistantMessage").call(args).done();
+  },
+
+  goToNode(nodeName: string, args: TsNode): TsNode {
+    return $.id("goToNode")
+      .call([ts.str(nodeName), args])
+      .done();
+  },
+
+  nodeReturn({ messages, data }: { messages: TsNode; data: TsNode }): TsReturn {
+    return ts.return(ts.obj({ messages, data }));
+  },
+
+  jsonStringify(value: TsNode): TsNode {
+    return $.id("JSON").prop("stringify").call([value]).done();
+  },
+
+  consoleLog(...args: TsNode[]): TsNode {
+    return $.id("console").prop("log").call(args).done();
+  },
+
+  consoleWarn(...args: TsNode[]): TsNode {
+    return $.id("console").prop("warn").call(args).done();
+  },
+
+  consoleError(...args: TsNode[]): TsNode {
+    return $.id("console").prop("error").call(args).done();
+  },
+
+  /* 
+          ? ts.obj([ts.spread(ts.runtime.state), ts.set("data", ts.id(tempVar))])
+        : ts.obj({ data: ts.id(tempVar) }); */
+
+  /* 
+
+  functionReturn(value: TsNode): TsReturn {
+    return ts.return(ts.obj({ data: value }));
+  }, */
+
   /** Predefined runtime identifiers */
   runtime: {
     self: { kind: "identifier", name: "__self" } as TsIdentifier,
@@ -320,6 +515,11 @@ export const ts = {
     state: { kind: "identifier", name: "__state" } as TsIdentifier,
     globalCtx: { kind: "identifier", name: "__globalCtx" } as TsIdentifier,
     client: { kind: "identifier", name: "__client" } as TsIdentifier,
+    statelogClient: {
+      kind: "identifier",
+      name: "statelogClient",
+    } as TsIdentifier,
+    graph: { kind: "identifier", name: "__graph" } as TsIdentifier,
   },
 
   /** Thread operations */

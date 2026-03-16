@@ -15,6 +15,10 @@ export class TsChain {
     return new TsChain(ts.prop(this.node, name));
   }
 
+  map(fn: TsNode): TsChain {
+    return new TsChain(ts.call(ts.prop(this.node, "map"), [fn]));
+  }
+
   /** Computed index: .index(expr) → ts.index(this, expr) */
   index(expr: TsNode): TsChain {
     return new TsChain(ts.index(this.node, expr));
@@ -23,6 +27,10 @@ export class TsChain {
   /** Function call: .call([arg1, arg2]) → ts.call(this, [arg1, arg2]) */
   call(args: TsNode[] = []): TsChain {
     return new TsChain(ts.call(this.node, args));
+  }
+
+  namedArgs(args: Record<string, TsNode>): TsChain {
+    return new TsChain(ts.namedArgs(this.node, args));
   }
 
   /** Await: .await() → ts.await(this) */
@@ -68,3 +76,5 @@ export function $(node: TsNode): TsChain {
 
 /** Shorthand: wrap an identifier */
 $.id = (name: string): TsChain => new TsChain(ts.id(name));
+
+$.z = () => new TsChain(ts.id("z"));

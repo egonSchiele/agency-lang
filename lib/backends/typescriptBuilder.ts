@@ -82,26 +82,19 @@ import type {
 import { ts, $ } from "../ir/builders.js";
 import { printTs } from "../ir/prettyPrint.js";
 import type { ProgramInfo } from "../programInfo.js";
+import { scopeKey, lookupType, getVisibleTypes, GLOBAL_SCOPE_KEY } from "../programInfo.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
 export class TypeScriptBuilder {
-  // Type system tracking (seeded from ProgramInfo)
-  private typeHints: TypeHintMap = {};
-  private typeAliases: Record<string, VariableType> = {};
-  private graphNodes: GraphNodeDefinition[] = [];
-
   // Output assembly
   private generatedStatements: TsNode[] = [];
   private generatedTypeAliases: TsNode[] = [];
 
-  // Import tracking (seeded from ProgramInfo)
+  // Import tracking
   private importStatements: TsNode[] = [];
-  private importedNodes: ImportNodeStatement[] = [];
-  private importedTools: ImportToolStatement[] = [];
 
-  // Function tracking (seeded from ProgramInfo)
-  private functionDefinitions: Record<string, FunctionDefinition> = {};
+  // Function tracking
   private functionsUsed: Set<string> = new Set();
 
   // Scope management
@@ -191,8 +184,24 @@ export class TypeScriptBuilder {
 
   // ------- Lookup helpers -------
 
+  private currentScopeKey(): string {
+    return scopeKey(this.getCurrentScope());
+  }
+
+  private getTypeHint(varName: string): VariableType | undefined {
+    return lookupType(this.programInfo.typeHints, this.currentScopeKey(), varName);
+  }
+
+  private getVisibleTypeAliases(): Record<string, VariableType> {
+    return getVisibleTypes(this.programInfo.typeAliases, this.currentScopeKey());
+  }
+
+  private getVisibleTypeHints(): TypeHintMap {
+    return getVisibleTypes(this.programInfo.typeHints, this.currentScopeKey());
+  }
+
   private isImportedTool(functionName: string): boolean {
-    return this.importedTools
+    return this.programInfo.importedTools
       .map((node) => node.importedTools)
       .flat()
       .includes(functionName);
@@ -206,15 +215,15 @@ export class TypeScriptBuilder {
       return false;
     }
     return (
-      !!this.functionDefinitions[functionName] ||
+      !!this.programInfo.functionDefinitions[functionName] ||
       this.isImportedTool(functionName)
     );
   }
 
   private isGraphNode(functionName: string): boolean {
     return (
-      this.graphNodes.map((n) => n.nodeName).includes(functionName) ||
-      this.importedNodes
+      this.programInfo.graphNodes.map((n) => n.nodeName).includes(functionName) ||
+      this.programInfo.importedNodes
         .map((n) => n.importedNodes)
         .flat()
         .includes(functionName)
@@ -248,14 +257,14 @@ export class TypeScriptBuilder {
       case "global":
         return undefined;
       case "function": {
-        const funcDef = this.functionDefinitions[currentScope.functionName];
+        const funcDef = this.programInfo.functionDefinitions[currentScope.functionName];
         if (funcDef && funcDef.returnType) {
           return funcDef.returnType;
         }
         return undefined;
       }
       case "node": {
-        const graphNode = this.graphNodes.find(
+        const graphNode = this.programInfo.graphNodes.find(
           (n) => n.nodeName === currentScope.nodeName,
         );
         if (graphNode && graphNode.returnType) {
@@ -287,14 +296,6 @@ export class TypeScriptBuilder {
   // ------- Main entry point -------
 
   build(program: AgencyProgram): TsNode {
-    // Seed metadata from ProgramInfo (replaces passes 1-4)
-    this.typeAliases = this.programInfo.typeAliases;
-    this.typeHints = this.programInfo.typeHints;
-    this.graphNodes = this.programInfo.graphNodes;
-    this.importedNodes = this.programInfo.importedNodes;
-    this.importedTools = this.programInfo.importedTools;
-    this.functionDefinitions = this.programInfo.functionDefinitions;
-
     // Pass 5: Generate code for tools
     for (const node of program.nodes) {
       if (node.type === "function") {
@@ -788,7 +789,7 @@ export class TypeScriptBuilder {
     node.toolNames.forEach((toolName) => {
       if (BUILTIN_TOOLS.includes(toolName)) return;
       if (
-        !this.functionDefinitions[toolName] &&
+        !this.programInfo.functionDefinitions[toolName] &&
         !this.isImportedTool(toolName)
       ) {
         throw new Error(
@@ -801,7 +802,7 @@ export class TypeScriptBuilder {
 
   private processTool(node: FunctionDefinition): TsNode {
     const { functionName, parameters } = node;
-    if (this.graphNodes.map((n) => n.nodeName).includes(functionName)) {
+    if (this.programInfo.graphNodes.map((n) => n.nodeName).includes(functionName)) {
       throw new Error(
         `There is already a node named '${functionName}'. Functions can't have the same name as an existing node.`,
       );
@@ -813,7 +814,7 @@ export class TypeScriptBuilder {
         type: "primitiveType" as const,
         value: "string",
       };
-      const tsType = mapTypeToZodSchema(typeHint, this.typeAliases);
+      const tsType = mapTypeToZodSchema(typeHint, this.getVisibleTypeAliases());
       properties[param.name] = tsType;
     });
     let schema = "";
@@ -1061,7 +1062,7 @@ export class TypeScriptBuilder {
       }
     });
 
-    const targetNode = this.graphNodes.find((n) => n.nodeName === functionName);
+    const targetNode = this.programInfo.graphNodes.find((n) => n.nodeName === functionName);
     let dataNode: TsNode;
     if (targetNode && targetNode.parameters.length > 0) {
       const entries: Record<string, TsNode> = {};
@@ -1355,19 +1356,19 @@ export class TypeScriptBuilder {
     prompt: PromptLiteral;
   }): TsNode {
     const _variableType = variableType ||
-      this.typeHints[variableName] || {
+      this.getTypeHint(variableName) || {
         type: "primitiveType" as const,
         value: "string",
       };
 
-    const zodSchema = mapTypeToZodSchema(_variableType, this.typeAliases);
+    const zodSchema = mapTypeToZodSchema(_variableType, this.getVisibleTypeAliases());
     const clientConfig = prompt.config
       ? this.processNode(prompt.config)
       : ts.obj({});
 
     const promptCode = this.buildPromptString({
       segments: prompt.segments,
-      typeHints: this.typeHints,
+      typeHints: this.getVisibleTypeHints(),
       skills: prompt.skills || [],
     });
 
@@ -1390,7 +1391,7 @@ export class TypeScriptBuilder {
         });
       }
       if (
-        !this.functionDefinitions[toolName] &&
+        !this.programInfo.functionDefinitions[toolName] &&
         !this.isImportedTool(toolName)
       ) {
         throw new Error(
@@ -1758,7 +1759,7 @@ export class TypeScriptBuilder {
 
   private preprocess(): TsNode[] {
     const nodes: TsNode[] = [];
-    this.importedNodes.forEach((importNode) => {
+    this.programInfo.importedNodes.forEach((importNode) => {
       const from = importNode.agencyFile.replace(".agency", ".js");
       const defaultImportName = this.agencyFileToDefaultImportName(
         importNode.agencyFile,
@@ -1799,7 +1800,7 @@ export class TypeScriptBuilder {
       );
     });
 
-    this.importedNodes.forEach((importNode) => {
+    this.programInfo.importedNodes.forEach((importNode) => {
       const defaultImportName = this.agencyFileToDefaultImportName(
         importNode.agencyFile,
       );
@@ -1811,7 +1812,7 @@ export class TypeScriptBuilder {
       );
     });
 
-    for (const node of this.graphNodes) {
+    for (const node of this.programInfo.graphNodes) {
       const args = node.parameters;
       const fnParams: {
         name: string;
@@ -1865,7 +1866,7 @@ export class TypeScriptBuilder {
       );
     }
 
-    if (this.graphNodes.map((n) => n.nodeName).includes("main")) {
+    if (this.programInfo.graphNodes.map((n) => n.nodeName).includes("main")) {
       result.push(
         ts.if(
           ts.binOp(

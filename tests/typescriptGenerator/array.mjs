@@ -138,6 +138,9 @@ const __graph = __ctx.graph;
         ctx: __ctx,
         prompt: `the first 5 prime numbers`,
         messages: __metadata?.messages || new MessageThread(),
+        responseFormat: z.object({
+          response: z.array(z.number())
+        }),
         tools: undefined,
         toolHandlers: [],
         clientConfig: {},
@@ -172,6 +175,9 @@ __self.numbers = _numbers({
         ctx: __ctx,
         prompt: `a list of 3 common greetings in different languages`,
         messages: __metadata?.messages || new MessageThread(),
+        responseFormat: z.object({
+          response: z.array(z.string())
+        }),
         tools: undefined,
         toolHandlers: [],
         clientConfig: {},

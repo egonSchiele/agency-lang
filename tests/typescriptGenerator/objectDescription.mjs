@@ -138,6 +138,9 @@ const __graph = __ctx.graph;
         ctx: __ctx,
         prompt: `extract the hostname and port from 'https://example.com:8080'`,
         messages: __metadata?.messages || new MessageThread(),
+        responseFormat: z.object({
+          response: z.object({ "hostname": z.string(), "port": z.number() })
+        }),
         tools: undefined,
         toolHandlers: [],
         clientConfig: {},

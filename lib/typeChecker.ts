@@ -1,5 +1,6 @@
 import { color } from "@/utils/termcolors.js";
 import type { ProgramInfo } from "./programInfo.js";
+import { GLOBAL_SCOPE_KEY, getVisibleTypes, scopeKey, collectProgramInfo } from "./programInfo.js";
 import { AgencyConfig } from "./config.js";
 import {
   AgencyNode,
@@ -14,6 +15,8 @@ import {
   ReturnStatement,
   ValueAccess,
   AccessChainElement,
+  functionScope,
+  nodeScope,
 } from "./types.js";
 import { getImportedNames } from "./types/importStatement.js";
 import { walkNodes } from "./utils/node.js";
@@ -34,6 +37,7 @@ type ScopeInfo = {
   variableTypes: Record<string, VariableType | "any">;
   body: AgencyNode[];
   name: string;
+  scopeKey: string;
   returnType?: VariableType | null;
 };
 
@@ -95,7 +99,8 @@ const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
 export class TypeChecker {
   private program: AgencyProgram;
   private config: AgencyConfig;
-  private typeAliases: Record<string, VariableType> = {};
+  private scopedTypeAliases: Record<string, Record<string, VariableType>> = {};
+  private currentScopeKey: string = GLOBAL_SCOPE_KEY;
   private functionDefs: Record<string, FunctionDefinition> = {};
   private nodeDefs: Record<string, GraphNodeDefinition> = {};
   private errors: TypeCheckError[] = [];
@@ -105,27 +110,41 @@ export class TypeChecker {
   constructor(program: AgencyProgram, config: AgencyConfig = {}, info?: ProgramInfo) {
     this.program = program;
     this.config = config;
-    if (info) {
-      this.typeAliases = { ...info.typeAliases };
-      this.functionDefs = { ...info.functionDefinitions };
-      this.nodeDefs = Object.fromEntries(
-        info.graphNodes.map((n) => [n.nodeName, n]),
-      );
+    const resolved = info ?? collectProgramInfo(program);
+    this.scopedTypeAliases = Object.fromEntries(
+      Object.entries(resolved.typeAliases).map(([k, v]) => [k, { ...v }]),
+    );
+    this.functionDefs = { ...resolved.functionDefinitions };
+    this.nodeDefs = Object.fromEntries(
+      resolved.graphNodes.map((n) => [n.nodeName, n]),
+    );
+  }
+
+  /** Get the flat map of type aliases visible in the current scope. */
+  private get typeAliases(): Record<string, VariableType> {
+    return getVisibleTypes(this.scopedTypeAliases, this.currentScopeKey);
+  }
+
+  /** Run a callback with currentScopeKey set, restoring it afterwards. */
+  private withScope<T>(key: string, fn: () => T): T {
+    const prev = this.currentScopeKey;
+    this.currentScopeKey = key;
+    try {
+      return fn();
+    } finally {
+      this.currentScopeKey = prev;
     }
   }
 
   check(): TypeCheckResult {
     this.errors = [];
-    if (Object.keys(this.typeAliases).length === 0) {
-      this.collectTypeAliases();
-    } else {
-      // Still validate type references even when seeded from ProgramInfo
-      for (const [name, aliasedType] of Object.entries(this.typeAliases)) {
-        this.validateTypeReferences(aliasedType, name);
-      }
-    }
-    if (Object.keys(this.functionDefs).length === 0 && Object.keys(this.nodeDefs).length === 0) {
-      this.collectFunctionDefs();
+    // Validate that type aliases don't reference unknown aliases
+    for (const [sk, scopeAliases] of Object.entries(this.scopedTypeAliases)) {
+      this.withScope(sk, () => {
+        for (const [name, aliasedType] of Object.entries(scopeAliases)) {
+          this.validateTypeReferences(aliasedType, name);
+        }
+      });
     }
     this.inferReturnTypes();
     this.checkScopes();
@@ -142,17 +161,6 @@ export class TypeChecker {
     });
   }
 
-  private collectTypeAliases(): void {
-    for (const node of this.program.nodes) {
-      if (node.type === "typeAlias") {
-        this.typeAliases[node.aliasName] = node.aliasedType;
-      }
-    }
-    // Validate that type aliases don't reference unknown aliases
-    for (const [name, aliasedType] of Object.entries(this.typeAliases)) {
-      this.validateTypeReferences(aliasedType, name);
-    }
-  }
 
   private validateTypeReferences(vt: VariableType, context: string): void {
     switch (vt.type) {
@@ -179,15 +187,6 @@ export class TypeChecker {
     }
   }
 
-  private collectFunctionDefs(): void {
-    for (const node of this.program.nodes) {
-      if (node.type === "function") {
-        this.functionDefs[node.functionName] = node;
-      } else if (node.type === "graphNode") {
-        this.nodeDefs[node.nodeName] = node;
-      }
-    }
-  }
 
   private inferReturnTypes(): void {
     const allDefs: (FunctionDefinition | GraphNodeDefinition)[] = [
@@ -219,49 +218,55 @@ export class TypeChecker {
 
     this.inferringReturnType.add(name);
 
-    // Build scope variable types
-    const vars: Record<string, VariableType | "any"> = {};
-    for (const param of def.parameters) {
-      vars[param.name] = param.typeHint ?? "any";
-    }
-    this.collectVariableTypes(def.body, vars, name);
+    const defScopeKey = def.type === "function"
+      ? scopeKey(functionScope(def.functionName))
+      : scopeKey(nodeScope(def.nodeName));
 
-    // Collect return statements from the body, filtering out returns inside nested functions/nodes
-    const returnValues: AgencyNode[] = [];
-    for (const { node, ancestors } of walkNodes(def.body)) {
-      if (node.type === "returnStatement") {
-        // Skip returns inside nested function or graphNode definitions
-        const insideNested = ancestors.some(
-          (a) => a.type === "function" || a.type === "graphNode",
-        );
-        if (!insideNested) {
-          returnValues.push(node.value);
+    return this.withScope(defScopeKey, () => {
+      // Build scope variable types
+      const vars: Record<string, VariableType | "any"> = {};
+      for (const param of def.parameters) {
+        vars[param.name] = param.typeHint ?? "any";
+      }
+      this.collectVariableTypes(def.body, vars, name);
+
+      // Collect return statements from the body, filtering out returns inside nested functions/nodes
+      const returnValues: AgencyNode[] = [];
+      for (const { node, ancestors } of walkNodes(def.body)) {
+        if (node.type === "returnStatement") {
+          // Skip returns inside nested function or graphNode definitions
+          const insideNested = ancestors.some(
+            (a) => a.type === "function" || a.type === "graphNode",
+          );
+          if (!insideNested) {
+            returnValues.push(node.value);
+          }
         }
       }
-    }
 
-    let inferred: VariableType | "any";
-    if (returnValues.length === 0) {
-      inferred = { type: "primitiveType", value: "void" };
-    } else {
-      const types = returnValues.map((v) => this.synthType(v, vars));
-      if (types.some((t) => t === "any")) {
-        inferred = "any";
+      let inferred: VariableType | "any";
+      if (returnValues.length === 0) {
+        inferred = { type: "primitiveType", value: "void" };
       } else {
-        const first = types[0] as VariableType;
-        const allSame = types.every(
-          (t) =>
-            t !== "any" &&
-            this.isAssignable(t, first) &&
-            this.isAssignable(first, t),
-        );
-        inferred = allSame ? first : "any";
+        const types = returnValues.map((v) => this.synthType(v, vars));
+        if (types.some((t) => t === "any")) {
+          inferred = "any";
+        } else {
+          const first = types[0] as VariableType;
+          const allSame = types.every(
+            (t) =>
+              t !== "any" &&
+              this.isAssignable(t, first) &&
+              this.isAssignable(first, t),
+          );
+          inferred = allSame ? first : "any";
+        }
       }
-    }
 
-    this.inferredReturnTypes[name] = this.widenType(inferred);
-    this.inferringReturnType.delete(name);
-    return this.inferredReturnTypes[name];
+      this.inferredReturnTypes[name] = this.widenType(inferred);
+      this.inferringReturnType.delete(name);
+      return this.inferredReturnTypes[name];
+    });
   }
 
   private checkScopes(): void {
@@ -275,6 +280,7 @@ export class TypeChecker {
       variableTypes: topLevelVars,
       body: this.program.nodes,
       name: "top-level",
+      scopeKey: GLOBAL_SCOPE_KEY,
     });
 
     // Function scopes
@@ -288,6 +294,7 @@ export class TypeChecker {
         variableTypes: vars,
         body: fn.body,
         name: fn.functionName,
+        scopeKey: scopeKey(functionScope(fn.functionName)),
         returnType: fn.returnType,
       });
     }
@@ -303,17 +310,20 @@ export class TypeChecker {
         variableTypes: vars,
         body: node.body,
         name: node.nodeName,
+        scopeKey: scopeKey(nodeScope(node.nodeName)),
         returnType: node.returnType,
       });
     }
 
     // Now check function calls, return types, and expressions within each scope
     for (const scope of scopes) {
-      this.checkFunctionCallsInScope(scope);
-      if (scope.returnType !== undefined) {
-        this.checkReturnTypesInScope(scope);
-      }
-      this.checkExpressionsInScope(scope);
+      this.withScope(scope.scopeKey, () => {
+        this.checkFunctionCallsInScope(scope);
+        if (scope.returnType !== undefined) {
+          this.checkReturnTypesInScope(scope);
+        }
+        this.checkExpressionsInScope(scope);
+      });
     }
   }
 

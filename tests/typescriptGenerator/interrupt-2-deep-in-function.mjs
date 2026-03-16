@@ -118,15 +118,18 @@ export const __foo2Tool = {
 };
 export const __foo2ToolParams = ["name", "age"];
 export async function greet(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
-  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+  const __setupData = setupFunction({
     state: __state
   });
-  // __state will be undefined if this function is
-  // being called as a tool by an llm
-  const __ctx = __state?.ctx || __globalCtx;
-  const statelogClient = __ctx.statelogClient;
-  const __graph = __ctx.graph;
-  const __funcStartTime = performance.now();
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+  let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onFunctionStart",
@@ -215,15 +218,18 @@ return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} yea
 
 
 export async function foo2(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
-  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+  const __setupData = setupFunction({
     state: __state
   });
-  // __state will be undefined if this function is
-  // being called as a tool by an llm
-  const __ctx = __state?.ctx || __globalCtx;
-  const statelogClient = __ctx.statelogClient;
-  const __graph = __ctx.graph;
-  const __funcStartTime = performance.now();
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+  let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onFunctionStart",
@@ -310,12 +316,16 @@ return __stack.locals.response
 
 
 graph.node("sayHi", async (__state: GraphState) => {
-  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupNode({
+  const __setupData = setupNode({
     state: __state
   });
-  const __ctx = __state.ctx;
-  const statelogClient = __ctx.statelogClient;
-  const __graph = __ctx.graph;
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state.ctx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",

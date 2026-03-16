@@ -110,12 +110,16 @@ __globalCtx.stateStack.globals.config = {
 };
 
 graph.node("main", async (__state: GraphState) => {
-  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupNode({
+  const __setupData = setupNode({
     state: __state
   });
-  const __ctx = __state.ctx;
-  const statelogClient = __ctx.statelogClient;
-  const __graph = __ctx.graph;
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state.ctx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",

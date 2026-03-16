@@ -124,15 +124,18 @@ export const __fibsTool = {
 };
 export const __fibsToolParams = [];
 export async function openai(msg: string, __state: InternalFunctionState | undefined = undefined) {
-  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+  const __setupData = setupFunction({
     state: __state
   });
-  // __state will be undefined if this function is
-  // being called as a tool by an llm
-  const __ctx = __state?.ctx || __globalCtx;
-  const statelogClient = __ctx.statelogClient;
-  const __graph = __ctx.graph;
-  const __funcStartTime = performance.now();
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+  let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onFunctionStart",
@@ -174,7 +177,9 @@ __self.response = _response(__stack.args.msg, {
 
 let __defaultTimeblockName_endTime: number = performance.now();
 let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultTimeblockName_startTime;
-console.log("Time taken:", __defaultTimeblockName, "ms")
+"Time taken:"
+__defaultTimeblockName
+"ms"
       
       
       __stack.step++;
@@ -207,15 +212,18 @@ return `OpenAI response: ${__stack.locals.response}`
 
 
 export async function google(msg: string, __state: InternalFunctionState | undefined = undefined) {
-  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+  const __setupData = setupFunction({
     state: __state
   });
-  // __state will be undefined if this function is
-  // being called as a tool by an llm
-  const __ctx = __state?.ctx || __globalCtx;
-  const statelogClient = __ctx.statelogClient;
-  const __graph = __ctx.graph;
-  const __funcStartTime = performance.now();
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+  let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onFunctionStart",
@@ -264,7 +272,9 @@ __self.response = _response(__stack.args.msg, {
 
 let __defaultTimeblockName_endTime: number = performance.now();
 let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultTimeblockName_startTime;
-console.log("Time taken:", __defaultTimeblockName, "ms")
+"Time taken:"
+__defaultTimeblockName
+"ms"
       
       __stack.step++;
     }
@@ -296,15 +306,18 @@ return `Google response: ${__stack.locals.response}`
 
 
 export async function fibs(__state: InternalFunctionState | undefined = undefined) {
-  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+  const __setupData = setupFunction({
     state: __state
   });
-  // __state will be undefined if this function is
-  // being called as a tool by an llm
-  const __ctx = __state?.ctx || __globalCtx;
-  const statelogClient = __ctx.statelogClient;
-  const __graph = __ctx.graph;
-  const __funcStartTime = performance.now();
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+  let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onFunctionStart",
@@ -369,12 +382,16 @@ return __self.__promptVar
 
 
 graph.node("main", async (__state: GraphState) => {
-  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupNode({
+  const __setupData = setupNode({
     state: __state
   });
-  const __ctx = __state.ctx;
-  const statelogClient = __ctx.statelogClient;
-  const __graph = __ctx.graph;
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state.ctx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",

@@ -106,12 +106,16 @@ export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, 
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 graph.node("main", async (__state: GraphState) => {
-  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupNode({
+  const __setupData = setupNode({
     state: __state
   });
-  const __ctx = __state.ctx;
-  const statelogClient = __ctx.statelogClient;
-  const __graph = __ctx.graph;
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state.ctx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -177,7 +181,7 @@ __self.response1 = _response1(__stack.locals.msg, {
   }
   if (__step <= 6) {
     __client = __getClientWithConfig({
-      model: `gemini-2.5-flash-lite`
+      model: "`gemini-2.5-flash-lite`"
     });
     
     __stack.step++;

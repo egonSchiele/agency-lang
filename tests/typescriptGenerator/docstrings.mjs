@@ -140,15 +140,18 @@ export const __processDataToolParams = [];
 
 
 export async function add(a: any, b: any, __state: InternalFunctionState | undefined = undefined) {
-  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+  const __setupData = setupFunction({
     state: __state
   });
-  // __state will be undefined if this function is
-  // being called as a tool by an llm
-  const __ctx = __state?.ctx || __globalCtx;
-  const statelogClient = __ctx.statelogClient;
-  const __graph = __ctx.graph;
-  const __funcStartTime = performance.now();
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+  let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onFunctionStart",
@@ -187,15 +190,18 @@ export async function add(a: any, b: any, __state: InternalFunctionState | undef
 
 
 export async function greet(name: any, __state: InternalFunctionState | undefined = undefined) {
-  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+  const __setupData = setupFunction({
     state: __state
   });
-  // __state will be undefined if this function is
-  // being called as a tool by an llm
-  const __ctx = __state?.ctx || __globalCtx;
-  const statelogClient = __ctx.statelogClient;
-  const __graph = __ctx.graph;
-  const __funcStartTime = performance.now();
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+  let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onFunctionStart",
@@ -232,15 +238,18 @@ export async function greet(name: any, __state: InternalFunctionState | undefine
 
 
 export async function calculateArea(width: any, height: any, __state: InternalFunctionState | undefined = undefined) {
-  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+  const __setupData = setupFunction({
     state: __state
   });
-  // __state will be undefined if this function is
-  // being called as a tool by an llm
-  const __ctx = __state?.ctx || __globalCtx;
-  const statelogClient = __ctx.statelogClient;
-  const __graph = __ctx.graph;
-  const __funcStartTime = performance.now();
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+  let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onFunctionStart",
@@ -279,15 +288,18 @@ export async function calculateArea(width: any, height: any, __state: InternalFu
 
 
 export async function processData(__state: InternalFunctionState | undefined = undefined) {
-  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+  const __setupData = setupFunction({
     state: __state
   });
-  // __state will be undefined if this function is
-  // being called as a tool by an llm
-  const __ctx = __state?.ctx || __globalCtx;
-  const statelogClient = __ctx.statelogClient;
-  const __graph = __ctx.graph;
-  const __funcStartTime = performance.now();
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+  let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onFunctionStart",

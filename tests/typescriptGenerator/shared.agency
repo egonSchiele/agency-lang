@@ -1,0 +1,4 @@
+shared foo = 1
+node main() {
+  foo = foo + 1
+}

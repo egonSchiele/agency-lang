@@ -105,6 +105,9 @@ export const approveInterrupt = (interrupt: Interrupt, metadata?: Record<string,
 export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, any>) => _rejectInterrupt({ ctx: __globalCtx, interrupt, metadata });
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
+function __initializeGlobals(__ctx) {
+
+}
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -123,9 +126,6 @@ const __graph = __ctx.graph;
       nodeName: "main"
     }
   })
-  if (__state.isResume) {
-    __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
-  }
   if (!__state.isResume) {
     __stack.args["input"] = __state.data.input;
   }
@@ -187,7 +187,8 @@ export async function main(input: any, { messages, callbacks }: { messages?: any
       input: input
     },
     messages: messages,
-    callbacks: callbacks
+    callbacks: callbacks,
+    initializeGlobals: __initializeGlobals
   });
 }
 export const __mainNodeParams = ["input"];

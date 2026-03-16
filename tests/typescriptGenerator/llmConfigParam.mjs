@@ -105,9 +105,11 @@ export const approveInterrupt = (interrupt: Interrupt, metadata?: Record<string,
 export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, any>) => _rejectInterrupt({ ctx: __globalCtx, interrupt, metadata });
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
-__globalCtx.stateStack.globals.config = {
-  "model": `gemini-2.5-flash-lite`
-};
+function __initializeGlobals(__ctx) {
+  __ctx.stateStack.globals.config = {
+    "model": `gemini-2.5-flash-lite`
+  };
+}
 
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
@@ -127,9 +129,6 @@ const __graph = __ctx.graph;
       nodeName: "main"
     }
   })
-  if (__state.isResume) {
-    __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
-  }
   if (__step <= 0) {
 
     __stack.step++;
@@ -146,7 +145,7 @@ const __graph = __ctx.graph;
         }),
         tools: undefined,
         toolHandlers: [],
-        clientConfig: __globalCtx.stateStack.globals.config,
+        clientConfig: __ctx.stateStack.globals.config,
         stream: false,
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
@@ -214,7 +213,8 @@ export async function main({ messages, callbacks }: { messages?: any; callbacks?
     nodeName: "main",
     data: {},
     messages: messages,
-    callbacks: callbacks
+    callbacks: callbacks,
+    initializeGlobals: __initializeGlobals
   });
 }
 export const __mainNodeParams = [];

@@ -105,31 +105,33 @@ export const approveInterrupt = (interrupt: Interrupt, metadata?: Record<string,
 export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, any>) => _rejectInterrupt({ ctx: __globalCtx, interrupt, metadata });
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
-__globalCtx.stateStack.globals.arr1 = [1, 2];
+function __initializeGlobals(__ctx) {
+  __ctx.stateStack.globals.arr1 = [1, 2];
+  __ctx.stateStack.globals.arr2 = [3, 4];
+  __ctx.stateStack.globals.combined = [...__ctx.stateStack.globals.arr1, ...__ctx.stateStack.globals.arr2];
+  __ctx.stateStack.globals.withExtra = [...__ctx.stateStack.globals.arr1, 5, 6];
+  __ctx.stateStack.globals.obj1 = {
+    "a": 1
+  };
+  __ctx.stateStack.globals.obj2 = {
+    "b": 2
+  };
+  __ctx.stateStack.globals.merged = {
+    ...__ctx.stateStack.globals.obj1,
+    ...__ctx.stateStack.globals.obj2
+  };
+  __ctx.stateStack.globals.withKey = {
+    ...__ctx.stateStack.globals.obj1,
+    "c": 3
+  };
+}
 
-__globalCtx.stateStack.globals.arr2 = [3, 4];
-
-__globalCtx.stateStack.globals.combined = [...__globalCtx.stateStack.globals.arr1, ...__globalCtx.stateStack.globals.arr2];
-
-__globalCtx.stateStack.globals.withExtra = [...__globalCtx.stateStack.globals.arr1, 5, 6];
 
 
-__globalCtx.stateStack.globals.obj1 = {
-  "a": 1
-};
 
-__globalCtx.stateStack.globals.obj2 = {
-  "b": 2
-};
 
-__globalCtx.stateStack.globals.merged = {
-  ...__globalCtx.stateStack.globals.obj1,
-  ...__globalCtx.stateStack.globals.obj2
-};
 
-__globalCtx.stateStack.globals.withKey = {
-  ...__globalCtx.stateStack.globals.obj1,
-  "c": 3
-};
+
+
 
 export default graph

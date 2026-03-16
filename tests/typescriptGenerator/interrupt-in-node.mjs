@@ -105,6 +105,9 @@ export const approveInterrupt = (interrupt: Interrupt, metadata?: Record<string,
 export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, any>) => _rejectInterrupt({ ctx: __globalCtx, interrupt, metadata });
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
+function __initializeGlobals(__ctx) {
+
+}
 export const __greetTool = {
   name: "greet",
   description: `No description provided.`,
@@ -177,7 +180,6 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   
 } else {
   const __interruptResult = interrupt(`Agent wants to call the greet function with name: ${__stack.args.name} and age: ${__stack.args.age}`);
-  __ctx.stateStack.nodesTraversed = __graph.getNodesTraversed();
   __interruptResult.state = __ctx.stateStack.toJSON();
   
   
@@ -229,9 +231,6 @@ const __graph = __ctx.graph;
       nodeName: "foo2"
     }
   })
-  if (__state.isResume) {
-    __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
-  }
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
     __stack.args["age"] = __state.data.age;
@@ -326,9 +325,6 @@ const __graph = __ctx.graph;
       nodeName: "sayHi"
     }
   })
-  if (__state.isResume) {
-    __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
-  }
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
   }
@@ -382,7 +378,8 @@ export async function foo2(name: string, age: number, { messages, callbacks }: {
       age: age
     },
     messages: messages,
-    callbacks: callbacks
+    callbacks: callbacks,
+    initializeGlobals: __initializeGlobals
   });
 }
 export const __foo2NodeParams = ["name", "age"];
@@ -394,7 +391,8 @@ export async function sayHi(name: any, { messages, callbacks }: { messages?: any
       name: name
     },
     messages: messages,
-    callbacks: callbacks
+    callbacks: callbacks,
+    initializeGlobals: __initializeGlobals
   });
 }
 export const __sayHiNodeParams = ["name"];

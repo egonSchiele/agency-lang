@@ -105,6 +105,9 @@ export const approveInterrupt = (interrupt: Interrupt, metadata?: Record<string,
 export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, any>) => _rejectInterrupt({ ctx: __globalCtx, interrupt, metadata });
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
+function __initializeGlobals(__ctx) {
+  __ctx.stateStack.globals.x = 42;
+}
 export const __greetTool = {
   name: "greet",
   description: `No description provided.`,
@@ -114,7 +117,6 @@ export const __greetToolParams = [];
 
 
 
-__globalCtx.stateStack.globals.x = 42;
 
 
 

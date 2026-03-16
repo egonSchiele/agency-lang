@@ -105,6 +105,40 @@ export const approveInterrupt = (interrupt: Interrupt, metadata?: Record<string,
 export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, any>) => _rejectInterrupt({ ctx: __globalCtx, interrupt, metadata });
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
+function __initializeGlobals(__ctx) {
+  __ctx.stateStack.globals.nums = [1, 2, 3, 4, 5];
+  __ctx.stateStack.globals.names = [`Alice`, `Bob`, `Charlie`];
+  __ctx.stateStack.globals.matrix = [[1, 2], [3, 4], [5, 6]];
+  __ctx.stateStack.globals.person = {
+    "name": `Alice`,
+    "age": 30
+  };
+  __ctx.stateStack.globals.address = {
+    "street": `123 Main St`,
+    "city": `NYC`,
+    "zip": `10001`
+  };
+  __ctx.stateStack.globals.user = {
+    "name": `Bob`,
+    "tags": [`admin`, `developer`]
+  };
+  __ctx.stateStack.globals.users = [{
+    "name": `Alice`,
+    "age": 30
+  }, {
+    "name": `Bob`,
+    "age": 25
+  }];
+  __ctx.stateStack.globals.config = {
+    "server": {
+      "host": `localhost`,
+      "port": 8080
+    },
+    "debug": true
+  };
+  __ctx.stateStack.globals.firstNum = __ctx.stateStack.globals.nums[0];
+  __ctx.stateStack.globals.personName = __ctx.stateStack.globals.person.name;
+}
 //  Test arrays and objects
 
 
@@ -112,107 +146,75 @@ export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Re
 
 
 
-__globalCtx.stateStack.globals.nums = [1, 2, 3, 4, 5];
 
-await print(__globalCtx.stateStack.globals.nums)
+await print(__ctx.stateStack.globals.nums)
 
 
 //  Array with strings
 
 
 
-__globalCtx.stateStack.globals.names = [`Alice`, `Bob`, `Charlie`];
 
-await print(__globalCtx.stateStack.globals.names)
+await print(__ctx.stateStack.globals.names)
 
 
 //  Nested arrays
 
 
 
-__globalCtx.stateStack.globals.matrix = [[1, 2], [3, 4], [5, 6]];
 
-await print(__globalCtx.stateStack.globals.matrix)
+await print(__ctx.stateStack.globals.matrix)
 
 
 //  Simple object
 
 
 
-__globalCtx.stateStack.globals.person = {
-  "name": `Alice`,
-  "age": 30
-};
 
-await print(__globalCtx.stateStack.globals.person)
+await print(__ctx.stateStack.globals.person)
 
 
 //  Object with nested structure
 
 
 
-__globalCtx.stateStack.globals.address = {
-  "street": `123 Main St`,
-  "city": `NYC`,
-  "zip": `10001`
-};
 
-await print(__globalCtx.stateStack.globals.address)
+await print(__ctx.stateStack.globals.address)
 
 
 //  Object with array property
 
 
 
-__globalCtx.stateStack.globals.user = {
-  "name": `Bob`,
-  "tags": [`admin`, `developer`]
-};
 
-await print(__globalCtx.stateStack.globals.user)
+await print(__ctx.stateStack.globals.user)
 
 
 //  Array of objects
 
 
 
-__globalCtx.stateStack.globals.users = [{
-  "name": `Alice`,
-  "age": 30
-}, {
-  "name": `Bob`,
-  "age": 25
-}];
 
-await print(__globalCtx.stateStack.globals.users)
+await print(__ctx.stateStack.globals.users)
 
 
 //  Nested object
 
 
 
-__globalCtx.stateStack.globals.config = {
-  "server": {
-    "host": `localhost`,
-    "port": 8080
-  },
-  "debug": true
-};
 
-await print(__globalCtx.stateStack.globals.config)
+await print(__ctx.stateStack.globals.config)
 
 
 //  Array access
 
-__globalCtx.stateStack.globals.firstNum = __globalCtx.stateStack.globals.nums[0];
 
-await print(__globalCtx.stateStack.globals.firstNum)
+await print(__ctx.stateStack.globals.firstNum)
 
 
 //  Object property access
 
-__globalCtx.stateStack.globals.personName = __globalCtx.stateStack.globals.person.name;
 
-await print(__globalCtx.stateStack.globals.personName)
+await print(__ctx.stateStack.globals.personName)
 
 export default graph

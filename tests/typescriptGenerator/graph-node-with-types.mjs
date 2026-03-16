@@ -105,6 +105,9 @@ export const approveInterrupt = (interrupt: Interrupt, metadata?: Record<string,
 export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, any>) => _rejectInterrupt({ ctx: __globalCtx, interrupt, metadata });
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
+function __initializeGlobals(__ctx) {
+
+}
 //  Test graph nodes with typed parameters
 
 
@@ -126,9 +129,6 @@ const __graph = __ctx.graph;
       nodeName: "greet"
     }
   })
-  if (__state.isResume) {
-    __globalCtx.stateStack.globals = __state.ctx.stateStack.globals;
-  }
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
   }
@@ -188,7 +188,8 @@ export async function greet(name: string, { messages, callbacks }: { messages?: 
       name: name
     },
     messages: messages,
-    callbacks: callbacks
+    callbacks: callbacks,
+    initializeGlobals: __initializeGlobals
   });
 }
 export const __greetNodeParams = ["name"];

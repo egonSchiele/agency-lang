@@ -24,7 +24,6 @@ import {
 import { SpecialVar } from "@/types/specialVar.js";
 import { TimeBlock } from "@/types/timeBlock.js";
 import { formatTypeHint } from "@/cli/util.js";
-import * as renderFunctionDefinition from "../templates/backends/typescriptGenerator/functionDefinition.js";
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
 import * as renderInterruptReturn from "../templates/backends/typescriptGenerator/interruptReturn.js";
 import * as renderGraphNode from "../templates/backends/typescriptGenerator/graphNode.js";
@@ -75,7 +74,7 @@ import {
 } from "@/types/binop.js";
 import { expressionToString, getBaseVarName } from "@/utils/node.js";
 
-import type { TsNode, TsObjectEntry, TsElseIf } from "../ir/tsIR.js";
+import type { TsNode, TsObjectEntry, TsElseIf, TsParam } from "../ir/tsIR.js";
 import { ts, $ } from "../ir/builders.js";
 import { printTs } from "../ir/prettyPrint.js";
 import type { ProgramInfo } from "../programInfo.js";
@@ -821,29 +820,99 @@ export class TypeScriptBuilder {
     this.startScope({ type: "function", functionName: node.functionName });
     const { functionName, body, parameters } = node;
     const args = parameters.map((p) => p.name);
-    const typedArgs = parameters.map((p) => {
-      if (p.typeHint) {
-        return `${p.name}: ${formatTypeHint(p.typeHint)}`;
-      }
-      return `${p.name}: any`;
-    });
 
     const bodyCode = this.processBodyAsParts(body);
-
     this.endScope();
-    const paramList = typedArgs.length > 0 ? typedArgs.join(", ") + ", " : "";
-    const paramAssignments = args
-      .map((arg) => `__stack.args["${arg}"] = ${arg};`)
-      .join("\n    ");
-    const argsObject = args.length > 0 ? `{ ${args.join(", ")} }` : "{}";
-    return ts.raw(
-      renderFunctionDefinition.default({
-        functionName,
-        paramList,
-        paramAssignments,
-        argsObject,
-        functionBody: bodyCode.map((n) => this.str(n)).join("\n"),
-      }),
+
+    // Build function params: typed args + __state
+    const fnParams: TsParam[] = parameters.map((p) => ({
+      name: p.name,
+      typeAnnotation: p.typeHint ? formatTypeHint(p.typeHint) : "any",
+    }));
+    fnParams.push({
+      name: "__state",
+      typeAnnotation: "InternalFunctionState | undefined",
+      defaultValue: ts.raw("undefined"),
+    });
+
+    // Build args object for hook data
+    const argsObj: Record<string, TsNode> = {};
+    for (const arg of args) {
+      argsObj[arg] = ts.id(arg);
+    }
+
+    // Setup block
+    const setupStmts: TsNode[] = [
+      ts.constDecl(
+        "{ stack: __stack, step: __step, self: __self, threads: __threads }",
+        $(ts.id("setupFunction")).call([ts.obj({ state: ts.runtime.state })]).done(),
+      ),
+      ts.raw("// __state will be undefined if this function is\n// being called as a tool by an llm"),
+      ts.constDecl("__ctx", ts.raw("__state?.ctx || __globalCtx")),
+      ts.constDecl("statelogClient", $(ts.runtime.ctx).prop("statelogClient").done()),
+      ts.constDecl("__graph", $(ts.runtime.ctx).prop("graph").done()),
+      ts.constDecl("__funcStartTime", $(ts.id("performance")).prop("now").call().done()),
+      $(ts.id("callHook")).call([ts.obj({
+        callbacks: $(ts.runtime.ctx).prop("callbacks").done(),
+        name: ts.str("onFunctionStart"),
+        data: ts.obj({
+          functionName: ts.str(functionName),
+          args: args.length > 0 ? ts.obj(argsObj) : ts.raw("{}"),
+          isBuiltin: ts.bool(false),
+        }),
+      })]).await().done(),
+    ];
+
+    // Param assignments to stack
+    for (const arg of args) {
+      setupStmts.push(
+        ts.assign(
+          $(ts.runtime.stack).prop("args").index(ts.str(arg)).done(),
+          ts.id(arg),
+        ),
+      );
+    }
+
+    // __self.__retryable
+    setupStmts.push(
+      ts.assign(
+        $(ts.runtime.self).prop("__retryable").done(),
+        ts.raw("__self.__retryable ?? true"),
+      ),
+    );
+
+    // Try/catch wrapping the body
+    setupStmts.push(
+      ts.tryCatch(
+        ts.statements(bodyCode),
+        ts.statements([
+          ts.if(
+            ts.raw("__error instanceof ToolCallError"),
+            ts.raw("throw __error"),
+          ),
+          ts.raw("throw new ToolCallError(__error, { retryable: __self.__retryable })"),
+        ]),
+        "__error",
+      ),
+    );
+
+    // onFunctionEnd hook
+    setupStmts.push(
+      $(ts.id("callHook")).call([ts.obj({
+        callbacks: $(ts.runtime.ctx).prop("callbacks").done(),
+        name: ts.str("onFunctionEnd"),
+        data: ts.obj({
+          functionName: ts.str(functionName),
+          timeTaken: $(ts.id("performance")).prop("now").call().minus(ts.id("__funcStartTime")).done(),
+        }),
+      })]).await().done(),
+    );
+
+    return ts.functionDecl(
+      functionName,
+      fnParams,
+      ts.statements(setupStmts),
+      { async: true, export: true },
     );
   }
 

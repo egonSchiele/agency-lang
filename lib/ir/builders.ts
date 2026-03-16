@@ -85,7 +85,7 @@ export const ts = {
     initializer?: TsNode,
     typeAnnotation?: string,
   ): TsVarDecl {
-    return ts.letDecl(name, initializer, typeAnnotation);
+    return { kind: "varDecl", declKind: "let", name, typeAnnotation, initializer };
   },
 
   constDecl(
@@ -93,7 +93,7 @@ export const ts = {
     initializer?: TsNode,
     typeAnnotation?: string,
   ): TsVarDecl {
-    return ts.constDecl(name, initializer, typeAnnotation);
+    return { kind: "varDecl", declKind: "const", name, typeAnnotation, initializer };
   },
 
   assign(lhs: TsNode, rhs: TsNode): TsAssign {

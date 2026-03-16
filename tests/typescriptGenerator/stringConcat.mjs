@@ -5,7 +5,7 @@ import { z } from "zod";
 import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
-import type { GraphState, InternalFunctionState, Interrupt } from "agency-lang/runtime";
+import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore,
   setupNode, setupFunction, runNode, runPrompt, callHook,
@@ -22,14 +22,14 @@ import {
   head, tail, empty,
   builtinFetch as _builtinFetch,
   builtinFetchJSON as _builtinFetchJSON,
-  builtinInput as _builtinInput,
+  builtinInput as input,
   builtinRead as _builtinReadRaw,
   builtinWrite as _builtinWriteRaw,
   builtinReadImage as _builtinReadImageRaw,
-  builtinSleep as _builtinSleep,
-  builtinRound as _builtinRound,
-  printJSON as _printJSON,
-  print as _print,
+  builtinSleep as sleep,
+  builtinRound as round,
+  printJSON,
+  print,
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
@@ -85,13 +85,13 @@ const __globalCtx = new RuntimeContext({
 const graph = __globalCtx.graph;
 
 // Path-dependent builtin wrappers
-function _builtinRead(filename: string): string {
+function read(filename: string): string {
   return _builtinReadRaw({ filename, dirname: __dirname });
 }
-function _builtinWrite(filename: string, content: string): void {
+function write(filename: string, content: string): void {
   _builtinWriteRaw({ filename, content, dirname: __dirname });
 }
-function _builtinReadImage(filename: string): string {
+function readImage(filename: string): string {
   return _builtinReadImageRaw({ filename, dirname: __dirname });
 }
 export function readSkill({filepath}: {filepath: string}): string {
@@ -100,11 +100,11 @@ export function readSkill({filepath}: {filepath: string}): string {
 
 // Interrupt re-exports bound to this module's context
 export { interrupt, isInterrupt };
-export const respondToInterrupt = (i: Interrupt, r: any, m?: any) => _respondToInterrupt({ ctx: __globalCtx, interrupt: i, interruptResponse: r, metadata: m });
-export const approveInterrupt = (i: Interrupt, m?: any) => _approveInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
-export const rejectInterrupt = (i: Interrupt, m?: any) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
-export const modifyInterrupt = (i: Interrupt, a: any, m?: any) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
-export const resolveInterrupt = (i: Interrupt, v: any, m?: any) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
+export const respondToInterrupt = (interrupt: Interrupt, response: InterruptResponse, metadata?: Record<string, any>) => _respondToInterrupt({ ctx: __globalCtx, interrupt, interruptResponse: response, metadata });
+export const approveInterrupt = (interrupt: Interrupt, metadata?: Record<string, any>) => _approveInterrupt({ ctx: __globalCtx, interrupt, metadata });
+export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, any>) => _rejectInterrupt({ ctx: __globalCtx, interrupt, metadata });
+export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
+export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 graph.node("foo", async (__state: GraphState) => {
   const { stack: __stack, step: __step, self: __self, threads: __threads } = setupNode({
     state: __state
@@ -127,12 +127,12 @@ graph.node("foo", async (__state: GraphState) => {
     __stack.step++;
   }
   if (__step <= 1) {
-    await await _print(`What is your name?`)
+    await print(`What is your name?`)
     
     __stack.step++;
   }
   if (__step <= 2) {
-    __stack.locals.name = await await _builtinInput(`> `);
+    __stack.locals.name = await input(`> `);
 if (isInterrupt(__stack.locals.name)) {
       return {
         ...__state,
@@ -143,7 +143,7 @@ if (isInterrupt(__stack.locals.name)) {
     __stack.step++;
   }
   if (__step <= 3) {
-    await await _print(`Hello, ${__stack.locals.name}!`)
+    await print(`Hello, ${__stack.locals.name}!`)
     
     __stack.step++;
   }

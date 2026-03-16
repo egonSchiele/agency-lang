@@ -5,7 +5,7 @@ import { z } from "zod";
 import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
-import type { GraphState, InternalFunctionState, Interrupt } from "agency-lang/runtime";
+import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore,
   setupNode, setupFunction, runNode, runPrompt, callHook,
@@ -22,14 +22,14 @@ import {
   head, tail, empty,
   builtinFetch as _builtinFetch,
   builtinFetchJSON as _builtinFetchJSON,
-  builtinInput as _builtinInput,
+  builtinInput as input,
   builtinRead as _builtinReadRaw,
   builtinWrite as _builtinWriteRaw,
   builtinReadImage as _builtinReadImageRaw,
-  builtinSleep as _builtinSleep,
-  builtinRound as _builtinRound,
-  printJSON as _printJSON,
-  print as _print,
+  builtinSleep as sleep,
+  builtinRound as round,
+  printJSON,
+  print,
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
@@ -85,13 +85,13 @@ const __globalCtx = new RuntimeContext({
 const graph = __globalCtx.graph;
 
 // Path-dependent builtin wrappers
-function _builtinRead(filename: string): string {
+function read(filename: string): string {
   return _builtinReadRaw({ filename, dirname: __dirname });
 }
-function _builtinWrite(filename: string, content: string): void {
+function write(filename: string, content: string): void {
   _builtinWriteRaw({ filename, content, dirname: __dirname });
 }
-function _builtinReadImage(filename: string): string {
+function readImage(filename: string): string {
   return _builtinReadImageRaw({ filename, dirname: __dirname });
 }
 export function readSkill({filepath}: {filepath: string}): string {
@@ -100,11 +100,11 @@ export function readSkill({filepath}: {filepath: string}): string {
 
 // Interrupt re-exports bound to this module's context
 export { interrupt, isInterrupt };
-export const respondToInterrupt = (i: Interrupt, r: any, m?: any) => _respondToInterrupt({ ctx: __globalCtx, interrupt: i, interruptResponse: r, metadata: m });
-export const approveInterrupt = (i: Interrupt, m?: any) => _approveInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
-export const rejectInterrupt = (i: Interrupt, m?: any) => _rejectInterrupt({ ctx: __globalCtx, interrupt: i, metadata: m });
-export const modifyInterrupt = (i: Interrupt, a: any, m?: any) => _modifyInterrupt({ ctx: __globalCtx, interrupt: i, newArguments: a, metadata: m });
-export const resolveInterrupt = (i: Interrupt, v: any, m?: any) => _resolveInterrupt({ ctx: __globalCtx, interrupt: i, value: v, metadata: m });
+export const respondToInterrupt = (interrupt: Interrupt, response: InterruptResponse, metadata?: Record<string, any>) => _respondToInterrupt({ ctx: __globalCtx, interrupt, interruptResponse: response, metadata });
+export const approveInterrupt = (interrupt: Interrupt, metadata?: Record<string, any>) => _approveInterrupt({ ctx: __globalCtx, interrupt, metadata });
+export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, any>) => _rejectInterrupt({ ctx: __globalCtx, interrupt, metadata });
+export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
+export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 //  Test arrays and objects
 
 
@@ -114,7 +114,7 @@ export const resolveInterrupt = (i: Interrupt, v: any, m?: any) => _resolveInter
 
 __globalCtx.stateStack.globals.nums = [1, 2, 3, 4, 5];
 
-await await _print(__globalCtx.stateStack.globals.nums)
+await print(__globalCtx.stateStack.globals.nums)
 
 
 //  Array with strings
@@ -123,7 +123,7 @@ await await _print(__globalCtx.stateStack.globals.nums)
 
 __globalCtx.stateStack.globals.names = [`Alice`, `Bob`, `Charlie`];
 
-await await _print(__globalCtx.stateStack.globals.names)
+await print(__globalCtx.stateStack.globals.names)
 
 
 //  Nested arrays
@@ -132,7 +132,7 @@ await await _print(__globalCtx.stateStack.globals.names)
 
 __globalCtx.stateStack.globals.matrix = [[1, 2], [3, 4], [5, 6]];
 
-await await _print(__globalCtx.stateStack.globals.matrix)
+await print(__globalCtx.stateStack.globals.matrix)
 
 
 //  Simple object
@@ -144,7 +144,7 @@ __globalCtx.stateStack.globals.person = {
   "age": 30
 };
 
-await await _print(__globalCtx.stateStack.globals.person)
+await print(__globalCtx.stateStack.globals.person)
 
 
 //  Object with nested structure
@@ -157,7 +157,7 @@ __globalCtx.stateStack.globals.address = {
   "zip": `10001`
 };
 
-await await _print(__globalCtx.stateStack.globals.address)
+await print(__globalCtx.stateStack.globals.address)
 
 
 //  Object with array property
@@ -169,7 +169,7 @@ __globalCtx.stateStack.globals.user = {
   "tags": [`admin`, `developer`]
 };
 
-await await _print(__globalCtx.stateStack.globals.user)
+await print(__globalCtx.stateStack.globals.user)
 
 
 //  Array of objects
@@ -184,7 +184,7 @@ __globalCtx.stateStack.globals.users = [{
   "age": 25
 }];
 
-await await _print(__globalCtx.stateStack.globals.users)
+await print(__globalCtx.stateStack.globals.users)
 
 
 //  Nested object
@@ -199,20 +199,20 @@ __globalCtx.stateStack.globals.config = {
   "debug": true
 };
 
-await await _print(__globalCtx.stateStack.globals.config)
+await print(__globalCtx.stateStack.globals.config)
 
 
 //  Array access
 
 __globalCtx.stateStack.globals.firstNum = __globalCtx.stateStack.globals.nums[0];
 
-await await _print(__globalCtx.stateStack.globals.firstNum)
+await print(__globalCtx.stateStack.globals.firstNum)
 
 
 //  Object property access
 
 __globalCtx.stateStack.globals.personName = __globalCtx.stateStack.globals.person.name;
 
-await await _print(__globalCtx.stateStack.globals.personName)
+await print(__globalCtx.stateStack.globals.personName)
 
 export default graph

@@ -119,41 +119,36 @@ export const __fooTool = {
   description: `No description provided.`,
   schema: z.object({})
 };
-
 export const __fooToolParams = [];
-
-
 export async function foo(__state: InternalFunctionState | undefined = undefined) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupFunction({ state: __state });
-
-    // __state will be undefined if this function is
-    // being called as a tool by an llm
-    const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    const __funcStartTime = performance.now();
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "foo", args: {}, isBuiltin: false } });
-
-    // put all args on the state stack
-    
-
-    __self.__retryable = __self.__retryable ?? true;
-
-    try {
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is
+// being called as a tool by an llm
+  const __ctx = __state?.ctx || __globalCtx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  const __funcStartTime = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "foo",
+      args: {},
+      isBuiltin: false
+    }
+  })
+  __self.__retryable = __self.__retryable ?? true;
+  try {
     if (__step <= 0) {
 
-  __stack.step++;
-}
-if (__step <= 1) {
-  
-{
-
-
+      __stack.step++;
+    }
+    if (__step <= 1) {
+      {
 const __tid = __threads.create();
-
-__threads.pushActive(__tid);
-
+__threads.pushActive(__tid)
 
 async function _res1(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
@@ -259,21 +254,25 @@ __self.res3 = _res3({
 [__stack.locals.res2, __stack.locals.res3] = await Promise.all([__stack.locals.res2, __stack.locals.res3]);
 }
 
-
-
-__threads.popActive();
+__threads.popActive()
 }
-
-  
-  __stack.step++;
-}
-    } catch (__error) {
-      if (__error instanceof ToolCallError) throw __error;
-      throw new ToolCallError(__error, { retryable: __self.__retryable });
+      
+      __stack.step++;
     }
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "foo", timeTaken: performance.now() - __funcStartTime } });
+  } catch (__error) {
+    if (__error instanceof ToolCallError) {
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "foo",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
 }
 
-
-export default graph;
+export default graph

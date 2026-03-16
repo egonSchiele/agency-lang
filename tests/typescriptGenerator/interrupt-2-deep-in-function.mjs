@@ -119,43 +119,45 @@ export const __greetTool = {
   description: `No description provided.`,
   schema: z.object({"name": z.string(), "age": z.number(), })
 };
-
 export const __greetToolParams = ["name","age"];
-
 export const __foo2Tool = {
   name: "foo2",
   description: `No description provided.`,
   schema: z.object({"name": z.string(), "age": z.number(), })
 };
-
 export const __foo2ToolParams = ["name","age"];
-
-
 export async function greet(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupFunction({ state: __state });
-
-    // __state will be undefined if this function is
-    // being called as a tool by an llm
-    const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    const __funcStartTime = performance.now();
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "greet", args: { name, age }, isBuiltin: false } });
-
-    // put all args on the state stack
-    __stack.args["name"] = name;
-    __stack.args["age"] = age;
-
-    __self.__retryable = __self.__retryable ?? true;
-
-    try {
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is
+// being called as a tool by an llm
+  const __ctx = __state?.ctx || __globalCtx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  const __funcStartTime = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "greet",
+      args: {
+        name: name,
+        age: age
+      },
+      isBuiltin: false
+    }
+  })
+  __stack.args["name"] = name;
+  __stack.args["age"] = age;
+  __self.__retryable = __self.__retryable ?? true;
+  try {
     if (__step <= 0) {
 
-  __stack.step++;
-}
-if (__step <= 1) {
-  // Remember this will be called both in a tool call context
+      __stack.step++;
+    }
+    if (__step <= 1) {
+      // Remember this will be called both in a tool call context
 // and when the user is simply calling a function.
 
 if (__state.interruptData?.interruptResponse?.type === "approve") {
@@ -195,57 +197,70 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   
 }
 
-  
-  __stack.step++;
-}
-if (__step <= 2) {
-  __ctx.stateStack.pop();
-return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`
-  
-  __stack.step++;
-}
-    } catch (__error) {
-      if (__error instanceof ToolCallError) throw __error;
-      throw new ToolCallError(__error, { retryable: __self.__retryable });
+      
+      __stack.step++;
     }
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "greet", timeTaken: performance.now() - __funcStartTime } });
+    if (__step <= 2) {
+      __ctx.stateStack.pop();
+return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`
+      
+      __stack.step++;
+    }
+  } catch (__error) {
+    if (__error instanceof ToolCallError) {
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "greet",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
 }
-
-
 
 
 export async function foo2(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupFunction({ state: __state });
-
-    // __state will be undefined if this function is
-    // being called as a tool by an llm
-    const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    const __funcStartTime = performance.now();
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "foo2", args: { name, age }, isBuiltin: false } });
-
-    // put all args on the state stack
-    __stack.args["name"] = name;
-    __stack.args["age"] = age;
-
-    __self.__retryable = __self.__retryable ?? true;
-
-    try {
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is
+// being called as a tool by an llm
+  const __ctx = __state?.ctx || __globalCtx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  const __funcStartTime = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "foo2",
+      args: {
+        name: name,
+        age: age
+      },
+      isBuiltin: false
+    }
+  })
+  __stack.args["name"] = name;
+  __stack.args["age"] = age;
+  __self.__retryable = __self.__retryable ?? true;
+  try {
     if (__step <= 0) {
 
-  __stack.step++;
-}
-if (__step <= 1) {
-  await await _print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`)
-  
-  
-  __stack.step++;
-}
-if (__step <= 2) {
-  
+      __stack.step++;
+    }
+    if (__step <= 1) {
+      await await _print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`)
+      
+      
+      __stack.step++;
+    }
+    if (__step <= 2) {
+      
 async function _response(name, age, __metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -278,28 +293,35 @@ if (isInterrupt(__self.response)) {
    
 }
 
-  
-  __stack.step++;
-}
-if (__step <= 3) {
-  await await _print(`Greeted, age is still ${__stack.args.age}...`)
-  
-  __stack.step++;
-}
-if (__step <= 4) {
-  __ctx.stateStack.pop();
-return __stack.locals.response
-  
-  __stack.step++;
-}
-    } catch (__error) {
-      if (__error instanceof ToolCallError) throw __error;
-      throw new ToolCallError(__error, { retryable: __self.__retryable });
+      
+      __stack.step++;
     }
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "foo2", timeTaken: performance.now() - __funcStartTime } });
+    if (__step <= 3) {
+      await await _print(`Greeted, age is still ${__stack.args.age}...`)
+      
+      __stack.step++;
+    }
+    if (__step <= 4) {
+      __ctx.stateStack.pop();
+return __stack.locals.response
+      
+      __stack.step++;
+    }
+  } catch (__error) {
+    if (__error instanceof ToolCallError) {
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "foo2",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
 }
-
 
 
 
@@ -336,19 +358,16 @@ if (__step <= 2) {
 }
 if (__step <= 3) {
   __stack.locals.response = foo2(__stack.args.name, __stack.locals.age, {
-  ctx: __ctx,
-  threads: new ThreadStore(),
-  interruptData: __state?.interruptData
-});
-
-
+    ctx: __ctx,
+    threads: new ThreadStore(),
+    interruptData: __state?.interruptData
+  });
 if (isInterrupt(__stack.locals.response)) {
-  
-  return { ...__state, data: __stack.locals.response };
-  
-   
-}
-
+    return {
+      ...__state,
+      data: __stack.locals.response
+    };
+  }
   
   __stack.step++;
 }
@@ -379,18 +398,16 @@ if (__step <= 7) {
     return { messages: __threads, data: undefined };
 });
 
-
 export async function sayHi(name: any, { messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
-
-
   return runNode({
     ctx: __globalCtx,
     nodeName: "sayHi",
-    data: { name },
-    messages,
-    callbacks,
+    data: {
+      name: name
+    },
+    messages: messages,
+    callbacks: callbacks
   });
 }
-
 export const __sayHiNodeParams = ["name"];
-export default graph;
+export default graph

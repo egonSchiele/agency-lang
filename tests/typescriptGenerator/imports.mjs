@@ -136,5 +136,5 @@ export const resolveInterrupt = (i: Interrupt, v: any, m?: any) => _resolveInter
 
 
 
-graph.merge(__graph___foo);
-export default graph;
+graph.merge(__graph___foo)
+export default graph

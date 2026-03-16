@@ -143,18 +143,16 @@ graph.node("analyzeData", async (__state: GraphState) => {
     return { messages: __threads, data: undefined };
 });
 
-
 export async function analyzeData(input: string, { messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
-
-
   return runNode({
     ctx: __globalCtx,
     nodeName: "analyzeData",
-    data: { input },
-    messages,
-    callbacks,
+    data: {
+      input: input
+    },
+    messages: messages,
+    callbacks: callbacks
   });
 }
-
 export const __analyzeDataNodeParams = ["input"];
-export default graph;
+export default graph

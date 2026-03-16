@@ -119,9 +119,7 @@ export const __greetTool = {
   description: `No description provided.`,
   schema: z.object({})
 };
-
 export const __greetToolParams = [];
-
 //  This is a single line comment at the top of the file
 
 
@@ -141,51 +139,60 @@ __globalCtx.stateStack.globals.y = `hello`;
 
 //  Comment before function definition
 
-
 export async function greet(__state: InternalFunctionState | undefined = undefined) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupFunction({ state: __state });
-
-    // __state will be undefined if this function is
-    // being called as a tool by an llm
-    const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    const __funcStartTime = performance.now();
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "greet", args: {}, isBuiltin: false } });
-
-    // put all args on the state stack
-    
-
-    __self.__retryable = __self.__retryable ?? true;
-
-    try {
-    if (__step <= 0) {
-  //  Comment inside function
-  
-  __stack.step++;
-}
-if (__step <= 1) {
-  __stack.locals.message = `Hello, World!`;
-  
-  //  Another comment
-  
-  __stack.step++;
-}
-if (__step <= 2) {
-  __ctx.stateStack.pop();
-return __stack.locals.message
-  
-  __stack.step++;
-}
-    } catch (__error) {
-      if (__error instanceof ToolCallError) throw __error;
-      throw new ToolCallError(__error, { retryable: __self.__retryable });
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is
+// being called as a tool by an llm
+  const __ctx = __state?.ctx || __globalCtx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  const __funcStartTime = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "greet",
+      args: {},
+      isBuiltin: false
     }
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "greet", timeTaken: performance.now() - __funcStartTime } });
+  })
+  __self.__retryable = __self.__retryable ?? true;
+  try {
+    if (__step <= 0) {
+      //  Comment inside function
+      
+      __stack.step++;
+    }
+    if (__step <= 1) {
+      __stack.locals.message = `Hello, World!`;
+      
+      //  Another comment
+      
+      __stack.step++;
+    }
+    if (__step <= 2) {
+      __ctx.stateStack.pop();
+return __stack.locals.message
+      
+      __stack.step++;
+    }
+  } catch (__error) {
+    if (__error instanceof ToolCallError) {
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "greet",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
 }
-
 
 
 
@@ -209,19 +216,16 @@ graph.node("main", async (__state: GraphState) => {
 }
 if (__step <= 1) {
   __stack.locals.result = greet({
-  ctx: __ctx,
-  threads: new ThreadStore(),
-  interruptData: __state?.interruptData
-});
-
-
+    ctx: __ctx,
+    threads: new ThreadStore(),
+    interruptData: __state?.interruptData
+  });
 if (isInterrupt(__stack.locals.result)) {
-  
-  return { ...__state, data: __stack.locals.result };
-  
-   
-}
-
+    return {
+      ...__state,
+      data: __stack.locals.result
+    };
+  }
   
   __stack.step++;
 }
@@ -271,29 +275,26 @@ if (__step <= 6) {
     return { messages: __threads, data: undefined };
 });
 
-
-
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
-
   return runNode({
     ctx: __globalCtx,
     nodeName: "main",
-    data: {  },
-    messages,
-    callbacks,
+    data: {},
+    messages: messages,
+    callbacks: callbacks
   });
 }
-
 export const __mainNodeParams = [];
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-    try {
-      const initialState = { messages: new ThreadStore(), data: {} };
-      await main(initialState);
-    } catch (__error: any) {
-      console.error(`
-Agent crashed: ${__error.message}`);
-      throw __error;
-    }
+  try {
+    const initialState = {
+      messages: new ThreadStore(),
+      data: {}
+    };
+    await main(initialState)
+  } catch (__error: any) {
+    console.error(`\nAgent crashed: ${__error.message}`)
+    throw __error
+  }
 }
-
-export default graph;
+export default graph

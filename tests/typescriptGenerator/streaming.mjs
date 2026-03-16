@@ -216,18 +216,14 @@ if (__step <= 6) {
     return { messages: __threads, data: undefined };
 });
 
-
-
 export async function foo({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
-
   return runNode({
     ctx: __globalCtx,
     nodeName: "foo",
-    data: {  },
-    messages,
-    callbacks,
+    data: {},
+    messages: messages,
+    callbacks: callbacks
   });
 }
-
 export const __fooNodeParams = [];
-export default graph;
+export default graph

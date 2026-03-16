@@ -120,17 +120,13 @@ export const __addTool = {
 This is a simple addition function.`,
   schema: z.object({"a": z.string(), "b": z.string(), })
 };
-
 export const __addToolParams = ["a","b"];
-
 export const __greetTool = {
   name: "greet",
   description: `Generate a greeting message for the given name.`,
   schema: z.object({"name": z.string(), })
 };
-
 export const __greetToolParams = ["name"];
-
 export const __calculateAreaTool = {
   name: "calculateArea",
   description: `Calculate the area of a rectangle.
@@ -142,152 +138,195 @@ Parameters:
 Returns: the area as a number`,
   schema: z.object({"width": z.string(), "height": z.string(), })
 };
-
 export const __calculateAreaToolParams = ["width","height"];
-
 export const __processDataTool = {
   name: "processData",
   description: `Single line docstring`,
   schema: z.object({})
 };
-
 export const __processDataToolParams = [];
-
 //  Test docstrings in functions
 
 
-
 export async function add(a: any, b: any, __state: InternalFunctionState | undefined = undefined) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupFunction({ state: __state });
-
-    // __state will be undefined if this function is
-    // being called as a tool by an llm
-    const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    const __funcStartTime = performance.now();
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "add", args: { a, b }, isBuiltin: false } });
-
-    // put all args on the state stack
-    __stack.args["a"] = a;
-    __stack.args["b"] = b;
-
-    __self.__retryable = __self.__retryable ?? true;
-
-    try {
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is
+// being called as a tool by an llm
+  const __ctx = __state?.ctx || __globalCtx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  const __funcStartTime = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "add",
+      args: {
+        a: a,
+        b: b
+      },
+      isBuiltin: false
+    }
+  })
+  __stack.args["a"] = a;
+  __stack.args["b"] = b;
+  __self.__retryable = __self.__retryable ?? true;
+  try {
     if (__step <= 0) {
 
-  __stack.step++;
-}
-    } catch (__error) {
-      if (__error instanceof ToolCallError) throw __error;
-      throw new ToolCallError(__error, { retryable: __self.__retryable });
+      __stack.step++;
     }
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "add", timeTaken: performance.now() - __funcStartTime } });
+  } catch (__error) {
+    if (__error instanceof ToolCallError) {
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "add",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
 }
-
-
 
 
 export async function greet(name: any, __state: InternalFunctionState | undefined = undefined) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupFunction({ state: __state });
-
-    // __state will be undefined if this function is
-    // being called as a tool by an llm
-    const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    const __funcStartTime = performance.now();
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "greet", args: { name }, isBuiltin: false } });
-
-    // put all args on the state stack
-    __stack.args["name"] = name;
-
-    __self.__retryable = __self.__retryable ?? true;
-
-    try {
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is
+// being called as a tool by an llm
+  const __ctx = __state?.ctx || __globalCtx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  const __funcStartTime = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "greet",
+      args: {
+        name: name
+      },
+      isBuiltin: false
+    }
+  })
+  __stack.args["name"] = name;
+  __self.__retryable = __self.__retryable ?? true;
+  try {
     if (__step <= 0) {
 
-  __stack.step++;
-}
-    } catch (__error) {
-      if (__error instanceof ToolCallError) throw __error;
-      throw new ToolCallError(__error, { retryable: __self.__retryable });
+      __stack.step++;
     }
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "greet", timeTaken: performance.now() - __funcStartTime } });
+  } catch (__error) {
+    if (__error instanceof ToolCallError) {
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "greet",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
 }
-
-
 
 
 export async function calculateArea(width: any, height: any, __state: InternalFunctionState | undefined = undefined) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupFunction({ state: __state });
-
-    // __state will be undefined if this function is
-    // being called as a tool by an llm
-    const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    const __funcStartTime = performance.now();
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "calculateArea", args: { width, height }, isBuiltin: false } });
-
-    // put all args on the state stack
-    __stack.args["width"] = width;
-    __stack.args["height"] = height;
-
-    __self.__retryable = __self.__retryable ?? true;
-
-    try {
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is
+// being called as a tool by an llm
+  const __ctx = __state?.ctx || __globalCtx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  const __funcStartTime = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "calculateArea",
+      args: {
+        width: width,
+        height: height
+      },
+      isBuiltin: false
+    }
+  })
+  __stack.args["width"] = width;
+  __stack.args["height"] = height;
+  __self.__retryable = __self.__retryable ?? true;
+  try {
     if (__step <= 0) {
 
-  __stack.step++;
-}
-    } catch (__error) {
-      if (__error instanceof ToolCallError) throw __error;
-      throw new ToolCallError(__error, { retryable: __self.__retryable });
+      __stack.step++;
     }
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "calculateArea", timeTaken: performance.now() - __funcStartTime } });
+  } catch (__error) {
+    if (__error instanceof ToolCallError) {
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "calculateArea",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
 }
-
-
 
 
 export async function processData(__state: InternalFunctionState | undefined = undefined) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupFunction({ state: __state });
-
-    // __state will be undefined if this function is
-    // being called as a tool by an llm
-    const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    const __funcStartTime = performance.now();
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "processData", args: {}, isBuiltin: false } });
-
-    // put all args on the state stack
-    
-
-    __self.__retryable = __self.__retryable ?? true;
-
-    try {
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is
+// being called as a tool by an llm
+  const __ctx = __state?.ctx || __globalCtx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  const __funcStartTime = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "processData",
+      args: {},
+      isBuiltin: false
+    }
+  })
+  __self.__retryable = __self.__retryable ?? true;
+  try {
     if (__step <= 0) {
 
-  __stack.step++;
-}
-    } catch (__error) {
-      if (__error instanceof ToolCallError) throw __error;
-      throw new ToolCallError(__error, { retryable: __self.__retryable });
+      __stack.step++;
     }
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "processData", timeTaken: performance.now() - __funcStartTime } });
+  } catch (__error) {
+    if (__error instanceof ToolCallError) {
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "processData",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
 }
 
 
-
-export default graph;
+export default graph

@@ -134,15 +134,12 @@ graph.node("main", async (__state: GraphState) => {
 }
 if (__step <= 1) {
   __stack.locals.message = await await _builtinInput(`Please enter a message: `);
-
-
 if (isInterrupt(__stack.locals.message)) {
-  
-  return { ...__state, data: __stack.locals.message };
-  
-   
-}
-
+    return {
+      ...__state,
+      data: __stack.locals.message
+    };
+  }
   
   
   __stack.step++;
@@ -194,29 +191,26 @@ if (__step <= 4) {
     return { messages: __threads, data: undefined };
 });
 
-
-
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
-
   return runNode({
     ctx: __globalCtx,
     nodeName: "main",
-    data: {  },
-    messages,
-    callbacks,
+    data: {},
+    messages: messages,
+    callbacks: callbacks
   });
 }
-
 export const __mainNodeParams = [];
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-    try {
-      const initialState = { messages: new ThreadStore(), data: {} };
-      await main(initialState);
-    } catch (__error: any) {
-      console.error(`
-Agent crashed: ${__error.message}`);
-      throw __error;
-    }
+  try {
+    const initialState = {
+      messages: new ThreadStore(),
+      data: {}
+    };
+    await main(initialState)
+  } catch (__error: any) {
+    console.error(`\nAgent crashed: ${__error.message}`)
+    throw __error
+  }
 }
-
-export default graph;
+export default graph

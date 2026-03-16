@@ -224,4 +224,4 @@ __globalCtx.stateStack.globals.personName = __globalCtx.stateStack.globals.perso
 
 await await _print(__globalCtx.stateStack.globals.personName)
 
-export default graph;
+export default graph

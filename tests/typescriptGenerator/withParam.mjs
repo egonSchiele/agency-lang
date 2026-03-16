@@ -181,29 +181,28 @@ if (__step <= 3) {
 });
 
 
-
 export async function main(input: any, { messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
-
-
   return runNode({
     ctx: __globalCtx,
     nodeName: "main",
-    data: { input },
-    messages,
-    callbacks,
+    data: {
+      input: input
+    },
+    messages: messages,
+    callbacks: callbacks
   });
 }
-
 export const __mainNodeParams = ["input"];
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-    try {
-      const initialState = { messages: new ThreadStore(), data: {} };
-      await main(initialState);
-    } catch (__error: any) {
-      console.error(`
-Agent crashed: ${__error.message}`);
-      throw __error;
-    }
+  try {
+    const initialState = {
+      messages: new ThreadStore(),
+      data: {}
+    };
+    await main(initialState)
+  } catch (__error: any) {
+    console.error(`\nAgent crashed: ${__error.message}`)
+    throw __error
+  }
 }
-
-export default graph;
+export default graph

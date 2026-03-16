@@ -182,18 +182,16 @@ if (__step <= 3) {
     return { messages: __threads, data: undefined };
 });
 
-
 export async function greet(name: string, { messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
-
-
   return runNode({
     ctx: __globalCtx,
     nodeName: "greet",
-    data: { name },
-    messages,
-    callbacks,
+    data: {
+      name: name
+    },
+    messages: messages,
+    callbacks: callbacks
   });
 }
-
 export const __greetNodeParams = ["name"];
-export default graph;
+export default graph

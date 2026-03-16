@@ -119,67 +119,63 @@ export const __addTool = {
   description: `Adds two numbers together`,
   schema: z.object({"x": z.number(), "y": z.number(), })
 };
-
 export const __addToolParams = ["x","y"];
-
 export const __greetTool = {
   name: "greet",
   description: `Greets a person by name`,
   schema: z.object({"name": z.string(), })
 };
-
 export const __greetToolParams = ["name"];
-
 export const __mixedTool = {
   name: "mixed",
   description: `Mixed typed and untyped parameters`,
   schema: z.object({"count": z.number(), "label": z.string(), })
 };
-
 export const __mixedToolParams = ["count","label"];
-
 export const __processArrayTool = {
   name: "processArray",
   description: `Processes an array of numbers`,
   schema: z.object({"items": z.array(z.number()), })
 };
-
 export const __processArrayToolParams = ["items"];
-
 export const __flexibleTool = {
   name: "flexible",
   description: `Handles either a string or number`,
   schema: z.object({"value": z.union([z.string(), z.number()]), })
 };
-
 export const __flexibleToolParams = ["value"];
-
-
 export async function add(x: number, y: number, __state: InternalFunctionState | undefined = undefined) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupFunction({ state: __state });
-
-    // __state will be undefined if this function is
-    // being called as a tool by an llm
-    const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    const __funcStartTime = performance.now();
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "add", args: { x, y }, isBuiltin: false } });
-
-    // put all args on the state stack
-    __stack.args["x"] = x;
-    __stack.args["y"] = y;
-
-    __self.__retryable = __self.__retryable ?? true;
-
-    try {
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is
+// being called as a tool by an llm
+  const __ctx = __state?.ctx || __globalCtx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  const __funcStartTime = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "add",
+      args: {
+        x: x,
+        y: y
+      },
+      isBuiltin: false
+    }
+  })
+  __stack.args["x"] = x;
+  __stack.args["y"] = y;
+  __self.__retryable = __self.__retryable ?? true;
+  try {
     if (__step <= 0) {
 
-  __stack.step++;
-}
-if (__step <= 1) {
-  
+      __stack.step++;
+    }
+    if (__step <= 1) {
+      
 async function _result(x, y, __metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -204,54 +200,66 @@ __self.result = _result(__stack.args.x, __stack.args.y, {
 
 
 
-  
-  __stack.step++;
-}
-if (__step <= 2) {
-  [__self.result] = await Promise.all([__self.result]);
-  __stack.step++;
-}
-if (__step <= 3) {
-  __ctx.stateStack.pop();
-return __stack.locals.result
-  
-  __stack.step++;
-}
-    } catch (__error) {
-      if (__error instanceof ToolCallError) throw __error;
-      throw new ToolCallError(__error, { retryable: __self.__retryable });
+      
+      __stack.step++;
     }
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "add", timeTaken: performance.now() - __funcStartTime } });
+    if (__step <= 2) {
+      [__self.result] = await Promise.all([__self.result]);
+      __stack.step++;
+    }
+    if (__step <= 3) {
+      __ctx.stateStack.pop();
+return __stack.locals.result
+      
+      __stack.step++;
+    }
+  } catch (__error) {
+    if (__error instanceof ToolCallError) {
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "add",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
 }
-
-
 
 
 export async function greet(name: string, __state: InternalFunctionState | undefined = undefined) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupFunction({ state: __state });
-
-    // __state will be undefined if this function is
-    // being called as a tool by an llm
-    const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    const __funcStartTime = performance.now();
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "greet", args: { name }, isBuiltin: false } });
-
-    // put all args on the state stack
-    __stack.args["name"] = name;
-
-    __self.__retryable = __self.__retryable ?? true;
-
-    try {
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is
+// being called as a tool by an llm
+  const __ctx = __state?.ctx || __globalCtx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  const __funcStartTime = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "greet",
+      args: {
+        name: name
+      },
+      isBuiltin: false
+    }
+  })
+  __stack.args["name"] = name;
+  __self.__retryable = __self.__retryable ?? true;
+  try {
     if (__step <= 0) {
 
-  __stack.step++;
-}
-if (__step <= 1) {
-  
+      __stack.step++;
+    }
+    if (__step <= 1) {
+      
 async function _message(name, __metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -276,55 +284,68 @@ __self.message = _message(__stack.args.name, {
 
 
 
-  
-  __stack.step++;
-}
-if (__step <= 2) {
-  [__self.message] = await Promise.all([__self.message]);
-  __stack.step++;
-}
-if (__step <= 3) {
-  __ctx.stateStack.pop();
-return __stack.locals.message
-  
-  __stack.step++;
-}
-    } catch (__error) {
-      if (__error instanceof ToolCallError) throw __error;
-      throw new ToolCallError(__error, { retryable: __self.__retryable });
+      
+      __stack.step++;
     }
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "greet", timeTaken: performance.now() - __funcStartTime } });
+    if (__step <= 2) {
+      [__self.message] = await Promise.all([__self.message]);
+      __stack.step++;
+    }
+    if (__step <= 3) {
+      __ctx.stateStack.pop();
+return __stack.locals.message
+      
+      __stack.step++;
+    }
+  } catch (__error) {
+    if (__error instanceof ToolCallError) {
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "greet",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
 }
-
-
 
 
 export async function mixed(count: number, label: any, __state: InternalFunctionState | undefined = undefined) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupFunction({ state: __state });
-
-    // __state will be undefined if this function is
-    // being called as a tool by an llm
-    const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    const __funcStartTime = performance.now();
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "mixed", args: { count, label }, isBuiltin: false } });
-
-    // put all args on the state stack
-    __stack.args["count"] = count;
-    __stack.args["label"] = label;
-
-    __self.__retryable = __self.__retryable ?? true;
-
-    try {
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is
+// being called as a tool by an llm
+  const __ctx = __state?.ctx || __globalCtx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  const __funcStartTime = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "mixed",
+      args: {
+        count: count,
+        label: label
+      },
+      isBuiltin: false
+    }
+  })
+  __stack.args["count"] = count;
+  __stack.args["label"] = label;
+  __self.__retryable = __self.__retryable ?? true;
+  try {
     if (__step <= 0) {
 
-  __stack.step++;
-}
-if (__step <= 1) {
-  
+      __stack.step++;
+    }
+    if (__step <= 1) {
+      
 async function _output(label, count, __metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -349,54 +370,66 @@ __self.output = _output(__stack.args.label, __stack.args.count, {
 
 
 
-  
-  __stack.step++;
-}
-if (__step <= 2) {
-  [__self.output] = await Promise.all([__self.output]);
-  __stack.step++;
-}
-if (__step <= 3) {
-  __ctx.stateStack.pop();
-return __stack.locals.output
-  
-  __stack.step++;
-}
-    } catch (__error) {
-      if (__error instanceof ToolCallError) throw __error;
-      throw new ToolCallError(__error, { retryable: __self.__retryable });
+      
+      __stack.step++;
     }
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "mixed", timeTaken: performance.now() - __funcStartTime } });
+    if (__step <= 2) {
+      [__self.output] = await Promise.all([__self.output]);
+      __stack.step++;
+    }
+    if (__step <= 3) {
+      __ctx.stateStack.pop();
+return __stack.locals.output
+      
+      __stack.step++;
+    }
+  } catch (__error) {
+    if (__error instanceof ToolCallError) {
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "mixed",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
 }
-
-
 
 
 export async function processArray(items: number[], __state: InternalFunctionState | undefined = undefined) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupFunction({ state: __state });
-
-    // __state will be undefined if this function is
-    // being called as a tool by an llm
-    const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    const __funcStartTime = performance.now();
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "processArray", args: { items }, isBuiltin: false } });
-
-    // put all args on the state stack
-    __stack.args["items"] = items;
-
-    __self.__retryable = __self.__retryable ?? true;
-
-    try {
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is
+// being called as a tool by an llm
+  const __ctx = __state?.ctx || __globalCtx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  const __funcStartTime = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "processArray",
+      args: {
+        items: items
+      },
+      isBuiltin: false
+    }
+  })
+  __stack.args["items"] = items;
+  __self.__retryable = __self.__retryable ?? true;
+  try {
     if (__step <= 0) {
 
-  __stack.step++;
-}
-if (__step <= 1) {
-  
+      __stack.step++;
+    }
+    if (__step <= 1) {
+      
 async function _result(items, __metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -421,54 +454,66 @@ __self.result = _result(__stack.args.items, {
 
 
 
-  
-  __stack.step++;
-}
-if (__step <= 2) {
-  [__self.result] = await Promise.all([__self.result]);
-  __stack.step++;
-}
-if (__step <= 3) {
-  __ctx.stateStack.pop();
-return __stack.locals.result
-  
-  __stack.step++;
-}
-    } catch (__error) {
-      if (__error instanceof ToolCallError) throw __error;
-      throw new ToolCallError(__error, { retryable: __self.__retryable });
+      
+      __stack.step++;
     }
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "processArray", timeTaken: performance.now() - __funcStartTime } });
+    if (__step <= 2) {
+      [__self.result] = await Promise.all([__self.result]);
+      __stack.step++;
+    }
+    if (__step <= 3) {
+      __ctx.stateStack.pop();
+return __stack.locals.result
+      
+      __stack.step++;
+    }
+  } catch (__error) {
+    if (__error instanceof ToolCallError) {
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "processArray",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
 }
-
-
 
 
 export async function flexible(value: string | number, __state: InternalFunctionState | undefined = undefined) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupFunction({ state: __state });
-
-    // __state will be undefined if this function is
-    // being called as a tool by an llm
-    const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    const __funcStartTime = performance.now();
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "flexible", args: { value }, isBuiltin: false } });
-
-    // put all args on the state stack
-    __stack.args["value"] = value;
-
-    __self.__retryable = __self.__retryable ?? true;
-
-    try {
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is
+// being called as a tool by an llm
+  const __ctx = __state?.ctx || __globalCtx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  const __funcStartTime = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "flexible",
+      args: {
+        value: value
+      },
+      isBuiltin: false
+    }
+  })
+  __stack.args["value"] = value;
+  __self.__retryable = __self.__retryable ?? true;
+  try {
     if (__step <= 0) {
 
-  __stack.step++;
-}
-if (__step <= 1) {
-  
+      __stack.step++;
+    }
+    if (__step <= 1) {
+      
 async function _result(value, __metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -493,27 +538,34 @@ __self.result = _result(__stack.args.value, {
 
 
 
-  
-  __stack.step++;
-}
-if (__step <= 2) {
-  [__self.result] = await Promise.all([__self.result]);
-  __stack.step++;
-}
-if (__step <= 3) {
-  __ctx.stateStack.pop();
-return __stack.locals.result
-  
-  __stack.step++;
-}
-    } catch (__error) {
-      if (__error instanceof ToolCallError) throw __error;
-      throw new ToolCallError(__error, { retryable: __self.__retryable });
+      
+      __stack.step++;
     }
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "flexible", timeTaken: performance.now() - __funcStartTime } });
+    if (__step <= 2) {
+      [__self.result] = await Promise.all([__self.result]);
+      __stack.step++;
+    }
+    if (__step <= 3) {
+      __ctx.stateStack.pop();
+return __stack.locals.result
+      
+      __stack.step++;
+    }
+  } catch (__error) {
+    if (__error instanceof ToolCallError) {
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "flexible",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
 }
-
 
 
 
@@ -575,91 +627,76 @@ graph.node("main", async (__state: GraphState) => {
 }
 if (__step <= 1) {
   __stack.locals.sum = add(5, 10, {
-  ctx: __ctx,
-  threads: new ThreadStore(),
-  interruptData: __state?.interruptData
-});
-
-
+    ctx: __ctx,
+    threads: new ThreadStore(),
+    interruptData: __state?.interruptData
+  });
 if (isInterrupt(__stack.locals.sum)) {
-  
-  return { ...__state, data: __stack.locals.sum };
-  
-   
-}
-
+    return {
+      ...__state,
+      data: __stack.locals.sum
+    };
+  }
   
   __stack.step++;
 }
 if (__step <= 2) {
   __stack.locals.greeting = greet(`Alice`, {
-  ctx: __ctx,
-  threads: new ThreadStore(),
-  interruptData: __state?.interruptData
-});
-
-
+    ctx: __ctx,
+    threads: new ThreadStore(),
+    interruptData: __state?.interruptData
+  });
 if (isInterrupt(__stack.locals.greeting)) {
-  
-  return { ...__state, data: __stack.locals.greeting };
-  
-   
-}
-
+    return {
+      ...__state,
+      data: __stack.locals.greeting
+    };
+  }
   
   __stack.step++;
 }
 if (__step <= 3) {
   __stack.locals.labeled = mixed(42, `Answer`, {
-  ctx: __ctx,
-  threads: new ThreadStore(),
-  interruptData: __state?.interruptData
-});
-
-
+    ctx: __ctx,
+    threads: new ThreadStore(),
+    interruptData: __state?.interruptData
+  });
 if (isInterrupt(__stack.locals.labeled)) {
-  
-  return { ...__state, data: __stack.locals.labeled };
-  
-   
-}
-
+    return {
+      ...__state,
+      data: __stack.locals.labeled
+    };
+  }
   
   __stack.step++;
 }
 if (__step <= 4) {
   __stack.locals.processed = processArray([1, 2, 3, 4, 5], {
-  ctx: __ctx,
-  threads: new ThreadStore(),
-  interruptData: __state?.interruptData
-});
-
-
+    ctx: __ctx,
+    threads: new ThreadStore(),
+    interruptData: __state?.interruptData
+  });
 if (isInterrupt(__stack.locals.processed)) {
-  
-  return { ...__state, data: __stack.locals.processed };
-  
-   
-}
-
+    return {
+      ...__state,
+      data: __stack.locals.processed
+    };
+  }
   
   __stack.step++;
 }
 if (__step <= 5) {
   __stack.locals.flexResult = flexible(`test`, {
-  ctx: __ctx,
-  threads: new ThreadStore(),
-  interruptData: __state?.interruptData
-});
-
-
+    ctx: __ctx,
+    threads: new ThreadStore(),
+    interruptData: __state?.interruptData
+  });
 if (isInterrupt(__stack.locals.flexResult)) {
-  
-  return { ...__state, data: __stack.locals.flexResult };
-  
-   
-}
-
+    return {
+      ...__state,
+      data: __stack.locals.flexResult
+    };
+  }
   
   __stack.step++;
 }
@@ -668,43 +705,36 @@ if (isInterrupt(__stack.locals.flexResult)) {
     return { messages: __threads, data: undefined };
 });
 
-
-
 export async function foo({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
-
   return runNode({
     ctx: __globalCtx,
     nodeName: "foo",
-    data: {  },
-    messages,
-    callbacks,
+    data: {},
+    messages: messages,
+    callbacks: callbacks
   });
 }
-
 export const __fooNodeParams = [];
-
-
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
-
   return runNode({
     ctx: __globalCtx,
     nodeName: "main",
-    data: {  },
-    messages,
-    callbacks,
+    data: {},
+    messages: messages,
+    callbacks: callbacks
   });
 }
-
 export const __mainNodeParams = [];
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-    try {
-      const initialState = { messages: new ThreadStore(), data: {} };
-      await main(initialState);
-    } catch (__error: any) {
-      console.error(`
-Agent crashed: ${__error.message}`);
-      throw __error;
-    }
+  try {
+    const initialState = {
+      messages: new ThreadStore(),
+      data: {}
+    };
+    await main(initialState)
+  } catch (__error: any) {
+    console.error(`\nAgent crashed: ${__error.message}`)
+    throw __error
+  }
 }
-
-export default graph;
+export default graph

@@ -119,41 +119,36 @@ export const __fooTool = {
   description: `No description provided.`,
   schema: z.object({})
 };
-
 export const __fooToolParams = [];
-
-
 export async function foo(__state: InternalFunctionState | undefined = undefined) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupFunction({ state: __state });
-
-    // __state will be undefined if this function is
-    // being called as a tool by an llm
-    const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    const __funcStartTime = performance.now();
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "foo", args: {}, isBuiltin: false } });
-
-    // put all args on the state stack
-    
-
-    __self.__retryable = __self.__retryable ?? true;
-
-    try {
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is
+// being called as a tool by an llm
+  const __ctx = __state?.ctx || __globalCtx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  const __funcStartTime = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "foo",
+      args: {},
+      isBuiltin: false
+    }
+  })
+  __self.__retryable = __self.__retryable ?? true;
+  try {
     if (__step <= 0) {
 
-  __stack.step++;
-}
-if (__step <= 1) {
-  
-{
-
-
+      __stack.step++;
+    }
+    if (__step <= 1) {
+      {
 const __tid = __threads.create();
-
-__threads.pushActive(__tid);
-
+__threads.pushActive(__tid)
 
 async function _res1(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
@@ -192,14 +187,9 @@ if (isInterrupt(__self.res1)) {
 }
 
 
-
 {
-
 const __tid = __threads.createSubthread();
-
-
-__threads.pushActive(__tid);
-
+__threads.pushActive(__tid)
 
 async function _res2(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
@@ -238,14 +228,9 @@ if (isInterrupt(__self.res2)) {
 }
 
 
-
 {
-
 const __tid = __threads.createSubthread();
-
-
-__threads.pushActive(__tid);
-
+__threads.pushActive(__tid)
 
 async function _res3(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
@@ -284,20 +269,12 @@ if (isInterrupt(__self.res3)) {
 }
 
 
-
-
-__threads.popActive();
+__threads.popActive()
 }
 
-
-
 {
-
-
 const __tid = __threads.create();
-
-__threads.pushActive(__tid);
-
+__threads.pushActive(__tid)
 
 async function _res5(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
@@ -336,26 +313,15 @@ if (isInterrupt(__self.res5)) {
 }
 
 
-
-
-__threads.popActive();
+__threads.popActive()
 }
 
-
-
-
-__threads.popActive();
+__threads.popActive()
 }
-
-
 
 {
-
 const __tid = __threads.createSubthread();
-
-
-__threads.pushActive(__tid);
-
+__threads.pushActive(__tid)
 
 async function _res4(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
@@ -394,53 +360,54 @@ if (isInterrupt(__self.res4)) {
 }
 
 
-
-
-__threads.popActive();
+__threads.popActive()
 }
 
-
-
-
-__threads.popActive();
+__threads.popActive()
 }
-
-  
-  __stack.step++;
-}
-if (__step <= 2) {
-  await await _print(`res1`, __stack.locals.res1)
-  
-  __stack.step++;
-}
-if (__step <= 3) {
-  await await _print(`res2`, __stack.locals.res2)
-  
-  __stack.step++;
-}
-if (__step <= 4) {
-  await await _print(`res3`, __stack.locals.res3)
-  
-  __stack.step++;
-}
-if (__step <= 5) {
-  await await _print(`res4`, __stack.locals.res4)
-  
-  __stack.step++;
-}
-if (__step <= 6) {
-  await await _print(`res5`, __stack.locals.res5)
-  
-  __stack.step++;
-}
-    } catch (__error) {
-      if (__error instanceof ToolCallError) throw __error;
-      throw new ToolCallError(__error, { retryable: __self.__retryable });
+      
+      __stack.step++;
     }
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "foo", timeTaken: performance.now() - __funcStartTime } });
+    if (__step <= 2) {
+      await await _print(`res1`, __stack.locals.res1)
+      
+      __stack.step++;
+    }
+    if (__step <= 3) {
+      await await _print(`res2`, __stack.locals.res2)
+      
+      __stack.step++;
+    }
+    if (__step <= 4) {
+      await await _print(`res3`, __stack.locals.res3)
+      
+      __stack.step++;
+    }
+    if (__step <= 5) {
+      await await _print(`res4`, __stack.locals.res4)
+      
+      __stack.step++;
+    }
+    if (__step <= 6) {
+      await await _print(`res5`, __stack.locals.res5)
+      
+      __stack.step++;
+    }
+  } catch (__error) {
+    if (__error instanceof ToolCallError) {
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "foo",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
 }
-
 
 
 
@@ -462,14 +429,9 @@ graph.node("main", async (__state: GraphState) => {
   __stack.step++;
 }
 if (__step <= 1) {
-  
-{
-
-
+  {
 const __tid = __threads.create();
-
-__threads.pushActive(__tid);
-
+__threads.pushActive(__tid)
 
 async function _res1(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
@@ -508,14 +470,9 @@ if (isInterrupt(__self.res1)) {
 }
 
 
-
 {
-
 const __tid = __threads.createSubthread();
-
-
-__threads.pushActive(__tid);
-
+__threads.pushActive(__tid)
 
 async function _res2(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
@@ -554,14 +511,9 @@ if (isInterrupt(__self.res2)) {
 }
 
 
-
 {
-
 const __tid = __threads.createSubthread();
-
-
-__threads.pushActive(__tid);
-
+__threads.pushActive(__tid)
 
 async function _res3(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
@@ -600,20 +552,12 @@ if (isInterrupt(__self.res3)) {
 }
 
 
-
-
-__threads.popActive();
+__threads.popActive()
 }
 
-
-
 {
-
-
 const __tid = __threads.create();
-
-__threads.pushActive(__tid);
-
+__threads.pushActive(__tid)
 
 async function _res5(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
@@ -652,26 +596,15 @@ if (isInterrupt(__self.res5)) {
 }
 
 
-
-
-__threads.popActive();
+__threads.popActive()
 }
 
-
-
-
-__threads.popActive();
+__threads.popActive()
 }
-
-
 
 {
-
 const __tid = __threads.createSubthread();
-
-
-__threads.pushActive(__tid);
-
+__threads.pushActive(__tid)
 
 async function _res4(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
@@ -710,17 +643,11 @@ if (isInterrupt(__self.res4)) {
 }
 
 
-
-
-__threads.popActive();
+__threads.popActive()
 }
 
-
-
-
-__threads.popActive();
+__threads.popActive()
 }
-
   
   __stack.step++;
 }
@@ -754,29 +681,26 @@ if (__step <= 6) {
     return { messages: __threads, data: undefined };
 });
 
-
-
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
-
   return runNode({
     ctx: __globalCtx,
     nodeName: "main",
-    data: {  },
-    messages,
-    callbacks,
+    data: {},
+    messages: messages,
+    callbacks: callbacks
   });
 }
-
 export const __mainNodeParams = [];
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-    try {
-      const initialState = { messages: new ThreadStore(), data: {} };
-      await main(initialState);
-    } catch (__error: any) {
-      console.error(`
-Agent crashed: ${__error.message}`);
-      throw __error;
-    }
+  try {
+    const initialState = {
+      messages: new ThreadStore(),
+      data: {}
+    };
+    await main(initialState)
+  } catch (__error: any) {
+    console.error(`\nAgent crashed: ${__error.message}`)
+    throw __error
+  }
 }
-
-export default graph;
+export default graph

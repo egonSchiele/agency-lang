@@ -139,15 +139,12 @@ if (__step <= 1) {
 }
 if (__step <= 2) {
   __stack.locals.name = await await _builtinInput(`> `);
-
-
 if (isInterrupt(__stack.locals.name)) {
-  
-  return { ...__state, data: __stack.locals.name };
-  
-   
-}
-
+    return {
+      ...__state,
+      data: __stack.locals.name
+    };
+  }
   
   __stack.step++;
 }
@@ -162,18 +159,14 @@ if (__step <= 3) {
 });
 
 
-
-
 export async function foo({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
-
   return runNode({
     ctx: __globalCtx,
     nodeName: "foo",
-    data: {  },
-    messages,
-    callbacks,
+    data: {},
+    messages: messages,
+    callbacks: callbacks
   });
 }
-
 export const __fooNodeParams = [];
-export default graph;
+export default graph

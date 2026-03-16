@@ -119,50 +119,49 @@ export const __openaiTool = {
   description: `No description provided.`,
   schema: z.object({"msg": z.string(), })
 };
-
 export const __openaiToolParams = ["msg"];
-
 export const __googleTool = {
   name: "google",
   description: `No description provided.`,
   schema: z.object({"msg": z.string(), })
 };
-
 export const __googleToolParams = ["msg"];
-
 export const __fibsTool = {
   name: "fibs",
   description: `No description provided.`,
   schema: z.object({})
 };
-
 export const __fibsToolParams = [];
-
-
 export async function openai(msg: string, __state: InternalFunctionState | undefined = undefined) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupFunction({ state: __state });
-
-    // __state will be undefined if this function is
-    // being called as a tool by an llm
-    const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    const __funcStartTime = performance.now();
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "openai", args: { msg }, isBuiltin: false } });
-
-    // put all args on the state stack
-    __stack.args["msg"] = msg;
-
-    __self.__retryable = __self.__retryable ?? true;
-
-    try {
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is
+// being called as a tool by an llm
+  const __ctx = __state?.ctx || __globalCtx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  const __funcStartTime = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "openai",
+      args: {
+        msg: msg
+      },
+      isBuiltin: false
+    }
+  })
+  __stack.args["msg"] = msg;
+  __self.__retryable = __self.__retryable ?? true;
+  try {
     if (__step <= 0) {
 
-  __stack.step++;
-}
-if (__step <= 1) {
-  let __defaultTimeblockName_startTime: number = performance.now();
+      __stack.step++;
+    }
+    if (__step <= 1) {
+      let __defaultTimeblockName_startTime: number = performance.now();
 
 async function _response(msg, __metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
@@ -191,64 +190,73 @@ __self.response = _response(__stack.args.msg, {
 
 let __defaultTimeblockName_endTime: number = performance.now();
 let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultTimeblockName_startTime;
-
-
-console.log("Time taken:", __defaultTimeblockName, "ms");
-
-  
-  
-  __stack.step++;
-}
-if (__step <= 2) {
-  [__self.response] = await Promise.all([__self.response]);
-  __stack.step++;
-}
-if (__step <= 3) {
-  __ctx.stateStack.pop();
-return `OpenAI response: ${__stack.locals.response}`
-  
-  __stack.step++;
-}
-    } catch (__error) {
-      if (__error instanceof ToolCallError) throw __error;
-      throw new ToolCallError(__error, { retryable: __self.__retryable });
+console.log("Time taken:", __defaultTimeblockName, "ms")
+      
+      
+      __stack.step++;
     }
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "openai", timeTaken: performance.now() - __funcStartTime } });
+    if (__step <= 2) {
+      [__self.response] = await Promise.all([__self.response]);
+      __stack.step++;
+    }
+    if (__step <= 3) {
+      __ctx.stateStack.pop();
+return `OpenAI response: ${__stack.locals.response}`
+      
+      __stack.step++;
+    }
+  } catch (__error) {
+    if (__error instanceof ToolCallError) {
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "openai",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
 }
-
-
 
 
 export async function google(msg: string, __state: InternalFunctionState | undefined = undefined) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupFunction({ state: __state });
-
-    // __state will be undefined if this function is
-    // being called as a tool by an llm
-    const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    const __funcStartTime = performance.now();
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "google", args: { msg }, isBuiltin: false } });
-
-    // put all args on the state stack
-    __stack.args["msg"] = msg;
-
-    __self.__retryable = __self.__retryable ?? true;
-
-    try {
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is
+// being called as a tool by an llm
+  const __ctx = __state?.ctx || __globalCtx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  const __funcStartTime = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "google",
+      args: {
+        msg: msg
+      },
+      isBuiltin: false
+    }
+  })
+  __stack.args["msg"] = msg;
+  __self.__retryable = __self.__retryable ?? true;
+  try {
     if (__step <= 0) {
 
-  __stack.step++;
-}
-if (__step <= 1) {
-  __threads.active().setMessages([])
-  
-  __stack.step++;
-}
-if (__step <= 2) {
-  let __defaultTimeblockName_startTime: number = performance.now();
+      __stack.step++;
+    }
+    if (__step <= 1) {
+      __threads.active().setMessages([])
+      
+      __stack.step++;
+    }
+    if (__step <= 2) {
+      let __defaultTimeblockName_startTime: number = performance.now();
 
 async function _response(msg, __metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
@@ -279,58 +287,64 @@ __self.response = _response(__stack.args.msg, {
 
 let __defaultTimeblockName_endTime: number = performance.now();
 let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultTimeblockName_startTime;
-
-
-console.log("Time taken:", __defaultTimeblockName, "ms");
-
-  
-  __stack.step++;
-}
-if (__step <= 3) {
-  [__self.response] = await Promise.all([__self.response]);
-  __stack.step++;
-}
-if (__step <= 4) {
-  __ctx.stateStack.pop();
-return `Google response: ${__stack.locals.response}`
-  
-  __stack.step++;
-}
-    } catch (__error) {
-      if (__error instanceof ToolCallError) throw __error;
-      throw new ToolCallError(__error, { retryable: __self.__retryable });
+console.log("Time taken:", __defaultTimeblockName, "ms")
+      
+      __stack.step++;
     }
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "google", timeTaken: performance.now() - __funcStartTime } });
+    if (__step <= 3) {
+      [__self.response] = await Promise.all([__self.response]);
+      __stack.step++;
+    }
+    if (__step <= 4) {
+      __ctx.stateStack.pop();
+return `Google response: ${__stack.locals.response}`
+      
+      __stack.step++;
+    }
+  } catch (__error) {
+    if (__error instanceof ToolCallError) {
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "google",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
 }
-
-
 
 
 export async function fibs(__state: InternalFunctionState | undefined = undefined) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupFunction({ state: __state });
-
-    // __state will be undefined if this function is
-    // being called as a tool by an llm
-    const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    const __funcStartTime = performance.now();
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "fibs", args: {}, isBuiltin: false } });
-
-    // put all args on the state stack
-    
-
-    __self.__retryable = __self.__retryable ?? true;
-
-    try {
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is
+// being called as a tool by an llm
+  const __ctx = __state?.ctx || __globalCtx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  const __funcStartTime = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "fibs",
+      args: {},
+      isBuiltin: false
+    }
+  })
+  __self.__retryable = __self.__retryable ?? true;
+  try {
     if (__step <= 0) {
 
-  __stack.step++;
-}
-if (__step <= 1) {
-  
+      __stack.step++;
+    }
+    if (__step <= 1) {
+      
 async function ___promptVar(__metadata): Promise<any> {
   __self.__removedTools = __self.__removedTools || [];
   return runPrompt({
@@ -369,17 +383,24 @@ if (isInterrupt(__self.__promptVar)) {
 
 __ctx.stateStack.pop();
 return __self.__promptVar
-  
-  __stack.step++;
-}
-    } catch (__error) {
-      if (__error instanceof ToolCallError) throw __error;
-      throw new ToolCallError(__error, { retryable: __self.__retryable });
+      
+      __stack.step++;
     }
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "fibs", timeTaken: performance.now() - __funcStartTime } });
+  } catch (__error) {
+    if (__error instanceof ToolCallError) {
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "fibs",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
 }
-
 
 
 
@@ -402,51 +423,42 @@ graph.node("main", async (__state: GraphState) => {
 }
 if (__step <= 1) {
   __stack.locals.msg = await await _builtinInput(`> `);
-
-
 if (isInterrupt(__stack.locals.msg)) {
-  
-  return { ...__state, data: __stack.locals.msg };
-  
-   
-}
-
+    return {
+      ...__state,
+      data: __stack.locals.msg
+    };
+  }
   
   __stack.step++;
 }
 if (__step <= 2) {
   __stack.locals.res2 = google(__stack.locals.msg, {
-  ctx: __ctx,
-  threads: new ThreadStore(),
-  interruptData: __state?.interruptData
-});
-
-
+    ctx: __ctx,
+    threads: new ThreadStore(),
+    interruptData: __state?.interruptData
+  });
 if (isInterrupt(__stack.locals.res2)) {
-  
-  return { ...__state, data: __stack.locals.res2 };
-  
-   
-}
-
+    return {
+      ...__state,
+      data: __stack.locals.res2
+    };
+  }
   
   __stack.step++;
 }
 if (__step <= 3) {
   __stack.locals.res1 = openai(__stack.locals.msg, {
-  ctx: __ctx,
-  threads: new ThreadStore(),
-  interruptData: __state?.interruptData
-});
-
-
+    ctx: __ctx,
+    threads: new ThreadStore(),
+    interruptData: __state?.interruptData
+  });
 if (isInterrupt(__stack.locals.res1)) {
-  
-  return { ...__state, data: __stack.locals.res1 };
-  
-   
-}
-
+    return {
+      ...__state,
+      data: __stack.locals.res1
+    };
+  }
   
   __stack.step++;
 }
@@ -469,29 +481,26 @@ if (__step <= 6) {
     return { messages: __threads, data: undefined };
 });
 
-
-
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
-
   return runNode({
     ctx: __globalCtx,
     nodeName: "main",
-    data: {  },
-    messages,
-    callbacks,
+    data: {},
+    messages: messages,
+    callbacks: callbacks
   });
 }
-
 export const __mainNodeParams = [];
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-    try {
-      const initialState = { messages: new ThreadStore(), data: {} };
-      await main(initialState);
-    } catch (__error: any) {
-      console.error(`
-Agent crashed: ${__error.message}`);
-      throw __error;
-    }
+  try {
+    const initialState = {
+      messages: new ThreadStore(),
+      data: {}
+    };
+    await main(initialState)
+  } catch (__error: any) {
+    console.error(`\nAgent crashed: ${__error.message}`)
+    throw __error
+  }
 }
-
-export default graph;
+export default graph

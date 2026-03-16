@@ -119,45 +119,52 @@ export const __testTool = {
   description: `No description provided.`,
   schema: z.object({})
 };
-
 export const __testToolParams = [];
-
-
 export async function test(__state: InternalFunctionState | undefined = undefined) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupFunction({ state: __state });
-
-    // __state will be undefined if this function is
-    // being called as a tool by an llm
-    const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    const __funcStartTime = performance.now();
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "test", args: {}, isBuiltin: false } });
-
-    // put all args on the state stack
-    
-
-    __self.__retryable = __self.__retryable ?? true;
-
-    try {
+  const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is
+// being called as a tool by an llm
+  const __ctx = __state?.ctx || __globalCtx;
+  const statelogClient = __ctx.statelogClient;
+  const __graph = __ctx.graph;
+  const __funcStartTime = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "test",
+      args: {},
+      isBuiltin: false
+    }
+  })
+  __self.__retryable = __self.__retryable ?? true;
+  try {
     if (__step <= 0) {
 
-  __stack.step++;
-}
-if (__step <= 1) {
-  __stack.locals.foo = 1;
-  
-  __stack.step++;
-}
-    } catch (__error) {
-      if (__error instanceof ToolCallError) throw __error;
-      throw new ToolCallError(__error, { retryable: __self.__retryable });
+      __stack.step++;
     }
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "test", timeTaken: performance.now() - __funcStartTime } });
+    if (__step <= 1) {
+      __stack.locals.foo = 1;
+      
+      __stack.step++;
+    }
+  } catch (__error) {
+    if (__error instanceof ToolCallError) {
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "test",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
 }
-
 
 
 
@@ -189,39 +196,52 @@ if (__step <= 1) {
   __stack.step++;
 }
 if (__step <= 2) {
-  
-export async function add(a: any, b: any, __state: InternalFunctionState | undefined = undefined) {
-    const { stack: __stack, step: __step, self: __self, threads: __threads } =
-      setupFunction({ state: __state });
-
+  export async function add(a: any, b: any, __state: InternalFunctionState | undefined = undefined) {
+    const { stack: __stack, step: __step, self: __self, threads: __threads } = setupFunction({
+      state: __state
+    });
     // __state will be undefined if this function is
-    // being called as a tool by an llm
+// being called as a tool by an llm
     const __ctx = __state?.ctx || __globalCtx;
     const statelogClient = __ctx.statelogClient;
     const __graph = __ctx.graph;
     const __funcStartTime = performance.now();
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionStart", data: { functionName: "add", args: { a, b }, isBuiltin: false } });
-
-    // put all args on the state stack
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onFunctionStart",
+      data: {
+        functionName: "add",
+        args: {
+          a: a,
+          b: b
+        },
+        isBuiltin: false
+      }
+    })
     __stack.args["a"] = a;
     __stack.args["b"] = b;
-
     __self.__retryable = __self.__retryable ?? true;
-
     try {
-    if (__step <= 0) {
-  //  multi-param function
-  
-  __stack.step++;
-}
+      if (__step <= 0) {
+        //  multi-param function
+        
+        __stack.step++;
+      }
     } catch (__error) {
-      if (__error instanceof ToolCallError) throw __error;
-      throw new ToolCallError(__error, { retryable: __self.__retryable });
+      if (__error instanceof ToolCallError) {
+        throw __error
+      }
+      throw new ToolCallError(__error, { retryable: __self.__retryable })
     }
-
-    await callHook({ callbacks: __ctx.callbacks, name: "onFunctionEnd", data: { functionName: "add", timeTaken: performance.now() - __funcStartTime } });
-}
-
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onFunctionEnd",
+      data: {
+        functionName: "add",
+        timeTaken: performance.now() - __funcStartTime
+      }
+    })
+  }
   
   __stack.step++;
 }
@@ -230,29 +250,26 @@ export async function add(a: any, b: any, __state: InternalFunctionState | undef
     return { messages: __threads, data: undefined };
 });
 
-
-
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
-
   return runNode({
     ctx: __globalCtx,
     nodeName: "main",
-    data: {  },
-    messages,
-    callbacks,
+    data: {},
+    messages: messages,
+    callbacks: callbacks
   });
 }
-
 export const __mainNodeParams = [];
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-    try {
-      const initialState = { messages: new ThreadStore(), data: {} };
-      await main(initialState);
-    } catch (__error: any) {
-      console.error(`
-Agent crashed: ${__error.message}`);
-      throw __error;
-    }
+  try {
+    const initialState = {
+      messages: new ThreadStore(),
+      data: {}
+    };
+    await main(initialState)
+  } catch (__error: any) {
+    console.error(`\nAgent crashed: ${__error.message}`)
+    throw __error
+  }
 }
-
-export default graph;
+export default graph

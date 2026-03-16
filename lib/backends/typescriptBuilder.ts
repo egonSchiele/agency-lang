@@ -411,8 +411,8 @@ export class TypeScriptBuilder {
 
   // ------- Type system (side effects only) -------
 
-  private processTypeAlias(_node: TypeAlias): TsNode {
-    return ts.empty();
+  private processTypeAlias(node: TypeAlias): TsNode {
+    return ts.raw(`type ${node.aliasName} = ${formatTypeHint(node.aliasedType)};`);
   }
 
   private processTypeHint(_node: TypeHint): TsNode {

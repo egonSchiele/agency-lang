@@ -12,20 +12,21 @@ export const TYPES_THAT_DONT_TRIGGER_NEW_PART: AgencyNode["type"][] = [
 ];
 
 /**
- * Maps Agency built-in function names to TypeScript equivalents
+ * Maps Agency built-in function names to TypeScript equivalents.
+ * Most map to themselves; exceptions are names that shadow JS globals.
  */
 export const BUILTIN_FUNCTIONS: Record<string, string> = {
-  print: "_print",
-  printJSON: "_printJSON",
-  input: "_builtinInput",
-  read: "_builtinRead",
-  readImage: "_builtinReadImage",
-  write: "_builtinWrite",
+  print: "print",
+  printJSON: "printJSON",
+  input: "input",
+  read: "read",
+  readImage: "readImage",
+  write: "write",
   fetch: "_builtinFetch",
   fetchJSON: "_builtinFetchJSON",
   fetchJson: "_builtinFetchJSON",
-  sleep: "_builtinSleep",
-  round: "_builtinRound",
+  sleep: "sleep",
+  round: "round",
 };
 
 export const BUILTIN_FUNCTIONS_TO_ASYNC: Record<string, boolean> = {

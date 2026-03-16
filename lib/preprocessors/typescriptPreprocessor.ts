@@ -1231,14 +1231,11 @@ export class TypescriptPreprocessor {
    */
   protected resolveVariableScopes(): void {
     const globalVars = new Set<string>();
+    const sharedVars = new Set<string>();
     const importedVars = new Set<string>();
     const funcOrNodeArgs: Record<string, string[]> = {};
-    /* const functionSpecificVarNameToScope: Record<
-      string,
-      Record<string, ScopeType>
-    > = {}; */
 
-    // First, we collect all global variables
+    // First, we collect all global and shared variables
     for (const { node, scopes } of walkNodesArray(this.program.nodes)) {
       if (scopes.length === 0) {
         throw new Error(
@@ -1247,7 +1244,11 @@ export class TypescriptPreprocessor {
       }
       if (node.type === "assignment") {
         if (scopes.length === 0 || scopes.at(-1)?.type === "global") {
-          globalVars.add(node.variableName);
+          if (node.shared) {
+            sharedVars.add(node.variableName);
+          } else {
+            globalVars.add(node.variableName);
+          }
         }
       } else if (node.type === "variableName") {
         if (scopes.length === 0 || scopes.at(-1)?.type === "global") {
@@ -1276,6 +1277,9 @@ export class TypescriptPreprocessor {
       // imported takes precedence over global
       if (importedVars.has(varName)) {
         return "imported";
+      }
+      if (sharedVars.has(varName)) {
+        return "shared";
       }
       if (globalVars.has(varName)) {
         return "global";
@@ -1343,6 +1347,8 @@ export class TypescriptPreprocessor {
             node.type === "variableName" ? node.value : node.variableName;
           if (importedVars.has(name)) {
             node.scope = "imported";
+          } else if (sharedVars.has(name)) {
+            node.scope = "shared";
           } else {
             node.scope = "global";
           }

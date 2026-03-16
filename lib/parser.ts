@@ -22,6 +22,7 @@ import { booleanParser } from "./parsers/literals.js";
 import { commentParser } from "./parsers/comment.js";
 import {
   assignmentParser,
+  sharedAssignmentParser,
   functionParser,
   graphNodeParser,
   ifParser,
@@ -77,6 +78,7 @@ export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
         functionParser,
         returnStatementParser,
         specialVarParser,
+        sharedAssignmentParser,
         assignmentParser,
         binOpParser,
         llmPromptFunctionCallParser,

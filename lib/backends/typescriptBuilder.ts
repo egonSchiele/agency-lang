@@ -182,6 +182,7 @@ export class TypeScriptBuilder {
       case "args":
         return "__stack.args";
       case "imported":
+      case "shared":
         return "";
       default:
         throw new Error(`Unknown scope type: ${scope} for varName: ${varName}`);
@@ -301,6 +302,18 @@ export class TypeScriptBuilder {
       }
     }
 
+    // Collect shared variable names and emit top-level `let` declarations
+    const sharedVarNames = new Set<string>();
+    for (const node of program.nodes) {
+      if (node.type === "assignment" && node.scope === "shared") {
+        sharedVarNames.add(node.variableName);
+      }
+    }
+    const sharedDeclarations: TsNode[] = [];
+    for (const name of sharedVarNames) {
+      sharedDeclarations.push(ts.letDecl(name));
+    }
+
     // Pass 7: Process all nodes and generate code
     // Separate global-scope assignments into __initializeGlobals function
     const globalInitStatements: TsNode[] = [];
@@ -334,6 +347,11 @@ export class TypeScriptBuilder {
 
     for (const alias of this.generatedTypeAliases) {
       sections.push(alias);
+    }
+
+    // Emit shared variable declarations at module level
+    if (sharedDeclarations.length > 0) {
+      sections.push(ts.statements(sharedDeclarations));
     }
 
     // Generate __initializeGlobals function for per-execution global variable initialization
@@ -1199,6 +1217,7 @@ export class TypeScriptBuilder {
     const { variableName, typeHint, value } = node;
     const scopeVar = this.scopetoString(node.scope!, variableName);
     const chainStr = this.renderAccessChain(node.accessChain);
+    const qualifiedName = scopeVar ? `${scopeVar}.${variableName}${chainStr}` : `${variableName}${chainStr}`;
 
     if (value.type === "prompt") {
       return this.processPromptLiteral(variableName, typeHint, value);
@@ -1211,13 +1230,13 @@ export class TypeScriptBuilder {
         .join(", ");
       return ts.raw(
         renderInterruptAssignment.default({
-          variableName: `${scopeVar}.${variableName}${chainStr}`,
+          variableName: qualifiedName,
           interruptArgs,
           nodeContext: this.getCurrentScope().type === "node",
         }),
       );
     } else if (value.type === "functionCall") {
-      const varRef = ts.raw(`${scopeVar}.${variableName}${chainStr}`);
+      const varRef = ts.raw(qualifiedName);
       const stmts: TsNode[] = [ts.assign(varRef, this.processNode(value))];
       if (this.getCurrentScope().type !== "global") {
         const returnObj =
@@ -1235,7 +1254,7 @@ export class TypeScriptBuilder {
     } else if (value.type === "timeBlock") {
       return this.processTimeBlock(value, variableName);
     } else if (value.type === "messageThread") {
-      const varName = `${scopeVar}.${variableName}${chainStr}`;
+      const varName = qualifiedName;
       return this.processMessageThread(value, varName);
     } else {
       const lhs = this.buildAssignmentLhs(

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { assignmentParser } from "./function.js";
+import { assignmentParser, sharedAssignmentParser } from "./function.js";
 
 describe("assignmentParser", () => {
   const testCases = [
@@ -489,6 +489,51 @@ describe("assignmentParser", () => {
           const result = assignmentParser(input);
           expect(result.success).toBe(false);
         });
+    }
+  });
+});
+
+describe("sharedAssignmentParser", () => {
+  it("should parse a shared assignment with a number", () => {
+    const result = sharedAssignmentParser("shared x = 42");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.type).toBe("assignment");
+      expect(result.result.variableName).toBe("x");
+      expect(result.result.shared).toBe(true);
+      expect(result.result.value).toEqual({ type: "number", value: "42" });
+    }
+  });
+
+  it("should parse a shared assignment with a string", () => {
+    const result = sharedAssignmentParser('shared name = "Alice"');
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.shared).toBe(true);
+      expect(result.result.variableName).toBe("name");
+    }
+  });
+
+  it("should parse a shared assignment with a function call", () => {
+    const result = sharedAssignmentParser('shared myPrompt = read("prompt.md")');
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.shared).toBe(true);
+      expect(result.result.variableName).toBe("myPrompt");
+      expect(result.result.value.type).toBe("functionCall");
+    }
+  });
+
+  it("should not parse a regular assignment", () => {
+    const result = sharedAssignmentParser("x = 42");
+    expect(result.success).toBe(false);
+  });
+
+  it("regular assignmentParser should not set shared", () => {
+    const result = assignmentParser("x = 42");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.shared).toBeUndefined();
     }
   });
 });

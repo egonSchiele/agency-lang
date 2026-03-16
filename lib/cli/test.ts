@@ -519,7 +519,7 @@ export async function testTs(config: AgencyConfig, inputPaths: string[]) {
 
     for (const dir of testDirs) {
       const dirName = path.basename(dir);
-      console.log(color.yellow(`\nRunning TS test: ${dirName}`));
+      console.log(color.yellow(`\nRunning JS test: ${dirName}`));
 
       const agencyFile = findAgencyFile(dir);
       if (!agencyFile) {

@@ -401,12 +401,13 @@ export class AgencyGenerator {
     const varName = node.typeHint
       ? `${node.variableName}${chainStr}: ${variableTypeToString(node.typeHint, this.typeAliases)}`
       : `${node.variableName}${chainStr}`;
+    const prefix = node.shared ? "shared " : "";
     if (node.value.type === "timeBlock") {
       const code = this.processTimeBlock(node.value);
-      return this.indentStr(`${varName} = ${code.trim()}\n`);
+      return this.indentStr(`${prefix}${varName} = ${code.trim()}\n`);
     }
     let valueCode = this.processNode(node.value).trim();
-    return this.indentStr(`${varName} = ${valueCode}`);
+    return this.indentStr(`${prefix}${varName} = ${valueCode}`);
   }
 
   protected processTimeBlock(node: TimeBlock): string {

@@ -1,0 +1,8 @@
+{
+  "call1": {
+    "sharedVar": "mutated"
+  },
+  "call2": {
+    "sharedVar": "mutated"
+  }
+}

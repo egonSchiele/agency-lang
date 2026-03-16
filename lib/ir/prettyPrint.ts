@@ -12,6 +12,7 @@ function scopeToPrefix(scope: TsScopedVar["scope"]): string {
     case "args":
       return "__stack.args";
     case "imported":
+    case "shared":
       return "";
   }
 }

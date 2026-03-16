@@ -1,0 +1,11 @@
+shared sharedVar = "shared-value"
+
+node foo(sleepTime: number, newSharedVar: string | null) {
+  sleep(sleepTime)
+  if (newSharedVar) {
+    sharedVar = newSharedVar
+  }
+  return { 
+    sharedVar: sharedVar
+  }
+}

@@ -252,7 +252,7 @@ export interface TsNewExpr {
 export interface TsScopedVar {
   kind: "scopedVar";
   name: string;
-  scope: "global" | "function" | "node" | "args" | "imported";
+  scope: "global" | "shared" | "function" | "node" | "args" | "imported";
 }
 
 /** Return from a function scope — pops the state stack, then returns the value */

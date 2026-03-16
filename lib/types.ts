@@ -41,7 +41,7 @@ export * from "./types/typeHints.js";
 export * from "./types/whileLoop.js";
 export * from "./types/forLoop.js";
 
-export type Scope = GlobalScope | FunctionScope | NodeScope | ImportedScope;
+export type Scope = GlobalScope | FunctionScope | NodeScope | ImportedScope | SharedScope;
 export type ScopeType = Scope["type"] | "args";
 export type GlobalScope = {
   type: "global";
@@ -64,12 +64,18 @@ export type ImportedScope = {
   type: "imported";
 };
 
+// shared across all calls — lives in module namespace, not on execution context
+export type SharedScope = {
+  type: "shared";
+};
+
 export type Assignment = {
   type: "assignment";
   variableName: string;
   accessChain?: AccessChainElement[];
   typeHint?: VariableType;
   scope?: ScopeType;
+  shared?: boolean;
   value:
     | ValueAccess
     | Literal

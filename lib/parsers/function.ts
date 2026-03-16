@@ -139,6 +139,11 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
   return success(out, result.rest);
 };
 
+export const sharedAssignmentParser: Parser<Assignment> = (input: string) => {
+  const parser = seqC(str("shared"), spaces, captureCaptures(assignmentParser));
+  return map(parser, (result) => ({ ...result, shared: true }))(input);
+};
+
 const trim = (s: string) => s.trim();
 export const docStringParser: Parser<DocString> = trace(
   "docStringParser",

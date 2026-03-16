@@ -211,6 +211,36 @@ import bar from "bar.js"
 
 For any logic that is more complex, implement it in a separate TypeScript file, then import the relevant functions into Agency and use them.
 
+### `safe` keyword
+As we've already seen, all functions can be used as tools. Now inside those functions you may be calling other functions, including some that you imported from TypeScript. Sometimes when a tool is called, the LLM doesn't call the tool correctly.
+
+For example, given a tool like this:
+
+```
+def editIngredientsTool(ingredientIds: string[]): Result {
+  ingredients = await getIngredients(ingredientIds)
+  result = await editIngredients({
+    ingredients: ingredients
+  })
+  return result
+}
+``
+It's possible that the LLM will make an error in calling this tool. It may specify some ingredient IDs that don't exist, or it may incorrectly use the ingredient names instead of the IDs. In this case, the `getIngredients` call is defined so it will throw an error.
+
+In such situations, you can usually just send the request to the LLM again, and it will work... but that's a poor user experience. I'd like the LLM to retry these sorts of tool calls itself. But the question is, can the tool call be retried? What if it has run some code that has mutated some state, and if we retry the tool call, that code will run again and cause problems? For example, what if the tool call sent an email to a user, and if we retry the tool call, it will send another email to the user?
+
+This is where `safe` comes in. When importing a TypeScript function, we can mark it safe – safe to be rerun. Then, if a tool call throws an error, we check if any unsafe functions have been called so far, and if not, we send the error back to the LLM and ask it to retry the call. Here's how you would mark a function as safe:
+
+```ts
+import { safe someFunction } from "./someModule.js"
+
+// here, foo is safe but bar is not
+import { safe foo, bar } from "./someModule.js"
+
+Agency limits the number of times the function can be rerun. The limit is currently 5, because if a function is always going to throw an error, it doesn't make sense to keep calling it infinitely. So we call it a finite number of times, and after that we remove the tool from the list so it can no longer be called.
+
+Note that if a tool call throws an error, and we have already called an unsafe function, then that tool is removed from the list immediately, and the error is sent back to the LLM. All imported TypeScript functions are assumed to be unsafe unless explicitly marked safe.
+
 ## Using your agent
 
 You can either run an agency file directly, in which case you need to define a node named `main` that will get executed as the entry point to your agent, or you can import your agent into a TypeScript file. Here is an example of that:

@@ -1,8 +1,0 @@
-let {{{timingVarName:string}}}_startTime: number = performance.now();
-{{{bodyCodeStr:string}}}
-let {{{timingVarName}}}_endTime: number = performance.now();
-let {{{timingVarName}}}: number = {{{timingVarName}}}_endTime - {{{timingVarName}}}_startTime;
-
-{{#printTime}}
-console.log("Time taken:", {{{timingVarName}}}, "ms");
-{{/printTime}}

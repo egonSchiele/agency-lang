@@ -37,7 +37,11 @@ export class TypescriptPreprocessor {
   protected functionDefinitions: Record<string, FunctionDefinition> = {};
   protected graphNodeDefinitions: Record<string, AgencyNode> = {};
   protected importedTools: string[] = [];
-  constructor(program: AgencyProgram, config: AgencyConfig = {}, info?: ProgramInfo) {
+  constructor(
+    program: AgencyProgram,
+    config: AgencyConfig = {},
+    info?: ProgramInfo,
+  ) {
     this.program = program;
     this.config = config;
     if (info) {
@@ -61,8 +65,35 @@ export class TypescriptPreprocessor {
     }
     this.collectTools();
     this.collectSkills();
-    this.markFunctionsAsync();
-    this.markFunctionCallsAsync();
+    /*
+    Skipping these for now. The issue is that these functions could be modifying global state.
+    Here's an example:
+
+    ```agency
+    globalVar = 0
+      
+    def increment() {
+      globalVar = globalVar + 1
+    }
+      
+    def getGlobal() {
+      return globalVar
+    }
+      
+    node main() {
+      increment()
+      increment()
+      val = getGlobal()
+      print(val)
+    }
+    ```
+      
+    In the current code to mark functions async,
+    all three of these function calls run concurrently...
+    so `val` could be 0, 1, or 2, depending on how many of the increment() calls run!
+    */
+    // this.markFunctionsAsync();
+    // this.markFunctionCallsAsync();
     this.removeUnusedLlmCalls();
     this.addPromiseAllCalls();
     this.filterExcludedNodeTypes();

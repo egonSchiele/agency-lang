@@ -360,9 +360,13 @@ export class TypeScriptBuilder {
       ts.functionDecl(
         "__initializeGlobals",
         [{ name: "__ctx" }],
-        ts.statements(globalInitStatements),
+        ts.statements([
+          ...globalInitStatements,
+          ts.assign(ts.id("__globalsInitialized"), ts.bool(true)),
+        ]),
       ),
     );
+    sections.push(ts.varDecl("let", "__globalsInitialized", ts.bool(false)));
 
     sections.push(ts.statements(this.generatedStatements));
 
@@ -897,6 +901,11 @@ export class TypeScriptBuilder {
         graph: ts.ctx("graph"),
       }),
 
+      ts.if(
+        ts.raw("!__globalsInitialized"),
+        ts.call(ts.id("__initializeGlobals"), [ts.id("__ctx")]),
+      ),
+
       ts.time("__funcStartTime"),
       ts.callHook("onFunctionStart", {
         functionName: ts.str(functionName),
@@ -920,7 +929,7 @@ export class TypeScriptBuilder {
       ),
     );
 
-    // Try/catch wrapping the body
+    // Try/catch wrapping the body, with finally to always pop the state stack
     setupStmts.push(
       ts.tryCatch(
         ts.statements(bodyCode),
@@ -934,6 +943,7 @@ export class TypeScriptBuilder {
           ),
         ]),
         "__error",
+        ts.raw("__ctx.stateStack.pop()"),
       ),
     );
 
@@ -1181,6 +1191,20 @@ export class TypeScriptBuilder {
 
   private processReturnStatement(node: ReturnStatement): TsNode {
     if (this.isInsideGraphNode) {
+      if (
+        node.value.type === "functionCall" &&
+        node.value.functionName === "interrupt"
+      ) {
+        const interruptArgs = node.value.arguments
+          .map((arg) => this.str(this.processNode(arg)))
+          .join(", ");
+        return ts.raw(
+          renderInterruptReturn.default({
+            interruptArgs,
+            nodeContext: true,
+          }),
+        );
+      }
       const valueNode = this.processNode(node.value);
       if (
         node.value.type === "functionCall" &&

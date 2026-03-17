@@ -74,6 +74,7 @@ export function printTs(node: TsNode, indent = 0): string {
       const sig = `${parts.join(" ")}(${printParams(node.params)})`;
       const ret = node.returnType ? `: ${node.returnType}` : "";
       const body = printBody(node.body, indent);
+      console.log(parts, sig);
       return `${sig}${ret} {\n${body}\n${ind(indent)}}`;
     }
 
@@ -168,12 +169,20 @@ export function printTs(node: TsNode, indent = 0): string {
       const catchClause = node.catchParam
         ? `catch (${node.catchParam})`
         : "catch";
-      return `try {\n${printBody(node.tryBody, indent)}\n${ind(indent)}} ${catchClause} {\n${printBody(node.catchBody, indent)}\n${ind(indent)}}`;
+      let result = `try {\n${printBody(node.tryBody, indent)}\n${ind(indent)}} ${catchClause} {\n${printBody(node.catchBody, indent)}\n${ind(indent)}}`;
+      if (node.finallyBody) {
+        result += ` finally {\n${printBody(node.finallyBody, indent)}\n${ind(indent)}}`;
+      }
+      return result;
     }
 
     case "binOp": {
-      const left = node.parenLeft ? `(${printTs(node.left, indent)})` : printTs(node.left, indent);
-      const right = node.parenRight ? `(${printTs(node.right, indent)})` : printTs(node.right, indent);
+      const left = node.parenLeft
+        ? `(${printTs(node.left, indent)})`
+        : printTs(node.left, indent);
+      const right = node.parenRight
+        ? `(${printTs(node.right, indent)})`
+        : printTs(node.right, indent);
       return `${left} ${node.op} ${right}`;
     }
 
@@ -223,7 +232,7 @@ export function printTs(node: TsNode, indent = 0): string {
     }
 
     case "functionReturn":
-      return `__ctx.stateStack.pop();\nreturn ${printTs(node.value, indent)}`;
+      return `return ${printTs(node.value, indent)}`;
 
     case "stepBlock": {
       const stepBody = printBody(node.body, indent);

@@ -106,21 +106,25 @@ export async function runNode({
     name: "onAgentStart",
     data: { nodeName, args: data, messages: messages || [] },
   });
-  const threadStore = new ThreadStore();
-  const result = await execCtx.graph.run(nodeName, {
-    messages: threadStore,
-    data,
-    ctx: execCtx,
-    isResume: false,
-  }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
-  const returnObject = createReturnObject({
-    result,
-    stateStack: execCtx.stateStack,
-  });
-  await callHook({
-    callbacks: execCtx.callbacks,
-    name: "onAgentEnd",
-    data: { nodeName, result: returnObject },
-  });
-  return returnObject;
+  try {
+    const threadStore = new ThreadStore();
+    const result = await execCtx.graph.run(nodeName, {
+      messages: threadStore,
+      data,
+      ctx: execCtx,
+      isResume: false,
+    }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
+    const returnObject = createReturnObject({
+      result,
+      stateStack: execCtx.stateStack,
+    });
+    await callHook({
+      callbacks: execCtx.callbacks,
+      name: "onAgentEnd",
+      data: { nodeName, result: returnObject },
+    });
+    return returnObject;
+  } finally {
+    execCtx.cleanup();
+  }
 }

@@ -274,8 +274,9 @@ export const ts = {
     tryBody: TsNode,
     catchBody: TsNode,
     catchParam?: string,
+    finallyBody?: TsNode,
   ): TsTryCatch {
-    return { kind: "tryCatch", tryBody, catchParam, catchBody };
+    return { kind: "tryCatch", tryBody, catchParam, catchBody, finallyBody };
   },
 
   binOp(

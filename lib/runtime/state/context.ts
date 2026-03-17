@@ -71,6 +71,13 @@ export class RuntimeContext<T> {
     return execCtx;
   }
 
+  /** Sever references held by an execution context so GC can reclaim them. */
+  cleanup(): void {
+    this.stateStack = null as any;
+    this.statelogClient = null as any;
+    this.callbacks = null as any;
+  }
+
   toJSON() {
     return {
       stateStack: this.stateStack.toJSON(),

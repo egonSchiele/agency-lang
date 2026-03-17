@@ -18,6 +18,11 @@ export function mapTypeToZodSchema(
     ),
   );
  */
+  if (!variableType) {
+    throw new Error(
+      `Received undefined variableType. typeAliases: ${JSON.stringify(typeAliases)}`,
+    );
+  }
   if (variableType.type === "primitiveType") {
     switch (variableType.value.toLowerCase()) {
       case "number":
@@ -68,6 +73,11 @@ export function mapTypeToZodSchema(
       .join(", ");
     return `z.object({ ${props} })`;
   } else if (variableType.type === "typeAliasVariable") {
+    if (!typeAliases || !typeAliases[variableType.aliasName]) {
+      throw new Error(
+        `Type alias '${variableType.aliasName}' not found in provided type aliases: ${JSON.stringify(typeAliases)}`,
+      );
+    }
     return mapTypeToZodSchema(typeAliases[variableType.aliasName], typeAliases);
   }
 

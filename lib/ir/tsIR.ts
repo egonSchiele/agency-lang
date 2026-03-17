@@ -187,6 +187,7 @@ export interface TsTryCatch {
   tryBody: TsNode;
   catchParam?: string;
   catchBody: TsNode;
+  finallyBody?: TsNode;
 }
 
 export interface TsBinOp {

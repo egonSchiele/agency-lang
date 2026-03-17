@@ -17,7 +17,6 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   return { messages: __threads, data: null };
   {{/nodeContext}}
   {{^nodeContext}}
-  __ctx.stateStack.pop();
   return null;
   {{/nodeContext}}
 } else if (__state.interruptData?.interruptResponse?.type === "modify") {
@@ -34,7 +33,6 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   return { messages: __threads, data: __resolvedValue };
   {{/nodeContext}}
   {{^nodeContext}}
-  __ctx.stateStack.pop();
   return __resolvedValue;
   {{/nodeContext}}
 } else {

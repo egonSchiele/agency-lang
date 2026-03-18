@@ -77,7 +77,7 @@ function normalizeWhitespace(code: string): string {
   );
 }
 
-export function generateWithBuilder(agencySource: string): string {
+export function generateWithBuilder(agencySource: string, moduleId: string = "test.agency"): string {
   const parseResult = parseAgency(agencySource);
   if (!parseResult.success) {
     throw new Error(`Failed to parse: ${parseResult.message}`);
@@ -85,7 +85,7 @@ export function generateWithBuilder(agencySource: string): string {
   const info = collectProgramInfo(parseResult.result);
   const preprocessor = new TypescriptPreprocessor(parseResult.result, {}, info);
   const preprocessedProgram = preprocessor.preprocess();
-  const builder = new TypeScriptBuilder(undefined, info);
+  const builder = new TypeScriptBuilder(undefined, info, moduleId);
   const ir = builder.build(preprocessedProgram);
   return printTs(ir);
 }
@@ -113,7 +113,7 @@ describe("TypeScript Builder Integration Tests", () => {
       it("should generate correct TypeScript output", () => {
         let generatedTS: string;
         try {
-          generatedTS = generateWithBuilder(agencyContent);
+          generatedTS = generateWithBuilder(agencyContent, name + ".agency");
         } catch (error) {
           throw new Error(
             `Failed to generate TypeScript for fixture: ${name}\nFile: ${agencyPath}\nError: ${error instanceof Error ? error.message : String(error)}`,

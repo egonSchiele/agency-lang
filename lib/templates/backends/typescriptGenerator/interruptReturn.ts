@@ -37,7 +37,7 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   {{/nodeContext}}
 } else {
   const __interruptResult = interrupt({{{interruptArgs}}});
-  __interruptResult.state = __ctx.stateStack.toJSON();
+  __interruptResult.state = __ctx.stateToJSON();
   {{#nodeContext}}
   return { messages: __threads, data: __interruptResult };
   {{/nodeContext}}

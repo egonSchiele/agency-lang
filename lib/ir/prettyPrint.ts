@@ -5,7 +5,7 @@ const INDENT = "  ";
 function scopeToPrefix(scope: TsScopedVar["scope"]): string {
   switch (scope) {
     case "global":
-      return "__ctx.stateStack.globals";
+      throw new Error("Global-scoped variables must have a moduleId on TsScopedVar");
     case "function":
     case "node":
       return "__stack.locals";
@@ -74,7 +74,6 @@ export function printTs(node: TsNode, indent = 0): string {
       const sig = `${parts.join(" ")}(${printParams(node.params)})`;
       const ret = node.returnType ? `: ${node.returnType}` : "";
       const body = printBody(node.body, indent);
-      console.log(parts, sig);
       return `${sig}${ret} {\n${body}\n${ind(indent)}}`;
     }
 
@@ -226,6 +225,9 @@ export function printTs(node: TsNode, indent = 0): string {
     }
 
     case "scopedVar": {
+      if (node.scope === "global" && node.moduleId) {
+        return `__ctx.globals.get(${JSON.stringify(node.moduleId)}, ${JSON.stringify(node.name)})`;
+      }
       const prefix = scopeToPrefix(node.scope);
       if (prefix === "") return node.name;
       return `${prefix}.${node.name}`;

@@ -41,7 +41,61 @@ export * from "./types/typeHints.js";
 export * from "./types/whileLoop.js";
 export * from "./types/forLoop.js";
 
-export type Scope = GlobalScope | FunctionScope | NodeScope | ImportedScope | SharedScope;
+/**
+ * Scope types for variable resolution.
+ * Before discussing scope, here's an important fact to know.
+You can import agency nodes into TypeScript files and call them as functions. Each call of an agency node
+gets isolated context execution. This means that all state in that call is going to be isolated from
+any other calls happening concurrently. If an agent has a global variable named `globalVar`,
+each call will get its own copy of `globalVar`.
+
+ * - "global"   — variables global to a single .agency file
+ * - "function" — function call execution scope
+ * - "node"     — graph node execution scope
+ * - "args"     — function/node parameters
+ * - "imported" — variable from an import statement
+ * - "shared"   — shared across all calls to an agent
+ * 
+ * ## Function vs Node Scope
+ * There's some terminology conflation happening here. Sometimes scope means "what scope is this variable in?",
+ * and sometimes scope means "what is the current execution scope: am I in a node or a function?"
+ *
+ * Node and function scopes exist not to tell us what scope a variable is in, but what the current execution scope is.
+ * This is because some things work differently in functions versus nodes. For example, when returning from a node,
+ * we wrap the result in an object and attach messages to the object as well.
+ * 
+ * ## Shared
+ * Shared variables are global variables that are shared across all calls to an agency node function.
+ * These are the only types of variables that don't get isolated execution context. If you have
+ * a shared variable named `sharedVar`, that variable will be shared across all calls happening
+ * now and in the future.
+ * Agency has a feature to save and restore state between interrupts. All state gets saved and restored,
+ * *except* shared variables. Because shared variables are shared across all calls there's no need
+ * to save or restore them.
+ * 
+ * Shared variables are great for caching or for expensive operations like reading the contents of a file.
+ * Because each call gets its own copy of a global variable, that means that global variables are initialized
+ * fresh for each call. If the initialization is an expensive operation, such as making an HTTP call,
+ * you will pay that cost on every invocation of your agent:
+ * 
+ * ```agency
+ * // this will be called on every invocation of the agent
+ * globalVar = fetch("https://example.com/api/data");
+ * ```
+ * 
+ * You can instead use a shared variable, and the variable will only be initialized once and used for all requests:
+ * 
+ * ```agency
+ * // this will only be called once, and the result will be shared across all invocations of the agent
+ * shared foo = fetch("https://example.com/api/data");
+ * ```
+ */
+export type Scope =
+  | GlobalScope
+  | FunctionScope
+  | NodeScope
+  | ImportedScope
+  | SharedScope;
 export type ScopeType = Scope["type"] | "args";
 export type GlobalScope = {
   type: "global";

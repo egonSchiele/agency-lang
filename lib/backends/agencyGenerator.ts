@@ -271,24 +271,6 @@ export class AgencyGenerator {
     return this.currentScope[this.currentScope.length - 1];
   }
 
-  protected scopetoString(scope: ScopeType, varName?: string): string {
-    if (varName && BUILTIN_VARIABLES.includes(varName)) {
-      return "";
-    }
-    switch (scope) {
-      case "global":
-        return "__globalCtx.stateStack.globals";
-      case "function":
-      case "node":
-        return "__stack.locals";
-      case "args":
-        return "__stack.args";
-      case "imported":
-        return "";
-      default:
-        throw new Error(`Unknown scope type: ${scope} for varName: ${varName}`);
-    }
-  }
 
   protected isImportedTool(functionName: string): boolean {
     return this.importedTools

@@ -839,6 +839,14 @@ node foo() {
 }
 ```
 
+Of course, the other way to have state that is shared across all calls is to create it in a TypeScript file and import it:
+
+```ts
+import { sharedState } from "./sharedState.js"
+```
+
+Only agency state gets execution isolation across calls. Anything imported from TypeScript is shared.
+
 ## A few notes on agent design
 
 As you build more complex agents, a good way to design them is with a decision tree-style approach. Instead of having one big prompt, use several smaller prompts to categorize a user's message and then use the appropriate prompt. This should make your agent faster and more reliable. For example, suppose you are building an agent that a user can use to either report their mood or add an item to their to-do list.

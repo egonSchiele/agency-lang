@@ -82,7 +82,12 @@ import type {
 import { ts, $ } from "../ir/builders.js";
 import { printTs } from "../ir/prettyPrint.js";
 import type { ProgramInfo } from "../programInfo.js";
-import { scopeKey, lookupType, getVisibleTypes, GLOBAL_SCOPE_KEY } from "../programInfo.js";
+import {
+  scopeKey,
+  lookupType,
+  getVisibleTypes,
+  GLOBAL_SCOPE_KEY,
+} from "../programInfo.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
@@ -117,10 +122,23 @@ export class TypeScriptBuilder {
   private importedFunctions: Record<string, boolean> = {};
 
   private programInfo: ProgramInfo;
+  private moduleId: string;
 
-  constructor(config: AgencyConfig | undefined, info: ProgramInfo) {
+  /**
+   * @param config - Agency compiler configuration (model defaults, logging, etc.)
+   * @param info - Pre-collected program metadata (function definitions, graph nodes, imports, type hints)
+   * @param moduleId - Unique identifier for this module (e.g., "foo.agency"), used to
+   *   namespace global variables in the GlobalStore so that different modules' globals
+   *   don't collide. Must be consistent between the defining module and any importers.
+   */
+  constructor(
+    config: AgencyConfig | undefined,
+    info: ProgramInfo,
+    moduleId: string,
+  ) {
     this.agencyConfig = mergeDeep(this.configDefaults(), config || {});
     this.programInfo = info;
+    this.moduleId = moduleId;
   }
 
   private configDefaults(): Partial<AgencyConfig> {
@@ -159,27 +177,22 @@ export class TypeScriptBuilder {
     return this.currentScope[this.currentScope.length - 1];
   }
 
-  private scopetoString(scope: ScopeType, varName?: string): string {
-    if (varName && BUILTIN_VARIABLES.includes(varName)) {
-      return "";
+  /**
+   * Assign a value to a scoped variable. For global scope, emits a
+   * `__ctx.globals.set(moduleId, name, value)` call. For all other scopes,
+   * emits a normal `lhs = rhs` assignment.
+   */
+  private scopedAssign(
+    scope: ScopeType,
+    varName: string,
+    value: TsNode,
+    accessChain?: AccessChainElement[],
+  ): TsNode {
+    if (scope === "global" && (!accessChain || accessChain.length === 0)) {
+      return ts.globalSet(this.moduleId, varName, value);
     }
-    if (varName && this.loopVars.includes(varName)) {
-      return "";
-    }
-    switch (scope) {
-      case "global":
-        return "__ctx.stateStack.globals";
-      case "function":
-      case "node":
-        return "__stack.locals";
-      case "args":
-        return "__stack.args";
-      case "imported":
-      case "shared":
-        return "";
-      default:
-        throw new Error(`Unknown scope type: ${scope} for varName: ${varName}`);
-    }
+    const lhs = this.buildAssignmentLhs(scope, varName, accessChain);
+    return ts.assign(lhs, value);
   }
 
   // ------- Lookup helpers -------
@@ -189,11 +202,18 @@ export class TypeScriptBuilder {
   }
 
   private getTypeHint(varName: string): VariableType | undefined {
-    return lookupType(this.programInfo.typeHints, this.currentScopeKey(), varName);
+    return lookupType(
+      this.programInfo.typeHints,
+      this.currentScopeKey(),
+      varName,
+    );
   }
 
   private getVisibleTypeAliases(): Record<string, VariableType> {
-    return getVisibleTypes(this.programInfo.typeAliases, this.currentScopeKey());
+    return getVisibleTypes(
+      this.programInfo.typeAliases,
+      this.currentScopeKey(),
+    );
   }
 
   private getVisibleTypeHints(): TypeHintMap {
@@ -222,7 +242,9 @@ export class TypeScriptBuilder {
 
   private isGraphNode(functionName: string): boolean {
     return (
-      this.programInfo.graphNodes.map((n) => n.nodeName).includes(functionName) ||
+      this.programInfo.graphNodes
+        .map((n) => n.nodeName)
+        .includes(functionName) ||
       this.programInfo.importedNodes
         .map((n) => n.importedNodes)
         .flat()
@@ -257,7 +279,8 @@ export class TypeScriptBuilder {
       case "global":
         return undefined;
       case "function": {
-        const funcDef = this.programInfo.functionDefinitions[currentScope.functionName];
+        const funcDef =
+          this.programInfo.functionDefinitions[currentScope.functionName];
         if (funcDef && funcDef.returnType) {
           return funcDef.returnType;
         }
@@ -316,13 +339,16 @@ export class TypeScriptBuilder {
     }
 
     // Pass 7: Process all nodes and generate code
-    // Separate global-scope assignments into __initializeGlobals function
+    // Separate global-scope assignments into __initializeGlobals function.
     const globalInitStatements: TsNode[] = [];
     for (const node of program.nodes) {
-      const result = this.processNode(node);
       if (node.type === "assignment" && node.scope === "global") {
-        globalInitStatements.push(result);
+        const valueNode = this.processNode(node.value);
+        globalInitStatements.push(
+          ts.globalSet(this.moduleId, node.variableName, valueNode),
+        );
       } else {
+        const result = this.processNode(node);
         this.generatedStatements.push(result);
       }
     }
@@ -362,11 +388,18 @@ export class TypeScriptBuilder {
         [{ name: "__ctx" }],
         ts.statements([
           ...globalInitStatements,
-          ts.assign(ts.id("__globalsInitialized"), ts.bool(true)),
+          // Mark this module as initialized on the GlobalStore. The flag is
+          // serialized with the store, so on interrupt resume the restored
+          // GlobalStore already has this flag set and __initializeGlobals
+          // won't be called again — avoiding re-evaluation of init expressions
+          // and overwriting of restored global values.
+          ts.call(
+            $(ts.runtime.ctx).prop("globals").prop("markInitialized").done(),
+            [ts.str(this.moduleId)],
+          ),
         ]),
       ),
     );
-    sections.push(ts.varDecl("let", "__globalsInitialized", ts.bool(false)));
 
     sections.push(ts.statements(this.generatedStatements));
 
@@ -509,7 +542,7 @@ export class TypeScriptBuilder {
         if (importedOrUnknownScope || isBuiltinVar || isLoopVar) {
           return ts.id(literal.value);
         }
-        return ts.scopedVar(literal.value, literal.scope!);
+        return ts.scopedVar(literal.value, literal.scope!, this.moduleId);
       }
       case "prompt":
         return this.processPromptLiteral(
@@ -806,7 +839,9 @@ export class TypeScriptBuilder {
 
   private processTool(node: FunctionDefinition): TsNode {
     const { functionName, parameters } = node;
-    if (this.programInfo.graphNodes.map((n) => n.nodeName).includes(functionName)) {
+    if (
+      this.programInfo.graphNodes.map((n) => n.nodeName).includes(functionName)
+    ) {
       throw new Error(
         `There is already a node named '${functionName}'. Functions can't have the same name as an existing node.`,
       );
@@ -901,9 +936,14 @@ export class TypeScriptBuilder {
         graph: ts.ctx("graph"),
       }),
 
+      // Ensure this module's globals are initialized on the current ctx.
+      // The isInitialized flag lives on the GlobalStore and is serialized,
+      // so on interrupt resume the restored store already has it set.
       ts.if(
-        ts.raw("!__globalsInitialized"),
-        ts.call(ts.id("__initializeGlobals"), [ts.id("__ctx")]),
+        ts.raw(
+          `!__ctx.globals.isInitialized(${JSON.stringify(this.moduleId)})`,
+        ),
+        ts.call(ts.id("__initializeGlobals"), [ts.runtime.ctx]),
       ),
 
       ts.time("__funcStartTime"),
@@ -1072,7 +1112,9 @@ export class TypeScriptBuilder {
       }
     });
 
-    const targetNode = this.programInfo.graphNodes.find((n) => n.nodeName === functionName);
+    const targetNode = this.programInfo.graphNodes.find(
+      (n) => n.nodeName === functionName,
+    );
     let dataNode: TsNode;
     if (targetNode && targetNode.parameters.length > 0) {
       const entries: Record<string, TsNode> = {};
@@ -1240,9 +1282,6 @@ export class TypeScriptBuilder {
 
   private processAssignment(node: Assignment): TsNode {
     const { variableName, typeHint, value } = node;
-    const scopeVar = this.scopetoString(node.scope!, variableName);
-    const chainStr = this.renderAccessChain(node.accessChain);
-    const qualifiedName = scopeVar ? `${scopeVar}.${variableName}${chainStr}` : `${variableName}${chainStr}`;
 
     if (value.type === "prompt") {
       return this.processPromptLiteral(variableName, typeHint, value);
@@ -1253,16 +1292,40 @@ export class TypeScriptBuilder {
       const interruptArgs = value.arguments
         .map((arg) => this.str(this.processNode(arg)))
         .join(", ");
+      const makeAssign = (val: string) =>
+        this.str(
+          this.scopedAssign(
+            node.scope!,
+            variableName,
+            ts.raw(val),
+            node.accessChain,
+          ),
+        );
       return ts.raw(
         renderInterruptAssignment.default({
-          variableName: qualifiedName,
+          assignResolve: makeAssign(
+            "__state.interruptData.interruptResponse.value",
+          ),
+          assignApprove: makeAssign("true"),
+          assignReject: makeAssign("false"),
           interruptArgs,
           nodeContext: this.getCurrentScope().type === "node",
         }),
       );
     } else if (value.type === "functionCall") {
-      const varRef = ts.raw(qualifiedName);
-      const stmts: TsNode[] = [ts.assign(varRef, this.processNode(value))];
+      const varRef = this.buildAssignmentLhs(
+        node.scope!,
+        variableName,
+        node.accessChain,
+      );
+      const stmts: TsNode[] = [
+        this.scopedAssign(
+          node.scope!,
+          variableName,
+          this.processNode(value),
+          node.accessChain,
+        ),
+      ];
       if (this.getCurrentScope().type !== "global") {
         const returnObj =
           this.getCurrentScope().type === "node"
@@ -1279,32 +1342,15 @@ export class TypeScriptBuilder {
     } else if (value.type === "timeBlock") {
       return this.processTimeBlock(value, variableName);
     } else if (value.type === "messageThread") {
-      const varName = qualifiedName;
-      return this.processMessageThread(value, varName);
+      return this.processMessageThread(value, node);
     } else {
-      const lhs = this.buildAssignmentLhs(
+      return this.scopedAssign(
         node.scope!,
         variableName,
+        this.processNode(value),
         node.accessChain,
       );
-      return ts.assign(lhs, this.processNode(value));
     }
-  }
-
-  private renderAccessChain(chain?: AccessChainElement[]): string {
-    if (!chain || chain.length === 0) return "";
-    return chain
-      .map((el) => {
-        switch (el.kind) {
-          case "property":
-            return `.${el.name}`;
-          case "index":
-            return `[${this.str(this.processNode(el.index))}]`;
-          case "methodCall":
-            return `.${this.generateFunctionCallExpression(el.functionCall, "valueAccess")}`;
-        }
-      })
-      .join("");
   }
 
   private buildAccessChain(base: TsNode, chain?: AccessChainElement[]): TsNode {
@@ -1346,7 +1392,10 @@ export class TypeScriptBuilder {
     variableName: string,
     chain?: AccessChainElement[],
   ): TsNode {
-    return this.buildAccessChain(ts.scopedVar(variableName, scope), chain);
+    return this.buildAccessChain(
+      ts.scopedVar(variableName, scope, this.moduleId),
+      chain,
+    );
   }
 
   private processPromptLiteral(
@@ -1385,7 +1434,10 @@ export class TypeScriptBuilder {
         value: "string",
       };
 
-    const zodSchema = mapTypeToZodSchema(_variableType, this.getVisibleTypeAliases());
+    const zodSchema = mapTypeToZodSchema(
+      _variableType,
+      this.getVisibleTypeAliases(),
+    );
     const clientConfig = prompt.config
       ? this.processNode(prompt.config)
       : ts.obj({});
@@ -1622,9 +1674,12 @@ export class TypeScriptBuilder {
     return ts.statements(stmts);
   }
 
-  private processMessageThread(node: MessageThread, varName?: string): TsNode {
+  private processMessageThread(
+    node: MessageThread,
+    assignTo?: Assignment,
+  ): TsNode {
     if (node.threadType === "parallel") {
-      return this.processParallelThread(node, varName);
+      return this.processParallelThread(node, assignTo);
     }
 
     const bodyNodes = node.body.map((stmt) => this.processNode(stmt));
@@ -1642,11 +1697,13 @@ export class TypeScriptBuilder {
         .done(),
       ...bodyNodes,
     ];
-    if (varName) {
+    if (assignTo) {
       stmts.push(
-        ts.assign(
-          ts.raw(varName),
+        this.scopedAssign(
+          assignTo.scope!,
+          assignTo.variableName,
           $(ts.threads.active()).prop("cloneMessages").call().done(),
+          assignTo.accessChain,
         ),
       );
     }
@@ -1654,7 +1711,10 @@ export class TypeScriptBuilder {
     return ts.raw(`{\n${this.str(ts.statements(stmts))}\n}`);
   }
 
-  private processParallelThread(node: MessageThread, varName?: string): TsNode {
+  private processParallelThread(
+    node: MessageThread,
+    assignTo?: Assignment,
+  ): TsNode {
     const stmts: TsNode[] = [];
 
     const assignmentVarNames: [string, ScopeType][] = [];
@@ -1675,7 +1735,7 @@ export class TypeScriptBuilder {
     }
 
     const scopedVarNodes = assignmentVarNames.map(([name, scope]) =>
-      ts.scopedVar(name, scope),
+      ts.scopedVar(name, scope, this.moduleId),
     );
 
     stmts.push(
@@ -1689,7 +1749,7 @@ export class TypeScriptBuilder {
       ),
     );
 
-    if (varName) {
+    if (assignTo) {
       const entries: TsObjectEntry[] = assignmentVarNames.map(([name]) => ({
         spread: false,
         key: name,
@@ -1700,7 +1760,14 @@ export class TypeScriptBuilder {
           ),
         ),
       }));
-      stmts.push(ts.assign(ts.raw(varName), ts.obj(entries)));
+      stmts.push(
+        this.scopedAssign(
+          assignTo.scope!,
+          assignTo.variableName,
+          ts.obj(entries),
+          assignTo.accessChain,
+        ),
+      );
     }
 
     for (const [name] of assignmentVarNames) {

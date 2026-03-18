@@ -4,8 +4,6 @@ import path, { dirname } from "path";
 import fs from "fs";
 import { generateTypeScript } from "../lib/backends/typescriptGenerator.js";
 import { TypescriptPreprocessor } from "../lib/preprocessors/typescriptPreprocessor.js";
-import { TypeScriptBuilder } from "../lib/backends/typescriptBuilder.js";
-import { printTs } from "../lib/ir/prettyPrint.js";
 import { parseAgency } from "../lib/parser.js";
 import { collectProgramInfo } from "../lib/programInfo.js";
 import { fileURLToPath } from "url";
@@ -35,7 +33,7 @@ function regenerateFixtures(dir: string, relativePath = "") {
       const parseResult = parseAgency(agencyContent);
 
       if (parseResult.success) {
-        const tsCode = generateTypeScript(parseResult.result);
+        const tsCode = generateTypeScript(parseResult.result, undefined, undefined, entry.name);
         fs.writeFileSync(mtsPath, tsCode, "utf-8");
         const fixtureRelPath = path.join(relativePath, baseName) || baseName;
         console.log(`✓ Updated ${fixtureRelPath}.mjs`);
@@ -98,12 +96,7 @@ function regenerateBuilderFixtures(dir: string, relativePath = "") {
       const parseResult = parseAgency(agencyContent);
 
       if (parseResult.success) {
-        const info = collectProgramInfo(parseResult.result);
-        const preprocessor = new TypescriptPreprocessor(parseResult.result, {}, info);
-        const preprocessedProgram = preprocessor.preprocess();
-        const builder = new TypeScriptBuilder(undefined, info);
-        const ir = builder.build(preprocessedProgram);
-        const tsCode = printTs(ir);
+        const tsCode = generateTypeScript(parseResult.result, undefined, undefined, entry.name);
         fs.writeFileSync(mtsPath, tsCode, "utf-8");
         const fixtureRelPath = path.join(relativePath, baseName) || baseName;
         console.log(`✓ Updated ${fixtureRelPath}.mjs`);

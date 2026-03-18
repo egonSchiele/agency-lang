@@ -1,3 +1,4 @@
+import tool { increment, getGlobal } from "./bar.agency"
 import tool { ascii } from "./bar.agency"
 import { bestSong } from "./funcs.js"
 import node { bar } from "./bar.agency"
@@ -23,4 +24,18 @@ node jsImport() {
 
 node nodeImport() {
   return bar("Alice")
+}
+
+// test that global vars with the same name in different files
+// don't clobber each other
+globalVar = 3
+node testGlobalVarIsolation() {
+  increment()
+  increment()
+  return interrupt("Interrupting after 2 increments")
+  barGlobal = getGlobal()
+  return { 
+    globalVarInFoo: globalVar,
+    globalVarInBar: barGlobal
+  }
 }

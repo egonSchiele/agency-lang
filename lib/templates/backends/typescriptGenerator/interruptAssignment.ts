@@ -7,30 +7,33 @@ export const template = `// Remember this will be called both in a tool call con
 // and when the user is simply calling a function.
 
 if (__state.interruptData?.interruptResponse?.type === "resolve") {
-  {{{variableName}}} = __state.interruptData.interruptResponse.value;
+  {{{assignResolve}}};
   __state.interruptData.interruptResponse = null;
 } else if (__state.interruptData?.interruptResponse?.type === "approve") {
-  {{{variableName}}} = true;
+  {{{assignApprove}}};
   __state.interruptData.interruptResponse = null;
 } else if (__state.interruptData?.interruptResponse?.type === "reject") {
   // reject for tool calls handled separately
-  {{{variableName}}} = false;
+  {{{assignReject}}};
   __state.interruptData.interruptResponse = null;
 } else if (__state.interruptData?.interruptResponse?.type === "modify") {
   throw new Error("Interrupt response of type 'modify' is used for modifying tool call args. Use resolve instead.");
 } else {
   const __interruptResult = interrupt({{{interruptArgs}}});
-  __interruptResult.state = __ctx.stateStack.toJSON();
+  __interruptResult.state = __ctx.stateToJSON();
   {{#nodeContext}}
   return { messages: __threads, data: __interruptResult };
   {{/nodeContext}}
   {{^nodeContext}}
   return __interruptResult;
   {{/nodeContext}}
-}`;
+}
+`;
 
 export type TemplateType = {
-  variableName: string | boolean | number;
+  assignResolve: string | boolean | number;
+  assignApprove: string | boolean | number;
+  assignReject: string | boolean | number;
   interruptArgs: string | boolean | number;
   nodeContext: boolean;
 };

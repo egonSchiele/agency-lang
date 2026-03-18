@@ -192,7 +192,8 @@ export function compile(
     }
   });
 
-  const generatedCode = generateTypeScript(parsedProgram, config, info);
+  const moduleId = path.relative(process.cwd(), absoluteInputFile);
+  const generatedCode = generateTypeScript(parsedProgram, config, info, moduleId);
   if (options?.ts) {
     // TypeScript output — add @ts-nocheck so type errors don't block compilation
     fs.writeFileSync(outputFile, "// @ts-nocheck\n" + generatedCode, "utf-8");

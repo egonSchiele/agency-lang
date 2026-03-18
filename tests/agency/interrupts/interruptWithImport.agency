@@ -1,0 +1,19 @@
+import { increment, getGlobal, funcThrowsInterrupt } from "./foo.agency"
+
+node main() {
+  increment()
+  increment()
+  return interrupt("Interrupting after 2 increments")
+  return getGlobal()
+}
+
+node noInterrupt() {
+  increment()
+  increment()
+  return getGlobal()
+}
+
+node interruptHandler() {
+  result = funcThrowsInterrupt(5)
+  return result
+}

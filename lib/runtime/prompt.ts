@@ -125,7 +125,7 @@ async function _runPrompt({
   }
 
   updateTokenStats({
-    stateStack: ctx.stateStack,
+    globals: ctx.globals,
     usage: completion.usage,
     cost: completion.cost,
   });
@@ -441,7 +441,7 @@ export async function runPrompt(args: {
         model: clientConfig.model,
       });
 
-      interrupt.state = ctx.stateStack.toJSON();
+      interrupt.state = ctx.stateToJSON();
       return interrupt;
     }
 

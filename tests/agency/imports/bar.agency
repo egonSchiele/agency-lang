@@ -15,3 +15,14 @@ async def greet(name: string) {
 node bar(name: string) {
   return greet(name)
 }
+
+
+globalVar = 0
+
+def increment() {
+  globalVar = globalVar + 1
+}
+
+def getGlobal() {
+  return globalVar
+}

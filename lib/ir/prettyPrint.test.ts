@@ -354,10 +354,14 @@ describe("prettyPrint", () => {
     );
   });
 
-  it("TsScopedVar global", () => {
-    expect(printTs(ts.scopedVar("x", "global"))).toBe(
-      "__ctx.stateStack.globals.x",
+  it("TsScopedVar global with moduleId", () => {
+    expect(printTs(ts.scopedVar("x", "global", "test.agency"))).toBe(
+      '__ctx.globals.get("test.agency", "x")',
     );
+  });
+
+  it("TsScopedVar global without moduleId throws", () => {
+    expect(() => printTs(ts.scopedVar("x", "global"))).toThrow();
   });
 
   it("TsScopedVar function", () => {

@@ -1,6 +1,7 @@
 import { deepClone } from "./utils.js";
 import { createReturnObject } from "./utils.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
+import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import * as smoltalk from "smoltalk";
 import { RuntimeContext } from "./state/context.js";
 import { GraphState } from "./types.js";
@@ -47,11 +48,16 @@ export type InterruptData = {
   interruptResponse?: InterruptResponse;
 };
 
+export type InterruptState = {
+  stack: StateStackJSON;
+  globals: GlobalStoreJSON;
+};
+
 export type Interrupt<T = any> = {
   type: "interrupt";
   data: T;
   interruptData?: InterruptData;
-  state?: StateStackJSON;
+  state?: InterruptState;
 };
 
 export function interrupt<T = any>(data: T): Interrupt<T> {
@@ -78,8 +84,10 @@ export async function respondToInterrupt(args: {
   const { ctx, metadata = {} } = args;
 
   const execCtx = ctx.createExecutionContext();
-  execCtx.stateStack = StateStack.fromJSON(interrupt.state!);
+  const savedState = interrupt.state!;
+  execCtx.stateStack = StateStack.fromJSON(savedState.stack);
   execCtx.stateStack.deserializeMode();
+  execCtx.globals = GlobalStore.fromJSON(savedState.globals);
 
   if (metadata.callbacks) {
     execCtx.callbacks = metadata.callbacks;
@@ -108,7 +116,7 @@ export async function respondToInterrupt(args: {
     isResume: true,
     interruptData,
   }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
-  return createReturnObject({ result, stateStack: execCtx.stateStack });
+  return createReturnObject({ result, globals: execCtx.globals });
 }
 
 export async function approveInterrupt({
@@ -185,14 +193,15 @@ export async function resolveInterrupt({
 
 export async function resumeFromState(args: {
   ctx: RuntimeContext<GraphState>;
-  state: StateStackJSON;
+  state: InterruptState;
   metadata?: Record<string, any>;
 }): Promise<any> {
   const { ctx, metadata = {} } = args;
 
   const execCtx = ctx.createExecutionContext();
-  execCtx.stateStack = StateStack.fromJSON(args.state || {});
+  execCtx.stateStack = StateStack.fromJSON(args.state.stack);
   execCtx.stateStack.deserializeMode();
+  execCtx.globals = GlobalStore.fromJSON(args.state.globals);
 
   const nodesTraversed = execCtx.stateStack.nodesTraversed || [];
   const nodeName = nodesTraversed[nodesTraversed.length - 1];
@@ -210,5 +219,5 @@ export async function resumeFromState(args: {
     //interruptData
   }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
 
-  return createReturnObject({ result, stateStack: execCtx.stateStack });
+  return createReturnObject({ result, globals: execCtx.globals });
 }

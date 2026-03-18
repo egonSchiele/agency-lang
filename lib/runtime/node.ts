@@ -116,7 +116,7 @@ export async function runNode({
     }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
     const returnObject = createReturnObject({
       result,
-      stateStack: execCtx.stateStack,
+      globals: execCtx.globals,
     });
     await callHook({
       callbacks: execCtx.callbacks,

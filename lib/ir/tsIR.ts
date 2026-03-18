@@ -254,6 +254,7 @@ export interface TsScopedVar {
   kind: "scopedVar";
   name: string;
   scope: "global" | "shared" | "function" | "node" | "args" | "imported";
+  moduleId?: string;
 }
 
 /** Return from a function scope — pops the state stack, then returns the value */

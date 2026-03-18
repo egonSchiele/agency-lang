@@ -34,6 +34,22 @@
           "desiredAccuracy": 80
         }
       ]
+    },
+    {
+      "nodeName": "testGlobalVarIsolation",
+      "input": "",
+      "expectedOutput": "{\"globalVarInFoo\":3,\"globalVarInBar\":2}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Interrupting after 2 increments"
+        }
+      ]
     }
   ]
 }

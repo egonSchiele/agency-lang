@@ -335,8 +335,8 @@ export const ts = {
     return { kind: "newExpr", callee, arguments: args };
   },
 
-  scopedVar(name: string, scope: TsScopedVar["scope"]): TsScopedVar {
-    return { kind: "scopedVar", name, scope };
+  scopedVar(name: string, scope: TsScopedVar["scope"], moduleId?: string): TsScopedVar {
+    return { kind: "scopedVar", name, scope, moduleId };
   },
 
   functionReturn(value: TsNode): TsFunctionReturn {
@@ -505,6 +505,21 @@ export const ts = {
   functionReturn(value: TsNode): TsReturn {
     return ts.return(ts.obj({ data: value }));
   }, */
+
+  /** GlobalStore operations */
+  globalGet(moduleId: string, varName: string): TsCall {
+    return ts.call(
+      $(ts.runtime.ctx).prop("globals").prop("get").done(),
+      [ts.str(moduleId), ts.str(varName)],
+    );
+  },
+
+  globalSet(moduleId: string, varName: string, value: TsNode): TsCall {
+    return ts.call(
+      $(ts.runtime.ctx).prop("globals").prop("set").done(),
+      [ts.str(moduleId), ts.str(varName), value],
+    );
+  },
 
   /** Predefined runtime identifiers */
   runtime: {

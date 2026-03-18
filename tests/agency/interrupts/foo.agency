@@ -1,0 +1,19 @@
+globalVar = 0
+
+def increment() {
+  globalVar = globalVar + 1
+}
+
+def getGlobal() {
+  return globalVar
+}
+
+def funcThrowsInterrupt(val: number) {
+  foo = val
+  bar = 10
+  interrupt("Interrupting from funcThrowsInterrupt")
+  return { 
+    foo: foo,
+    bar: bar
+  }
+}

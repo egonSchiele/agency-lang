@@ -1,0 +1,41 @@
+{
+  "sourceFile": "interruptWithImport.agency",
+  "tests": [
+    {
+      "nodeName": "noInterrupt",
+      "input": "",
+      "expectedOutput": "2",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "2",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Interrupting after 2 increments"
+        }
+      ]
+    },
+    {
+      "nodeName": "interruptHandler",
+      "input": "",
+      "expectedOutput": "{\"foo\":5,\"bar\":10}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

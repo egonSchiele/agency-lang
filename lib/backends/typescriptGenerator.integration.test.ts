@@ -126,7 +126,8 @@ describe("TypeScript Backend Integration Tests", () => {
         // 3. Generate TypeScript
         let generatedTS: string;
         try {
-          generatedTS = generateTypeScript(parseResult.result);
+          const moduleId = path.basename(name) + ".agency";
+          generatedTS = generateTypeScript(parseResult.result, undefined, undefined, moduleId);
         } catch (error) {
           const errorMessage = [
             `Failed to generate TypeScript for fixture: ${name}`,

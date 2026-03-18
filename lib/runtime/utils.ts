@@ -1,5 +1,5 @@
 import { color } from "termcolors";
-import { StateStack } from "./state/stateStack.js";
+import { GlobalStore } from "./state/globalStore.js";
 import { ThreadStore } from "./index.js";
 import { RunNodeResult } from "./types.js";
 
@@ -71,10 +71,10 @@ export function extractResponse(rawValue: any, schema: any): any {
 
 export function createReturnObject<T>({
   result,
-  stateStack,
+  globals,
 }: {
   result: { data: T; messages: ThreadStore };
-  stateStack: StateStack;
+  globals: GlobalStore;
 }): RunNodeResult<T> {
   // Note: we're *not* using structuredClone here because structuredClone
   // doesn't call `toJSON`, so it's not cloning our message objects correctly.
@@ -82,19 +82,19 @@ export function createReturnObject<T>({
     JSON.stringify({
       messages: result.messages,
       data: result.data,
-      tokens: stateStack.globals.__tokenStats,
+      tokens: globals.get(GlobalStore.INTERNAL_MODULE, "__tokenStats"),
     }),
   );
 }
 
 export function updateTokenStats(args: {
-  stateStack: StateStack;
+  globals: GlobalStore;
   usage: any;
   cost: any;
 }): void {
-  const { stateStack, usage, cost } = args;
+  const { globals, usage, cost } = args;
   if (!usage || !cost) return;
-  const tokenStats = stateStack.globals.__tokenStats;
+  const tokenStats = globals.get(GlobalStore.INTERNAL_MODULE, "__tokenStats");
   tokenStats.usage.inputTokens += usage.inputTokens || 0;
   tokenStats.usage.outputTokens += usage.outputTokens || 0;
   tokenStats.usage.cachedInputTokens += usage.cachedInputTokens || 0;

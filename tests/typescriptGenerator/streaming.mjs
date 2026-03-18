@@ -106,7 +106,7 @@ export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, 
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 function __initializeGlobals(__ctx) {
-
+  __ctx.globals.markInitialized("streaming.agency")
 }
 graph.node("foo", async (__state: GraphState) => {
   const __setupData = setupNode({
@@ -146,23 +146,26 @@ const __graph = __ctx.graph;
         removedTools: __self.__removedTools
       });
     }
-__self.response = _response({
-      messages: new MessageThread()
+__self.response = await _response({
+      messages: __threads.getOrCreateActive()
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__self.response)) {
+      return {
+        messages: __threads,
+        data: __self.response
+      };
+    }
     
     __stack.step++;
   }
   if (__step <= 2) {
-    [__self.response] = await Promise.all([__self.response]);
-    __stack.step++;
-  }
-  if (__step <= 3) {
     await print(__stack.locals.response)
     
     
     __stack.step++;
   }
-  if (__step <= 4) {
+  if (__step <= 3) {
     async function _response2(__metadata) {
       __self.__removedTools = __self.__removedTools || [];
       return runPrompt({
@@ -180,17 +183,20 @@ __self.response = _response({
         removedTools: __self.__removedTools
       });
     }
-__self.response2 = _response2({
-      messages: new MessageThread()
+__self.response2 = await _response2({
+      messages: __threads.getOrCreateActive()
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__self.response2)) {
+      return {
+        messages: __threads,
+        data: __self.response2
+      };
+    }
     
     __stack.step++;
   }
-  if (__step <= 5) {
-    [__self.response2] = await Promise.all([__self.response2]);
-    __stack.step++;
-  }
-  if (__step <= 6) {
+  if (__step <= 4) {
     await print(__stack.locals.response2)
     
     __stack.step++;

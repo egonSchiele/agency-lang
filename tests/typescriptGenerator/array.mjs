@@ -106,7 +106,7 @@ export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, 
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 function __initializeGlobals(__ctx) {
-
+  __ctx.globals.markInitialized("array.agency")
 }
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
@@ -150,17 +150,20 @@ const __graph = __ctx.graph;
         removedTools: __self.__removedTools
       });
     }
-__self.numbers = _numbers({
-      messages: new MessageThread()
+__self.numbers = await _numbers({
+      messages: __threads.getOrCreateActive()
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__self.numbers)) {
+      return {
+        messages: __threads,
+        data: __self.numbers
+      };
+    }
     
     __stack.step++;
   }
   if (__step <= 2) {
-    [__self.numbers] = await Promise.all([__self.numbers]);
-    __stack.step++;
-  }
-  if (__step <= 3) {
     await print(__stack.locals.numbers)
     
     
@@ -168,7 +171,7 @@ __self.numbers = _numbers({
     
     __stack.step++;
   }
-  if (__step <= 4) {
+  if (__step <= 3) {
     async function _greetings(__metadata) {
       __self.__removedTools = __self.__removedTools || [];
       return runPrompt({
@@ -187,17 +190,20 @@ __self.numbers = _numbers({
         removedTools: __self.__removedTools
       });
     }
-__self.greetings = _greetings({
-      messages: new MessageThread()
+__self.greetings = await _greetings({
+      messages: __threads.getOrCreateActive()
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__self.greetings)) {
+      return {
+        messages: __threads,
+        data: __self.greetings
+      };
+    }
     
     __stack.step++;
   }
-  if (__step <= 5) {
-    [__self.greetings] = await Promise.all([__self.greetings]);
-    __stack.step++;
-  }
-  if (__step <= 6) {
+  if (__step <= 4) {
     await print(__stack.locals.greetings)
     
     __stack.step++;

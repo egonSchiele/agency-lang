@@ -107,7 +107,7 @@ export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<strin
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 let foo;
 function __initializeGlobals(__ctx) {
-
+  __ctx.globals.markInitialized("shared.agency")
 }
 foo = 1;
 

@@ -106,7 +106,7 @@ export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, 
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 function __initializeGlobals(__ctx) {
-
+  __ctx.globals.markInitialized("interrupt-2-deep-in-function.agency")
 }
 export const __greetTool = {
   name: "greet",
@@ -132,6 +132,9 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  if (!__ctx.globals.isInitialized("interrupt-2-deep-in-function.agency")) {
+    __initializeGlobals(__ctx)
+  }
   let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
@@ -166,7 +169,6 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   __state.interruptData.interruptResponse = null;
   
   
-  __ctx.stateStack.pop();
   return null;
   
 } else if (__state.interruptData?.interruptResponse?.type === "modify") {
@@ -181,12 +183,11 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   const __resolvedValue = __state.interruptData.interruptResponse.value;
   
   
-  __ctx.stateStack.pop();
   return __resolvedValue;
   
 } else {
   const __interruptResult = interrupt(`Agent wants to call the greet function with name: ${__stack.args.name} and age: ${__stack.args.age}`);
-  __interruptResult.state = __ctx.stateStack.toJSON();
+  __interruptResult.state = __ctx.stateToJSON();
   
   
   return __interruptResult;
@@ -197,8 +198,7 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
       __stack.step++;
     }
     if (__step <= 2) {
-      __ctx.stateStack.pop();
-return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`
+      return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`
       
       __stack.step++;
     }
@@ -207,6 +207,8 @@ return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} yea
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    __ctx.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -231,6 +233,9 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  if (!__ctx.globals.isInitialized("interrupt-2-deep-in-function.agency")) {
+    __initializeGlobals(__ctx)
+  }
   let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
@@ -295,8 +300,7 @@ if (isInterrupt(__self.response)) {
       __stack.step++;
     }
     if (__step <= 4) {
-      __ctx.stateStack.pop();
-return __stack.locals.response
+      return __stack.locals.response
       
       __stack.step++;
     }
@@ -305,6 +309,8 @@ return __stack.locals.response
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    __ctx.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -353,9 +359,9 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 3) {
-    __stack.locals.response = foo2(__stack.args.name, __stack.locals.age, {
+    __stack.locals.response = await foo2(__stack.args.name, __stack.locals.age, {
       ctx: __ctx,
-      threads: new ThreadStore(),
+      threads: __threads,
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.response)) {
@@ -368,20 +374,16 @@ if (isInterrupt(__stack.locals.response)) {
     __stack.step++;
   }
   if (__step <= 4) {
-    [__self.response] = await Promise.all([__self.response]);
-    __stack.step++;
-  }
-  if (__step <= 5) {
     await print(__stack.locals.response)
     
     __stack.step++;
   }
-  if (__step <= 6) {
+  if (__step <= 5) {
     await print(`Greeting sent.`)
     
     __stack.step++;
   }
-  if (__step <= 7) {
+  if (__step <= 6) {
     return {
       messages: __threads,
       data: __stack.locals.response

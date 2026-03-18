@@ -106,7 +106,7 @@ export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, 
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 function __initializeGlobals(__ctx) {
-
+  __ctx.globals.markInitialized("interrupt-assignment.agency")
 }
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
@@ -135,25 +135,26 @@ const __graph = __ctx.graph;
 // and when the user is simply calling a function.
 
 if (__state.interruptData?.interruptResponse?.type === "resolve") {
-  __stack.locals.name = __state.interruptData.interruptResponse.value;
+  __stack.locals.name = __state.interruptData.interruptResponse.value;;
   __state.interruptData.interruptResponse = null;
 } else if (__state.interruptData?.interruptResponse?.type === "approve") {
-  __stack.locals.name = true;
+  __stack.locals.name = true;;
   __state.interruptData.interruptResponse = null;
 } else if (__state.interruptData?.interruptResponse?.type === "reject") {
   // reject for tool calls handled separately
-  __stack.locals.name = false;
+  __stack.locals.name = false;;
   __state.interruptData.interruptResponse = null;
 } else if (__state.interruptData?.interruptResponse?.type === "modify") {
   throw new Error("Interrupt response of type 'modify' is used for modifying tool call args. Use resolve instead.");
 } else {
   const __interruptResult = interrupt(`What is your name?`);
-  __interruptResult.state = __ctx.stateStack.toJSON();
+  __interruptResult.state = __ctx.stateToJSON();
   
   return { messages: __threads, data: __interruptResult };
   
   
 }
+
     
     __stack.step++;
   }
@@ -173,17 +174,20 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
         removedTools: __self.__removedTools
       });
     }
-__self.greeting = _greeting({
-      messages: new MessageThread()
+__self.greeting = await _greeting({
+      messages: __threads.getOrCreateActive()
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__self.greeting)) {
+      return {
+        messages: __threads,
+        data: __self.greeting
+      };
+    }
     
     __stack.step++;
   }
   if (__step <= 3) {
-    [__self.greeting] = await Promise.all([__self.greeting]);
-    __stack.step++;
-  }
-  if (__step <= 4) {
     return {
       messages: __threads,
       data: __stack.locals.greeting

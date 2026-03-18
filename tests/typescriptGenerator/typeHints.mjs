@@ -106,7 +106,7 @@ export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, 
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 function __initializeGlobals(__ctx) {
-
+  __ctx.globals.markInitialized("typeHints.agency")
 }
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
@@ -150,9 +150,16 @@ const __graph = __ctx.graph;
         removedTools: __self.__removedTools
       });
     }
-__self.count = _count({
-      messages: new MessageThread()
+__self.count = await _count({
+      messages: __threads.getOrCreateActive()
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__self.count)) {
+      return {
+        messages: __threads,
+        data: __self.count
+      };
+    }
     
     
     
@@ -175,27 +182,26 @@ __self.count = _count({
         removedTools: __self.__removedTools
       });
     }
-__self.message = _message({
-      messages: new MessageThread()
+__self.message = await _message({
+      messages: __threads.getOrCreateActive()
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__self.message)) {
+      return {
+        messages: __threads,
+        data: __self.message
+      };
+    }
     
     
     __stack.step++;
   }
   if (__step <= 3) {
-    [__self.count] = await Promise.all([__self.count]);
-    __stack.step++;
-  }
-  if (__step <= 4) {
     await print(__stack.locals.count)
     
     __stack.step++;
   }
-  if (__step <= 5) {
-    [__self.message] = await Promise.all([__self.message]);
-    __stack.step++;
-  }
-  if (__step <= 6) {
+  if (__step <= 4) {
     await print(__stack.locals.message)
     
     __stack.step++;

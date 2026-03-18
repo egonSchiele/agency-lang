@@ -106,9 +106,10 @@ export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, 
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 function __initializeGlobals(__ctx) {
-  __ctx.stateStack.globals.config = {
+  __ctx.globals.set("llmConfigParam.agency", "config", {
     "model": `gemini-2.5-flash-lite`
-  };
+  })
+  __ctx.globals.markInitialized("llmConfigParam.agency")
 }
 
 graph.node("main", async (__state: GraphState) => {
@@ -145,16 +146,23 @@ const __graph = __ctx.graph;
         }),
         tools: undefined,
         toolHandlers: [],
-        clientConfig: __ctx.stateStack.globals.config,
+        clientConfig: __ctx.globals.get("llmConfigParam.agency", "config"),
         stream: false,
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
       });
     }
-__self.foo = _foo({
-      messages: new MessageThread()
+__self.foo = await _foo({
+      messages: __threads.getOrCreateActive()
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__self.foo)) {
+      return {
+        messages: __threads,
+        data: __self.foo
+      };
+    }
     
     __stack.step++;
   }
@@ -179,17 +187,20 @@ __self.foo = _foo({
         removedTools: __self.__removedTools
       });
     }
-__self.foo2 = _foo2({
-      messages: new MessageThread()
+__self.foo2 = await _foo2({
+      messages: __threads.getOrCreateActive()
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__self.foo2)) {
+      return {
+        messages: __threads,
+        data: __self.foo2
+      };
+    }
     
     __stack.step++;
   }
   if (__step <= 3) {
-    [__self.foo, __self.foo2] = await Promise.all([__self.foo, __self.foo2]);
-    __stack.step++;
-  }
-  if (__step <= 4) {
     await print(__stack.locals.foo, __stack.locals.foo2)
     
     __stack.step++;

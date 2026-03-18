@@ -106,7 +106,8 @@ export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, 
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 function __initializeGlobals(__ctx) {
-  __ctx.stateStack.globals.x = 42;
+  __ctx.globals.set("multiLineComment.agency", "x", 42)
+  __ctx.globals.markInitialized("multiLineComment.agency")
 }
 export const __greetTool = {
   name: "greet",
@@ -134,6 +135,9 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  if (!__ctx.globals.isInitialized("multiLineComment.agency")) {
+    __initializeGlobals(__ctx)
+  }
   let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
@@ -151,8 +155,7 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 1) {
-      __ctx.stateStack.pop();
-return `hello`
+      return `hello`
       
       __stack.step++;
     }
@@ -161,6 +164,8 @@ return `hello`
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    __ctx.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,

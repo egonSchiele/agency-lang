@@ -106,7 +106,7 @@ export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, 
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 function __initializeGlobals(__ctx) {
-
+  __ctx.globals.markInitialized("asyncKeyword.agency")
 }
 export const __openaiTool = {
   name: "openai",
@@ -138,6 +138,9 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  if (!__ctx.globals.isInitialized("asyncKeyword.agency")) {
+    __initializeGlobals(__ctx)
+  }
   let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
@@ -174,9 +177,13 @@ async function _response(msg, __metadata) {
           removedTools: __self.__removedTools
         });
       }
-__self.response = _response(__stack.args.msg, {
-        messages: new MessageThread()
+__self.response = await _response(__stack.args.msg, {
+        messages: __threads.getOrCreateActive()
       });
+// return early from node if this is an interrupt
+if (isInterrupt(__self.response)) {
+        return __self.response;
+      }
 
 let __defaultTimeblockName_endTime: number = performance.now();
 let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultTimeblockName_startTime;
@@ -188,12 +195,7 @@ __defaultTimeblockName
       __stack.step++;
     }
     if (__step <= 2) {
-      [__self.response] = await Promise.all([__self.response]);
-      __stack.step++;
-    }
-    if (__step <= 3) {
-      __ctx.stateStack.pop();
-return `OpenAI response: ${__stack.locals.response}`
+      return `OpenAI response: ${__stack.locals.response}`
       
       __stack.step++;
     }
@@ -202,6 +204,8 @@ return `OpenAI response: ${__stack.locals.response}`
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    __ctx.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -226,6 +230,9 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  if (!__ctx.globals.isInitialized("asyncKeyword.agency")) {
+    __initializeGlobals(__ctx)
+  }
   let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
@@ -269,9 +276,13 @@ async function _response(msg, __metadata) {
           removedTools: __self.__removedTools
         });
       }
-__self.response = _response(__stack.args.msg, {
-        messages: new MessageThread()
+__self.response = await _response(__stack.args.msg, {
+        messages: __threads.getOrCreateActive()
       });
+// return early from node if this is an interrupt
+if (isInterrupt(__self.response)) {
+        return __self.response;
+      }
 
 let __defaultTimeblockName_endTime: number = performance.now();
 let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultTimeblockName_startTime;
@@ -282,12 +293,7 @@ __defaultTimeblockName
       __stack.step++;
     }
     if (__step <= 3) {
-      [__self.response] = await Promise.all([__self.response]);
-      __stack.step++;
-    }
-    if (__step <= 4) {
-      __ctx.stateStack.pop();
-return `Google response: ${__stack.locals.response}`
+      return `Google response: ${__stack.locals.response}`
       
       __stack.step++;
     }
@@ -296,6 +302,8 @@ return `Google response: ${__stack.locals.response}`
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    __ctx.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -320,6 +328,9 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  if (!__ctx.globals.isInitialized("asyncKeyword.agency")) {
+    __initializeGlobals(__ctx)
+  }
   let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
@@ -362,7 +373,6 @@ __self.__promptVar = await ___promptVar({
 if (isInterrupt(__self.__promptVar)) {
         return __self.__promptVar;
       }
-__ctx.stateStack.pop();
 return __self.__promptVar
       
       __stack.step++;
@@ -372,6 +382,8 @@ return __self.__promptVar
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    __ctx.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,

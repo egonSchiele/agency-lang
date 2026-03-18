@@ -106,38 +106,39 @@ export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, 
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 function __initializeGlobals(__ctx) {
-  __ctx.stateStack.globals.nums = [1, 2, 3, 4, 5];
-  __ctx.stateStack.globals.names = [`Alice`, `Bob`, `Charlie`];
-  __ctx.stateStack.globals.matrix = [[1, 2], [3, 4], [5, 6]];
-  __ctx.stateStack.globals.person = {
+  __ctx.globals.set("arrayAndObject.agency", "nums", [1, 2, 3, 4, 5])
+  __ctx.globals.set("arrayAndObject.agency", "names", [`Alice`, `Bob`, `Charlie`])
+  __ctx.globals.set("arrayAndObject.agency", "matrix", [[1, 2], [3, 4], [5, 6]])
+  __ctx.globals.set("arrayAndObject.agency", "person", {
     "name": `Alice`,
     "age": 30
-  };
-  __ctx.stateStack.globals.address = {
+  })
+  __ctx.globals.set("arrayAndObject.agency", "address", {
     "street": `123 Main St`,
     "city": `NYC`,
     "zip": `10001`
-  };
-  __ctx.stateStack.globals.user = {
+  })
+  __ctx.globals.set("arrayAndObject.agency", "user", {
     "name": `Bob`,
     "tags": [`admin`, `developer`]
-  };
-  __ctx.stateStack.globals.users = [{
+  })
+  __ctx.globals.set("arrayAndObject.agency", "users", [{
     "name": `Alice`,
     "age": 30
   }, {
     "name": `Bob`,
     "age": 25
-  }];
-  __ctx.stateStack.globals.config = {
+  }])
+  __ctx.globals.set("arrayAndObject.agency", "config", {
     "server": {
       "host": `localhost`,
       "port": 8080
     },
     "debug": true
-  };
-  __ctx.stateStack.globals.firstNum = __ctx.stateStack.globals.nums[0];
-  __ctx.stateStack.globals.personName = __ctx.stateStack.globals.person.name;
+  })
+  __ctx.globals.set("arrayAndObject.agency", "firstNum", __ctx.globals.get("arrayAndObject.agency", "nums")[0])
+  __ctx.globals.set("arrayAndObject.agency", "personName", __ctx.globals.get("arrayAndObject.agency", "person").name)
+  __ctx.globals.markInitialized("arrayAndObject.agency")
 }
 //  Test arrays and objects
 
@@ -147,7 +148,7 @@ function __initializeGlobals(__ctx) {
 
 
 
-await print(__ctx.stateStack.globals.nums)
+await print(__ctx.globals.get("arrayAndObject.agency", "nums"))
 
 
 //  Array with strings
@@ -155,7 +156,7 @@ await print(__ctx.stateStack.globals.nums)
 
 
 
-await print(__ctx.stateStack.globals.names)
+await print(__ctx.globals.get("arrayAndObject.agency", "names"))
 
 
 //  Nested arrays
@@ -163,7 +164,7 @@ await print(__ctx.stateStack.globals.names)
 
 
 
-await print(__ctx.stateStack.globals.matrix)
+await print(__ctx.globals.get("arrayAndObject.agency", "matrix"))
 
 
 //  Simple object
@@ -171,7 +172,7 @@ await print(__ctx.stateStack.globals.matrix)
 
 
 
-await print(__ctx.stateStack.globals.person)
+await print(__ctx.globals.get("arrayAndObject.agency", "person"))
 
 
 //  Object with nested structure
@@ -179,7 +180,7 @@ await print(__ctx.stateStack.globals.person)
 
 
 
-await print(__ctx.stateStack.globals.address)
+await print(__ctx.globals.get("arrayAndObject.agency", "address"))
 
 
 //  Object with array property
@@ -187,7 +188,7 @@ await print(__ctx.stateStack.globals.address)
 
 
 
-await print(__ctx.stateStack.globals.user)
+await print(__ctx.globals.get("arrayAndObject.agency", "user"))
 
 
 //  Array of objects
@@ -195,7 +196,7 @@ await print(__ctx.stateStack.globals.user)
 
 
 
-await print(__ctx.stateStack.globals.users)
+await print(__ctx.globals.get("arrayAndObject.agency", "users"))
 
 
 //  Nested object
@@ -203,18 +204,18 @@ await print(__ctx.stateStack.globals.users)
 
 
 
-await print(__ctx.stateStack.globals.config)
+await print(__ctx.globals.get("arrayAndObject.agency", "config"))
 
 
 //  Array access
 
 
-await print(__ctx.stateStack.globals.firstNum)
+await print(__ctx.globals.get("arrayAndObject.agency", "firstNum"))
 
 
 //  Object property access
 
 
-await print(__ctx.stateStack.globals.personName)
+await print(__ctx.globals.get("arrayAndObject.agency", "personName"))
 
 export default graph

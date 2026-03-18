@@ -106,8 +106,9 @@ export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, 
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 function __initializeGlobals(__ctx) {
-  __ctx.stateStack.globals.x = 42;
-  __ctx.stateStack.globals.y = `hello`;
+  __ctx.globals.set("comments.agency", "x", 42)
+  __ctx.globals.set("comments.agency", "y", `hello`)
+  __ctx.globals.markInitialized("comments.agency")
 }
 export const __greetTool = {
   name: "greet",
@@ -144,6 +145,9 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  if (!__ctx.globals.isInitialized("comments.agency")) {
+    __initializeGlobals(__ctx)
+  }
   let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
@@ -169,8 +173,7 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 2) {
-      __ctx.stateStack.pop();
-return __stack.locals.message
+      return __stack.locals.message
       
       __stack.step++;
     }
@@ -179,6 +182,8 @@ return __stack.locals.message
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    __ctx.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -215,9 +220,9 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
-    __stack.locals.result = greet({
+    __stack.locals.result = await greet({
       ctx: __ctx,
-      threads: new ThreadStore(),
+      threads: __threads,
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.result)) {
@@ -230,10 +235,6 @@ if (isInterrupt(__stack.locals.result)) {
     __stack.step++;
   }
   if (__step <= 2) {
-    [__self.result] = await Promise.all([__self.result]);
-    __stack.step++;
-  }
-  if (__step <= 3) {
     await print(__stack.locals.result)
     
     
@@ -245,7 +246,7 @@ if (isInterrupt(__stack.locals.result)) {
     
     __stack.step++;
   }
-  if (__step <= 4) {
+  if (__step <= 3) {
     __stack.locals.age = 25;
     
     
@@ -253,12 +254,12 @@ if (isInterrupt(__stack.locals.result)) {
     
     __stack.step++;
   }
-  if (__step <= 5) {
+  if (__step <= 4) {
     __stack.locals.status = `active`;
     
     __stack.step++;
   }
-  if (__step <= 6) {
+  if (__step <= 5) {
     switch (__stack.locals.status) {
       case `inactive`:
         await print(`Stopped`)

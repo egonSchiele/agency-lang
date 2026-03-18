@@ -27,17 +27,12 @@
               "type": "usesTool",
               "toolNames": []
             },
-            "skills": [],
-            "async": true
+            "skills": []
           },
           "scope": "function"
         },
         {
           "type": "newLine"
-        },
-        {
-          "type": "rawCode",
-          "value": "[__self.result] = await Promise.all([__self.result]);"
         },
         {
           "type": "returnStatement",
@@ -50,8 +45,7 @@
         {
           "type": "newLine"
         }
-      ],
-      "async": true
+      ]
     },
     {
       "type": "newLine"

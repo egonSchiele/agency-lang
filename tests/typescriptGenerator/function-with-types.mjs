@@ -106,7 +106,7 @@ export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, 
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 function __initializeGlobals(__ctx) {
-
+  __ctx.globals.markInitialized("function-with-types.agency")
 }
 export const __addTool = {
   name: "add",
@@ -150,6 +150,9 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  if (!__ctx.globals.isInitialized("function-with-types.agency")) {
+    __initializeGlobals(__ctx)
+  }
   let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
@@ -187,19 +190,18 @@ const __graph = __ctx.graph;
           removedTools: __self.__removedTools
         });
       }
-__self.result = _result(__stack.args.x, __stack.args.y, {
-        messages: new MessageThread()
+__self.result = await _result(__stack.args.x, __stack.args.y, {
+        messages: __threads.getOrCreateActive()
       });
+// return early from node if this is an interrupt
+if (isInterrupt(__self.result)) {
+        return __self.result;
+      }
       
       __stack.step++;
     }
     if (__step <= 2) {
-      [__self.result] = await Promise.all([__self.result]);
-      __stack.step++;
-    }
-    if (__step <= 3) {
-      __ctx.stateStack.pop();
-return __stack.locals.result
+      return __stack.locals.result
       
       __stack.step++;
     }
@@ -208,6 +210,8 @@ return __stack.locals.result
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    __ctx.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -232,6 +236,9 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  if (!__ctx.globals.isInitialized("function-with-types.agency")) {
+    __initializeGlobals(__ctx)
+  }
   let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
@@ -267,19 +274,18 @@ const __graph = __ctx.graph;
           removedTools: __self.__removedTools
         });
       }
-__self.message = _message(__stack.args.name, {
-        messages: new MessageThread()
+__self.message = await _message(__stack.args.name, {
+        messages: __threads.getOrCreateActive()
       });
+// return early from node if this is an interrupt
+if (isInterrupt(__self.message)) {
+        return __self.message;
+      }
       
       __stack.step++;
     }
     if (__step <= 2) {
-      [__self.message] = await Promise.all([__self.message]);
-      __stack.step++;
-    }
-    if (__step <= 3) {
-      __ctx.stateStack.pop();
-return __stack.locals.message
+      return __stack.locals.message
       
       __stack.step++;
     }
@@ -288,6 +294,8 @@ return __stack.locals.message
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    __ctx.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -312,6 +320,9 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  if (!__ctx.globals.isInitialized("function-with-types.agency")) {
+    __initializeGlobals(__ctx)
+  }
   let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
@@ -349,19 +360,18 @@ const __graph = __ctx.graph;
           removedTools: __self.__removedTools
         });
       }
-__self.output = _output(__stack.args.label, __stack.args.count, {
-        messages: new MessageThread()
+__self.output = await _output(__stack.args.label, __stack.args.count, {
+        messages: __threads.getOrCreateActive()
       });
+// return early from node if this is an interrupt
+if (isInterrupt(__self.output)) {
+        return __self.output;
+      }
       
       __stack.step++;
     }
     if (__step <= 2) {
-      [__self.output] = await Promise.all([__self.output]);
-      __stack.step++;
-    }
-    if (__step <= 3) {
-      __ctx.stateStack.pop();
-return __stack.locals.output
+      return __stack.locals.output
       
       __stack.step++;
     }
@@ -370,6 +380,8 @@ return __stack.locals.output
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    __ctx.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -394,6 +406,9 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  if (!__ctx.globals.isInitialized("function-with-types.agency")) {
+    __initializeGlobals(__ctx)
+  }
   let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
@@ -429,19 +444,18 @@ const __graph = __ctx.graph;
           removedTools: __self.__removedTools
         });
       }
-__self.result = _result(__stack.args.items, {
-        messages: new MessageThread()
+__self.result = await _result(__stack.args.items, {
+        messages: __threads.getOrCreateActive()
       });
+// return early from node if this is an interrupt
+if (isInterrupt(__self.result)) {
+        return __self.result;
+      }
       
       __stack.step++;
     }
     if (__step <= 2) {
-      [__self.result] = await Promise.all([__self.result]);
-      __stack.step++;
-    }
-    if (__step <= 3) {
-      __ctx.stateStack.pop();
-return __stack.locals.result
+      return __stack.locals.result
       
       __stack.step++;
     }
@@ -450,6 +464,8 @@ return __stack.locals.result
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    __ctx.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -474,6 +490,9 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  if (!__ctx.globals.isInitialized("function-with-types.agency")) {
+    __initializeGlobals(__ctx)
+  }
   let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
@@ -509,19 +528,18 @@ const __graph = __ctx.graph;
           removedTools: __self.__removedTools
         });
       }
-__self.result = _result(__stack.args.value, {
-        messages: new MessageThread()
+__self.result = await _result(__stack.args.value, {
+        messages: __threads.getOrCreateActive()
       });
+// return early from node if this is an interrupt
+if (isInterrupt(__self.result)) {
+        return __self.result;
+      }
       
       __stack.step++;
     }
     if (__step <= 2) {
-      [__self.result] = await Promise.all([__self.result]);
-      __stack.step++;
-    }
-    if (__step <= 3) {
-      __ctx.stateStack.pop();
-return __stack.locals.result
+      return __stack.locals.result
       
       __stack.step++;
     }
@@ -530,6 +548,8 @@ return __stack.locals.result
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    __ctx.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -616,9 +636,9 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
-    __stack.locals.sum = add(5, 10, {
+    __stack.locals.sum = await add(5, 10, {
       ctx: __ctx,
-      threads: new ThreadStore(),
+      threads: __threads,
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.sum)) {
@@ -631,9 +651,9 @@ if (isInterrupt(__stack.locals.sum)) {
     __stack.step++;
   }
   if (__step <= 2) {
-    __stack.locals.greeting = greet(`Alice`, {
+    __stack.locals.greeting = await greet(`Alice`, {
       ctx: __ctx,
-      threads: new ThreadStore(),
+      threads: __threads,
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.greeting)) {
@@ -646,9 +666,9 @@ if (isInterrupt(__stack.locals.greeting)) {
     __stack.step++;
   }
   if (__step <= 3) {
-    __stack.locals.labeled = mixed(42, `Answer`, {
+    __stack.locals.labeled = await mixed(42, `Answer`, {
       ctx: __ctx,
-      threads: new ThreadStore(),
+      threads: __threads,
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.labeled)) {
@@ -661,9 +681,9 @@ if (isInterrupt(__stack.locals.labeled)) {
     __stack.step++;
   }
   if (__step <= 4) {
-    __stack.locals.processed = processArray([1, 2, 3, 4, 5], {
+    __stack.locals.processed = await processArray([1, 2, 3, 4, 5], {
       ctx: __ctx,
-      threads: new ThreadStore(),
+      threads: __threads,
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.processed)) {
@@ -676,9 +696,9 @@ if (isInterrupt(__stack.locals.processed)) {
     __stack.step++;
   }
   if (__step <= 5) {
-    __stack.locals.flexResult = flexible(`test`, {
+    __stack.locals.flexResult = await flexible(`test`, {
       ctx: __ctx,
-      threads: new ThreadStore(),
+      threads: __threads,
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.flexResult)) {

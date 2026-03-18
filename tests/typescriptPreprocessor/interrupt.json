@@ -42,8 +42,7 @@
                   }
                 ]
               }
-            ],
-            "async": false
+            ]
           }
         },
         {
@@ -72,8 +71,7 @@
         {
           "type": "newLine"
         }
-      ],
-      "async": false
+      ]
     },
     {
       "type": "newLine"
@@ -122,8 +120,7 @@
         {
           "type": "newLine"
         }
-      ],
-      "async": true
+      ]
     },
     {
       "type": "newLine"
@@ -165,8 +162,7 @@
                 "safeAction"
               ]
             },
-            "skills": [],
-            "async": false
+            "skills": []
           },
           "scope": "function"
         },
@@ -182,8 +178,7 @@
               "value": "result",
               "scope": "function"
             }
-          ],
-          "async": false
+          ]
         },
         {
           "type": "newLine"

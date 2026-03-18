@@ -106,24 +106,25 @@ export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, 
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 function __initializeGlobals(__ctx) {
-  __ctx.stateStack.globals.arr1 = [1, 2];
-  __ctx.stateStack.globals.arr2 = [3, 4];
-  __ctx.stateStack.globals.combined = [...__ctx.stateStack.globals.arr1, ...__ctx.stateStack.globals.arr2];
-  __ctx.stateStack.globals.withExtra = [...__ctx.stateStack.globals.arr1, 5, 6];
-  __ctx.stateStack.globals.obj1 = {
+  __ctx.globals.set("splat.agency", "arr1", [1, 2])
+  __ctx.globals.set("splat.agency", "arr2", [3, 4])
+  __ctx.globals.set("splat.agency", "combined", [...__ctx.globals.get("splat.agency", "arr1"), ...__ctx.globals.get("splat.agency", "arr2")])
+  __ctx.globals.set("splat.agency", "withExtra", [...__ctx.globals.get("splat.agency", "arr1"), 5, 6])
+  __ctx.globals.set("splat.agency", "obj1", {
     "a": 1
-  };
-  __ctx.stateStack.globals.obj2 = {
+  })
+  __ctx.globals.set("splat.agency", "obj2", {
     "b": 2
-  };
-  __ctx.stateStack.globals.merged = {
-    ...__ctx.stateStack.globals.obj1,
-    ...__ctx.stateStack.globals.obj2
-  };
-  __ctx.stateStack.globals.withKey = {
-    ...__ctx.stateStack.globals.obj1,
+  })
+  __ctx.globals.set("splat.agency", "merged", {
+    ...__ctx.globals.get("splat.agency", "obj1"),
+    ...__ctx.globals.get("splat.agency", "obj2")
+  })
+  __ctx.globals.set("splat.agency", "withKey", {
+    ...__ctx.globals.get("splat.agency", "obj1"),
     "c": 3
-  };
+  })
+  __ctx.globals.markInitialized("splat.agency")
 }
 
 

@@ -23,8 +23,7 @@
         {
           "type": "newLine"
         }
-      ],
-      "async": true
+      ]
     },
     {
       "type": "newLine"
@@ -66,17 +65,12 @@
               "type": "usesTool",
               "toolNames": []
             },
-            "skills": [],
-            "async": true
+            "skills": []
           },
           "scope": "function"
         },
         {
           "type": "newLine"
-        },
-        {
-          "type": "rawCode",
-          "value": "[__self.result] = await Promise.all([__self.result]);"
         },
         {
           "type": "returnStatement",
@@ -89,8 +83,7 @@
         {
           "type": "newLine"
         }
-      ],
-      "async": true
+      ]
     },
     {
       "type": "newLine"
@@ -120,8 +113,7 @@
                   }
                 ]
               }
-            ],
-            "async": true
+            ]
           },
           "scope": "function"
         },
@@ -144,17 +136,12 @@
                   }
                 ]
               }
-            ],
-            "async": true
+            ]
           },
           "scope": "function"
         },
         {
           "type": "newLine"
-        },
-        {
-          "type": "rawCode",
-          "value": "[__self.a, __self.b] = await Promise.all([__self.a, __self.b]);"
         },
         {
           "type": "assignment",
@@ -195,17 +182,12 @@
               "type": "usesTool",
               "toolNames": []
             },
-            "skills": [],
-            "async": true
+            "skills": []
           },
           "scope": "function"
         },
         {
           "type": "newLine"
-        },
-        {
-          "type": "rawCode",
-          "value": "[__self.result] = await Promise.all([__self.result]);"
         },
         {
           "type": "functionCall",
@@ -216,8 +198,7 @@
               "value": "result",
               "scope": "function"
             }
-          ],
-          "async": false
+          ]
         },
         {
           "type": "newLine"

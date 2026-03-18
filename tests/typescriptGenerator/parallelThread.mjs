@@ -106,7 +106,7 @@ export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, 
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 function __initializeGlobals(__ctx) {
-
+  __ctx.globals.markInitialized("parallelThread.agency")
 }
 export const __fooTool = {
   name: "foo",
@@ -126,6 +126,9 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  if (!__ctx.globals.isInitialized("parallelThread.agency")) {
+    __initializeGlobals(__ctx)
+  }
   let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
@@ -193,9 +196,13 @@ async function _res2(__metadata) {
     removedTools: __self.__removedTools
   });
 }
-__self.res2 = _res2({
+__self.res2 = await _res2({
   messages: __threads.get(__ptid_res2)
 });
+// return early from node if this is an interrupt
+if (isInterrupt(__self.res2)) {
+  return __self.res2;
+}
 
 async function _res3(__metadata) {
   __self.__removedTools = __self.__removedTools || [];
@@ -215,11 +222,14 @@ async function _res3(__metadata) {
     removedTools: __self.__removedTools
   });
 }
-__self.res3 = _res3({
+__self.res3 = await _res3({
   messages: __threads.get(__ptid_res3)
 });
+// return early from node if this is an interrupt
+if (isInterrupt(__self.res3)) {
+  return __self.res3;
+}
 
-[__self.res2, __self.res3] = await Promise.all([__self.res2, __self.res3]);
 [__stack.locals.res2, __stack.locals.res3] = await Promise.all([__stack.locals.res2, __stack.locals.res3]);
 }
 
@@ -233,6 +243,8 @@ __threads.popActive()
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    __ctx.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,

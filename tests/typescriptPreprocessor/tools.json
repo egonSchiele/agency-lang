@@ -42,15 +42,13 @@
                   }
                 ]
               }
-            ],
-            "async": false
+            ]
           }
         },
         {
           "type": "newLine"
         }
-      ],
-      "async": true
+      ]
     },
     {
       "type": "newLine"
@@ -99,8 +97,7 @@
         {
           "type": "newLine"
         }
-      ],
-      "async": true
+      ]
     },
     {
       "type": "newLine"

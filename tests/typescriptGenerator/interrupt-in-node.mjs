@@ -106,7 +106,7 @@ export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, 
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 function __initializeGlobals(__ctx) {
-
+  __ctx.globals.markInitialized("interrupt-in-node.agency")
 }
 export const __greetTool = {
   name: "greet",
@@ -126,6 +126,9 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  if (!__ctx.globals.isInitialized("interrupt-in-node.agency")) {
+    __initializeGlobals(__ctx)
+  }
   let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
@@ -160,7 +163,6 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   __state.interruptData.interruptResponse = null;
   
   
-  __ctx.stateStack.pop();
   return null;
   
 } else if (__state.interruptData?.interruptResponse?.type === "modify") {
@@ -175,12 +177,11 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   const __resolvedValue = __state.interruptData.interruptResponse.value;
   
   
-  __ctx.stateStack.pop();
   return __resolvedValue;
   
 } else {
   const __interruptResult = interrupt(`Agent wants to call the greet function with name: ${__stack.args.name} and age: ${__stack.args.age}`);
-  __interruptResult.state = __ctx.stateStack.toJSON();
+  __interruptResult.state = __ctx.stateToJSON();
   
   
   return __interruptResult;
@@ -191,8 +192,7 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
       __stack.step++;
     }
     if (__step <= 2) {
-      __ctx.stateStack.pop();
-return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`
+      return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`
       
       __stack.step++;
     }
@@ -201,6 +201,8 @@ return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} yea
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    __ctx.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -343,8 +345,7 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 3) {
-    __ctx.stateStack.pop();
-return goToNode("foo2", {
+    return goToNode("foo2", {
       messages: __stack.messages,
       ctx: __ctx,
       data: {

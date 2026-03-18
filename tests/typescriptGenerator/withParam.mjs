@@ -106,7 +106,7 @@ export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, 
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 function __initializeGlobals(__ctx) {
-
+  __ctx.globals.markInitialized("withParam.agency")
 }
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
@@ -150,17 +150,20 @@ const __graph = __ctx.graph;
         removedTools: __self.__removedTools
       });
     }
-__self.result = _result(__stack.args.input, {
-      messages: new MessageThread()
+__self.result = await _result(__stack.args.input, {
+      messages: __threads.getOrCreateActive()
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__self.result)) {
+      return {
+        messages: __threads,
+        data: __self.result
+      };
+    }
     
     __stack.step++;
   }
   if (__step <= 2) {
-    [__self.result] = await Promise.all([__self.result]);
-    __stack.step++;
-  }
-  if (__step <= 3) {
     await print(__stack.locals.result)
     
     __stack.step++;

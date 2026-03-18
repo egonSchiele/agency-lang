@@ -105,8 +105,7 @@
         {
           "type": "newLine"
         }
-      ],
-      "async": true
+      ]
     },
     {
       "type": "newLine"
@@ -149,17 +148,12 @@
                 "value": "nodeLocal",
                 "scope": "function"
               }
-            ],
-            "async": true
+            ]
           },
           "scope": "function"
         },
         {
           "type": "newLine"
-        },
-        {
-          "type": "rawCode",
-          "value": "[__self.output] = await Promise.all([__self.output]);"
         },
         {
           "type": "functionCall",
@@ -170,8 +164,7 @@
               "value": "output",
               "scope": "function"
             }
-          ],
-          "async": false
+          ]
         },
         {
           "type": "newLine"

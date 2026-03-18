@@ -196,13 +196,9 @@ async function _res2(__metadata) {
     removedTools: __self.__removedTools
   });
 }
-__self.res2 = await _res2({
+__self.res2 = _res2({
   messages: __threads.get(__ptid_res2)
 });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.res2)) {
-  return __self.res2;
-}
 
 async function _res3(__metadata) {
   __self.__removedTools = __self.__removedTools || [];
@@ -222,14 +218,11 @@ async function _res3(__metadata) {
     removedTools: __self.__removedTools
   });
 }
-__self.res3 = await _res3({
+__self.res3 = _res3({
   messages: __threads.get(__ptid_res3)
 });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.res3)) {
-  return __self.res3;
-}
 
+[__self.res2, __self.res3] = await Promise.all([__self.res2, __self.res3]);
 [__stack.locals.res2, __stack.locals.res3] = await Promise.all([__stack.locals.res2, __stack.locals.res3]);
 }
 

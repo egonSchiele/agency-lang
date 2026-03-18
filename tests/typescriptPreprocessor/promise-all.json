@@ -42,12 +42,17 @@
               "type": "usesTool",
               "toolNames": []
             },
-            "skills": []
+            "skills": [],
+            "async": true
           },
           "scope": "function"
         },
         {
           "type": "newLine"
+        },
+        {
+          "type": "rawCode",
+          "value": "[__self.result] = await Promise.all([__self.result]);"
         },
         {
           "type": "returnStatement",
@@ -93,7 +98,8 @@
               "type": "usesTool",
               "toolNames": []
             },
-            "skills": []
+            "skills": [],
+            "async": true
           },
           "scope": "function"
         },
@@ -119,12 +125,17 @@
               "type": "usesTool",
               "toolNames": []
             },
-            "skills": []
+            "skills": [],
+            "async": true
           },
           "scope": "function"
         },
         {
           "type": "newLine"
+        },
+        {
+          "type": "rawCode",
+          "value": "[__self.a, __self.b] = await Promise.all([__self.a, __self.b]);"
         },
         {
           "type": "assignment",
@@ -168,7 +179,8 @@
               "value": "combined",
               "scope": "function"
             }
-          ]
+          ],
+          "async": false
         },
         {
           "type": "newLine"

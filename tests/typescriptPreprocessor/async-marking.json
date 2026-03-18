@@ -65,12 +65,17 @@
               "type": "usesTool",
               "toolNames": []
             },
-            "skills": []
+            "skills": [],
+            "async": true
           },
           "scope": "function"
         },
         {
           "type": "newLine"
+        },
+        {
+          "type": "rawCode",
+          "value": "[__self.result] = await Promise.all([__self.result]);"
         },
         {
           "type": "returnStatement",
@@ -113,7 +118,8 @@
                   }
                 ]
               }
-            ]
+            ],
+            "async": false
           },
           "scope": "function"
         },
@@ -136,7 +142,8 @@
                   }
                 ]
               }
-            ]
+            ],
+            "async": false
           },
           "scope": "function"
         },
@@ -182,12 +189,17 @@
               "type": "usesTool",
               "toolNames": []
             },
-            "skills": []
+            "skills": [],
+            "async": true
           },
           "scope": "function"
         },
         {
           "type": "newLine"
+        },
+        {
+          "type": "rawCode",
+          "value": "[__self.result] = await Promise.all([__self.result]);"
         },
         {
           "type": "functionCall",
@@ -198,7 +210,8 @@
               "value": "result",
               "scope": "function"
             }
-          ]
+          ],
+          "async": false
         },
         {
           "type": "newLine"

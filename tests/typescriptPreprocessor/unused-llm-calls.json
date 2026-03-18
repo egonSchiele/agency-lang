@@ -33,12 +33,17 @@
               "type": "usesTool",
               "toolNames": []
             },
-            "skills": []
+            "skills": [],
+            "async": true
           },
           "scope": "function"
         },
         {
           "type": "newLine"
+        },
+        {
+          "type": "rawCode",
+          "value": "[__self.used] = await Promise.all([__self.used]);"
         },
         {
           "type": "functionCall",
@@ -49,7 +54,8 @@
               "value": "used",
               "scope": "function"
             }
-          ]
+          ],
+          "async": false
         },
         {
           "type": "newLine"
@@ -95,7 +101,8 @@
               "type": "usesTool",
               "toolNames": []
             },
-            "skills": []
+            "skills": [],
+            "async": false
           }
         },
         {

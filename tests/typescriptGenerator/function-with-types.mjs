@@ -190,17 +190,17 @@ const __graph = __ctx.graph;
           removedTools: __self.__removedTools
         });
       }
-__self.result = await _result(__stack.args.x, __stack.args.y, {
-        messages: __threads.getOrCreateActive()
+__self.result = _result(__stack.args.x, __stack.args.y, {
+        messages: __threads.createAndReturnThread()
       });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.result)) {
-        return __self.result;
-      }
       
       __stack.step++;
     }
     if (__step <= 2) {
+      [__self.result] = await Promise.all([__self.result]);
+      __stack.step++;
+    }
+    if (__step <= 3) {
       return __stack.locals.result
       
       __stack.step++;
@@ -274,17 +274,17 @@ const __graph = __ctx.graph;
           removedTools: __self.__removedTools
         });
       }
-__self.message = await _message(__stack.args.name, {
-        messages: __threads.getOrCreateActive()
+__self.message = _message(__stack.args.name, {
+        messages: __threads.createAndReturnThread()
       });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.message)) {
-        return __self.message;
-      }
       
       __stack.step++;
     }
     if (__step <= 2) {
+      [__self.message] = await Promise.all([__self.message]);
+      __stack.step++;
+    }
+    if (__step <= 3) {
       return __stack.locals.message
       
       __stack.step++;
@@ -360,17 +360,17 @@ const __graph = __ctx.graph;
           removedTools: __self.__removedTools
         });
       }
-__self.output = await _output(__stack.args.label, __stack.args.count, {
-        messages: __threads.getOrCreateActive()
+__self.output = _output(__stack.args.label, __stack.args.count, {
+        messages: __threads.createAndReturnThread()
       });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.output)) {
-        return __self.output;
-      }
       
       __stack.step++;
     }
     if (__step <= 2) {
+      [__self.output] = await Promise.all([__self.output]);
+      __stack.step++;
+    }
+    if (__step <= 3) {
       return __stack.locals.output
       
       __stack.step++;
@@ -444,17 +444,17 @@ const __graph = __ctx.graph;
           removedTools: __self.__removedTools
         });
       }
-__self.result = await _result(__stack.args.items, {
-        messages: __threads.getOrCreateActive()
+__self.result = _result(__stack.args.items, {
+        messages: __threads.createAndReturnThread()
       });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.result)) {
-        return __self.result;
-      }
       
       __stack.step++;
     }
     if (__step <= 2) {
+      [__self.result] = await Promise.all([__self.result]);
+      __stack.step++;
+    }
+    if (__step <= 3) {
       return __stack.locals.result
       
       __stack.step++;
@@ -528,17 +528,17 @@ const __graph = __ctx.graph;
           removedTools: __self.__removedTools
         });
       }
-__self.result = await _result(__stack.args.value, {
-        messages: __threads.getOrCreateActive()
+__self.result = _result(__stack.args.value, {
+        messages: __threads.createAndReturnThread()
       });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.result)) {
-        return __self.result;
-      }
       
       __stack.step++;
     }
     if (__step <= 2) {
+      [__self.result] = await Promise.all([__self.result]);
+      __stack.step++;
+    }
+    if (__step <= 3) {
       return __stack.locals.result
       
       __stack.step++;

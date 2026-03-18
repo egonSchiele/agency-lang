@@ -161,20 +161,17 @@ if (isInterrupt(__stack.locals.message)) {
         removedTools: __self.__removedTools
       });
     }
-__self.sentiment = await _sentiment(__stack.locals.message, {
-      messages: __threads.getOrCreateActive()
+__self.sentiment = _sentiment(__stack.locals.message, {
+      messages: __threads.createAndReturnThread()
     });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.sentiment)) {
-      return {
-        messages: __threads,
-        data: __self.sentiment
-      };
-    }
     
     __stack.step++;
   }
   if (__step <= 3) {
+    [__self.sentiment] = await Promise.all([__self.sentiment]);
+    __stack.step++;
+  }
+  if (__step <= 4) {
     await print(__stack.locals.sentiment)
     
     __stack.step++;

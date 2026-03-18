@@ -150,20 +150,17 @@ const __graph = __ctx.graph;
         removedTools: __self.__removedTools
       });
     }
-__self.numbers = await _numbers({
-      messages: __threads.getOrCreateActive()
+__self.numbers = _numbers({
+      messages: __threads.createAndReturnThread()
     });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.numbers)) {
-      return {
-        messages: __threads,
-        data: __self.numbers
-      };
-    }
     
     __stack.step++;
   }
   if (__step <= 2) {
+    [__self.numbers] = await Promise.all([__self.numbers]);
+    __stack.step++;
+  }
+  if (__step <= 3) {
     await print(__stack.locals.numbers)
     
     
@@ -171,7 +168,7 @@ if (isInterrupt(__self.numbers)) {
     
     __stack.step++;
   }
-  if (__step <= 3) {
+  if (__step <= 4) {
     async function _greetings(__metadata) {
       __self.__removedTools = __self.__removedTools || [];
       return runPrompt({
@@ -190,20 +187,17 @@ if (isInterrupt(__self.numbers)) {
         removedTools: __self.__removedTools
       });
     }
-__self.greetings = await _greetings({
-      messages: __threads.getOrCreateActive()
+__self.greetings = _greetings({
+      messages: __threads.createAndReturnThread()
     });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.greetings)) {
-      return {
-        messages: __threads,
-        data: __self.greetings
-      };
-    }
     
     __stack.step++;
   }
-  if (__step <= 4) {
+  if (__step <= 5) {
+    [__self.greetings] = await Promise.all([__self.greetings]);
+    __stack.step++;
+  }
+  if (__step <= 6) {
     await print(__stack.locals.greetings)
     
     __stack.step++;

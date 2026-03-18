@@ -147,20 +147,17 @@ const __graph = __ctx.graph;
         removedTools: __self.__removedTools
       });
     }
-__self.greeting = await _greeting({
-      messages: __threads.getOrCreateActive()
+__self.greeting = _greeting({
+      messages: __threads.createAndReturnThread()
     });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.greeting)) {
-      return {
-        messages: __threads,
-        data: __self.greeting
-      };
-    }
     
     __stack.step++;
   }
   if (__step <= 2) {
+    [__self.greeting] = await Promise.all([__self.greeting]);
+    __stack.step++;
+  }
+  if (__step <= 3) {
     await print(__stack.locals.greeting)
     
     __stack.step++;

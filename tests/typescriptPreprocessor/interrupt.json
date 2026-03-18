@@ -42,7 +42,8 @@
                   }
                 ]
               }
-            ]
+            ],
+            "async": false
           }
         },
         {
@@ -162,7 +163,8 @@
                 "safeAction"
               ]
             },
-            "skills": []
+            "skills": [],
+            "async": false
           },
           "scope": "function"
         },
@@ -178,7 +180,8 @@
               "value": "result",
               "scope": "function"
             }
-          ]
+          ],
+          "async": false
         },
         {
           "type": "newLine"

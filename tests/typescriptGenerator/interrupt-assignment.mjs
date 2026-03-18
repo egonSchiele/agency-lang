@@ -174,20 +174,17 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
         removedTools: __self.__removedTools
       });
     }
-__self.greeting = await _greeting({
-      messages: __threads.getOrCreateActive()
+__self.greeting = _greeting({
+      messages: __threads.createAndReturnThread()
     });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.greeting)) {
-      return {
-        messages: __threads,
-        data: __self.greeting
-      };
-    }
     
     __stack.step++;
   }
   if (__step <= 3) {
+    [__self.greeting] = await Promise.all([__self.greeting]);
+    __stack.step++;
+  }
+  if (__step <= 4) {
     return {
       messages: __threads,
       data: __stack.locals.greeting

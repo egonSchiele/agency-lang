@@ -150,16 +150,9 @@ const __graph = __ctx.graph;
         removedTools: __self.__removedTools
       });
     }
-__self.count = await _count({
-      messages: __threads.getOrCreateActive()
+__self.count = _count({
+      messages: __threads.createAndReturnThread()
     });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.count)) {
-      return {
-        messages: __threads,
-        data: __self.count
-      };
-    }
     
     
     
@@ -182,26 +175,27 @@ if (isInterrupt(__self.count)) {
         removedTools: __self.__removedTools
       });
     }
-__self.message = await _message({
-      messages: __threads.getOrCreateActive()
+__self.message = _message({
+      messages: __threads.createAndReturnThread()
     });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.message)) {
-      return {
-        messages: __threads,
-        data: __self.message
-      };
-    }
     
     
     __stack.step++;
   }
   if (__step <= 3) {
+    [__self.count] = await Promise.all([__self.count]);
+    __stack.step++;
+  }
+  if (__step <= 4) {
     await print(__stack.locals.count)
     
     __stack.step++;
   }
-  if (__step <= 4) {
+  if (__step <= 5) {
+    [__self.message] = await Promise.all([__self.message]);
+    __stack.step++;
+  }
+  if (__step <= 6) {
     await print(__stack.locals.message)
     
     __stack.step++;

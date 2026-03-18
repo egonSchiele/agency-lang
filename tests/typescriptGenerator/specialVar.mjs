@@ -163,33 +163,30 @@ if (isInterrupt(__stack.locals.msg)) {
         removedTools: __self.__removedTools
       });
     }
-__self.response1 = await _response1(__stack.locals.msg, {
-      messages: __threads.getOrCreateActive()
+__self.response1 = _response1(__stack.locals.msg, {
+      messages: __threads.createAndReturnThread()
     });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.response1)) {
-      return {
-        messages: __threads,
-        data: __self.response1
-      };
-    }
     
     
     __stack.step++;
   }
   if (__step <= 4) {
+    [__self.response1] = await Promise.all([__self.response1]);
+    __stack.step++;
+  }
+  if (__step <= 5) {
     await print(__stack.locals.response1)
     
     __stack.step++;
   }
-  if (__step <= 5) {
+  if (__step <= 6) {
     __client = __getClientWithConfig({
       model: "`gemini-2.5-flash-lite`"
     });
     
     __stack.step++;
   }
-  if (__step <= 6) {
+  if (__step <= 7) {
     async function _response2(msg, __metadata) {
       __self.__removedTools = __self.__removedTools || [];
       return runPrompt({
@@ -205,26 +202,23 @@ if (isInterrupt(__self.response1)) {
         removedTools: __self.__removedTools
       });
     }
-__self.response2 = await _response2(__stack.locals.msg, {
-      messages: __threads.getOrCreateActive()
+__self.response2 = _response2(__stack.locals.msg, {
+      messages: __threads.createAndReturnThread()
     });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.response2)) {
-      return {
-        messages: __threads,
-        data: __self.response2
-      };
-    }
     
-    
-    __stack.step++;
-  }
-  if (__step <= 7) {
-    await print(__stack.locals.response2)
     
     __stack.step++;
   }
   if (__step <= 8) {
+    [__self.response2] = await Promise.all([__self.response2]);
+    __stack.step++;
+  }
+  if (__step <= 9) {
+    await print(__stack.locals.response2)
+    
+    __stack.step++;
+  }
+  if (__step <= 10) {
     return {
       messages: __threads,
       data: [__stack.locals.response1, __stack.locals.response2]

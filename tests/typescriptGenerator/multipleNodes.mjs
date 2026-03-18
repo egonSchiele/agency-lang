@@ -147,20 +147,17 @@ const __graph = __ctx.graph;
         removedTools: __self.__removedTools
       });
     }
-__self.greeting = await _greeting({
-      messages: __threads.getOrCreateActive()
+__self.greeting = _greeting({
+      messages: __threads.createAndReturnThread()
     });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.greeting)) {
-      return {
-        messages: __threads,
-        data: __self.greeting
-      };
-    }
     
     __stack.step++;
   }
   if (__step <= 2) {
+    [__self.greeting] = await Promise.all([__self.greeting]);
+    __stack.step++;
+  }
+  if (__step <= 3) {
     return goToNode("processGreeting", {
       messages: __stack.messages,
       ctx: __ctx,
@@ -228,20 +225,17 @@ const __graph = __ctx.graph;
         removedTools: __self.__removedTools
       });
     }
-__self.result = await _result(__stack.args.msg, {
-      messages: __threads.getOrCreateActive()
+__self.result = _result(__stack.args.msg, {
+      messages: __threads.createAndReturnThread()
     });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.result)) {
-      return {
-        messages: __threads,
-        data: __self.result
-      };
-    }
     
     __stack.step++;
   }
   if (__step <= 2) {
+    [__self.result] = await Promise.all([__self.result]);
+    __stack.step++;
+  }
+  if (__step <= 3) {
     await print(__stack.locals.result)
     
     __stack.step++;

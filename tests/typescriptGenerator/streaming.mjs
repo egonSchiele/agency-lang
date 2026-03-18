@@ -146,26 +146,23 @@ const __graph = __ctx.graph;
         removedTools: __self.__removedTools
       });
     }
-__self.response = await _response({
-      messages: __threads.getOrCreateActive()
+__self.response = _response({
+      messages: __threads.createAndReturnThread()
     });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.response)) {
-      return {
-        messages: __threads,
-        data: __self.response
-      };
-    }
     
     __stack.step++;
   }
   if (__step <= 2) {
+    [__self.response] = await Promise.all([__self.response]);
+    __stack.step++;
+  }
+  if (__step <= 3) {
     await print(__stack.locals.response)
     
     
     __stack.step++;
   }
-  if (__step <= 3) {
+  if (__step <= 4) {
     async function _response2(__metadata) {
       __self.__removedTools = __self.__removedTools || [];
       return runPrompt({
@@ -183,20 +180,17 @@ if (isInterrupt(__self.response)) {
         removedTools: __self.__removedTools
       });
     }
-__self.response2 = await _response2({
-      messages: __threads.getOrCreateActive()
+__self.response2 = _response2({
+      messages: __threads.createAndReturnThread()
     });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.response2)) {
-      return {
-        messages: __threads,
-        data: __self.response2
-      };
-    }
     
     __stack.step++;
   }
-  if (__step <= 4) {
+  if (__step <= 5) {
+    [__self.response2] = await Promise.all([__self.response2]);
+    __stack.step++;
+  }
+  if (__step <= 6) {
     await print(__stack.locals.response2)
     
     __stack.step++;

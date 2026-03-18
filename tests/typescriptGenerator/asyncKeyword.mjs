@@ -177,13 +177,9 @@ async function _response(msg, __metadata) {
           removedTools: __self.__removedTools
         });
       }
-__self.response = await _response(__stack.args.msg, {
-        messages: __threads.getOrCreateActive()
+__self.response = _response(__stack.args.msg, {
+        messages: __threads.createAndReturnThread()
       });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.response)) {
-        return __self.response;
-      }
 
 let __defaultTimeblockName_endTime: number = performance.now();
 let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultTimeblockName_startTime;
@@ -195,6 +191,10 @@ __defaultTimeblockName
       __stack.step++;
     }
     if (__step <= 2) {
+      [__self.response] = await Promise.all([__self.response]);
+      __stack.step++;
+    }
+    if (__step <= 3) {
       return `OpenAI response: ${__stack.locals.response}`
       
       __stack.step++;
@@ -276,13 +276,9 @@ async function _response(msg, __metadata) {
           removedTools: __self.__removedTools
         });
       }
-__self.response = await _response(__stack.args.msg, {
-        messages: __threads.getOrCreateActive()
+__self.response = _response(__stack.args.msg, {
+        messages: __threads.createAndReturnThread()
       });
-// return early from node if this is an interrupt
-if (isInterrupt(__self.response)) {
-        return __self.response;
-      }
 
 let __defaultTimeblockName_endTime: number = performance.now();
 let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultTimeblockName_startTime;
@@ -293,6 +289,10 @@ __defaultTimeblockName
       __stack.step++;
     }
     if (__step <= 3) {
+      [__self.response] = await Promise.all([__self.response]);
+      __stack.step++;
+    }
+    if (__step <= 4) {
       return `Google response: ${__stack.locals.response}`
       
       __stack.step++;
@@ -430,9 +430,9 @@ if (isInterrupt(__stack.locals.msg)) {
     __stack.step++;
   }
   if (__step <= 2) {
-    __stack.locals.res2 = google(__stack.locals.msg, {
+    __stack.locals.res2 = await google(__stack.locals.msg, {
       ctx: __ctx,
-      threads: new ThreadStore(),
+      threads: __threads,
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.res2)) {
@@ -445,9 +445,9 @@ if (isInterrupt(__stack.locals.res2)) {
     __stack.step++;
   }
   if (__step <= 3) {
-    __stack.locals.res1 = openai(__stack.locals.msg, {
+    __stack.locals.res1 = await openai(__stack.locals.msg, {
       ctx: __ctx,
-      threads: new ThreadStore(),
+      threads: __threads,
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.res1)) {
@@ -460,15 +460,11 @@ if (isInterrupt(__stack.locals.res1)) {
     __stack.step++;
   }
   if (__step <= 4) {
-    [__self.res2, __self.res1] = await Promise.all([__self.res2, __self.res1]);
-    __stack.step++;
-  }
-  if (__step <= 5) {
     __stack.locals.results = __stack.locals.Promise.race([__stack.locals.res1, __stack.locals.res2]);
     
     __stack.step++;
   }
-  if (__step <= 6) {
+  if (__step <= 5) {
     await printJSON(__stack.locals.results)
     
     __stack.step++;

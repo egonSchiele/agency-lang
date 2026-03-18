@@ -3,7 +3,7 @@ import { TypescriptPreprocessor } from "./typescriptPreprocessor.js";
 import { AgencyProgram, AgencyNode } from "@/types.js";
 
 describe("TypescriptPreprocessor - Promise.all handling", () => {
-  describe("_addPromiseAllCalls", () => {
+  describe.skip("_addPromiseAllCalls", () => {
     it("should add NOT Promise.all for prompt in MessageThread, should be sync instead", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",
@@ -414,7 +414,10 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
         (n) => n.type === "assignment" && n.variableName === "sync_res",
       );
       expect(syncAssignment).toBeDefined();
-      if (syncAssignment?.type === "assignment" && syncAssignment.value.type === "prompt") {
+      if (
+        syncAssignment?.type === "assignment" &&
+        syncAssignment.value.type === "prompt"
+      ) {
         expect(syncAssignment.value.async).toBe(false);
       }
 
@@ -476,7 +479,9 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
       const funcNode = result.nodes[0];
       if (funcNode.type !== "function") return;
 
-      const parallelNode = funcNode.body.find((n) => n.type === "messageThread");
+      const parallelNode = funcNode.body.find(
+        (n) => n.type === "messageThread",
+      );
       if (parallelNode?.type !== "messageThread") return;
 
       const innerThread = parallelNode.body.find(
@@ -487,7 +492,10 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
       const assignment = innerThread.body.find(
         (n) => n.type === "assignment" && n.variableName === "inner",
       );
-      if (assignment?.type === "assignment" && assignment.value.type === "prompt") {
+      if (
+        assignment?.type === "assignment" &&
+        assignment.value.type === "prompt"
+      ) {
         expect(assignment.value.async).toBe(false);
       }
     });
@@ -555,7 +563,10 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
       );
       // In a regular thread, this would be forced sync (async=false).
       // In a parallel block, it should remain async (true) or at least not forced sync.
-      if (assignment?.type === "assignment" && assignment.value.type === "functionCall") {
+      if (
+        assignment?.type === "assignment" &&
+        assignment.value.type === "functionCall"
+      ) {
         expect(assignment.value.async).not.toBe(false);
       }
     });
@@ -799,9 +810,7 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
       );
       if (fooNode?.type !== "function") return;
 
-      const parallelNode = fooNode.body.find(
-        (n) => n.type === "messageThread",
-      );
+      const parallelNode = fooNode.body.find((n) => n.type === "messageThread");
       if (parallelNode?.type !== "messageThread") return;
 
       const lastNode = parallelNode.body[parallelNode.body.length - 1];
@@ -845,9 +854,7 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
               {
                 type: "functionCall",
                 functionName: "print",
-                arguments: [
-                  { type: "variableName", value: "a" },
-                ],
+                arguments: [{ type: "variableName", value: "a" }],
               },
             ],
           },

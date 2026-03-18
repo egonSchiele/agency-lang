@@ -93,7 +93,7 @@ export class TypescriptPreprocessor {
     so `val` could be 0, 1, or 2, depending on how many of the increment() calls run!
     */
     // this.markFunctionsAsync();
-    // this.markFunctionCallsAsync();
+    this.markFunctionCallsAsync();
     this.removeUnusedLlmCalls();
     this.addPromiseAllCalls();
     this.filterExcludedNodeTypes();
@@ -328,7 +328,12 @@ export class TypescriptPreprocessor {
       );
 
       if (node.type === "functionCall") {
-        // Skip method calls on objects (e.g. planner.newPlan()) —
+        // run all function calls sync for now,
+        // since they may be modifying shared state
+        // and we don't have a good way to determine which ones are safe to run async.
+        node.async = false;
+        continue;
+        /*         // Skip method calls on objects (e.g. planner.newPlan()) —
         // these are part of a valueAccess chain and should not have
         // async/await applied to them individually.
         const isPartOfValueAccess = ancestors.some(
@@ -376,7 +381,7 @@ export class TypescriptPreprocessor {
         const isAsync = this.functionNameToAsync[node.functionName];
         if (isAsync) {
           node.async = true;
-        }
+        } */
       } else if (node.type === "prompt") {
         // prompts in message threads are sync to preserve message order
         // (unless in a parallel block where they run concurrently)

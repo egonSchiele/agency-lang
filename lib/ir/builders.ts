@@ -335,7 +335,11 @@ export const ts = {
     return { kind: "newExpr", callee, arguments: args };
   },
 
-  scopedVar(name: string, scope: TsScopedVar["scope"], moduleId?: string): TsScopedVar {
+  scopedVar(
+    name: string,
+    scope: TsScopedVar["scope"],
+    moduleId?: string,
+  ): TsScopedVar {
     return { kind: "scopedVar", name, scope, moduleId };
   },
 
@@ -508,17 +512,18 @@ export const ts = {
 
   /** GlobalStore operations */
   globalGet(moduleId: string, varName: string): TsCall {
-    return ts.call(
-      $(ts.runtime.ctx).prop("globals").prop("get").done(),
-      [ts.str(moduleId), ts.str(varName)],
-    );
+    return ts.call($(ts.runtime.ctx).prop("globals").prop("get").done(), [
+      ts.str(moduleId),
+      ts.str(varName),
+    ]);
   },
 
   globalSet(moduleId: string, varName: string, value: TsNode): TsCall {
-    return ts.call(
-      $(ts.runtime.ctx).prop("globals").prop("set").done(),
-      [ts.str(moduleId), ts.str(varName), value],
-    );
+    return ts.call($(ts.runtime.ctx).prop("globals").prop("set").done(), [
+      ts.str(moduleId),
+      ts.str(varName),
+      value,
+    ]);
   },
 
   /** Predefined runtime identifiers */
@@ -542,6 +547,12 @@ export const ts = {
   threads: {
     create(): TsCall {
       return ts.call(ts.prop(ts.runtime.threads, "create"));
+    },
+    createAndReturnThread(): TsCall {
+      return ts.call(ts.prop(ts.runtime.threads, "createAndReturnThread"));
+    },
+    createSubthread(): TsCall {
+      return ts.call(ts.prop(ts.runtime.threads, "createSubthread"));
     },
     get(id: TsNode): TsCall {
       return ts.call(ts.prop(ts.runtime.threads, "get"), [id]);

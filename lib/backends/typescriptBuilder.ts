@@ -1487,7 +1487,7 @@ export class TypeScriptBuilder {
     if (this.parallelThreadVars[variableName]) {
       threadExpr = ts.threads.get(ts.id(this.parallelThreadVars[variableName]));
     } else if (prompt.async) {
-      threadExpr = ts.new(ts.id("MessageThread"));
+      threadExpr = ts.threads.createAndReturnThread();
     } else {
       threadExpr = ts.threads.getOrCreateActive();
     }

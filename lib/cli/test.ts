@@ -598,6 +598,12 @@ export async function testTs(config: AgencyConfig, inputPaths: string[]) {
     }
   }
 
+  if (failures.length > 0) {
+    console.log("");
+    for (const dir of failures) {
+      console.log(color.red(` FAIL  ${dir}`));
+    }
+  }
   console.log(
     `\n${successes.length}/${successes.length + failures.length} TS tests passed`,
   );

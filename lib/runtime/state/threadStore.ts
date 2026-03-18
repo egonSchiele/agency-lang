@@ -26,6 +26,11 @@ export class ThreadStore {
     return id;
   }
 
+  createAndReturnThread(): MessageThread {
+    const id = this.create();
+    return this.get(id);
+  }
+
   // Create a subthread that inherits from the current active thread
   createSubthread(): MessageThreadID {
     const parentId = this.activeId();

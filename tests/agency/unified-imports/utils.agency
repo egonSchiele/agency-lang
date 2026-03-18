@@ -1,0 +1,8 @@
+def add(a: number, b: number) {
+  return a + b
+}
+
+node greet(name: string) {
+  result = llm("Say hello to ${name}! Keep it to one sentence.")
+  return result
+}

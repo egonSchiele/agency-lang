@@ -6,6 +6,8 @@ import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.j
 import { collectProgramInfo } from "@/programInfo.js";
 import { typeCheck, formatErrors } from "@/typeChecker.js";
 import { ImportStatement } from "@/types/importStatement.js";
+import { buildSymbolTable, type SymbolTable } from "@/symbolTable.js";
+import { resolveImports } from "@/preprocessors/importResolver.js";
 import { renderMermaidAscii } from "beautiful-mermaid";
 import { spawn } from "child_process";
 import * as fs from "fs";
@@ -117,7 +119,7 @@ export function compile(
   config: AgencyConfig,
   inputFile: string,
   _outputFile?: string,
-  options?: { ts?: boolean },
+  options?: { ts?: boolean; symbolTable?: SymbolTable },
 ): string | null {
   // Check if the input is a directory
   const stats = fs.statSync(inputFile);
@@ -151,11 +153,21 @@ export function compile(
 
   const contents = readFile(inputFile);
   const parsedProgram = parse(contents, config);
-  const info = collectProgramInfo(parsedProgram);
+
+  // Build symbol table once at the top level, reuse for recursive calls
+  const symbolTable =
+    options?.symbolTable ?? buildSymbolTable(absoluteInputFile, config);
+  // Resolve unified imports into specialized AST nodes
+  const resolvedProgram = resolveImports(
+    parsedProgram,
+    symbolTable,
+    absoluteInputFile,
+  );
+  const info = collectProgramInfo(resolvedProgram);
 
   // Run type checking if enabled via config
   if (config.typeCheck || config.typeCheckStrict) {
-    const { errors } = typeCheck(parsedProgram, config, info);
+    const { errors } = typeCheck(resolvedProgram, config, info);
     if (errors.length > 0) {
       if (config.typeCheckStrict) {
         console.error(formatErrors(errors));
@@ -166,7 +178,7 @@ export function compile(
     }
   }
 
-  const imports = getImports(parsedProgram);
+  const imports = getImports(resolvedProgram);
 
   const inputDir = path.dirname(absoluteInputFile);
   for (const importPath of imports) {
@@ -182,18 +194,18 @@ export function compile(
         );
       }
     }
-    compile(config, absPath, undefined, options);
+    compile(config, absPath, undefined, { ...options, symbolTable });
   }
 
   // Update the import path in the AST to reference the new .ts file
-  parsedProgram.nodes.forEach((node) => {
+  resolvedProgram.nodes.forEach((node) => {
     if (node.type === "importStatement") {
       node.modulePath = node.modulePath.replace(".agency", ext);
     }
   });
 
   const moduleId = path.relative(process.cwd(), absoluteInputFile);
-  const generatedCode = generateTypeScript(parsedProgram, config, info, moduleId);
+  const generatedCode = generateTypeScript(resolvedProgram, config, info, moduleId);
   if (options?.ts) {
     // TypeScript output — add @ts-nocheck so type errors don't block compilation
     fs.writeFileSync(outputFile, "// @ts-nocheck\n" + generatedCode, "utf-8");

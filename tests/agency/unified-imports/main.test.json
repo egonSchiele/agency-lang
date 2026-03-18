@@ -1,0 +1,27 @@
+{
+  "sourceFile": "main.agency",
+  "tests": [
+    {
+      "nodeName": "testFunctionImport",
+      "input": "",
+      "expectedOutput": "7",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "testNodeImport",
+      "input": "",
+      "expectedOutput": "\"Hello, Alice!\"",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "Should be a string greeting a person named Alice",
+          "desiredAccuracy": 80
+        }
+      ]
+    }
+  ]
+}

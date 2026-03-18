@@ -1247,6 +1247,13 @@ export class TypeScriptBuilder {
           }),
         );
       }
+      if (node.value.type === "prompt") {
+        const valueNode = this.processNode(node.value);
+        return ts.statements([
+          valueNode,
+          ts.nodeResult(ts.self(DEFAULT_PROMPT_NAME)),
+        ]);
+      }
       const valueNode = this.processNode(node.value);
       if (
         node.value.type === "functionCall" &&

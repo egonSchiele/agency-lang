@@ -1,0 +1,13 @@
+def seven(): number {
+  return llm("Return the number 7")
+}
+
+
+node typed() {
+  res: number = seven()
+  return res
+}
+
+node main() {
+  return llm("Return the number 7")
+}

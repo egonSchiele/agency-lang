@@ -132,6 +132,18 @@ Transforms the agency AST into the TypeScript IR, which is one step above simple
 ### Generate TypeScript code
 We use the `printTs()` function in `lib/ir/prettyPrint.ts` to convert the TypeScript IR AST into TypeScript code. See `lib/backends/typescriptGenerator.ts` and `lib/ir/prettyPrint.ts`.
 
+## SimpleMachine (graph execution)
+Agency programs compile to graphs executed by `SimpleMachine` (`lib/simplemachine/`). See `docs/dev/simplemachine.md` for details on nodes, edges, conditional transitions, and how compiled Agency code maps to graph operations.
+
+## Smoltalk (LLM client)
+All LLM interactions go through the [smoltalk](https://www.npmjs.com/package/smoltalk) library. See `docs/dev/smoltalk.md` for how Agency uses it for structured output requests, message construction, and token tracking.
+
+## Statelog (tracing)
+`StatelogClient` (`lib/statelogClient.ts`) provides optional execution tracing — graph topology, node lifecycle, LLM calls, and tool executions. See `docs/dev/statelog.md`.
+
+## Configuration
+`AgencyConfig` (`lib/config.ts`) defines all compiler and runtime options. See `docs/dev/config.md` for the full option reference and `docs/config.md` for basic usage.
+
 ## Language design and features
 See `DOCS.md` for the full language reference and design docs.
 

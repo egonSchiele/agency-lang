@@ -1,19 +1,61 @@
 import { safe lookupItem, saveItem, resetCounters } from "./tools.js"
 
+// --- Helper functions ---
+
+// lookupTool wraps the safe imported function lookupItem.
+// Since lookupItem is marked safe, calling it does not set __retryable = false,
+// so lookupTool remains retryable when used as a tool.
 def lookupTool(id: string) {
   return lookupItem(id)
 }
 
+// saveAndLookupTool calls saveItem (not marked safe), so __retryable is set
+// to false. If this tool throws after calling saveItem, it cannot be retried.
 def saveAndLookupTool(id: string) {
   saveItem(id)
   item = lookupItem(id)
   return item
 }
 
+// safeLookupHelper is an agency-defined function explicitly marked safe.
+// The safe keyword is an assertion by the developer that this function is
+// always safe to retry, regardless of what it calls internally.
+safe def safeLookupHelper(id: string) {
+  return lookupItem(id)
+}
+
+// safeWrapperTool calls safeLookupHelper, which is marked safe def.
+// Since safeLookupHelper is safe, this tool remains retryable — the LLM
+// can retry it if it throws an error.
+def safeWrapperTool(id: string) {
+  return safeLookupHelper(id)
+}
+
+// derivedSafeWrapperTool calls lookupTool, which is NOT marked safe def.
+// However, lookupTool only calls safe imported functions internally, so
+// its safety is derived at runtime: no unsafe functions are ever called
+// in the chain, so the tool remains retryable.
+def derivedSafeWrapperTool(id: string) {
+  return lookupTool(id)
+}
+
+// unsafeChainTool calls saveItem (unsafe), then calls lookupTool which
+// throws. Even though lookupTool itself is safe, saveItem is NOT. So if
+// lookupTool throws after saveItem is called, this call should NOT
+// be retried.
+def unsafeChainTool(id: string) {
+  saveItem(id)
+  return lookupTool(id)
+}
+
 def resetCountersTool() {
   return resetCounters()
 }
 
+// --- Test nodes ---
+
+// Test 1: A tool that directly calls a safe imported function.
+// The tool is retryable, so the LLM can retry on error.
 node testSafeRetry() {
   resetCountersTool()
   uses lookupTool
@@ -21,9 +63,42 @@ node testSafeRetry() {
   return result
 }
 
+// Test 2: A tool that calls an unsafe imported function (saveItem).
+// The tool is not retryable, so it is removed on error.
 node testUnsafeNoRetry() {
   resetCountersTool()
   uses saveAndLookupTool
   result = llm("Save and look up item 'xyz'. Use the saveAndLookupTool.")
+  return result
+}
+
+// Test 3: A tool that calls a safe def agency function (safeLookupHelper).
+// Because safeLookupHelper is marked safe, this tool remains retryable.
+// The LLM should retry on error and succeed on the second attempt.
+node testSafeDefRetry() {
+  resetCountersTool()
+  uses safeWrapperTool
+  result = llm("Look up item with id 'def'. Use the safeWrapperTool. If you get a temporary error, retry the same tool call.")
+  return result
+}
+
+// Test 4: A tool that calls an unmarked agency function (lookupTool) which
+// only calls safe imported functions. Safety is derived at runtime — since
+// no unsafe function is ever called, the tool stays retryable.
+node testDerivedSafeRetry() {
+  resetCountersTool()
+  uses derivedSafeWrapperTool
+  result = llm("Look up item with id 'ghi'. Use the derivedSafeWrapperTool. If you get a temporary error, retry the same tool call.")
+  return result
+}
+
+// Test 5: A tool that calls saveItem (unsafe), then calls lookupTool which
+// throws. The outer function's __retryable is false (due to saveItem), and
+// the catch block ANDs it with the inner ToolCallError's retryable, making
+// the whole tool non-retryable.
+node testUnsafeChainNoRetry() {
+  resetCountersTool()
+  uses unsafeChainTool
+  result = llm("Save and look up item 'jkl'. Use the unsafeChainTool.")
   return result
 }

@@ -13,5 +13,28 @@
       "saveAndLookupTool"
     ],
     "hasResult": true
+  },
+  "safeDefRetry": {
+    "toolCallCount": 2,
+    "toolCalls": [
+      "safeWrapperTool",
+      "safeWrapperTool"
+    ],
+    "succeeded": true
+  },
+  "derivedSafeRetry": {
+    "toolCallCount": 2,
+    "toolCalls": [
+      "derivedSafeWrapperTool",
+      "derivedSafeWrapperTool"
+    ],
+    "succeeded": true
+  },
+  "unsafeChainNoRetry": {
+    "toolCallCount": 1,
+    "toolCalls": [
+      "unsafeChainTool"
+    ],
+    "hasResult": true
   }
 }

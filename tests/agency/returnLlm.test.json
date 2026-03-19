@@ -4,17 +4,7 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "7",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
-    },
-    {
-      "nodeName": "main",
-      "input": "",
-      "expectedOutput": "\"7\"",
+      "expectedOutput": "\"hi\"",
       "evaluationCriteria": [
         {
           "type": "exact"

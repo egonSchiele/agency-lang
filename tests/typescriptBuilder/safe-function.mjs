@@ -1,3 +1,4 @@
+import { lookupItem, saveItem } from "./tools.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -106,8 +107,146 @@ export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, 
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("simple.agency")
+  __ctx.globals.markInitialized("safe-function.agency")
 }
+export const __safeLookupTool = {
+  name: "safeLookup",
+  description: `No description provided.`,
+  schema: z.object({"id": z.string(), })
+};
+export const __safeLookupToolParams = ["id"];
+export const __unsafeSaveTool = {
+  name: "unsafeSave",
+  description: `No description provided.`,
+  schema: z.object({"id": z.string(), })
+};
+export const __unsafeSaveToolParams = ["id"];
+
+
+export async function safeLookup(id: string, __state: InternalFunctionState | undefined = undefined) {
+  const __setupData = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+  if (!__ctx.globals.isInitialized("safe-function.agency")) {
+    __initializeGlobals(__ctx)
+  }
+  let __funcStartTime: number = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "safeLookup",
+      args: {
+        id: id
+      },
+      isBuiltin: false
+    }
+  })
+  __stack.args["id"] = id;
+  __self.__retryable = __self.__retryable ?? true;
+  try {
+    if (__step <= 0) {
+
+      __stack.step++;
+    }
+    if (__step <= 1) {
+      return await lookupItem(__stack.args.id)
+      
+      __stack.step++;
+    }
+  } catch (__error) {
+    if (__error instanceof ToolCallError) {
+      __error.retryable = __error.retryable && __self.__retryable
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    __ctx.stateStack.pop()
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "safeLookup",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
+}
+
+
+export async function unsafeSave(id: string, __state: InternalFunctionState | undefined = undefined) {
+  const __setupData = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+  if (!__ctx.globals.isInitialized("safe-function.agency")) {
+    __initializeGlobals(__ctx)
+  }
+  let __funcStartTime: number = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "unsafeSave",
+      args: {
+        id: id
+      },
+      isBuiltin: false
+    }
+  })
+  __stack.args["id"] = id;
+  __self.__retryable = __self.__retryable ?? true;
+  try {
+    if (__step <= 0) {
+
+      __stack.step++;
+    }
+    if (__step <= 1) {
+      __self.__retryable = false;
+      await saveItem(__stack.args.id)
+      
+      __stack.step++;
+    }
+    if (__step <= 2) {
+      return await lookupItem(__stack.args.id)
+      
+      __stack.step++;
+    }
+  } catch (__error) {
+    if (__error instanceof ToolCallError) {
+      __error.retryable = __error.retryable && __self.__retryable
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    __ctx.stateStack.pop()
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "unsafeSave",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
+}
+
+
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -128,18 +267,27 @@ const __graph = __ctx.graph;
   })
   if (__step <= 0) {
     
-    
     __stack.step++;
   }
   if (__step <= 1) {
-    async function _greeting(__metadata) {
+    async function _result(__metadata) {
       __self.__removedTools = __self.__removedTools || [];
       return runPrompt({
         ctx: __ctx,
-        prompt: `say hello`,
+        prompt: `Use the tools`,
         messages: __metadata?.messages || new MessageThread(),
-        tools: undefined,
-        toolHandlers: [],
+        tools: [__safeLookupTool, __unsafeSaveTool],
+        toolHandlers: [{
+          name: "safeLookup",
+          params: __safeLookupToolParams,
+          execute: safeLookup,
+          isBuiltin: false
+        }, {
+          name: "unsafeSave",
+          params: __unsafeSaveToolParams,
+          execute: unsafeSave,
+          isBuiltin: false
+        }],
         clientConfig: {},
         stream: false,
         maxToolCallRounds: 10,
@@ -147,19 +295,24 @@ const __graph = __ctx.graph;
         removedTools: __self.__removedTools
       });
     }
-__self.greeting = _greeting({
-      messages: __threads.createAndReturnThread()
+__self.result = await _result({
+      messages: __threads.getOrCreateActive()
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__self.result)) {
+      return {
+        messages: __threads,
+        data: __self.result
+      };
+    }
     
     __stack.step++;
   }
   if (__step <= 2) {
-    [__self.greeting] = await Promise.all([__self.greeting]);
-    __stack.step++;
-  }
-  if (__step <= 3) {
-    __self.__retryable = false;
-    await print(__stack.locals.greeting)
+    return {
+      messages: __threads,
+      data: __stack.locals.result
+    };
     
     __stack.step++;
   }

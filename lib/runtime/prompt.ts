@@ -193,6 +193,21 @@ async function executeToolCalls({
       continue;
     }
 
+    // Without this, if the LLM makes multiple tool calls to the same tool in the same message,
+    // we keep calling the tool even though it's been removed
+    if (removedTools.includes(handler.name)) {
+      messages.push(
+        smoltalk.toolMessage(
+          `Error: Handler for tool call ${handler.name} has been removed already due to previous errors, and will not be executed.`,
+          {
+            tool_call_id: toolCall.id,
+            name: toolCall.name,
+          },
+        ),
+      );
+      continue;
+    }
+
     const params = handler.params.map(
       (param: string) => toolCall.arguments[param],
     );
@@ -246,8 +261,8 @@ async function executeToolCalls({
           error instanceof ToolCallError ? error.retryable : false;
         const errorMessage =
           error instanceof Error ? error.message : String(error);
-
-        toolErrorCounts[handler.name] = (toolErrorCounts[handler.name] || 0) + 1;
+        toolErrorCounts[handler.name] =
+          (toolErrorCounts[handler.name] || 0) + 1;
 
         if (retryable && toolErrorCounts[handler.name] < 5) {
           messages.push(
@@ -358,7 +373,6 @@ export async function runPrompt(args: {
     (h) => !removedTools.includes(h.name),
   );
   const clientConfig = ctx.getSmoltalkConfig(args.clientConfig || {});
-  // console.log(color.magenta(JSON.stringify(clientConfig, null, 2)) + "\n");
   /* in order, either:
   1. restore messages from interruptData if present (resuming after an interrupt)
   2. use messages passed in as argument (add onto message thread)
@@ -426,12 +440,8 @@ export async function runPrompt(args: {
     messages = executeToolCallsResult.messages;
 
     // Filter out tools that failed after side effects
-    if (removedTools.length > 0) {
-      tools = tools.filter((t) => !removedTools.includes(t.name));
-      toolHandlers = toolHandlers.filter(
-        (h) => !removedTools.includes(h.name),
-      );
-    }
+    tools = tools.filter((t) => !removedTools.includes(t.name));
+    toolHandlers = toolHandlers.filter((h) => !removedTools.includes(h.name));
 
     if (executeToolCallsResult.isInterrupt) {
       const { interrupt } = executeToolCallsResult;

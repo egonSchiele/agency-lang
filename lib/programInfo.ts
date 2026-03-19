@@ -25,6 +25,8 @@ export type ProgramInfo = {
   importedNodes: ImportNodeStatement[];
   importedTools: ImportToolStatement[];
   importStatements: ImportStatement[];
+  safeFunctions: Record<string, boolean>;
+  importedFunctions: Record<string, boolean>;
 };
 
 export function scopeKey(scope: Scope): string {
@@ -73,6 +75,8 @@ export function collectProgramInfo(program: AgencyProgram): ProgramInfo {
     importedNodes: [],
     importedTools: [],
     importStatements: [],
+    safeFunctions: {},
+    importedFunctions: {},
   };
 
   // Top-level pass: collect functions, graph nodes, imports
@@ -80,6 +84,9 @@ export function collectProgramInfo(program: AgencyProgram): ProgramInfo {
     switch (node.type) {
       case "function":
         info.functionDefinitions[node.functionName] = node;
+        if (node.safe) {
+          info.safeFunctions[node.functionName] = true;
+        }
         break;
       case "graphNode":
         info.graphNodes.push(node);
@@ -92,6 +99,16 @@ export function collectProgramInfo(program: AgencyProgram): ProgramInfo {
         break;
       case "importStatement":
         info.importStatements.push(node);
+        for (const nameType of node.importedNames) {
+          if (nameType.type === "namedImport") {
+            for (const name of nameType.importedNames) {
+              info.importedFunctions[name] = true;
+            }
+            for (const safeName of nameType.safeNames) {
+              info.safeFunctions[safeName] = true;
+            }
+          }
+        }
         break;
     }
   }

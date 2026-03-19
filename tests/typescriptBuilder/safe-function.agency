@@ -1,0 +1,16 @@
+import { safe lookupItem, saveItem } from "./tools.js"
+
+safe def safeLookup(id: string) {
+  return lookupItem(id)
+}
+
+def unsafeSave(id: string) {
+  saveItem(id)
+  return lookupItem(id)
+}
+
+node main() {
+  uses safeLookup, unsafeSave
+  result = llm("Use the tools")
+  return result
+}

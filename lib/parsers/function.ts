@@ -472,8 +472,8 @@ export const functionReturnTypeParser: Parser<VariableType> = trace(
   ),
 );
 
-export const _functionParser: Parser<FunctionDefinition> = trace(
-  "_functionParser",
+const _baseFunctionParser: Parser<FunctionDefinition> = trace(
+  "_baseFunctionParser",
   seqC(
     set("type", "function"),
     str("def"),
@@ -509,39 +509,35 @@ export const _functionParser: Parser<FunctionDefinition> = trace(
   ),
 );
 
-export const asyncFunctionParser: Parser<FunctionDefinition> = (
-  input: string,
-) => {
-  const parser = trace(
-    "asyncFunctionParser",
-    seqC(str("async"), spaces, captureCaptures(_functionParser)),
-  );
-  const mappedParser = map(parser, (result) => ({
-    ...result,
-    async: true,
-  }));
-  return mappedParser(input);
-};
-
-export const syncFunctionParser: Parser<FunctionDefinition> = (
-  input: string,
-) => {
-  const parser = trace(
-    "syncFunctionParser",
-    seqC(str("sync"), spaces, captureCaptures(_functionParser)),
-  );
-  const mappedParser = map(parser, (result) => ({
-    ...result,
-    async: false,
-  }));
-  return mappedParser(input);
-};
-
-export const functionParser: Parser<FunctionDefinition> = or(
-  asyncFunctionParser,
-  syncFunctionParser,
-  _functionParser, // default to async if no keyword is provided
+const safeKeywordParser: Parser<boolean> = or(
+  map(seqC(str("safe"), spaces), () => true),
+  succeed(false),
 );
+
+const asyncSyncKeywordParser: Parser<boolean | undefined> = or(
+  map(seqC(str("async"), spaces), () => true),
+  map(seqC(str("sync"), spaces), () => false),
+  succeed(undefined),
+);
+
+export const functionParser: Parser<FunctionDefinition> = (input: string) => {
+  const safeResult = safeKeywordParser(input);
+  if (!safeResult.success) return safeResult;
+  const isSafe = safeResult.result;
+
+  const asyncResult = asyncSyncKeywordParser(safeResult.rest);
+  if (!asyncResult.success) return asyncResult;
+  const isAsync = asyncResult.result;
+
+  const baseResult = _baseFunctionParser(asyncResult.rest);
+  if (!baseResult.success) return baseResult;
+
+  const result = { ...baseResult.result };
+  if (isSafe) result.safe = true;
+  if (isAsync !== undefined) result.async = isAsync;
+
+  return { ...baseResult, result };
+};
 
 const visibilityParser: Parser<Visibility> = or(
   str("public" as const),

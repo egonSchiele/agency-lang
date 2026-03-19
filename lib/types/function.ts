@@ -22,6 +22,7 @@ export type FunctionDefinition = {
   returnType?: VariableType | null;
   docString?: DocString;
   async?: boolean;
+  safe?: boolean;
 };
 
 export type FunctionCall = {

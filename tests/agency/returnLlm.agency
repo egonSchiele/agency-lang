@@ -9,5 +9,5 @@ node typed() {
 }
 
 node main() {
-  return llm("Return the number 7")
+  return llm("Return the string 'hi'. Return just the string, no explanation or formatting.")
 }

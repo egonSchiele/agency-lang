@@ -70,7 +70,7 @@ import {
   Operator,
   PRECEDENCE,
 } from "@/types/binop.js";
-import { expressionToString, getBaseVarName } from "@/utils/node.js";
+import { expressionToString, getBaseVarName, walkNodesArray } from "@/utils/node.js";
 
 import type {
   TsNode,
@@ -117,9 +117,6 @@ export class TypeScriptBuilder {
   private parallelThreadVars: Record<string, string> = {};
   private loopVars: string[] = [];
 
-  // Function tracking for safe functions
-  private safeFunctions: Record<string, boolean> = {};
-  private importedFunctions: Record<string, boolean> = {};
 
   private programInfo: ProgramInfo;
   private moduleId: string;
@@ -254,20 +251,17 @@ export class TypeScriptBuilder {
 
   private isImpureImportedFunction(functionName: string): boolean {
     return (
-      !!this.importedFunctions[functionName] &&
-      !this.safeFunctions[functionName]
+      !!this.programInfo.importedFunctions[functionName] &&
+      !this.programInfo.safeFunctions[functionName]
     );
   }
 
   private containsImpureCall(node: AgencyNode): boolean {
-    if (node.type === "functionCall") {
-      if (this.isImpureImportedFunction(node.functionName)) {
-        return true;
-      }
-    }
-    if (node.type === "assignment" && node.value) {
-      if (this.containsImpureCall(node.value as AgencyNode)) {
-        return true;
+    for (const { node: subNode } of walkNodesArray([node])) {
+      if (subNode.type === "functionCall") {
+        const name = subNode.functionName;
+        if (this.isImpureImportedFunction(name)) return true;
+        if (BUILTIN_FUNCTIONS[name]) return true;
       }
     }
     return false;
@@ -761,20 +755,6 @@ export class TypeScriptBuilder {
   }
 
   private processImportStatement(node: ImportStatement): TsNode {
-    // Track safe and imported functions
-    for (const nameType of node.importedNames) {
-      if (nameType.type === "namedImport") {
-        for (const name of nameType.importedNames) {
-          this.importedFunctions[name] = true;
-        }
-        if (nameType.safeNames) {
-          for (const safeName of nameType.safeNames) {
-            this.safeFunctions[safeName] = true;
-          }
-        }
-      }
-    }
-
     const from = node.modulePath.replace(/\.agency$/, ".js");
     const imports = node.importedNames.map((nameType) => {
       switch (nameType.type) {
@@ -894,7 +874,7 @@ export class TypeScriptBuilder {
     const { functionName, body, parameters } = node;
     const args = parameters.map((p) => p.name);
 
-    const bodyCode = this.processBodyAsParts(body);
+    const bodyCode = this.processBodyAsParts(body, { isInSafeFunction: !!node.safe });
     this.endScope();
 
     // Build function params: typed args + __state
@@ -976,7 +956,10 @@ export class TypeScriptBuilder {
         ts.statements([
           ts.if(
             ts.raw("__error instanceof ToolCallError"),
-            ts.throw("__error"),
+            ts.statements([
+              ts.raw("__error.retryable = __error.retryable && __self.__retryable"),
+              ts.throw("__error"),
+            ]),
           ),
           ts.throw(
             "new ToolCallError(__error, { retryable: __self.__retryable })",
@@ -1785,13 +1768,16 @@ export class TypeScriptBuilder {
     return ts.raw(`{\n${stmts.map((s) => this.str(s)).join("\n")}\n}`);
   }
 
-  private processBodyAsParts(body: AgencyNode[]): TsStepBlock[] {
+  private processBodyAsParts(
+    body: AgencyNode[],
+    opts: { isInSafeFunction?: boolean } = {},
+  ): TsStepBlock[] {
     const parts: TsNode[][] = [[]];
     for (const stmt of body) {
       if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type)) {
         parts.push([]);
       }
-      if (this.containsImpureCall(stmt)) {
+      if (!opts.isInSafeFunction && this.containsImpureCall(stmt)) {
         parts[parts.length - 1].push(
           ts.assign(ts.self("__retryable"), ts.bool(false)),
         );

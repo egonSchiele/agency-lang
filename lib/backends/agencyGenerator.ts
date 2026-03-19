@@ -505,6 +505,7 @@ export class AgencyGenerator {
       ? ": " + variableTypeToString(node.returnType, this.typeAliases)
       : "";
 
+    let safePrefix = node.safe ? "safe " : "";
     let asyncPrefix = "";
     if (node.async === true) {
       asyncPrefix = "async ";
@@ -513,7 +514,7 @@ export class AgencyGenerator {
     }
 
     let result = this.indentStr(
-      `${asyncPrefix}def ${functionName}(${params})${returnTypeStr} {\n`,
+      `${safePrefix}${asyncPrefix}def ${functionName}(${params})${returnTypeStr} {\n`,
     );
 
     this.increaseIndent();

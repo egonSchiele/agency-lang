@@ -1,8 +1,8 @@
 import {
   AgencyConfig,
-  BUILTIN_FUNCTIONS,
-  BUILTIN_FUNCTIONS_TO_ASYNC,
+  BUILTIN_FUNCTIONS
 } from "@/config.js";
+import type { ProgramInfo } from "@/programInfo.js";
 import {
   AgencyNode,
   AgencyProgram,
@@ -10,14 +10,12 @@ import {
   FunctionCall,
   FunctionDefinition,
   getImportedNames,
-  globalScope,
   IfElse,
   PromptLiteral,
   RawCode,
-  Scope,
   ScopeType,
   TimeBlock,
-  WhileLoop,
+  WhileLoop
 } from "@/types.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
@@ -26,8 +24,6 @@ import {
   getAllVariablesInBodyArray,
   walkNodesArray,
 } from "@/utils/node.js";
-import type { ProgramInfo } from "@/programInfo.js";
-import { color } from "@/utils/termcolors.js";
 
 export class TypescriptPreprocessor {
   public program: AgencyProgram;
@@ -127,8 +123,8 @@ export class TypescriptPreprocessor {
       if (node.type === "prompt") {
         const hasSyncTools = node.tools
           ? node.tools.toolNames.some(
-              (t) => this.functionNameToAsync[t] === false,
-            )
+            (t) => this.functionNameToAsync[t] === false,
+          )
           : false;
         if (!hasSyncTools) {
           /* skip this LLM call since it isn't using any tools that have side effects,
@@ -145,8 +141,8 @@ export class TypescriptPreprocessor {
       if (node.type === "assignment" && node.value.type === "prompt") {
         const hasSyncTools = node.value.tools
           ? node.value.tools.toolNames.some(
-              (t) => this.functionNameToAsync[t] === false,
-            )
+            (t) => this.functionNameToAsync[t] === false,
+          )
           : false;
         if (hasSyncTools) {
           // has sync tools, which means they have a side effect,
@@ -404,14 +400,14 @@ export class TypescriptPreprocessor {
         // check if any of its tools will throw an interrupt
         const toolThrowsInterrupt = node.tools
           ? node.tools?.toolNames.some((toolName) => {
-              /*
-            If we don't know whether this function uses an interrupt,
-            that's probably because it was imported and we don't have this information.
-            We need to assume it throws an interrupt. */
-              const usesInterrupt =
-                this.functionNameToUsesInterrupt[toolName] ?? true;
-              return usesInterrupt;
-            })
+            /*
+          If we don't know whether this function uses an interrupt,
+          that's probably because it was imported and we don't have this information.
+          We need to assume it throws an interrupt. */
+            const usesInterrupt =
+              this.functionNameToUsesInterrupt[toolName] ?? true;
+            return usesInterrupt;
+          })
           : false;
         node.async = !toolThrowsInterrupt;
       }

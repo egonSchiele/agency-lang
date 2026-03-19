@@ -15,6 +15,7 @@ import {
   VariableType,
 } from "../types.js";
 
+import { formatTypeHint } from "@/cli/util.js";
 import {
   BUILTIN_FUNCTIONS,
   BUILTIN_TOOLS,
@@ -23,17 +24,28 @@ import {
 } from "@/config.js";
 import { SpecialVar } from "@/types/specialVar.js";
 import { TimeBlock } from "@/types/timeBlock.js";
-import { formatTypeHint } from "@/cli/util.js";
+import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
 import * as renderInterruptReturn from "../templates/backends/typescriptGenerator/interruptReturn.js";
-import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 
+import { AgencyConfig } from "@/config.js";
+import {
+  BinOpArgument,
+  BinOpExpression,
+  Operator,
+  PRECEDENCE,
+} from "@/types/binop.js";
+import { MessageThread } from "@/types/messageThread.js";
+import { Skill } from "@/types/skill.js";
+import { expressionToString, getBaseVarName, walkNodesArray } from "@/utils/node.js";
+import path from "path";
 import { AccessChainElement, ValueAccess } from "../types/access.js";
 import {
   AgencyArray,
   AgencyObject,
   AgencyObjectKV,
 } from "../types/dataStructures.js";
+import { ForLoop } from "../types/forLoop.js";
 import {
   FunctionCall,
   FunctionDefinition,
@@ -49,9 +61,8 @@ import {
 import { MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
-import { ForLoop } from "../types/forLoop.js";
 import { WhileLoop } from "../types/whileLoop.js";
-import { escape, uniq, mergeDeep } from "../utils.js";
+import { escape, mergeDeep, uniq } from "../utils.js";
 import {
   generateBuiltinHelpers,
   mapFunctionName,
@@ -60,33 +71,21 @@ import {
   DEFAULT_SCHEMA,
   mapTypeToZodSchema,
 } from "./typescriptGenerator/typeToZodSchema.js";
-import { AgencyConfig } from "@/config.js";
-import { MessageThread } from "@/types/messageThread.js";
-import { Skill } from "@/types/skill.js";
-import path, { parse } from "path";
-import {
-  BinOpArgument,
-  BinOpExpression,
-  Operator,
-  PRECEDENCE,
-} from "@/types/binop.js";
-import { expressionToString, getBaseVarName, walkNodesArray } from "@/utils/node.js";
 
+import { $, ts } from "../ir/builders.js";
+import { printTs } from "../ir/prettyPrint.js";
 import type {
+  TsElseIf,
   TsNode,
   TsObjectEntry,
-  TsElseIf,
   TsParam,
   TsStepBlock,
 } from "../ir/tsIR.js";
-import { ts, $ } from "../ir/builders.js";
-import { printTs } from "../ir/prettyPrint.js";
 import type { ProgramInfo } from "../programInfo.js";
 import {
-  scopeKey,
-  lookupType,
   getVisibleTypes,
-  GLOBAL_SCOPE_KEY,
+  lookupType,
+  scopeKey
 } from "../programInfo.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
@@ -1008,9 +1007,9 @@ export class TypeScriptBuilder {
       const nodeContext = scope.type === "node";
       const returnBody = nodeContext
         ? ts.obj([
-            ts.setSpread(ts.runtime.state),
-            ts.set("data", ts.id(tempVar)),
-          ])
+          ts.setSpread(ts.runtime.state),
+          ts.set("data", ts.id(tempVar)),
+        ])
         : ts.obj({ data: ts.id(tempVar) });
       return ts.statements([
         ts.constDecl(tempVar, callNode),
@@ -1420,9 +1419,9 @@ export class TypeScriptBuilder {
   }): TsNode {
     const _variableType = variableType ||
       this.getTypeHint(variableName) || {
-        type: "primitiveType" as const,
-        value: "string",
-      };
+      type: "primitiveType" as const,
+      value: "string",
+    };
 
     const zodSchema = mapTypeToZodSchema(
       _variableType,
@@ -1563,9 +1562,9 @@ export class TypeScriptBuilder {
       const isNodeContext = this.getCurrentScope().type === "node";
       const returnExpr = isNodeContext
         ? ts.nodeReturn({
-            messages: ts.runtime.threads,
-            data: varRef,
-          })
+          messages: ts.runtime.threads,
+          data: varRef,
+        })
         : ts.return(varRef);
       stmts.push(
         ts.if($(ts.id("isInterrupt")).call([varRef]).done(), returnExpr),

@@ -5,11 +5,10 @@ import type {
   Scope,
   VariableType,
 } from "./types.js";
-import { functionScope, nodeScope } from "./types.js";
 import type {
   ImportNodeStatement,
-  ImportToolStatement,
   ImportStatement,
+  ImportToolStatement,
 } from "./types/importStatement.js";
 import { walkNodes } from "./utils/node.js";
 

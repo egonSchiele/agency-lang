@@ -51,15 +51,15 @@ pnpm test:run           # Run vitest once
 pnpm run agency <file>  # Compile and run an .agency file
 pnpm run compile <file> # Compile .agency to .ts
 pnpm run ast <file>     # Parse .agency and print AST as JSON
-pnpm run fmt <file>     # Format .agency file
-pnpm run eval           # Run evaluation on a node
+pnpm run preprocess <file>     # Parse .agency, run preprocessor, and print the resulting AST as JSON
+pnpm run fmt <file>     # Format .agency file using the AgencyGenerator
 make all                # Run templates + build
 make fixtures           # Rebuild all integration test fixtures
 ```
 
 ## Templates (typestache)
 
-Mustache templates in `lib/templates/` are compiled to TypeScript files using [typestache](https://www.npmjs.com/package/typestache). Run `pnpm run templates` to recompile them. The generated `.ts` files export a default render function you can import and call to produce a string from template data. If you create or modify a `.mustache` file, you must run `pnpm run templates` before building.
+Mustache templates in `lib/templates/` are compiled to TypeScript files using [typestache](https://www.npmjs.com/package/typestache). Run `pnpm run templates` to recompile them. The generated `.ts` files export a default render function you can import and call to produce a string from template data. If you create or modify a `.mustache` file, you must run `pnpm run templates` before building. Do not modify the TypeScript files directly; only modify the Mustache files.
 
 ## Parsers
 
@@ -73,38 +73,28 @@ The TypeScript IR is a structured representation of generated TypeScript code. I
 
 ### Files
 
-- **`tsIR.ts`** — Defines ~28 node types using `kind` as the discriminant (not `type`, to avoid collision with Agency AST). The `TsNode` union includes: `TsRaw` (verbatim string escape hatch), `TsStatements`, `TsImport`, `TsVarDecl`, `TsAssign`, `TsFunctionDecl`, `TsArrowFn`, `TsCall`, `TsAwait`, `TsReturn`, `TsObjectLiteral`, `TsArrayLiteral`, `TsTemplateLit`, `TsIf`, `TsFor`, `TsWhile`, `TsSwitch`, `TsTryCatch`, `TsBinOp`, `TsPropertyAccess`, `TsSpread`, `TsIdentifier`, `TsStringLiteral`, `TsNumericLiteral`, `TsBooleanLiteral`, `TsComment`, `TsExport`, `TsNewExpr`, and `TsScopedVar`.
+- **`tsIR.ts`** — Defines ~28 node types using `kind` as the discriminant (not `type`, to avoid collision with Agency AST).
 - **`builders.ts`** — Exports a `ts` namespace object with short factory functions: `ts.raw(code)`, `ts.call(callee, args)`, `ts.id(name)`, `ts.obj(entries)`, `ts.arr(items)`, `ts.scopedVar(name, scope)`, etc.
-- **`prettyPrint.ts`** — Exports `printTs(node: TsNode, indent?: number): string`. Recursive switch on `node.kind` with 2-space indentation. `TsRaw` emits its string verbatim. `TsScopedVar` is resolved to runtime-specific prefixes here (`"global"` → `__globalCtx.stateStack.globals`, `"function"`/`"node"` → `__stack.locals`, `"args"` → `__stack.args`, `"imported"` → no prefix).
+- **`prettyPrint.ts`** — Exports `printTs(node: TsNode, indent?: number): string`. This function recursively prints a `TsNode` tree to a TypeScript code string. It handles indentation and formatting based on node types.
 
 ### Key design decisions
 
-- `TsScopedVar` carries scope metadata (`"global"`, `"function"`, `"node"`, `"args"`, `"imported"`). The builder produces these for variable references, and `printTs` resolves them to runtime prefixes. This keeps the builder decoupled from runtime string conventions.
+- `TsScopedVar` carries scope metadata (`"global"`, `"function"`, `"node"`, `"args"`, `"imported"`, `"shared"`). The builder produces these for variable references, and `printTs` resolves them to runtime prefixes. This keeps the builder decoupled from runtime string conventions.
 - `TsRaw` is the escape hatch — any string can be wrapped in it. This is used for template-rendered code that hasn't been ported to structured IR yet.
 
 ## Code Generation
 
-There are two compilation paths from Agency AST to TypeScript:
+The entry point is `generateTypeScript(program)` exported from `typescriptGenerator.ts`, and it uses the **TypeScriptBuilder** (`lib/backends/typescriptBuilder.ts`). Takes a preprocessed Agency AST and produces a `TsNode` tree.
 
-### Legacy path: BaseGenerator → TypeScriptGenerator
+## The full pipeline
+The full pipeline is: `parse → buildSymbolTable → collectProgramInfo → TypescriptPreprocessor → TypeScriptBuilder.build() → printTs()`.
 
-```
-BaseGenerator
-  └── TypeScriptGenerator
-```
-
-- **BaseGenerator** (`lib/backends/baseGenerator.ts`): Contains the `processNode` switch that dispatches to handler methods for each AST node type.
-- **TypeScriptGenerator** (`lib/backends/typescriptGenerator.ts`): Implements all code generation logic for producing TypeScript output, including graph-specific code generation (graph nodes, edges, state machines).
-
-The entry point is `generateTypeScript(program)` exported from `typescriptGenerator.ts`.
-
-### New path: TypeScriptBuilder → printTs
-
-- **TypeScriptBuilder** (`lib/backends/typescriptBuilder.ts`): Standalone class (no inheritance from BaseGenerator). Takes a preprocessed Agency AST and produces a `TsNode` tree. The full pipeline is: `parse → TypescriptPreprocessor → TypeScriptBuilder.build() → printTs()`.
-
-The builder has its own `processNode` dispatch switch and duplicates the state management from BaseGenerator/TypeScriptGenerator (scope stack, type hints, graph topology, etc.). Each handler method returns `TsNode`. Methods that are straightforward to port return proper IR nodes (e.g., `TsArrayLiteral`, `TsScopedVar`, `TsTemplateLit`). Template-heavy methods wrap their output in `TsRaw` for now.
-
-The builder uses the same Mustache templates as TypeScriptGenerator for complex nodes (prompts, function definitions, graph nodes, etc.). When a raw method needs a sub-expression result as a string, it calls `printTs(this.processNode(subExpr))`.
+- Parse - parses the code into an AST
+- buildSymbolTable - collects symbol tables from across all the files that are going to be compiled. For each symbol, it stores its type: is it a node, a function, a type, etc. This is then used in the preprocessor to transform import statements into import statements of a specific type; for example, if a node is being imported, an import statement will be transformed into an import node statement. See lib/symbolTable.ts for more.
+- collectProgramInfo - Collects all sorts of other program info: information about function definitions, type aliases, graph nodes, imports, etc. See the lib/programInfo.ts class for full information.
+- preprocessor - Runs several transforms on the agency AST before it is sent to the builder. The preprocessor marks certain LLM calls as asynchronous, removes unused LLM code, and resolves variable scopes; that is, for each variable used, it identifies whether it is a global variable, local variable, imported variable, shared variable, etc. See lib/preprocessors/typescriptPreprocessor.ts.
+- build - Transforms the agency AST into the TypeScript IR, which is one step above simple strings of TypeScript code. The TypeScript IR was introduced because it was a useful way to modify and transform TypeScript code. Without the TypeScript IR, we'd be running modifications on strings directly, which is extremely buggy and error-prone. See lib/backends/typescriptBuilder.ts.
+- Generate TypeScript code - We use the `printTs()` function in lib/ir/prettyPrint.ts to convert the TypeScript IR AST into TypeScript code. See lib/backends/typescriptGenerator.ts and lib/ir/prettyPrint.ts.
 
 ## Testing
 
@@ -119,7 +109,7 @@ Integration tests use fixture pairs in the `tests/` directory. Each fixture is a
 - `tests/typescriptGenerator/` — fixtures for the TypeScript generator (runner: `lib/backends/typescriptGenerator.integration.test.ts`)
 - `tests/typescriptBuilder/` — fixtures for the TypeScript builder (runner: `lib/backends/typescriptBuilder.integration.test.ts`)
 
-To add a new integration test, create a `.agency` file in the appropriate directory and run `make fixtures` to generate the corresponding `.mjs` file. The regeneration script (`scripts/regenerate-fixtures.ts`) handles both generator and builder fixtures.
+To add a new integration test, create a `.agency` file in the appropriate directory and run `make fixtures` to generate the corresponding `.mjs` file. The regeneration script (`scripts/regenerate-fixtures.ts`) handles both generator and builder fixtures. You shouldn't need to run this script directly; simply run `make fixtures` instead.
 
 ### Agency integration tests
 This is a new way to write integration tests. There are a bunch of `.agency` test files in the `tests/agency` directory. These files are run with a test harness, and the output is compared using either exact match or an LLM as a judge. You can check out some of these `.agency` files to see what they look like. Also check out some of the `.test.json` files to see what the expected output and evaluation criteria look like.

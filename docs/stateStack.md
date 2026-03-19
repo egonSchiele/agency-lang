@@ -4,8 +4,11 @@
 - `this.stack`: an array containing the state of every frame in the stack.
   For each frame, it tracks the local variables, the arguments to the function
   or node, and what line the execution is currently on.
-- `this.globals`: keeps track of any global variables. 
 - `this.other`: this is where we store interrupt data. This could be better named.
+- `this.nodesTraversed`: tracks which graph nodes have been visited during execution, used for resuming from the correct node after an interrupt.
+- `this.deserializeStackLength`: tracks how many frames still need to be restored during deserialization (see below).
+
+Note: global variables are now stored in the `GlobalStore` class (`lib/runtime/state/globalStore.ts`), not in the `StateStack`.
 
 ## More on global state
 Note that since every agency file has its own state stack.

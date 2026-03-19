@@ -51,7 +51,7 @@ Primitive types:
 - number
 - boolean
 - null
-- undefined
+- undefined (treated as null)
 
 Union types. Example:
 
@@ -95,7 +95,7 @@ Here is an example of a function in Agency:
 
 ```ts
 def greet(name: string): string {
-  greeting = `Greet the person named ${name}`
+  greeting = llm("Greet the person named ${name}")
   return greeting
 }
 ```
@@ -104,7 +104,7 @@ All functions in Agency can automatically be used as tools. For example, you can
 
 ```ts
 use greet
-response: string = `Use the greet function to greet Alice`
+response: string = llm(`Use the greet function to greet Alice`)
 ```
 
 The `use greet` line tells Agency to make the `greet` function available as a tool in the LLM prompt.
@@ -163,30 +163,19 @@ When an agency file gets transpiled to TypeScript, all of the nodes and function
 
 ```ts
 // This imports the ingredients node
-import { ingredients } from "./ingredients.agency"
+// ingredients.js is the transpiled output of ingredients.agency
+import { ingredients } from "./ingredients.js"
 ```
 
 and then simply call them as regular functions.
 
-If you're importing into another agency file, you should use `import node` and `import tool` statements.
-
-For example, to import nodes from another agency file:
+If you're importing into another agency file, use `.agency` as the extension instead:
 
 ```ts
-import node { ingredients, steps } from "./recipe.agency"
+import { ingredients, steps } from "./recipe.agency"
 ```
 
-If you use `import` instead of `import node`, the node won't get merged into the graph, which may be desirable if you want that node to be in a separate graph.
-
-To import functions (tools) from another agency file:
-
-```ts
-import tool { fetchRecipe } from "./recipe.agency"
-```
-
-If you use `import` instead of `import tool`, you'll be able to use the imported function as a function but not as a tool.
-
-If an agency file is going to be imported, don't define a `main` node because it will automatically be executed on import.
+If an agency file is going to be imported, the `main` node won't automatically be executed on import... it only executes if you run the file directly (similar to python's `if __name__ == "__main__"`).
 
 ### Built-in functions
 Agency has some built-in functions for common tasks:
@@ -199,9 +188,11 @@ Agency has some built-in functions for common tasks:
 - `write(path: string, content: string): void` - writes the specified content to a file at the specified path
 - `readImage(path: string): Image` - reads an image file at the specified path and returns it as an Image object
 
-### Typescript interop
+Built-in functions can also be used as tools.
 
-There's not much more that agency can do. It is intentionally bare-bones. However, it transpiles to TypeScript and has great interoperability with it. You can import TypeScript code. Any import statement you can use in ESM modules will work:
+### JavaScript/TypeScript interop
+
+Agency transpiles to JavaScript or TypeScript and has great interoperability with it. You can import TypeScript code. Any import statement you can use in ESM modules will work:
 
 ```ts
 import { someFunction } from "./someModule.js"
@@ -209,14 +200,12 @@ import * as foo from "foo.js"
 import bar from "bar.js"
 ```
 
-For any logic that is more complex, implement it in a separate TypeScript file, then import the relevant functions into Agency and use them.
-
 ### `safe` keyword
 As we've already seen, all functions can be used as tools. Now inside those functions you may be calling other functions, including some that you imported from TypeScript. Sometimes when a tool is called, the LLM doesn't call the tool correctly.
 
 For example, given a tool like this:
 
-```
+```ts
 def editIngredientsTool(ingredientIds: string[]): Result {
   ingredients = await getIngredients(ingredientIds)
   result = await editIngredients({
@@ -224,7 +213,8 @@ def editIngredientsTool(ingredientIds: string[]): Result {
   })
   return result
 }
-``
+```
+
 It's possible that the LLM will make an error in calling this tool. It may specify some ingredient IDs that don't exist, or it may incorrectly use the ingredient names instead of the IDs. In this case, the `getIngredients` call is defined so it will throw an error.
 
 In such situations, you can usually just send the request to the LLM again, and it will work... but that's a poor user experience. I'd like the LLM to retry these sorts of tool calls itself. But the question is, can the tool call be retried? What if it has run some code that has mutated some state, and if we retry the tool call, that code will run again and cause problems? For example, what if the tool call sent an email to a user, and if we retry the tool call, it will send another email to the user?
@@ -236,10 +226,62 @@ import { safe someFunction } from "./someModule.js"
 
 // here, foo is safe but bar is not
 import { safe foo, bar } from "./someModule.js"
+```
 
-Agency limits the number of times the function can be rerun. The limit is currently 5, because if a function is always going to throw an error, it doesn't make sense to keep calling it infinitely. So we call it a finite number of times, and after that we remove the tool from the list so it can no longer be called.
+All functions are assumed unsafe unless explicitly marked safe. 
 
-Note that if a tool call throws an error, and we have already called an unsafe function, then that tool is removed from the list immediately, and the error is sent back to the LLM. All imported TypeScript functions are assumed to be unsafe unless explicitly marked safe.
+Let's look at an example. You're importing two functions, one safe and the other unsafe, and calling them in a tool:
+
+```ts
+import { safe safeFunction, unsafeFunction } from "./someModule.js"
+
+def myTool() {
+  result1 = unsafeFunction()
+  result2 = safeFunction()
+  return result1 + result2
+}
+```
+
+Suppose `safeFunction` throws an error. Since `unsafeFunction` was called before the error was thrown, we consider the tool call to be unsafe to retry. So we don't ask the LLM to retry the call; instead, we immediately send the error back to the LLM and remove this tool from the tool list.
+
+On the other hand:
+
+```ts
+def myTool() {
+  result1 = safeFunction()
+  result2 = unsafeFunction()
+  return result1 + result2
+}
+```
+
+If `safeFunction` throws an error here, we know that no unsafe functions were called before the error was thrown, so we can safely ask the LLM to retry the call. We send the error back to the LLM and ask it to try again, and since `safeFunction` is safe, it can be retried without any issues.
+
+---
+
+> Side note: this concept also works in arbitrarily deep stacks. Example:
+
+Suppose you call `func A` as a tool and it calls two other functions:
+
+```
+    func A -> func B -> func C
+```
+
+Before the call to funcC, funcB called an unsafe function, so funcB can no longer be retried. Now, a function call within funcC throws an error. funcC can be retried, but because func B cannot be, we don't retry this tool call.
+
+---
+
+As you can see, Agency smartly figures out at which point in the execution a tool would be unsafe to retry. If you want to explicitly mark any tool or agency function as safe to retry, use the safe keyword when defining the tool:
+
+```ts
+safe def myTool() {
+  // this tool is safe to retry, even if it calls unsafe functions
+  result1 = unsafeFunction()
+  result2 = unsafeFunction()
+  return result1 + result2
+}
+```
+
+Agency limits the number of times a tool can be called again like this. The limit is currently 5, because if a function is always going to throw an error, it doesn't make sense to keep calling it infinitely. So we call it a finite number of times, and after that we remove the tool from the list so it can no longer be called.
 
 ## Using your agent
 
@@ -274,7 +316,7 @@ import graph from "./foo.ts"
 ```
 
 ## Interrupts and Human-in-the-loop
-Agency has support for interrupts, which you can use to implement a human-in-the-loop system. Interrupts are very simple to use and work quite well.
+Agency has support for interrupts, which you can use to implement a human-in-the-loop system. This is a core feature of Agency. Interrupts are very simple to use and work quite well.
 
 Here's an example. Suppose I have the following agency code:
 
@@ -419,9 +461,10 @@ export type StreamChunk = {
 ```
 
 ## Parallel calls
-Where possible, Agency will try to run your code async, which often means llm calls will happen in parallel when possible. Let's look at some examples.
 
-Both of these LLM calls can be run in parallel because they don't depend on each other.
+Where possible, Agency will try to run your llm calls in parallel. Let's look at some examples.
+
+Both of these LLM calls can be run in parallel because they don't depend on each other (llm calls are isolated unless they're in a thread, which we'll talk about later):
 
 ```ts
 node example() {
@@ -451,55 +494,6 @@ node example() {
   // 
   sum: number = llm("Add up these numbers ${fibs}.")
   print(sum)
-}
-```
-
-These two calls can't run in parallel because they might throw interrupts, and we can only handle one interrupt at a time.
-```ts
-def readFile(name: string) {
-  return interrupt("Reading file ${name}")
-  return "file contents"
-}
-
-node example() {
-  uses readFile
-  todos = llm("Get a list of todos from todos.json.")
-
-  uses readFile
-  reminders = llm("Get a list of reminders from reminders.json.")
-}
-```
-
-```ts
-def foo() {
-  return llm("Say hi")
-}
-
-def bar() {
-  return llm("Write a joke")
-}
-
-node example() {
-  // These two calls can run in parallel:
-  foo()
-  bar()
-}
-```
-
-```ts
-sync def foo() {
-  return llm("Say hi")
-}
-
-sync def bar() {
-  return llm("Write a joke")
-}
-
-node example() {
-  // These two calls WON'T run in parallel,
-  // because the user specifically marked them as sync functions.
-  foo()
-  bar()
 }
 ```
 
@@ -766,6 +760,8 @@ const result = await foo()
 
 Suppose you call the `foo` function twice. What will happen to `globalVar`? Will `globalVar = 2`?
 Let's take a different example.
+
+## Isolated execution state per call
 
 ```ts
 userId = null

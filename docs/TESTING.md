@@ -1,6 +1,7 @@
 # Testing Guide
 
 This document covers all the ways to write and run tests in the Agency language repo.
+Note: All `agency` commands in this file should be run using `pnpm run agency`.
 
 ## Quick Reference
 
@@ -274,10 +275,10 @@ agency test tests/agency/example.test.json
 agency fixtures tests/agency/example.agency
 agency fixtures tests/agency/example.agency:nodeName
 
-# Multi-step TypeScript tests
-agency test --ts tests/agency-ts
-agency test --ts tests/agency-ts/my-test
+# Multi-step JavaScript tests
+agency test --js tests/agency-js
+agency test --js tests/agency-js/my-test
 
-# Generate TypeScript test fixtures
-agency test --gen-fixtures tests/agency-ts
+# Generate JavaScript test fixtures
+agency fixtures tests/agency-js
 ```

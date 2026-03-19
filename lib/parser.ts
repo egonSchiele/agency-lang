@@ -1,32 +1,34 @@
-import { EgonLog } from "egonlog";
 import {
   capture,
   eof,
+  failure,
   many,
   or,
   Parser,
   ParserResult,
   seqC,
   set,
-  success,
-  trace,
   setInputStr,
-  TarsecError,
-  failure,
   setTraceHost,
   setTraceId,
+  success,
+  TarsecError,
+  trace,
 } from "tarsec";
 
+import { nanoid } from "nanoid";
+import { AgencyConfig } from "./config.js";
 import { valueAccessParser } from "./parsers/access.js";
-import { booleanParser } from "./parsers/literals.js";
+import { binOpParser } from "./parsers/binop.js";
 import { commentParser } from "./parsers/comment.js";
+import { forLoopParser } from "./parsers/forLoop.js";
 import {
   assignmentParser,
-  sharedAssignmentParser,
   functionParser,
   graphNodeParser,
   ifParser,
   messageThreadParser,
+  sharedAssignmentParser,
   timeBlockParser,
   whileLoopParser,
 } from "./parsers/function.js";
@@ -39,20 +41,17 @@ import {
   importStatmentParser,
   importToolStatmentParser,
 } from "./parsers/importStatement.js";
+import { keywordParser } from "./parsers/keyword.js";
+import { booleanParser } from "./parsers/literals.js";
 import { matchBlockParser } from "./parsers/matchBlock.js";
 import { multiLineCommentParser } from "./parsers/multiLineComment.js";
 import { newLineParser } from "./parsers/newline.js";
 import { returnStatementParser } from "./parsers/returnStatement.js";
+import { skillParser } from "./parsers/skill.js";
 import { specialVarParser } from "./parsers/specialVar.js";
 import { usesToolParser } from "./parsers/tools.js";
 import { typeAliasParser, typeHintParser } from "./parsers/typeHints.js";
 import { AgencyNode, AgencyProgram } from "./types.js";
-import { skillParser } from "./parsers/skill.js";
-import { AgencyConfig } from "./config.js";
-import { nanoid } from "nanoid";
-import { binOpParser } from "./parsers/binop.js";
-import { forLoopParser } from "./parsers/forLoop.js";
-import { keywordParser } from "./parsers/keyword.js";
 
 export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
   const parser = many(

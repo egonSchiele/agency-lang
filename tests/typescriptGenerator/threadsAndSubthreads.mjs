@@ -309,32 +309,38 @@ __threads.popActive()
       __stack.step++;
     }
     if (__step <= 2) {
+      __self.__retryable = false;
       await print(`res1`, __stack.locals.res1)
       
       __stack.step++;
     }
     if (__step <= 3) {
+      __self.__retryable = false;
       await print(`res2`, __stack.locals.res2)
       
       __stack.step++;
     }
     if (__step <= 4) {
+      __self.__retryable = false;
       await print(`res3`, __stack.locals.res3)
       
       __stack.step++;
     }
     if (__step <= 5) {
+      __self.__retryable = false;
       await print(`res4`, __stack.locals.res4)
       
       __stack.step++;
     }
     if (__step <= 6) {
+      __self.__retryable = false;
       await print(`res5`, __stack.locals.res5)
       
       __stack.step++;
     }
   } catch (__error) {
     if (__error instanceof ToolCallError) {
+      __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
@@ -553,26 +559,31 @@ __threads.popActive()
     __stack.step++;
   }
   if (__step <= 2) {
+    __self.__retryable = false;
     await print(`res1`, __stack.locals.res1)
     
     __stack.step++;
   }
   if (__step <= 3) {
+    __self.__retryable = false;
     await print(`res2`, __stack.locals.res2)
     
     __stack.step++;
   }
   if (__step <= 4) {
+    __self.__retryable = false;
     await print(`res3`, __stack.locals.res3)
     
     __stack.step++;
   }
   if (__step <= 5) {
+    __self.__retryable = false;
     await print(`res4`, __stack.locals.res4)
     
     __stack.step++;
   }
   if (__step <= 6) {
+    __self.__retryable = false;
     await print(`res5`, __stack.locals.res5)
     
     __stack.step++;

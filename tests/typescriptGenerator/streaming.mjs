@@ -157,6 +157,7 @@ __self.response = _response({
     __stack.step++;
   }
   if (__step <= 3) {
+    __self.__retryable = false;
     await print(__stack.locals.response)
     
     
@@ -191,6 +192,7 @@ __self.response2 = _response2({
     __stack.step++;
   }
   if (__step <= 6) {
+    __self.__retryable = false;
     await print(__stack.locals.response2)
     
     __stack.step++;

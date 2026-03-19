@@ -233,6 +233,7 @@ __threads.popActive()
     }
   } catch (__error) {
     if (__error instanceof ToolCallError) {
+      __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })

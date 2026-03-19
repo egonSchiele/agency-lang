@@ -131,6 +131,7 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
+    __self.__retryable = false;
     __stack.locals.message = await input(`Please enter a message: `);
 if (isInterrupt(__stack.locals.message)) {
       return {
@@ -172,6 +173,7 @@ __self.sentiment = _sentiment(__stack.locals.message, {
     __stack.step++;
   }
   if (__step <= 4) {
+    __self.__retryable = false;
     await print(__stack.locals.sentiment)
     
     __stack.step++;

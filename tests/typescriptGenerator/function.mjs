@@ -152,6 +152,7 @@ const __graph = __ctx.graph;
     }
   } catch (__error) {
     if (__error instanceof ToolCallError) {
+      __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
@@ -192,6 +193,7 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
+    __self.__retryable = false;
     await print(await test({
       ctx: __ctx,
       threads: __threads,
@@ -241,6 +243,7 @@ const __graph = __ctx.graph;
         }
       } catch (__error) {
         if (__error instanceof ToolCallError) {
+          __error.retryable = __error.retryable && __self.__retryable
           throw __error
         }
         throw new ToolCallError(__error, { retryable: __self.__retryable })

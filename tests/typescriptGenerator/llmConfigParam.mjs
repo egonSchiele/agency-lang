@@ -191,6 +191,7 @@ __self.foo2 = _foo2({
     __stack.step++;
   }
   if (__step <= 4) {
+    __self.__retryable = false;
     await print(__stack.locals.foo, __stack.locals.foo2)
     
     __stack.step++;

@@ -131,6 +131,7 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
+    __self.__retryable = false;
     let x_startTime: number = performance.now();
 //  Test the sleep built-in function
 
@@ -148,6 +149,7 @@ let x: number = x_endTime - x_startTime;
     __stack.step++;
   }
   if (__step <= 2) {
+    __self.__retryable = false;
     await print(__stack.locals.x)
     
     __stack.step++;

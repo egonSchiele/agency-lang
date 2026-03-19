@@ -201,6 +201,7 @@ __defaultTimeblockName
     }
   } catch (__error) {
     if (__error instanceof ToolCallError) {
+      __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
@@ -299,6 +300,7 @@ __defaultTimeblockName
     }
   } catch (__error) {
     if (__error instanceof ToolCallError) {
+      __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
@@ -379,6 +381,7 @@ return __self.__promptVar
     }
   } catch (__error) {
     if (__error instanceof ToolCallError) {
+      __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
@@ -419,6 +422,7 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
+    __self.__retryable = false;
     __stack.locals.msg = await input(`> `);
 if (isInterrupt(__stack.locals.msg)) {
       return {
@@ -465,6 +469,7 @@ if (isInterrupt(__stack.locals.res1)) {
     __stack.step++;
   }
   if (__step <= 5) {
+    __self.__retryable = false;
     await printJSON(__stack.locals.results)
     
     __stack.step++;

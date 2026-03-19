@@ -161,6 +161,7 @@ __self.numbers = _numbers({
     __stack.step++;
   }
   if (__step <= 3) {
+    __self.__retryable = false;
     await print(__stack.locals.numbers)
     
     
@@ -198,6 +199,7 @@ __self.greetings = _greetings({
     __stack.step++;
   }
   if (__step <= 6) {
+    __self.__retryable = false;
     await print(__stack.locals.greetings)
     
     __stack.step++;

@@ -187,6 +187,7 @@ __self.message = _message({
     __stack.step++;
   }
   if (__step <= 4) {
+    __self.__retryable = false;
     await print(__stack.locals.count)
     
     __stack.step++;
@@ -196,6 +197,7 @@ __self.message = _message({
     __stack.step++;
   }
   if (__step <= 6) {
+    __self.__retryable = false;
     await print(__stack.locals.message)
     
     __stack.step++;

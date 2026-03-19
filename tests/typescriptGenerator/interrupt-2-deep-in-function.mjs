@@ -204,6 +204,7 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
     }
   } catch (__error) {
     if (__error instanceof ToolCallError) {
+      __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
@@ -258,6 +259,7 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 1) {
+      __self.__retryable = false;
       await print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`)
       
       
@@ -295,6 +297,7 @@ if (isInterrupt(__self.response)) {
       __stack.step++;
     }
     if (__step <= 3) {
+      __self.__retryable = false;
       await print(`Greeted, age is still ${__stack.args.age}...`)
       
       __stack.step++;
@@ -306,6 +309,7 @@ if (isInterrupt(__self.response)) {
     }
   } catch (__error) {
     if (__error instanceof ToolCallError) {
+      __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
@@ -349,6 +353,7 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
+    __self.__retryable = false;
     await print(`Saying hi to ${__stack.args.name}...`)
     
     __stack.step++;
@@ -374,11 +379,13 @@ if (isInterrupt(__stack.locals.response)) {
     __stack.step++;
   }
   if (__step <= 4) {
+    __self.__retryable = false;
     await print(__stack.locals.response)
     
     __stack.step++;
   }
   if (__step <= 5) {
+    __self.__retryable = false;
     await print(`Greeting sent.`)
     
     __stack.step++;

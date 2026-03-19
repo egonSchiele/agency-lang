@@ -131,11 +131,13 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
+    __self.__retryable = false;
     await print(`What is your name?`)
     
     __stack.step++;
   }
   if (__step <= 2) {
+    __self.__retryable = false;
     __stack.locals.name = await input(`> `);
 if (isInterrupt(__stack.locals.name)) {
       return {
@@ -147,6 +149,7 @@ if (isInterrupt(__stack.locals.name)) {
     __stack.step++;
   }
   if (__step <= 3) {
+    __self.__retryable = false;
     await print(`Hello, ${__stack.locals.name}!`)
     
     __stack.step++;

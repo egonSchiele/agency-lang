@@ -137,6 +137,7 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 2) {
+    __self.__retryable = false;
     for (const item of __stack.locals.items) {
       await print(item)
       
@@ -148,6 +149,7 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 3) {
+    __self.__retryable = false;
     for (let i = 0; i < 5; i++) {
       await print(i)
       
@@ -164,6 +166,7 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 5) {
+    __self.__retryable = false;
     for (let index = 0; index < __stack.locals.names.length; index++) {
       const name = __stack.locals.names[index];
       await print(name)

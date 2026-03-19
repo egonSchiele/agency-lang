@@ -168,6 +168,7 @@ __self.response = _response(__stack.locals.person, {
     __stack.step++;
   }
   if (__step <= 4) {
+    __self.__retryable = false;
     await print(__stack.locals.response)
     
     __stack.step++;

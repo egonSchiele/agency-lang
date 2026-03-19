@@ -162,6 +162,7 @@ __self.greeting = _greeting(__stack.locals.name, {
     __stack.step++;
   }
   if (__step <= 4) {
+    __self.__retryable = false;
     await print(__stack.locals.greeting)
     
     __stack.step++;

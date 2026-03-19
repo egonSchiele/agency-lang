@@ -140,6 +140,7 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 2) {
+    __self.__retryable = false;
     switch (__stack.locals.action) {
       case `start`:
         await print(`Starting...`)
@@ -166,6 +167,7 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 4) {
+    __self.__retryable = false;
     switch (__stack.locals.statusCode) {
       case 200:
         await print(`OK`)
@@ -226,6 +228,7 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 9) {
+    __self.__retryable = false;
     switch (__stack.locals.level) {
       case `debug`:
         await print(`Debug mode enabled`)

@@ -162,6 +162,7 @@ __self.foo = _foo({
     __stack.step++;
   }
   if (__step <= 3) {
+    __self.__retryable = false;
     await print(__stack.locals.foo)
     
     __stack.step++;

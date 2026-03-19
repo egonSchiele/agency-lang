@@ -179,6 +179,7 @@ const __graph = __ctx.graph;
     }
   } catch (__error) {
     if (__error instanceof ToolCallError) {
+      __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
@@ -235,6 +236,7 @@ if (isInterrupt(__stack.locals.result)) {
     __stack.step++;
   }
   if (__step <= 2) {
+    __self.__retryable = false;
     await print(__stack.locals.result)
     
     
@@ -260,6 +262,7 @@ if (isInterrupt(__stack.locals.result)) {
     __stack.step++;
   }
   if (__step <= 5) {
+    __self.__retryable = false;
     switch (__stack.locals.status) {
       case `inactive`:
         await print(`Stopped`)

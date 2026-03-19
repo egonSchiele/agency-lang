@@ -131,11 +131,13 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
+    __self.__retryable = false;
     await print(`lets race!`)
     
     __stack.step++;
   }
   if (__step <= 2) {
+    __self.__retryable = false;
     __stack.locals.msg = await input(`> `);
 if (isInterrupt(__stack.locals.msg)) {
       return {
@@ -175,6 +177,7 @@ __self.response1 = _response1(__stack.locals.msg, {
     __stack.step++;
   }
   if (__step <= 5) {
+    __self.__retryable = false;
     await print(__stack.locals.response1)
     
     __stack.step++;
@@ -214,6 +217,7 @@ __self.response2 = _response2(__stack.locals.msg, {
     __stack.step++;
   }
   if (__step <= 9) {
+    __self.__retryable = false;
     await print(__stack.locals.response2)
     
     __stack.step++;

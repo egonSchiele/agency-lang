@@ -313,11 +313,16 @@ export class TypeScriptBuilder {
 
   build(program: AgencyProgram): TsNode {
     // Pass 5: Generate code for tools
+    const functionDefs: FunctionDefinition[] = [];
     for (const node of program.nodes) {
       if (node.type === "function") {
+        functionDefs.push(node);
         this.generatedStatements.push(this.processTool(node));
       }
     }
+
+    // Generate tool registry (always — builtin tools are always available)
+    this.generatedStatements.push(this.generateToolRegistry(functionDefs));
 
     // Collect shared variable names and emit top-level `let` declarations
     const sharedVarNames = new Set<string>();
@@ -859,6 +864,54 @@ export class TypeScriptBuilder {
         ),
       ),
     ]);
+  }
+
+  private buildToolRegistryEntry(
+    toolName: string,
+    executeName: string,
+    isBuiltin: boolean,
+  ): TsNode {
+    return ts.obj({
+      definition: ts.id(`__${toolName}Tool`),
+      handler: ts.obj({
+        name: ts.str(toolName),
+        params: ts.id(`__${toolName}ToolParams`),
+        execute: ts.id(executeName),
+        isBuiltin: ts.bool(isBuiltin),
+      }),
+    });
+  }
+
+  /**
+   * Generate __toolRegistry mapping function names to their tool definitions and handlers.
+   * The tool() function is defined in imports.mustache and closes over __toolRegistry.
+   */
+  private generateToolRegistry(functionDefs: FunctionDefinition[]): TsNode {
+    const entries: Record<string, TsNode> = {};
+
+    for (const def of functionDefs) {
+      entries[def.functionName] = this.buildToolRegistryEntry(
+        def.functionName, def.functionName, false,
+      );
+    }
+
+    // Add imported tools (they import __toolNameTool and __toolNameToolParams)
+    const importedToolNames = this.programInfo.importedTools
+      .flatMap((node) => node.importedTools);
+    for (const toolName of importedToolNames) {
+      entries[toolName] = this.buildToolRegistryEntry(
+        toolName, toolName, false,
+      );
+    }
+
+    for (const toolName of BUILTIN_TOOLS) {
+      const internalName = BUILTIN_FUNCTIONS[toolName] || toolName;
+      entries[toolName] = this.buildToolRegistryEntry(
+        toolName, internalName, true,
+      );
+    }
+
+    return ts.varDecl("const", "__toolRegistry", ts.obj(entries));
   }
 
   private processFunctionDefinition(node: FunctionDefinition): TsNode {
@@ -1434,11 +1487,47 @@ export class TypeScriptBuilder {
       ? this.processNode(promptArg)
       : ts.raw("``");
 
-    // Extract config from second argument (if present)
+    // Extract config from second argument (if present).
+    // Known keys (tools) are extracted; the rest passes through as clientConfig.
     const configArg = node.arguments[1];
-    const clientConfig = configArg
-      ? this.processNode(configArg)
-      : ts.obj({});
+    let clientConfig: TsNode;
+    let configToolNames: string[] = [];
+
+    if (configArg && configArg.type === "agencyObject") {
+      // Extract tools from config object
+      const toolsEntry = configArg.entries.find(
+        (e) => !("type" in e && e.type === "splat") && (e as AgencyObjectKV).key === "tools",
+      ) as AgencyObjectKV | undefined;
+
+      if (toolsEntry && toolsEntry.value.type === "agencyArray") {
+        // Extract tool names from the array items
+        for (const item of toolsEntry.value.items) {
+          if (item.type === "variableName") {
+            // Bare function reference: llm("...", { tools: [getWeather] })
+            configToolNames.push(item.value);
+          } else if (item.type === "functionCall" && item.functionName === "tool") {
+            // Explicit tool() call: llm("...", { tools: [tool(getWeather)] })
+            const toolArg = item.arguments[0];
+            if (toolArg && toolArg.type === "variableName") {
+              configToolNames.push(toolArg.value);
+            }
+          }
+        }
+      }
+
+      // Build clientConfig without known keys
+      const knownKeys = ["tools"];
+      const remainingEntries = configArg.entries.filter(
+        (e) => ("type" in e && e.type === "splat") || !knownKeys.includes((e as AgencyObjectKV).key),
+      );
+      clientConfig = remainingEntries.length > 0
+        ? this.processNode({ ...configArg, entries: remainingEntries })
+        : ts.obj({});
+    } else if (configArg) {
+      clientConfig = this.processNode(configArg);
+    } else {
+      clientConfig = ts.obj({});
+    }
 
     // Thread expression
     let threadExpr: TsNode;
@@ -1446,49 +1535,31 @@ export class TypeScriptBuilder {
     if (this.parallelThreadVars[variableName]) {
       threadExpr = ts.threads.get(ts.id(this.parallelThreadVars[variableName]));
     } else if (this.insideMessageThread || isInFunction) {
-      // Inside a message thread block: use the active thread (shared).
-      // Inside a function: use getOrCreateActive because the caller passes
-      // its ThreadStore (with the active thread already set), so the function
-      // respects the caller's thread context.
       threadExpr = ts.threads.getOrCreateActive();
     } else {
-      // Top-level node code outside a message thread: each llm call gets its own thread
       threadExpr = ts.threads.createAndReturnThread();
     }
 
-    // Tools from usesTool statements (attached by preprocessor)
-    const toolNames = node.tools?.toolNames || [];
-    const toolsNode: TsNode =
-      toolNames.length > 0
-        ? ts.arr(toolNames.map((name) => ts.id(`__${name}Tool`)))
-        : ts.id("undefined");
+    // Merge tools from usesTool statements (preprocessor) and config object
+    const usesToolNames = node.tools?.toolNames || [];
+    const allToolNames = [...usesToolNames, ...configToolNames];
 
-    // Tool handlers
-    const toolHandlerNodes: TsNode[] = toolNames.map((toolName) => {
-      if (BUILTIN_TOOLS.includes(toolName)) {
-        const internalName = BUILTIN_FUNCTIONS[toolName] || toolName;
-        return ts.obj({
-          name: ts.str(toolName),
-          params: ts.id(`__${toolName}ToolParams`),
-          execute: ts.id(internalName),
-          isBuiltin: ts.bool(true),
-        });
-      }
-      if (
-        !this.programInfo.functionDefinitions[toolName] &&
-        !this.isImportedTool(toolName)
-      ) {
-        throw new Error(
-          `Tool '${toolName}' is being used but no function definition found for it. Make sure to define a function for this tool.`,
-        );
-      }
-      return ts.obj({
-        name: ts.str(toolName),
-        params: ts.id(`__${toolName}ToolParams`),
-        execute: ts.id(toolName),
-        isBuiltin: ts.bool(false),
-      });
-    });
+    // Generate tools as tool() registry lookups merged into clientConfig
+    const toolNodes: TsNode[] = allToolNames.map((name) =>
+      $(ts.id("tool")).call([ts.str(name)]).done(),
+    );
+
+    // Merge tools into clientConfig
+    let mergedConfig: TsNode;
+    if (allToolNames.length > 0) {
+      // Spread user config and add tools
+      mergedConfig = ts.obj([
+        ts.set("tools", ts.arr(toolNodes)),
+        ts.setSpread(clientConfig),
+      ]);
+    } else {
+      mergedConfig = clientConfig;
+    }
 
     // Build runPrompt config object
     const runPromptEntries: Record<string, TsNode> = {
@@ -1502,9 +1573,7 @@ export class TypeScriptBuilder {
         .namedArgs({ response: ts.raw(zodSchema) })
         .done();
     }
-    runPromptEntries.tools = toolsNode;
-    runPromptEntries.toolHandlers = ts.arr(toolHandlerNodes);
-    runPromptEntries.clientConfig = clientConfig;
+    runPromptEntries.clientConfig = mergedConfig;
     runPromptEntries.maxToolCallRounds = ts.num(
       this.agencyConfig.maxToolCallRounds || 10,
     );

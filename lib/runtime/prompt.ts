@@ -351,9 +351,7 @@ export async function runPrompt(args: {
   prompt: string;
   messages: MessageThread;
   responseFormat?: any;
-  tools?: Tool[];
-  toolHandlers?: ToolHandler[];
-  clientConfig: Partial<smoltalk.SmolPromptConfig>;
+  clientConfig: Partial<smoltalk.SmolPromptConfig> & { tools?: any[] };
   maxToolCallRounds?: number;
   interruptData?: InterruptData;
   removedTools?: string[];
@@ -365,11 +363,21 @@ export async function runPrompt(args: {
     maxToolCallRounds = 10,
     removedTools = [],
   } = args;
-  let tools = (args.tools || []).filter((t) => !removedTools.includes(t.name));
-  let toolHandlers = (args.toolHandlers || []).filter(
-    (h) => !removedTools.includes(h.name),
-  );
-  const clientConfig = ctx.getSmoltalkConfig(args.clientConfig || {});
+
+  // Extract tool registry entries from clientConfig.tools and split into
+  // definitions (for smoltalk) and handlers (for execution).
+  const toolEntries: { definition: Tool; handler: ToolHandler }[] =
+    (args.clientConfig?.tools || []).map((entry: any) => entry);
+  let tools = toolEntries
+    .map((e) => e.definition)
+    .filter((t) => !removedTools.includes(t.name));
+  let toolHandlers = toolEntries
+    .map((e) => e.handler)
+    .filter((h) => !removedTools.includes(h.name));
+
+  // Remove tools key from clientConfig before passing to smoltalk
+  const { tools: _extractedTools, ...restClientConfig } = args.clientConfig || {};
+  const clientConfig = ctx.getSmoltalkConfig(restClientConfig);
   /* in order, either:
   1. restore messages from interruptData if present (resuming after an interrupt)
   2. use messages passed in as argument (add onto message thread)

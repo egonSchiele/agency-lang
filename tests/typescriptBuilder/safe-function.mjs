@@ -56,6 +56,7 @@ import {
   sleepToolParams as __sleepToolParams,
   roundTool as __roundTool,
   roundToolParams as __roundToolParams,
+  _builtinTool as __builtinTool,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -99,6 +100,11 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
+// tool() function — looks up a tool by name from the module's __toolRegistry
+function tool(__name: string) {
+  return __builtinTool(__name, __toolRegistry);
+}
+
 // Interrupt re-exports bound to this module's context
 export { interrupt, isInterrupt };
 export const respondToInterrupt = (interrupt: Interrupt, response: InterruptResponse, metadata?: Record<string, any>) => _respondToInterrupt({ ctx: __globalCtx, interrupt, interruptResponse: response, metadata });
@@ -121,6 +127,134 @@ export const __unsafeSaveTool = {
   schema: z.object({"id": z.string(), })
 };
 export const __unsafeSaveToolParams = ["id"];
+const __toolRegistry = {
+  safeLookup: {
+    definition: __safeLookupTool,
+    handler: {
+      name: "safeLookup",
+      params: __safeLookupToolParams,
+      execute: safeLookup,
+      isBuiltin: false
+    }
+  },
+  unsafeSave: {
+    definition: __unsafeSaveTool,
+    handler: {
+      name: "unsafeSave",
+      params: __unsafeSaveToolParams,
+      execute: unsafeSave,
+      isBuiltin: false
+    }
+  },
+  readSkill: {
+    definition: __readSkillTool,
+    handler: {
+      name: "readSkill",
+      params: __readSkillToolParams,
+      execute: readSkill,
+      isBuiltin: true
+    }
+  },
+  print: {
+    definition: __printTool,
+    handler: {
+      name: "print",
+      params: __printToolParams,
+      execute: print,
+      isBuiltin: true
+    }
+  },
+  printJSON: {
+    definition: __printJSONTool,
+    handler: {
+      name: "printJSON",
+      params: __printJSONToolParams,
+      execute: printJSON,
+      isBuiltin: true
+    }
+  },
+  input: {
+    definition: __inputTool,
+    handler: {
+      name: "input",
+      params: __inputToolParams,
+      execute: input,
+      isBuiltin: true
+    }
+  },
+  read: {
+    definition: __readTool,
+    handler: {
+      name: "read",
+      params: __readToolParams,
+      execute: read,
+      isBuiltin: true
+    }
+  },
+  readImage: {
+    definition: __readImageTool,
+    handler: {
+      name: "readImage",
+      params: __readImageToolParams,
+      execute: readImage,
+      isBuiltin: true
+    }
+  },
+  write: {
+    definition: __writeTool,
+    handler: {
+      name: "write",
+      params: __writeToolParams,
+      execute: write,
+      isBuiltin: true
+    }
+  },
+  fetch: {
+    definition: __fetchTool,
+    handler: {
+      name: "fetch",
+      params: __fetchToolParams,
+      execute: _builtinFetch,
+      isBuiltin: true
+    }
+  },
+  fetchJSON: {
+    definition: __fetchJSONTool,
+    handler: {
+      name: "fetchJSON",
+      params: __fetchJSONToolParams,
+      execute: _builtinFetchJSON,
+      isBuiltin: true
+    }
+  },
+  fetchJson: {
+    definition: __fetchJsonTool,
+    handler: {
+      name: "fetchJson",
+      params: __fetchJsonToolParams,
+      execute: _builtinFetchJSON,
+      isBuiltin: true
+    }
+  },
+  sleep: {
+    definition: __sleepTool,
+    handler: {
+      name: "sleep",
+      params: __sleepToolParams,
+      execute: sleep,
+      isBuiltin: true
+    }
+  },
+  round: {
+    definition: __roundTool,
+    handler: {
+      name: "round",
+      params: __roundToolParams,
+      execute: round,
+      isBuiltin: true
+    }
+  }
+};
 
 
 export async function safeLookup(id: string, __state: InternalFunctionState | undefined = undefined) {
@@ -275,19 +409,10 @@ __stack.locals.result = await runPrompt({
       ctx: __ctx,
       prompt: `Use the tools`,
       messages: __threads.createAndReturnThread(),
-      tools: [__safeLookupTool, __unsafeSaveTool],
-      toolHandlers: [{
-        name: "safeLookup",
-        params: __safeLookupToolParams,
-        execute: safeLookup,
-        isBuiltin: false
-      }, {
-        name: "unsafeSave",
-        params: __unsafeSaveToolParams,
-        execute: unsafeSave,
-        isBuiltin: false
-      }],
-      clientConfig: {},
+      clientConfig: {
+        tools: [tool("safeLookup"), tool("unsafeSave")],
+        ...{}
+      },
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools

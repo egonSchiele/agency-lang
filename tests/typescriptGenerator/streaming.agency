@@ -1,9 +1,12 @@
 node foo() {
-  response = stream llm("Generate a response word by word")
+  response = llm("Generate a response word by word", { 
+    stream: true
+  })
   print(response)
 
-  response2 = stream llm("Generate a response word by word, but with a different model", { 
-    model: "gemini-2.5-flash-lite"
+  response2 = llm("Generate a response word by word, but with a different model", { 
+    model: "gemini-2.5-flash-lite",
+    stream: true
   })
   print(response2)
 }

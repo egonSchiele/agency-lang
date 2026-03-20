@@ -1,0 +1,13 @@
+def greet(name: string): string {
+  return "Howdy, ${name}!!!!!!"
+}
+
+def farewell(name: string): string {
+  return "Adios, ${name}~~~~~~"
+}
+
+node main() {
+  uses greet
+  result: string = llm("First, use the greet function to greet Adit. Then, use the farewell function to say goodbye to Adit. Return ONLY the two results separated by a space, nothing else.", { tools: [farewell] })
+  return result
+}

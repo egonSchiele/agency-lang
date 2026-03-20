@@ -1,0 +1,15 @@
+{
+  "sourceFile": "configToolsMerged.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "Howdy, Adit!!!!!! Adios, Adit~~~~~~",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

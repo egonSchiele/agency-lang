@@ -40,7 +40,9 @@ export {
   printJSON,
   print,
   readSkill,
+  tool as _builtinTool,
 } from "./builtins.js";
+export type { ToolRegistryEntry } from "./builtins.js";
 
 export {
   readSkillTool,

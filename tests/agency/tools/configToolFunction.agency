@@ -1,0 +1,8 @@
+def greet(name: string): string {
+  return "Yo yo yo, ${name}!!!!!!"
+}
+
+node main() {
+  result: string = llm("Use the greet function to greet Steve. Return ONLY the result of the function call, nothing else.", { tools: [tool(greet)] })
+  return result
+}

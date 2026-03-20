@@ -1,0 +1,15 @@
+{
+  "sourceFile": "configToolFunction.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"Yo yo yo, Steve!!!!!!\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

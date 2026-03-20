@@ -1,0 +1,15 @@
+{
+  "sourceFile": "configTools.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"Howdy, Adit!!!!!!\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

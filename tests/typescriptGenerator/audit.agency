@@ -1,0 +1,9 @@
+def greet(name: string): string {
+  return "Hello, ${name}!"
+}
+
+node main() {
+  x = 5
+  greeting = greet("world")
+  print(greeting)
+}

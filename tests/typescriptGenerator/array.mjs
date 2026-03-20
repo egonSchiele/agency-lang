@@ -55,6 +55,7 @@ import {
   sleepToolParams as __sleepToolParams,
   roundTool as __roundTool,
   roundToolParams as __roundToolParams,
+  _builtinTool as __builtinTool,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -98,6 +99,11 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
+// tool() function — looks up a tool by name from the module's __toolRegistry
+function tool(__name: string) {
+  return __builtinTool(__name, __toolRegistry);
+}
+
 // Interrupt re-exports bound to this module's context
 export { interrupt, isInterrupt };
 export const respondToInterrupt = (interrupt: Interrupt, response: InterruptResponse, metadata?: Record<string, any>) => _respondToInterrupt({ ctx: __globalCtx, interrupt, interruptResponse: response, metadata });
@@ -108,6 +114,116 @@ export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Re
 function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("array.agency")
 }
+const __toolRegistry = {
+  readSkill: {
+    definition: __readSkillTool,
+    handler: {
+      name: "readSkill",
+      params: __readSkillToolParams,
+      execute: readSkill,
+      isBuiltin: true
+    }
+  },
+  print: {
+    definition: __printTool,
+    handler: {
+      name: "print",
+      params: __printToolParams,
+      execute: print,
+      isBuiltin: true
+    }
+  },
+  printJSON: {
+    definition: __printJSONTool,
+    handler: {
+      name: "printJSON",
+      params: __printJSONToolParams,
+      execute: printJSON,
+      isBuiltin: true
+    }
+  },
+  input: {
+    definition: __inputTool,
+    handler: {
+      name: "input",
+      params: __inputToolParams,
+      execute: input,
+      isBuiltin: true
+    }
+  },
+  read: {
+    definition: __readTool,
+    handler: {
+      name: "read",
+      params: __readToolParams,
+      execute: read,
+      isBuiltin: true
+    }
+  },
+  readImage: {
+    definition: __readImageTool,
+    handler: {
+      name: "readImage",
+      params: __readImageToolParams,
+      execute: readImage,
+      isBuiltin: true
+    }
+  },
+  write: {
+    definition: __writeTool,
+    handler: {
+      name: "write",
+      params: __writeToolParams,
+      execute: write,
+      isBuiltin: true
+    }
+  },
+  fetch: {
+    definition: __fetchTool,
+    handler: {
+      name: "fetch",
+      params: __fetchToolParams,
+      execute: _builtinFetch,
+      isBuiltin: true
+    }
+  },
+  fetchJSON: {
+    definition: __fetchJSONTool,
+    handler: {
+      name: "fetchJSON",
+      params: __fetchJSONToolParams,
+      execute: _builtinFetchJSON,
+      isBuiltin: true
+    }
+  },
+  fetchJson: {
+    definition: __fetchJsonTool,
+    handler: {
+      name: "fetchJson",
+      params: __fetchJsonToolParams,
+      execute: _builtinFetchJSON,
+      isBuiltin: true
+    }
+  },
+  sleep: {
+    definition: __sleepTool,
+    handler: {
+      name: "sleep",
+      params: __sleepToolParams,
+      execute: sleep,
+      isBuiltin: true
+    }
+  },
+  round: {
+    definition: __roundTool,
+    handler: {
+      name: "round",
+      params: __roundToolParams,
+      execute: round,
+      isBuiltin: true
+    }
+  }
+};
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -132,35 +248,30 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
-    async function _numbers(__metadata) {
-      __self.__removedTools = __self.__removedTools || [];
-      return runPrompt({
-        ctx: __ctx,
-        prompt: `the first 5 prime numbers`,
-        messages: __metadata?.messages || new MessageThread(),
-        responseFormat: z.object({
-          response: z.array(z.number())
-        }),
-        tools: undefined,
-        toolHandlers: [],
-        clientConfig: {},
-        stream: false,
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-    }
-__self.numbers = _numbers({
-      messages: __threads.createAndReturnThread()
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.numbers = await runPrompt({
+      ctx: __ctx,
+      prompt: `the first 5 prime numbers`,
+      messages: __threads.createAndReturnThread(),
+      responseFormat: z.object({
+        response: z.array(z.number())
+      }),
+      clientConfig: {},
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.numbers)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.numbers
+      };
+    }
     
     __stack.step++;
   }
   if (__step <= 2) {
-    [__self.numbers] = await Promise.all([__self.numbers]);
-    __stack.step++;
-  }
-  if (__step <= 3) {
     __self.__retryable = false;
     await print(__stack.locals.numbers)
     
@@ -169,36 +280,31 @@ __self.numbers = _numbers({
     
     __stack.step++;
   }
-  if (__step <= 4) {
-    async function _greetings(__metadata) {
-      __self.__removedTools = __self.__removedTools || [];
-      return runPrompt({
-        ctx: __ctx,
-        prompt: `a list of 3 common greetings in different languages`,
-        messages: __metadata?.messages || new MessageThread(),
-        responseFormat: z.object({
-          response: z.array(z.string())
-        }),
-        tools: undefined,
-        toolHandlers: [],
-        clientConfig: {},
-        stream: false,
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-    }
-__self.greetings = _greetings({
-      messages: __threads.createAndReturnThread()
+  if (__step <= 3) {
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.greetings = await runPrompt({
+      ctx: __ctx,
+      prompt: `a list of 3 common greetings in different languages`,
+      messages: __threads.createAndReturnThread(),
+      responseFormat: z.object({
+        response: z.array(z.string())
+      }),
+      clientConfig: {},
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.greetings)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.greetings
+      };
+    }
     
     __stack.step++;
   }
-  if (__step <= 5) {
-    [__self.greetings] = await Promise.all([__self.greetings]);
-    __stack.step++;
-  }
-  if (__step <= 6) {
+  if (__step <= 4) {
     __self.__retryable = false;
     await print(__stack.locals.greetings)
     

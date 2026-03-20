@@ -42,8 +42,7 @@
                   }
                 ]
               }
-            ],
-            "async": false
+            ]
           }
         },
         {
@@ -149,11 +148,17 @@
           },
           "variableName": "result",
           "value": {
-            "type": "prompt",
-            "segments": [
+            "type": "functionCall",
+            "functionName": "llm",
+            "arguments": [
               {
-                "type": "text",
-                "value": "Do something risky and something safe"
+                "type": "string",
+                "segments": [
+                  {
+                    "type": "text",
+                    "value": "Do something risky and something safe"
+                  }
+                ]
               }
             ],
             "tools": {
@@ -162,9 +167,7 @@
                 "riskyAction",
                 "safeAction"
               ]
-            },
-            "skills": [],
-            "async": false
+            }
           },
           "scope": "local"
         },
@@ -180,8 +183,7 @@
               "value": "result",
               "scope": "local"
             }
-          ],
-          "async": false
+          ]
         },
         {
           "type": "newLine"

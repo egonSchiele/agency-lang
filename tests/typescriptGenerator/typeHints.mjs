@@ -55,6 +55,7 @@ import {
   sleepToolParams as __sleepToolParams,
   roundTool as __roundTool,
   roundToolParams as __roundToolParams,
+  _builtinTool as __builtinTool,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -98,6 +99,11 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
+// tool() function — looks up a tool by name from the module's __toolRegistry
+function tool(__name: string) {
+  return __builtinTool(__name, __toolRegistry);
+}
+
 // Interrupt re-exports bound to this module's context
 export { interrupt, isInterrupt };
 export const respondToInterrupt = (interrupt: Interrupt, response: InterruptResponse, metadata?: Record<string, any>) => _respondToInterrupt({ ctx: __globalCtx, interrupt, interruptResponse: response, metadata });
@@ -108,6 +114,116 @@ export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Re
 function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("typeHints.agency")
 }
+const __toolRegistry = {
+  readSkill: {
+    definition: __readSkillTool,
+    handler: {
+      name: "readSkill",
+      params: __readSkillToolParams,
+      execute: readSkill,
+      isBuiltin: true
+    }
+  },
+  print: {
+    definition: __printTool,
+    handler: {
+      name: "print",
+      params: __printToolParams,
+      execute: print,
+      isBuiltin: true
+    }
+  },
+  printJSON: {
+    definition: __printJSONTool,
+    handler: {
+      name: "printJSON",
+      params: __printJSONToolParams,
+      execute: printJSON,
+      isBuiltin: true
+    }
+  },
+  input: {
+    definition: __inputTool,
+    handler: {
+      name: "input",
+      params: __inputToolParams,
+      execute: input,
+      isBuiltin: true
+    }
+  },
+  read: {
+    definition: __readTool,
+    handler: {
+      name: "read",
+      params: __readToolParams,
+      execute: read,
+      isBuiltin: true
+    }
+  },
+  readImage: {
+    definition: __readImageTool,
+    handler: {
+      name: "readImage",
+      params: __readImageToolParams,
+      execute: readImage,
+      isBuiltin: true
+    }
+  },
+  write: {
+    definition: __writeTool,
+    handler: {
+      name: "write",
+      params: __writeToolParams,
+      execute: write,
+      isBuiltin: true
+    }
+  },
+  fetch: {
+    definition: __fetchTool,
+    handler: {
+      name: "fetch",
+      params: __fetchToolParams,
+      execute: _builtinFetch,
+      isBuiltin: true
+    }
+  },
+  fetchJSON: {
+    definition: __fetchJSONTool,
+    handler: {
+      name: "fetchJSON",
+      params: __fetchJSONToolParams,
+      execute: _builtinFetchJSON,
+      isBuiltin: true
+    }
+  },
+  fetchJson: {
+    definition: __fetchJsonTool,
+    handler: {
+      name: "fetchJson",
+      params: __fetchJsonToolParams,
+      execute: _builtinFetchJSON,
+      isBuiltin: true
+    }
+  },
+  sleep: {
+    definition: __sleepTool,
+    handler: {
+      name: "sleep",
+      params: __sleepToolParams,
+      execute: sleep,
+      isBuiltin: true
+    }
+  },
+  round: {
+    definition: __roundTool,
+    handler: {
+      name: "round",
+      params: __roundToolParams,
+      execute: round,
+      isBuiltin: true
+    }
+  }
+};
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -132,27 +248,26 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
-    async function _count(__metadata) {
-      __self.__removedTools = __self.__removedTools || [];
-      return runPrompt({
-        ctx: __ctx,
-        prompt: `the number 42`,
-        messages: __metadata?.messages || new MessageThread(),
-        responseFormat: z.object({
-          response: z.number()
-        }),
-        tools: undefined,
-        toolHandlers: [],
-        clientConfig: {},
-        stream: false,
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-    }
-__self.count = _count({
-      messages: __threads.createAndReturnThread()
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.count = await runPrompt({
+      ctx: __ctx,
+      prompt: `the number 42`,
+      messages: __threads.createAndReturnThread(),
+      responseFormat: z.object({
+        response: z.number()
+      }),
+      clientConfig: {},
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.count)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.count
+      };
+    }
     
     
     
@@ -160,43 +275,34 @@ __self.count = _count({
     __stack.step++;
   }
   if (__step <= 2) {
-    async function _message(__metadata) {
-      __self.__removedTools = __self.__removedTools || [];
-      return runPrompt({
-        ctx: __ctx,
-        prompt: `a greeting message`,
-        messages: __metadata?.messages || new MessageThread(),
-        tools: undefined,
-        toolHandlers: [],
-        clientConfig: {},
-        stream: false,
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-    }
-__self.message = _message({
-      messages: __threads.createAndReturnThread()
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.message = await runPrompt({
+      ctx: __ctx,
+      prompt: `a greeting message`,
+      messages: __threads.createAndReturnThread(),
+      clientConfig: {},
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.message)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.message
+      };
+    }
     
     
     __stack.step++;
   }
   if (__step <= 3) {
-    [__self.count] = await Promise.all([__self.count]);
-    __stack.step++;
-  }
-  if (__step <= 4) {
     __self.__retryable = false;
     await print(__stack.locals.count)
     
     __stack.step++;
   }
-  if (__step <= 5) {
-    [__self.message] = await Promise.all([__self.message]);
-    __stack.step++;
-  }
-  if (__step <= 6) {
+  if (__step <= 4) {
     __self.__retryable = false;
     await print(__stack.locals.message)
     

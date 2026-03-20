@@ -16,28 +16,28 @@
           "type": "assignment",
           "variableName": "result",
           "value": {
-            "type": "prompt",
-            "segments": [
+            "type": "functionCall",
+            "functionName": "llm",
+            "arguments": [
               {
-                "type": "text",
-                "value": "Hello, {name}!"
+                "type": "string",
+                "segments": [
+                  {
+                    "type": "text",
+                    "value": "Hello, {name}!"
+                  }
+                ]
               }
             ],
             "tools": {
               "type": "usesTool",
               "toolNames": []
-            },
-            "skills": [],
-            "async": true
+            }
           },
           "scope": "local"
         },
         {
           "type": "newLine"
-        },
-        {
-          "type": "rawCode",
-          "value": "[__self.result] = await Promise.all([__self.result]);"
         },
         {
           "type": "returnStatement",

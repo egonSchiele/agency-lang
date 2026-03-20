@@ -55,6 +55,7 @@ import {
   sleepToolParams as __sleepToolParams,
   roundTool as __roundTool,
   roundToolParams as __roundToolParams,
+  _builtinTool as __builtinTool,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -98,6 +99,11 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
+// tool() function — looks up a tool by name from the module's __toolRegistry
+function tool(__name: string) {
+  return __builtinTool(__name, __toolRegistry);
+}
+
 // Interrupt re-exports bound to this module's context
 export { interrupt, isInterrupt };
 export const respondToInterrupt = (interrupt: Interrupt, response: InterruptResponse, metadata?: Record<string, any>) => _respondToInterrupt({ ctx: __globalCtx, interrupt, interruptResponse: response, metadata });
@@ -138,6 +144,161 @@ export const __flexibleTool = {
   schema: z.object({"value": z.union([z.string(), z.number()]), })
 };
 export const __flexibleToolParams = ["value"];
+const __toolRegistry = {
+  add: {
+    definition: __addTool,
+    handler: {
+      name: "add",
+      params: __addToolParams,
+      execute: add,
+      isBuiltin: false
+    }
+  },
+  greet: {
+    definition: __greetTool,
+    handler: {
+      name: "greet",
+      params: __greetToolParams,
+      execute: greet,
+      isBuiltin: false
+    }
+  },
+  mixed: {
+    definition: __mixedTool,
+    handler: {
+      name: "mixed",
+      params: __mixedToolParams,
+      execute: mixed,
+      isBuiltin: false
+    }
+  },
+  processArray: {
+    definition: __processArrayTool,
+    handler: {
+      name: "processArray",
+      params: __processArrayToolParams,
+      execute: processArray,
+      isBuiltin: false
+    }
+  },
+  flexible: {
+    definition: __flexibleTool,
+    handler: {
+      name: "flexible",
+      params: __flexibleToolParams,
+      execute: flexible,
+      isBuiltin: false
+    }
+  },
+  readSkill: {
+    definition: __readSkillTool,
+    handler: {
+      name: "readSkill",
+      params: __readSkillToolParams,
+      execute: readSkill,
+      isBuiltin: true
+    }
+  },
+  print: {
+    definition: __printTool,
+    handler: {
+      name: "print",
+      params: __printToolParams,
+      execute: print,
+      isBuiltin: true
+    }
+  },
+  printJSON: {
+    definition: __printJSONTool,
+    handler: {
+      name: "printJSON",
+      params: __printJSONToolParams,
+      execute: printJSON,
+      isBuiltin: true
+    }
+  },
+  input: {
+    definition: __inputTool,
+    handler: {
+      name: "input",
+      params: __inputToolParams,
+      execute: input,
+      isBuiltin: true
+    }
+  },
+  read: {
+    definition: __readTool,
+    handler: {
+      name: "read",
+      params: __readToolParams,
+      execute: read,
+      isBuiltin: true
+    }
+  },
+  readImage: {
+    definition: __readImageTool,
+    handler: {
+      name: "readImage",
+      params: __readImageToolParams,
+      execute: readImage,
+      isBuiltin: true
+    }
+  },
+  write: {
+    definition: __writeTool,
+    handler: {
+      name: "write",
+      params: __writeToolParams,
+      execute: write,
+      isBuiltin: true
+    }
+  },
+  fetch: {
+    definition: __fetchTool,
+    handler: {
+      name: "fetch",
+      params: __fetchToolParams,
+      execute: _builtinFetch,
+      isBuiltin: true
+    }
+  },
+  fetchJSON: {
+    definition: __fetchJSONTool,
+    handler: {
+      name: "fetchJSON",
+      params: __fetchJSONToolParams,
+      execute: _builtinFetchJSON,
+      isBuiltin: true
+    }
+  },
+  fetchJson: {
+    definition: __fetchJsonTool,
+    handler: {
+      name: "fetchJson",
+      params: __fetchJsonToolParams,
+      execute: _builtinFetchJSON,
+      isBuiltin: true
+    }
+  },
+  sleep: {
+    definition: __sleepTool,
+    handler: {
+      name: "sleep",
+      params: __sleepToolParams,
+      execute: sleep,
+      isBuiltin: true
+    }
+  },
+  round: {
+    definition: __roundTool,
+    handler: {
+      name: "round",
+      params: __roundToolParams,
+      execute: round,
+      isBuiltin: true
+    }
+  }
+};
 export async function add(x: number, y: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -175,32 +336,24 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 1) {
-      async function _result(x, y, __metadata) {
-        __self.__removedTools = __self.__removedTools || [];
-        return runPrompt({
-          ctx: __ctx,
-          prompt: `add ${x} and ${y}`,
-          messages: __metadata?.messages || new MessageThread(),
-          tools: undefined,
-          toolHandlers: [],
-          clientConfig: {},
-          stream: false,
-          maxToolCallRounds: 10,
-          interruptData: __state?.interruptData,
-          removedTools: __self.__removedTools
-        });
-      }
-__self.result = _result(__stack.args.x, __stack.args.y, {
-        messages: __threads.createAndReturnThread()
+      __self.__removedTools = __self.__removedTools || [];
+__stack.locals.result = await runPrompt({
+        ctx: __ctx,
+        prompt: `add ${__stack.args.x} and ${__stack.args.y}`,
+        messages: __threads.getOrCreateActive(),
+        clientConfig: {},
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
       });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.result)) {
+        return __stack.locals.result;
+      }
       
       __stack.step++;
     }
     if (__step <= 2) {
-      [__self.result] = await Promise.all([__self.result]);
-      __stack.step++;
-    }
-    if (__step <= 3) {
       return __stack.locals.result
       
       __stack.step++;
@@ -260,32 +413,24 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 1) {
-      async function _message(name, __metadata) {
-        __self.__removedTools = __self.__removedTools || [];
-        return runPrompt({
-          ctx: __ctx,
-          prompt: `Hello ${name}!`,
-          messages: __metadata?.messages || new MessageThread(),
-          tools: undefined,
-          toolHandlers: [],
-          clientConfig: {},
-          stream: false,
-          maxToolCallRounds: 10,
-          interruptData: __state?.interruptData,
-          removedTools: __self.__removedTools
-        });
-      }
-__self.message = _message(__stack.args.name, {
-        messages: __threads.createAndReturnThread()
+      __self.__removedTools = __self.__removedTools || [];
+__stack.locals.message = await runPrompt({
+        ctx: __ctx,
+        prompt: `Hello ${__stack.args.name}!`,
+        messages: __threads.getOrCreateActive(),
+        clientConfig: {},
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
       });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.message)) {
+        return __stack.locals.message;
+      }
       
       __stack.step++;
     }
     if (__step <= 2) {
-      [__self.message] = await Promise.all([__self.message]);
-      __stack.step++;
-    }
-    if (__step <= 3) {
       return __stack.locals.message
       
       __stack.step++;
@@ -347,32 +492,24 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 1) {
-      async function _output(label, count, __metadata) {
-        __self.__removedTools = __self.__removedTools || [];
-        return runPrompt({
-          ctx: __ctx,
-          prompt: `${label}: ${count}`,
-          messages: __metadata?.messages || new MessageThread(),
-          tools: undefined,
-          toolHandlers: [],
-          clientConfig: {},
-          stream: false,
-          maxToolCallRounds: 10,
-          interruptData: __state?.interruptData,
-          removedTools: __self.__removedTools
-        });
-      }
-__self.output = _output(__stack.args.label, __stack.args.count, {
-        messages: __threads.createAndReturnThread()
+      __self.__removedTools = __self.__removedTools || [];
+__stack.locals.output = await runPrompt({
+        ctx: __ctx,
+        prompt: `${__stack.args.label}: ${__stack.args.count}`,
+        messages: __threads.getOrCreateActive(),
+        clientConfig: {},
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
       });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.output)) {
+        return __stack.locals.output;
+      }
       
       __stack.step++;
     }
     if (__step <= 2) {
-      [__self.output] = await Promise.all([__self.output]);
-      __stack.step++;
-    }
-    if (__step <= 3) {
       return __stack.locals.output
       
       __stack.step++;
@@ -432,32 +569,24 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 1) {
-      async function _result(items, __metadata) {
-        __self.__removedTools = __self.__removedTools || [];
-        return runPrompt({
-          ctx: __ctx,
-          prompt: `Processing array with ${items} items`,
-          messages: __metadata?.messages || new MessageThread(),
-          tools: undefined,
-          toolHandlers: [],
-          clientConfig: {},
-          stream: false,
-          maxToolCallRounds: 10,
-          interruptData: __state?.interruptData,
-          removedTools: __self.__removedTools
-        });
-      }
-__self.result = _result(__stack.args.items, {
-        messages: __threads.createAndReturnThread()
+      __self.__removedTools = __self.__removedTools || [];
+__stack.locals.result = await runPrompt({
+        ctx: __ctx,
+        prompt: `Processing array with ${__stack.args.items} items`,
+        messages: __threads.getOrCreateActive(),
+        clientConfig: {},
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
       });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.result)) {
+        return __stack.locals.result;
+      }
       
       __stack.step++;
     }
     if (__step <= 2) {
-      [__self.result] = await Promise.all([__self.result]);
-      __stack.step++;
-    }
-    if (__step <= 3) {
       return __stack.locals.result
       
       __stack.step++;
@@ -517,32 +646,24 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 1) {
-      async function _result(value, __metadata) {
-        __self.__removedTools = __self.__removedTools || [];
-        return runPrompt({
-          ctx: __ctx,
-          prompt: `Received value: ${value}`,
-          messages: __metadata?.messages || new MessageThread(),
-          tools: undefined,
-          toolHandlers: [],
-          clientConfig: {},
-          stream: false,
-          maxToolCallRounds: 10,
-          interruptData: __state?.interruptData,
-          removedTools: __self.__removedTools
-        });
-      }
-__self.result = _result(__stack.args.value, {
-        messages: __threads.createAndReturnThread()
+      __self.__removedTools = __self.__removedTools || [];
+__stack.locals.result = await runPrompt({
+        ctx: __ctx,
+        prompt: `Received value: ${__stack.args.value}`,
+        messages: __threads.getOrCreateActive(),
+        clientConfig: {},
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
       });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.result)) {
+        return __stack.locals.result;
+      }
       
       __stack.step++;
     }
     if (__step <= 2) {
-      [__self.result] = await Promise.all([__self.result]);
-      __stack.step++;
-    }
-    if (__step <= 3) {
       return __stack.locals.result
       
       __stack.step++;
@@ -644,7 +765,7 @@ const __graph = __ctx.graph;
   if (__step <= 1) {
     __stack.locals.sum = await add(5, 10, {
       ctx: __ctx,
-      threads: __threads,
+      threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.sum)) {
@@ -659,7 +780,7 @@ if (isInterrupt(__stack.locals.sum)) {
   if (__step <= 2) {
     __stack.locals.greeting = await greet(`Alice`, {
       ctx: __ctx,
-      threads: __threads,
+      threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.greeting)) {
@@ -674,7 +795,7 @@ if (isInterrupt(__stack.locals.greeting)) {
   if (__step <= 3) {
     __stack.locals.labeled = await mixed(42, `Answer`, {
       ctx: __ctx,
-      threads: __threads,
+      threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.labeled)) {
@@ -689,7 +810,7 @@ if (isInterrupt(__stack.locals.labeled)) {
   if (__step <= 4) {
     __stack.locals.processed = await processArray([1, 2, 3, 4, 5], {
       ctx: __ctx,
-      threads: __threads,
+      threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.processed)) {
@@ -704,7 +825,7 @@ if (isInterrupt(__stack.locals.processed)) {
   if (__step <= 5) {
     __stack.locals.flexResult = await flexible(`test`, {
       ctx: __ctx,
-      threads: __threads,
+      threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.flexResult)) {

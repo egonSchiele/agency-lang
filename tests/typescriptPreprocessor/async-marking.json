@@ -46,36 +46,36 @@
           "type": "assignment",
           "variableName": "result",
           "value": {
-            "type": "prompt",
-            "segments": [
+            "type": "functionCall",
+            "functionName": "llm",
+            "arguments": [
               {
-                "type": "text",
-                "value": "Respond to: "
-              },
-              {
-                "type": "interpolation",
-                "expression": {
-                  "type": "variableName",
-                  "value": "prompt",
-                  "scope": "args"
-                }
+                "type": "string",
+                "segments": [
+                  {
+                    "type": "text",
+                    "value": "Respond to: "
+                  },
+                  {
+                    "type": "interpolation",
+                    "expression": {
+                      "type": "variableName",
+                      "value": "prompt",
+                      "scope": "args"
+                    }
+                  }
+                ]
               }
             ],
             "tools": {
               "type": "usesTool",
               "toolNames": []
-            },
-            "skills": [],
-            "async": true
+            }
           },
           "scope": "local"
         },
         {
           "type": "newLine"
-        },
-        {
-          "type": "rawCode",
-          "value": "[__self.result] = await Promise.all([__self.result]);"
         },
         {
           "type": "returnStatement",
@@ -118,8 +118,7 @@
                   }
                 ]
               }
-            ],
-            "async": false
+            ]
           },
           "scope": "local"
         },
@@ -142,8 +141,7 @@
                   }
                 ]
               }
-            ],
-            "async": false
+            ]
           },
           "scope": "local"
         },
@@ -158,48 +156,48 @@
           },
           "variableName": "result",
           "value": {
-            "type": "prompt",
-            "segments": [
+            "type": "functionCall",
+            "functionName": "llm",
+            "arguments": [
               {
-                "type": "text",
-                "value": "Combine "
-              },
-              {
-                "type": "interpolation",
-                "expression": {
-                  "type": "variableName",
-                  "value": "a",
-                  "scope": "local"
-                }
-              },
-              {
-                "type": "text",
-                "value": " and "
-              },
-              {
-                "type": "interpolation",
-                "expression": {
-                  "type": "variableName",
-                  "value": "b",
-                  "scope": "local"
-                }
+                "type": "string",
+                "segments": [
+                  {
+                    "type": "text",
+                    "value": "Combine "
+                  },
+                  {
+                    "type": "interpolation",
+                    "expression": {
+                      "type": "variableName",
+                      "value": "a",
+                      "scope": "local"
+                    }
+                  },
+                  {
+                    "type": "text",
+                    "value": " and "
+                  },
+                  {
+                    "type": "interpolation",
+                    "expression": {
+                      "type": "variableName",
+                      "value": "b",
+                      "scope": "local"
+                    }
+                  }
+                ]
               }
             ],
             "tools": {
               "type": "usesTool",
               "toolNames": []
-            },
-            "skills": [],
-            "async": true
+            }
           },
           "scope": "local"
         },
         {
           "type": "newLine"
-        },
-        {
-          "type": "rawCode",
-          "value": "[__self.result] = await Promise.all([__self.result]);"
         },
         {
           "type": "functionCall",
@@ -210,8 +208,7 @@
               "value": "result",
               "scope": "local"
             }
-          ],
-          "async": false
+          ]
         },
         {
           "type": "newLine"

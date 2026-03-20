@@ -55,6 +55,7 @@ import {
   sleepToolParams as __sleepToolParams,
   roundTool as __roundTool,
   roundToolParams as __roundToolParams,
+  _builtinTool as __builtinTool,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -98,6 +99,11 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
+// tool() function — looks up a tool by name from the module's __toolRegistry
+function tool(__name: string) {
+  return __builtinTool(__name, __toolRegistry);
+}
+
 // Interrupt re-exports bound to this module's context
 export { interrupt, isInterrupt };
 export const respondToInterrupt = (interrupt: Interrupt, response: InterruptResponse, metadata?: Record<string, any>) => _respondToInterrupt({ ctx: __globalCtx, interrupt, interruptResponse: response, metadata });
@@ -114,6 +120,125 @@ export const __fooTool = {
   schema: z.object({})
 };
 export const __fooToolParams = [];
+const __toolRegistry = {
+  foo: {
+    definition: __fooTool,
+    handler: {
+      name: "foo",
+      params: __fooToolParams,
+      execute: foo,
+      isBuiltin: false
+    }
+  },
+  readSkill: {
+    definition: __readSkillTool,
+    handler: {
+      name: "readSkill",
+      params: __readSkillToolParams,
+      execute: readSkill,
+      isBuiltin: true
+    }
+  },
+  print: {
+    definition: __printTool,
+    handler: {
+      name: "print",
+      params: __printToolParams,
+      execute: print,
+      isBuiltin: true
+    }
+  },
+  printJSON: {
+    definition: __printJSONTool,
+    handler: {
+      name: "printJSON",
+      params: __printJSONToolParams,
+      execute: printJSON,
+      isBuiltin: true
+    }
+  },
+  input: {
+    definition: __inputTool,
+    handler: {
+      name: "input",
+      params: __inputToolParams,
+      execute: input,
+      isBuiltin: true
+    }
+  },
+  read: {
+    definition: __readTool,
+    handler: {
+      name: "read",
+      params: __readToolParams,
+      execute: read,
+      isBuiltin: true
+    }
+  },
+  readImage: {
+    definition: __readImageTool,
+    handler: {
+      name: "readImage",
+      params: __readImageToolParams,
+      execute: readImage,
+      isBuiltin: true
+    }
+  },
+  write: {
+    definition: __writeTool,
+    handler: {
+      name: "write",
+      params: __writeToolParams,
+      execute: write,
+      isBuiltin: true
+    }
+  },
+  fetch: {
+    definition: __fetchTool,
+    handler: {
+      name: "fetch",
+      params: __fetchToolParams,
+      execute: _builtinFetch,
+      isBuiltin: true
+    }
+  },
+  fetchJSON: {
+    definition: __fetchJSONTool,
+    handler: {
+      name: "fetchJSON",
+      params: __fetchJSONToolParams,
+      execute: _builtinFetchJSON,
+      isBuiltin: true
+    }
+  },
+  fetchJson: {
+    definition: __fetchJsonTool,
+    handler: {
+      name: "fetchJson",
+      params: __fetchJsonToolParams,
+      execute: _builtinFetchJSON,
+      isBuiltin: true
+    }
+  },
+  sleep: {
+    definition: __sleepTool,
+    handler: {
+      name: "sleep",
+      params: __sleepToolParams,
+      execute: sleep,
+      isBuiltin: true
+    }
+  },
+  round: {
+    definition: __roundTool,
+    handler: {
+      name: "round",
+      params: __roundToolParams,
+      execute: round,
+      isBuiltin: true
+    }
+  }
+};
 export async function foo(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -149,80 +274,63 @@ const __graph = __ctx.graph;
       {
 const __tid = __threads.create();
 __threads.pushActive(__tid)
-async function _res1(__metadata) {
-  __self.__removedTools = __self.__removedTools || [];
-  return runPrompt({
-    ctx: __ctx,
-    prompt: `What are the first 5 prime numbers?`,
-    messages: __metadata?.messages || new MessageThread(),
-    responseFormat: z.object({
-      response: z.array(z.number())
-    }),
-    tools: undefined,
-    toolHandlers: [],
-    clientConfig: {},
-    stream: false,
-    maxToolCallRounds: 10,
-    interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools
-  });
-}
-__self.res1 = await _res1({
-  messages: __threads.getOrCreateActive()
+__self.__removedTools = __self.__removedTools || [];
+__stack.locals.res1 = await runPrompt({
+  ctx: __ctx,
+  prompt: `What are the first 5 prime numbers?`,
+  messages: __threads.getOrCreateActive(),
+  responseFormat: z.object({
+    response: z.array(z.number())
+  }),
+  clientConfig: {},
+  maxToolCallRounds: 10,
+  interruptData: __state?.interruptData,
+  removedTools: __self.__removedTools
 });
 // return early from node if this is an interrupt
-if (isInterrupt(__self.res1)) {
-  return __self.res1;
+if (isInterrupt(__stack.locals.res1)) {
+  return __stack.locals.res1;
 }
 
 {
 const __ptid_res2 = __threads.create();
 const __ptid_res3 = __threads.create();
-async function _res2(__metadata) {
-  __self.__removedTools = __self.__removedTools || [];
-  return runPrompt({
-    ctx: __ctx,
-    prompt: `What is 2+2?`,
-    messages: __metadata?.messages || new MessageThread(),
-    responseFormat: z.object({
-      response: z.number()
-    }),
-    tools: undefined,
-    toolHandlers: [],
-    clientConfig: {},
-    stream: false,
-    maxToolCallRounds: 10,
-    interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools
-  });
-}
-__self.res2 = _res2({
-  messages: __threads.get(__ptid_res2)
+__self.__removedTools = __self.__removedTools || [];
+__stack.locals.res2 = await runPrompt({
+  ctx: __ctx,
+  prompt: `What is 2+2?`,
+  messages: __threads.get(__ptid_res2),
+  responseFormat: z.object({
+    response: z.number()
+  }),
+  clientConfig: {},
+  maxToolCallRounds: 10,
+  interruptData: __state?.interruptData,
+  removedTools: __self.__removedTools
 });
-
-async function _res3(__metadata) {
-  __self.__removedTools = __self.__removedTools || [];
-  return runPrompt({
-    ctx: __ctx,
-    prompt: `What is 3+3?`,
-    messages: __metadata?.messages || new MessageThread(),
-    responseFormat: z.object({
-      response: z.number()
-    }),
-    tools: undefined,
-    toolHandlers: [],
-    clientConfig: {},
-    stream: false,
-    maxToolCallRounds: 10,
-    interruptData: __state?.interruptData,
-    removedTools: __self.__removedTools
-  });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.res2)) {
+  return __stack.locals.res2;
 }
-__self.res3 = _res3({
-  messages: __threads.get(__ptid_res3)
-});
 
-[__self.res2, __self.res3] = await Promise.all([__self.res2, __self.res3]);
+__self.__removedTools = __self.__removedTools || [];
+__stack.locals.res3 = await runPrompt({
+  ctx: __ctx,
+  prompt: `What is 3+3?`,
+  messages: __threads.get(__ptid_res3),
+  responseFormat: z.object({
+    response: z.number()
+  }),
+  clientConfig: {},
+  maxToolCallRounds: 10,
+  interruptData: __state?.interruptData,
+  removedTools: __self.__removedTools
+});
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.res3)) {
+  return __stack.locals.res3;
+}
+
 [__stack.locals.res2, __stack.locals.res3] = await Promise.all([__stack.locals.res2, __stack.locals.res3]);
 }
 

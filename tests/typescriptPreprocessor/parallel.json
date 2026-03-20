@@ -22,19 +22,23 @@
               },
               "variableName": "res1",
               "value": {
-                "type": "prompt",
-                "segments": [
+                "type": "functionCall",
+                "functionName": "llm",
+                "arguments": [
                   {
-                    "type": "text",
-                    "value": "What are the first 5 prime numbers?"
+                    "type": "string",
+                    "segments": [
+                      {
+                        "type": "text",
+                        "value": "What are the first 5 prime numbers?"
+                      }
+                    ]
                   }
                 ],
                 "tools": {
                   "type": "usesTool",
                   "toolNames": []
-                },
-                "skills": [],
-                "async": false
+                }
               },
               "scope": "local"
             },
@@ -53,19 +57,23 @@
                   },
                   "variableName": "res2",
                   "value": {
-                    "type": "prompt",
-                    "segments": [
+                    "type": "functionCall",
+                    "functionName": "llm",
+                    "arguments": [
                       {
-                        "type": "text",
-                        "value": "What is 2+2?"
+                        "type": "string",
+                        "segments": [
+                          {
+                            "type": "text",
+                            "value": "What is 2+2?"
+                          }
+                        ]
                       }
                     ],
                     "tools": {
                       "type": "usesTool",
                       "toolNames": []
-                    },
-                    "skills": [],
-                    "async": true
+                    }
                   },
                   "scope": "local"
                 },
@@ -80,28 +88,28 @@
                   },
                   "variableName": "res3",
                   "value": {
-                    "type": "prompt",
-                    "segments": [
+                    "type": "functionCall",
+                    "functionName": "llm",
+                    "arguments": [
                       {
-                        "type": "text",
-                        "value": "What is 3+3?"
+                        "type": "string",
+                        "segments": [
+                          {
+                            "type": "text",
+                            "value": "What is 3+3?"
+                          }
+                        ]
                       }
                     ],
                     "tools": {
                       "type": "usesTool",
                       "toolNames": []
-                    },
-                    "skills": [],
-                    "async": true
+                    }
                   },
                   "scope": "local"
                 },
                 {
                   "type": "newLine"
-                },
-                {
-                  "type": "rawCode",
-                  "value": "[__self.res2, __self.res3] = await Promise.all([__self.res2, __self.res3]);"
                 }
               ]
             },

@@ -23,36 +23,36 @@
           "type": "assignment",
           "variableName": "result",
           "value": {
-            "type": "prompt",
-            "segments": [
+            "type": "functionCall",
+            "functionName": "llm",
+            "arguments": [
               {
-                "type": "text",
-                "value": "Process: "
-              },
-              {
-                "type": "interpolation",
-                "expression": {
-                  "type": "variableName",
-                  "value": "label",
-                  "scope": "args"
-                }
+                "type": "string",
+                "segments": [
+                  {
+                    "type": "text",
+                    "value": "Process: "
+                  },
+                  {
+                    "type": "interpolation",
+                    "expression": {
+                      "type": "variableName",
+                      "value": "label",
+                      "scope": "args"
+                    }
+                  }
+                ]
               }
             ],
             "tools": {
               "type": "usesTool",
               "toolNames": []
-            },
-            "skills": [],
-            "async": true
+            }
           },
           "scope": "local"
         },
         {
           "type": "newLine"
-        },
-        {
-          "type": "rawCode",
-          "value": "[__self.result] = await Promise.all([__self.result]);"
         },
         {
           "type": "returnStatement",
@@ -87,19 +87,23 @@
           },
           "variableName": "a",
           "value": {
-            "type": "prompt",
-            "segments": [
+            "type": "functionCall",
+            "functionName": "llm",
+            "arguments": [
               {
-                "type": "text",
-                "value": "First async task"
+                "type": "string",
+                "segments": [
+                  {
+                    "type": "text",
+                    "value": "First async task"
+                  }
+                ]
               }
             ],
             "tools": {
               "type": "usesTool",
               "toolNames": []
-            },
-            "skills": [],
-            "async": true
+            }
           },
           "scope": "local"
         },
@@ -114,28 +118,28 @@
           },
           "variableName": "b",
           "value": {
-            "type": "prompt",
-            "segments": [
+            "type": "functionCall",
+            "functionName": "llm",
+            "arguments": [
               {
-                "type": "text",
-                "value": "Second async task"
+                "type": "string",
+                "segments": [
+                  {
+                    "type": "text",
+                    "value": "Second async task"
+                  }
+                ]
               }
             ],
             "tools": {
               "type": "usesTool",
               "toolNames": []
-            },
-            "skills": [],
-            "async": true
+            }
           },
           "scope": "local"
         },
         {
           "type": "newLine"
-        },
-        {
-          "type": "rawCode",
-          "value": "[__self.a, __self.b] = await Promise.all([__self.a, __self.b]);"
         },
         {
           "type": "assignment",
@@ -179,8 +183,7 @@
               "value": "combined",
               "scope": "local"
             }
-          ],
-          "async": false
+          ]
         },
         {
           "type": "newLine"

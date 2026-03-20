@@ -135,62 +135,62 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
-    async function _foo(__metadata) {
-      __self.__removedTools = __self.__removedTools || [];
-      return runPrompt({
-        ctx: __ctx,
-        prompt: `What are 5 numbers?`,
-        messages: __metadata?.messages || new MessageThread(),
-        responseFormat: z.object({
-          response: z.array(z.number())
-        }),
-        tools: undefined,
-        toolHandlers: [],
-        clientConfig: __ctx.globals.get("llmConfigParam.agency", "config"),
-        stream: false,
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-    }
-__self.foo = _foo({
-      messages: __threads.createAndReturnThread()
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.foo = await runPrompt({
+      ctx: __ctx,
+      prompt: `What are 5 numbers?`,
+      messages: __threads.getOrCreateActive(),
+      responseFormat: z.object({
+        response: z.array(z.number())
+      }),
+      tools: undefined,
+      toolHandlers: [],
+      clientConfig: __ctx.globals.get("llmConfigParam.agency", "config"),
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.foo)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.foo
+      };
+    }
     
     __stack.step++;
   }
   if (__step <= 2) {
-    async function _foo2(__metadata) {
-      __self.__removedTools = __self.__removedTools || [];
-      return runPrompt({
-        ctx: __ctx,
-        prompt: `What are 5 numbers?`,
-        messages: __metadata?.messages || new MessageThread(),
-        responseFormat: z.object({
-          response: z.array(z.number())
-        }),
-        tools: undefined,
-        toolHandlers: [],
-        clientConfig: {
-          "maxTokens": 100
-        },
-        stream: false,
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-    }
-__self.foo2 = _foo2({
-      messages: __threads.createAndReturnThread()
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.foo2 = await runPrompt({
+      ctx: __ctx,
+      prompt: `What are 5 numbers?`,
+      messages: __threads.getOrCreateActive(),
+      responseFormat: z.object({
+        response: z.array(z.number())
+      }),
+      tools: undefined,
+      toolHandlers: [],
+      clientConfig: {
+        "maxTokens": 100
+      },
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.foo2)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.foo2
+      };
+    }
     
     __stack.step++;
   }
   if (__step <= 3) {
-    [__self.foo, __self.foo2] = await Promise.all([__self.foo, __self.foo2]);
-    __stack.step++;
-  }
-  if (__step <= 4) {
     __self.__retryable = false;
     await print(__stack.locals.foo, __stack.locals.foo2)
     

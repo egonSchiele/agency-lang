@@ -28,10 +28,6 @@ import { valueAccessParser } from "./access.js";
 import { commentParser } from "./comment.js";
 import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
 import { assignmentParser } from "./function.js";
-import {
-  llmPromptFunctionCallParser,
-  streamingPromptLiteralParser,
-} from "./functionCall.js";
 import { booleanParser, literalParser } from "./literals.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { returnStatementParser } from "./returnStatement.js";
@@ -61,8 +57,6 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
     capture(
       or(
         returnStatementParser,
-        streamingPromptLiteralParser,
-        llmPromptFunctionCallParser,
         agencyArrayParser,
         agencyObjectParser,
         assignmentParser,

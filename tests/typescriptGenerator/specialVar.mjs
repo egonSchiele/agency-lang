@@ -150,79 +150,75 @@ if (isInterrupt(__stack.locals.msg)) {
     __stack.step++;
   }
   if (__step <= 3) {
-    async function _response1(msg, __metadata) {
-      __self.__removedTools = __self.__removedTools || [];
-      return runPrompt({
-        ctx: __ctx,
-        prompt: `${msg}`,
-        messages: __metadata?.messages || new MessageThread(),
-        tools: undefined,
-        toolHandlers: [],
-        clientConfig: {},
-        stream: false,
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-    }
-__self.response1 = _response1(__stack.locals.msg, {
-      messages: __threads.createAndReturnThread()
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.response1 = await runPrompt({
+      ctx: __ctx,
+      prompt: `${__stack.locals.msg}`,
+      messages: __threads.getOrCreateActive(),
+      tools: undefined,
+      toolHandlers: [],
+      clientConfig: {},
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.response1)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.response1
+      };
+    }
     
     
     __stack.step++;
   }
   if (__step <= 4) {
-    [__self.response1] = await Promise.all([__self.response1]);
-    __stack.step++;
-  }
-  if (__step <= 5) {
     __self.__retryable = false;
     await print(__stack.locals.response1)
     
     __stack.step++;
   }
-  if (__step <= 6) {
+  if (__step <= 5) {
     __client = __getClientWithConfig({
       model: "`gemini-2.5-flash-lite`"
     });
     
     __stack.step++;
   }
-  if (__step <= 7) {
-    async function _response2(msg, __metadata) {
-      __self.__removedTools = __self.__removedTools || [];
-      return runPrompt({
-        ctx: __ctx,
-        prompt: `${msg}`,
-        messages: __metadata?.messages || new MessageThread(),
-        tools: undefined,
-        toolHandlers: [],
-        clientConfig: {},
-        stream: false,
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-    }
-__self.response2 = _response2(__stack.locals.msg, {
-      messages: __threads.createAndReturnThread()
+  if (__step <= 6) {
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.response2 = await runPrompt({
+      ctx: __ctx,
+      prompt: `${__stack.locals.msg}`,
+      messages: __threads.getOrCreateActive(),
+      tools: undefined,
+      toolHandlers: [],
+      clientConfig: {},
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.response2)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.response2
+      };
+    }
     
     
     __stack.step++;
   }
-  if (__step <= 8) {
-    [__self.response2] = await Promise.all([__self.response2]);
-    __stack.step++;
-  }
-  if (__step <= 9) {
+  if (__step <= 7) {
     __self.__retryable = false;
     await print(__stack.locals.response2)
     
     __stack.step++;
   }
-  if (__step <= 10) {
+  if (__step <= 8) {
     return {
       messages: __threads,
       data: [__stack.locals.response1, __stack.locals.response2]

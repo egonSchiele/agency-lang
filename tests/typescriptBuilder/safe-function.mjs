@@ -270,39 +270,34 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
-    async function _result(__metadata) {
-      __self.__removedTools = __self.__removedTools || [];
-      return runPrompt({
-        ctx: __ctx,
-        prompt: `Use the tools`,
-        messages: __metadata?.messages || new MessageThread(),
-        tools: [__safeLookupTool, __unsafeSaveTool],
-        toolHandlers: [{
-          name: "safeLookup",
-          params: __safeLookupToolParams,
-          execute: safeLookup,
-          isBuiltin: false
-        }, {
-          name: "unsafeSave",
-          params: __unsafeSaveToolParams,
-          execute: unsafeSave,
-          isBuiltin: false
-        }],
-        clientConfig: {},
-        stream: false,
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-    }
-__self.result = await _result({
-      messages: __threads.getOrCreateActive()
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.result = await runPrompt({
+      ctx: __ctx,
+      prompt: `Use the tools`,
+      messages: __threads.getOrCreateActive(),
+      tools: [__safeLookupTool, __unsafeSaveTool],
+      toolHandlers: [{
+        name: "safeLookup",
+        params: __safeLookupToolParams,
+        execute: safeLookup,
+        isBuiltin: false
+      }, {
+        name: "unsafeSave",
+        params: __unsafeSaveToolParams,
+        execute: unsafeSave,
+        isBuiltin: false
+      }],
+      clientConfig: {},
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
     });
 // return early from node if this is an interrupt
-if (isInterrupt(__self.result)) {
+if (isInterrupt(__stack.locals.result)) {
       return {
         messages: __threads,
-        data: __self.result
+        data: __stack.locals.result
       };
     }
     

@@ -132,35 +132,33 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
-    async function _numbers(__metadata) {
-      __self.__removedTools = __self.__removedTools || [];
-      return runPrompt({
-        ctx: __ctx,
-        prompt: `the first 5 prime numbers`,
-        messages: __metadata?.messages || new MessageThread(),
-        responseFormat: z.object({
-          response: z.array(z.number())
-        }),
-        tools: undefined,
-        toolHandlers: [],
-        clientConfig: {},
-        stream: false,
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-    }
-__self.numbers = _numbers({
-      messages: __threads.createAndReturnThread()
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.numbers = await runPrompt({
+      ctx: __ctx,
+      prompt: `the first 5 prime numbers`,
+      messages: __threads.getOrCreateActive(),
+      responseFormat: z.object({
+        response: z.array(z.number())
+      }),
+      tools: undefined,
+      toolHandlers: [],
+      clientConfig: {},
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.numbers)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.numbers
+      };
+    }
     
     __stack.step++;
   }
   if (__step <= 2) {
-    [__self.numbers] = await Promise.all([__self.numbers]);
-    __stack.step++;
-  }
-  if (__step <= 3) {
     __self.__retryable = false;
     await print(__stack.locals.numbers)
     
@@ -169,36 +167,34 @@ __self.numbers = _numbers({
     
     __stack.step++;
   }
-  if (__step <= 4) {
-    async function _greetings(__metadata) {
-      __self.__removedTools = __self.__removedTools || [];
-      return runPrompt({
-        ctx: __ctx,
-        prompt: `a list of 3 common greetings in different languages`,
-        messages: __metadata?.messages || new MessageThread(),
-        responseFormat: z.object({
-          response: z.array(z.string())
-        }),
-        tools: undefined,
-        toolHandlers: [],
-        clientConfig: {},
-        stream: false,
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-    }
-__self.greetings = _greetings({
-      messages: __threads.createAndReturnThread()
+  if (__step <= 3) {
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.greetings = await runPrompt({
+      ctx: __ctx,
+      prompt: `a list of 3 common greetings in different languages`,
+      messages: __threads.getOrCreateActive(),
+      responseFormat: z.object({
+        response: z.array(z.string())
+      }),
+      tools: undefined,
+      toolHandlers: [],
+      clientConfig: {},
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.greetings)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.greetings
+      };
+    }
     
     __stack.step++;
   }
-  if (__step <= 5) {
-    [__self.greetings] = await Promise.all([__self.greetings]);
-    __stack.step++;
-  }
-  if (__step <= 6) {
+  if (__step <= 4) {
     __self.__retryable = false;
     await print(__stack.locals.greetings)
     

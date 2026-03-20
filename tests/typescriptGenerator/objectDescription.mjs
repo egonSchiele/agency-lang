@@ -132,36 +132,34 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
-    async function _url(__metadata) {
-      __self.__removedTools = __self.__removedTools || [];
-      return runPrompt({
-        ctx: __ctx,
-        prompt: `extract the hostname and port from 'https://example.com:8080'`,
-        messages: __metadata?.messages || new MessageThread(),
-        responseFormat: z.object({
-          response: z.object({ "hostname": z.string(), "port": z.number() })
-        }),
-        tools: undefined,
-        toolHandlers: [],
-        clientConfig: {},
-        stream: false,
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-    }
-__self.url = _url({
-      messages: __threads.createAndReturnThread()
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.url = await runPrompt({
+      ctx: __ctx,
+      prompt: `extract the hostname and port from 'https://example.com:8080'`,
+      messages: __threads.getOrCreateActive(),
+      responseFormat: z.object({
+        response: z.object({ "hostname": z.string(), "port": z.number() })
+      }),
+      tools: undefined,
+      toolHandlers: [],
+      clientConfig: {},
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.url)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.url
+      };
+    }
     
     
     __stack.step++;
   }
   if (__step <= 2) {
-    [__self.url] = await Promise.all([__self.url]);
-    __stack.step++;
-  }
-  if (__step <= 3) {
     __self.__retryable = false;
     await print(__stack.locals.url)
     

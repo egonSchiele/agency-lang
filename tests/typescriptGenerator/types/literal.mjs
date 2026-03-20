@@ -129,17 +129,92 @@ const __graph = __ctx.graph;
   if (__step <= 0) {
     
     
-    // Removed unused LLM call "the string hi", was assigned to variable 'foo' but variable was never used.
+    __stack.step++;
+  }
+  if (__step <= 1) {
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.foo = await runPrompt({
+      ctx: __ctx,
+      prompt: `the string hi`,
+      messages: __threads.getOrCreateActive(),
+      responseFormat: z.object({
+        response: z.literal("hi")
+      }),
+      tools: undefined,
+      toolHandlers: [],
+      clientConfig: {},
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
+    });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.foo)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.foo
+      };
+    }
     
     
     
     
-    // Removed unused LLM call "the number 42", was assigned to variable 'bar' but variable was never used.
+    __stack.step++;
+  }
+  if (__step <= 2) {
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.bar = await runPrompt({
+      ctx: __ctx,
+      prompt: `the number 42`,
+      messages: __threads.getOrCreateActive(),
+      responseFormat: z.object({
+        response: z.literal(42)
+      }),
+      tools: undefined,
+      toolHandlers: [],
+      clientConfig: {},
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
+    });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.bar)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.bar
+      };
+    }
     
     
     
     
-    // Removed unused LLM call "the boolean true", was assigned to variable 'baz' but variable was never used.
+    __stack.step++;
+  }
+  if (__step <= 3) {
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.baz = await runPrompt({
+      ctx: __ctx,
+      prompt: `the boolean true`,
+      messages: __threads.getOrCreateActive(),
+      responseFormat: z.object({
+        response: z.literal(true)
+      }),
+      tools: undefined,
+      toolHandlers: [],
+      clientConfig: {},
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
+    });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.baz)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.baz
+      };
+    }
     
     __stack.step++;
   }

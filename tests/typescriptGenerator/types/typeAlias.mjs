@@ -133,35 +133,33 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
-    async function _foo(__metadata) {
-      __self.__removedTools = __self.__removedTools || [];
-      return runPrompt({
-        ctx: __ctx,
-        prompt: `a set of coordinates`,
-        messages: __metadata?.messages || new MessageThread(),
-        responseFormat: z.object({
-          response: z.object({ "x": z.number(), "y": z.number() })
-        }),
-        tools: undefined,
-        toolHandlers: [],
-        clientConfig: {},
-        stream: false,
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-    }
-__self.foo = _foo({
-      messages: __threads.createAndReturnThread()
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.foo = await runPrompt({
+      ctx: __ctx,
+      prompt: `a set of coordinates`,
+      messages: __threads.getOrCreateActive(),
+      responseFormat: z.object({
+        response: z.object({ "x": z.number(), "y": z.number() })
+      }),
+      tools: undefined,
+      toolHandlers: [],
+      clientConfig: {},
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.foo)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.foo
+      };
+    }
     
     __stack.step++;
   }
   if (__step <= 2) {
-    [__self.foo] = await Promise.all([__self.foo]);
-    __stack.step++;
-  }
-  if (__step <= 3) {
     __self.__retryable = false;
     await print(__stack.locals.foo)
     

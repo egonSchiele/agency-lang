@@ -175,32 +175,27 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 1) {
-      async function _result(x, y, __metadata) {
-        __self.__removedTools = __self.__removedTools || [];
-        return runPrompt({
-          ctx: __ctx,
-          prompt: `add ${x} and ${y}`,
-          messages: __metadata?.messages || new MessageThread(),
-          tools: undefined,
-          toolHandlers: [],
-          clientConfig: {},
-          stream: false,
-          maxToolCallRounds: 10,
-          interruptData: __state?.interruptData,
-          removedTools: __self.__removedTools
-        });
-      }
-__self.result = _result(__stack.args.x, __stack.args.y, {
-        messages: __threads.createAndReturnThread()
+      __self.__removedTools = __self.__removedTools || [];
+__stack.locals.result = await runPrompt({
+        ctx: __ctx,
+        prompt: `add ${__stack.args.x} and ${__stack.args.y}`,
+        messages: __threads.getOrCreateActive(),
+        tools: undefined,
+        toolHandlers: [],
+        clientConfig: {},
+        stream: false,
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
       });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.result)) {
+        return __stack.locals.result;
+      }
       
       __stack.step++;
     }
     if (__step <= 2) {
-      [__self.result] = await Promise.all([__self.result]);
-      __stack.step++;
-    }
-    if (__step <= 3) {
       return __stack.locals.result
       
       __stack.step++;
@@ -260,32 +255,27 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 1) {
-      async function _message(name, __metadata) {
-        __self.__removedTools = __self.__removedTools || [];
-        return runPrompt({
-          ctx: __ctx,
-          prompt: `Hello ${name}!`,
-          messages: __metadata?.messages || new MessageThread(),
-          tools: undefined,
-          toolHandlers: [],
-          clientConfig: {},
-          stream: false,
-          maxToolCallRounds: 10,
-          interruptData: __state?.interruptData,
-          removedTools: __self.__removedTools
-        });
-      }
-__self.message = _message(__stack.args.name, {
-        messages: __threads.createAndReturnThread()
+      __self.__removedTools = __self.__removedTools || [];
+__stack.locals.message = await runPrompt({
+        ctx: __ctx,
+        prompt: `Hello ${__stack.args.name}!`,
+        messages: __threads.getOrCreateActive(),
+        tools: undefined,
+        toolHandlers: [],
+        clientConfig: {},
+        stream: false,
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
       });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.message)) {
+        return __stack.locals.message;
+      }
       
       __stack.step++;
     }
     if (__step <= 2) {
-      [__self.message] = await Promise.all([__self.message]);
-      __stack.step++;
-    }
-    if (__step <= 3) {
       return __stack.locals.message
       
       __stack.step++;
@@ -347,32 +337,27 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 1) {
-      async function _output(label, count, __metadata) {
-        __self.__removedTools = __self.__removedTools || [];
-        return runPrompt({
-          ctx: __ctx,
-          prompt: `${label}: ${count}`,
-          messages: __metadata?.messages || new MessageThread(),
-          tools: undefined,
-          toolHandlers: [],
-          clientConfig: {},
-          stream: false,
-          maxToolCallRounds: 10,
-          interruptData: __state?.interruptData,
-          removedTools: __self.__removedTools
-        });
-      }
-__self.output = _output(__stack.args.label, __stack.args.count, {
-        messages: __threads.createAndReturnThread()
+      __self.__removedTools = __self.__removedTools || [];
+__stack.locals.output = await runPrompt({
+        ctx: __ctx,
+        prompt: `${__stack.args.label}: ${__stack.args.count}`,
+        messages: __threads.getOrCreateActive(),
+        tools: undefined,
+        toolHandlers: [],
+        clientConfig: {},
+        stream: false,
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
       });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.output)) {
+        return __stack.locals.output;
+      }
       
       __stack.step++;
     }
     if (__step <= 2) {
-      [__self.output] = await Promise.all([__self.output]);
-      __stack.step++;
-    }
-    if (__step <= 3) {
       return __stack.locals.output
       
       __stack.step++;
@@ -432,32 +417,27 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 1) {
-      async function _result(items, __metadata) {
-        __self.__removedTools = __self.__removedTools || [];
-        return runPrompt({
-          ctx: __ctx,
-          prompt: `Processing array with ${items} items`,
-          messages: __metadata?.messages || new MessageThread(),
-          tools: undefined,
-          toolHandlers: [],
-          clientConfig: {},
-          stream: false,
-          maxToolCallRounds: 10,
-          interruptData: __state?.interruptData,
-          removedTools: __self.__removedTools
-        });
-      }
-__self.result = _result(__stack.args.items, {
-        messages: __threads.createAndReturnThread()
+      __self.__removedTools = __self.__removedTools || [];
+__stack.locals.result = await runPrompt({
+        ctx: __ctx,
+        prompt: `Processing array with ${__stack.args.items} items`,
+        messages: __threads.getOrCreateActive(),
+        tools: undefined,
+        toolHandlers: [],
+        clientConfig: {},
+        stream: false,
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
       });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.result)) {
+        return __stack.locals.result;
+      }
       
       __stack.step++;
     }
     if (__step <= 2) {
-      [__self.result] = await Promise.all([__self.result]);
-      __stack.step++;
-    }
-    if (__step <= 3) {
       return __stack.locals.result
       
       __stack.step++;
@@ -517,32 +497,27 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 1) {
-      async function _result(value, __metadata) {
-        __self.__removedTools = __self.__removedTools || [];
-        return runPrompt({
-          ctx: __ctx,
-          prompt: `Received value: ${value}`,
-          messages: __metadata?.messages || new MessageThread(),
-          tools: undefined,
-          toolHandlers: [],
-          clientConfig: {},
-          stream: false,
-          maxToolCallRounds: 10,
-          interruptData: __state?.interruptData,
-          removedTools: __self.__removedTools
-        });
-      }
-__self.result = _result(__stack.args.value, {
-        messages: __threads.createAndReturnThread()
+      __self.__removedTools = __self.__removedTools || [];
+__stack.locals.result = await runPrompt({
+        ctx: __ctx,
+        prompt: `Received value: ${__stack.args.value}`,
+        messages: __threads.getOrCreateActive(),
+        tools: undefined,
+        toolHandlers: [],
+        clientConfig: {},
+        stream: false,
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
       });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.result)) {
+        return __stack.locals.result;
+      }
       
       __stack.step++;
     }
     if (__step <= 2) {
-      [__self.result] = await Promise.all([__self.result]);
-      __stack.step++;
-    }
-    if (__step <= 3) {
       return __stack.locals.result
       
       __stack.step++;

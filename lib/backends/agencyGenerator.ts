@@ -9,7 +9,6 @@ import {
   MultiLineStringLiteral,
   NewLine,
   ObjectProperty,
-  PromptLiteral,
   Scope,
   ScopeType,
   StringLiteral,
@@ -197,7 +196,6 @@ export class AgencyGenerator {
       case "multiLineString":
       case "string":
       case "variableName":
-      case "prompt":
       case "boolean":
         return this.generateLiteral(node);
       case "returnStatement":
@@ -416,8 +414,6 @@ export class AgencyGenerator {
         return literal.value;
       case "multiLineString":
         return this.generateMultiLineStringLiteral(literal);
-      case "prompt":
-        return this.indentStr(this.generatePromptLiteral(literal));
       case "boolean":
         return literal.value ? "true" : "false";
       default:
@@ -425,28 +421,6 @@ export class AgencyGenerator {
     }
   }
 
-  private generatePromptLiteral(node: PromptLiteral): string {
-    let result = "";
-    if (node.isStreaming) {
-      result += "stream ";
-    }
-    result += 'llm("';
-    for (const segment of node.segments) {
-      if (segment.type === "text") {
-        result += segment.value;
-      } else if (segment.type === "interpolation") {
-        result += `\${${expressionToString(segment.expression)}}`;
-      }
-    }
-
-    if (node.config) {
-      const objCode = this.processNode(node.config);
-      result += `", ${objCode})`;
-    } else {
-      result += `")`;
-    }
-    return result;
-  }
 
   private generateStringLiteral(node: StringLiteral): string {
     let result = '"';
@@ -477,13 +451,6 @@ export class AgencyGenerator {
       .join("\n");
   }
 
-  protected processPromptLiteral(
-    variableName: string,
-    variableType: VariableType | undefined,
-    node: PromptLiteral,
-  ): string {
-    return "";
-  }
 
   // Function methods
 

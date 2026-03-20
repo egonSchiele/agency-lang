@@ -131,7 +131,29 @@ const __graph = __ctx.graph;
   }
   if (__step <= 0) {
     
-    // Removed unused LLM call "Analyzing: {input}", was assigned to variable 'result' but variable was never used.
+    __stack.step++;
+  }
+  if (__step <= 1) {
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.result = await runPrompt({
+      ctx: __ctx,
+      prompt: `Analyzing: ${__stack.args.input}`,
+      messages: __threads.getOrCreateActive(),
+      tools: undefined,
+      toolHandlers: [],
+      clientConfig: {},
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
+    });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.result)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.result
+      };
+    }
     
     __stack.step++;
   }

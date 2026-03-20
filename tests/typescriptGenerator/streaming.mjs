@@ -131,67 +131,66 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
-    async function _response(__metadata) {
-      __self.__removedTools = __self.__removedTools || [];
-      return runPrompt({
-        ctx: __ctx,
-        prompt: `Generate a response word by word`,
-        messages: __metadata?.messages || new MessageThread(),
-        tools: undefined,
-        toolHandlers: [],
-        clientConfig: {},
-        stream: true,
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-    }
-__self.response = _response({
-      messages: __threads.createAndReturnThread()
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.response = await runPrompt({
+      ctx: __ctx,
+      prompt: `Generate a response word by word`,
+      messages: __threads.getOrCreateActive(),
+      tools: undefined,
+      toolHandlers: [],
+      clientConfig: {
+        "stream": true
+      },
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.response)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.response
+      };
+    }
     
     __stack.step++;
   }
   if (__step <= 2) {
-    [__self.response] = await Promise.all([__self.response]);
-    __stack.step++;
-  }
-  if (__step <= 3) {
     __self.__retryable = false;
     await print(__stack.locals.response)
     
     
     __stack.step++;
   }
-  if (__step <= 4) {
-    async function _response2(__metadata) {
-      __self.__removedTools = __self.__removedTools || [];
-      return runPrompt({
-        ctx: __ctx,
-        prompt: `Generate a response word by word, but with a different model`,
-        messages: __metadata?.messages || new MessageThread(),
-        tools: undefined,
-        toolHandlers: [],
-        clientConfig: {
-          "model": `gemini-2.5-flash-lite`
-        },
-        stream: true,
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-    }
-__self.response2 = _response2({
-      messages: __threads.createAndReturnThread()
+  if (__step <= 3) {
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.response2 = await runPrompt({
+      ctx: __ctx,
+      prompt: `Generate a response word by word, but with a different model`,
+      messages: __threads.getOrCreateActive(),
+      tools: undefined,
+      toolHandlers: [],
+      clientConfig: {
+        "model": `gemini-2.5-flash-lite`,
+        "stream": true
+      },
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.response2)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.response2
+      };
+    }
     
     __stack.step++;
   }
-  if (__step <= 5) {
-    [__self.response2] = await Promise.all([__self.response2]);
-    __stack.step++;
-  }
-  if (__step <= 6) {
+  if (__step <= 4) {
     __self.__retryable = false;
     await print(__stack.locals.response2)
     
@@ -210,6 +209,7 @@ __self.response2 = _response2({
     data: undefined
   };
 })
+
 export async function foo({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
     ctx: __globalCtx,

@@ -132,27 +132,29 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
-    async function _count(__metadata) {
-      __self.__removedTools = __self.__removedTools || [];
-      return runPrompt({
-        ctx: __ctx,
-        prompt: `the number 42`,
-        messages: __metadata?.messages || new MessageThread(),
-        responseFormat: z.object({
-          response: z.number()
-        }),
-        tools: undefined,
-        toolHandlers: [],
-        clientConfig: {},
-        stream: false,
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-    }
-__self.count = _count({
-      messages: __threads.createAndReturnThread()
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.count = await runPrompt({
+      ctx: __ctx,
+      prompt: `the number 42`,
+      messages: __threads.getOrCreateActive(),
+      responseFormat: z.object({
+        response: z.number()
+      }),
+      tools: undefined,
+      toolHandlers: [],
+      clientConfig: {},
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.count)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.count
+      };
+    }
     
     
     
@@ -160,43 +162,37 @@ __self.count = _count({
     __stack.step++;
   }
   if (__step <= 2) {
-    async function _message(__metadata) {
-      __self.__removedTools = __self.__removedTools || [];
-      return runPrompt({
-        ctx: __ctx,
-        prompt: `a greeting message`,
-        messages: __metadata?.messages || new MessageThread(),
-        tools: undefined,
-        toolHandlers: [],
-        clientConfig: {},
-        stream: false,
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-    }
-__self.message = _message({
-      messages: __threads.createAndReturnThread()
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.message = await runPrompt({
+      ctx: __ctx,
+      prompt: `a greeting message`,
+      messages: __threads.getOrCreateActive(),
+      tools: undefined,
+      toolHandlers: [],
+      clientConfig: {},
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.message)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.message
+      };
+    }
     
     
     __stack.step++;
   }
   if (__step <= 3) {
-    [__self.count] = await Promise.all([__self.count]);
-    __stack.step++;
-  }
-  if (__step <= 4) {
     __self.__retryable = false;
     await print(__stack.locals.count)
     
     __stack.step++;
   }
-  if (__step <= 5) {
-    [__self.message] = await Promise.all([__self.message]);
-    __stack.step++;
-  }
-  if (__step <= 6) {
+  if (__step <= 4) {
     __self.__retryable = false;
     await print(__stack.locals.message)
     

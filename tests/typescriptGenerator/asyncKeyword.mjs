@@ -162,24 +162,23 @@ const __graph = __ctx.graph;
     }
     if (__step <= 1) {
       let __defaultTimeblockName_startTime: number = performance.now();
-async function _response(msg, __metadata) {
-        __self.__removedTools = __self.__removedTools || [];
-        return runPrompt({
-          ctx: __ctx,
-          prompt: `Respond to this user message: ${msg}`,
-          messages: __metadata?.messages || new MessageThread(),
-          tools: undefined,
-          toolHandlers: [],
-          clientConfig: {},
-          stream: false,
-          maxToolCallRounds: 10,
-          interruptData: __state?.interruptData,
-          removedTools: __self.__removedTools
-        });
-      }
-__self.response = _response(__stack.args.msg, {
-        messages: __threads.createAndReturnThread()
+__self.__removedTools = __self.__removedTools || [];
+__stack.locals.response = await runPrompt({
+        ctx: __ctx,
+        prompt: `Respond to this user message: ${__stack.args.msg}`,
+        messages: __threads.getOrCreateActive(),
+        tools: undefined,
+        toolHandlers: [],
+        clientConfig: {},
+        stream: false,
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
       });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.response)) {
+        return __stack.locals.response;
+      }
 
 let __defaultTimeblockName_endTime: number = performance.now();
 let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultTimeblockName_startTime;
@@ -191,10 +190,6 @@ __defaultTimeblockName
       __stack.step++;
     }
     if (__step <= 2) {
-      [__self.response] = await Promise.all([__self.response]);
-      __stack.step++;
-    }
-    if (__step <= 3) {
       return `OpenAI response: ${__stack.locals.response}`
       
       __stack.step++;
@@ -260,26 +255,25 @@ const __graph = __ctx.graph;
     }
     if (__step <= 2) {
       let __defaultTimeblockName_startTime: number = performance.now();
-async function _response(msg, __metadata) {
-        __self.__removedTools = __self.__removedTools || [];
-        return runPrompt({
-          ctx: __ctx,
-          prompt: `Respond to this user message: ${msg}`,
-          messages: __metadata?.messages || new MessageThread(),
-          tools: undefined,
-          toolHandlers: [],
-          clientConfig: {
-            "model": `gemini-2.5-flash-lite`
-          },
-          stream: false,
-          maxToolCallRounds: 10,
-          interruptData: __state?.interruptData,
-          removedTools: __self.__removedTools
-        });
-      }
-__self.response = _response(__stack.args.msg, {
-        messages: __threads.createAndReturnThread()
+__self.__removedTools = __self.__removedTools || [];
+__stack.locals.response = await runPrompt({
+        ctx: __ctx,
+        prompt: `Respond to this user message: ${__stack.args.msg}`,
+        messages: __threads.getOrCreateActive(),
+        tools: undefined,
+        toolHandlers: [],
+        clientConfig: {
+          "model": `gemini-2.5-flash-lite`
+        },
+        stream: false,
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
       });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.response)) {
+        return __stack.locals.response;
+      }
 
 let __defaultTimeblockName_endTime: number = performance.now();
 let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultTimeblockName_startTime;
@@ -290,10 +284,6 @@ __defaultTimeblockName
       __stack.step++;
     }
     if (__step <= 3) {
-      [__self.response] = await Promise.all([__self.response]);
-      __stack.step++;
-    }
-    if (__step <= 4) {
       return `Google response: ${__stack.locals.response}`
       
       __stack.step++;
@@ -350,30 +340,25 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 1) {
-      async function ___promptVar(__metadata) {
-        __self.__removedTools = __self.__removedTools || [];
-        return runPrompt({
-          ctx: __ctx,
-          prompt: `Generate the first 10 Fibonacci numbers`,
-          messages: __metadata?.messages || new MessageThread(),
-          responseFormat: z.object({
-            response: z.array(z.number())
-          }),
-          tools: undefined,
-          toolHandlers: [],
-          clientConfig: {},
-          stream: false,
-          maxToolCallRounds: 10,
-          interruptData: __state?.interruptData,
-          removedTools: __self.__removedTools
-        });
-      }
-__self.__promptVar = await ___promptVar({
-        messages: __threads.getOrCreateActive()
+      __self.__removedTools = __self.__removedTools || [];
+__stack.locals.__promptVar = await runPrompt({
+        ctx: __ctx,
+        prompt: `Generate the first 10 Fibonacci numbers`,
+        messages: __threads.getOrCreateActive(),
+        responseFormat: z.object({
+          response: z.array(z.number())
+        }),
+        tools: undefined,
+        toolHandlers: [],
+        clientConfig: {},
+        stream: false,
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
       });
 // return early from node if this is an interrupt
-if (isInterrupt(__self.__promptVar)) {
-        return __self.__promptVar;
+if (isInterrupt(__stack.locals.__promptVar)) {
+        return __stack.locals.__promptVar;
       }
 return __self.__promptVar
       

@@ -22,15 +22,15 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                     variableName: "story",
                     typeHint: { type: "primitiveType", value: "string" },
                     value: {
-                      type: "prompt",
-                      segments: [
+                      type: "functionCall",
+                      functionName: "llm",
+                      arguments: [{ type: "string", segments: [
                         {
                           type: "text",
                           value: "Write a story",
                         },
-                      ],
+                      ] }],
                       async: true,
-                      isStreaming: true,
                     },
                   },
                   {
@@ -41,15 +41,15 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                       elementType: { type: "primitiveType", value: "number" },
                     },
                     value: {
-                      type: "prompt",
-                      segments: [
+                      type: "functionCall",
+                      functionName: "llm",
+                      arguments: [{ type: "string", segments: [
                         {
                           type: "text",
                           value: "Get fibonacci numbers",
                         },
-                      ],
+                      ] }],
                       async: true,
-                      isStreaming: true,
                     },
                   },
                 ],
@@ -92,12 +92,13 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
       expect(messageThreadNode).toBeDefined();
       if (messageThreadNode?.type === "messageThread") {
         const promptNodes = messageThreadNode.body.filter(
-          (node) => node.type === "assignment" && node.value.type === "prompt",
+          (node) => node.type === "assignment" && node.value.type === "functionCall",
         );
         expect(promptNodes.length).toBe(2);
-        for (const promptNode of promptNodes) {
-          // @ts-ignore
-          expect(promptNode.value.async).toBe(false);
+        for (const node of promptNodes) {
+          if (node.type === "assignment" && node.value.type === "functionCall") {
+            expect(node.value.async).toBe(false);
+          }
         }
       }
     });
@@ -119,13 +120,14 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                     variableName: "result",
                     typeHint: { type: "primitiveType", value: "string" },
                     value: {
-                      type: "prompt",
-                      segments: [
+                      type: "functionCall",
+                      functionName: "llm",
+                      arguments: [{ type: "string", segments: [
                         {
                           type: "text",
                           value: "Get result",
                         },
-                      ],
+                      ] }],
                       async: true,
                     },
                   },
@@ -178,13 +180,14 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                 variableName: "story",
                 typeHint: { type: "primitiveType", value: "string" },
                 value: {
-                  type: "prompt",
-                  segments: [
+                  type: "functionCall",
+                  functionName: "llm",
+                  arguments: [{ type: "string", segments: [
                     {
                       type: "text",
                       value: "Write a story",
                     },
-                  ],
+                  ] }],
                   async: true,
                 },
               },
@@ -239,13 +242,14 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                     type: "assignment",
                     variableName: "inner",
                     value: {
-                      type: "prompt",
-                      segments: [
+                      type: "functionCall",
+                      functionName: "llm",
+                      arguments: [{ type: "string", segments: [
                         {
                           type: "text",
                           value: "Inner prompt",
                         },
-                      ],
+                      ] }],
                       async: true,
                     },
                   },
@@ -302,8 +306,9 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                     variableName: "a",
                     typeHint: { type: "primitiveType", value: "number" },
                     value: {
-                      type: "prompt",
-                      segments: [{ type: "text", value: "What is 2+2?" }],
+                      type: "functionCall",
+                      functionName: "llm",
+                      arguments: [{ type: "string", segments: [{ type: "text", value: "What is 2+2?" }] }],
                     },
                   },
                   {
@@ -311,8 +316,9 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                     variableName: "b",
                     typeHint: { type: "primitiveType", value: "number" },
                     value: {
-                      type: "prompt",
-                      segments: [{ type: "text", value: "What is 3+3?" }],
+                      type: "functionCall",
+                      functionName: "llm",
+                      arguments: [{ type: "string", segments: [{ type: "text", value: "What is 3+3?" }] }],
                     },
                   },
                 ],
@@ -335,11 +341,11 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
       if (parallelNode?.type !== "messageThread") return;
 
       const assignments = parallelNode.body.filter(
-        (n) => n.type === "assignment" && n.value.type === "prompt",
+        (n) => n.type === "assignment" && n.value.type === "functionCall",
       );
       expect(assignments.length).toBe(2);
       for (const a of assignments) {
-        if (a.type === "assignment" && a.value.type === "prompt") {
+        if (a.type === "assignment" && a.value.type === "functionCall") {
           expect(a.value.async).toBe(true);
         }
       }
@@ -365,8 +371,9 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                     variableName: "sync_res",
                     typeHint: { type: "primitiveType", value: "string" },
                     value: {
-                      type: "prompt",
-                      segments: [{ type: "text", value: "sync prompt" }],
+                      type: "functionCall",
+                      functionName: "llm",
+                      arguments: [{ type: "string", segments: [{ type: "text", value: "sync prompt" }] }],
                     },
                   },
                   {
@@ -378,8 +385,9 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                         variableName: "async_a",
                         typeHint: { type: "primitiveType", value: "number" },
                         value: {
-                          type: "prompt",
-                          segments: [{ type: "text", value: "parallel a" }],
+                          type: "functionCall",
+                          functionName: "llm",
+                          arguments: [{ type: "string", segments: [{ type: "text", value: "parallel a" }] }],
                         },
                       },
                       {
@@ -387,8 +395,9 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                         variableName: "async_b",
                         typeHint: { type: "primitiveType", value: "number" },
                         value: {
-                          type: "prompt",
-                          segments: [{ type: "text", value: "parallel b" }],
+                          type: "functionCall",
+                          functionName: "llm",
+                          arguments: [{ type: "string", segments: [{ type: "text", value: "parallel b" }] }],
                         },
                       },
                     ],
@@ -416,21 +425,22 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
       expect(syncAssignment).toBeDefined();
       if (
         syncAssignment?.type === "assignment" &&
-        syncAssignment.value.type === "prompt"
+        syncAssignment.value.type === "functionCall" &&
+        syncAssignment.value.functionName === "llm"
       ) {
         expect(syncAssignment.value.async).toBe(false);
       }
 
-      // Parallel-level prompts should be async
+      // Parallel-level llm calls should be async
       const parallelNode = threadNode.body.find(
         (n) => n.type === "messageThread" && n.threadType === "parallel",
       );
       if (parallelNode?.type !== "messageThread") return;
       const asyncAssignments = parallelNode.body.filter(
-        (n) => n.type === "assignment" && n.value.type === "prompt",
+        (n) => n.type === "assignment" && n.value.type === "functionCall",
       );
       for (const a of asyncAssignments) {
-        if (a.type === "assignment" && a.value.type === "prompt") {
+        if (a.type === "assignment" && a.value.type === "functionCall") {
           expect(a.value.async).toBe(true);
         }
       }
@@ -460,8 +470,9 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                         variableName: "inner",
                         typeHint: { type: "primitiveType", value: "string" },
                         value: {
-                          type: "prompt",
-                          segments: [{ type: "text", value: "inner prompt" }],
+                          type: "functionCall",
+                          functionName: "llm",
+                          arguments: [{ type: "string", segments: [{ type: "text", value: "inner prompt" }] }],
                         },
                       },
                     ],
@@ -494,13 +505,14 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
       );
       if (
         assignment?.type === "assignment" &&
-        assignment.value.type === "prompt"
+        assignment.value.type === "functionCall" &&
+        assignment.value.functionName === "llm"
       ) {
         expect(assignment.value.async).toBe(false);
       }
     });
 
-    it("should allow function calls containing prompts to be async inside parallel block", () => {
+    it("should allow function calls containing llm calls to be async inside parallel block", () => {
       // A function that contains a prompt, called inside a parallel block,
       // should NOT be forced sync (unlike in a regular thread block)
       const program: AgencyProgram = {
@@ -516,8 +528,9 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                 variableName: "x",
                 typeHint: { type: "primitiveType", value: "string" },
                 value: {
-                  type: "prompt",
-                  segments: [{ type: "text", value: "helper prompt" }],
+                  type: "functionCall",
+                  functionName: "llm",
+                  arguments: [{ type: "string", segments: [{ type: "text", value: "helper prompt" }] }],
                 },
               },
             ],
@@ -591,8 +604,9 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                     variableName: "a",
                     typeHint: { type: "primitiveType", value: "number" },
                     value: {
-                      type: "prompt",
-                      segments: [{ type: "text", value: "What is 2+2?" }],
+                      type: "functionCall",
+                      functionName: "llm",
+                      arguments: [{ type: "string", segments: [{ type: "text", value: "What is 2+2?" }] }],
                     },
                   },
                   {
@@ -600,8 +614,9 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                     variableName: "b",
                     typeHint: { type: "primitiveType", value: "number" },
                     value: {
-                      type: "prompt",
-                      segments: [{ type: "text", value: "What is 3+3?" }],
+                      type: "functionCall",
+                      functionName: "llm",
+                      arguments: [{ type: "string", segments: [{ type: "text", value: "What is 3+3?" }] }],
                     },
                   },
                 ],
@@ -696,8 +711,9 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                     variableName: "x",
                     typeHint: { type: "primitiveType", value: "number" },
                     value: {
-                      type: "prompt",
-                      segments: [{ type: "text", value: "prompt x" }],
+                      type: "functionCall",
+                      functionName: "llm",
+                      arguments: [{ type: "string", segments: [{ type: "text", value: "prompt x" }] }],
                     },
                   },
                   {
@@ -705,8 +721,9 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                     variableName: "y",
                     typeHint: { type: "primitiveType", value: "number" },
                     value: {
-                      type: "prompt",
-                      segments: [{ type: "text", value: "prompt y" }],
+                      type: "functionCall",
+                      functionName: "llm",
+                      arguments: [{ type: "string", segments: [{ type: "text", value: "prompt y" }] }],
                     },
                   },
                   {
@@ -714,8 +731,9 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                     variableName: "z",
                     typeHint: { type: "primitiveType", value: "number" },
                     value: {
-                      type: "prompt",
-                      segments: [{ type: "text", value: "prompt z" }],
+                      type: "functionCall",
+                      functionName: "llm",
+                      arguments: [{ type: "string", segments: [{ type: "text", value: "prompt z" }] }],
                     },
                   },
                 ],
@@ -762,8 +780,9 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                 variableName: "inner",
                 typeHint: { type: "primitiveType", value: "string" },
                 value: {
-                  type: "prompt",
-                  segments: [{ type: "text", value: "helper prompt" }],
+                  type: "functionCall",
+                  functionName: "llm",
+                  arguments: [{ type: "string", segments: [{ type: "text", value: "helper prompt" }] }],
                 },
               },
             ],
@@ -782,8 +801,9 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                     variableName: "fromPrompt",
                     typeHint: { type: "primitiveType", value: "number" },
                     value: {
-                      type: "prompt",
-                      segments: [{ type: "text", value: "What is 2+2?" }],
+                      type: "functionCall",
+                      functionName: "llm",
+                      arguments: [{ type: "string", segments: [{ type: "text", value: "What is 2+2?" }] }],
                     },
                   },
                   {
@@ -845,8 +865,9 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                     variableName: "a",
                     typeHint: { type: "primitiveType", value: "number" },
                     value: {
-                      type: "prompt",
-                      segments: [{ type: "text", value: "What is 2+2?" }],
+                      type: "functionCall",
+                      functionName: "llm",
+                      arguments: [{ type: "string", segments: [{ type: "text", value: "What is 2+2?" }] }],
                     },
                   },
                 ],
@@ -913,8 +934,9 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                     type: "assignment",
                     variableName: "a",
                     value: {
-                      type: "prompt",
-                      segments: [{ type: "text", value: "Get A" }],
+                      type: "functionCall",
+                      functionName: "llm",
+                      arguments: [{ type: "string", segments: [{ type: "text", value: "Get A" }] }],
                       async: true,
                     },
                   },
@@ -927,8 +949,9 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                     type: "assignment",
                     variableName: "b",
                     value: {
-                      type: "prompt",
-                      segments: [{ type: "text", value: "Get B" }],
+                      type: "functionCall",
+                      functionName: "llm",
+                      arguments: [{ type: "string", segments: [{ type: "text", value: "Get B" }] }],
                       async: true,
                     },
                   },

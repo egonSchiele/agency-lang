@@ -250,34 +250,29 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 2) {
-    async function _response(name, age, __metadata) {
-      __self.__removedTools = __self.__removedTools || [];
-      return runPrompt({
-        ctx: __ctx,
-        prompt: `Greet the user with their name: ${name} and age ${age} using the greet function.`,
-        messages: __metadata?.messages || new MessageThread(),
-        tools: [__greetTool],
-        toolHandlers: [{
-          name: "greet",
-          params: __greetToolParams,
-          execute: greet,
-          isBuiltin: false
-        }],
-        clientConfig: {},
-        stream: false,
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-    }
-__self.response = await _response(__stack.args.name, __stack.args.age, {
-      messages: __threads.getOrCreateActive()
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.response = await runPrompt({
+      ctx: __ctx,
+      prompt: `Greet the user with their name: ${__stack.args.name} and age ${__stack.args.age} using the greet function.`,
+      messages: __threads.getOrCreateActive(),
+      tools: [__greetTool],
+      toolHandlers: [{
+        name: "greet",
+        params: __greetToolParams,
+        execute: greet,
+        isBuiltin: false
+      }],
+      clientConfig: {},
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
     });
 // return early from node if this is an interrupt
-if (isInterrupt(__self.response)) {
+if (isInterrupt(__stack.locals.response)) {
       return {
         messages: __threads,
-        data: __self.response
+        data: __stack.locals.response
       };
     }
     

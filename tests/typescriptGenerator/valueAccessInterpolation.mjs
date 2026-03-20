@@ -144,32 +144,30 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 3) {
-    async function _result(user, __metadata) {
-      __self.__removedTools = __self.__removedTools || [];
-      return runPrompt({
-        ctx: __ctx,
-        prompt: `Tell me about ${user.name} who is ${user.age} years old`,
-        messages: __metadata?.messages || new MessageThread(),
-        tools: undefined,
-        toolHandlers: [],
-        clientConfig: {},
-        stream: false,
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-    }
-__self.result = _result(__stack.locals.user, {
-      messages: __threads.createAndReturnThread()
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.result = await runPrompt({
+      ctx: __ctx,
+      prompt: `Tell me about ${__stack.locals.user.name} who is ${__stack.locals.user.age} years old`,
+      messages: __threads.getOrCreateActive(),
+      tools: undefined,
+      toolHandlers: [],
+      clientConfig: {},
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.result)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.result
+      };
+    }
     
     __stack.step++;
   }
   if (__step <= 4) {
-    [__self.result] = await Promise.all([__self.result]);
-    __stack.step++;
-  }
-  if (__step <= 5) {
     __self.__retryable = false;
     await print(__stack.locals.result)
     

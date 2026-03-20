@@ -1,15 +1,11 @@
-import { AgencyNode, ScopeType } from "@/types.js";
+import { ScopeType } from "@/types.js";
 import { ValueAccess } from "./access.js";
-import { AgencyObject } from "./dataStructures.js";
-import { Skill } from "./skill.js";
-import { UsesTool } from "./tools.js";
 
 export type Literal =
   | NumberLiteral
   | MultiLineStringLiteral
   | StringLiteral
   | VariableNameLiteral
-  | PromptLiteral
   | BooleanLiteral;
 
 export type NumberLiteral = {
@@ -50,16 +46,6 @@ export type TextSegment = {
 export type InterpolationSegment = {
   type: "interpolation";
   expression: VariableNameLiteral | ValueAccess;
-};
-
-export type PromptLiteral = {
-  type: "prompt";
-  segments: PromptSegment[];
-  config?: AgencyNode;
-  isStreaming?: boolean;
-  async?: boolean;
-  tools?: UsesTool;
-  skills?: Skill[];
 };
 
 export type RawCode = {

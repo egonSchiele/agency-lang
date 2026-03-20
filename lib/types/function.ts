@@ -7,6 +7,7 @@ import {
 import { ValueAccess } from "./access.js";
 import { BinOpExpression } from "./binop.js";
 import { Literal } from "./literals.js";
+import { UsesTool } from "./tools.js";
 
 export type FunctionParameter = {
   type: "functionParameter";
@@ -37,6 +38,7 @@ export type FunctionCall = {
     | FunctionCall
   )[];
   async?: boolean;
+  tools?: UsesTool;
 };
 
 export type DocString = {

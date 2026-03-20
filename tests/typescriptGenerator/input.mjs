@@ -144,35 +144,33 @@ if (isInterrupt(__stack.locals.message)) {
     __stack.step++;
   }
   if (__step <= 2) {
-    async function _sentiment(message, __metadata) {
-      __self.__removedTools = __self.__removedTools || [];
-      return runPrompt({
-        ctx: __ctx,
-        prompt: `Categorize the sentiment in this message: ${message}`,
-        messages: __metadata?.messages || new MessageThread(),
-        responseFormat: z.object({
-          response: z.union([z.literal("happy"), z.literal("sad"), z.literal("neutral")])
-        }),
-        tools: undefined,
-        toolHandlers: [],
-        clientConfig: {},
-        stream: false,
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-    }
-__self.sentiment = _sentiment(__stack.locals.message, {
-      messages: __threads.createAndReturnThread()
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.sentiment = await runPrompt({
+      ctx: __ctx,
+      prompt: `Categorize the sentiment in this message: ${__stack.locals.message}`,
+      messages: __threads.getOrCreateActive(),
+      responseFormat: z.object({
+        response: z.union([z.literal("happy"), z.literal("sad"), z.literal("neutral")])
+      }),
+      tools: undefined,
+      toolHandlers: [],
+      clientConfig: {},
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.sentiment)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.sentiment
+      };
+    }
     
     __stack.step++;
   }
   if (__step <= 3) {
-    [__self.sentiment] = await Promise.all([__self.sentiment]);
-    __stack.step++;
-  }
-  if (__step <= 4) {
     __self.__retryable = false;
     await print(__stack.locals.sentiment)
     

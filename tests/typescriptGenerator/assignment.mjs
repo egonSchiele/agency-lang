@@ -129,7 +129,32 @@ const __graph = __ctx.graph;
   if (__step <= 0) {
     
     
-    // Removed unused LLM call "the number 1", was assigned to variable 'bar' but variable was never used.
+    __stack.step++;
+  }
+  if (__step <= 1) {
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.bar = await runPrompt({
+      ctx: __ctx,
+      prompt: `the number 1`,
+      messages: __threads.getOrCreateActive(),
+      responseFormat: z.object({
+        response: z.number()
+      }),
+      tools: undefined,
+      toolHandlers: [],
+      clientConfig: {},
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
+    });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.bar)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.bar
+      };
+    }
     
     __stack.step++;
   }

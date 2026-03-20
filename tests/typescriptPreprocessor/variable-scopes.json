@@ -148,8 +148,7 @@
                 "value": "nodeLocal",
                 "scope": "local"
               }
-            ],
-            "async": false
+            ]
           },
           "scope": "local"
         },
@@ -165,8 +164,7 @@
               "value": "output",
               "scope": "local"
             }
-          ],
-          "async": false
+          ]
         },
         {
           "type": "newLine"

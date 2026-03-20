@@ -36,7 +36,6 @@ async function _runPrompt({
   tools,
   prompt,
   responseFormat,
-  stream,
   clientConfig,
 }: {
   ctx: RuntimeContext<GraphState>;
@@ -44,9 +43,9 @@ async function _runPrompt({
   tools: Tool[];
   prompt: string;
   responseFormat?: any;
-  stream?: boolean;
   clientConfig: Partial<smoltalk.SmolPromptConfig>;
 }): Promise<{ messages: MessageThread; toolCalls: smoltalk.ToolCallJSON[] }> {
+  const stream = !!(clientConfig as any)?.stream;
   const startTime = performance.now();
 
   const startHookResult = await callHook({
@@ -355,7 +354,6 @@ export async function runPrompt(args: {
   tools?: Tool[];
   toolHandlers?: ToolHandler[];
   clientConfig: Partial<smoltalk.SmolPromptConfig>;
-  stream?: boolean;
   maxToolCallRounds?: number;
   interruptData?: InterruptData;
   removedTools?: string[];
@@ -364,7 +362,6 @@ export async function runPrompt(args: {
     ctx,
     prompt,
     responseFormat,
-    stream = false,
     maxToolCallRounds = 10,
     removedTools = [],
   } = args;
@@ -402,7 +399,6 @@ export async function runPrompt(args: {
       tools: tools || [],
       prompt,
       responseFormat,
-      stream,
       clientConfig,
     });
     messages = result.messages;
@@ -461,7 +457,6 @@ export async function runPrompt(args: {
       tools: tools || [],
       prompt,
       responseFormat,
-      stream,
       clientConfig,
     });
     messages = result.messages;

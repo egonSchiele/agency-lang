@@ -139,35 +139,33 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 2) {
-    async function _response(person, __metadata) {
-      __self.__removedTools = __self.__removedTools || [];
-      return runPrompt({
-        ctx: __ctx,
-        prompt: `Say hi to ${person.name}, who is ${person.age} years old.`,
-        messages: __metadata?.messages || new MessageThread(),
-        responseFormat: z.object({
-          response: z.object({ "greeting": z.string() })
-        }),
-        tools: undefined,
-        toolHandlers: [],
-        clientConfig: {},
-        stream: false,
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-    }
-__self.response = _response(__stack.locals.person, {
-      messages: __threads.createAndReturnThread()
+    __self.__removedTools = __self.__removedTools || [];
+__stack.locals.response = await runPrompt({
+      ctx: __ctx,
+      prompt: `Say hi to ${__stack.locals.person.name}, who is ${__stack.locals.person.age} years old.`,
+      messages: __threads.getOrCreateActive(),
+      responseFormat: z.object({
+        response: z.object({ "greeting": z.string() })
+      }),
+      tools: undefined,
+      toolHandlers: [],
+      clientConfig: {},
+      stream: false,
+      maxToolCallRounds: 10,
+      interruptData: __state?.interruptData,
+      removedTools: __self.__removedTools
     });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.response)) {
+      return {
+        messages: __threads,
+        data: __stack.locals.response
+      };
+    }
     
     __stack.step++;
   }
   if (__step <= 3) {
-    [__self.response] = await Promise.all([__self.response]);
-    __stack.step++;
-  }
-  if (__step <= 4) {
     __self.__retryable = false;
     await print(__stack.locals.response)
     

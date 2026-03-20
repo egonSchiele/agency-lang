@@ -1,0 +1,10 @@
+{
+  "data": 10,
+  "auditTypes": [
+    "nodeEntry",
+    "return",
+    "assignment",
+    "return",
+    "nodeExit"
+  ]
+}

@@ -128,6 +128,14 @@ async function _runPrompt({
     usage: completion.usage,
     cost: completion.cost,
   });
+  await ctx.audit({
+    type: "llmCall",
+    model: String(modelName),
+    prompt,
+    response: completion.output,
+    tokens: completion.usage,
+    duration: endTime - startTime,
+  });
   const endHookResult = await callHook({
     callbacks: ctx.callbacks,
     name: "onLLMCallEnd",
@@ -243,6 +251,7 @@ async function executeToolCalls({
         data: { toolName: handler.name, args: params },
       });
 
+      const auditArgs = [...params];
       // todo do we want to pass an existing message thread
       // into tool calls
       params.push({
@@ -310,6 +319,14 @@ async function executeToolCalls({
           result,
           timeTaken: toolCallEndTime - toolCallStartTime,
         },
+      });
+
+      await ctx.audit({
+        type: "toolCall",
+        functionName: handler.name,
+        args: auditArgs,
+        result,
+        duration: toolCallEndTime - toolCallStartTime,
       });
 
       ctx.statelogClient.toolCall({

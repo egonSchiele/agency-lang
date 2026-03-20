@@ -62,3 +62,10 @@ export type AuditEntry =
   | NodeEntryAudit
   | NodeExitAudit
   | InterruptAudit;
+
+// Distributive Omit so that discriminated union members are preserved
+export type AuditEntryInput = AuditEntry extends infer T
+  ? T extends AuditEntry
+    ? Omit<T, "timestamp">
+    : never
+  : never;

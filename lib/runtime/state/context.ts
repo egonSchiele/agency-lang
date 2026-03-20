@@ -6,7 +6,7 @@ import { nanoid } from "nanoid";
 import { SmolPromptConfig } from "@/index.js";
 import { callHook } from "../hooks.js";
 import type { AgencyCallbacks } from "../hooks.js";
-import type { AuditEntry } from "../audit.js";
+import type { AuditEntry, AuditEntryInput } from "../audit.js";
 
 /* bunch of stuff that every node/function in the runtime needs access to,
 that we don't want to pass as individual arguments everywhere */
@@ -110,7 +110,7 @@ export class RuntimeContext<T> {
     return { ...this.smoltalkDefaults, ...config };
   }
 
-  async audit(entry: Omit<AuditEntry, "timestamp">): Promise<void> {
+  async audit(entry: AuditEntryInput): Promise<void> {
     const fullEntry = { ...entry, timestamp: Date.now() };
     await callHook({
       callbacks: this.callbacks,

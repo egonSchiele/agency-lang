@@ -136,14 +136,13 @@ const __graph = __ctx.graph;
 __stack.locals.foo = await runPrompt({
       ctx: __ctx,
       prompt: `the string hi`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       responseFormat: z.object({
         response: z.literal("hi")
       }),
       tools: undefined,
       toolHandlers: [],
       clientConfig: {},
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools
@@ -166,14 +165,13 @@ if (isInterrupt(__stack.locals.foo)) {
 __stack.locals.bar = await runPrompt({
       ctx: __ctx,
       prompt: `the number 42`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       responseFormat: z.object({
         response: z.literal(42)
       }),
       tools: undefined,
       toolHandlers: [],
       clientConfig: {},
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools
@@ -196,14 +194,13 @@ if (isInterrupt(__stack.locals.bar)) {
 __stack.locals.baz = await runPrompt({
       ctx: __ctx,
       prompt: `the boolean true`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       responseFormat: z.object({
         response: z.literal(true)
       }),
       tools: undefined,
       toolHandlers: [],
       clientConfig: {},
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools

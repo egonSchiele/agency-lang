@@ -154,11 +154,10 @@ if (isInterrupt(__stack.locals.msg)) {
 __stack.locals.response1 = await runPrompt({
       ctx: __ctx,
       prompt: `${__stack.locals.msg}`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       tools: undefined,
       toolHandlers: [],
       clientConfig: {},
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools
@@ -192,11 +191,10 @@ if (isInterrupt(__stack.locals.response1)) {
 __stack.locals.response2 = await runPrompt({
       ctx: __ctx,
       prompt: `${__stack.locals.msg}`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       tools: undefined,
       toolHandlers: [],
       clientConfig: {},
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools

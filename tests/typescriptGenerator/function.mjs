@@ -196,7 +196,7 @@ const __graph = __ctx.graph;
     __self.__retryable = false;
     await print(await test({
       ctx: __ctx,
-      threads: __threads,
+      threads: new ThreadStore(),
       interruptData: __state?.interruptData
     }))
     

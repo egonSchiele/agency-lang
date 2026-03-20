@@ -136,14 +136,13 @@ const __graph = __ctx.graph;
 __stack.locals.bar = await runPrompt({
       ctx: __ctx,
       prompt: `the number 1`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       responseFormat: z.object({
         response: z.number()
       }),
       tools: undefined,
       toolHandlers: [],
       clientConfig: {},
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools

@@ -223,7 +223,7 @@ const __graph = __ctx.graph;
   if (__step <= 1) {
     __stack.locals.result = await greet({
       ctx: __ctx,
-      threads: __threads,
+      threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.result)) {

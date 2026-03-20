@@ -254,7 +254,7 @@ const __graph = __ctx.graph;
 __stack.locals.response = await runPrompt({
       ctx: __ctx,
       prompt: `Greet the user with their name: ${__stack.args.name} and age ${__stack.args.age} using the greet function.`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       tools: [__greetTool],
       toolHandlers: [{
         name: "greet",
@@ -263,7 +263,6 @@ __stack.locals.response = await runPrompt({
         isBuiltin: false
       }],
       clientConfig: {},
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools

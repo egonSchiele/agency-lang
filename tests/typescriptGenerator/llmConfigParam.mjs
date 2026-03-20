@@ -139,14 +139,13 @@ const __graph = __ctx.graph;
 __stack.locals.foo = await runPrompt({
       ctx: __ctx,
       prompt: `What are 5 numbers?`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       responseFormat: z.object({
         response: z.array(z.number())
       }),
       tools: undefined,
       toolHandlers: [],
       clientConfig: __ctx.globals.get("llmConfigParam.agency", "config"),
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools
@@ -166,7 +165,7 @@ if (isInterrupt(__stack.locals.foo)) {
 __stack.locals.foo2 = await runPrompt({
       ctx: __ctx,
       prompt: `What are 5 numbers?`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       responseFormat: z.object({
         response: z.array(z.number())
       }),
@@ -175,7 +174,6 @@ __stack.locals.foo2 = await runPrompt({
       clientConfig: {
         "maxTokens": 100
       },
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools

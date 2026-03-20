@@ -274,7 +274,7 @@ const __graph = __ctx.graph;
 __stack.locals.result = await runPrompt({
       ctx: __ctx,
       prompt: `Use the tools`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       tools: [__safeLookupTool, __unsafeSaveTool],
       toolHandlers: [{
         name: "safeLookup",
@@ -288,7 +288,6 @@ __stack.locals.result = await runPrompt({
         isBuiltin: false
       }],
       clientConfig: {},
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools

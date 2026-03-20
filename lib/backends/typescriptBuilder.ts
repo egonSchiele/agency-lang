@@ -1067,9 +1067,14 @@ export class TypeScriptBuilder {
     const shouldAwait = !node.async && context !== "valueAccess";
 
     if (this.isAgencyFunction(node.functionName, context)) {
+      // Inside a message thread: pass the caller's ThreadStore so the function
+      // shares the thread context. Outside: pass a new ThreadStore for isolation.
+      const threadsExpr = this.insideMessageThread
+        ? ts.runtime.threads
+        : ts.newThreadStore();
       const configObj = ts.functionCallConfig({
         ctx: ts.runtime.ctx,
-        threads: node.async ? ts.newThreadStore() : ts.runtime.threads,
+        threads: threadsExpr,
         interruptData: ts.raw("__state?.interruptData"),
       });
       const call = ts.call(ts.id(functionName), [...argNodes, configObj]);
@@ -1437,13 +1442,17 @@ export class TypeScriptBuilder {
 
     // Thread expression
     let threadExpr: TsNode;
+    const isInFunction = this.getCurrentScope().type === "function";
     if (this.parallelThreadVars[variableName]) {
       threadExpr = ts.threads.get(ts.id(this.parallelThreadVars[variableName]));
-    } else if (this.insideMessageThread) {
-      // Inside a message thread block: use the active thread (shared)
+    } else if (this.insideMessageThread || isInFunction) {
+      // Inside a message thread block: use the active thread (shared).
+      // Inside a function: use getOrCreateActive because the caller passes
+      // its ThreadStore (with the active thread already set), so the function
+      // respects the caller's thread context.
       threadExpr = ts.threads.getOrCreateActive();
     } else {
-      // Outside a message thread: each llm call gets its own thread
+      // Top-level node code outside a message thread: each llm call gets its own thread
       threadExpr = ts.threads.createAndReturnThread();
     }
 

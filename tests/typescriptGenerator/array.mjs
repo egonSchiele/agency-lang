@@ -136,14 +136,13 @@ const __graph = __ctx.graph;
 __stack.locals.numbers = await runPrompt({
       ctx: __ctx,
       prompt: `the first 5 prime numbers`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       responseFormat: z.object({
         response: z.array(z.number())
       }),
       tools: undefined,
       toolHandlers: [],
       clientConfig: {},
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools
@@ -172,14 +171,13 @@ if (isInterrupt(__stack.locals.numbers)) {
 __stack.locals.greetings = await runPrompt({
       ctx: __ctx,
       prompt: `a list of 3 common greetings in different languages`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       responseFormat: z.object({
         response: z.array(z.string())
       }),
       tools: undefined,
       toolHandlers: [],
       clientConfig: {},
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools

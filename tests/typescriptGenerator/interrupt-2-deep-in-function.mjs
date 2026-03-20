@@ -279,7 +279,6 @@ __stack.locals.response = await runPrompt({
           isBuiltin: false
         }],
         clientConfig: {},
-        stream: false,
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
@@ -361,7 +360,7 @@ const __graph = __ctx.graph;
   if (__step <= 3) {
     __stack.locals.response = await foo2(__stack.args.name, __stack.locals.age, {
       ctx: __ctx,
-      threads: __threads,
+      threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.response)) {

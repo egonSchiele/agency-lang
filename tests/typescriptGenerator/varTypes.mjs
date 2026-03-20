@@ -143,14 +143,13 @@ const __graph = __ctx.graph;
 __stack.locals.response = await runPrompt({
       ctx: __ctx,
       prompt: `Say hi to ${__stack.locals.person.name}, who is ${__stack.locals.person.age} years old.`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       responseFormat: z.object({
         response: z.object({ "greeting": z.string() })
       }),
       tools: undefined,
       toolHandlers: [],
       clientConfig: {},
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools

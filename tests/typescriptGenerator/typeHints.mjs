@@ -136,14 +136,13 @@ const __graph = __ctx.graph;
 __stack.locals.count = await runPrompt({
       ctx: __ctx,
       prompt: `the number 42`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       responseFormat: z.object({
         response: z.number()
       }),
       tools: undefined,
       toolHandlers: [],
       clientConfig: {},
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools
@@ -166,11 +165,10 @@ if (isInterrupt(__stack.locals.count)) {
 __stack.locals.message = await runPrompt({
       ctx: __ctx,
       prompt: `a greeting message`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       tools: undefined,
       toolHandlers: [],
       clientConfig: {},
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools

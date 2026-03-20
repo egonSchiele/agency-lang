@@ -135,13 +135,12 @@ const __graph = __ctx.graph;
 __stack.locals.response = await runPrompt({
       ctx: __ctx,
       prompt: `Generate a response word by word`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       tools: undefined,
       toolHandlers: [],
       clientConfig: {
         "stream": true
       },
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools
@@ -168,14 +167,13 @@ if (isInterrupt(__stack.locals.response)) {
 __stack.locals.response2 = await runPrompt({
       ctx: __ctx,
       prompt: `Generate a response word by word, but with a different model`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       tools: undefined,
       toolHandlers: [],
       clientConfig: {
         "model": `gemini-2.5-flash-lite`,
         "stream": true
       },
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools

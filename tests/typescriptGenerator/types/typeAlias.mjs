@@ -137,14 +137,13 @@ const __graph = __ctx.graph;
 __stack.locals.foo = await runPrompt({
       ctx: __ctx,
       prompt: `a set of coordinates`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       responseFormat: z.object({
         response: z.object({ "x": z.number(), "y": z.number() })
       }),
       tools: undefined,
       toolHandlers: [],
       clientConfig: {},
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools

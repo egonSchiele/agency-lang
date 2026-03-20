@@ -170,7 +170,6 @@ __stack.locals.response = await runPrompt({
         tools: undefined,
         toolHandlers: [],
         clientConfig: {},
-        stream: false,
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
@@ -265,7 +264,6 @@ __stack.locals.response = await runPrompt({
         clientConfig: {
           "model": `gemini-2.5-flash-lite`
         },
-        stream: false,
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
@@ -351,7 +349,6 @@ __stack.locals.__promptVar = await runPrompt({
         tools: undefined,
         toolHandlers: [],
         clientConfig: {},
-        stream: false,
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools

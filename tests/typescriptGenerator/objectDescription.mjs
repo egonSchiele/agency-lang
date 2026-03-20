@@ -136,14 +136,13 @@ const __graph = __ctx.graph;
 __stack.locals.url = await runPrompt({
       ctx: __ctx,
       prompt: `extract the hostname and port from 'https://example.com:8080'`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       responseFormat: z.object({
         response: z.object({ "hostname": z.string(), "port": z.number() })
       }),
       tools: undefined,
       toolHandlers: [],
       clientConfig: {},
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools

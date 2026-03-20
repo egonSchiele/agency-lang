@@ -160,7 +160,6 @@ __stack.locals.res1 = await runPrompt({
   tools: undefined,
   toolHandlers: [],
   clientConfig: {},
-  stream: false,
   maxToolCallRounds: 10,
   interruptData: __state?.interruptData,
   removedTools: __self.__removedTools
@@ -184,7 +183,6 @@ __stack.locals.res2 = await runPrompt({
   tools: undefined,
   toolHandlers: [],
   clientConfig: {},
-  stream: false,
   maxToolCallRounds: 10,
   interruptData: __state?.interruptData,
   removedTools: __self.__removedTools
@@ -208,7 +206,6 @@ __stack.locals.res3 = await runPrompt({
   tools: undefined,
   toolHandlers: [],
   clientConfig: {},
-  stream: false,
   maxToolCallRounds: 10,
   interruptData: __state?.interruptData,
   removedTools: __self.__removedTools
@@ -235,7 +232,6 @@ __stack.locals.res5 = await runPrompt({
   tools: undefined,
   toolHandlers: [],
   clientConfig: {},
-  stream: false,
   maxToolCallRounds: 10,
   interruptData: __state?.interruptData,
   removedTools: __self.__removedTools
@@ -265,7 +261,6 @@ __stack.locals.res4 = await runPrompt({
   tools: undefined,
   toolHandlers: [],
   clientConfig: {},
-  stream: false,
   maxToolCallRounds: 10,
   interruptData: __state?.interruptData,
   removedTools: __self.__removedTools
@@ -370,7 +365,6 @@ __stack.locals.res1 = await runPrompt({
   tools: undefined,
   toolHandlers: [],
   clientConfig: {},
-  stream: false,
   maxToolCallRounds: 10,
   interruptData: __state?.interruptData,
   removedTools: __self.__removedTools
@@ -397,7 +391,6 @@ __stack.locals.res2 = await runPrompt({
   tools: undefined,
   toolHandlers: [],
   clientConfig: {},
-  stream: false,
   maxToolCallRounds: 10,
   interruptData: __state?.interruptData,
   removedTools: __self.__removedTools
@@ -424,7 +417,6 @@ __stack.locals.res3 = await runPrompt({
   tools: undefined,
   toolHandlers: [],
   clientConfig: {},
-  stream: false,
   maxToolCallRounds: 10,
   interruptData: __state?.interruptData,
   removedTools: __self.__removedTools
@@ -454,7 +446,6 @@ __stack.locals.res5 = await runPrompt({
   tools: undefined,
   toolHandlers: [],
   clientConfig: {},
-  stream: false,
   maxToolCallRounds: 10,
   interruptData: __state?.interruptData,
   removedTools: __self.__removedTools
@@ -487,7 +478,6 @@ __stack.locals.res4 = await runPrompt({
   tools: undefined,
   toolHandlers: [],
   clientConfig: {},
-  stream: false,
   maxToolCallRounds: 10,
   interruptData: __state?.interruptData,
   removedTools: __self.__removedTools

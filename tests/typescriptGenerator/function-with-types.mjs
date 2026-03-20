@@ -183,7 +183,6 @@ __stack.locals.result = await runPrompt({
         tools: undefined,
         toolHandlers: [],
         clientConfig: {},
-        stream: false,
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
@@ -263,7 +262,6 @@ __stack.locals.message = await runPrompt({
         tools: undefined,
         toolHandlers: [],
         clientConfig: {},
-        stream: false,
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
@@ -345,7 +343,6 @@ __stack.locals.output = await runPrompt({
         tools: undefined,
         toolHandlers: [],
         clientConfig: {},
-        stream: false,
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
@@ -425,7 +422,6 @@ __stack.locals.result = await runPrompt({
         tools: undefined,
         toolHandlers: [],
         clientConfig: {},
-        stream: false,
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
@@ -505,7 +501,6 @@ __stack.locals.result = await runPrompt({
         tools: undefined,
         toolHandlers: [],
         clientConfig: {},
-        stream: false,
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
@@ -619,7 +614,7 @@ const __graph = __ctx.graph;
   if (__step <= 1) {
     __stack.locals.sum = await add(5, 10, {
       ctx: __ctx,
-      threads: __threads,
+      threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.sum)) {
@@ -634,7 +629,7 @@ if (isInterrupt(__stack.locals.sum)) {
   if (__step <= 2) {
     __stack.locals.greeting = await greet(`Alice`, {
       ctx: __ctx,
-      threads: __threads,
+      threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.greeting)) {
@@ -649,7 +644,7 @@ if (isInterrupt(__stack.locals.greeting)) {
   if (__step <= 3) {
     __stack.locals.labeled = await mixed(42, `Answer`, {
       ctx: __ctx,
-      threads: __threads,
+      threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.labeled)) {
@@ -664,7 +659,7 @@ if (isInterrupt(__stack.locals.labeled)) {
   if (__step <= 4) {
     __stack.locals.processed = await processArray([1, 2, 3, 4, 5], {
       ctx: __ctx,
-      threads: __threads,
+      threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.processed)) {
@@ -679,7 +674,7 @@ if (isInterrupt(__stack.locals.processed)) {
   if (__step <= 5) {
     __stack.locals.flexResult = await flexible(`test`, {
       ctx: __ctx,
-      threads: __threads,
+      threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.flexResult)) {

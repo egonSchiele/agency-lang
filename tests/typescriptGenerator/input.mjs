@@ -148,14 +148,13 @@ if (isInterrupt(__stack.locals.message)) {
 __stack.locals.sentiment = await runPrompt({
       ctx: __ctx,
       prompt: `Categorize the sentiment in this message: ${__stack.locals.message}`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       responseFormat: z.object({
         response: z.union([z.literal("happy"), z.literal("sad"), z.literal("neutral")])
       }),
       tools: undefined,
       toolHandlers: [],
       clientConfig: {},
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools

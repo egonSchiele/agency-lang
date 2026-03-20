@@ -148,11 +148,10 @@ const __graph = __ctx.graph;
 __stack.locals.result = await runPrompt({
       ctx: __ctx,
       prompt: `Tell me about ${__stack.locals.user.name} who is ${__stack.locals.user.age} years old`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       tools: undefined,
       toolHandlers: [],
       clientConfig: {},
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools

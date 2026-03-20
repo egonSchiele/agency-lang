@@ -140,11 +140,10 @@ const __graph = __ctx.graph;
 __stack.locals.greeting = await runPrompt({
       ctx: __ctx,
       prompt: `say hi to ${__stack.locals.name}`,
-      messages: __threads.getOrCreateActive(),
+      messages: __threads.createAndReturnThread(),
       tools: undefined,
       toolHandlers: [],
       clientConfig: {},
-      stream: false,
       maxToolCallRounds: 10,
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools

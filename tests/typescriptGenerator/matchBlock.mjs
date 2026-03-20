@@ -252,6 +252,11 @@ const __graph = __ctx.graph;
   }
   if (__step <= 1) {
     __stack.locals.action = `start`;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.action",
+      value: __stack.locals.action
+    })
     
     __stack.step++;
   }
@@ -279,6 +284,11 @@ const __graph = __ctx.graph;
   }
   if (__step <= 3) {
     __stack.locals.statusCode = 200;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.statusCode",
+      value: __stack.locals.statusCode
+    })
     
     __stack.step++;
   }
@@ -306,11 +316,21 @@ const __graph = __ctx.graph;
   }
   if (__step <= 5) {
     __stack.locals.grade = `A`;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.grade",
+      value: __stack.locals.grade
+    })
     
     __stack.step++;
   }
   if (__step <= 6) {
     __stack.locals.points = 0;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.points",
+      value: __stack.locals.points
+    })
     
     __stack.step++;
   }
@@ -340,6 +360,11 @@ const __graph = __ctx.graph;
   }
   if (__step <= 8) {
     __stack.locals.level = `debug`;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.level",
+      value: __stack.locals.level
+    })
     
     __stack.step++;
   }
@@ -367,6 +392,11 @@ const __graph = __ctx.graph;
   }
   if (__step <= 10) {
     __stack.locals.resultType = `array`;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.resultType",
+      value: __stack.locals.resultType
+    })
     
     __stack.step++;
   }
@@ -393,6 +423,11 @@ const __graph = __ctx.graph;
   }
   if (__step <= 12) {
     __stack.locals.format = `json`;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.format",
+      value: __stack.locals.format
+    })
     
     __stack.step++;
   }

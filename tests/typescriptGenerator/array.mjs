@@ -268,12 +268,22 @@ if (isInterrupt(__stack.locals.numbers)) {
         data: __stack.locals.numbers
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     __stack.step++;
   }
   if (__step <= 2) {
     __self.__retryable = false;
     await print(__stack.locals.numbers)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [__stack.locals.numbers]
+    })
     
     
     
@@ -301,12 +311,22 @@ if (isInterrupt(__stack.locals.greetings)) {
         data: __stack.locals.greetings
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     __stack.step++;
   }
   if (__step <= 4) {
     __self.__retryable = false;
     await print(__stack.locals.greetings)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [__stack.locals.greetings]
+    })
     
     __stack.step++;
   }

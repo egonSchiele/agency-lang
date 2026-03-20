@@ -251,6 +251,11 @@ const __graph = __ctx.graph;
       "name": `Alice`,
       "age": 30
     };
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.person",
+      value: __stack.locals.person
+    })
     
     __stack.step++;
   }
@@ -275,12 +280,22 @@ if (isInterrupt(__stack.locals.response)) {
         data: __stack.locals.response
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     __stack.step++;
   }
   if (__step <= 3) {
     __self.__retryable = false;
     await print(__stack.locals.response)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [__stack.locals.response]
+    })
     
     __stack.step++;
   }

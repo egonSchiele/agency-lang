@@ -248,11 +248,23 @@ const __graph = __ctx.graph;
   }
   if (__step <= 1) {
     __stack.locals.x = 42;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.x",
+      value: __stack.locals.x
+    })
     
     __stack.step++;
   }
   if (__step <= 2) {
-    return {
+    await __ctx.audit({
+      type: "return",
+      value: {
+        messages: __threads,
+        data: __stack.locals.x
+      }
+    })
+return {
       messages: __threads,
       data: __stack.locals.x
     };

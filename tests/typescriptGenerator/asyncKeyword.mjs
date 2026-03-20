@@ -325,12 +325,21 @@ let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultT
 "Time taken:"
 __defaultTimeblockName
 "ms"
+      await __ctx.audit({
+        type: "assignment",
+        variable: "__defaultTimeblockName_startTime",
+        value: __defaultTimeblockName_startTime
+      })
       
       
       __stack.step++;
     }
     if (__step <= 2) {
-      return `OpenAI response: ${__stack.locals.response}`
+      await __ctx.audit({
+        type: "return",
+        value: `OpenAI response: ${__stack.locals.response}`
+      })
+return `OpenAI response: ${__stack.locals.response}`
       
       __stack.step++;
     }
@@ -390,6 +399,11 @@ const __graph = __ctx.graph;
     }
     if (__step <= 1) {
       __threads.active().setMessages([])
+      await __ctx.audit({
+        type: "functionCall",
+        functionName: "__threads.active().setMessages",
+        args: [[]]
+      })
       
       __stack.step++;
     }
@@ -417,11 +431,20 @@ let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultT
 "Time taken:"
 __defaultTimeblockName
 "ms"
+      await __ctx.audit({
+        type: "assignment",
+        variable: "__defaultTimeblockName_startTime",
+        value: __defaultTimeblockName_startTime
+      })
       
       __stack.step++;
     }
     if (__step <= 3) {
-      return `Google response: ${__stack.locals.response}`
+      await __ctx.audit({
+        type: "return",
+        value: `Google response: ${__stack.locals.response}`
+      })
+return `Google response: ${__stack.locals.response}`
       
       __stack.step++;
     }
@@ -495,6 +518,11 @@ if (isInterrupt(__stack.locals.__promptVar)) {
         return __stack.locals.__promptVar;
       }
 return __self.__promptVar
+      await __ctx.audit({
+        type: "assignment",
+        variable: "__self.__removedTools",
+        value: __self.__removedTools
+      })
       
       __stack.step++;
     }
@@ -549,6 +577,11 @@ if (isInterrupt(__stack.locals.msg)) {
         data: __stack.locals.msg
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.msg",
+      value: __stack.locals.msg
+    })
     
     __stack.step++;
   }
@@ -564,6 +597,11 @@ if (isInterrupt(__stack.locals.res2)) {
         data: __stack.locals.res2
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.res2",
+      value: __stack.locals.res2
+    })
     
     __stack.step++;
   }
@@ -579,6 +617,11 @@ if (isInterrupt(__stack.locals.res1)) {
         data: __stack.locals.res1
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.res1",
+      value: __stack.locals.res1
+    })
     
     __stack.step++;
   }
@@ -588,12 +631,22 @@ if (isInterrupt(__stack.locals.res1)) {
   }
   if (__step <= 5) {
     __stack.locals.results = Promise.race([__stack.locals.res1, __stack.locals.res2]);
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.results",
+      value: __stack.locals.results
+    })
     
     __stack.step++;
   }
   if (__step <= 6) {
     __self.__retryable = false;
     await printJSON(__stack.locals.results)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "printJSON",
+      args: [__stack.locals.results]
+    })
     
     __stack.step++;
   }

@@ -280,7 +280,11 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 1) {
-      return `hello`
+      await __ctx.audit({
+        type: "return",
+        value: `hello`
+      })
+return `hello`
       
       __stack.step++;
     }

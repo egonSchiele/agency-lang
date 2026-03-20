@@ -350,11 +350,20 @@ __stack.locals.result = await runPrompt({
 if (isInterrupt(__stack.locals.result)) {
         return __stack.locals.result;
       }
+      await __ctx.audit({
+        type: "assignment",
+        variable: "__self.__removedTools",
+        value: __self.__removedTools
+      })
       
       __stack.step++;
     }
     if (__step <= 2) {
-      return __stack.locals.result
+      await __ctx.audit({
+        type: "return",
+        value: __stack.locals.result
+      })
+return __stack.locals.result
       
       __stack.step++;
     }
@@ -427,11 +436,20 @@ __stack.locals.message = await runPrompt({
 if (isInterrupt(__stack.locals.message)) {
         return __stack.locals.message;
       }
+      await __ctx.audit({
+        type: "assignment",
+        variable: "__self.__removedTools",
+        value: __self.__removedTools
+      })
       
       __stack.step++;
     }
     if (__step <= 2) {
-      return __stack.locals.message
+      await __ctx.audit({
+        type: "return",
+        value: __stack.locals.message
+      })
+return __stack.locals.message
       
       __stack.step++;
     }
@@ -506,11 +524,20 @@ __stack.locals.output = await runPrompt({
 if (isInterrupt(__stack.locals.output)) {
         return __stack.locals.output;
       }
+      await __ctx.audit({
+        type: "assignment",
+        variable: "__self.__removedTools",
+        value: __self.__removedTools
+      })
       
       __stack.step++;
     }
     if (__step <= 2) {
-      return __stack.locals.output
+      await __ctx.audit({
+        type: "return",
+        value: __stack.locals.output
+      })
+return __stack.locals.output
       
       __stack.step++;
     }
@@ -583,11 +610,20 @@ __stack.locals.result = await runPrompt({
 if (isInterrupt(__stack.locals.result)) {
         return __stack.locals.result;
       }
+      await __ctx.audit({
+        type: "assignment",
+        variable: "__self.__removedTools",
+        value: __self.__removedTools
+      })
       
       __stack.step++;
     }
     if (__step <= 2) {
-      return __stack.locals.result
+      await __ctx.audit({
+        type: "return",
+        value: __stack.locals.result
+      })
+return __stack.locals.result
       
       __stack.step++;
     }
@@ -660,11 +696,20 @@ __stack.locals.result = await runPrompt({
 if (isInterrupt(__stack.locals.result)) {
         return __stack.locals.result;
       }
+      await __ctx.audit({
+        type: "assignment",
+        variable: "__self.__removedTools",
+        value: __self.__removedTools
+      })
       
       __stack.step++;
     }
     if (__step <= 2) {
-      return __stack.locals.result
+      await __ctx.audit({
+        type: "return",
+        value: __stack.locals.result
+      })
+return __stack.locals.result
       
       __stack.step++;
     }
@@ -713,11 +758,23 @@ const __graph = __ctx.graph;
   if (__step <= 1) {
     __self.__retryable = false;
     await print(`This is a node with a return type`)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [`This is a node with a return type`]
+    })
     
     __stack.step++;
   }
   if (__step <= 2) {
-    return {
+    await __ctx.audit({
+      type: "return",
+      value: {
+        messages: __threads,
+        data: `Node completed`
+      }
+    })
+return {
       messages: __threads,
       data: `Node completed`
     };
@@ -774,6 +831,11 @@ if (isInterrupt(__stack.locals.sum)) {
         data: __stack.locals.sum
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.sum",
+      value: __stack.locals.sum
+    })
     
     __stack.step++;
   }
@@ -789,6 +851,11 @@ if (isInterrupt(__stack.locals.greeting)) {
         data: __stack.locals.greeting
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.greeting",
+      value: __stack.locals.greeting
+    })
     
     __stack.step++;
   }
@@ -804,6 +871,11 @@ if (isInterrupt(__stack.locals.labeled)) {
         data: __stack.locals.labeled
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.labeled",
+      value: __stack.locals.labeled
+    })
     
     __stack.step++;
   }
@@ -819,6 +891,11 @@ if (isInterrupt(__stack.locals.processed)) {
         data: __stack.locals.processed
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.processed",
+      value: __stack.locals.processed
+    })
     
     __stack.step++;
   }
@@ -834,6 +911,11 @@ if (isInterrupt(__stack.locals.flexResult)) {
         data: __stack.locals.flexResult
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.flexResult",
+      value: __stack.locals.flexResult
+    })
     
     __stack.step++;
   }

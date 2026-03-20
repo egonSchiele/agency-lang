@@ -249,6 +249,11 @@ const __graph = __ctx.graph;
   if (__step <= 1) {
     __self.__retryable = false;
     await print(`What is your name?`)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [`What is your name?`]
+    })
     
     __stack.step++;
   }
@@ -261,12 +266,22 @@ if (isInterrupt(__stack.locals.name)) {
         data: __stack.locals.name
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.name",
+      value: __stack.locals.name
+    })
     
     __stack.step++;
   }
   if (__step <= 3) {
     __self.__retryable = false;
     await print(`Hello, ${__stack.locals.name}!`)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [`Hello, ${__stack.locals.name}!`]
+    })
     
     __stack.step++;
   }

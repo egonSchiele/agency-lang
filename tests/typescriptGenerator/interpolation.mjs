@@ -248,6 +248,11 @@ const __graph = __ctx.graph;
   }
   if (__step <= 1) {
     __stack.locals.name = `Alice`;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.name",
+      value: __stack.locals.name
+    })
     
     __stack.step++;
   }
@@ -269,12 +274,22 @@ if (isInterrupt(__stack.locals.greeting)) {
         data: __stack.locals.greeting
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     __stack.step++;
   }
   if (__step <= 3) {
     __self.__retryable = false;
     await print(__stack.locals.greeting)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [__stack.locals.greeting]
+    })
     
     __stack.step++;
   }

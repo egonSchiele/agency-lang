@@ -264,12 +264,22 @@ if (isInterrupt(__stack.locals.response1)) {
         data: __stack.locals.response1
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     __stack.step++;
   }
   if (__step <= 2) {
     __self.__retryable = false;
     await print(__stack.locals.response1)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [__stack.locals.response1]
+    })
     
     __stack.step++;
   }

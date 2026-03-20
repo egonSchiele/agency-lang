@@ -396,30 +396,55 @@ __threads.popActive()
     if (__step <= 2) {
       __self.__retryable = false;
       await print(`res1`, __stack.locals.res1)
+      await __ctx.audit({
+        type: "functionCall",
+        functionName: "print",
+        args: [`res1`, __stack.locals.res1]
+      })
       
       __stack.step++;
     }
     if (__step <= 3) {
       __self.__retryable = false;
       await print(`res2`, __stack.locals.res2)
+      await __ctx.audit({
+        type: "functionCall",
+        functionName: "print",
+        args: [`res2`, __stack.locals.res2]
+      })
       
       __stack.step++;
     }
     if (__step <= 4) {
       __self.__retryable = false;
       await print(`res3`, __stack.locals.res3)
+      await __ctx.audit({
+        type: "functionCall",
+        functionName: "print",
+        args: [`res3`, __stack.locals.res3]
+      })
       
       __stack.step++;
     }
     if (__step <= 5) {
       __self.__retryable = false;
       await print(`res4`, __stack.locals.res4)
+      await __ctx.audit({
+        type: "functionCall",
+        functionName: "print",
+        args: [`res4`, __stack.locals.res4]
+      })
       
       __stack.step++;
     }
     if (__step <= 6) {
       __self.__retryable = false;
       await print(`res5`, __stack.locals.res5)
+      await __ctx.audit({
+        type: "functionCall",
+        functionName: "print",
+        args: [`res5`, __stack.locals.res5]
+      })
       
       __stack.step++;
     }
@@ -606,30 +631,55 @@ __threads.popActive()
   if (__step <= 2) {
     __self.__retryable = false;
     await print(`res1`, __stack.locals.res1)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [`res1`, __stack.locals.res1]
+    })
     
     __stack.step++;
   }
   if (__step <= 3) {
     __self.__retryable = false;
     await print(`res2`, __stack.locals.res2)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [`res2`, __stack.locals.res2]
+    })
     
     __stack.step++;
   }
   if (__step <= 4) {
     __self.__retryable = false;
     await print(`res3`, __stack.locals.res3)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [`res3`, __stack.locals.res3]
+    })
     
     __stack.step++;
   }
   if (__step <= 5) {
     __self.__retryable = false;
     await print(`res4`, __stack.locals.res4)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [`res4`, __stack.locals.res4]
+    })
     
     __stack.step++;
   }
   if (__step <= 6) {
     __self.__retryable = false;
     await print(`res5`, __stack.locals.res5)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [`res5`, __stack.locals.res5]
+    })
     
     __stack.step++;
   }

@@ -249,6 +249,11 @@ const __graph = __ctx.graph;
   if (__step <= 1) {
     __self.__retryable = false;
     await print(`lets race!`)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [`lets race!`]
+    })
     
     __stack.step++;
   }
@@ -261,6 +266,11 @@ if (isInterrupt(__stack.locals.msg)) {
         data: __stack.locals.msg
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.msg",
+      value: __stack.locals.msg
+    })
     
     
     __stack.step++;
@@ -283,6 +293,11 @@ if (isInterrupt(__stack.locals.response1)) {
         data: __stack.locals.response1
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     
     __stack.step++;
@@ -290,6 +305,11 @@ if (isInterrupt(__stack.locals.response1)) {
   if (__step <= 4) {
     __self.__retryable = false;
     await print(__stack.locals.response1)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [__stack.locals.response1]
+    })
     
     __stack.step++;
   }
@@ -297,6 +317,11 @@ if (isInterrupt(__stack.locals.response1)) {
     __client = __getClientWithConfig({
       model: "`gemini-2.5-flash-lite`"
     });
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__client",
+      value: __client
+    })
     
     __stack.step++;
   }
@@ -318,6 +343,11 @@ if (isInterrupt(__stack.locals.response2)) {
         data: __stack.locals.response2
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     
     __stack.step++;
@@ -325,11 +355,23 @@ if (isInterrupt(__stack.locals.response2)) {
   if (__step <= 7) {
     __self.__retryable = false;
     await print(__stack.locals.response2)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [__stack.locals.response2]
+    })
     
     __stack.step++;
   }
   if (__step <= 8) {
-    return {
+    await __ctx.audit({
+      type: "return",
+      value: {
+        messages: __threads,
+        data: [__stack.locals.response1, __stack.locals.response2]
+      }
+    })
+return {
       messages: __threads,
       data: [__stack.locals.response1, __stack.locals.response2]
     };

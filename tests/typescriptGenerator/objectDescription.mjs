@@ -268,6 +268,11 @@ if (isInterrupt(__stack.locals.url)) {
         data: __stack.locals.url
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     
     __stack.step++;
@@ -275,6 +280,11 @@ if (isInterrupt(__stack.locals.url)) {
   if (__step <= 2) {
     __self.__retryable = false;
     await print(__stack.locals.url)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [__stack.locals.url]
+    })
     
     __stack.step++;
   }

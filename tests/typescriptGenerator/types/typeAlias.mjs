@@ -269,12 +269,22 @@ if (isInterrupt(__stack.locals.foo)) {
         data: __stack.locals.foo
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     __stack.step++;
   }
   if (__step <= 2) {
     __self.__retryable = false;
     await print(__stack.locals.foo)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [__stack.locals.foo]
+    })
     
     __stack.step++;
   }

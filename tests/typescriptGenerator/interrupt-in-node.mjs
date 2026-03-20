@@ -317,7 +317,11 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
       __stack.step++;
     }
     if (__step <= 2) {
-      return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`
+      await __ctx.audit({
+        type: "return",
+        value: `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`
+      })
+return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`
       
       __stack.step++;
     }
@@ -370,6 +374,11 @@ const __graph = __ctx.graph;
   if (__step <= 1) {
     __self.__retryable = false;
     await print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`]
+    })
     
     
     __stack.step++;
@@ -395,17 +404,34 @@ if (isInterrupt(__stack.locals.response)) {
         data: __stack.locals.response
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     __stack.step++;
   }
   if (__step <= 3) {
     __self.__retryable = false;
     await print(`Greeted, age is still ${__stack.args.age}...`)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [`Greeted, age is still ${__stack.args.age}...`]
+    })
     
     __stack.step++;
   }
   if (__step <= 4) {
-    return {
+    await __ctx.audit({
+      type: "return",
+      value: {
+        messages: __threads,
+        data: __stack.locals.response
+      }
+    })
+return {
       messages: __threads,
       data: __stack.locals.response
     };
@@ -455,16 +481,45 @@ const __graph = __ctx.graph;
   if (__step <= 1) {
     __self.__retryable = false;
     await print(`Saying hi to ${__stack.args.name}...`)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [`Saying hi to ${__stack.args.name}...`]
+    })
     
     __stack.step++;
   }
   if (__step <= 2) {
     __stack.locals.age = 30;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.age",
+      value: __stack.locals.age
+    })
     
     __stack.step++;
   }
   if (__step <= 3) {
     return goToNode("foo2", {
+      messages: __stack.messages,
+      ctx: __ctx,
+      data: {
+        name: __stack.args.name,
+        age: __stack.locals.age
+      }
+    })
+    await __ctx.audit({
+      type: "return",
+      value: goToNode("foo2", {
+        messages: __stack.messages,
+        ctx: __ctx,
+        data: {
+          name: __stack.args.name,
+          age: __stack.locals.age
+        }
+      })
+    })
+return goToNode("foo2", {
       messages: __stack.messages,
       ctx: __ctx,
       data: {

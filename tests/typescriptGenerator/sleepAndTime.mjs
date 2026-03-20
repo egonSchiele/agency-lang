@@ -261,12 +261,22 @@ await print(`Done sleeping!`)
 
 let x_endTime: number = performance.now();
 let x: number = x_endTime - x_startTime;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "x_startTime",
+      value: x_startTime
+    })
     
     __stack.step++;
   }
   if (__step <= 2) {
     __self.__retryable = false;
     await print(__stack.locals.x)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [__stack.locals.x]
+    })
     
     __stack.step++;
   }

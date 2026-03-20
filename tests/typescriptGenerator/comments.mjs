@@ -292,13 +292,22 @@ const __graph = __ctx.graph;
     }
     if (__step <= 1) {
       __stack.locals.message = `Hello, World!`;
+      await __ctx.audit({
+        type: "assignment",
+        variable: "__stack.locals.message",
+        value: __stack.locals.message
+      })
       
       //  Another comment
       
       __stack.step++;
     }
     if (__step <= 2) {
-      return __stack.locals.message
+      await __ctx.audit({
+        type: "return",
+        value: __stack.locals.message
+      })
+return __stack.locals.message
       
       __stack.step++;
     }
@@ -357,12 +366,22 @@ if (isInterrupt(__stack.locals.result)) {
         data: __stack.locals.result
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.result",
+      value: __stack.locals.result
+    })
     
     __stack.step++;
   }
   if (__step <= 2) {
     __self.__retryable = false;
     await print(__stack.locals.result)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [__stack.locals.result]
+    })
     
     
     //  Testing comments in different contexts
@@ -375,6 +394,11 @@ if (isInterrupt(__stack.locals.result)) {
   }
   if (__step <= 3) {
     __stack.locals.age = 25;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.age",
+      value: __stack.locals.age
+    })
     
     
     //  2. Before conditionals
@@ -383,6 +407,11 @@ if (isInterrupt(__stack.locals.result)) {
   }
   if (__step <= 4) {
     __stack.locals.status = `active`;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.status",
+      value: __stack.locals.status
+    })
     
     __stack.step++;
   }

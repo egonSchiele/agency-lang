@@ -265,11 +265,33 @@ if (isInterrupt(__stack.locals.greeting)) {
         data: __stack.locals.greeting
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     __stack.step++;
   }
   if (__step <= 2) {
     return goToNode("processGreeting", {
+      messages: __stack.messages,
+      ctx: __ctx,
+      data: {
+        msg: __stack.locals.greeting
+      }
+    })
+    await __ctx.audit({
+      type: "return",
+      value: goToNode("processGreeting", {
+        messages: __stack.messages,
+        ctx: __ctx,
+        data: {
+          msg: __stack.locals.greeting
+        }
+      })
+    })
+return goToNode("processGreeting", {
       messages: __stack.messages,
       ctx: __ctx,
       data: {
@@ -338,12 +360,22 @@ if (isInterrupt(__stack.locals.result)) {
         data: __stack.locals.result
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     __stack.step++;
   }
   if (__step <= 2) {
     __self.__retryable = false;
     await print(__stack.locals.result)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [__stack.locals.result]
+    })
     
     __stack.step++;
   }
@@ -386,6 +418,19 @@ const __graph = __ctx.graph;
   }
   if (__step <= 1) {
     return goToNode("greet", {
+      messages: __stack.messages,
+      ctx: __ctx,
+      data: {}
+    })
+    await __ctx.audit({
+      type: "return",
+      value: goToNode("greet", {
+        messages: __stack.messages,
+        ctx: __ctx,
+        data: {}
+      })
+    })
+return goToNode("greet", {
       messages: __stack.messages,
       ctx: __ctx,
       data: {}

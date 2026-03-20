@@ -251,6 +251,11 @@ const __graph = __ctx.graph;
   }
   if (__step <= 1) {
     foo = foo + 1;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "foo",
+      value: foo
+    })
     
     __stack.step++;
   }

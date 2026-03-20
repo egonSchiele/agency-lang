@@ -73,6 +73,7 @@ import {
 
 import { $, ts } from "../ir/builders.js";
 import { printTs } from "../ir/prettyPrint.js";
+import { auditNode } from "../ir/audit.js";
 import type {
   TsElseIf,
   TsNode,
@@ -1824,7 +1825,17 @@ export class TypeScriptBuilder {
           ts.assign(ts.self("__retryable"), ts.bool(false)),
         );
       }
-      parts[parts.length - 1].push(this.processStatement(stmt));
+      const processed = this.processStatement(stmt);
+      const audit = auditNode(processed);
+      if (audit && audit.kind === "statements" && (processed.kind === "return" || processed.kind === "functionReturn")) {
+        // For returns, auditNode returns [auditCall, originalReturn] — replace the original
+        parts[parts.length - 1].push(audit);
+      } else {
+        parts[parts.length - 1].push(processed);
+        if (audit) {
+          parts[parts.length - 1].push(audit);
+        }
+      }
     }
     return parts.map((part, i) => ts.stepBlock(i, ts.statements(part)));
   }

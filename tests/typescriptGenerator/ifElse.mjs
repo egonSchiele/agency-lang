@@ -249,6 +249,11 @@ const __graph = __ctx.graph;
   }
   if (__step <= 1) {
     __stack.locals.flag = true;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.flag",
+      value: __stack.locals.flag
+    })
     
     __stack.step++;
   }
@@ -276,6 +281,11 @@ const __graph = __ctx.graph;
     __stack.locals.obj = {
       "active": true
     };
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.obj",
+      value: __stack.locals.obj
+    })
     
     __stack.step++;
   }
@@ -292,6 +302,11 @@ const __graph = __ctx.graph;
   }
   if (__step <= 6) {
     __stack.locals.outer = true;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.outer",
+      value: __stack.locals.outer
+    })
     
     __stack.step++;
   }
@@ -325,6 +340,11 @@ const __graph = __ctx.graph;
   }
   if (__step <= 8) {
     __stack.locals.condition = true;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.condition",
+      value: __stack.locals.condition
+    })
     
     __stack.step++;
   }
@@ -345,6 +365,11 @@ const __graph = __ctx.graph;
   }
   if (__step <= 10) {
     __stack.locals.value = false;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.value",
+      value: __stack.locals.value
+    })
     
     __stack.step++;
   }

@@ -268,6 +268,11 @@ if (isInterrupt(__stack.locals.count)) {
         data: __stack.locals.count
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     
     
@@ -292,6 +297,11 @@ if (isInterrupt(__stack.locals.message)) {
         data: __stack.locals.message
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     
     __stack.step++;
@@ -299,12 +309,22 @@ if (isInterrupt(__stack.locals.message)) {
   if (__step <= 3) {
     __self.__retryable = false;
     await print(__stack.locals.count)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [__stack.locals.count]
+    })
     
     __stack.step++;
   }
   if (__step <= 4) {
     __self.__retryable = false;
     await print(__stack.locals.message)
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [__stack.locals.message]
+    })
     
     __stack.step++;
   }

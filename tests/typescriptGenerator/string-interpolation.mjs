@@ -248,6 +248,11 @@ const __graph = __ctx.graph;
   }
   if (__step <= 1) {
     __stack.locals.greeting = `Hello, my name is ${name} and I am ${age} years old.`;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.greeting",
+      value: __stack.locals.greeting
+    })
     
     __stack.step++;
   }

@@ -272,6 +272,11 @@ const __graph = __ctx.graph;
     }
     if (__step <= 1) {
       __stack.locals.foo = 1;
+      await __ctx.audit({
+        type: "assignment",
+        variable: "__stack.locals.foo",
+        value: __stack.locals.foo
+      })
       
       __stack.step++;
     }
@@ -324,6 +329,15 @@ const __graph = __ctx.graph;
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
     }))
+    await __ctx.audit({
+      type: "functionCall",
+      functionName: "print",
+      args: [await test({
+        ctx: __ctx,
+        threads: new ThreadStore(),
+        interruptData: __state?.interruptData
+      })]
+    })
     
     
     __stack.step++;

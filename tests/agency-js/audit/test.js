@@ -8,11 +8,11 @@ const result = await main(5, {
       // Strip timestamps for deterministic comparison
       const { timestamp, ...rest } = entry;
       entries.push(rest);
-    }
-  }
+    },
+  },
 });
 
 writeFileSync(
   "__result.json",
-  JSON.stringify({ data: result.data, auditTypes: entries.map(e => e.type) }, null, 2),
+  JSON.stringify({ data: result.data, entries }, null, 2),
 );

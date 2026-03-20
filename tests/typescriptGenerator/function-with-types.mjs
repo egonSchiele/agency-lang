@@ -327,6 +327,15 @@ const __graph = __ctx.graph;
       isBuiltin: false
     }
   })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "add",
+    args: {
+      x: x,
+      y: y
+    },
+    result: undefined
+  })
   __stack.args["x"] = x;
   __stack.args["y"] = y;
   __self.__retryable = __self.__retryable ?? true;
@@ -413,6 +422,14 @@ const __graph = __ctx.graph;
       },
       isBuiltin: false
     }
+  })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "greet",
+    args: {
+      name: name
+    },
+    result: undefined
   })
   __stack.args["name"] = name;
   __self.__retryable = __self.__retryable ?? true;
@@ -501,6 +518,15 @@ const __graph = __ctx.graph;
       isBuiltin: false
     }
   })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "mixed",
+    args: {
+      count: count,
+      label: label
+    },
+    result: undefined
+  })
   __stack.args["count"] = count;
   __stack.args["label"] = label;
   __self.__retryable = __self.__retryable ?? true;
@@ -588,6 +614,14 @@ const __graph = __ctx.graph;
       isBuiltin: false
     }
   })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "processArray",
+    args: {
+      items: items
+    },
+    result: undefined
+  })
   __stack.args["items"] = items;
   __self.__retryable = __self.__retryable ?? true;
   try {
@@ -673,6 +707,14 @@ const __graph = __ctx.graph;
       },
       isBuiltin: false
     }
+  })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "flexible",
+    args: {
+      value: value
+    },
+    result: undefined
   })
   __stack.args["value"] = value;
   __self.__retryable = __self.__retryable ?? true;

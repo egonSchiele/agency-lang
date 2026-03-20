@@ -986,6 +986,18 @@ export class TypeScriptBuilder {
         args: ts.obj(argsObj),
         isBuiltin: ts.bool(false),
       }),
+      $(ts.runtime.ctx)
+        .prop("audit")
+        .call([
+          ts.obj({
+            type: ts.str("functionCall"),
+            functionName: ts.str(functionName),
+            args: ts.obj(argsObj),
+            result: ts.id("undefined"),
+          }),
+        ])
+        .await()
+        .done(),
     ];
 
     // Param assignments to stack

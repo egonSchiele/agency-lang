@@ -296,6 +296,14 @@ const __graph = __ctx.graph;
       isBuiltin: false
     }
   })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "openai",
+    args: {
+      msg: msg
+    },
+    result: undefined
+  })
   __stack.args["msg"] = msg;
   __self.__retryable = __self.__retryable ?? true;
   try {
@@ -389,6 +397,14 @@ const __graph = __ctx.graph;
       },
       isBuiltin: false
     }
+  })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "google",
+    args: {
+      msg: msg
+    },
+    result: undefined
   })
   __stack.args["msg"] = msg;
   __self.__retryable = __self.__retryable ?? true;
@@ -493,6 +509,12 @@ const __graph = __ctx.graph;
       args: {},
       isBuiltin: false
     }
+  })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "fibs",
+    args: {},
+    result: undefined
   })
   __self.__retryable = __self.__retryable ?? true;
   try {

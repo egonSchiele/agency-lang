@@ -284,6 +284,14 @@ const __graph = __ctx.graph;
       isBuiltin: false
     }
   })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "safeLookup",
+    args: {
+      id: id
+    },
+    result: undefined
+  })
   __stack.args["id"] = id;
   __self.__retryable = __self.__retryable ?? true;
   try {
@@ -346,6 +354,14 @@ const __graph = __ctx.graph;
       },
       isBuiltin: false
     }
+  })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "unsafeSave",
+    args: {
+      id: id
+    },
+    result: undefined
   })
   __stack.args["id"] = id;
   __self.__retryable = __self.__retryable ?? true;

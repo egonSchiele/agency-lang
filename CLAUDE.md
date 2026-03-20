@@ -223,7 +223,8 @@ Key components:
 1. **Define the type** in `lib/types/` (create a new file or add to an existing one). Export it from `lib/types.ts`. Add the new type to the `AgencyNode` union type in `lib/types.ts`.
 2. **Add a parser** in `lib/parsers/`. Wire it into the main parser in `lib/parser.ts`. Add unit tests in a co-located `.test.ts` file.
 3. **Add code generation** by adding a case to `processNode` in `lib/backends/typescriptBuilder.ts`. You may also need to create new `.mustache` template files in `lib/templates/backends/` and run `pnpm run templates`.
-4. **Add integration test fixtures** — create `.agency` and `.mts` files in `tests/typescriptGenerator/`.
+4. **Add audit logging** — if the new node type produces a new TsNode kind in the IR, consider whether it needs a case in `auditNode()` in `lib/ir/audit.ts`. This function inspects processed IR nodes and generates `__ctx.audit(...)` calls. See the "Audit Logging" section below for details.
+5. **Add integration test fixtures** — create `.agency` and `.mts` files in `tests/typescriptGenerator/`.
 
 ### Adding a CLI command
 
@@ -244,6 +245,17 @@ All LLM interactions go through the [smoltalk](https://www.npmjs.com/package/smo
 
 ### Configuration
 `AgencyConfig` (`lib/config.ts`) defines all compiler and runtime options. See `docs/dev/config.md` for the full option reference and `docs/config.md` for basic usage.
+
+### Audit Logging
+Agency auto-generates structured audit log entries for every operation an agent performs. Entries are emitted via an `onAudit` callback — there is no internal storage.
+
+Audit logging has two parts:
+1. **Builder-generated calls** — `auditNode()` in `lib/ir/audit.ts` inspects processed IR nodes and produces `__ctx.audit(...)` calls. These are injected in `processBodyAsParts` in the builder. The function handles assignments, variable declarations, function calls, returns, and destructuring (Promise.all). It returns `null` for nodes that shouldn't be audited (control flow, comments, etc.). If you add a new TsNode kind to the IR, consider whether it needs a case in `auditNode()`.
+2. **Runtime calls** — manual `ctx.audit()` calls in `lib/runtime/node.ts` (node entry/exit), `lib/runtime/prompt.ts` (LLM calls, tool calls), and `lib/runtime/interrupts.ts` (interrupts). Function call audits are emitted in the generated function setup code alongside `onFunctionStart`.
+
+The `AuditEntry` type is a discriminated union defined in `lib/runtime/audit.ts`. The `makeAuditCall` helper in `lib/ir/audit.ts` is generic over `AuditEntry["type"]`, so adding a field to an audit entry variant will cause a compile error if `auditNode()` doesn't supply it.
+
+Users can also set `audit.logFile` in `agency.json` (or use `agency run -l <file>`) to write audit entries to a JSONL file. See `docs/superpowers/specs/2026-03-20-audit-logs-design.md` for the full design.
 
 ## General code Guidelines
 - NEVER use dynamic imports

@@ -273,6 +273,12 @@ const __graph = __ctx.graph;
       isBuiltin: false
     }
   })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "greet",
+    args: {},
+    result: undefined
+  })
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {

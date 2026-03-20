@@ -282,6 +282,15 @@ const __graph = __ctx.graph;
       isBuiltin: false
     }
   })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "greet",
+    args: {
+      name: name,
+      age: age
+    },
+    result: undefined
+  })
   __stack.args["name"] = name;
   __stack.args["age"] = age;
   __self.__retryable = __self.__retryable ?? true;
@@ -387,6 +396,15 @@ const __graph = __ctx.graph;
       },
       isBuiltin: false
     }
+  })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "foo2",
+    args: {
+      name: name,
+      age: age
+    },
+    result: undefined
   })
   __stack.args["name"] = name;
   __stack.args["age"] = age;

@@ -264,6 +264,12 @@ const __graph = __ctx.graph;
       isBuiltin: false
     }
   })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "test",
+    args: {},
+    result: undefined
+  })
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {
@@ -371,6 +377,15 @@ const __graph = __ctx.graph;
           },
           isBuiltin: false
         }
+      })
+      await __ctx.audit({
+        type: "functionCall",
+        functionName: "add",
+        args: {
+          a: a,
+          b: b
+        },
+        result: undefined
       })
       __stack.args["a"] = a;
       __stack.args["b"] = b;

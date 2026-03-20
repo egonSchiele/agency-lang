@@ -266,6 +266,14 @@ const __graph = __ctx.graph;
       isBuiltin: false
     }
   })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "greet",
+    args: {
+      name: name
+    },
+    result: undefined
+  })
   __stack.args["name"] = name;
   __self.__retryable = __self.__retryable ?? true;
   try {

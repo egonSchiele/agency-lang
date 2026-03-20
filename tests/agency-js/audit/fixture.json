@@ -1,10 +1,40 @@
 {
   "data": 10,
-  "auditTypes": [
-    "nodeEntry",
-    "return",
-    "assignment",
-    "return",
-    "nodeExit"
+  "entries": [
+    {
+      "type": "nodeEntry",
+      "nodeName": "main"
+    },
+    {
+      "type": "functionCall",
+      "functionName": "double",
+      "args": {
+        "n": 5
+      }
+    },
+    {
+      "type": "return",
+      "value": 10
+    },
+    {
+      "type": "assignment",
+      "variable": "__stack.locals.result",
+      "value": 10
+    },
+    {
+      "type": "return",
+      "value": {
+        "messages": {
+          "threads": {},
+          "counter": 0,
+          "activeStack": []
+        },
+        "data": 10
+      }
+    },
+    {
+      "type": "nodeExit",
+      "nodeName": "main"
+    }
   ]
 }

@@ -8,19 +8,49 @@ import {
   FunctionDefinition,
   getImportedNames,
   IfElse,
-  PromptLiteral,
   RawCode,
   ScopeType,
   TimeBlock,
   WhileLoop,
 } from "@/types.js";
 import { MessageThread } from "@/types/messageThread.js";
-import { Skill } from "@/types/skill.js";
+// import { Skill } from "@/types/skill.js"; // Unused after llm() refactor
 import {
   expressionToString,
   getAllVariablesInBodyArray,
   walkNodesArray,
 } from "@/utils/node.js";
+
+/** Check if a node is an llm() function call */
+function isLlmCall(node: AgencyNode): node is FunctionCall {
+  return node.type === "functionCall" && node.functionName === "llm";
+}
+
+/** Extract the llm() FunctionCall from a node, if present (handles assignments, returns, etc.) */
+function getLlmCall(node: AgencyNode): FunctionCall | null {
+  if (isLlmCall(node)) return node;
+  if (node.type === "assignment" && isLlmCall(node.value)) return node.value;
+  if (node.type === "returnStatement" && isLlmCall(node.value)) return node.value;
+  return null;
+}
+
+/** Get a short string representation of an llm() call for comments */
+function llmCallToString(call: FunctionCall): string {
+  const firstArg = call.arguments[0];
+  if (!firstArg) return "llm()";
+  if (firstArg.type === "string" || firstArg.type === "multiLineString") {
+    const str = firstArg.segments
+      .map((seg) =>
+        seg.type === "text"
+          ? seg.value
+          : `{${expressionToString(seg.expression)}}`,
+      )
+      .join("");
+    return str;
+  }
+  if (firstArg.type === "variableName") return `\${${firstArg.value}}`;
+  return "llm(...)";
+}
 
 export class TypescriptPreprocessor {
   public program: AgencyProgram;
@@ -86,7 +116,7 @@ export class TypescriptPreprocessor {
     so `val` could be 0, 1, or 2, depending on how many of the increment() calls run!
     */
     // this.markFunctionsAsync();
-    this.markFunctionCallsAsync();
+    // this.markFunctionCallsAsync();
     this.removeUnusedLlmCalls();
     this.addPromiseAllCalls();
     this.filterExcludedNodeTypes();
@@ -104,17 +134,12 @@ export class TypescriptPreprocessor {
     }
   }
 
-  protected promptLiteralToString(prompt: PromptLiteral): string {
-    return prompt.segments
-      .map((seg) =>
-        seg.type === "text"
-          ? seg.value
-          : `{${expressionToString(seg.expression)}}`,
-      )
-      .join("");
-  }
-
+  // TODO: Update _removeUnusedLlmCalls to work with llm() as FunctionCall.
+  // Currently disabled because we can't introspect the config object to check
+  // for sync tools. Need to update this to check for tools in the llm() config arg.
   protected _removeUnusedLlmCalls(body: AgencyNode[]): AgencyNode[] {
+    return body;
+    /* Original implementation (used PromptLiteral nodes, needs rewrite for FunctionCall):
     const newBody: AgencyNode[] = [];
     for (const node of body) {
       if (node.type === "prompt") {
@@ -124,8 +149,6 @@ export class TypescriptPreprocessor {
             )
           : false;
         if (!hasSyncTools) {
-          /* skip this LLM call since it isn't using any tools that have side effects,
-          isn't being assigned to a variable, and isn't being returned. */
           newBody.push({
             type: "comment",
             content: `Removed unused LLM call: "${this.promptLiteralToString(node)}"`,
@@ -134,7 +157,6 @@ export class TypescriptPreprocessor {
         }
       }
 
-      // if it is being assigned to a variable, check if that variable is used anywhere else in the body.
       if (node.type === "assignment" && node.value.type === "prompt") {
         const hasSyncTools = node.value.tools
           ? node.value.tools.toolNames.some(
@@ -142,8 +164,6 @@ export class TypescriptPreprocessor {
             )
           : false;
         if (hasSyncTools) {
-          // has sync tools, which means they have a side effect,
-          // so we need to keep this llm call.
           newBody.push(node);
         } else {
           const isUsed = this.isVarUsedInBody(node.variableName, node, body);
@@ -152,7 +172,7 @@ export class TypescriptPreprocessor {
           } else {
             newBody.push({
               type: "comment",
-              content: `Removed unused LLM call "${this.promptLiteralToString(node.value)}", was assigned to variable '${node.variableName}' but variable was never used.`,
+              content: `Removed unused LLM call, was assigned to variable '${node.variableName}' but variable was never used.`,
             });
             continue;
           }
@@ -161,14 +181,13 @@ export class TypescriptPreprocessor {
         node.type === "returnStatement" &&
         node.value.type === "prompt"
       ) {
-        // returning an llm call, keep it.
-        // future improvement: check if the return value is used anywhere.
         newBody.push(node);
       } else {
         newBody.push(node);
       }
     }
     return newBody;
+    */
   }
 
   protected isVarUsedInBody(
@@ -225,12 +244,13 @@ export class TypescriptPreprocessor {
     for (const { node } of walkNodesArray(body)) {
       if (node.type === "usesTool") {
         toolsUsed.push(...node.toolNames);
-      } else if (node.type === "prompt" && !node.tools) {
+      } else if (node.type === "functionCall" && node.functionName === "llm" && !node.tools) {
         node.tools = { type: "usesTool", toolNames: toolsUsed };
         toolsUsed = [];
       } else if (
         node.type === "assignment" &&
-        node.value.type === "prompt" &&
+        node.value.type === "functionCall" &&
+        node.value.functionName === "llm" &&
         !node.value.tools
       ) {
         node.value.tools = { type: "usesTool", toolNames: [...toolsUsed] };
@@ -248,7 +268,11 @@ export class TypescriptPreprocessor {
     }
   }
 
+  // TODO: Update collectSkillsInFunction to work with llm() as FunctionCall.
+  // Skills are now passed in the config object (2nd arg to llm()), but skill
+  // statements still need to be collected and merged with config skills.
   protected collectSkillsInFunction(body: AgencyNode[]): void {
+    /* Original implementation (used PromptLiteral nodes, needs rewrite for FunctionCall):
     let skillsUsed: Skill[] = [];
 
     const setSkillsForPrompt = (promptNode: PromptLiteral) => {
@@ -279,6 +303,7 @@ export class TypescriptPreprocessor {
         setSkillsForPrompt(node.value);
       }
     }
+    */
   }
 
   protected markFunctionsAsync(): void {
@@ -321,93 +346,42 @@ export class TypescriptPreprocessor {
       );
 
       if (node.type === "functionCall") {
-        // run all function calls sync for now,
-        // unless specifically marked async, since we don't want to accidentally run things in parallel,
-        // since they may be modifying shared state
-        // and we don't have a good way to determine which ones are safe to run async.
-        node.async = node.async ?? false;
-        continue;
-        /*         // Skip method calls on objects (e.g. planner.newPlan()) —
-        // these are part of a valueAccess chain and should not have
-        // async/await applied to them individually.
-        const isPartOfValueAccess = ancestors.some(
-          (a) => a.type === "valueAccess",
-        );
-        if (isPartOfValueAccess) {
-          continue;
-        }
+        if (node.functionName === "llm") {
+          // llm() calls: sync by default when they have a config arg (2nd argument),
+          // unless explicitly marked async by the user.
+          // llm() calls without config follow the same rules as before.
+          if (node.async !== undefined) {
+            continue; // already marked as async or sync by user
+          }
 
-        // if in return, this is the last line of execution,
-        // so we need to wait for it to finish
-        if (isInReturnStatement) {
-          node.async = false;
-          continue;
-        }
+          const hasConfig = node.arguments.length > 1;
+          if (hasConfig) {
+            // LLM calls with config are always sync unless explicitly async
+            node.async = false;
+            continue;
+          }
 
-        if (this.isBuiltinFunction(node.functionName)) {
-          node.async = BUILTIN_FUNCTIONS_TO_ASYNC[node.functionName] ?? false;
-          continue;
-        }
+          // prompts in message threads are sync to preserve message order
+          // (unless in a parallel block where they run concurrently)
+          if (isInMessageThread && !isInParallelThread) {
+            node.async = false;
+            continue;
+          }
 
-        const func = this.functionDefinitions[node.functionName];
-        if (!func) {
-          // see if it is explicitly marked async,
-          // otherwise mark it sync since we don't know what it is.
-          node.async = this.functionNameToAsync[node.functionName] || false;
-          continue;
-          // throw new Error(
-          //   `Function ${node.functionName} not found for function call: ${JSON.stringify(node)}`,
-          // );
-        }
+          // if in return, this is the last line of execution,
+          // so we need to wait for it to finish
+          if (isInReturnStatement) {
+            node.async = false;
+            continue;
+          }
 
-        const children = this.findChildren(func.body, "prompt");
-        const containsPrompt = children.length > 0;
-
-        // all prompts need to run synchronously within a message thread
-        // to ensure correct ordering of messages, so if this function
-        // calls any prompts and is being called within a message thread,
-        // it also needs to be synchronous (unless in a parallel block).
-        if (isInMessageThread && !isInParallelThread && containsPrompt) {
-          node.async = false;
-          continue;
-        }
-
-        const isAsync = this.functionNameToAsync[node.functionName];
-        if (isAsync) {
+          // Default: async (no tools to worry about in the no-config case)
           node.async = true;
-        } */
-      } else if (node.type === "prompt") {
-        // prompts in message threads are sync to preserve message order
-        // (unless in a parallel block where they run concurrently)
-        if (isInMessageThread && !isInParallelThread) {
-          node.async = false;
-          continue;
+        } else {
+          // Non-llm function calls: run sync unless specifically marked async
+          node.async = node.async ?? false;
         }
-
-        // if in return, this is the last line of execution,
-        // so we need to wait for it to finish
-        if (isInReturnStatement) {
-          node.async = false;
-          continue;
-        }
-
-        if (node.async !== undefined) {
-          continue; // already marked as async or sync
-        }
-
-        // check if any of its tools will throw an interrupt
-        const toolThrowsInterrupt = node.tools
-          ? node.tools?.toolNames.some((toolName) => {
-              /*
-          If we don't know whether this function uses an interrupt,
-          that's probably because it was imported and we don't have this information.
-          We need to assume it throws an interrupt. */
-              const usesInterrupt =
-                this.functionNameToUsesInterrupt[toolName] ?? true;
-              return usesInterrupt;
-            })
-          : false;
-        node.async = !toolThrowsInterrupt;
+        continue;
       }
     }
   }
@@ -473,21 +447,11 @@ export class TypescriptPreprocessor {
     return false;
   }
 
-  private prettifyName(call: FunctionCall | PromptLiteral): string {
-    if (call.type === "functionCall") {
-      return call.functionName;
-    } else if (call.type === "prompt") {
-      const stringified = call.segments
-        .map((seg) =>
-          seg.type === "text"
-            ? seg.value
-            : `{${expressionToString(seg.expression)}}`,
-        )
-        .join("__")
-        .substring(0, 20);
-      return `"llm(${stringified})"`;
+  private prettifyName(call: FunctionCall): string {
+    if (call.functionName === "llm") {
+      return `"llm(${llmCallToString(call).substring(0, 20)})"`;
     }
-    return "unknown";
+    return call.functionName;
   }
 
   public renderMermaid(): string[] {
@@ -498,15 +462,10 @@ export class TypescriptPreprocessor {
     const nextId = () => `n${nodeCounter++}`;
 
     const addToolsLabel = (
-      call: FunctionCall | PromptLiteral,
+      call: FunctionCall,
       callId: string,
     ) => {
-      if (call.type === "prompt" && call.tools?.toolNames.length) {
-        const labelId = nextId();
-        const toolsList = call.tools.toolNames.join(", ");
-        labelLines.push(`  ${labelId}([tools: ${toolsList}]):::toolLabel`);
-        labelLines.push(`  ${callId} -.- ${labelId}`);
-      }
+      // TODO: Update to extract tools from llm() config object
     };
 
     for (const node of this.program.nodes) {
@@ -574,32 +533,22 @@ export class TypescriptPreprocessor {
 
   protected extractFunctionCalls(
     body: AgencyNode[],
-  ): (FunctionCall | PromptLiteral)[] {
-    const calls: (FunctionCall | PromptLiteral)[] = [];
+  ): FunctionCall[] {
+    const calls: FunctionCall[] = [];
     for (const { node } of walkNodesArray(body)) {
       if (node.type === "functionCall") {
         calls.push(node);
-      } else if (node.type === "prompt") {
-        calls.push(node);
-        /*         const stringified = node.segments
-          .map((seg) =>
-            seg.type === "text" ? seg.value : `{${seg.variableName}}`,
-          )
-          .join("__")
-          .substring(0, 20);
-        calls.push(`llm(${stringified})`);
- */
       }
     }
     return calls;
   }
 
   protected groupCallsByAsync(
-    calls: (FunctionCall | PromptLiteral)[],
-  ): { type: "sync" | "async"; calls: (FunctionCall | PromptLiteral)[] }[] {
+    calls: FunctionCall[],
+  ): { type: "sync" | "async"; calls: FunctionCall[] }[] {
     const groups: {
       type: "sync" | "async";
-      calls: (FunctionCall | PromptLiteral)[];
+      calls: FunctionCall[];
     }[] = [];
     for (const call of calls) {
       const callType = call.async ? "async" : "sync";
@@ -722,8 +671,7 @@ export class TypescriptPreprocessor {
       // Process assignments in this body
       if (node.type === "assignment") {
         const isAsyncCall =
-          (node.value.type === "functionCall" && node.value.async) ||
-          (node.value.type === "prompt" && node.value.async);
+          node.value.type === "functionCall" && node.value.async;
 
         if (isAsyncCall) {
           asyncVarToAssignment[node.variableName] = node;
@@ -891,8 +839,7 @@ export class TypescriptPreprocessor {
             .filter(
               (n): n is Assignment =>
                 n.type === "assignment" &&
-                ((n.value.type === "prompt" && !!n.value.async) ||
-                  (n.value.type === "functionCall" && !!n.value.async)),
+                n.value.type === "functionCall" && !!n.value.async,
             )
             .map((n) => n.variableName);
 

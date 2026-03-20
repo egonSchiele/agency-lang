@@ -94,6 +94,10 @@ const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
     params: [{ type: "primitiveType", value: "number" }],
     returnType: { type: "primitiveType", value: "number" },
   },
+  llm: {
+    params: ["any"],
+    returnType: { type: "primitiveType", value: "string" },
+  },
 };
 
 export class TypeChecker {
@@ -554,8 +558,8 @@ export class TypeChecker {
     scopeVars: Record<string, VariableType | "any">,
     context: string,
   ): void {
-    // Prompts adopt the expected type — skip checking
-    if (expr.type === "prompt") return;
+    // llm() calls adopt the expected type — skip checking
+    if (expr.type === "functionCall" && expr.functionName === "llm") return;
 
     const actualType = this.synthType(expr, scopeVars);
     if (actualType === "any") return;
@@ -594,8 +598,6 @@ export class TypeChecker {
         return { type: "primitiveType", value: "string" };
       case "boolean":
         return { type: "primitiveType", value: "boolean" };
-      case "prompt":
-        return { type: "primitiveType", value: "string" };
       case "binOpExpression": {
         const op = expr.operator;
         if (

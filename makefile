@@ -1,8 +1,6 @@
 .PHONY: all test
 
 all:
-	# pnpm run templates && pnpm run build && pnpm run start tests/function.agency
-	# pnpm run templates && pnpm run build && pnpm run start tests/assignment.agency
 	pnpm run templates && pnpm run build
 
 test:

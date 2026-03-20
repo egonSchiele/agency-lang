@@ -44,8 +44,6 @@ import { _valueAccessParser, valueAccessParser } from "./access.js";
 import { commentParser } from "./comment.js";
 import {
   functionCallParser,
-  llmPromptFunctionCallParser,
-  streamingPromptLiteralParser,
 } from "./functionCall.js";
 import { booleanParser, literalParser } from "./literals.js";
 import { matchBlockParser } from "./matchBlock.js";
@@ -97,8 +95,6 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
           binOpParser,
           timeBlockParser,
           messageThreadParser,
-          streamingPromptLiteralParser,
-          llmPromptFunctionCallParser,
           booleanParser,
           valueAccessParser,
           agencyArrayParser,
@@ -169,7 +165,6 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
         forLoopParser,
         whileLoopParser,
         matchBlockParser,
-        streamingPromptLiteralParser,
         ifParser,
         timeBlockParser,
         messageThreadParser,
@@ -178,7 +173,6 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
         functionParser,
         assignmentParser,
         binOpParser,
-        llmPromptFunctionCallParser,
         booleanParser,
         valueAccessParser,
         literalParser,

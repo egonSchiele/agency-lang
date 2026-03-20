@@ -1,4 +1,6 @@
 node main() {
-  res = stream llm("Return the integers from 1 to 10")
+  res = llm("Return the integers from 1 to 10", { 
+    stream: true
+  })
   return res
 }

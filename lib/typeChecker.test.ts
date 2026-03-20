@@ -234,8 +234,9 @@ describe("TypeChecker", () => {
             variableName: "s",
             typeHint: { type: "stringLiteralType", value: "success" },
             value: {
-              type: "prompt",
-              segments: [{ type: "text", value: "Pick a status" }],
+              type: "functionCall",
+              functionName: "llm",
+              arguments: [{ type: "string", segments: [{ type: "text", value: "Pick a status" }] }],
             },
           },
           {
@@ -356,8 +357,9 @@ describe("TypeChecker", () => {
               {
                 type: "returnStatement",
                 value: {
-                  type: "prompt",
-                  segments: [{ type: "text", value: "What is your name?" }],
+                  type: "functionCall",
+                  functionName: "llm",
+                  arguments: [{ type: "string", segments: [{ type: "text", value: "What is your name?" }] }],
                 },
               },
             ],
@@ -1005,8 +1007,9 @@ describe("TypeChecker", () => {
             functionName: "doSomething",
             arguments: [
               {
-                type: "prompt",
-                segments: [{ type: "text", value: "What is 2+2?" }],
+                type: "functionCall",
+                functionName: "llm",
+                arguments: [{ type: "string", segments: [{ type: "text", value: "What is 2+2?" }] }],
               },
             ],
           },
@@ -1413,8 +1416,9 @@ describe("TypeChecker", () => {
             variableName: "response",
             typeHint: { type: "typeAliasVariable", aliasName: "User" },
             value: {
-              type: "prompt",
-              segments: [{ type: "text", value: "What is your name and age?" }],
+              type: "functionCall",
+              functionName: "llm",
+              arguments: [{ type: "string", segments: [{ type: "text", value: "What is your name and age?" }] }],
             },
           },
           {
@@ -2094,8 +2098,9 @@ describe("TypeChecker", () => {
               ],
             },
             value: {
-              type: "prompt",
-              segments: [{ type: "text", value: "What is your name?" }],
+              type: "functionCall",
+              functionName: "llm",
+              arguments: [{ type: "string", segments: [{ type: "text", value: "What is your name?" }] }],
             },
           },
         ],

@@ -138,21 +138,12 @@ export function* getAllVariablesInBody(
         }
       }
     } else if (
-      node.type === "prompt" ||
       node.type === "string" ||
       node.type === "multiLineString"
     ) {
       for (const seg of node.segments) {
         if (seg.type === "interpolation") {
           yield* getAllVariablesInBody([seg.expression as AgencyNode]);
-        }
-      }
-      if (node.type === "prompt") {
-        for (const toolName of node.tools?.toolNames ?? []) {
-          yield { name: toolName, node };
-        }
-        if (node.config) {
-          yield* getAllVariablesInBody([node.config]);
         }
       }
     } else if (node.type === "returnStatement") {
@@ -299,7 +290,6 @@ export function* walkNodes(
     } else if (node.type === "specialVar") {
       yield* walkNodes([node.value], [...ancestors, node], scopes);
     } else if (
-      node.type === "prompt" ||
       node.type === "string" ||
       node.type === "multiLineString"
     ) {
@@ -311,9 +301,6 @@ export function* walkNodes(
             scopes,
           );
         }
-      }
-      if (node.type === "prompt" && node.config) {
-        yield* walkNodes([node.config], [...ancestors, node], scopes);
       }
     } else if (node.type === "binOpExpression") {
       yield* walkNodes([node.left], [...ancestors, node], scopes);

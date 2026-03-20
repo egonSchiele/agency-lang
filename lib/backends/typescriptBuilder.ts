@@ -5,7 +5,6 @@ import {
   Assignment,
   InterpolationSegment,
   Literal,
-  PromptLiteral,
   PromptSegment,
   Scope,
   ScopeType,
@@ -115,6 +114,7 @@ export class TypeScriptBuilder {
   // Threading & control flow
   private parallelThreadVars: Record<string, string> = {};
   private loopVars: string[] = [];
+  private insideMessageThread: boolean = false;
 
 
   private programInfo: ProgramInfo;
@@ -430,7 +430,6 @@ export class TypeScriptBuilder {
       case "multiLineString":
       case "string":
       case "variableName":
-      case "prompt":
       case "boolean":
         return this.generateLiteral(node);
       case "returnStatement":
@@ -537,12 +536,6 @@ export class TypeScriptBuilder {
         }
         return ts.scopedVar(literal.value, literal.scope!, this.moduleId);
       }
-      case "prompt":
-        return this.processPromptLiteral(
-          DEFAULT_PROMPT_NAME,
-          this.getScopeReturnType(),
-          literal,
-        );
       case "boolean":
         return ts.bool(literal.value);
     }
@@ -1024,6 +1017,16 @@ export class TypeScriptBuilder {
   }
 
   private processFunctionCall(node: FunctionCall): TsNode {
+    if (node.functionName === "llm") {
+      // Standalone llm() call (not assigned to variable)
+      return this.processLlmCall(
+        DEFAULT_PROMPT_NAME,
+        this.getScopeReturnType(),
+        node,
+        "local",
+      );
+    }
+
     if (this.isGraphNode(node.functionName)) {
       this.currentAdjacentNodes.push(node.functionName);
       this.functionsUsed.add(node.functionName);
@@ -1064,9 +1067,14 @@ export class TypeScriptBuilder {
     const shouldAwait = !node.async && context !== "valueAccess";
 
     if (this.isAgencyFunction(node.functionName, context)) {
+      // Inside a message thread: pass the caller's ThreadStore so the function
+      // shares the thread context. Outside: pass a new ThreadStore for isolation.
+      const threadsExpr = this.insideMessageThread
+        ? ts.runtime.threads
+        : ts.newThreadStore();
       const configObj = ts.functionCallConfig({
         ctx: ts.runtime.ctx,
-        threads: node.async ? ts.newThreadStore() : ts.runtime.threads,
+        threads: threadsExpr,
         interruptData: ts.raw("__state?.interruptData"),
       });
       const call = ts.call(ts.id(functionName), [...argNodes, configObj]);
@@ -1229,10 +1237,15 @@ export class TypeScriptBuilder {
           }),
         );
       }
-      if (node.value.type === "prompt") {
-        const valueNode = this.processNode(node.value);
+      if (node.value.type === "functionCall" && node.value.functionName === "llm") {
+        const llmNode = this.processLlmCall(
+          DEFAULT_PROMPT_NAME,
+          this.getScopeReturnType(),
+          node.value,
+          "local",
+        );
         return ts.statements([
-          valueNode,
+          llmNode,
           ts.nodeResult(ts.self(DEFAULT_PROMPT_NAME)),
         ]);
       }
@@ -1246,7 +1259,6 @@ export class TypeScriptBuilder {
       return ts.nodeResult(valueNode);
     }
 
-    const valueNode = this.processNode(node.value);
     if (
       node.value.type === "functionCall" &&
       node.value.functionName === "interrupt"
@@ -1260,20 +1272,27 @@ export class TypeScriptBuilder {
           nodeContext: this.getCurrentScope().type === "node",
         }),
       );
-    } else if (node.value.type === "prompt") {
+    } else if (node.value.type === "functionCall" && node.value.functionName === "llm") {
+      const llmNode = this.processLlmCall(
+        DEFAULT_PROMPT_NAME,
+        this.getScopeReturnType(),
+        node.value,
+        "local",
+      );
       return ts.statements([
-        valueNode,
+        llmNode,
         ts.functionReturn(ts.self(DEFAULT_PROMPT_NAME)),
       ]);
     }
+    const valueNode = this.processNode(node.value);
     return ts.functionReturn(valueNode);
   }
 
   private processAssignment(node: Assignment): TsNode {
     const { variableName, typeHint, value } = node;
 
-    if (value.type === "prompt") {
-      return this.processPromptLiteral(variableName, typeHint, value);
+    if (value.type === "functionCall" && value.functionName === "llm") {
+      return this.processLlmCall(variableName, typeHint, value, node.scope!);
     } else if (
       value.type === "functionCall" &&
       value.functionName === "interrupt"
@@ -1387,36 +1406,17 @@ export class TypeScriptBuilder {
     );
   }
 
-  private processPromptLiteral(
+  /**
+   * Process an llm() function call. Generates a direct runPrompt() call
+   * (no inner function wrapper). Handles async/sync, interrupt checking,
+   * response format from type hints, and tools from config object.
+   */
+  private processLlmCall(
     variableName: string,
     variableType: VariableType | undefined,
-    node: PromptLiteral,
+    node: FunctionCall,
+    scope: ScopeType,
   ): TsNode {
-    const interpolatedVars = uniq(
-      node.segments
-        .filter((s) => s.type === "interpolation")
-        .map((s) => getBaseVarName(s as InterpolationSegment)),
-    );
-
-    return this.generatePromptFunction({
-      variableName,
-      variableType,
-      functionArgs: interpolatedVars,
-      prompt: node,
-    });
-  }
-
-  private generatePromptFunction({
-    variableName,
-    variableType,
-    functionArgs = [],
-    prompt,
-  }: {
-    variableName: string;
-    variableType: VariableType | undefined;
-    functionArgs: string[];
-    prompt: PromptLiteral;
-  }): TsNode {
     const _variableType = variableType ||
       this.getTypeHint(variableName) || {
       type: "primitiveType" as const,
@@ -1427,18 +1427,37 @@ export class TypeScriptBuilder {
       _variableType,
       this.getVisibleTypeAliases(),
     );
-    const clientConfig = prompt.config
-      ? this.processNode(prompt.config)
+
+    // Extract prompt from first argument, using processNode to get scoped variable references
+    const promptArg = node.arguments[0];
+    const promptNode = promptArg
+      ? this.processNode(promptArg)
+      : ts.raw("``");
+
+    // Extract config from second argument (if present)
+    const configArg = node.arguments[1];
+    const clientConfig = configArg
+      ? this.processNode(configArg)
       : ts.obj({});
 
-    const promptCode = this.buildPromptString({
-      segments: prompt.segments,
-      typeHints: this.getVisibleTypeHints(),
-      skills: prompt.skills || [],
-    });
+    // Thread expression
+    let threadExpr: TsNode;
+    const isInFunction = this.getCurrentScope().type === "function";
+    if (this.parallelThreadVars[variableName]) {
+      threadExpr = ts.threads.get(ts.id(this.parallelThreadVars[variableName]));
+    } else if (this.insideMessageThread || isInFunction) {
+      // Inside a message thread block: use the active thread (shared).
+      // Inside a function: use getOrCreateActive because the caller passes
+      // its ThreadStore (with the active thread already set), so the function
+      // respects the caller's thread context.
+      threadExpr = ts.threads.getOrCreateActive();
+    } else {
+      // Top-level node code outside a message thread: each llm call gets its own thread
+      threadExpr = ts.threads.createAndReturnThread();
+    }
 
-    // Tools array
-    const toolNames = prompt.tools?.toolNames || [];
+    // Tools from usesTool statements (attached by preprocessor)
+    const toolNames = node.tools?.toolNames || [];
     const toolsNode: TsNode =
       toolNames.length > 0
         ? ts.arr(toolNames.map((name) => ts.id(`__${name}Tool`)))
@@ -1471,39 +1490,11 @@ export class TypeScriptBuilder {
       });
     });
 
-    // Thread expression for metadata
-    let threadExpr: TsNode;
-    if (this.parallelThreadVars[variableName]) {
-      threadExpr = ts.threads.get(ts.id(this.parallelThreadVars[variableName]));
-    } else if (prompt.async) {
-      threadExpr = ts.threads.createAndReturnThread();
-    } else {
-      threadExpr = ts.threads.getOrCreateActive();
-    }
-    const metadataObj = ts.obj({ messages: threadExpr });
-
-    // Scoped function args for the call site
-    const scopedFunctionArgNodes: TsNode[] = functionArgs.map((arg) => {
-      const interpSegment = prompt.segments.find(
-        (s) =>
-          s.type === "interpolation" &&
-          getBaseVarName(s as InterpolationSegment) === arg,
-      ) as InterpolationSegment | undefined;
-      if (!interpSegment) {
-        return ts.id(arg);
-      }
-      const baseExpr =
-        interpSegment.expression.type === "variableName"
-          ? interpSegment.expression
-          : interpSegment.expression.base;
-      return this.processNode(baseExpr);
-    });
-
     // Build runPrompt config object
     const runPromptEntries: Record<string, TsNode> = {
       ctx: ts.runtime.ctx,
-      prompt: ts.raw(promptCode),
-      messages: ts.raw("__metadata?.messages || new MessageThread()"),
+      prompt: promptNode,
+      messages: $(threadExpr).done(),
     };
     if (zodSchema !== DEFAULT_SCHEMA) {
       runPromptEntries.responseFormat = $.z()
@@ -1514,50 +1505,30 @@ export class TypeScriptBuilder {
     runPromptEntries.tools = toolsNode;
     runPromptEntries.toolHandlers = ts.arr(toolHandlerNodes);
     runPromptEntries.clientConfig = clientConfig;
-    runPromptEntries.stream = ts.bool(prompt.isStreaming || false);
     runPromptEntries.maxToolCallRounds = ts.num(
       this.agencyConfig.maxToolCallRounds || 10,
     );
     runPromptEntries.interruptData = ts.raw("__state?.interruptData");
     runPromptEntries.removedTools = ts.self("__removedTools");
 
-    // Function params
-    const fnParams: TsParam[] = functionArgs.map((arg) => ({ name: arg }));
-    fnParams.push({ name: "__metadata" });
-
-    // Inner function declaration
-    const innerFn = ts.functionDecl(
-      `_${variableName}`,
-      fnParams,
-      ts.statements([
-        ts.assign(
-          ts.self("__removedTools"),
-          ts.binOp(ts.self("__removedTools"), "||", ts.arr([])),
-        ),
-        ts.return(
-          $(ts.id("runPrompt"))
-            .call([ts.obj(runPromptEntries)])
-            .done(),
-        ),
-      ]),
-      { async: true },
-    );
-
-    // Call expression
-    const callArgs: TsNode[] = [...scopedFunctionArgNodes, metadataObj];
-    const callExpr = $(ts.id(`_${variableName}`))
-      .call(callArgs)
+    const runPromptCall = $(ts.id("runPrompt"))
+      .call([ts.obj(runPromptEntries)])
       .done();
 
-    const varRef = ts.self(variableName);
-    const stmts: TsNode[] = [innerFn];
+    const varRef = ts.scopedVar(variableName, scope, this.moduleId);
+    const stmts: TsNode[] = [
+      ts.assign(
+        ts.self("__removedTools"),
+        ts.binOp(ts.self("__removedTools"), "||", ts.arr([])),
+      ),
+    ];
 
-    if (prompt.async) {
+    if (node.async) {
       // Async: no await, no interrupt check
-      stmts.push(ts.assign(varRef, callExpr));
+      stmts.push(ts.assign(varRef, runPromptCall));
     } else {
       // Sync: await + interrupt check
-      stmts.push(ts.assign(varRef, ts.await(callExpr)));
+      stmts.push(ts.assign(varRef, ts.await(runPromptCall)));
       stmts.push(ts.comment("return early from node if this is an interrupt"));
       const isNodeContext = this.getCurrentScope().type === "node";
       const returnExpr = isNodeContext
@@ -1671,7 +1642,10 @@ export class TypeScriptBuilder {
       return this.processParallelThread(node, assignTo);
     }
 
+    const prevInsideMessageThread = this.insideMessageThread;
+    this.insideMessageThread = true;
     const bodyNodes = node.body.map((stmt) => this.processNode(stmt));
+    this.insideMessageThread = prevInsideMessageThread;
     const createMethod =
       node.threadType === "subthread" ? "createSubthread" : "create";
     const stmts: TsNode[] = [
@@ -1708,7 +1682,7 @@ export class TypeScriptBuilder {
 
     const assignmentVarNames: [string, ScopeType][] = [];
     for (const stmt of node.body) {
-      if (stmt.type === "assignment" && stmt.value.type === "prompt") {
+      if (stmt.type === "assignment" && stmt.value.type === "functionCall" && stmt.value.functionName === "llm") {
         assignmentVarNames.push([stmt.variableName, stmt.scope!]);
       }
     }

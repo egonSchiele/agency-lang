@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   functionCallParser,
-  streamingPromptLiteralParser,
 } from "./functionCall.js";
 import {
   valueAccessParser,
@@ -380,76 +379,5 @@ describe("async/sync function calls via valueAccessParser", () => {
   });
 });
 
-describe("streamingPromptLiteralParser", () => {
-  const testCases = [
-    {
-      input: 'streaming llm("Hello world")',
-      expected: {
-        success: true,
-        result: {
-          type: "prompt",
-          segments: [{ type: "text", value: "Hello world" }],
-          isStreaming: true,
-        },
-      },
-    },
-    {
-      input: 'stream llm("Generate a response")',
-      expected: {
-        success: true,
-        result: {
-          type: "prompt",
-          segments: [{ type: "text", value: "Generate a response" }],
-          isStreaming: true,
-        },
-      },
-    },
-    {
-      input: 'streaming llm("Hello ${name}")',
-      expected: {
-        success: true,
-        result: {
-          type: "prompt",
-          segments: [
-            { type: "text", value: "Hello " },
-            { type: "interpolation", expression: { type: "variableName", value: "name" } },
-          ],
-          isStreaming: true,
-        },
-      },
-    },
-    {
-      input: 'streaming llm("")',
-      expected: {
-        success: true,
-        result: {
-          type: "prompt",
-          segments: [],
-          isStreaming: true,
-        },
-      },
-    },
-    // Failure cases
-    { input: '`Hello world`', expected: { success: false } },
-    { input: 'streaming`Hello`', expected: { success: false } },
-    { input: "streaming", expected: { success: false } },
-    { input: "", expected: { success: false } },
-  ];
-
-  testCases.forEach(({ input, expected }) => {
-    if (expected.success) {
-      it(`should parse "${input}" successfully`, () => {
-        const result = streamingPromptLiteralParser(input);
-        expect(result.success).toBe(true);
-        if (result.success) {
-          expect(result.result).toEqual(expected.result);
-        }
-      });
-    } else {
-      it(`should fail to parse "${input}"`, () => {
-          const result = streamingPromptLiteralParser(input);
-          expect(result.success).toBe(false);
-        });
-    }
-  });
-});
+// TODO: streamingPromptLiteralParser tests removed — streaming now handled via config object.
+// Streaming will be passed as { stream: true } in the llm() config argument.

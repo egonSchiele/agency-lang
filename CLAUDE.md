@@ -38,8 +38,6 @@ agency-lang/
 │   │   ├── test.ts                # Test and fixtures commands
 │   │   ├── agent.ts               # Agent-related CLI commands
 │   │   ├── help.ts                # Help command
-│   │   ├── remoteRun.ts           # Remote run command
-│   │   ├── upload.ts              # Upload command
 │   │   └── util.ts                # Shared CLI utilities (parseTarget, pickANode, executeNode, etc.)
 │   ├── runtime/                   # Runtime library used by compiled Agency code
 │   │   ├── index.ts               # Runtime exports
@@ -66,7 +64,7 @@ agency-lang/
 │   │   ├── error.ts               # Graph error types
 │   │   └── util.ts                # Graph utilities
 │   ├── agents/                    # Built-in Agency agents
-│   │   └── agency-agent/          # Self-referential Agency agent
+│   │   └── agency-agent/          # The agent built into Agency, to help write Agency code
 │   ├── templates/                 # Mustache templates compiled to TypeScript via typestache
 │   │   ├── backends/              # Templates used by code generators
 │   │   ├── cli/                   # Templates used by CLI commands
@@ -132,20 +130,55 @@ Transforms the agency AST into the TypeScript IR, which is one step above simple
 ### Generate TypeScript code
 We use the `printTs()` function in `lib/ir/prettyPrint.ts` to convert the TypeScript IR AST into TypeScript code. See `lib/backends/typescriptGenerator.ts` and `lib/ir/prettyPrint.ts`.
 
-## SimpleMachine (graph execution)
-Agency programs compile to graphs executed by `SimpleMachine` (`lib/simplemachine/`). See `docs/dev/simplemachine.md` for details on nodes, edges, conditional transitions, and how compiled Agency code maps to graph operations.
-
-## Smoltalk (LLM client)
-All LLM interactions go through the [smoltalk](https://www.npmjs.com/package/smoltalk) library. See `docs/dev/smoltalk.md` for how Agency uses it for structured output requests, message construction, and token tracking.
-
-## Statelog (tracing)
-`StatelogClient` (`lib/statelogClient.ts`) provides optional execution tracing — graph topology, node lifecycle, LLM calls, and tool executions. See `docs/dev/statelog.md`.
-
-## Configuration
-`AgencyConfig` (`lib/config.ts`) defines all compiler and runtime options. See `docs/dev/config.md` for the full option reference and `docs/config.md` for basic usage.
-
 ## Language design and features
 See `DOCS.md` for the full language reference and design docs.
+
+## Code generation and backends
+The code that gets written and executed from an agency program comes from two places.
+One is new TypeScript code written for the program. This comes from the builder, which in turn uses a combination of the TypeScript IR and the Mustache templates. 
+The other is TypeScript libraries and functions that get run by the generated TypeScript code. Much of this is in the runtime directory (`lib/runtime`) or imported from other libraries such as Zod.
+As you can imagine, it's much better to have functionality in these shared libraries because then it is easily testable and refactorable, and we get type safety etc. The code for generating new TypeScript code on the other hand is much harder to work with. It's harder to read and reason about, and it doesn't have the same type safety. The TypeScript IR ameliorates some of this pain, but in general, when you are thinking of adding new features or modifying existing features, you should try to push as much of the functionality as you can into the runtime TypeScript libraries. Anything that can't be pushed to this should go in the builder if possible, especially if it is TypeScript code that may need to be manipulated later. For anything that's too complex and can't be put in the runtime libs, consider putting it in a Mustache file instead, so it's easy to read.
+
+## Core features of Agency
+
+### Message threads
+Message threads are a core feature of Agency, and it's how we store and use message history. By default, every LLM call in Agency is isolated, but message threads can combine them. For usage, see DOCS.md. For implementation notes, see docs/dev/threads.md.
+Message threads are quite complicated, and agency includes tests for a lot of different test cases. See docs/dev/message-thread-tests.md for a full list of test cases.
+
+### Interrupts and state serialization
+
+A core feature of Agency is the ability to pause and resume execution. This allows us to support a feature called Interrupts. Interrupts allow an Agency program to pause execution, return control to the caller, and resume later. This enables human-in-the-loop workflows where a user can approve, reject, modify, or resolve an interrupted operation.
+
+All the Runtime state lives in the RuntimeContext object (lib/runtime/state/context.ts). Some of this needs to get serialized when parsing, and some of this does not. The `stateToJSON` method on RuntimeContext shows what gets serialized: StateStack and GlobalStore.
+
+StateStack stores the state for every frame in an execution. It stores the arguments to a function or node, any local variables, any message threads. The GlobalStore stores global variables per module. This means that the global variables for each file get their own isolated context. This is to support another core feature of agency: execution isolation. More on this below.
+
+When an interrupt is triggered, the runtime serializes the full execution state — the `StateStack` (call stack frames with local variables, arguments, and step counters) and the `GlobalStore` (cross-module global variables) — into a JSON-serializable `InterruptState`. This state is returned to the caller along with the interrupt data.
+
+To resume, the caller passes the serialized state and an `InterruptResponse` (one of `approve`, `reject`, `modify`, or `resolve`) back to one of the response functions (`approveInterrupt`, `rejectInterrupt`, `modifyInterrupt`, `resolveInterrupt`). The runtime deserializes the state, puts the `StateStack` into deserialize mode, and re-runs from the last graph node visited. As each function/node is re-entered, its frame is shifted off the front of the stack and pushed to the back, restoring local state without re-executing side effects.
+
+A couple of things to note here:
+1. this means that none of the state in previous nodes is serialized. Nodes are different from functions because while functions return, nodes represent different states in a state machine. So when you transition to another node, you never return to the first one. This means we only need to serialize any state relevant to the current node.
+2. How do we return, when resuming from an interrupt, how do we resume at the exact line where we left off? There's a variety of ways to do this. Services like Temporal write and replay logs. However, since we have language level control with Agency, we can do something much simpler and dumber. Every statement in the generated TypeScript code has its own step, wrapped with an if statement that looks something like this:
+
+```ts
+  if (__step <= 3) {
+    // actual code for the statement
+    __stack.step++;
+  }
+```
+
+Every time we go to the next statement, we increment the step counter (`__stack.step++`). The step value gets saved on the state stack just like all the other local variables. Then, execution continues as normal. Since all statements are wrapped in these if statements, we won't execute any statements that are lower than the current step value. This lets us easily and cleanly return to the exact statement we were at. It avoids the overhead that replay logs provide, and gives us a guarantee that nothing else will get executed, which is harder to do with replay logs.
+
+See `lib/runtime/interrupts.ts` for the implementation, `docs/stateStack.md` for how the state stack serialization/deserialization works, and `docs/INTERRUPT_TESTING.md` for interrupt test cases.
+
+### Execution isolation
+Since agency is designed to be used in the web context, it's possible that multiple threads will be using the agent concurrently. In this case, global state would be shared across all of those calls. Importantly, this would include the StateStack. Even if you're okay with sharing global variables across all calls, sharing the StateStack would mean that the call stacks for all the calls would get mixed together, which would be chaos. So agency provides runtime execution isolation for each call. Each call gets its own StateStack and its own global variables.
+
+If you do want to share state between calls, use the `shared` keyword. Because each call gets its own copy of the global variables, that means global variables are initialized fresh for each call. If the initialization is expensive, that can add extra performance cost. That's when it's important to use the shared keyword. Shared variables are only initialized once. They don't get serialized or deserialized. Shared variables are good for creating caches, reading files, etc.
+For more information about shared and all the other scope types, see the comment in lib/types.ts.
+
+## Implementation details
 
 ## Parsers
 
@@ -160,42 +193,9 @@ https://github.com/egonSchiele/tarsec/tree/main/tutorials
 
 See `docs/TESTING.md` for the full testing guide.
 
-## Common Tasks
-
-### Adding a new AST node type
-
-1. **Define the type** in `lib/types/` (create a new file or add to an existing one). Export it from `lib/types.ts`. Add the new type to the `AgencyNode` union type in `lib/types.ts`.
-2. **Add a parser** in `lib/parsers/`. Wire it into the main parser in `lib/parser.ts`. Add unit tests in a co-located `.test.ts` file.
-3. **Add code generation** by adding a case to `processNode` in `lib/backends/typescriptBuilder.ts`. You may also need to create new `.mustache` template files in `lib/templates/backends/` and run `pnpm run templates`.
-4. **Add integration test fixtures** — create `.agency` and `.mts` files in `tests/typescriptGenerator/`.
-
-### Adding a CLI command
-
-1. Add the command definition in `scripts/agency.ts` using commander (`.command()`, `.argument()`, `.option()`, `.action()`).
-2. Implement the command logic in `lib/cli/` (create a new file or add to an existing one). Shared utilities like `parseTarget`, `pickANode`, `executeNode` live in `lib/cli/util.ts`.
-3. Optionally add a shortcut script in `package.json` under `"scripts"`.
-
-## Code Guidelines
-- NEVER use dynamic imports
-- Use objects instead of maps.
-- Use arrays instead of sets.
-- Use types instead of interfaces.
 
 ## Typechecker
 See docs/dev/typechecker.md and docs/typeChecker.md for more information. Code it at lib/typeChecker.ts.
-
-## Message threads
-Message threads are a core feature of Agency, and it's how we store and use message history. By default, every LLM call in Agency is isolated, but message threads can combine them. For usage, see DOCS.md. For implementation notes, see docs/dev/threads.md.
-Message threads are quite complicated, and agency includes tests for a lot of different test cases. See docs/dev/message-thread-tests.md for a full list of test cases.
-
-## Interrupts and state serialization
-Interrupts allow an Agency program to pause execution, return control to the caller, and resume later. This enables human-in-the-loop workflows where a user can approve, reject, modify, or resolve an interrupted operation.
-
-When an interrupt is triggered, the runtime serializes the full execution state — the `StateStack` (call stack frames with local variables, arguments, and step counters) and the `GlobalStore` (cross-module global variables) — into a JSON-serializable `InterruptState`. This state is returned to the caller along with the interrupt data.
-
-To resume, the caller passes the serialized state and an `InterruptResponse` (one of `approve`, `reject`, `modify`, or `resolve`) back to one of the response functions (`approveInterrupt`, `rejectInterrupt`, `modifyInterrupt`, `resolveInterrupt`). The runtime deserializes the state, puts the `StateStack` into deserialize mode, and re-runs from the last graph node visited. As each function/node is re-entered, its frame is shifted off the front of the stack and pushed to the back, restoring local state without re-executing side effects.
-
-See `lib/runtime/interrupts.ts` for the implementation, `docs/stateStack.md` for how the state stack serialization/deserialization works, and `docs/INTERRUPT_TESTING.md` for interrupt test cases.
 
 ## TypeScript IR
 The TypeScript IR was introduced because it was a useful way to modify and transform TypeScript code. Without the TypeScript IR, we'd be running modifications on strings directly, which is extremely buggy and error-prone.
@@ -215,6 +215,41 @@ Key components:
 - **`StateStack`** (`lib/runtime/state/stateStack.ts`) — Manages the call stack for serialization/deserialization (see Interrupts section above).
 - **`runPrompt`** (`lib/runtime/prompt.ts`) — Executes LLM calls via smoltalk.
 - **`setupNode` / `setupFunction` / `runNode`** (`lib/runtime/node.ts`) — Entry points for executing compiled nodes and functions.
+
+## Common Tasks
+
+### Adding a new AST node type
+
+1. **Define the type** in `lib/types/` (create a new file or add to an existing one). Export it from `lib/types.ts`. Add the new type to the `AgencyNode` union type in `lib/types.ts`.
+2. **Add a parser** in `lib/parsers/`. Wire it into the main parser in `lib/parser.ts`. Add unit tests in a co-located `.test.ts` file.
+3. **Add code generation** by adding a case to `processNode` in `lib/backends/typescriptBuilder.ts`. You may also need to create new `.mustache` template files in `lib/templates/backends/` and run `pnpm run templates`.
+4. **Add integration test fixtures** — create `.agency` and `.mts` files in `tests/typescriptGenerator/`.
+
+### Adding a CLI command
+
+1. Add the command definition in `scripts/agency.ts` using commander (`.command()`, `.argument()`, `.option()`, `.action()`).
+2. Implement the command logic in `lib/cli/` (create a new file or add to an existing one). Shared utilities like `parseTarget`, `pickANode`, `executeNode` live in `lib/cli/util.ts`.
+3. Optionally add a shortcut script in `package.json` under `"scripts"`.
+
+## Other miscellaneous things to know about
+
+### SimpleMachine (graph execution)
+Agency programs compile to graphs executed by `SimpleMachine` (`lib/simplemachine/`). See `docs/dev/simplemachine.md` for details on nodes, edges, conditional transitions, and how compiled Agency code maps to graph operations.
+
+### Smoltalk (LLM client)
+All LLM interactions go through the [smoltalk](https://www.npmjs.com/package/smoltalk) library. See `docs/dev/smoltalk.md` for how Agency uses it for structured output requests, message construction, and token tracking.
+
+### Statelog (tracing)
+`StatelogClient` (`lib/statelogClient.ts`) provides optional execution tracing — graph topology, node lifecycle, LLM calls, and tool executions. See `docs/dev/statelog.md`.
+
+### Configuration
+`AgencyConfig` (`lib/config.ts`) defines all compiler and runtime options. See `docs/dev/config.md` for the full option reference and `docs/config.md` for basic usage.
+
+## General code Guidelines
+- NEVER use dynamic imports
+- Use objects instead of maps.
+- Use arrays instead of sets.
+- Use types instead of interfaces.
 
 ## Other docs and resources:
 - `DOCS.md` — language reference and design docs

@@ -214,14 +214,15 @@ Audit calls are injected inside step blocks (`if (__step <= N) { ... }`). When r
 | `lib/runtime/node.ts` | 2 audit calls (nodeEntry, nodeExit) |
 | `lib/runtime/prompt.ts` | 2 audit calls (llmCall, toolCall) |
 | `lib/runtime/interrupts.ts` | 1 audit call (interrupt) |
-| `lib/backends/typescriptBuilder.ts` | Import `auditNode`, 3 lines in `processBodyAsParts` |
+| `lib/backends/typescriptBuilder.ts` | Import `auditNode`, 3 lines in `processBodyAsParts`, audit log file setup in `generateImports`, default `onAudit` in exported node function |
+| `lib/config.ts` | Add `audit.logFile` to `AgencyConfig` |
+| `scripts/agency.ts` | Add `-l, --log <file>` option to `run` command |
 
 ### Not changed (vs original plan)
 
 - `GlobalStore` — no storage
 - `RunNodeResult` — no audit field
 - `createReturnObject` — no audit inclusion
-- `lib/config.ts` — no config gate
 - No serialization changes
 
 ## Testing
@@ -230,6 +231,78 @@ Audit calls are injected inside step blocks (`if (__step <= N) { ... }`). When r
 - **Integration fixtures** (`tests/typescriptGenerator/`): `.agency` + `.mts` pairs with assignments, function calls, and returns. Audit calls are always present in generated output.
 - **End-to-end test** (`tests/agency/`): run a program with an `onAudit` callback, collect entries, assert on the sequence (nodeEntry, assignment, functionCall, nodeExit, etc.).
 - **Existing tests**: `pnpm test:run` to verify nothing breaks.
+
+## CLI Audit Log File
+
+### Config
+
+Add `audit.logFile` to `AgencyConfig` in `lib/config.ts`:
+
+```ts
+audit?: {
+  logFile?: string;
+};
+```
+
+This can be set in `agency.json`:
+
+```json
+{
+  "audit": {
+    "logFile": "audit-log.jsonl"
+  }
+}
+```
+
+### CLI flag
+
+Add `-l, --log <file>` to the `run` command in `scripts/agency.ts`. When specified, it overrides `audit.logFile` from config:
+
+```ts
+.option("-l, --log <file>", "Write audit log entries to a JSONL file")
+```
+
+The CLI passes this into the config before compiling:
+
+```ts
+if (options.log) {
+  config.audit = { ...config.audit, logFile: options.log };
+}
+```
+
+### Code generation
+
+In the builder's `generateImports` (or the generated setup section), when `this.agencyConfig.audit?.logFile` is set, emit code that:
+
+1. Imports `appendFileSync` from `fs`
+2. Creates a default `onAudit` callback that appends `JSON.stringify(entry) + "\n"` to the log file
+3. Wraps the exported node function so that the file-based `onAudit` is used as a default, but a user-provided `onAudit` callback takes precedence
+
+The generated code would look roughly like:
+
+```ts
+import { appendFileSync } from "fs";
+
+const __auditLogFile = "audit-log.jsonl";
+const __defaultOnAudit = (entry) => {
+  appendFileSync(__auditLogFile, JSON.stringify(entry) + "\n");
+};
+```
+
+And in the exported node function (line ~1954-1982 of the builder), the `callbacks` parameter merging becomes:
+
+```ts
+callbacks: { onAudit: __defaultOnAudit, ...callbacks }
+```
+
+This way, if the user passes their own `onAudit` callback, it overrides the file logger via spread. If they don't, the file logger is used.
+
+### Priority order
+
+1. User-provided `onAudit` callback (highest — overrides everything)
+2. `-l` CLI flag (overrides config)
+3. `audit.logFile` in `agency.json` (default)
+4. No audit logging to file (if none of the above are set)
 
 ## Future Enhancements (not in scope)
 

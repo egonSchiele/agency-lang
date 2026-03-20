@@ -181,9 +181,37 @@ if (audit) {
 
 This covers all function and node bodies since `processBodyAsParts` is called by both `processFunctionDefinition` and `processGraphNode`.
 
+### Async function calls
+
+When a function is called with `async` in Agency, the generated code assigns the promise immediately and awaits it later via `Promise.all`:
+
+```js
+// Step 1: promise assigned (not awaited)
+__stack.locals.greeting = greet(`Adit`, { ... });
+
+// Step 2: promise resolved
+[__self.greeting] = await Promise.all([__self.greeting]);
+
+// Step 3: resolved value used
+await print(__stack.locals.greeting);
+```
+
+The audit logs two entries for this pattern:
+
+1. **At the assignment step** — `{ type: "assignment", variable: "greeting", value: <Promise> }`. The value will be a Promise object, signaling to the consumer that this is an async call that hasn't resolved yet.
+2. **At the `Promise.all` step** — `{ type: "assignment", variable: "greeting", value: <resolved value> }`. Now the value is the actual result.
+
+This gives the user a clear picture: "this was kicked off async" followed by "this is what it resolved to."
+
+The `auditNode` function needs to handle the `Promise.all` resolution node (which is a `TsAssign` with a `Promise.all` rhs) and emit an assignment audit for each resolved variable.
+
 ### Complementary audit entries
 
 For `x = llm("do something")`, both the builder-generated assignment audit (variable name + value) and the runtime LLM audit (prompt, response, tokens, duration) fire. These are complementary: the LLM audit has the detailed call data, the assignment audit shows where the result landed.
+
+### Return statement ordering
+
+For `return` and `functionReturn` nodes, the audit call must be emitted *before* the return, not after — otherwise the return exits the function before the audit runs. `auditNode` for these cases returns a `TsStatements` node containing `[auditCall, originalReturn]`, which replaces the original return node in the step block. `processBodyAsParts` needs to handle this: when `auditNode` returns a replacement (for returns), use it instead of appending after.
 
 ### Interaction with step blocks and interrupt resumption
 

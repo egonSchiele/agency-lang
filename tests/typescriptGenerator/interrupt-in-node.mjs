@@ -377,7 +377,8 @@ const __graph = __ctx.graph;
     await __ctx.audit({
       type: "functionCall",
       functionName: "print",
-      args: [`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`]
+      args: [`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`],
+      result: undefined
     })
     
     
@@ -418,7 +419,8 @@ if (isInterrupt(__stack.locals.response)) {
     await __ctx.audit({
       type: "functionCall",
       functionName: "print",
-      args: [`Greeted, age is still ${__stack.args.age}...`]
+      args: [`Greeted, age is still ${__stack.args.age}...`],
+      result: undefined
     })
     
     __stack.step++;
@@ -484,7 +486,8 @@ const __graph = __ctx.graph;
     await __ctx.audit({
       type: "functionCall",
       functionName: "print",
-      args: [`Saying hi to ${__stack.args.name}...`]
+      args: [`Saying hi to ${__stack.args.name}...`],
+      result: undefined
     })
     
     __stack.step++;
@@ -500,14 +503,6 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 3) {
-    return goToNode("foo2", {
-      messages: __stack.messages,
-      ctx: __ctx,
-      data: {
-        name: __stack.args.name,
-        age: __stack.locals.age
-      }
-    })
     await __ctx.audit({
       type: "return",
       value: goToNode("foo2", {

@@ -360,7 +360,8 @@ const __graph = __ctx.graph;
       await __ctx.audit({
         type: "functionCall",
         functionName: "saveItem",
-        args: [__stack.args.id]
+        args: [__stack.args.id],
+        result: undefined
       })
       
       __stack.step++;

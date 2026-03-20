@@ -36,7 +36,11 @@ import {
 } from "@/types/binop.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
-import { expressionToString, getBaseVarName, walkNodesArray } from "@/utils/node.js";
+import {
+  expressionToString,
+  getBaseVarName,
+  walkNodesArray,
+} from "@/utils/node.js";
 import path from "path";
 import { AccessChainElement, ValueAccess } from "../types/access.js";
 import {
@@ -82,11 +86,7 @@ import type {
   TsStepBlock,
 } from "../ir/tsIR.js";
 import type { ProgramInfo } from "../programInfo.js";
-import {
-  getVisibleTypes,
-  lookupType,
-  scopeKey
-} from "../programInfo.js";
+import { getVisibleTypes, lookupType, scopeKey } from "../programInfo.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
@@ -116,7 +116,6 @@ export class TypeScriptBuilder {
   private parallelThreadVars: Record<string, string> = {};
   private loopVars: string[] = [];
   private insideMessageThread: boolean = false;
-
 
   private programInfo: ProgramInfo;
   private moduleId: string;
@@ -892,23 +891,30 @@ export class TypeScriptBuilder {
 
     for (const def of functionDefs) {
       entries[def.functionName] = this.buildToolRegistryEntry(
-        def.functionName, def.functionName, false,
+        def.functionName,
+        def.functionName,
+        false,
       );
     }
 
     // Add imported tools (they import __toolNameTool and __toolNameToolParams)
-    const importedToolNames = this.programInfo.importedTools
-      .flatMap((node) => node.importedTools);
+    const importedToolNames = this.programInfo.importedTools.flatMap(
+      (node) => node.importedTools,
+    );
     for (const toolName of importedToolNames) {
       entries[toolName] = this.buildToolRegistryEntry(
-        toolName, toolName, false,
+        toolName,
+        toolName,
+        false,
       );
     }
 
     for (const toolName of BUILTIN_TOOLS) {
       const internalName = BUILTIN_FUNCTIONS[toolName] || toolName;
       entries[toolName] = this.buildToolRegistryEntry(
-        toolName, internalName, true,
+        toolName,
+        internalName,
+        true,
       );
     }
 
@@ -920,7 +926,9 @@ export class TypeScriptBuilder {
     const { functionName, body, parameters } = node;
     const args = parameters.map((p) => p.name);
 
-    const bodyCode = this.processBodyAsParts(body, { isInSafeFunction: !!node.safe });
+    const bodyCode = this.processBodyAsParts(body, {
+      isInSafeFunction: !!node.safe,
+    });
     this.endScope();
 
     // Build function params: typed args + __state
@@ -1003,7 +1011,9 @@ export class TypeScriptBuilder {
           ts.if(
             ts.raw("__error instanceof ToolCallError"),
             ts.statements([
-              ts.raw("__error.retryable = __error.retryable && __self.__retryable"),
+              ts.raw(
+                "__error.retryable = __error.retryable && __self.__retryable",
+              ),
               ts.throw("__error"),
             ]),
           ),
@@ -1054,9 +1064,9 @@ export class TypeScriptBuilder {
       const nodeContext = scope.type === "node";
       const returnBody = nodeContext
         ? ts.obj([
-          ts.setSpread(ts.runtime.state),
-          ts.set("data", ts.id(tempVar)),
-        ])
+            ts.setSpread(ts.runtime.state),
+            ts.set("data", ts.id(tempVar)),
+          ])
         : ts.obj({ data: ts.id(tempVar) });
       return ts.statements([
         ts.constDecl(tempVar, callNode),
@@ -1291,7 +1301,10 @@ export class TypeScriptBuilder {
           }),
         );
       }
-      if (node.value.type === "functionCall" && node.value.functionName === "llm") {
+      if (
+        node.value.type === "functionCall" &&
+        node.value.functionName === "llm"
+      ) {
         const llmNode = this.processLlmCall(
           DEFAULT_PROMPT_NAME,
           this.getScopeReturnType(),
@@ -1326,7 +1339,10 @@ export class TypeScriptBuilder {
           nodeContext: this.getCurrentScope().type === "node",
         }),
       );
-    } else if (node.value.type === "functionCall" && node.value.functionName === "llm") {
+    } else if (
+      node.value.type === "functionCall" &&
+      node.value.functionName === "llm"
+    ) {
       const llmNode = this.processLlmCall(
         DEFAULT_PROMPT_NAME,
         this.getScopeReturnType(),
@@ -1473,9 +1489,9 @@ export class TypeScriptBuilder {
   ): TsNode {
     const _variableType = variableType ||
       this.getTypeHint(variableName) || {
-      type: "primitiveType" as const,
-      value: "string",
-    };
+        type: "primitiveType" as const,
+        value: "string",
+      };
 
     const zodSchema = mapTypeToZodSchema(
       _variableType,
@@ -1484,9 +1500,7 @@ export class TypeScriptBuilder {
 
     // Extract prompt from first argument, using processNode to get scoped variable references
     const promptArg = node.arguments[0];
-    const promptNode = promptArg
-      ? this.processNode(promptArg)
-      : ts.raw("``");
+    const promptNode = promptArg ? this.processNode(promptArg) : ts.raw("``");
 
     // Extract config from second argument (if present).
     // Known keys (tools) are extracted; the rest passes through as clientConfig.
@@ -1497,7 +1511,9 @@ export class TypeScriptBuilder {
     if (configArg && configArg.type === "agencyObject") {
       // Extract tools from config object
       const toolsEntry = configArg.entries.find(
-        (e) => !("type" in e && e.type === "splat") && (e as AgencyObjectKV).key === "tools",
+        (e) =>
+          !("type" in e && e.type === "splat") &&
+          (e as AgencyObjectKV).key === "tools",
       ) as AgencyObjectKV | undefined;
 
       if (toolsEntry && toolsEntry.value.type === "agencyArray") {
@@ -1506,7 +1522,10 @@ export class TypeScriptBuilder {
           if (item.type === "variableName") {
             // Bare function reference: llm("...", { tools: [getWeather] })
             configToolNames.push(item.value);
-          } else if (item.type === "functionCall" && item.functionName === "tool") {
+          } else if (
+            item.type === "functionCall" &&
+            item.functionName === "tool"
+          ) {
             // Explicit tool() call: llm("...", { tools: [tool(getWeather)] })
             const toolArg = item.arguments[0];
             if (toolArg && toolArg.type === "variableName") {
@@ -1519,11 +1538,14 @@ export class TypeScriptBuilder {
       // Build clientConfig without known keys
       const knownKeys = ["tools"];
       const remainingEntries = configArg.entries.filter(
-        (e) => ("type" in e && e.type === "splat") || !knownKeys.includes((e as AgencyObjectKV).key),
+        (e) =>
+          ("type" in e && e.type === "splat") ||
+          !knownKeys.includes((e as AgencyObjectKV).key),
       );
-      clientConfig = remainingEntries.length > 0
-        ? this.processNode({ ...configArg, entries: remainingEntries })
-        : ts.obj({});
+      clientConfig =
+        remainingEntries.length > 0
+          ? this.processNode({ ...configArg, entries: remainingEntries })
+          : ts.obj({});
     } else if (configArg) {
       clientConfig = this.processNode(configArg);
     } else {
@@ -1547,7 +1569,9 @@ export class TypeScriptBuilder {
 
     // Generate tools as tool() registry lookups merged into clientConfig
     const toolNodes: TsNode[] = allToolNames.map((name) =>
-      $(ts.id("tool")).call([ts.str(name)]).done(),
+      $(ts.id("tool"))
+        .call([ts.str(name)])
+        .done(),
     );
 
     // Merge tools into clientConfig
@@ -1603,9 +1627,9 @@ export class TypeScriptBuilder {
       const isNodeContext = this.getCurrentScope().type === "node";
       const returnExpr = isNodeContext
         ? ts.nodeReturn({
-          messages: ts.runtime.threads,
-          data: varRef,
-        })
+            messages: ts.runtime.threads,
+            data: varRef,
+          })
         : ts.return(varRef);
       stmts.push(
         ts.if($(ts.id("isInterrupt")).call([varRef]).done(), returnExpr),
@@ -1752,7 +1776,11 @@ export class TypeScriptBuilder {
 
     const assignmentVarNames: [string, ScopeType][] = [];
     for (const stmt of node.body) {
-      if (stmt.type === "assignment" && stmt.value.type === "functionCall" && stmt.value.functionName === "llm") {
+      if (
+        stmt.type === "assignment" &&
+        stmt.value.type === "functionCall" &&
+        stmt.value.functionName === "llm"
+      ) {
         assignmentVarNames.push([stmt.variableName, stmt.scope!]);
       }
     }
@@ -1827,13 +1855,12 @@ export class TypeScriptBuilder {
       }
       const processed = this.processStatement(stmt);
       const audit = auditNode(processed);
-      if (audit && audit.kind === "statements" && (processed.kind === "return" || processed.kind === "functionReturn")) {
-        // For returns, auditNode returns [auditCall, originalReturn] — replace the original
-        parts[parts.length - 1].push(audit);
+      if (audit && audit.behavior === "replace") {
+        parts[parts.length - 1].push(audit.node);
       } else {
         parts[parts.length - 1].push(processed);
         if (audit) {
-          parts[parts.length - 1].push(audit);
+          parts[parts.length - 1].push(audit.node);
         }
       }
     }
@@ -1895,7 +1922,9 @@ export class TypeScriptBuilder {
         runtimeCtx,
         ts.raw(`import { appendFileSync } from "fs";`),
         ts.raw(`const __auditLogFile = ${JSON.stringify(logFile)};`),
-        ts.raw(`const __defaultOnAudit = (entry) => { appendFileSync(__auditLogFile, JSON.stringify(entry) + "\\n"); };`),
+        ts.raw(
+          `const __defaultOnAudit = (entry) => { appendFileSync(__auditLogFile, JSON.stringify(entry) + "\\n"); };`,
+        ),
       ]);
     }
 

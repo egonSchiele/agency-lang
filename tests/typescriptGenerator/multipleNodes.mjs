@@ -274,13 +274,6 @@ if (isInterrupt(__stack.locals.greeting)) {
     __stack.step++;
   }
   if (__step <= 2) {
-    return goToNode("processGreeting", {
-      messages: __stack.messages,
-      ctx: __ctx,
-      data: {
-        msg: __stack.locals.greeting
-      }
-    })
     await __ctx.audit({
       type: "return",
       value: goToNode("processGreeting", {
@@ -374,7 +367,8 @@ if (isInterrupt(__stack.locals.result)) {
     await __ctx.audit({
       type: "functionCall",
       functionName: "print",
-      args: [__stack.locals.result]
+      args: [__stack.locals.result],
+      result: undefined
     })
     
     __stack.step++;
@@ -417,11 +411,6 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
-    return goToNode("greet", {
-      messages: __stack.messages,
-      ctx: __ctx,
-      data: {}
-    })
     await __ctx.audit({
       type: "return",
       value: goToNode("greet", {

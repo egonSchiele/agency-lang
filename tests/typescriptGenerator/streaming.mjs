@@ -280,7 +280,8 @@ if (isInterrupt(__stack.locals.response)) {
     await __ctx.audit({
       type: "functionCall",
       functionName: "print",
-      args: [__stack.locals.response]
+      args: [__stack.locals.response],
+      result: undefined
     })
     
     
@@ -321,7 +322,8 @@ if (isInterrupt(__stack.locals.response2)) {
     await __ctx.audit({
       type: "functionCall",
       functionName: "print",
-      args: [__stack.locals.response2]
+      args: [__stack.locals.response2],
+      result: undefined
     })
     
     __stack.step++;

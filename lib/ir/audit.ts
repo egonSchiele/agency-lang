@@ -1,6 +1,12 @@
 import { $, ts } from "./builders.js";
 import type { TsNode } from "./tsIR.js";
 import { printTs } from "./prettyPrint.js";
+import type { AuditEntry } from "../runtime/audit.js";
+
+/** Maps each AuditEntry variant's fields (minus type/timestamp) to TsNode values */
+type AuditFieldsOf<T extends AuditEntry["type"]> = {
+  [K in keyof Omit<Extract<AuditEntry, { type: T }>, "type" | "timestamp">]: TsNode;
+};
 
 /**
  * Inspects a processed TsNode and returns a TsNode that represents
@@ -9,7 +15,19 @@ import { printTs } from "./prettyPrint.js";
  * For return/functionReturn nodes, returns a TsStatements containing
  * [auditCall, originalNode] since the audit must run before the return.
  */
-export function auditNode(node: TsNode): TsNode | null {
+type Behavior = "append" | "replace";
+
+function append(node: TsNode): { node: TsNode; behavior: "append" } {
+  return { node, behavior: "append" };
+}
+
+function replace(node: TsNode): { node: TsNode; behavior: "replace" } {
+  return { node, behavior: "replace" };
+}
+
+export function auditNode(
+  node: TsNode,
+): { node: TsNode; behavior: Behavior } | null {
   switch (node.kind) {
     case "assign":
       // For destructuring assignments like [x, y] = await Promise.all([x, y]),
@@ -21,38 +39,49 @@ export function auditNode(node: TsNode): TsNode | null {
             value: item,
           }),
         );
-        return audits.length === 1 ? audits[0] : ts.statements(audits);
+        return audits.length === 1
+          ? append(audits[0])
+          : append(ts.statements(audits));
       }
-      return makeAuditCall("assignment", {
-        variable: ts.str(printTs(node.lhs)),
-        value: node.lhs,
-      });
+      return append(
+        makeAuditCall("assignment", {
+          variable: ts.str(printTs(node.lhs)),
+          value: node.lhs,
+        }),
+      );
 
     case "varDecl":
-      return makeAuditCall("assignment", {
-        variable: ts.str(node.name),
-        value: ts.id(node.name),
-      });
+      return append(
+        makeAuditCall("assignment", {
+          variable: ts.str(node.name),
+          value: ts.id(node.name),
+        }),
+      );
 
     case "call":
-      return makeAuditCall("functionCall", {
-        functionName: ts.str(printTs(node.callee)),
-        args: ts.arr(node.arguments),
-      });
+      return append(
+        makeAuditCall("functionCall", {
+          functionName: ts.str(printTs(node.callee)),
+          args: ts.arr(node.arguments),
+          result: ts.id("undefined"),
+        }),
+      );
 
     case "return":
       if (node.expr) {
         const audit = makeAuditCall("return", { value: node.expr });
-        return ts.statements([audit, node]);
+        return replace(ts.statements([audit, node]));
       }
-      return ts.statements([
-        makeAuditCall("return", { value: ts.id("undefined") }),
-        node,
-      ]);
+      return replace(
+        ts.statements([
+          makeAuditCall("return", { value: ts.id("undefined") }),
+          node,
+        ]),
+      );
 
     case "functionReturn": {
       const audit = makeAuditCall("return", { value: node.value });
-      return ts.statements([audit, node]);
+      return replace(ts.statements([audit, node]));
     }
 
     case "await":
@@ -70,7 +99,7 @@ export function auditNode(node: TsNode): TsNode | null {
   }
 }
 
-function makeAuditCall(type: string, fields: Record<string, TsNode>): TsNode {
+function makeAuditCall<T extends AuditEntry["type"]>(type: T, fields: AuditFieldsOf<T>): TsNode {
   return $(ts.runtime.ctx)
     .prop("audit")
     .call([ts.obj({ type: ts.str(type), ...fields })])

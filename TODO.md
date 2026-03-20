@@ -125,3 +125,11 @@ ability to switch to other packages instead of smoltalk for LLM calls, other pac
 
 ## Derive safe-ness
 Currently only TypeScript functions can be marked safe. We should be able to derive whether an agency-defined function is safe by looking at whether it calls any unsafe functions, such as those imported from TypeScript and not marked safe, or certain built-in functions like write.
+
+
+  Remaining TODOs:
+  1. Re-enable removeUnusedLlmCalls (disabled, old logic commented out)
+  2. Re-enable collectSkillsInFunction (disabled, old logic commented out)
+  3. Regenerate fixtures and run full test suite (make fixtures && pnpm test:run)
+  4. The streaming.agency test fixture was reverted to the old stream llm(...) syntax — needs updating since that parser was removed
+  5. skill() and mcp() functions (future, not part of this PR)

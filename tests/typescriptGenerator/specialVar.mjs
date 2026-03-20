@@ -252,7 +252,8 @@ const __graph = __ctx.graph;
     await __ctx.audit({
       type: "functionCall",
       functionName: "print",
-      args: [`lets race!`]
+      args: [`lets race!`],
+      result: undefined
     })
     
     __stack.step++;
@@ -308,7 +309,8 @@ if (isInterrupt(__stack.locals.response1)) {
     await __ctx.audit({
       type: "functionCall",
       functionName: "print",
-      args: [__stack.locals.response1]
+      args: [__stack.locals.response1],
+      result: undefined
     })
     
     __stack.step++;
@@ -358,7 +360,8 @@ if (isInterrupt(__stack.locals.response2)) {
     await __ctx.audit({
       type: "functionCall",
       functionName: "print",
-      args: [__stack.locals.response2]
+      args: [__stack.locals.response2],
+      result: undefined
     })
     
     __stack.step++;

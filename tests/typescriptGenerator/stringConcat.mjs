@@ -252,7 +252,8 @@ const __graph = __ctx.graph;
     await __ctx.audit({
       type: "functionCall",
       functionName: "print",
-      args: [`What is your name?`]
+      args: [`What is your name?`],
+      result: undefined
     })
     
     __stack.step++;
@@ -280,7 +281,8 @@ if (isInterrupt(__stack.locals.name)) {
     await __ctx.audit({
       type: "functionCall",
       functionName: "print",
-      args: [`Hello, ${__stack.locals.name}!`]
+      args: [`Hello, ${__stack.locals.name}!`],
+      result: undefined
     })
     
     __stack.step++;

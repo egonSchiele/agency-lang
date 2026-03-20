@@ -299,7 +299,8 @@ if (isInterrupt(__stack.locals.sentiment)) {
     await __ctx.audit({
       type: "functionCall",
       functionName: "print",
-      args: [__stack.locals.sentiment]
+      args: [__stack.locals.sentiment],
+      result: undefined
     })
     
     __stack.step++;

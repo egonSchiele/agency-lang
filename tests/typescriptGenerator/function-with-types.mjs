@@ -761,7 +761,8 @@ const __graph = __ctx.graph;
     await __ctx.audit({
       type: "functionCall",
       functionName: "print",
-      args: [`This is a node with a return type`]
+      args: [`This is a node with a return type`],
+      result: undefined
     })
     
     __stack.step++;

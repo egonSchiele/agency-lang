@@ -283,7 +283,8 @@ if (isInterrupt(__stack.locals.foo)) {
     await __ctx.audit({
       type: "functionCall",
       functionName: "print",
-      args: [__stack.locals.foo]
+      args: [__stack.locals.foo],
+      result: undefined
     })
     
     __stack.step++;

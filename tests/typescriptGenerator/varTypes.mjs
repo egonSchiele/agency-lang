@@ -294,7 +294,8 @@ if (isInterrupt(__stack.locals.response)) {
     await __ctx.audit({
       type: "functionCall",
       functionName: "print",
-      args: [__stack.locals.response]
+      args: [__stack.locals.response],
+      result: undefined
     })
     
     __stack.step++;

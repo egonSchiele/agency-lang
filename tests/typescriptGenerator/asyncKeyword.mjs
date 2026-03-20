@@ -402,7 +402,8 @@ const __graph = __ctx.graph;
       await __ctx.audit({
         type: "functionCall",
         functionName: "__threads.active().setMessages",
-        args: [[]]
+        args: [[]],
+        result: undefined
       })
       
       __stack.step++;
@@ -645,7 +646,8 @@ if (isInterrupt(__stack.locals.res1)) {
     await __ctx.audit({
       type: "functionCall",
       functionName: "printJSON",
-      args: [__stack.locals.results]
+      args: [__stack.locals.results],
+      result: undefined
     })
     
     __stack.step++;

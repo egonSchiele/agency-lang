@@ -275,7 +275,8 @@ let x: number = x_endTime - x_startTime;
     await __ctx.audit({
       type: "functionCall",
       functionName: "print",
-      args: [__stack.locals.x]
+      args: [__stack.locals.x],
+      result: undefined
     })
     
     __stack.step++;

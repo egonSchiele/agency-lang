@@ -336,7 +336,8 @@ const __graph = __ctx.graph;
         ctx: __ctx,
         threads: new ThreadStore(),
         interruptData: __state?.interruptData
-      })]
+      })],
+      result: undefined
     })
     
     

@@ -399,7 +399,8 @@ __threads.popActive()
       await __ctx.audit({
         type: "functionCall",
         functionName: "print",
-        args: [`res1`, __stack.locals.res1]
+        args: [`res1`, __stack.locals.res1],
+        result: undefined
       })
       
       __stack.step++;
@@ -410,7 +411,8 @@ __threads.popActive()
       await __ctx.audit({
         type: "functionCall",
         functionName: "print",
-        args: [`res2`, __stack.locals.res2]
+        args: [`res2`, __stack.locals.res2],
+        result: undefined
       })
       
       __stack.step++;
@@ -421,7 +423,8 @@ __threads.popActive()
       await __ctx.audit({
         type: "functionCall",
         functionName: "print",
-        args: [`res3`, __stack.locals.res3]
+        args: [`res3`, __stack.locals.res3],
+        result: undefined
       })
       
       __stack.step++;
@@ -432,7 +435,8 @@ __threads.popActive()
       await __ctx.audit({
         type: "functionCall",
         functionName: "print",
-        args: [`res4`, __stack.locals.res4]
+        args: [`res4`, __stack.locals.res4],
+        result: undefined
       })
       
       __stack.step++;
@@ -443,7 +447,8 @@ __threads.popActive()
       await __ctx.audit({
         type: "functionCall",
         functionName: "print",
-        args: [`res5`, __stack.locals.res5]
+        args: [`res5`, __stack.locals.res5],
+        result: undefined
       })
       
       __stack.step++;
@@ -634,7 +639,8 @@ __threads.popActive()
     await __ctx.audit({
       type: "functionCall",
       functionName: "print",
-      args: [`res1`, __stack.locals.res1]
+      args: [`res1`, __stack.locals.res1],
+      result: undefined
     })
     
     __stack.step++;
@@ -645,7 +651,8 @@ __threads.popActive()
     await __ctx.audit({
       type: "functionCall",
       functionName: "print",
-      args: [`res2`, __stack.locals.res2]
+      args: [`res2`, __stack.locals.res2],
+      result: undefined
     })
     
     __stack.step++;
@@ -656,7 +663,8 @@ __threads.popActive()
     await __ctx.audit({
       type: "functionCall",
       functionName: "print",
-      args: [`res3`, __stack.locals.res3]
+      args: [`res3`, __stack.locals.res3],
+      result: undefined
     })
     
     __stack.step++;
@@ -667,7 +675,8 @@ __threads.popActive()
     await __ctx.audit({
       type: "functionCall",
       functionName: "print",
-      args: [`res4`, __stack.locals.res4]
+      args: [`res4`, __stack.locals.res4],
+      result: undefined
     })
     
     __stack.step++;
@@ -678,7 +687,8 @@ __threads.popActive()
     await __ctx.audit({
       type: "functionCall",
       functionName: "print",
-      args: [`res5`, __stack.locals.res5]
+      args: [`res5`, __stack.locals.res5],
+      result: undefined
     })
     
     __stack.step++;

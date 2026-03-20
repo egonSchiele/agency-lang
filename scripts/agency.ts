@@ -64,8 +64,12 @@ program
   .description("Compile and run .agency file(s)")
   .argument("[input]", "Paths to .agency input file")
   .option("--resume <statefile>", "Resume execution from a saved state file")
-  .action((input: string, options: { resume?: string }) => {
+  .option("-l, --log <file>", "Write audit log entries to a JSONL file")
+  .action((input: string, options: { resume?: string; log?: string }) => {
     const config = getConfig();
+    if (options.log) {
+      config.audit = { ...config.audit, logFile: options.log };
+    }
     run(config, input, undefined, options.resume);
   });
 

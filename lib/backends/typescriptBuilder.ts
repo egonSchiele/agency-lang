@@ -1875,7 +1875,7 @@ export class TypeScriptBuilder {
       }),
     });
 
-    const runtimeCtx = ts.statements([
+    let runtimeCtx: TsNode = ts.statements([
       ts.constDecl(
         "__globalCtx",
         ts.new(ts.id("RuntimeContext"), [
@@ -1888,6 +1888,16 @@ export class TypeScriptBuilder {
       ),
       ts.constDecl("graph", $(ts.runtime.globalCtx).prop("graph").done()),
     ]);
+
+    if (this.agencyConfig.audit?.logFile) {
+      const logFile = this.agencyConfig.audit.logFile;
+      runtimeCtx = ts.statements([
+        runtimeCtx,
+        ts.raw(`import { appendFileSync } from "fs";`),
+        ts.raw(`const __auditLogFile = ${JSON.stringify(logFile)};`),
+        ts.raw(`const __defaultOnAudit = (entry) => { appendFileSync(__auditLogFile, JSON.stringify(entry) + "\\n"); };`),
+      ]);
+    }
 
     return renderImports.default({
       runtimeContextCode: printTs(runtimeCtx),
@@ -1983,7 +1993,9 @@ export class TypeScriptBuilder {
                   nodeName: ts.str(node.nodeName),
                   data: ts.obj(dataObj),
                   messages: ts.id("messages"),
-                  callbacks: ts.id("callbacks"),
+                  callbacks: this.agencyConfig.audit?.logFile
+                    ? ts.raw("{ onAudit: __defaultOnAudit, ...callbacks }")
+                    : ts.id("callbacks"),
                   initializeGlobals: ts.id("__initializeGlobals"),
                 }),
               ])

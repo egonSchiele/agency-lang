@@ -148,4 +148,9 @@ export interface AgencyConfig {
    * Prevents path traversal attacks via imports like `../../etc/passwd`.
    */
   restrictImports?: boolean;
+
+  /** Audit logging config */
+  audit?: {
+    logFile?: string;
+  };
 }

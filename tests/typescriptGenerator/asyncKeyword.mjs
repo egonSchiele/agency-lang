@@ -434,9 +434,9 @@ if (isInterrupt(__stack.locals.msg)) {
     __stack.step++;
   }
   if (__step <= 2) {
-    __stack.locals.res2 = await google(__stack.locals.msg, {
+    __stack.locals.res2 = google(__stack.locals.msg, {
       ctx: __ctx,
-      threads: __threads,
+      threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.res2)) {
@@ -449,9 +449,9 @@ if (isInterrupt(__stack.locals.res2)) {
     __stack.step++;
   }
   if (__step <= 3) {
-    __stack.locals.res1 = await openai(__stack.locals.msg, {
+    __stack.locals.res1 = openai(__stack.locals.msg, {
       ctx: __ctx,
-      threads: __threads,
+      threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.res1)) {
@@ -464,11 +464,15 @@ if (isInterrupt(__stack.locals.res1)) {
     __stack.step++;
   }
   if (__step <= 4) {
-    __stack.locals.results = __stack.locals.Promise.race([__stack.locals.res1, __stack.locals.res2]);
-    
+    [__self.res2, __self.res1] = await Promise.all([__self.res2, __self.res1]);
     __stack.step++;
   }
   if (__step <= 5) {
+    __stack.locals.results = Promise.race([__stack.locals.res1, __stack.locals.res2]);
+    
+    __stack.step++;
+  }
+  if (__step <= 6) {
     __self.__retryable = false;
     await printJSON(__stack.locals.results)
     

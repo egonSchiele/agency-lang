@@ -30,7 +30,7 @@
             "skills": [],
             "async": true
           },
-          "scope": "function"
+          "scope": "local"
         },
         {
           "type": "newLine"
@@ -44,7 +44,7 @@
           "value": {
             "type": "variableName",
             "value": "result",
-            "scope": "function"
+            "scope": "local"
           }
         },
         {

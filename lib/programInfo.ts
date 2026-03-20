@@ -36,6 +36,8 @@ export function scopeKey(scope: Scope): string {
       return `function:${scope.functionName}`;
     case "node":
       return `node:${scope.nodeName}`;
+    case "local":
+      return `local`;
     case "imported":
       return "imported";
     case "shared":
@@ -60,7 +62,10 @@ export function getVisibleTypes(
   return { ...map[GLOBAL_SCOPE_KEY], ...map[key] };
 }
 
-function ensureScope(map: ScopedTypeMap, key: string): Record<string, VariableType> {
+function ensureScope(
+  map: ScopedTypeMap,
+  key: string,
+): Record<string, VariableType> {
   if (!map[key]) map[key] = {};
   return map[key];
 }

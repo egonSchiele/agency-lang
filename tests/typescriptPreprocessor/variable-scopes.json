@@ -44,7 +44,7 @@
               }
             ]
           },
-          "scope": "function"
+          "scope": "local"
         },
         {
           "type": "newLine"
@@ -72,7 +72,7 @@
                 "expression": {
                   "type": "variableName",
                   "value": "localVar",
-                  "scope": "function"
+                  "scope": "local"
                 }
               },
               {
@@ -89,7 +89,7 @@
               }
             ]
           },
-          "scope": "function"
+          "scope": "local"
         },
         {
           "type": "newLine"
@@ -99,7 +99,7 @@
           "value": {
             "type": "variableName",
             "value": "result",
-            "scope": "function"
+            "scope": "local"
           }
         },
         {
@@ -131,7 +131,7 @@
               }
             ]
           },
-          "scope": "function"
+          "scope": "local"
         },
         {
           "type": "newLine"
@@ -146,12 +146,12 @@
               {
                 "type": "variableName",
                 "value": "nodeLocal",
-                "scope": "function"
+                "scope": "local"
               }
             ],
             "async": false
           },
-          "scope": "function"
+          "scope": "local"
         },
         {
           "type": "newLine"
@@ -163,7 +163,7 @@
             {
               "type": "variableName",
               "value": "output",
-              "scope": "function"
+              "scope": "local"
             }
           ],
           "async": false

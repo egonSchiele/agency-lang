@@ -68,7 +68,7 @@
             "skills": [],
             "async": true
           },
-          "scope": "function"
+          "scope": "local"
         },
         {
           "type": "newLine"
@@ -82,7 +82,7 @@
           "value": {
             "type": "variableName",
             "value": "result",
-            "scope": "function"
+            "scope": "local"
           }
         },
         {
@@ -121,7 +121,7 @@
             ],
             "async": false
           },
-          "scope": "function"
+          "scope": "local"
         },
         {
           "type": "newLine"
@@ -145,7 +145,7 @@
             ],
             "async": false
           },
-          "scope": "function"
+          "scope": "local"
         },
         {
           "type": "newLine"
@@ -169,7 +169,7 @@
                 "expression": {
                   "type": "variableName",
                   "value": "a",
-                  "scope": "function"
+                  "scope": "local"
                 }
               },
               {
@@ -181,7 +181,7 @@
                 "expression": {
                   "type": "variableName",
                   "value": "b",
-                  "scope": "function"
+                  "scope": "local"
                 }
               }
             ],
@@ -192,7 +192,7 @@
             "skills": [],
             "async": true
           },
-          "scope": "function"
+          "scope": "local"
         },
         {
           "type": "newLine"
@@ -208,7 +208,7 @@
             {
               "type": "variableName",
               "value": "result",
-              "scope": "function"
+              "scope": "local"
             }
           ],
           "async": false

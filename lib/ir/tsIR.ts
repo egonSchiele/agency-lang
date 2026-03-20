@@ -253,7 +253,14 @@ export interface TsNewExpr {
 export interface TsScopedVar {
   kind: "scopedVar";
   name: string;
-  scope: "global" | "shared" | "function" | "node" | "args" | "imported";
+  scope:
+    | "global"
+    | "shared"
+    | "function"
+    | "node"
+    | "args"
+    | "imported"
+    | "local";
   moduleId?: string;
 }
 

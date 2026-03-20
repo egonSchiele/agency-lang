@@ -131,7 +131,7 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
-    __stack.locals.greeting = `Hello, my name is ${__stack.locals.name} and I am ${__stack.locals.age} years old.`;
+    __stack.locals.greeting = `Hello, my name is ${name} and I am ${age} years old.`;
     
     __stack.step++;
   }

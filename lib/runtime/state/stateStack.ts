@@ -1,4 +1,3 @@
-import { MessageJSON, ToolCallJSON, ToolMessageJSON } from "smoltalk";
 import { deepClone } from "../utils.js";
 import { ThreadStoreJSON } from "./threadStore.js";
 
@@ -90,5 +89,4 @@ export class StateStack {
     stateStack.deserializeStackLength = json.deserializeStackLength || 0;
     return stateStack;
   }
-
 }

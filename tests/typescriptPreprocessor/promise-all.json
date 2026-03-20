@@ -45,7 +45,7 @@
             "skills": [],
             "async": true
           },
-          "scope": "function"
+          "scope": "local"
         },
         {
           "type": "newLine"
@@ -59,7 +59,7 @@
           "value": {
             "type": "variableName",
             "value": "result",
-            "scope": "function"
+            "scope": "local"
           }
         },
         {
@@ -101,7 +101,7 @@
             "skills": [],
             "async": true
           },
-          "scope": "function"
+          "scope": "local"
         },
         {
           "type": "newLine"
@@ -128,7 +128,7 @@
             "skills": [],
             "async": true
           },
-          "scope": "function"
+          "scope": "local"
         },
         {
           "type": "newLine"
@@ -148,7 +148,7 @@
                 "expression": {
                   "type": "variableName",
                   "value": "a",
-                  "scope": "function"
+                  "scope": "local"
                 }
               },
               {
@@ -160,12 +160,12 @@
                 "expression": {
                   "type": "variableName",
                   "value": "b",
-                  "scope": "function"
+                  "scope": "local"
                 }
               }
             ]
           },
-          "scope": "function"
+          "scope": "local"
         },
         {
           "type": "newLine"
@@ -177,7 +177,7 @@
             {
               "type": "variableName",
               "value": "combined",
-              "scope": "function"
+              "scope": "local"
             }
           ],
           "async": false

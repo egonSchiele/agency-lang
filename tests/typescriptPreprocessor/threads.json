@@ -33,7 +33,7 @@
                 "skills": [],
                 "async": false
               },
-              "scope": "function"
+              "scope": "local"
             },
             {
               "type": "newLine"
@@ -60,7 +60,7 @@
                 "skills": [],
                 "async": false
               },
-              "scope": "function"
+              "scope": "local"
             },
             {
               "type": "newLine"

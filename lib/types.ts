@@ -55,6 +55,7 @@ each call will get its own copy of `globalVar`.
  * - "args"     — function/node parameters
  * - "imported" — variable from an import statement
  * - "shared"   — shared across all calls to an agent
+ * - "local"    — a variable declared inside a function or node body (not including parameters)
  * 
  * ## Function vs Node Scope
  * There's some terminology conflation happening here. Sometimes scope means "what scope is this variable in?",
@@ -95,7 +96,8 @@ export type Scope =
   | FunctionScope
   | NodeScope
   | ImportedScope
-  | SharedScope;
+  | SharedScope
+  | LocalScope;
 export type ScopeType = Scope["type"] | "args";
 export type GlobalScope = {
   type: "global";
@@ -105,6 +107,10 @@ export type FunctionScope = {
   type: "function";
   functionName: string;
   args?: boolean;
+};
+
+export type LocalScope = {
+  type: "local";
 };
 
 export type NodeScope = {

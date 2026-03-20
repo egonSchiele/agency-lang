@@ -1,7 +1,4 @@
-import {
-  AgencyConfig,
-  BUILTIN_FUNCTIONS
-} from "@/config.js";
+import { AgencyConfig, BUILTIN_FUNCTIONS } from "@/config.js";
 import type { ProgramInfo } from "@/programInfo.js";
 import {
   AgencyNode,
@@ -15,7 +12,7 @@ import {
   RawCode,
   ScopeType,
   TimeBlock,
-  WhileLoop
+  WhileLoop,
 } from "@/types.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
@@ -123,8 +120,8 @@ export class TypescriptPreprocessor {
       if (node.type === "prompt") {
         const hasSyncTools = node.tools
           ? node.tools.toolNames.some(
-            (t) => this.functionNameToAsync[t] === false,
-          )
+              (t) => this.functionNameToAsync[t] === false,
+            )
           : false;
         if (!hasSyncTools) {
           /* skip this LLM call since it isn't using any tools that have side effects,
@@ -141,8 +138,8 @@ export class TypescriptPreprocessor {
       if (node.type === "assignment" && node.value.type === "prompt") {
         const hasSyncTools = node.value.tools
           ? node.value.tools.toolNames.some(
-            (t) => this.functionNameToAsync[t] === false,
-          )
+              (t) => this.functionNameToAsync[t] === false,
+            )
           : false;
         if (hasSyncTools) {
           // has sync tools, which means they have a side effect,
@@ -325,9 +322,10 @@ export class TypescriptPreprocessor {
 
       if (node.type === "functionCall") {
         // run all function calls sync for now,
+        // unless specifically marked async, since we don't want to accidentally run things in parallel,
         // since they may be modifying shared state
         // and we don't have a good way to determine which ones are safe to run async.
-        node.async = false;
+        node.async = node.async ?? false;
         continue;
         /*         // Skip method calls on objects (e.g. planner.newPlan()) —
         // these are part of a valueAccess chain and should not have
@@ -400,14 +398,14 @@ export class TypescriptPreprocessor {
         // check if any of its tools will throw an interrupt
         const toolThrowsInterrupt = node.tools
           ? node.tools?.toolNames.some((toolName) => {
-            /*
+              /*
           If we don't know whether this function uses an interrupt,
           that's probably because it was imported and we don't have this information.
           We need to assume it throws an interrupt. */
-            const usesInterrupt =
-              this.functionNameToUsesInterrupt[toolName] ?? true;
-            return usesInterrupt;
-          })
+              const usesInterrupt =
+                this.functionNameToUsesInterrupt[toolName] ?? true;
+              return usesInterrupt;
+            })
           : false;
         node.async = !toolThrowsInterrupt;
       }
@@ -1265,7 +1263,8 @@ export class TypescriptPreprocessor {
     const globalVars = new Set<string>();
     const sharedVars = new Set<string>();
     const importedVars = new Set<string>();
-    const funcOrNodeArgs: Record<string, string[]> = {};
+    const funcArgs: Record<string, string[]> = {};
+    const localVarsInFunction: Record<string, Set<string>> = {};
 
     // First, we collect all global and shared variables
     for (const { node, scopes } of walkNodesArray(this.program.nodes)) {
@@ -1274,18 +1273,16 @@ export class TypescriptPreprocessor {
           `Top-level nodes should have at least the global scope in their scopes array. Node: ${JSON.stringify({ node })}, scopes: ${JSON.stringify({ scopes })}`,
         );
       }
+      if (scopes.at(-1)?.type !== "global") continue;
       if (node.type === "assignment") {
-        if (scopes.length === 0 || scopes.at(-1)?.type === "global") {
-          if (node.shared) {
-            sharedVars.add(node.variableName);
-          } else {
-            globalVars.add(node.variableName);
-          }
+        if (node.shared) {
+          sharedVars.add(node.variableName);
+        } else {
+          globalVars.add(node.variableName);
         }
-      } else if (node.type === "variableName") {
-        if (scopes.length === 0 || scopes.at(-1)?.type === "global") {
-          globalVars.add(node.value);
-        }
+        /*       } else if (node.type === "variableName") {
+        globalVars.add(node.value);
+ */
       } else if (node.type === "importStatement") {
         const importedNames = node.importedNames.map(getImportedNames).flat();
         importedNames.forEach((n) => {
@@ -1316,16 +1313,19 @@ export class TypescriptPreprocessor {
       if (globalVars.has(varName)) {
         return "global";
       }
-      if (
-        funcOrNodeArgs[funcName] &&
-        funcOrNodeArgs[funcName].includes(varName)
-      ) {
+      if (funcArgs[funcName] && funcArgs[funcName].includes(varName)) {
         return "args";
+      }
+      if (
+        localVarsInFunction[funcName] &&
+        localVarsInFunction[funcName].has(varName)
+      ) {
+        return "local";
       }
       return null;
     };
 
-    // second, make sure all args are scoped correctly.
+    // second, make sure all args are scoped correctly,
     // and all vars defined within a function or graph node are scoped to that function or graph node.
     for (const { node, scopes } of walkNodesArray(this.program.nodes)) {
       if (scopes.length === 0) {
@@ -1333,11 +1333,12 @@ export class TypescriptPreprocessor {
           `Top-level nodes should have at least the global scope in their scopes array. Node: ${JSON.stringify({ node })}, scopes: ${JSON.stringify({ scopes })}`,
         );
       }
-      if (node.type === "function") {
+      if (node.type === "function" || node.type === "graphNode") {
+        const nodeName =
+          node.type === "function" ? node.functionName : node.nodeName;
         // Parameters are in the function's scope
-        funcOrNodeArgs[node.functionName] = [
-          ...node.parameters.map((p) => p.name),
-        ];
+        funcArgs[nodeName] = [...node.parameters.map((p) => p.name)];
+        localVarsInFunction[nodeName] = new Set();
 
         // Then, whenever we see a variable being referenced,
         // we try to look up its scope and set it on that variable.
@@ -1347,43 +1348,29 @@ export class TypescriptPreprocessor {
         const varsDefinedInFunction = getAllVariablesInBodyArray(node.body);
         for (const { node: varNode } of varsDefinedInFunction) {
           if (varNode.type === "assignment") {
-            varNode.scope =
-              lookupScope(node.functionName, varNode.variableName) ||
-              "function";
+            let scope = lookupScope(nodeName, varNode.variableName);
+            if (scope === null) {
+              scope = "local"; // Local var, first time being assigned
+              localVarsInFunction[nodeName].add(varNode.variableName);
+            }
+            varNode.scope = scope;
           } else if (varNode.type === "variableName") {
-            varNode.scope =
-              lookupScope(node.functionName, varNode.value) || "function";
-          }
-        }
-      } else if (node.type === "graphNode") {
-        // Parameters are in the function's scope
-        funcOrNodeArgs[node.nodeName] = [...node.parameters.map((p) => p.name)];
-        const varsDefinedInNode = getAllVariablesInBodyArray(node.body);
-        for (const { node: varNode } of varsDefinedInNode) {
-          if (varNode.type === "assignment") {
-            varNode.scope =
-              lookupScope(node.nodeName, varNode.variableName) || "function";
-          } else if (varNode.type === "variableName") {
-            varNode.scope =
-              lookupScope(node.nodeName, varNode.value) || "function";
+            // a var is being referenced, we don't know
+            // what it is, so assume it is either imported or a JS global, like `Promise`.
+            varNode.scope = lookupScope(nodeName, varNode.value) || "imported";
           }
         }
       }
     }
 
-    // global scope for everything else
+    // imported scope for everything else
     for (const { node } of getAllVariablesInBodyArray(this.program.nodes)) {
       if (node.type === "variableName" || node.type === "assignment") {
         if (!node.scope) {
           const name =
             node.type === "variableName" ? node.value : node.variableName;
-          if (importedVars.has(name)) {
-            node.scope = "imported";
-          } else if (sharedVars.has(name)) {
-            node.scope = "shared";
-          } else {
-            node.scope = "global";
-          }
+          const scope = lookupScope("", name);
+          node.scope = scope || "imported";
         }
       }
     }

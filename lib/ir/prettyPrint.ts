@@ -5,9 +5,12 @@ const INDENT = "  ";
 function scopeToPrefix(scope: TsScopedVar["scope"]): string {
   switch (scope) {
     case "global":
-      throw new Error("Global-scoped variables must have a moduleId on TsScopedVar");
+      throw new Error(
+        "Global-scoped variables must have a moduleId on TsScopedVar",
+      );
     case "function":
     case "node":
+    case "local":
       return "__stack.locals";
     case "args":
       return "__stack.args";

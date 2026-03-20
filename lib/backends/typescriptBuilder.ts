@@ -114,6 +114,7 @@ export class TypeScriptBuilder {
   // Threading & control flow
   private parallelThreadVars: Record<string, string> = {};
   private loopVars: string[] = [];
+  private insideMessageThread: boolean = false;
 
 
   private programInfo: ProgramInfo;
@@ -1438,10 +1439,12 @@ export class TypeScriptBuilder {
     let threadExpr: TsNode;
     if (this.parallelThreadVars[variableName]) {
       threadExpr = ts.threads.get(ts.id(this.parallelThreadVars[variableName]));
-    } else if (node.async) {
-      threadExpr = ts.threads.createAndReturnThread();
-    } else {
+    } else if (this.insideMessageThread) {
+      // Inside a message thread block: use the active thread (shared)
       threadExpr = ts.threads.getOrCreateActive();
+    } else {
+      // Outside a message thread: each llm call gets its own thread
+      threadExpr = ts.threads.createAndReturnThread();
     }
 
     // Tools from usesTool statements (attached by preprocessor)
@@ -1630,7 +1633,10 @@ export class TypeScriptBuilder {
       return this.processParallelThread(node, assignTo);
     }
 
+    const prevInsideMessageThread = this.insideMessageThread;
+    this.insideMessageThread = true;
     const bodyNodes = node.body.map((stmt) => this.processNode(stmt));
+    this.insideMessageThread = prevInsideMessageThread;
     const createMethod =
       node.threadType === "subthread" ? "createSubthread" : "create";
     const stmts: TsNode[] = [

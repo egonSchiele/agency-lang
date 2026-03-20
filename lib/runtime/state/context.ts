@@ -112,6 +112,10 @@ export class RuntimeContext<T> {
 
   async audit(entry: Omit<AuditEntry, "timestamp">): Promise<void> {
     const fullEntry = { ...entry, timestamp: Date.now() };
-    await callHook({ callbacks: this.callbacks, name: "onAudit", data: fullEntry as AuditEntry });
+    await callHook({
+      callbacks: this.callbacks,
+      name: "onAudit",
+      data: fullEntry as AuditEntry,
+    });
   }
 }

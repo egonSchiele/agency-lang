@@ -284,6 +284,7 @@ __stack.locals.response1 = await runPrompt({
     });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.response1)) {
+      await __ctx.pendingPromises.awaitAll()
       return {
         messages: __threads,
         data: __stack.locals.response1
@@ -329,6 +330,7 @@ __stack.locals.response2 = await runPrompt({
     });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.response2)) {
+      await __ctx.pendingPromises.awaitAll()
       return {
         messages: __threads,
         data: __stack.locals.response2

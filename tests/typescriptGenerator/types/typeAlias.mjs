@@ -264,6 +264,7 @@ __stack.locals.foo = await runPrompt({
     });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.foo)) {
+      await __ctx.pendingPromises.awaitAll()
       return {
         messages: __threads,
         data: __stack.locals.foo

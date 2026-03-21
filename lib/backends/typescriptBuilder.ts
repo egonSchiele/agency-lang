@@ -1680,7 +1680,13 @@ export class TypeScriptBuilder {
           })
         : ts.return(varRef);
       stmts.push(
-        ts.if($(ts.id("isInterrupt")).call([varRef]).done(), returnExpr),
+        ts.if(
+          $(ts.id("isInterrupt")).call([varRef]).done(),
+          ts.statements([
+            ts.raw("await __ctx.pendingPromises.awaitAll()"),
+            returnExpr,
+          ]),
+        ),
       );
     }
 

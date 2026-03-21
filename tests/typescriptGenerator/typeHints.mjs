@@ -263,6 +263,7 @@ __stack.locals.count = await runPrompt({
     });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.count)) {
+      await __ctx.pendingPromises.awaitAll()
       return {
         messages: __threads,
         data: __stack.locals.count
@@ -292,6 +293,7 @@ __stack.locals.message = await runPrompt({
     });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.message)) {
+      await __ctx.pendingPromises.awaitAll()
       return {
         messages: __threads,
         data: __stack.locals.message

@@ -357,6 +357,7 @@ __stack.locals.result = await runPrompt({
       });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.result)) {
+        await __ctx.pendingPromises.awaitAll()
         return __stack.locals.result;
       }
       await __ctx.audit({
@@ -452,6 +453,7 @@ __stack.locals.message = await runPrompt({
       });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.message)) {
+        await __ctx.pendingPromises.awaitAll()
         return __stack.locals.message;
       }
       await __ctx.audit({
@@ -550,6 +552,7 @@ __stack.locals.output = await runPrompt({
       });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.output)) {
+        await __ctx.pendingPromises.awaitAll()
         return __stack.locals.output;
       }
       await __ctx.audit({
@@ -645,6 +648,7 @@ __stack.locals.result = await runPrompt({
       });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.result)) {
+        await __ctx.pendingPromises.awaitAll()
         return __stack.locals.result;
       }
       await __ctx.audit({
@@ -740,6 +744,7 @@ __stack.locals.result = await runPrompt({
       });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.result)) {
+        await __ctx.pendingPromises.awaitAll()
         return __stack.locals.result;
       }
       await __ctx.audit({

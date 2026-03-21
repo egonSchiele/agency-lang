@@ -265,17 +265,27 @@ if (isInterrupt(__stack.locals.greeting)) {
         data: __stack.locals.greeting
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     __stack.step++;
   }
   if (__step <= 2) {
-    return goToNode("processGreeting", {
+    const __auditReturnValue = goToNode("processGreeting", {
       messages: __stack.messages,
       ctx: __ctx,
       data: {
         msg: __stack.locals.greeting
       }
+    });
+await __ctx.audit({
+      type: "return",
+      value: __auditReturnValue
     })
+return __auditReturnValue
     
     __stack.step++;
   }
@@ -338,6 +348,11 @@ if (isInterrupt(__stack.locals.result)) {
         data: __stack.locals.result
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     __stack.step++;
   }
@@ -385,11 +400,16 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
-    return goToNode("greet", {
+    const __auditReturnValue = goToNode("greet", {
       messages: __stack.messages,
       ctx: __ctx,
       data: {}
+    });
+await __ctx.audit({
+      type: "return",
+      value: __auditReturnValue
     })
+return __auditReturnValue
     
     __stack.step++;
   }

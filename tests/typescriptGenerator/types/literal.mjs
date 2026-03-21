@@ -268,6 +268,11 @@ if (isInterrupt(__stack.locals.foo)) {
         data: __stack.locals.foo
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     
     
@@ -295,6 +300,11 @@ if (isInterrupt(__stack.locals.bar)) {
         data: __stack.locals.bar
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     
     
@@ -322,6 +332,11 @@ if (isInterrupt(__stack.locals.baz)) {
         data: __stack.locals.baz
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     __stack.step++;
   }

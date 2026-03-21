@@ -264,6 +264,11 @@ if (isInterrupt(__stack.locals.response1)) {
         data: __stack.locals.response1
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     __stack.step++;
   }

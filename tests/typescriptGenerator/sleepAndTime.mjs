@@ -261,6 +261,11 @@ await print(`Done sleeping!`)
 
 let x_endTime: number = performance.now();
 let x: number = x_endTime - x_startTime;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "x_startTime",
+      value: x_startTime
+    })
     
     __stack.step++;
   }

@@ -327,6 +327,15 @@ const __graph = __ctx.graph;
       isBuiltin: false
     }
   })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "add",
+    args: {
+      x: x,
+      y: y
+    },
+    result: undefined
+  })
   __stack.args["x"] = x;
   __stack.args["y"] = y;
   __self.__retryable = __self.__retryable ?? true;
@@ -350,11 +359,21 @@ __stack.locals.result = await runPrompt({
 if (isInterrupt(__stack.locals.result)) {
         return __stack.locals.result;
       }
+      await __ctx.audit({
+        type: "assignment",
+        variable: "__self.__removedTools",
+        value: __self.__removedTools
+      })
       
       __stack.step++;
     }
     if (__step <= 2) {
-      return __stack.locals.result
+      const __auditReturnValue = __stack.locals.result;
+await __ctx.audit({
+        type: "return",
+        value: __auditReturnValue
+      })
+return __auditReturnValue
       
       __stack.step++;
     }
@@ -405,6 +424,14 @@ const __graph = __ctx.graph;
       isBuiltin: false
     }
   })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "greet",
+    args: {
+      name: name
+    },
+    result: undefined
+  })
   __stack.args["name"] = name;
   __self.__retryable = __self.__retryable ?? true;
   try {
@@ -427,11 +454,21 @@ __stack.locals.message = await runPrompt({
 if (isInterrupt(__stack.locals.message)) {
         return __stack.locals.message;
       }
+      await __ctx.audit({
+        type: "assignment",
+        variable: "__self.__removedTools",
+        value: __self.__removedTools
+      })
       
       __stack.step++;
     }
     if (__step <= 2) {
-      return __stack.locals.message
+      const __auditReturnValue = __stack.locals.message;
+await __ctx.audit({
+        type: "return",
+        value: __auditReturnValue
+      })
+return __auditReturnValue
       
       __stack.step++;
     }
@@ -483,6 +520,15 @@ const __graph = __ctx.graph;
       isBuiltin: false
     }
   })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "mixed",
+    args: {
+      count: count,
+      label: label
+    },
+    result: undefined
+  })
   __stack.args["count"] = count;
   __stack.args["label"] = label;
   __self.__retryable = __self.__retryable ?? true;
@@ -506,11 +552,21 @@ __stack.locals.output = await runPrompt({
 if (isInterrupt(__stack.locals.output)) {
         return __stack.locals.output;
       }
+      await __ctx.audit({
+        type: "assignment",
+        variable: "__self.__removedTools",
+        value: __self.__removedTools
+      })
       
       __stack.step++;
     }
     if (__step <= 2) {
-      return __stack.locals.output
+      const __auditReturnValue = __stack.locals.output;
+await __ctx.audit({
+        type: "return",
+        value: __auditReturnValue
+      })
+return __auditReturnValue
       
       __stack.step++;
     }
@@ -561,6 +617,14 @@ const __graph = __ctx.graph;
       isBuiltin: false
     }
   })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "processArray",
+    args: {
+      items: items
+    },
+    result: undefined
+  })
   __stack.args["items"] = items;
   __self.__retryable = __self.__retryable ?? true;
   try {
@@ -583,11 +647,21 @@ __stack.locals.result = await runPrompt({
 if (isInterrupt(__stack.locals.result)) {
         return __stack.locals.result;
       }
+      await __ctx.audit({
+        type: "assignment",
+        variable: "__self.__removedTools",
+        value: __self.__removedTools
+      })
       
       __stack.step++;
     }
     if (__step <= 2) {
-      return __stack.locals.result
+      const __auditReturnValue = __stack.locals.result;
+await __ctx.audit({
+        type: "return",
+        value: __auditReturnValue
+      })
+return __auditReturnValue
       
       __stack.step++;
     }
@@ -638,6 +712,14 @@ const __graph = __ctx.graph;
       isBuiltin: false
     }
   })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "flexible",
+    args: {
+      value: value
+    },
+    result: undefined
+  })
   __stack.args["value"] = value;
   __self.__retryable = __self.__retryable ?? true;
   try {
@@ -660,11 +742,21 @@ __stack.locals.result = await runPrompt({
 if (isInterrupt(__stack.locals.result)) {
         return __stack.locals.result;
       }
+      await __ctx.audit({
+        type: "assignment",
+        variable: "__self.__removedTools",
+        value: __self.__removedTools
+      })
       
       __stack.step++;
     }
     if (__step <= 2) {
-      return __stack.locals.result
+      const __auditReturnValue = __stack.locals.result;
+await __ctx.audit({
+        type: "return",
+        value: __auditReturnValue
+      })
+return __auditReturnValue
       
       __stack.step++;
     }
@@ -717,10 +809,15 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 2) {
-    return {
+    const __auditReturnValue = {
       messages: __threads,
       data: `Node completed`
     };
+await __ctx.audit({
+      type: "return",
+      value: __auditReturnValue
+    })
+return __auditReturnValue;
     
     __stack.step++;
   }
@@ -774,6 +871,11 @@ if (isInterrupt(__stack.locals.sum)) {
         data: __stack.locals.sum
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.sum",
+      value: __stack.locals.sum
+    })
     
     __stack.step++;
   }
@@ -789,6 +891,11 @@ if (isInterrupt(__stack.locals.greeting)) {
         data: __stack.locals.greeting
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.greeting",
+      value: __stack.locals.greeting
+    })
     
     __stack.step++;
   }
@@ -804,6 +911,11 @@ if (isInterrupt(__stack.locals.labeled)) {
         data: __stack.locals.labeled
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.labeled",
+      value: __stack.locals.labeled
+    })
     
     __stack.step++;
   }
@@ -819,6 +931,11 @@ if (isInterrupt(__stack.locals.processed)) {
         data: __stack.locals.processed
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.processed",
+      value: __stack.locals.processed
+    })
     
     __stack.step++;
   }
@@ -834,6 +951,11 @@ if (isInterrupt(__stack.locals.flexResult)) {
         data: __stack.locals.flexResult
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.flexResult",
+      value: __stack.locals.flexResult
+    })
     
     __stack.step++;
   }

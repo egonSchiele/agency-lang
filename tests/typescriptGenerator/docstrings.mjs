@@ -322,6 +322,15 @@ const __graph = __ctx.graph;
       isBuiltin: false
     }
   })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "add",
+    args: {
+      a: a,
+      b: b
+    },
+    result: undefined
+  })
   __stack.args["a"] = a;
   __stack.args["b"] = b;
   __self.__retryable = __self.__retryable ?? true;
@@ -376,6 +385,14 @@ const __graph = __ctx.graph;
       },
       isBuiltin: false
     }
+  })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "greet",
+    args: {
+      name: name
+    },
+    result: undefined
   })
   __stack.args["name"] = name;
   __self.__retryable = __self.__retryable ?? true;
@@ -432,6 +449,15 @@ const __graph = __ctx.graph;
       isBuiltin: false
     }
   })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "calculateArea",
+    args: {
+      width: width,
+      height: height
+    },
+    result: undefined
+  })
   __stack.args["width"] = width;
   __stack.args["height"] = height;
   __self.__retryable = __self.__retryable ?? true;
@@ -484,6 +510,12 @@ const __graph = __ctx.graph;
       args: {},
       isBuiltin: false
     }
+  })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "processData",
+    args: {},
+    result: undefined
   })
   __self.__retryable = __self.__retryable ?? true;
   try {

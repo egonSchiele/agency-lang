@@ -292,14 +292,24 @@ if (isInterrupt(__stack.locals.greeting)) {
         data: __stack.locals.greeting
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     __stack.step++;
   }
   if (__step <= 3) {
-    return {
+    const __auditReturnValue = {
       messages: __threads,
       data: __stack.locals.greeting
     };
+await __ctx.audit({
+      type: "return",
+      value: __auditReturnValue
+    })
+return __auditReturnValue;
     
     __stack.step++;
   }

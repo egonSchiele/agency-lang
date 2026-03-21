@@ -249,6 +249,11 @@ const __graph = __ctx.graph;
   }
   if (__step <= 1) {
     __stack.locals.items = [`a`, `b`, `c`];
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.items",
+      value: __stack.locals.items
+    })
     
     __stack.step++;
   }
@@ -278,6 +283,11 @@ const __graph = __ctx.graph;
   }
   if (__step <= 4) {
     __stack.locals.names = [`alice`, `bob`];
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.names",
+      value: __stack.locals.names
+    })
     
     __stack.step++;
   }

@@ -267,6 +267,15 @@ const __graph = __ctx.graph;
       isBuiltin: false
     }
   })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "greet",
+    args: {
+      name: name,
+      age: age
+    },
+    result: undefined
+  })
   __stack.args["name"] = name;
   __stack.args["age"] = age;
   __self.__retryable = __self.__retryable ?? true;
@@ -317,7 +326,12 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
       __stack.step++;
     }
     if (__step <= 2) {
-      return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`
+      const __auditReturnValue = `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`;
+await __ctx.audit({
+        type: "return",
+        value: __auditReturnValue
+      })
+return __auditReturnValue
       
       __stack.step++;
     }
@@ -395,6 +409,11 @@ if (isInterrupt(__stack.locals.response)) {
         data: __stack.locals.response
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     __stack.step++;
   }
@@ -405,10 +424,15 @@ if (isInterrupt(__stack.locals.response)) {
     __stack.step++;
   }
   if (__step <= 4) {
-    return {
+    const __auditReturnValue = {
       messages: __threads,
       data: __stack.locals.response
     };
+await __ctx.audit({
+      type: "return",
+      value: __auditReturnValue
+    })
+return __auditReturnValue;
     
     __stack.step++;
   }
@@ -460,18 +484,28 @@ const __graph = __ctx.graph;
   }
   if (__step <= 2) {
     __stack.locals.age = 30;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.age",
+      value: __stack.locals.age
+    })
     
     __stack.step++;
   }
   if (__step <= 3) {
-    return goToNode("foo2", {
+    const __auditReturnValue = goToNode("foo2", {
       messages: __stack.messages,
       ctx: __ctx,
       data: {
         name: __stack.args.name,
         age: __stack.locals.age
       }
+    });
+await __ctx.audit({
+      type: "return",
+      value: __auditReturnValue
     })
+return __auditReturnValue
     
     __stack.step++;
   }

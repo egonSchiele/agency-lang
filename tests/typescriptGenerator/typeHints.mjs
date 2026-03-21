@@ -268,6 +268,11 @@ if (isInterrupt(__stack.locals.count)) {
         data: __stack.locals.count
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     
     
@@ -292,6 +297,11 @@ if (isInterrupt(__stack.locals.message)) {
         data: __stack.locals.message
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     
     __stack.step++;

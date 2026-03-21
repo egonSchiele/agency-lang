@@ -273,6 +273,12 @@ const __graph = __ctx.graph;
       isBuiltin: false
     }
   })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "greet",
+    args: {},
+    result: undefined
+  })
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {
@@ -280,7 +286,12 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 1) {
-      return `hello`
+      const __auditReturnValue = `hello`;
+await __ctx.audit({
+        type: "return",
+        value: __auditReturnValue
+      })
+return __auditReturnValue
       
       __stack.step++;
     }

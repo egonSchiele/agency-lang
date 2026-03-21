@@ -251,11 +251,21 @@ const __graph = __ctx.graph;
       "name": `Alice`,
       "age": 30
     };
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.user",
+      value: __stack.locals.user
+    })
     
     __stack.step++;
   }
   if (__step <= 2) {
     __stack.locals.greeting = `Hello, ${__stack.locals.user.name}!`;
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.greeting",
+      value: __stack.locals.greeting
+    })
     
     __stack.step++;
   }
@@ -277,6 +287,11 @@ if (isInterrupt(__stack.locals.result)) {
         data: __stack.locals.result
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     __stack.step++;
   }

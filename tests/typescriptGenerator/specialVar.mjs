@@ -261,6 +261,11 @@ if (isInterrupt(__stack.locals.msg)) {
         data: __stack.locals.msg
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.msg",
+      value: __stack.locals.msg
+    })
     
     
     __stack.step++;
@@ -283,6 +288,11 @@ if (isInterrupt(__stack.locals.response1)) {
         data: __stack.locals.response1
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     
     __stack.step++;
@@ -297,6 +307,11 @@ if (isInterrupt(__stack.locals.response1)) {
     __client = __getClientWithConfig({
       model: "`gemini-2.5-flash-lite`"
     });
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__client",
+      value: __client
+    })
     
     __stack.step++;
   }
@@ -318,6 +333,11 @@ if (isInterrupt(__stack.locals.response2)) {
         data: __stack.locals.response2
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     
     __stack.step++;
@@ -329,10 +349,15 @@ if (isInterrupt(__stack.locals.response2)) {
     __stack.step++;
   }
   if (__step <= 8) {
-    return {
+    const __auditReturnValue = {
       messages: __threads,
       data: [__stack.locals.response1, __stack.locals.response2]
     };
+await __ctx.audit({
+      type: "return",
+      value: __auditReturnValue
+    })
+return __auditReturnValue;
     
     __stack.step++;
   }

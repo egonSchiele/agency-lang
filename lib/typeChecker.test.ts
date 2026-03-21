@@ -2611,4 +2611,244 @@ describe("TypeChecker", () => {
       expect(errors.some((e) => e.message.includes("number") && e.message.includes("string"))).toBe(true);
     });
   });
+
+  describe("any and unknown primitive types", () => {
+    it("should allow assigning any type to a variable typed as 'any'", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "any" },
+            value: { type: "number", value: "42" },
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            value: { type: "string", segments: [{ type: "text", value: "hello" }] },
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(0);
+    });
+
+    it("should allow passing a primitiveType('any') variable to a typed parameter", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "name",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "any" },
+            value: { type: "number", value: "42" },
+          },
+          {
+            type: "functionCall",
+            functionName: "greet",
+            arguments: [{ type: "variableName", value: "x" }],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(0);
+    });
+
+    it("should allow property access on primitiveType('any')", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "any" },
+            value: { type: "number", value: "42" },
+          },
+          {
+            type: "assignment",
+            variableName: "y",
+            value: {
+              type: "valueAccess",
+              base: { type: "variableName", value: "x" },
+              chain: [{ kind: "property", name: "foo" }],
+            },
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(0);
+    });
+
+    it("should allow assigning any type to a variable typed as 'unknown'", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "unknown" },
+            value: { type: "number", value: "42" },
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            value: { type: "string", segments: [{ type: "text", value: "hello" }] },
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(0);
+    });
+
+    it("should error when assigning 'unknown' to a typed variable", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "unknown" },
+            value: { type: "number", value: "42" },
+          },
+          {
+            type: "assignment",
+            variableName: "y",
+            typeHint: { type: "primitiveType", value: "string" },
+            value: { type: "variableName", value: "x" },
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("unknown");
+      expect(errors[0].message).toContain("string");
+    });
+
+    it("should error when passing 'unknown' to a typed parameter", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "name",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "unknown" },
+            value: { type: "number", value: "42" },
+          },
+          {
+            type: "functionCall",
+            functionName: "greet",
+            arguments: [{ type: "variableName", value: "x" }],
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("unknown");
+    });
+
+    it("should allow assigning 'unknown' to 'unknown'", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "unknown" },
+            value: { type: "number", value: "42" },
+          },
+          {
+            type: "assignment",
+            variableName: "y",
+            typeHint: { type: "primitiveType", value: "unknown" },
+            value: { type: "variableName", value: "x" },
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(0);
+    });
+
+    it("should allow assigning 'unknown' to 'any'", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "unknown" },
+            value: { type: "number", value: "42" },
+          },
+          {
+            type: "assignment",
+            variableName: "y",
+            typeHint: { type: "primitiveType", value: "any" },
+            value: { type: "variableName", value: "x" },
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(0);
+    });
+
+    it("should error on property access on 'unknown'", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "unknown" },
+            value: { type: "number", value: "42" },
+          },
+          {
+            type: "assignment",
+            variableName: "y",
+            value: {
+              type: "valueAccess",
+              base: { type: "variableName", value: "x" },
+              chain: [{ kind: "property", name: "foo" }],
+            },
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("foo");
+      expect(errors[0].message).toContain("unknown");
+    });
+  });
 });

@@ -58,6 +58,8 @@ export const primitiveTypeParser: Parser<PrimitiveType> = trace(
         str("undefined"),
         str("void"),
         str("null"),
+        str("any"),
+        str("unknown"),
       ),
       "value",
     ),

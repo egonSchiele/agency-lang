@@ -707,6 +707,8 @@ export class TypeChecker {
     for (const element of expr.chain) {
       if (currentType === "any") return "any";
       const resolved = this.resolveType(currentType);
+      // primitiveType("any") behaves like the "any" sentinel for access chains
+      if (resolved.type === "primitiveType" && resolved.value === "any") return "any";
 
       switch (element.kind) {
         case "property": {
@@ -830,6 +832,24 @@ export class TypeChecker {
 
     const resolvedSource = this.resolveType(source);
     const resolvedTarget = this.resolveType(target);
+
+    // primitiveType("any") behaves the same as the "any" sentinel
+    if (
+      (resolvedSource.type === "primitiveType" && resolvedSource.value === "any") ||
+      (resolvedTarget.type === "primitiveType" && resolvedTarget.value === "any")
+    ) {
+      return true;
+    }
+
+    // unknown as target: anything can be assigned to unknown
+    if (resolvedTarget.type === "primitiveType" && resolvedTarget.value === "unknown") {
+      return true;
+    }
+
+    // unknown as source: only assignable to any (handled above) or unknown
+    if (resolvedSource.type === "primitiveType" && resolvedSource.value === "unknown") {
+      return false;
+    }
 
     // Union type as source: every member must be assignable to target
     // (checked first so that union-to-union works: each source member is tested

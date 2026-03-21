@@ -6,7 +6,7 @@ def append(sleepTime: number, value: any) {
 }
 
 node main() {
-  append(1, "hello")
-  append(0.5, "world")
+  async append(1, "hello")
+  async append(0.5, "world")
   return arr
 }

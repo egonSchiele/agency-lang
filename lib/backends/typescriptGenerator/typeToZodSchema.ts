@@ -36,6 +36,10 @@ export function mapTypeToZodSchema(
       case "undefined":
         // Undefined cannot be represented in JSON Schema
         return "z.null()";
+      case "any":
+        return "z.any()";
+      case "unknown":
+        return "z.unknown()";
       default:
         // Default to string for unknown types
         return DEFAULT_SCHEMA;

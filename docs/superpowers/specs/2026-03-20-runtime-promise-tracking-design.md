@@ -25,92 +25,131 @@ There is also a related bug with assigned async vars and interrupts: if `x = asy
 
 Replace the preprocessor's inline `Promise.all` code generation with a centralized runtime mechanism on `RuntimeContext`. All async promises (assigned and unassigned) are registered with the runtime, and the runtime provides methods to await specific promises or all pending promises.
 
-### RuntimeContext changes
+### New class: `PendingPromiseStore` (`lib/runtime/state/pendingPromiseStore.ts`)
 
-Add to `RuntimeContext` (`lib/runtime/state/context.ts`):
+A dedicated class for tracking async promises, following the same pattern as `GlobalStore` and `StateStack`:
 
 ```ts
-type PendingPromise = {
+type PendingPromiseEntry = {
   promise: Promise<any>;
   resolve?: (value: any) => void; // setter for assigned vars
 };
 
-// New fields on RuntimeContext:
-pendingPromises: Map<string, PendingPromise>;  // keyed by var name or auto-generated key
-private _pendingCounter: number;               // for generating keys for unassigned calls
+export class PendingPromiseStore {
+  private pending: Record<string, PendingPromiseEntry> = {};
+  private counter: number = 0;
+
+  /**
+   * Register an async promise for tracking.
+   * @param key - variable name for assigned calls, or null for unassigned
+   * @param promise - the promise to track
+   * @param resolve - optional setter to write the resolved value back
+   */
+  add(key: string | null, promise: Promise<any>, resolve?: (value: any) => void): void {
+    const actualKey = key ?? `__unassigned_${this.counter++}`;
+    this.pending[actualKey] = { promise, resolve };
+  }
+
+  /**
+   * Await specific pending promises by key. Used where the preprocessor
+   * currently inserts Promise.all — before first usage of an async variable.
+   * Resolves the promises and calls their setters to write values back.
+   * Removes awaited promises from the store.
+   *
+   * If a requested key is not in the store (e.g., the async assignment
+   * was inside a conditional branch that didn't execute), it is silently
+   * skipped. This is safe because the variable was never assigned a Promise
+   * in the first place — it retains whatever value it had before.
+   */
+  async awaitPending(keys: string[]): Promise<void> {
+    const entries = keys
+      .map(k => ({ key: k, entry: this.pending[k] }))
+      .filter(e => e.entry !== undefined);
+
+    if (entries.length === 0) return;
+
+    const results = await Promise.all(entries.map(e => e.entry!.promise));
+
+    for (let i = 0; i < entries.length; i++) {
+      const { key, entry } = entries[i];
+      if (entry!.resolve) {
+        entry!.resolve(results[i]);
+      }
+      delete this.pending[key];
+    }
+  }
+
+  /**
+   * Await ALL pending promises (assigned and unassigned).
+   * Used at node exit and before returning an interrupt.
+   * Any pending promise that returns an interrupt object triggers
+   * a ConcurrentInterruptError (phase 1 behavior).
+   */
+  async awaitAll(): Promise<void> {
+    const keys = Object.keys(this.pending);
+    if (keys.length === 0) return;
+
+    const entries = keys.map(k => ({ key: k, entry: this.pending[k] }));
+    this.pending = {};
+
+    const results = await Promise.all(entries.map(e => e.entry.promise));
+
+    for (let i = 0; i < entries.length; i++) {
+      const { entry } = entries[i];
+      const result = results[i];
+
+      // Phase 1: error if a pending promise returned an interrupt
+      if (isInterrupt(result)) {
+        throw new ConcurrentInterruptError(
+          "An async function returned an interrupt while another interrupt was pending. " +
+          "Concurrent interrupts are not yet supported. Assign the async call to a " +
+          "variable if it may trigger an interrupt."
+        );
+      }
+
+      if (entry.resolve) {
+        entry.resolve(result);
+      }
+    }
+  }
+
+  /** Clear all pending promises without awaiting them. Used during error cleanup. */
+  clear(): void {
+    this.pending = {};
+  }
+}
 ```
 
-Three new methods:
+### RuntimeContext changes
+
+Add a single new field to `RuntimeContext` (`lib/runtime/state/context.ts`):
 
 ```ts
-/**
- * Register an async promise for tracking.
- * @param key - variable name for assigned calls, or null for unassigned
- * @param promise - the promise to track
- * @param resolve - optional setter to write the resolved value back
- */
-addPending(key: string | null, promise: Promise<any>, resolve?: (value: any) => void): void {
-  const actualKey = key ?? `__unassigned_${this._pendingCounter++}`;
-  this.pendingPromises.set(actualKey, { promise, resolve });
-}
+pendingPromises: PendingPromiseStore;
+```
 
-/**
- * Await specific pending promises by key. Used where the preprocessor
- * currently inserts Promise.all — before first usage of an async variable.
- * Resolves the promises and calls their setters to write values back.
- * Removes awaited promises from the pending map.
- */
-async awaitPending(keys: string[]): Promise<void> {
-  const entries = keys
-    .map(k => ({ key: k, entry: this.pendingPromises.get(k) }))
-    .filter(e => e.entry !== undefined);
+Initialize in the constructor:
+```ts
+this.pendingPromises = new PendingPromiseStore();
+```
 
-  const results = await Promise.all(entries.map(e => e.entry!.promise));
+Initialize in `createExecutionContext()`:
+```ts
+execCtx.pendingPromises = new PendingPromiseStore();
+```
 
-  for (let i = 0; i < entries.length; i++) {
-    const { key, entry } = entries[i];
-    if (entry!.resolve) {
-      entry!.resolve(results[i]);
-    }
-    this.pendingPromises.delete(key);
-  }
-}
-
-/**
- * Await ALL pending promises (assigned and unassigned).
- * Used at node exit and before returning an interrupt.
- * Any pending promise that returns an interrupt object triggers
- * a ConcurrentInterruptError (phase 1 behavior).
- */
-async awaitAllPending(): Promise<void> {
-  if (this.pendingPromises.size === 0) return;
-
-  const entries = [...this.pendingPromises.entries()];
-  this.pendingPromises.clear();
-
-  const results = await Promise.all(entries.map(([_, e]) => e.promise));
-
-  for (let i = 0; i < entries.length; i++) {
-    const [_, entry] = entries[i];
-    const result = results[i];
-
-    // Phase 1: error if a pending promise returned an interrupt
-    if (isInterrupt(result)) {
-      throw new ConcurrentInterruptError(
-        "An async function returned an interrupt while another interrupt was pending. " +
-        "Concurrent interrupts are not yet supported. Assign the async call to a " +
-        "variable if it may trigger an interrupt."
-      );
-    }
-
-    if (entry.resolve) {
-      entry.resolve(result);
-    }
-  }
+In `cleanup()`, clear pending promises before nullifying other state to prevent dangling promises from referencing a nullified context:
+```ts
+cleanup(): void {
+  this.pendingPromises.clear();  // clear first, before nullifying deps
+  this.stateStack = null as any;
+  this.globals = null as any;
+  this.statelogClient = null as any;
+  this.callbacks = null as any;
 }
 ```
 
-These fields must also be initialized in `createExecutionContext()` and handled in `cleanup()`. They are NOT serialized — pending promises cannot be serialized. By the time state is serialized (at interrupt time), `awaitAllPending()` will have already resolved everything.
+The `PendingPromiseStore` is NOT serialized — pending promises cannot be serialized. By the time state is serialized (at interrupt time), `awaitAll()` will have already resolved everything.
 
 ### Builder changes (`lib/backends/typescriptBuilder.ts`)
 
@@ -124,10 +163,12 @@ Currently for `x = async func(...)`, `generateFunctionCallExpression` returns th
 // For: x = async func(...)
 // Generated:
 __self.x = func(..., { ctx: __ctx, ... });
-__ctx.addPending("x", __self.x, (val) => { __self.x = val; });
+__ctx.pendingPromises.add("x", __self.x, (val) => { __self.x = val; });
 ```
 
 This happens in the assignment processing path in `processNode` (or wherever assignments with async function call values are handled in the builder).
+
+The existing `isInterrupt` check that follows assigned function calls (in `processAssignment`) must be skipped when `node.value.async` is true, since the variable holds a Promise, not a resolved value. This mirrors how `processLlmCall` already skips the interrupt check for async calls (line 1640-1642). The interrupt check for these calls will happen later via `awaitAll`.
 
 #### Unassigned async calls
 
@@ -138,7 +179,7 @@ Currently for `async func(...)` as a statement, `processFunctionCallAsStatement`
 ```js
 // For: async func(...)
 // Generated:
-__ctx.addPending(null, func(..., { ctx: __ctx, ... }));
+__ctx.pendingPromises.add(null, func(..., { ctx: __ctx, ... }));
 ```
 
 The `isInterrupt` check is removed for async unassigned calls — it will be handled by `awaitAllPending` later.
@@ -148,18 +189,24 @@ The `isInterrupt` check is removed for async unassigned calls — it will be han
 At the end of each node body (before the return statement), the builder inserts:
 
 ```js
-await __ctx.awaitAllPending();
+await __ctx.pendingPromises.awaitAll();
 ```
 
 This ensures all fire-and-forget async calls complete before the node returns to the graph engine.
 
 #### Before interrupt return
 
-Wherever the builder generates interrupt return code (the `isInterrupt` check + return pattern), insert `awaitAllPending` before the return:
+Wherever the builder generates interrupt return code (the `isInterrupt` check + return pattern), insert `awaitAll` before the return. The specific locations are:
+
+- `processFunctionCallAsStatement` — unassigned sync function call interrupt check
+- `processAssignment` — assigned sync function call interrupt check
+- `processLlmCall` — sync LLM call interrupt check
+
+In each case:
 
 ```js
 if (isInterrupt(__result)) {
-  await __ctx.awaitAllPending();
+  await __ctx.pendingPromises.awaitAll();
   return { ...__state, data: __result };
 }
 ```
@@ -182,7 +229,7 @@ The preprocessor currently:
 [__self.x, __self.y] = await Promise.all([__self.x, __self.y]);
 
 // New:
-await __ctx.awaitPending(["x", "y"]);
+await __ctx.pendingPromises.awaitPending(["x", "y"]);
 ```
 
 The `awaitPending` method handles resolving the promises AND writing values back via the setter registered by `addPending`. This is simpler because the preprocessor no longer needs to know about `__self` prefixes or array destructuring.
@@ -198,7 +245,7 @@ The parallel block `Promise.all` insertion (lines 836-854) also changes to use `
 [__self.x, __self.y] = await Promise.all([__self.x, __self.y]);
 
 // New:
-await __ctx.awaitPending(["x", "y"]);
+await __ctx.pendingPromises.awaitPending(["x", "y"]);
 ```
 
 ### Error handling
@@ -223,7 +270,7 @@ This is thrown by `awaitAllPending` when a pending promise returns an interrupt 
 - **`setupFunction` / `setupNode`** — no changes. They still push/pop stateStack frames as before.
 - **`isInterrupt` checks for sync calls** — unchanged. Synchronous (non-async) function calls still check for interrupts immediately after the `await`.
 - **State serialization** — `stateToJSON()` is unchanged. `pendingPromises` is not serialized; by the time serialization happens, all promises have been resolved via `awaitAllPending`.
-- **`respondToInterrupt` / `approveInterrupt` / etc.** — unchanged for phase 1.
+- **`respondToInterrupt` / `approveInterrupt` / etc.** — unchanged for phase 1. When a resumed execution spawns new async calls and hits another interrupt, the `awaitAll` calls in the generated node code handle it — `respondToInterrupt` itself does not need changes.
 
 ## Test cases
 
@@ -239,7 +286,13 @@ This is thrown by `awaitAllPending` when a pending promise returns an interrupt 
 
 6. **Async calls in functions (not just nodes)** — `def helper() { async sideEffect() }` called from a node. The pending promise is registered on the shared `RuntimeContext`, so `awaitAllPending` at node exit catches it.
 
-7. **No async calls** — `awaitAllPending` is a no-op when `pendingPromises` is empty. No performance impact on sync-only code.
+7. **No async calls** — `awaitAll` is a no-op when `pendingPromises` is empty. No performance impact on sync-only code.
+
+8. **Async calls inside while loops** — each iteration registers a new pending promise with the same key. The `awaitPending` before usage within the loop body should resolve it each iteration.
+
+9. **Nested function calls with async** — `def helper() { x = async func() }` called from a node. The pending promise is registered on the shared `RuntimeContext` and resolved when `helper` calls `awaitPending` or at node exit via `awaitAll`.
+
+10. **Async assignment in conditional branch** — `if (cond) { x = async func() }` followed by usage of `x`. If the branch didn't execute, `awaitPending(["x"])` silently skips the missing key.
 
 ## Future work (not in this phase)
 

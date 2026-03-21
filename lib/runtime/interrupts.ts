@@ -108,16 +108,20 @@ export async function respondToInterrupt(args: {
   const nodesTraversed = execCtx.stateStack.nodesTraversed || [];
   const nodeName = nodesTraversed[nodesTraversed.length - 1];
   await execCtx.audit({ type: "interrupt", nodeName, args: interruptResponse });
-  const result = await execCtx.graph.run(nodeName, {
-    // todo user should be able to pass messages
-    // in metadata
-    messages: new ThreadStore(),
-    data: {},
-    ctx: execCtx,
-    isResume: true,
-    interruptData,
-  }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
-  return createReturnObject({ result, globals: execCtx.globals });
+  try {
+    const result = await execCtx.graph.run(nodeName, {
+      // todo user should be able to pass messages
+      // in metadata
+      messages: new ThreadStore(),
+      data: {},
+      ctx: execCtx,
+      isResume: true,
+      interruptData,
+    }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
+    return createReturnObject({ result, globals: execCtx.globals });
+  } finally {
+    execCtx.cleanup();
+  }
 }
 
 export async function approveInterrupt({
@@ -211,14 +215,18 @@ export async function resumeFromState(args: {
     throw new Error("No resumable node found in state file.");
   }
 
-  const result = await execCtx.graph.run(nodeName, {
-    // todo: is this correct? Do we need to pass messages here?
-    messages: new ThreadStore(),
-    ctx: execCtx,
-    isResume: true,
-    data: {},
-    //interruptData
-  }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
+  try {
+    const result = await execCtx.graph.run(nodeName, {
+      // todo: is this correct? Do we need to pass messages here?
+      messages: new ThreadStore(),
+      ctx: execCtx,
+      isResume: true,
+      data: {},
+      //interruptData
+    }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
 
-  return createReturnObject({ result, globals: execCtx.globals });
+    return createReturnObject({ result, globals: execCtx.globals });
+  } finally {
+    execCtx.cleanup();
+  }
 }

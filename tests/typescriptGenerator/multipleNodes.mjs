@@ -275,6 +275,7 @@ if (isInterrupt(__stack.locals.greeting)) {
     __stack.step++;
   }
   if (__step <= 2) {
+    await __ctx.pendingPromises.awaitAll()
     const __auditReturnValue = goToNode("processGreeting", {
       messages: __stack.messages,
       ctx: __ctx,
@@ -404,6 +405,7 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
+    await __ctx.pendingPromises.awaitAll()
     const __auditReturnValue = goToNode("greet", {
       messages: __stack.messages,
       ctx: __ctx,

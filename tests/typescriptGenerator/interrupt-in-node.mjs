@@ -425,6 +425,7 @@ if (isInterrupt(__stack.locals.response)) {
     __stack.step++;
   }
   if (__step <= 4) {
+    await __ctx.pendingPromises.awaitAll()
     const __auditReturnValue = {
       messages: __threads,
       data: __stack.locals.response
@@ -495,6 +496,7 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 3) {
+    await __ctx.pendingPromises.awaitAll()
     const __auditReturnValue = goToNode("foo2", {
       messages: __stack.messages,
       ctx: __ctx,

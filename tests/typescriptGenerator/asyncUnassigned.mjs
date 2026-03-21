@@ -351,6 +351,7 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 3) {
+    await __ctx.pendingPromises.awaitAll()
     const __auditReturnValue = {
       messages: __threads,
       data: `done`

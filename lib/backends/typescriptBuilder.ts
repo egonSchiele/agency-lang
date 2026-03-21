@@ -1914,6 +1914,12 @@ export class TypeScriptBuilder {
           ts.assign(ts.self("__retryable"), ts.bool(false)),
         );
       }
+      // In graph nodes, await all pending async promises before any return
+      if (this.isInsideGraphNode && stmt.type === "returnStatement") {
+        parts[parts.length - 1].push(
+          ts.raw("await __ctx.pendingPromises.awaitAll()"),
+        );
+      }
       const processed = this.processStatement(stmt);
       const audit = auditNode(processed);
       if (audit && audit.behavior === "replace") {

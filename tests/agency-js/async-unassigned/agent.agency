@@ -1,0 +1,12 @@
+arr = []
+
+def append(sleepTime: number, value: any) {
+  sleep(sleepTime)
+  arr.push(value)
+}
+
+node main() {
+  async append(0.1, "hello")
+  async append(0.05, "world")
+  return arr
+}

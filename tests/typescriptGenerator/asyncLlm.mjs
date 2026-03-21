@@ -291,6 +291,7 @@ __self.__pendingKey_y = __ctx.pendingPromises.add(__stack.locals.y, (val) => { _
     __stack.step++;
   }
   if (__step <= 4) {
+    await __ctx.pendingPromises.awaitAll()
     const __auditReturnValue = {
       messages: __threads,
       data: [__stack.locals.x, __stack.locals.y]

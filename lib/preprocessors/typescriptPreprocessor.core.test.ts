@@ -745,8 +745,8 @@ describe("TypescriptPreprocessor Core Functionality", () => {
         expect(rawCodeNodes.length).toBeGreaterThan(0);
 
         if (rawCodeNodes[0] && rawCodeNodes[0].type === "rawCode") {
-          expect(rawCodeNodes[0].value).toContain("Promise.all");
-          expect(rawCodeNodes[0].value).toContain("__self.a");
+          expect(rawCodeNodes[0].value).toContain("awaitPending");
+          expect(rawCodeNodes[0].value).toContain("__self.__pendingKey_a");
         }
       }
     });

@@ -480,7 +480,10 @@ describe("functionParser", () => {
                 type: "string",
                 segments: [
                   { type: "text", value: "say hello to " },
-                  { type: "interpolation", expression: { type: "variableName", value: "name" } },
+                  {
+                    type: "interpolation",
+                    expression: { type: "variableName", value: "name" },
+                  },
                 ],
               },
             },
@@ -685,7 +688,7 @@ describe("functionParser", () => {
             {
               type: "functionParameter",
               name: "data",
-              typeHint: { type: "typeAliasVariable", aliasName: "any" },
+              typeHint: { type: "primitiveType", value: "any" },
             },
           ],
           returnType: null,
@@ -2899,7 +2902,11 @@ describe("messageThreadParser", () => {
       { input: "thread", description: "missing braces" },
       { input: "subthread", description: "subthread missing braces" },
       { input: "thread {", description: "missing closing brace", throws: true },
-      { input: "subthread {", description: "subthread missing closing brace", throws: true },
+      {
+        input: "subthread {",
+        description: "subthread missing closing brace",
+        throws: true,
+      },
       { input: "thread }", description: "missing opening brace" },
       { input: "subthread }", description: "subthread missing opening brace" },
       { input: "threads { }", description: "wrong keyword (threads)" },

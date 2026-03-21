@@ -350,6 +350,7 @@ const __graph = __ctx.graph;
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.greeting)) {
+      await __ctx.pendingPromises.awaitAll()
       return {
         ...__state,
         data: __stack.locals.greeting

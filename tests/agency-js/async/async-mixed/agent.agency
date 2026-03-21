@@ -1,0 +1,17 @@
+log = []
+
+def sideEffect(val: string) {
+  sleep(0.05)
+  log.push(val)
+}
+
+def compute(val: number): number {
+  sleep(0.05)
+  return val * 2
+}
+
+node main() {
+  x = async compute(5)
+  async sideEffect("side")
+  return { x: x, log: log }
+}

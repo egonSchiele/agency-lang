@@ -1072,6 +1072,14 @@ export class TypeScriptBuilder {
       !this.isGraphNode(node.functionName) &&
       scope.type !== "global"
     ) {
+      // Async unassigned calls: register with pending promise store, no interrupt check
+      if (node.async) {
+        return ts.raw(
+          `__ctx.pendingPromises.add(${this.str(callNode)})`,
+        );
+      }
+
+      // Sync calls: check for interrupt result
       const tempVar = "__funcResult";
       const nodeContext = scope.type === "node";
       const returnBody = nodeContext
@@ -1084,7 +1092,10 @@ export class TypeScriptBuilder {
         ts.constDecl(tempVar, callNode),
         ts.if(
           ts.call(ts.id("isInterrupt"), [ts.id(tempVar)]),
-          ts.return(returnBody),
+          ts.statements([
+            ts.raw("await __ctx.pendingPromises.awaitAll()"),
+            ts.return(returnBody),
+          ]),
         ),
       ]);
     }
@@ -1093,6 +1104,15 @@ export class TypeScriptBuilder {
   }
 
   private processFunctionCall(node: FunctionCall): TsNode {
+    if (node.functionName === "throw") {
+      // throw("message") → throw new Error("message")
+      const argNodes: TsNode[] = node.arguments.map((arg) =>
+        this.processNode(arg),
+      );
+      const arg = argNodes.length > 0 ? argNodes[0] : ts.str("");
+      return ts.throw(`new Error(${this.str(arg)})`);
+    }
+
     if (node.functionName === "llm") {
       // Standalone llm() call (not assigned to variable)
       return this.processLlmCall(
@@ -1424,7 +1444,18 @@ export class TypeScriptBuilder {
           node.accessChain,
         ),
       ];
-      if (this.getCurrentScope().type !== "global") {
+
+      if (value.async) {
+        // Async: register with pending promise store, store the key, skip interrupt check
+        const pendingKeyVar = `__pendingKey_${variableName}`;
+        stmts.push(
+          ts.assign(
+            ts.self(pendingKeyVar),
+            ts.raw(`__ctx.pendingPromises.add(${this.str(varRef)}, (val) => { ${this.str(varRef)} = val; })`),
+          ),
+        );
+      } else if (this.getCurrentScope().type !== "global") {
+        // Sync: interrupt check with awaitAll before return
         const returnObj =
           this.getCurrentScope().type === "node"
             ? ts.obj([ts.setSpread(ts.runtime.state), ts.set("data", varRef)])
@@ -1432,7 +1463,10 @@ export class TypeScriptBuilder {
         stmts.push(
           ts.if(
             $(ts.id("isInterrupt")).call([varRef]).done(),
-            ts.return(returnObj),
+            ts.statements([
+              ts.raw("await __ctx.pendingPromises.awaitAll()"),
+              ts.return(returnObj),
+            ]),
           ),
         );
       }
@@ -1638,8 +1672,15 @@ export class TypeScriptBuilder {
     ];
 
     if (node.async) {
-      // Async: no await, no interrupt check
+      // Async: no await, no interrupt check. Register with pending promise store.
       stmts.push(ts.assign(varRef, runPromptCall));
+      const pendingKeyVar = `__pendingKey_${variableName}`;
+      stmts.push(
+        ts.assign(
+          ts.self(pendingKeyVar),
+          ts.raw(`__ctx.pendingPromises.add(${this.str(varRef)}, (val) => { ${this.str(varRef)} = val; })`),
+        ),
+      );
     } else {
       // Sync: await + interrupt check
       stmts.push(ts.assign(varRef, ts.await(runPromptCall)));
@@ -1652,7 +1693,13 @@ export class TypeScriptBuilder {
           })
         : ts.return(varRef);
       stmts.push(
-        ts.if($(ts.id("isInterrupt")).call([varRef]).done(), returnExpr),
+        ts.if(
+          $(ts.id("isInterrupt")).call([varRef]).done(),
+          ts.statements([
+            ts.raw("await __ctx.pendingPromises.awaitAll()"),
+            returnExpr,
+          ]),
+        ),
       );
     }
 

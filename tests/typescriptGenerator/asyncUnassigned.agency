@@ -1,0 +1,9 @@
+def append(sleepTime: number, value: any) {
+  sleep(sleepTime)
+}
+
+node main() {
+  async append(1, "hello")
+  async append(0.5, "world")
+  return "done"
+}

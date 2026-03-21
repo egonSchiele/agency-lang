@@ -438,6 +438,7 @@ __stack.locals.response = await runPrompt({
       });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.response)) {
+        await __ctx.pendingPromises.awaitAll()
         return __stack.locals.response;
       }
       await __ctx.audit({
@@ -532,6 +533,7 @@ const __graph = __ctx.graph;
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.response)) {
+      await __ctx.pendingPromises.awaitAll()
       return {
         ...__state,
         data: __stack.locals.response

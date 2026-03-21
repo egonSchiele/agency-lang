@@ -1,3 +1,10 @@
+export class ConcurrentInterruptError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ConcurrentInterruptError";
+  }
+}
+
 export class ToolCallError extends Error {
   retryable: boolean;
   originalError: unknown;

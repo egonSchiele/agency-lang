@@ -295,6 +295,7 @@ __stack.locals.res1 = await runPrompt({
 });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res1)) {
+  await __ctx.pendingPromises.awaitAll()
   return __stack.locals.res1;
 }
 
@@ -316,6 +317,7 @@ __stack.locals.res2 = await runPrompt({
 });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res2)) {
+  await __ctx.pendingPromises.awaitAll()
   return __stack.locals.res2;
 }
 
@@ -334,6 +336,7 @@ __stack.locals.res3 = await runPrompt({
 });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res3)) {
+  await __ctx.pendingPromises.awaitAll()
   return __stack.locals.res3;
 }
 

@@ -256,6 +256,7 @@ const __graph = __ctx.graph;
     __self.__retryable = false;
     __stack.locals.msg = await input(`> `);
 if (isInterrupt(__stack.locals.msg)) {
+      await __ctx.pendingPromises.awaitAll()
       return {
         ...__state,
         data: __stack.locals.msg
@@ -283,6 +284,7 @@ __stack.locals.response1 = await runPrompt({
     });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.response1)) {
+      await __ctx.pendingPromises.awaitAll()
       return {
         messages: __threads,
         data: __stack.locals.response1
@@ -328,6 +330,7 @@ __stack.locals.response2 = await runPrompt({
     });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.response2)) {
+      await __ctx.pendingPromises.awaitAll()
       return {
         messages: __threads,
         data: __stack.locals.response2

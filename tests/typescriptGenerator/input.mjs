@@ -250,6 +250,7 @@ const __graph = __ctx.graph;
     __self.__retryable = false;
     __stack.locals.message = await input(`Please enter a message: `);
 if (isInterrupt(__stack.locals.message)) {
+      await __ctx.pendingPromises.awaitAll()
       return {
         ...__state,
         data: __stack.locals.message
@@ -280,6 +281,7 @@ __stack.locals.sentiment = await runPrompt({
     });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.sentiment)) {
+      await __ctx.pendingPromises.awaitAll()
       return {
         messages: __threads,
         data: __stack.locals.sentiment

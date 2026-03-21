@@ -1,0 +1,15 @@
+def transform(val: string): string {
+  sleep(0.05)
+  return "transformed: ${val}"
+}
+
+def helper(val: string): string {
+  x = async transform(val)
+  return x
+}
+
+node main() {
+  a = async helper("first")
+  b = async helper("second")
+  return [a, b]
+}

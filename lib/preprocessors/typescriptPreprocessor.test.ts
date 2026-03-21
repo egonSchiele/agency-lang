@@ -161,8 +161,8 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
       );
       expect(promiseAllNode).toBeDefined();
       if (promiseAllNode?.type === "rawCode") {
-        expect(promiseAllNode.value).toContain("Promise.all");
-        expect(promiseAllNode.value).toContain("__self.result");
+        expect(promiseAllNode.value).toContain("awaitPending");
+        expect(promiseAllNode.value).toContain("__self.__pendingKey_result");
       }
     });
 
@@ -219,8 +219,8 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
       );
       expect(promiseAllNode).toBeDefined();
       if (promiseAllNode?.type === "rawCode") {
-        expect(promiseAllNode.value).toContain("Promise.all");
-        expect(promiseAllNode.value).toContain("__self.story");
+        expect(promiseAllNode.value).toContain("awaitPending");
+        expect(promiseAllNode.value).toContain("__self.__pendingKey_story");
       }
     });
 
@@ -641,9 +641,9 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
       const lastNode = parallelNode.body[parallelNode.body.length - 1];
       expect(lastNode.type).toBe("rawCode");
       if (lastNode.type === "rawCode") {
-        expect(lastNode.value).toContain("Promise.all");
-        expect(lastNode.value).toContain("__self.a");
-        expect(lastNode.value).toContain("__self.b");
+        expect(lastNode.value).toContain("awaitPending");
+        expect(lastNode.value).toContain("__self.__pendingKey_a");
+        expect(lastNode.value).toContain("__self.__pendingKey_b");
       }
     });
 
@@ -757,10 +757,10 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
       const lastNode = parallelNode.body[parallelNode.body.length - 1];
       expect(lastNode.type).toBe("rawCode");
       if (lastNode.type === "rawCode") {
-        expect(lastNode.value).toContain("Promise.all");
-        expect(lastNode.value).toContain("__self.x");
-        expect(lastNode.value).toContain("__self.y");
-        expect(lastNode.value).toContain("__self.z");
+        expect(lastNode.value).toContain("awaitPending");
+        expect(lastNode.value).toContain("__self.__pendingKey_x");
+        expect(lastNode.value).toContain("__self.__pendingKey_y");
+        expect(lastNode.value).toContain("__self.__pendingKey_z");
       }
     });
 
@@ -836,9 +836,9 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
       const lastNode = parallelNode.body[parallelNode.body.length - 1];
       expect(lastNode.type).toBe("rawCode");
       if (lastNode.type === "rawCode") {
-        expect(lastNode.value).toContain("Promise.all");
-        expect(lastNode.value).toContain("__self.fromPrompt");
-        expect(lastNode.value).toContain("__self.fromFunc");
+        expect(lastNode.value).toContain("awaitPending");
+        expect(lastNode.value).toContain("__self.__pendingKey_fromPrompt");
+        expect(lastNode.value).toContain("__self.__pendingKey_fromFunc");
       }
     });
 
@@ -897,13 +897,13 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
       );
       if (parallelNode?.type === "messageThread") {
         for (const n of parallelNode.body) {
-          if (n.type === "rawCode" && n.value.includes("Promise.all")) {
+          if (n.type === "rawCode" && n.value.includes("awaitPending")) {
             innerPromiseAll.push(n);
           }
         }
       }
       for (const n of funcNode.body) {
-        if (n.type === "rawCode" && n.value.includes("Promise.all")) {
+        if (n.type === "rawCode" && n.value.includes("awaitPending")) {
           outerPromiseAll.push(n);
         }
       }
@@ -983,9 +983,9 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
       );
       expect(promiseAllNode).toBeDefined();
       if (promiseAllNode?.type === "rawCode") {
-        expect(promiseAllNode.value).toContain("Promise.all");
-        expect(promiseAllNode.value).toContain("__self.a");
-        expect(promiseAllNode.value).toContain("__self.b");
+        expect(promiseAllNode.value).toContain("awaitPending");
+        expect(promiseAllNode.value).toContain("__self.__pendingKey_a");
+        expect(promiseAllNode.value).toContain("__self.__pendingKey_b");
       }
     });
   });

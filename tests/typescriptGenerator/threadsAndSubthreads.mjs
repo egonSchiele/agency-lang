@@ -295,6 +295,7 @@ __stack.locals.res1 = await runPrompt({
 });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res1)) {
+  await __ctx.pendingPromises.awaitAll()
   return __stack.locals.res1;
 }
 
@@ -316,6 +317,7 @@ __stack.locals.res2 = await runPrompt({
 });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res2)) {
+  await __ctx.pendingPromises.awaitAll()
   return __stack.locals.res2;
 }
 
@@ -337,6 +339,7 @@ __stack.locals.res3 = await runPrompt({
 });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res3)) {
+  await __ctx.pendingPromises.awaitAll()
   return __stack.locals.res3;
 }
 
@@ -361,6 +364,7 @@ __stack.locals.res5 = await runPrompt({
 });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res5)) {
+  await __ctx.pendingPromises.awaitAll()
   return __stack.locals.res5;
 }
 
@@ -388,6 +392,7 @@ __stack.locals.res4 = await runPrompt({
 });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res4)) {
+  await __ctx.pendingPromises.awaitAll()
   return __stack.locals.res4;
 }
 
@@ -490,6 +495,7 @@ __stack.locals.res1 = await runPrompt({
 });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res1)) {
+  await __ctx.pendingPromises.awaitAll()
   return {
     messages: __threads,
     data: __stack.locals.res1
@@ -514,6 +520,7 @@ __stack.locals.res2 = await runPrompt({
 });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res2)) {
+  await __ctx.pendingPromises.awaitAll()
   return {
     messages: __threads,
     data: __stack.locals.res2
@@ -538,6 +545,7 @@ __stack.locals.res3 = await runPrompt({
 });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res3)) {
+  await __ctx.pendingPromises.awaitAll()
   return {
     messages: __threads,
     data: __stack.locals.res3
@@ -565,6 +573,7 @@ __stack.locals.res5 = await runPrompt({
 });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res5)) {
+  await __ctx.pendingPromises.awaitAll()
   return {
     messages: __threads,
     data: __stack.locals.res5
@@ -595,6 +604,7 @@ __stack.locals.res4 = await runPrompt({
 });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res4)) {
+  await __ctx.pendingPromises.awaitAll()
   return {
     messages: __threads,
     data: __stack.locals.res4

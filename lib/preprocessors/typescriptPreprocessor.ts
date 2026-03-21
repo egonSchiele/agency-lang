@@ -118,7 +118,7 @@ export class TypescriptPreprocessor {
     // this.markFunctionsAsync();
     // this.markFunctionCallsAsync();
     this.removeUnusedLlmCalls();
-    this.addPromiseAllCalls();
+    this.addAwaitPendingCalls();
     this.filterExcludedNodeTypes();
     this.filterExcludedBuiltinFunctions();
     this.validateFetchDomains();
@@ -588,24 +588,24 @@ export class TypescriptPreprocessor {
     return sorted.reverse();
   }
 
-  protected addPromiseAllCalls(): void {
+  protected addAwaitPendingCalls(): void {
     for (const node of this.program.nodes) {
       if (node.type === "function" || node.type === "graphNode") {
-        node.body = this._addPromiseAllCalls(node.body);
+        node.body = this._addAwaitPendingCalls(node.body);
       }
     }
   }
 
-  protected _addPromiseAllCalls(body: AgencyNode[]): AgencyNode[] {
+  protected _addAwaitPendingCalls(body: AgencyNode[]): AgencyNode[] {
     /*     // First, recursively process nested function/node bodies
     // (functions and nodes create their own scope, so process them separately)
     for (const node of body) {
       if (node.type === "function" || node.type === "graphNode") {
-        node.body = this._addPromiseAllCalls(node.body);
+        node.body = this._addAwaitPendingCalls(node.body);
       } else if (node.type === "ifElse") {
-        node.thenBody = this._addPromiseAllCalls(node.thenBody);
+        node.thenBody = this._addAwaitPendingCalls(node.thenBody);
         if (node.elseBody) {
-          node.elseBody = this._addPromiseAllCalls(node.elseBody);
+          node.elseBody = this._addAwaitPendingCalls(node.elseBody);
         }
       }
     }
@@ -650,8 +650,8 @@ export class TypescriptPreprocessor {
       locationToVars[locationKey].push(varName);
     }
 
-    // Insert Promise.all calls before first usage
-    return this._insertPromiseAllCalls(body, locationToVars);
+    // Insert awaitPending calls before first usage
+    return this._insertAwaitPendingCalls(body, locationToVars);
   }
 
   /**
@@ -802,9 +802,9 @@ export class TypescriptPreprocessor {
   }
 
   /**
-   * Insert Promise.all calls at the appropriate locations in the body.
+   * Insert awaitPending calls at the appropriate locations in the body.
    */
-  protected _insertPromiseAllCalls(
+  protected _insertAwaitPendingCalls(
     body: AgencyNode[],
     locationToVars: Record<string, string[]>,
     currentPath: number[] = [],
@@ -815,25 +815,25 @@ export class TypescriptPreprocessor {
       const node = body[i];
       const locationKey = currentPath.join(",") + ":" + i;
 
-      // Check if we need to insert Promise.all before this node
+      // Check if we need to insert awaitPending before this node
       if (locationToVars[locationKey]) {
         const vars = locationToVars[locationKey];
-        const varArray = `[${vars.map((v) => `__self.${v}`).join(", ")}]`;
-        const promiseAllCode: RawCode = {
+        const keyArray = vars.map((v) => `__self.__pendingKey_${v}`).join(", ");
+        const awaitPendingCode: RawCode = {
           type: "rawCode",
-          value: `${varArray} = await Promise.all(${varArray});`,
+          value: `await __ctx.pendingPromises.awaitPending([${keyArray}]);`,
         };
-        newBody.push(promiseAllCode);
+        newBody.push(awaitPendingCode);
       }
 
       // Recursively process nested bodies
       if (node.type === "messageThread") {
-        node.body = this._insertPromiseAllCalls(node.body, locationToVars, [
+        node.body = this._insertAwaitPendingCalls(node.body, locationToVars, [
           ...currentPath,
           i,
         ]);
 
-        // For parallel blocks, append a Promise.all for all async vars defined within
+        // For parallel blocks, append an awaitPending for all async vars defined within
         if (node.threadType === "parallel") {
           const parallelAsyncVars = node.body
             .filter(
@@ -844,33 +844,33 @@ export class TypescriptPreprocessor {
             .map((n) => n.variableName);
 
           if (parallelAsyncVars.length > 0) {
-            const varArray = parallelAsyncVars
-              .map((v) => `__self.${v}`)
+            const keyArray = parallelAsyncVars
+              .map((v) => `__self.__pendingKey_${v}`)
               .join(", ");
             node.body.push({
               type: "rawCode",
-              value: `[${varArray}] = await Promise.all([${varArray}]);`,
+              value: `await __ctx.pendingPromises.awaitPending([${keyArray}]);`,
             });
           }
         }
       } else if (node.type === "timeBlock") {
-        node.body = this._insertPromiseAllCalls(node.body, locationToVars, [
+        node.body = this._insertAwaitPendingCalls(node.body, locationToVars, [
           ...currentPath,
           i,
         ]);
       } else if (node.type === "whileLoop") {
-        node.body = this._insertPromiseAllCalls(node.body, locationToVars, [
+        node.body = this._insertAwaitPendingCalls(node.body, locationToVars, [
           ...currentPath,
           i,
         ]);
       } else if (node.type === "ifElse") {
-        node.thenBody = this._insertPromiseAllCalls(
+        node.thenBody = this._insertAwaitPendingCalls(
           node.thenBody,
           locationToVars,
           [...currentPath, i, 0],
         );
         if (node.elseBody) {
-          node.elseBody = this._insertPromiseAllCalls(
+          node.elseBody = this._insertAwaitPendingCalls(
             node.elseBody,
             locationToVars,
             [...currentPath, i, 1],

@@ -1,0 +1,23 @@
+log = []
+
+def record(val: number) {
+  sleep(0.01)
+  log.push(val)
+}
+
+def compute(val: number): number {
+  sleep(0.01)
+  return val * 2
+}
+
+node main() {
+  results = []
+  i = 0
+  while (i < 3) {
+    x = async compute(i)
+    results.push(x)
+    async record(i)
+    i = i + 1
+  }
+  return { results: results, log: log }
+}

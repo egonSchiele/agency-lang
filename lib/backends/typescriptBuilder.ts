@@ -1435,7 +1435,18 @@ export class TypeScriptBuilder {
           node.accessChain,
         ),
       ];
-      if (this.getCurrentScope().type !== "global") {
+
+      if (value.async) {
+        // Async: register with pending promise store, store the key, skip interrupt check
+        const pendingKeyVar = `__pendingKey_${variableName}`;
+        stmts.push(
+          ts.assign(
+            ts.self(pendingKeyVar),
+            ts.raw(`__ctx.pendingPromises.add(${this.str(varRef)}, (val) => { ${this.str(varRef)} = val; })`),
+          ),
+        );
+      } else if (this.getCurrentScope().type !== "global") {
+        // Sync: interrupt check with awaitAll before return
         const returnObj =
           this.getCurrentScope().type === "node"
             ? ts.obj([ts.setSpread(ts.runtime.state), ts.set("data", varRef)])
@@ -1443,7 +1454,10 @@ export class TypeScriptBuilder {
         stmts.push(
           ts.if(
             $(ts.id("isInterrupt")).call([varRef]).done(),
-            ts.return(returnObj),
+            ts.statements([
+              ts.raw("await __ctx.pendingPromises.awaitAll()"),
+              ts.return(returnObj),
+            ]),
           ),
         );
       }

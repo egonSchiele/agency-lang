@@ -256,6 +256,7 @@ const __graph = __ctx.graph;
     __self.__retryable = false;
     __stack.locals.name = await input(`> `);
 if (isInterrupt(__stack.locals.name)) {
+      await __ctx.pendingPromises.awaitAll()
       return {
         ...__state,
         data: __stack.locals.name

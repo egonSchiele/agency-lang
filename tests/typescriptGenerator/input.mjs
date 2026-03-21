@@ -250,6 +250,7 @@ const __graph = __ctx.graph;
     __self.__retryable = false;
     __stack.locals.message = await input(`Please enter a message: `);
 if (isInterrupt(__stack.locals.message)) {
+      await __ctx.pendingPromises.awaitAll()
       return {
         ...__state,
         data: __stack.locals.message

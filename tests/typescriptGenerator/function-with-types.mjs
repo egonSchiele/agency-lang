@@ -866,6 +866,7 @@ const __graph = __ctx.graph;
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.sum)) {
+      await __ctx.pendingPromises.awaitAll()
       return {
         ...__state,
         data: __stack.locals.sum
@@ -886,6 +887,7 @@ if (isInterrupt(__stack.locals.sum)) {
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.greeting)) {
+      await __ctx.pendingPromises.awaitAll()
       return {
         ...__state,
         data: __stack.locals.greeting
@@ -906,6 +908,7 @@ if (isInterrupt(__stack.locals.greeting)) {
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.labeled)) {
+      await __ctx.pendingPromises.awaitAll()
       return {
         ...__state,
         data: __stack.locals.labeled
@@ -926,6 +929,7 @@ if (isInterrupt(__stack.locals.labeled)) {
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.processed)) {
+      await __ctx.pendingPromises.awaitAll()
       return {
         ...__state,
         data: __stack.locals.processed
@@ -946,6 +950,7 @@ if (isInterrupt(__stack.locals.processed)) {
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.flexResult)) {
+      await __ctx.pendingPromises.awaitAll()
       return {
         ...__state,
         data: __stack.locals.flexResult

@@ -112,36 +112,21 @@ export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, 
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("interrupt-2-deep-in-function.agency")
+  __ctx.globals.markInitialized("asyncAssigned.agency")
 }
-export const __greetTool = {
-  name: "greet",
+export const __computeTool = {
+  name: "compute",
   description: `No description provided.`,
-  schema: z.object({"name": z.string(), "age": z.number(), })
+  schema: z.object({"val": z.number(), })
 };
-export const __greetToolParams = ["name", "age"];
-export const __foo2Tool = {
-  name: "foo2",
-  description: `No description provided.`,
-  schema: z.object({"name": z.string(), "age": z.number(), })
-};
-export const __foo2ToolParams = ["name", "age"];
+export const __computeToolParams = ["val"];
 const __toolRegistry = {
-  greet: {
-    definition: __greetTool,
+  compute: {
+    definition: __computeTool,
     handler: {
-      name: "greet",
-      params: __greetToolParams,
-      execute: greet,
-      isBuiltin: false
-    }
-  },
-  foo2: {
-    definition: __foo2Tool,
-    handler: {
-      name: "foo2",
-      params: __foo2ToolParams,
-      execute: foo2,
+      name: "compute",
+      params: __computeToolParams,
+      execute: compute,
       isBuiltin: false
     }
   },
@@ -254,7 +239,7 @@ const __toolRegistry = {
     }
   }
 };
-export async function greet(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
+export async function compute(val: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -266,7 +251,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
-  if (!__ctx.globals.isInitialized("interrupt-2-deep-in-function.agency")) {
+  if (!__ctx.globals.isInitialized("asyncAssigned.agency")) {
     __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
@@ -274,25 +259,22 @@ const __graph = __ctx.graph;
     callbacks: __ctx.callbacks,
     name: "onFunctionStart",
     data: {
-      functionName: "greet",
+      functionName: "compute",
       args: {
-        name: name,
-        age: age
+        val: val
       },
       isBuiltin: false
     }
   })
   await __ctx.audit({
     type: "functionCall",
-    functionName: "greet",
+    functionName: "compute",
     args: {
-      name: name,
-      age: age
+      val: val
     },
     result: undefined
   })
-  __stack.args["name"] = name;
-  __stack.args["age"] = age;
+  __stack.args["val"] = val;
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {
@@ -300,48 +282,13 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 1) {
-      // Remember this will be called both in a tool call context
-// and when the user is simply calling a function.
-
-if (__state.interruptData?.interruptResponse?.type === "approve") {
-  // approved, clear interrupt response and continue execution
-  __state.interruptData.interruptResponse = null;
-} else if (__state.interruptData?.interruptResponse?.type === "reject" && !__state.isToolCall) {
-  // rejected, clear interrupt response and return early
-  // tool calls will instead tell the llm that the call was rejected
-  __state.interruptData.interruptResponse = null;
-  
-  
-  return null;
-  
-} else if (__state.interruptData?.interruptResponse?.type === "modify") {
-  if (__state.isToolCall) {
-    // continue, args will get modified in the tool call handler
-  } else {
-    throw new Error("Interrupt response of type 'modify' is not supported outside of tool calls yet.");
-  }
-} else if (__state.interruptData?.interruptResponse?.type === "resolve") {
-  console.log(JSON.stringify(__state.interruptData, null, 2));
-  throw new Error("Interrupt response of type 'resolve' cannot be returned from an interrupt call. It can only be assigned to a variable.");
-  const __resolvedValue = __state.interruptData.interruptResponse.value;
-  
-  
-  return __resolvedValue;
-  
-} else {
-  const __interruptResult = interrupt(`Agent wants to call the greet function with name: ${__stack.args.name} and age: ${__stack.args.age}`);
-  __interruptResult.state = __ctx.stateToJSON();
-  
-  
-  return __interruptResult;
-  
-}
-
+      __self.__retryable = false;
+      await sleep(0.1)
       
       __stack.step++;
     }
     if (__step <= 2) {
-      const __auditReturnValue = `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`;
+      const __auditReturnValue = __stack.args.val * 2;
 await __ctx.audit({
         type: "return",
         value: __auditReturnValue
@@ -363,128 +310,14 @@ return __auditReturnValue
     callbacks: __ctx.callbacks,
     name: "onFunctionEnd",
     data: {
-      functionName: "greet",
+      functionName: "compute",
       timeTaken: performance.now() - __funcStartTime
     }
   })
 }
 
 
-export async function foo2(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
-  const __setupData = setupFunction({
-    state: __state
-  });
-  // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
-const __step = __setupData.step;
-const __self = __setupData.self;
-const __threads = __setupData.threads;
-const __ctx = __state?.ctx || __globalCtx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
-  if (!__ctx.globals.isInitialized("interrupt-2-deep-in-function.agency")) {
-    __initializeGlobals(__ctx)
-  }
-  let __funcStartTime: number = performance.now();
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onFunctionStart",
-    data: {
-      functionName: "foo2",
-      args: {
-        name: name,
-        age: age
-      },
-      isBuiltin: false
-    }
-  })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "foo2",
-    args: {
-      name: name,
-      age: age
-    },
-    result: undefined
-  })
-  __stack.args["name"] = name;
-  __stack.args["age"] = age;
-  __self.__retryable = __self.__retryable ?? true;
-  try {
-    if (__step <= 0) {
-
-      __stack.step++;
-    }
-    if (__step <= 1) {
-      __self.__retryable = false;
-      await print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`)
-      
-      
-      __stack.step++;
-    }
-    if (__step <= 2) {
-      __self.__removedTools = __self.__removedTools || [];
-__stack.locals.response = await runPrompt({
-        ctx: __ctx,
-        prompt: `Greet the user with their name: ${__stack.args.name} and age ${__stack.args.age} using the greet function.`,
-        messages: __threads.getOrCreateActive(),
-        clientConfig: {
-          tools: [tool("greet")],
-          ...{}
-        },
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-// return early from node if this is an interrupt
-if (isInterrupt(__stack.locals.response)) {
-        return __stack.locals.response;
-      }
-      await __ctx.audit({
-        type: "assignment",
-        variable: "__self.__removedTools",
-        value: __self.__removedTools
-      })
-      
-      __stack.step++;
-    }
-    if (__step <= 3) {
-      __self.__retryable = false;
-      await print(`Greeted, age is still ${__stack.args.age}...`)
-      
-      __stack.step++;
-    }
-    if (__step <= 4) {
-      const __auditReturnValue = __stack.locals.response;
-await __ctx.audit({
-        type: "return",
-        value: __auditReturnValue
-      })
-return __auditReturnValue
-      
-      __stack.step++;
-    }
-  } catch (__error) {
-    if (__error instanceof ToolCallError) {
-      __error.retryable = __error.retryable && __self.__retryable
-      throw __error
-    }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
-  } finally {
-    __ctx.stateStack.pop()
-  }
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onFunctionEnd",
-    data: {
-      functionName: "foo2",
-      timeTaken: performance.now() - __funcStartTime
-    }
-  })
-}
-
-
-graph.node("sayHi", async (__state: GraphState) => {
+graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
@@ -499,69 +332,51 @@ const __graph = __ctx.graph;
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
     data: {
-      nodeName: "sayHi"
+      nodeName: "main"
     }
   })
-  if (!__state.isResume) {
-    __stack.args["name"] = __state.data.name;
-  }
   if (__step <= 0) {
 
     __stack.step++;
   }
   if (__step <= 1) {
-    __self.__retryable = false;
-    await print(`Saying hi to ${__stack.args.name}...`)
+    __stack.locals.x = compute(5, {
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    });
+__self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.x",
+      value: __stack.locals.x
+    })
     
     __stack.step++;
   }
   if (__step <= 2) {
-    __stack.locals.age = 30;
+    __stack.locals.y = compute(10, {
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    });
+__self.__pendingKey_y = __ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });
     await __ctx.audit({
       type: "assignment",
-      variable: "__stack.locals.age",
-      value: __stack.locals.age
+      variable: "__stack.locals.y",
+      value: __stack.locals.y
     })
     
     __stack.step++;
   }
   if (__step <= 3) {
-    __stack.locals.response = await foo2(__stack.args.name, __stack.locals.age, {
-      ctx: __ctx,
-      threads: new ThreadStore(),
-      interruptData: __state?.interruptData
-    });
-if (isInterrupt(__stack.locals.response)) {
-      await __ctx.pendingPromises.awaitAll()
-      return {
-        ...__state,
-        data: __stack.locals.response
-      };
-    }
-    await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.response",
-      value: __stack.locals.response
-    })
-    
+    [__self.x, __self.y] = await Promise.all([__self.x, __self.y]);
     __stack.step++;
   }
   if (__step <= 4) {
-    __self.__retryable = false;
-    await print(__stack.locals.response)
-    
-    __stack.step++;
-  }
-  if (__step <= 5) {
-    __self.__retryable = false;
-    await print(`Greeting sent.`)
-    
-    __stack.step++;
-  }
-  if (__step <= 6) {
     const __auditReturnValue = {
       messages: __threads,
-      data: __stack.locals.response
+      data: [__stack.locals.x, __stack.locals.y]
     };
 await __ctx.audit({
       type: "return",
@@ -575,7 +390,7 @@ return __auditReturnValue;
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",
     data: {
-      nodeName: "sayHi",
+      nodeName: "main",
       data: undefined
     }
   })
@@ -584,17 +399,28 @@ return __auditReturnValue;
     data: undefined
   };
 })
-export async function sayHi(name: any, { messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
+
+export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
     ctx: __globalCtx,
-    nodeName: "sayHi",
-    data: {
-      name: name
-    },
+    nodeName: "main",
+    data: {},
     messages: messages,
     callbacks: callbacks,
     initializeGlobals: __initializeGlobals
   });
 }
-export const __sayHiNodeParams = ["name"];
+export const __mainNodeParams = [];
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  try {
+    const initialState = {
+      messages: new ThreadStore(),
+      data: {}
+    };
+    await main(initialState)
+  } catch (__error: any) {
+    console.error(`\nAgent crashed: ${__error.message}`)
+    throw __error
+  }
+}
 export default graph

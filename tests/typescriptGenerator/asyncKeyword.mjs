@@ -591,6 +591,7 @@ const __graph = __ctx.graph;
     __self.__retryable = false;
     __stack.locals.msg = await input(`> `);
 if (isInterrupt(__stack.locals.msg)) {
+      await __ctx.pendingPromises.awaitAll()
       return {
         ...__state,
         data: __stack.locals.msg
@@ -610,12 +611,7 @@ if (isInterrupt(__stack.locals.msg)) {
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
-if (isInterrupt(__stack.locals.res2)) {
-      return {
-        ...__state,
-        data: __stack.locals.res2
-      };
-    }
+__self.__pendingKey_res2 = __ctx.pendingPromises.add(__stack.locals.res2, (val) => { __stack.locals.res2 = val; });
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.res2",
@@ -630,12 +626,7 @@ if (isInterrupt(__stack.locals.res2)) {
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
-if (isInterrupt(__stack.locals.res1)) {
-      return {
-        ...__state,
-        data: __stack.locals.res1
-      };
-    }
+__self.__pendingKey_res1 = __ctx.pendingPromises.add(__stack.locals.res1, (val) => { __stack.locals.res1 = val; });
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.res1",

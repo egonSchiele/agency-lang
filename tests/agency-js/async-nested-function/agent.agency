@@ -1,0 +1,20 @@
+log = []
+
+def record(val: string) {
+  sleep(0.01)
+  log.push(val)
+}
+
+def inner() {
+  async record("inner")
+}
+
+def outer() {
+  inner()
+  async record("outer")
+}
+
+node main() {
+  outer()
+  return log
+}

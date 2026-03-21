@@ -1104,6 +1104,15 @@ export class TypeScriptBuilder {
   }
 
   private processFunctionCall(node: FunctionCall): TsNode {
+    if (node.functionName === "throw") {
+      // throw("message") → throw new Error("message")
+      const argNodes: TsNode[] = node.arguments.map((arg) =>
+        this.processNode(arg),
+      );
+      const arg = argNodes.length > 0 ? argNodes[0] : ts.str("");
+      return ts.throw(`new Error(${this.str(arg)})`);
+    }
+
     if (node.functionName === "llm") {
       // Standalone llm() call (not assigned to variable)
       return this.processLlmCall(

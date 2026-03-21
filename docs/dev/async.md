@@ -414,7 +414,7 @@ Each of these should have a corresponding Agency test (`.agency` + `.mjs` fixtur
 
 25. **Verify generated TypeScript for unassigned async call.** The builder should emit `__ctx.pendingPromises.add(func(...))` without storing the key. No `isInterrupt` check.
 
-26. **Verify `awaitAll` is inserted at node exit.** Every node body should end with `await __ctx.pendingPromises.awaitAll()` before the return.
+26. **Verify `awaitAll` is called in runtime entry points.** `runNode`, `respondToInterrupt`, and `resumeFromState` should all call `await execCtx.pendingPromises.awaitAll()` before returning to TypeScript.
 
 27. **Verify `awaitAll` is inserted before interrupt returns.** Each `isInterrupt` check in the generated code should call `awaitAll` before returning the interrupt.
 
@@ -451,13 +451,89 @@ We chose: when any interrupt is triggered, first await ALL pending promises befo
 
 The tradeoff is that the user waits for all async work to finish before seeing the interrupt. If this is unacceptable, users can run parallel agents by calling multiple node functions in parallel from TypeScript — each gets its own isolated execution context, so interrupts in one don't block the other.
 
-### Future: interrupt queues (phase 2)
+## Known limitations
 
-If an async call triggers an interrupt while another interrupt is already being returned, phase 1 throws an error. Phase 2 will add an interrupt queue: multiple interrupts are collected and surfaced one at a time. This enables multi-agent patterns where different agents may each need human approval.
+### StateStack is shared across concurrent async calls
 
-### Future: handler syntax (phase 3)
+The `StateStack` on `RuntimeContext` is a single LIFO stack shared across all concurrent async function calls within the same node. When two async functions run concurrently, they both push/pop frames on this stack. Since JavaScript async functions interleave at `await` points, the pops can be mismatched:
 
-Phase 3 will add in-language interrupt handling:
+1. `agentA()` starts → pushes frame A (stack: `[A]`)
+2. agentA hits `await` → yields
+3. `agentB()` starts → pushes frame B (stack: `[A, B]`)
+4. agentB finishes first → `finally` pops frame B (correct)
+5. But if agentA finished first → `finally` pops frame **B** (wrong — B is on top, not A)
+
+**Why this doesn't cause runtime errors in phase 1:** Each function captures a direct JavaScript object reference to its frame at setup time (`__stack = __setupData.stack`, `__self = __stack.locals`). When a mismatched `pop()` removes the wrong frame from the stateStack *array*, the frame object itself still exists in memory — JavaScript is garbage collected, and the function still holds its reference. So `__self.x = 5` continues to work correctly even after the frame has been removed from the array. Consider this scenario:
+
+1. threadA pushes funcA1, threadB pushes funcB1, threadA pushes funcA2, threadB pushes funcB2
+2. Stack array: `[A1, B1, A2, B2]`
+3. threadB pops → removes B2 (correct). Stack: `[A1, B1, A2]`
+4. threadB pops → removes **A2** (wrong!). Stack: `[A1, B1]`
+5. funcA2 tries to set a variable → still works, because funcA2 holds a direct reference to the A2 frame object, which is still in memory even though it's no longer in the array
+
+So the mismatched pops don't corrupt in-memory execution.
+
+**Why this does break serialization:** When `stateStack.toJSON()` is called, it serializes `this.stack` — the array. If a frame was prematurely popped from the array by the wrong thread, it won't appear in the serialized output. On resume, that frame's state (locals, step counter, threads) is lost. This is why phase 1 awaits all async calls before any serialization occurs — by that point, all frames have been popped and the stateStack is empty. It also means we cannot reliably serialize the stateStack while async calls are in flight, which is one of the reasons phase 2 (interrupt queues) is complex — see below.
+
+### Functions must not trigger node transitions
+
+Functions (`def`) must not call graph nodes. This is enforced at compile time by the type checker. The reason: a node call returns a `GoToNode` object that tells SimpleMachine to transition. If a function returns a `GoToNode`, it would need to propagate up through the call chain to the node level, which is not how functions work (they return values, not graph transitions).
+
+This becomes especially dangerous with async:
+
+```agency
+def goFoo() {
+  return foo()
+}
+
+def goBar() {
+  return bar()
+}
+
+node main() {
+  async goFoo()
+  async goBar()
+}
+```
+
+Two concurrent async functions both trying to transition the graph to different nodes is a race condition. Only one transition can happen, and which one "wins" depends on execution order. This is nonsensical.
+
+The compile-time check prevents this class of bugs entirely.
+
+### Parallel agents: recommended pattern
+
+For running multiple agents in parallel where each may need interrupts or independent state, the recommended pattern is to call multiple node functions in parallel from TypeScript:
+
+```typescript
+const [result1, result2] = await Promise.all([
+  agentA("task 1"),
+  agentB("task 2"),
+]);
+```
+
+Each call gets its own isolated `RuntimeContext` (its own `StateStack`, `GlobalStore`, `PendingPromiseStore`). Interrupts in one don't block the other. State serialization works correctly because each execution is independent.
+
+This avoids all the shared-state issues that arise from concurrent async calls within a single node.
+
+## Future work
+
+### Interrupt queues (phase 2) — deferred
+
+The original plan was for phase 2 to replace `ConcurrentInterruptError` with an interrupt queue: when `awaitAll` discovers multiple interrupts from pending promises, queue them and surface one at a time.
+
+This is deferred because of significant complexity:
+
+**Routing responses to the right function.** When multiple async functions each return an interrupt, and the user responds to each one, the responses need to be routed back to the correct function on resume. Currently `interruptData` is a single object on `GraphState`. Supporting multiple interrupts requires keying responses (by variable name or call index), changing the `interruptData` structure (breaking API change), and modifying the builder to pass the right response to each async call.
+
+**StateStack interleaving.** The shared stateStack means we can't reliably capture per-function state snapshots while async calls are in flight. On resume, each async function would re-execute from scratch (step 0), replaying all side effects up to the interrupt point. This is the same replay behavior as current sync interrupts, but happening for multiple concurrent calls.
+
+**Re-execution complexity.** On resume, the node re-runs, the step counter skips to the async calls, and each async function re-executes fully. Each function needs to find its own interrupt response in the (now keyed) `interruptData` and continue past its interrupt point. This requires builder changes to generate response routing code.
+
+Given that the recommended pattern for parallel agents (calling from TypeScript) already works well, the interrupt queue feature is deferred until there's a concrete use case that can't be served by the TypeScript-level parallelism.
+
+### Handler syntax (phase 3) — deferred
+
+Phase 3 would add in-language interrupt handling:
 
 ```agency
 try {
@@ -467,4 +543,4 @@ try {
 }
 ```
 
-Handlers intercept interrupts before they bubble to the TypeScript caller. Combined with interrupt queues, this allows sophisticated agent orchestration patterns.
+Handlers would intercept interrupts before they bubble to the TypeScript caller. This depends on phase 2 (interrupt queues) for the multi-interrupt case, so it is also deferred.

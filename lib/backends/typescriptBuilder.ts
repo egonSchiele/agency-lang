@@ -1124,6 +1124,11 @@ export class TypeScriptBuilder {
     }
 
     if (this.isGraphNode(node.functionName)) {
+      if (this.getCurrentScope().type === "function") {
+        throw new Error(
+          `Cannot call graph node '${node.functionName}' from inside function '${(this.getCurrentScope() as any).functionName}'. Node transitions can only be made from within graph nodes.`,
+        );
+      }
       this.currentAdjacentNodes.push(node.functionName);
       this.functionsUsed.add(node.functionName);
       return this.generateNodeCallExpression(node);

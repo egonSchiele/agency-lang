@@ -326,11 +326,12 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
       __stack.step++;
     }
     if (__step <= 2) {
-      await __ctx.audit({
+      const __auditReturnValue = `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`;
+await __ctx.audit({
         type: "return",
-        value: `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`
+        value: __auditReturnValue
       })
-return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`
+return __auditReturnValue
       
       __stack.step++;
     }
@@ -435,17 +436,15 @@ if (isInterrupt(__stack.locals.response)) {
     __stack.step++;
   }
   if (__step <= 4) {
-    await __ctx.audit({
-      type: "return",
-      value: {
-        messages: __threads,
-        data: __stack.locals.response
-      }
-    })
-return {
+    const __auditReturnValue = {
       messages: __threads,
       data: __stack.locals.response
     };
+await __ctx.audit({
+      type: "return",
+      value: __auditReturnValue
+    })
+return __auditReturnValue;
     
     __stack.step++;
   }
@@ -512,25 +511,19 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 3) {
-    await __ctx.audit({
-      type: "return",
-      value: goToNode("foo2", {
-        messages: __stack.messages,
-        ctx: __ctx,
-        data: {
-          name: __stack.args.name,
-          age: __stack.locals.age
-        }
-      })
-    })
-return goToNode("foo2", {
+    const __auditReturnValue = goToNode("foo2", {
       messages: __stack.messages,
       ctx: __ctx,
       data: {
         name: __stack.args.name,
         age: __stack.locals.age
       }
+    });
+await __ctx.audit({
+      type: "return",
+      value: __auditReturnValue
     })
+return __auditReturnValue
     
     __stack.step++;
   }

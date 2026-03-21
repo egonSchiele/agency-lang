@@ -69,8 +69,13 @@ export function auditNode(
 
     case "return":
       if (node.expr) {
-        const audit = makeAuditCall("return", { value: node.expr });
-        return replace(ts.statements([audit, node]));
+        // Capture value in a temp variable to avoid double-executing side effects
+        const tempVar = ts.id("__auditReturnValue");
+        return replace(ts.statements([
+          ts.constDecl("__auditReturnValue", node.expr),
+          makeAuditCall("return", { value: tempVar }),
+          ts.return(tempVar),
+        ]));
       }
       return replace(
         ts.statements([
@@ -80,8 +85,13 @@ export function auditNode(
       );
 
     case "functionReturn": {
-      const audit = makeAuditCall("return", { value: node.value });
-      return replace(ts.statements([audit, node]));
+      // Capture value in a temp variable to avoid double-executing side effects
+      const tempVar = ts.id("__auditReturnValue");
+      return replace(ts.statements([
+        ts.constDecl("__auditReturnValue", node.value),
+        makeAuditCall("return", { value: tempVar }),
+        { ...node, value: tempVar },
+      ]));
     }
 
     case "await":

@@ -367,17 +367,15 @@ if (isInterrupt(__stack.locals.response2)) {
     __stack.step++;
   }
   if (__step <= 8) {
-    await __ctx.audit({
-      type: "return",
-      value: {
-        messages: __threads,
-        data: [__stack.locals.response1, __stack.locals.response2]
-      }
-    })
-return {
+    const __auditReturnValue = {
       messages: __threads,
       data: [__stack.locals.response1, __stack.locals.response2]
     };
+await __ctx.audit({
+      type: "return",
+      value: __auditReturnValue
+    })
+return __auditReturnValue;
     
     __stack.step++;
   }

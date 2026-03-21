@@ -368,11 +368,12 @@ if (isInterrupt(__stack.locals.result)) {
       __stack.step++;
     }
     if (__step <= 2) {
-      await __ctx.audit({
+      const __auditReturnValue = __stack.locals.result;
+await __ctx.audit({
         type: "return",
-        value: __stack.locals.result
+        value: __auditReturnValue
       })
-return __stack.locals.result
+return __auditReturnValue
       
       __stack.step++;
     }
@@ -462,11 +463,12 @@ if (isInterrupt(__stack.locals.message)) {
       __stack.step++;
     }
     if (__step <= 2) {
-      await __ctx.audit({
+      const __auditReturnValue = __stack.locals.message;
+await __ctx.audit({
         type: "return",
-        value: __stack.locals.message
+        value: __auditReturnValue
       })
-return __stack.locals.message
+return __auditReturnValue
       
       __stack.step++;
     }
@@ -559,11 +561,12 @@ if (isInterrupt(__stack.locals.output)) {
       __stack.step++;
     }
     if (__step <= 2) {
-      await __ctx.audit({
+      const __auditReturnValue = __stack.locals.output;
+await __ctx.audit({
         type: "return",
-        value: __stack.locals.output
+        value: __auditReturnValue
       })
-return __stack.locals.output
+return __auditReturnValue
       
       __stack.step++;
     }
@@ -653,11 +656,12 @@ if (isInterrupt(__stack.locals.result)) {
       __stack.step++;
     }
     if (__step <= 2) {
-      await __ctx.audit({
+      const __auditReturnValue = __stack.locals.result;
+await __ctx.audit({
         type: "return",
-        value: __stack.locals.result
+        value: __auditReturnValue
       })
-return __stack.locals.result
+return __auditReturnValue
       
       __stack.step++;
     }
@@ -747,11 +751,12 @@ if (isInterrupt(__stack.locals.result)) {
       __stack.step++;
     }
     if (__step <= 2) {
-      await __ctx.audit({
+      const __auditReturnValue = __stack.locals.result;
+await __ctx.audit({
         type: "return",
-        value: __stack.locals.result
+        value: __auditReturnValue
       })
-return __stack.locals.result
+return __auditReturnValue
       
       __stack.step++;
     }
@@ -810,17 +815,15 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 2) {
-    await __ctx.audit({
-      type: "return",
-      value: {
-        messages: __threads,
-        data: `Node completed`
-      }
-    })
-return {
+    const __auditReturnValue = {
       messages: __threads,
       data: `Node completed`
     };
+await __ctx.audit({
+      type: "return",
+      value: __auditReturnValue
+    })
+return __auditReturnValue;
     
     __stack.step++;
   }

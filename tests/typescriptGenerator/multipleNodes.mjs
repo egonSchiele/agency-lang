@@ -274,23 +274,18 @@ if (isInterrupt(__stack.locals.greeting)) {
     __stack.step++;
   }
   if (__step <= 2) {
-    await __ctx.audit({
-      type: "return",
-      value: goToNode("processGreeting", {
-        messages: __stack.messages,
-        ctx: __ctx,
-        data: {
-          msg: __stack.locals.greeting
-        }
-      })
-    })
-return goToNode("processGreeting", {
+    const __auditReturnValue = goToNode("processGreeting", {
       messages: __stack.messages,
       ctx: __ctx,
       data: {
         msg: __stack.locals.greeting
       }
+    });
+await __ctx.audit({
+      type: "return",
+      value: __auditReturnValue
     })
+return __auditReturnValue
     
     __stack.step++;
   }
@@ -411,19 +406,16 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
-    await __ctx.audit({
-      type: "return",
-      value: goToNode("greet", {
-        messages: __stack.messages,
-        ctx: __ctx,
-        data: {}
-      })
-    })
-return goToNode("greet", {
+    const __auditReturnValue = goToNode("greet", {
       messages: __stack.messages,
       ctx: __ctx,
       data: {}
+    });
+await __ctx.audit({
+      type: "return",
+      value: __auditReturnValue
     })
+return __auditReturnValue
     
     __stack.step++;
   }

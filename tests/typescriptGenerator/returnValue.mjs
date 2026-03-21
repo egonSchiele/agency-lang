@@ -257,17 +257,15 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 2) {
-    await __ctx.audit({
-      type: "return",
-      value: {
-        messages: __threads,
-        data: __stack.locals.x
-      }
-    })
-return {
+    const __auditReturnValue = {
       messages: __threads,
       data: __stack.locals.x
     };
+await __ctx.audit({
+      type: "return",
+      value: __auditReturnValue
+    })
+return __auditReturnValue;
     
     __stack.step++;
   }

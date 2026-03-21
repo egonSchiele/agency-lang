@@ -286,11 +286,12 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 1) {
-      await __ctx.audit({
+      const __auditReturnValue = `hello`;
+await __ctx.audit({
         type: "return",
-        value: `hello`
+        value: __auditReturnValue
       })
-return `hello`
+return __auditReturnValue
       
       __stack.step++;
     }

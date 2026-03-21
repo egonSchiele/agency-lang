@@ -343,11 +343,12 @@ __defaultTimeblockName
       __stack.step++;
     }
     if (__step <= 2) {
-      await __ctx.audit({
+      const __auditReturnValue = `OpenAI response: ${__stack.locals.response}`;
+await __ctx.audit({
         type: "return",
-        value: `OpenAI response: ${__stack.locals.response}`
+        value: __auditReturnValue
       })
-return `OpenAI response: ${__stack.locals.response}`
+return __auditReturnValue
       
       __stack.step++;
     }
@@ -457,11 +458,12 @@ __defaultTimeblockName
       __stack.step++;
     }
     if (__step <= 3) {
-      await __ctx.audit({
+      const __auditReturnValue = `Google response: ${__stack.locals.response}`;
+await __ctx.audit({
         type: "return",
-        value: `Google response: ${__stack.locals.response}`
+        value: __auditReturnValue
       })
-return `Google response: ${__stack.locals.response}`
+return __auditReturnValue
       
       __stack.step++;
     }

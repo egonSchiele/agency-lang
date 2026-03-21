@@ -300,11 +300,12 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 1) {
-      await __ctx.audit({
+      const __auditReturnValue = await lookupItem(__stack.args.id);
+await __ctx.audit({
         type: "return",
-        value: await lookupItem(__stack.args.id)
+        value: __auditReturnValue
       })
-return await lookupItem(__stack.args.id)
+return __auditReturnValue
       
       __stack.step++;
     }
@@ -383,11 +384,12 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 2) {
-      await __ctx.audit({
+      const __auditReturnValue = await lookupItem(__stack.args.id);
+await __ctx.audit({
         type: "return",
-        value: await lookupItem(__stack.args.id)
+        value: __auditReturnValue
       })
-return await lookupItem(__stack.args.id)
+return __auditReturnValue
       
       __stack.step++;
     }
@@ -463,17 +465,15 @@ if (isInterrupt(__stack.locals.result)) {
     __stack.step++;
   }
   if (__step <= 2) {
-    await __ctx.audit({
-      type: "return",
-      value: {
-        messages: __threads,
-        data: __stack.locals.result
-      }
-    })
-return {
+    const __auditReturnValue = {
       messages: __threads,
       data: __stack.locals.result
     };
+await __ctx.audit({
+      type: "return",
+      value: __auditReturnValue
+    })
+return __auditReturnValue;
     
     __stack.step++;
   }

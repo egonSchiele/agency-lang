@@ -341,11 +341,12 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
       __stack.step++;
     }
     if (__step <= 2) {
-      await __ctx.audit({
+      const __auditReturnValue = `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`;
+await __ctx.audit({
         type: "return",
-        value: `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`
+        value: __auditReturnValue
       })
-return `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`
+return __auditReturnValue
       
       __stack.step++;
     }
@@ -466,11 +467,12 @@ if (isInterrupt(__stack.locals.response)) {
       __stack.step++;
     }
     if (__step <= 4) {
-      await __ctx.audit({
+      const __auditReturnValue = __stack.locals.response;
+await __ctx.audit({
         type: "return",
-        value: __stack.locals.response
+        value: __auditReturnValue
       })
-return __stack.locals.response
+return __auditReturnValue
       
       __stack.step++;
     }
@@ -586,17 +588,15 @@ if (isInterrupt(__stack.locals.response)) {
     __stack.step++;
   }
   if (__step <= 6) {
-    await __ctx.audit({
-      type: "return",
-      value: {
-        messages: __threads,
-        data: __stack.locals.response
-      }
-    })
-return {
+    const __auditReturnValue = {
       messages: __threads,
       data: __stack.locals.response
     };
+await __ctx.audit({
+      type: "return",
+      value: __auditReturnValue
+    })
+return __auditReturnValue;
     
     __stack.step++;
   }

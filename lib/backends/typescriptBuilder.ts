@@ -1287,6 +1287,9 @@ export class TypeScriptBuilder {
     // Body
     stmts.push(...bodyCode);
 
+    // Await all pending async promises before node exits
+    stmts.push(ts.raw("await __ctx.pendingPromises.awaitAll()"));
+
     // onNodeEnd hook + return
     stmts.push(
       ts.callHook("onNodeEnd", {

@@ -471,6 +471,7 @@ return __auditReturnValue;
     
     __stack.step++;
   }
+  await __ctx.pendingPromises.awaitAll()
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",

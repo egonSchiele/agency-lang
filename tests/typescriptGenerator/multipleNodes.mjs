@@ -289,6 +289,7 @@ return __auditReturnValue
     
     __stack.step++;
   }
+  await __ctx.pendingPromises.awaitAll()
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",
@@ -362,6 +363,7 @@ if (isInterrupt(__stack.locals.result)) {
     
     __stack.step++;
   }
+  await __ctx.pendingPromises.awaitAll()
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",
@@ -413,6 +415,7 @@ return __auditReturnValue
     
     __stack.step++;
   }
+  await __ctx.pendingPromises.awaitAll()
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",

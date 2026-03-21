@@ -118,6 +118,7 @@ export async function respondToInterrupt(args: {
       isResume: true,
       interruptData,
     }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
+    await execCtx.pendingPromises.awaitAll();
     return createReturnObject({ result, globals: execCtx.globals });
   } finally {
     execCtx.cleanup();
@@ -224,7 +225,7 @@ export async function resumeFromState(args: {
       data: {},
       //interruptData
     }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
-
+    await execCtx.pendingPromises.awaitAll();
     return createReturnObject({ result, globals: execCtx.globals });
   } finally {
     execCtx.cleanup();

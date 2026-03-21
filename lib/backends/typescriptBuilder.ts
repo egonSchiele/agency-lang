@@ -1296,9 +1296,6 @@ export class TypeScriptBuilder {
     // Body
     stmts.push(...bodyCode);
 
-    // Await all pending async promises before node exits
-    stmts.push(ts.raw("await __ctx.pendingPromises.awaitAll()"));
-
     // onNodeEnd hook + return
     stmts.push(
       ts.callHook("onNodeEnd", {
@@ -1921,12 +1918,6 @@ export class TypeScriptBuilder {
       if (!opts.isInSafeFunction && this.containsImpureCall(stmt)) {
         parts[parts.length - 1].push(
           ts.assign(ts.self("__retryable"), ts.bool(false)),
-        );
-      }
-      // In graph nodes, await all pending async promises before any return
-      if (this.isInsideGraphNode && stmt.type === "returnStatement") {
-        parts[parts.length - 1].push(
-          ts.raw("await __ctx.pendingPromises.awaitAll()"),
         );
       }
       const processed = this.processStatement(stmt);

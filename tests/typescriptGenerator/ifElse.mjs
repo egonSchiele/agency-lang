@@ -414,7 +414,6 @@ const __graph = __ctx.graph;
     
     __stack.step++;
   }
-  await __ctx.pendingPromises.awaitAll()
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",

@@ -658,7 +658,6 @@ __self.__pendingKey_res1 = __ctx.pendingPromises.add(__stack.locals.res1, (val) 
     
     __stack.step++;
   }
-  await __ctx.pendingPromises.awaitAll()
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",

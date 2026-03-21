@@ -280,7 +280,6 @@ if (isInterrupt(__stack.locals.greeting)) {
     
     __stack.step++;
   }
-  await __ctx.pendingPromises.awaitAll()
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",

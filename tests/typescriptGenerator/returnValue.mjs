@@ -257,7 +257,6 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 2) {
-    await __ctx.pendingPromises.awaitAll()
     const __auditReturnValue = {
       messages: __threads,
       data: __stack.locals.x
@@ -270,7 +269,6 @@ return __auditReturnValue;
     
     __stack.step++;
   }
-  await __ctx.pendingPromises.awaitAll()
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",

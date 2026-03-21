@@ -302,7 +302,6 @@ if (isInterrupt(__stack.locals.greeting)) {
     __stack.step++;
   }
   if (__step <= 3) {
-    await __ctx.pendingPromises.awaitAll()
     const __auditReturnValue = {
       messages: __threads,
       data: __stack.locals.greeting
@@ -315,7 +314,6 @@ return __auditReturnValue;
     
     __stack.step++;
   }
-  await __ctx.pendingPromises.awaitAll()
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",

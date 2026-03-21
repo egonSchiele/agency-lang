@@ -425,7 +425,6 @@ if (isInterrupt(__stack.locals.response)) {
     __stack.step++;
   }
   if (__step <= 4) {
-    await __ctx.pendingPromises.awaitAll()
     const __auditReturnValue = {
       messages: __threads,
       data: __stack.locals.response
@@ -438,7 +437,6 @@ return __auditReturnValue;
     
     __stack.step++;
   }
-  await __ctx.pendingPromises.awaitAll()
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",
@@ -496,7 +494,6 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 3) {
-    await __ctx.pendingPromises.awaitAll()
     const __auditReturnValue = goToNode("foo2", {
       messages: __stack.messages,
       ctx: __ctx,
@@ -513,7 +510,6 @@ return __auditReturnValue
     
     __stack.step++;
   }
-  await __ctx.pendingPromises.awaitAll()
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",

@@ -17,8 +17,6 @@ node main() {
 
 The compiler generates the calls without `await`, stores the Promises in variables, and later inserts `Promise.all` before the variables are used. This is handled by the preprocessor, which analyzes first-usage locations and generates the appropriate await code.
 
-For context on why execution isolation matters here: each call to an Agency node from TypeScript gets its own isolated execution context (its own `StateStack` and `GlobalStore`). Global variables are initialized fresh per call. Shared variables (`shared` keyword) are the exception — they are shared across all calls and never serialized. See the `ScopeType` comment in `lib/types.ts` for the full breakdown.
-
 ## Problem 1: Unassigned async calls crash
 
 When you call an async function without assigning the result to a variable:
@@ -121,7 +119,7 @@ await __ctx.pendingPromises.awaitPending([__self.__pendingKey_x, __self.__pendin
 
 The `awaitPending` method resolves the promises and calls their setters to write the resolved values back to the variables.
 
-**Await at node exit:** The builder inserts `await __ctx.pendingPromises.awaitAll()` before each node's return statement. This catches all unassigned async calls (fire-and-forget) that nobody explicitly awaited.
+**Await at node exit:** The builder inserts `await __ctx.pendingPromises.awaitAll()` before each node's return statement. This catches all unassigned async calls (fire-and-forget) that nobody explicitly awaited. 
 
 **Await before interrupt:** Before any interrupt return, the builder inserts `await __ctx.pendingPromises.awaitAll()`. This ensures all pending async work completes and all assigned variables hold resolved values before state is serialized. The serialized state is then complete and consistent.
 

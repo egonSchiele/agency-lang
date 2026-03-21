@@ -814,7 +814,6 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 2) {
-    await __ctx.pendingPromises.awaitAll()
     const __auditReturnValue = {
       messages: __threads,
       data: `Node completed`
@@ -827,7 +826,6 @@ return __auditReturnValue;
     
     __stack.step++;
   }
-  await __ctx.pendingPromises.awaitAll()
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",
@@ -971,7 +969,6 @@ if (isInterrupt(__stack.locals.flexResult)) {
     
     __stack.step++;
   }
-  await __ctx.pendingPromises.awaitAll()
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",

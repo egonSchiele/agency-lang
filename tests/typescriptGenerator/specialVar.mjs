@@ -352,7 +352,6 @@ if (isInterrupt(__stack.locals.response2)) {
     __stack.step++;
   }
   if (__step <= 8) {
-    await __ctx.pendingPromises.awaitAll()
     const __auditReturnValue = {
       messages: __threads,
       data: [__stack.locals.response1, __stack.locals.response2]
@@ -365,7 +364,6 @@ return __auditReturnValue;
     
     __stack.step++;
   }
-  await __ctx.pendingPromises.awaitAll()
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",

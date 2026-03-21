@@ -115,6 +115,7 @@ export async function runNode({
       ctx: execCtx,
       isResume: false,
     }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
+    await execCtx.pendingPromises.awaitAll();
     await execCtx.audit({ type: "nodeExit", nodeName });
     const returnObject = createReturnObject({
       result,

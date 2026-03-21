@@ -1666,8 +1666,15 @@ export class TypeScriptBuilder {
     ];
 
     if (node.async) {
-      // Async: no await, no interrupt check
+      // Async: no await, no interrupt check. Register with pending promise store.
       stmts.push(ts.assign(varRef, runPromptCall));
+      const pendingKeyVar = `__pendingKey_${variableName}`;
+      stmts.push(
+        ts.assign(
+          ts.self(pendingKeyVar),
+          ts.raw(`__ctx.pendingPromises.add(${this.str(varRef)}, (val) => { ${this.str(varRef)} = val; })`),
+        ),
+      );
     } else {
       // Sync: await + interrupt check
       stmts.push(ts.assign(varRef, ts.await(runPromptCall)));

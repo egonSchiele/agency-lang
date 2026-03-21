@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { PendingPromiseStore } from "./pendingPromiseStore.js";
 import { ConcurrentInterruptError } from "../errors.js";
 

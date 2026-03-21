@@ -1,5 +1,6 @@
 import { StateStack } from "../state/stateStack.js";
 import { GlobalStore } from "../state/globalStore.js";
+import { PendingPromiseStore } from "./pendingPromiseStore.js";
 import { StatelogClient, StatelogConfig } from "../../statelogClient.js";
 import { SimpleMachine } from "../../simplemachine/index.js";
 import { nanoid } from "nanoid";
@@ -17,6 +18,7 @@ export class RuntimeContext<T> {
   globals: GlobalStore;
   callbacks: AgencyCallbacks;
   onStreamLock: boolean;
+  pendingPromises: PendingPromiseStore;
   graph: SimpleMachine<T>;
 
   // we need a single statelog client instance that can be used across the entire execution of the graph,
@@ -46,6 +48,7 @@ export class RuntimeContext<T> {
     this.globals = GlobalStore.withTokenStats();
     this.callbacks = {};
     this.onStreamLock = false;
+    this.pendingPromises = new PendingPromiseStore();
     this.dirname = args.dirname;
 
     const graphConfig = {
@@ -72,6 +75,7 @@ export class RuntimeContext<T> {
     execCtx.globals = GlobalStore.withTokenStats();
     execCtx.callbacks = {};
     execCtx.onStreamLock = false;
+    execCtx.pendingPromises = new PendingPromiseStore();
     execCtx.statelogClient = new StatelogClient({
       ...this.statelogConfig,
       traceId: nanoid(),
@@ -81,6 +85,7 @@ export class RuntimeContext<T> {
 
   /** Sever references held by an execution context so GC can reclaim them. */
   cleanup(): void {
+    this.pendingPromises.clear();
     this.stateStack = null as any;
     this.globals = null as any;
     this.statelogClient = null as any;

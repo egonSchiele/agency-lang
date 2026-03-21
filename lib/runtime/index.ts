@@ -6,6 +6,7 @@ export { StateStack } from "./state/stateStack.js";
 export { GlobalStore } from "./state/globalStore.js";
 export { MessageThread } from "./state/messageThread.js";
 export { ThreadStore } from "./state/threadStore.js";
+export { PendingPromiseStore } from "./state/pendingPromiseStore.js";
 
 export {
   deepClone,
@@ -88,6 +89,6 @@ export { isGenerator, handleStreamingResponse } from "./streaming.js";
 export { runPrompt } from "./prompt.js";
 export type { ToolHandler } from "./prompt.js";
 
-export { ToolCallError } from "./errors.js";
+export { ToolCallError, ConcurrentInterruptError } from "./errors.js";
 
 export { setupNode, setupFunction, runNode } from "./node.js";

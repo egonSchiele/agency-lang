@@ -49,9 +49,9 @@ export class PendingPromiseStore {
 
       if (isInterrupt(result)) {
         throw new ConcurrentInterruptError(
-          "An async function returned an interrupt while another interrupt was pending. " +
-          "Concurrent interrupts are not yet supported. Assign the async call to a " +
-          "variable if it may trigger an interrupt.",
+          "An async function returned an interrupt while awaiting pending promises. " +
+          "Async interrupts from pending promises are not yet supported. " +
+          "Assign the async call to a variable if it may trigger an interrupt.",
         );
       }
 

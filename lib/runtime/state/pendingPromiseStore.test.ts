@@ -30,12 +30,13 @@ describe("PendingPromiseStore", () => {
 
     it("removes awaited entries from the store", async () => {
       const store = new PendingPromiseStore();
-      const key = store.add(Promise.resolve(99));
+      let callCount = 0;
+      const key = store.add(Promise.resolve(99), () => { callCount++; });
       await store.awaitPending([key]);
-      // After awaiting, awaitPending on the same key should be a no-op (entry gone)
-      let called = false;
+      // After awaiting, awaitPending on the same key should be a no-op (entry gone),
+      // so the setter should not be invoked again.
       await store.awaitPending([key]);
-      expect(called).toBe(false);
+      expect(callCount).toBe(1);
     });
 
     it("silently skips missing keys", async () => {

@@ -119,13 +119,17 @@ await __ctx.pendingPromises.awaitPending([__self.__pendingKey_x, __self.__pendin
 
 The `awaitPending` method resolves the promises and calls their setters to write the resolved values back to the variables.
 
-**Await at node exit:** The builder inserts `await __ctx.pendingPromises.awaitAll()` before each node's return statement. This catches all unassigned async calls (fire-and-forget) that nobody explicitly awaited. 
+**Await at runtime entry points:** The `awaitAll` call does NOT live in generated node code. Instead, it lives in the three runtime functions that return control to TypeScript: `runNode`, `respondToInterrupt`, and `resumeFromState` (all in `lib/runtime/`). This is the right place because:
 
-**Await before interrupt:** Before any interrupt return, the builder inserts `await __ctx.pendingPromises.awaitAll()`. This ensures all pending async work completes and all assigned variables hold resolved values before state is serialized. The serialized state is then complete and consistent.
+- Pending promises live on `RuntimeContext`, which persists across node transitions within the same execution. There's no need to await them at every node boundary.
+- Node-to-node transitions (e.g., `return otherNode(...)`) should not wait for pending promises — that would add artificial slowness. The async work continues in the background and is only required to complete before we return to TypeScript or serialize state for an interrupt.
+- Centralizing `awaitAll` in the runtime (rather than in generated code) means fewer code paths to maintain and less generated code.
+
+**Await before interrupt:** Before any interrupt return, the builder inserts `await __ctx.pendingPromises.awaitAll()` in the generated code. This ensures all pending async work completes and all assigned variables hold resolved values before state is serialized. The serialized state is then complete and consistent. This is separate from the runtime `awaitAll` because interrupts return from inside generated node code, not from the runtime entry points.
 
 ### Why this solves each problem
 
-- **Unassigned async calls:** Registered with `add` (no key stored). Caught by `awaitAll` at node exit.
+- **Unassigned async calls:** Registered with `add` (no key stored). Caught by `awaitAll` in `runNode`/`respondToInterrupt`/`resumeFromState` when execution returns to TypeScript.
 - **Async vars + interrupts:** `awaitAll` resolves all pending promises (including assigned ones) before state serialization. The setter writes the resolved value back to the variable.
 - **Loop collisions:** Each iteration gets a unique key from the counter. All promises are tracked independently.
 - **Concurrent function collisions:** Each function call stores its key in its own `__self.__pendingKey_x`. The shared `PendingPromiseStore` holds all promises with distinct keys.

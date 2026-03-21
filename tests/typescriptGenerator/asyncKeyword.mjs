@@ -639,7 +639,7 @@ __self.__pendingKey_res1 = __ctx.pendingPromises.add(__stack.locals.res1, (val) 
     __stack.step++;
   }
   if (__step <= 4) {
-    [__self.res2, __self.res1] = await Promise.all([__self.res2, __self.res1]);
+    await __ctx.pendingPromises.awaitPending([__self.__pendingKey_res2, __self.__pendingKey_res1]);
     __stack.step++;
   }
   if (__step <= 5) {

@@ -818,10 +818,10 @@ export class TypescriptPreprocessor {
       // Check if we need to insert Promise.all before this node
       if (locationToVars[locationKey]) {
         const vars = locationToVars[locationKey];
-        const varArray = `[${vars.map((v) => `__self.${v}`).join(", ")}]`;
+        const keyArray = vars.map((v) => `__self.__pendingKey_${v}`).join(", ");
         const promiseAllCode: RawCode = {
           type: "rawCode",
-          value: `${varArray} = await Promise.all(${varArray});`,
+          value: `await __ctx.pendingPromises.awaitPending([${keyArray}]);`,
         };
         newBody.push(promiseAllCode);
       }
@@ -844,12 +844,12 @@ export class TypescriptPreprocessor {
             .map((n) => n.variableName);
 
           if (parallelAsyncVars.length > 0) {
-            const varArray = parallelAsyncVars
-              .map((v) => `__self.${v}`)
+            const keyArray = parallelAsyncVars
+              .map((v) => `__self.__pendingKey_${v}`)
               .join(", ");
             node.body.push({
               type: "rawCode",
-              value: `[${varArray}] = await Promise.all([${varArray}]);`,
+              value: `await __ctx.pendingPromises.awaitPending([${keyArray}]);`,
             });
           }
         }

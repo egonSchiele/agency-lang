@@ -287,7 +287,7 @@ __self.__pendingKey_y = __ctx.pendingPromises.add(__stack.locals.y, (val) => { _
     __stack.step++;
   }
   if (__step <= 3) {
-    [__self.x, __self.y] = await Promise.all([__self.x, __self.y]);
+    await __ctx.pendingPromises.awaitPending([__self.__pendingKey_x, __self.__pendingKey_y]);
     __stack.step++;
   }
   if (__step <= 4) {

@@ -1943,7 +1943,7 @@ export class TypeScriptBuilder {
         ts.raw(`import { appendFileSync } from "fs";`),
         ts.raw(`const __auditLogFile = ${JSON.stringify(logFile)};`),
         ts.raw(
-          `const __defaultOnAudit = (entry) => { appendFileSync(__auditLogFile, JSON.stringify(entry) + "\\n"); };`,
+          `const __defaultonAuditLog = (entry) => { appendFileSync(__auditLogFile, JSON.stringify(entry) + "\\n"); };`,
         ),
       ]);
     }
@@ -2043,7 +2043,9 @@ export class TypeScriptBuilder {
                   data: ts.obj(dataObj),
                   messages: ts.id("messages"),
                   callbacks: this.agencyConfig.audit?.logFile
-                    ? ts.raw("{ onAudit: __defaultOnAudit, ...callbacks }")
+                    ? ts.raw(
+                        "{ onAuditLog: __defaultonAuditLog, ...callbacks }",
+                      )
                     : ts.id("callbacks"),
                   initializeGlobals: ts.id("__initializeGlobals"),
                 }),

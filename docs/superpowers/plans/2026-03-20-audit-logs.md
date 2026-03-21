@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add audit logging that emits structured entries via an `onAudit` callback for every operation an agent performs — assignments, function calls, returns, LLM calls, tool calls, node entry/exit, and interrupts.
+**Goal:** Add audit logging that emits structured entries via an `onAuditLog` callback for every operation an agent performs — assignments, function calls, returns, LLM calls, tool calls, node entry/exit, and interrupts.
 
-**Architecture:** Callback-only (no storage). The builder injects `__ctx.audit(...)` calls after statements in `processBodyAsParts`. The runtime adds manual audit calls at key points (LLM calls, tool calls, node entry/exit, interrupts). An optional config/CLI flag enables JSONL file logging via a generated default `onAudit` callback.
+**Architecture:** Callback-only (no storage). The builder injects `__ctx.audit(...)` calls after statements in `processBodyAsParts`. The runtime adds manual audit calls at key points (LLM calls, tool calls, node entry/exit, interrupts). An optional config/CLI flag enables JSONL file logging via a generated default `onAuditLog` callback.
 
 **Tech Stack:** TypeScript, TypeScript IR (`lib/ir/`), Agency runtime (`lib/runtime/`), Agency builder (`lib/backends/typescriptBuilder.ts`)
 
@@ -26,7 +26,7 @@
 
 | File | Change |
 |------|--------|
-| `lib/runtime/hooks.ts` | Add `onAudit: AuditEntry` to `CallbackMap` |
+| `lib/runtime/hooks.ts` | Add `onAuditLog: AuditEntry` to `CallbackMap` |
 | `lib/runtime/state/context.ts` | Import `callHook`, add `audit()` method to `RuntimeContext` |
 | `lib/runtime/index.ts` | Re-export `AuditEntry` type |
 | `lib/runtime/node.ts` | Add 2 `audit()` calls (nodeEntry, nodeExit) |
@@ -42,7 +42,7 @@
 
 **Files:**
 - Create: `lib/runtime/audit.ts`
-- Modify: `lib/runtime/hooks.ts:13-49` (add `onAudit` to `CallbackMap`)
+- Modify: `lib/runtime/hooks.ts:13-49` (add `onAuditLog` to `CallbackMap`)
 - Modify: `lib/runtime/state/context.ts:1-7,86-91` (add import and `audit()` method)
 - Modify: `lib/runtime/index.ts:1-2` (add re-export)
 
@@ -115,7 +115,7 @@ export type AuditEntry =
   | InterruptAudit;
 ```
 
-- [ ] **Step 2: Add `onAudit` to `CallbackMap` in `lib/runtime/hooks.ts`**
+- [ ] **Step 2: Add `onAuditLog` to `CallbackMap` in `lib/runtime/hooks.ts`**
 
 Add import at the top:
 
@@ -126,7 +126,7 @@ import type { AuditEntry } from "./audit.js";
 Add to `CallbackMap` (after the `onStream` entry, before the closing `}`):
 
 ```ts
-  onAudit: AuditEntry;
+  onAuditLog: AuditEntry;
 ```
 
 - [ ] **Step 3: Add `audit()` method to `RuntimeContext` in `lib/runtime/state/context.ts`**
@@ -155,7 +155,7 @@ Add this method to the `RuntimeContext` class, after the `getSmoltalkConfig` met
 ```ts
   async audit(entry: Omit<AuditEntry, "timestamp">): Promise<void> {
     const fullEntry = { ...entry, timestamp: Date.now() };
-    await callHook({ callbacks: this.callbacks, name: "onAudit", data: fullEntry as AuditEntry });
+    await callHook({ callbacks: this.callbacks, name: "onAuditLog", data: fullEntry as AuditEntry });
   }
 ```
 
@@ -176,7 +176,7 @@ Expected: No build errors.
 
 ```bash
 git add lib/runtime/audit.ts lib/runtime/hooks.ts lib/runtime/state/context.ts lib/runtime/index.ts
-git commit -m "feat(audit): add AuditEntry type, onAudit callback, and ctx.audit() method"
+git commit -m "feat(audit): add AuditEntry type, onAuditLog callback, and ctx.audit() method"
 ```
 
 ---
@@ -254,7 +254,7 @@ Expected: No build errors.
 - [ ] **Step 6: Run existing tests**
 
 Run: `pnpm test:run`
-Expected: All existing tests pass. The audit calls are no-ops when no `onAudit` callback is registered.
+Expected: All existing tests pass. The audit calls are no-ops when no `onAuditLog` callback is registered.
 
 - [ ] **Step 7: Commit**
 
@@ -557,7 +557,7 @@ git commit -m "feat(audit): inject audit calls in processBodyAsParts"
 - Modify: `scripts/agency.ts:62-70` (add `-l` flag to `run` command)
 - Modify: `lib/cli/commands.ts:227-264` (pass log file to compile/run)
 - Modify: `lib/backends/typescriptBuilder.ts:1838-1884` (generate audit log file code in `generateImports`)
-- Modify: `lib/backends/typescriptBuilder.ts:1954-1982` (merge default `onAudit` in exported node functions)
+- Modify: `lib/backends/typescriptBuilder.ts:1954-1982` (merge default `onAuditLog` in exported node functions)
 
 - [ ] **Step 1: Add `audit` config to `AgencyConfig` in `lib/config.ts`**
 
@@ -617,24 +617,24 @@ The simplest approach: append the audit log setup code to the `runtimeCtx` state
         runtimeCtx,
         ts.raw(`import { appendFileSync } from "fs";`),
         ts.raw(`const __auditLogFile = ${JSON.stringify(logFile)};`),
-        ts.raw(`const __defaultOnAudit = (entry) => { appendFileSync(__auditLogFile, JSON.stringify(entry) + "\\n"); };`),
+        ts.raw(`const __defaultonAuditLog = (entry) => { appendFileSync(__auditLogFile, JSON.stringify(entry) + "\\n"); };`),
       ]);
     }
 ```
 
 Note: `runtimeCtx` needs to be declared with `let` instead of `const` (change line ~1867).
 
-- [ ] **Step 4: Conditionally merge default `onAudit` in exported node functions**
+- [ ] **Step 4: Conditionally merge default `onAuditLog` in exported node functions**
 
 In `generateExportedNodeFunctions`, change the `callbacks` property in the `runNode` call (line 1975) based on whether `audit.logFile` is configured:
 
 ```ts
 callbacks: this.agencyConfig.audit?.logFile
-  ? ts.raw("{ onAudit: __defaultOnAudit, ...callbacks }")
+  ? ts.raw("{ onAuditLog: __defaultonAuditLog, ...callbacks }")
   : ts.id("callbacks"),
 ```
 
-When `audit.logFile` is set, the generated code spreads user-provided callbacks over the default, so a user-provided `onAudit` overrides the file logger. When `audit.logFile` is not set, the callbacks are passed through unchanged.
+When `audit.logFile` is set, the generated code spreads user-provided callbacks over the default, so a user-provided `onAuditLog` overrides the file logger. When `audit.logFile` is not set, the callbacks are passed through unchanged.
 
 - [ ] **Step 5: Build and verify**
 
@@ -643,7 +643,7 @@ Expected: No build errors.
 
 - [ ] **Step 6: Manual test**
 
-Create a test `.agency` file and compile with `audit.logFile` set in a local `agency.json`. Verify the generated JS contains the `__defaultOnAudit` function and the callbacks merging.
+Create a test `.agency` file and compile with `audit.logFile` set in a local `agency.json`. Verify the generated JS contains the `__defaultonAuditLog` function and the callbacks merging.
 
 - [ ] **Step 7: Regenerate fixtures**
 
@@ -713,14 +713,14 @@ git commit -m "test(audit): add integration test fixture for audit log code gene
 
 ---
 
-## Task 7: End-to-end test with `onAudit` callback verification
+## Task 7: End-to-end test with `onAuditLog` callback verification
 
 **Files:**
 - Create: `tests/agency-ts/audit/agent.agency`
 - Create: `tests/agency-ts/audit/test.js`
 - Create: `tests/agency-ts/audit/fixture.json`
 
-This test uses the `agency-ts` test format (see `docs/TESTING.md` section 5) to verify that audit entries actually fire at runtime with the correct data. The `test.js` file imports the compiled agent, passes an `onAudit` callback, collects entries, and writes the result.
+This test uses the `agency-ts` test format (see `docs/TESTING.md` section 5) to verify that audit entries actually fire at runtime with the correct data. The `test.js` file imports the compiled agent, passes an `onAuditLog` callback, collects entries, and writes the result.
 
 - [ ] **Step 1: Create `tests/agency-ts/audit/agent.agency`**
 
@@ -744,7 +744,7 @@ import { writeFileSync } from "fs";
 const entries = [];
 const result = await main(5, {
   callbacks: {
-    onAudit: (entry) => {
+    onAuditLog: (entry) => {
       // Strip timestamps for deterministic comparison
       const { timestamp, ...rest } = entry;
       entries.push(rest);
@@ -775,7 +775,7 @@ Expected: Test PASSES — fixture matches.
 
 ```bash
 git add tests/agency-ts/audit/
-git commit -m "test(audit): add end-to-end test verifying onAudit callback entries"
+git commit -m "test(audit): add end-to-end test verifying onAuditLog callback entries"
 ```
 
 ---

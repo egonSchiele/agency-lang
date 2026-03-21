@@ -47,7 +47,7 @@ export type CallbackMap = {
     | { type: "tool_call"; toolCall: ToolCallJSON }
     | { type: "done"; result: PromptResult }
     | { type: "error"; error: any };
-  onAudit: AuditEntry;
+  onAuditLog: AuditEntry;
 };
 
 export type CallbackReturn<K extends keyof CallbackMap> = K extends

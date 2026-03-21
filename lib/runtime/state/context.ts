@@ -61,7 +61,9 @@ export class RuntimeContext<T> {
   }
 
   createExecutionContext(): RuntimeContext<T> {
-    const execCtx = Object.create(RuntimeContext.prototype) as RuntimeContext<T>;
+    const execCtx = Object.create(
+      RuntimeContext.prototype,
+    ) as RuntimeContext<T>;
     execCtx.graph = this.graph;
     execCtx.smoltalkDefaults = this.smoltalkDefaults;
     execCtx.dirname = this.dirname;
@@ -114,7 +116,7 @@ export class RuntimeContext<T> {
     const fullEntry = { ...entry, timestamp: Date.now() };
     await callHook({
       callbacks: this.callbacks,
-      name: "onAudit",
+      name: "onAuditLog",
       data: fullEntry as AuditEntry,
     });
   }

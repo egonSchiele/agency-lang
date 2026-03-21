@@ -247,7 +247,7 @@ All LLM interactions go through the [smoltalk](https://www.npmjs.com/package/smo
 `AgencyConfig` (`lib/config.ts`) defines all compiler and runtime options. See `docs/dev/config.md` for the full option reference and `docs/config.md` for basic usage.
 
 ### Audit Logging
-Agency auto-generates structured audit log entries for every operation an agent performs. Entries are emitted via an `onAudit` callback — there is no internal storage.
+Agency auto-generates structured audit log entries for every operation an agent performs. Entries are emitted via an `onAuditLog` callback — there is no internal storage.
 
 Audit logging has two parts:
 1. **Builder-generated calls** — `auditNode()` in `lib/ir/audit.ts` inspects processed IR nodes and produces `__ctx.audit(...)` calls. These are injected in `processBodyAsParts` in the builder. The function handles assignments, variable declarations, function calls, returns, and destructuring (Promise.all). It returns `null` for nodes that shouldn't be audited (control flow, comments, etc.). If you add a new TsNode kind to the IR, consider whether it needs a case in `auditNode()`.

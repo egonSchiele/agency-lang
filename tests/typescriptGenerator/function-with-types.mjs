@@ -805,12 +805,6 @@ const __graph = __ctx.graph;
   if (__step <= 1) {
     __self.__retryable = false;
     await print(`This is a node with a return type`)
-    await __ctx.audit({
-      type: "functionCall",
-      functionName: "print",
-      args: [`This is a node with a return type`],
-      result: undefined
-    })
     
     __stack.step++;
   }

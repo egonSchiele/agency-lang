@@ -416,12 +416,6 @@ const __graph = __ctx.graph;
     }
     if (__step <= 1) {
       __threads.active().setMessages([])
-      await __ctx.audit({
-        type: "functionCall",
-        functionName: "__threads.active().setMessages",
-        args: [[]],
-        result: undefined
-      })
       
       __stack.step++;
     }
@@ -667,12 +661,6 @@ if (isInterrupt(__stack.locals.res1)) {
   if (__step <= 6) {
     __self.__retryable = false;
     await printJSON(__stack.locals.results)
-    await __ctx.audit({
-      type: "functionCall",
-      functionName: "printJSON",
-      args: [__stack.locals.results],
-      result: undefined
-    })
     
     __stack.step++;
   }

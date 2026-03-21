@@ -418,12 +418,6 @@ const __graph = __ctx.graph;
     if (__step <= 1) {
       __self.__retryable = false;
       await print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`)
-      await __ctx.audit({
-        type: "functionCall",
-        functionName: "print",
-        args: [`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`],
-        result: undefined
-      })
       
       
       __stack.step++;
@@ -457,12 +451,6 @@ if (isInterrupt(__stack.locals.response)) {
     if (__step <= 3) {
       __self.__retryable = false;
       await print(`Greeted, age is still ${__stack.args.age}...`)
-      await __ctx.audit({
-        type: "functionCall",
-        functionName: "print",
-        args: [`Greeted, age is still ${__stack.args.age}...`],
-        result: undefined
-      })
       
       __stack.step++;
     }
@@ -524,12 +512,6 @@ const __graph = __ctx.graph;
   if (__step <= 1) {
     __self.__retryable = false;
     await print(`Saying hi to ${__stack.args.name}...`)
-    await __ctx.audit({
-      type: "functionCall",
-      functionName: "print",
-      args: [`Saying hi to ${__stack.args.name}...`],
-      result: undefined
-    })
     
     __stack.step++;
   }
@@ -566,24 +548,12 @@ if (isInterrupt(__stack.locals.response)) {
   if (__step <= 4) {
     __self.__retryable = false;
     await print(__stack.locals.response)
-    await __ctx.audit({
-      type: "functionCall",
-      functionName: "print",
-      args: [__stack.locals.response],
-      result: undefined
-    })
     
     __stack.step++;
   }
   if (__step <= 5) {
     __self.__retryable = false;
     await print(`Greeting sent.`)
-    await __ctx.audit({
-      type: "functionCall",
-      functionName: "print",
-      args: [`Greeting sent.`],
-      result: undefined
-    })
     
     __stack.step++;
   }

@@ -309,24 +309,12 @@ if (isInterrupt(__stack.locals.message)) {
   if (__step <= 3) {
     __self.__retryable = false;
     await print(__stack.locals.count)
-    await __ctx.audit({
-      type: "functionCall",
-      functionName: "print",
-      args: [__stack.locals.count],
-      result: undefined
-    })
     
     __stack.step++;
   }
   if (__step <= 4) {
     __self.__retryable = false;
     await print(__stack.locals.message)
-    await __ctx.audit({
-      type: "functionCall",
-      functionName: "print",
-      args: [__stack.locals.message],
-      result: undefined
-    })
     
     __stack.step++;
   }

@@ -26,14 +26,10 @@ describe("auditNode", () => {
     expect(result!.behavior).toBe("append");
   });
 
-  it("returns audit call for call", () => {
+  it("returns null for bare call (function calls are audited at function entry)", () => {
     const node = ts.call(ts.id("myFunc"), [ts.str("arg1")]);
     const result = auditNode(node);
-    expect(result).not.toBeNull();
-    const code = printTs(result!.node);
-    expect(code).toContain('"functionCall"');
-    expect(code).toContain('"myFunc"');
-    expect(result!.behavior).toBe("append");
+    expect(result).toBeNull();
   });
 
   it("returns replace behavior for return", () => {
@@ -53,13 +49,10 @@ describe("auditNode", () => {
     expect(result!.behavior).toBe("replace");
   });
 
-  it("unwraps await and inspects inner", () => {
+  it("unwraps await — returns null for awaited call (audited at function entry)", () => {
     const node = ts.await(ts.call(ts.id("fetchData"), []));
     const result = auditNode(node);
-    expect(result).not.toBeNull();
-    const code = printTs(result!.node);
-    expect(code).toContain('"functionCall"');
-    expect(code).toContain('"fetchData"');
+    expect(result).toBeNull();
   });
 
   it("returns null for comment", () => {

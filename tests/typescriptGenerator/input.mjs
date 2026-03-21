@@ -296,12 +296,6 @@ if (isInterrupt(__stack.locals.sentiment)) {
   if (__step <= 3) {
     __self.__retryable = false;
     await print(__stack.locals.sentiment)
-    await __ctx.audit({
-      type: "functionCall",
-      functionName: "print",
-      args: [__stack.locals.sentiment],
-      result: undefined
-    })
     
     __stack.step++;
   }

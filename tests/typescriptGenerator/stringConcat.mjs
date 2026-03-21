@@ -249,12 +249,6 @@ const __graph = __ctx.graph;
   if (__step <= 1) {
     __self.__retryable = false;
     await print(`What is your name?`)
-    await __ctx.audit({
-      type: "functionCall",
-      functionName: "print",
-      args: [`What is your name?`],
-      result: undefined
-    })
     
     __stack.step++;
   }
@@ -278,12 +272,6 @@ if (isInterrupt(__stack.locals.name)) {
   if (__step <= 3) {
     __self.__retryable = false;
     await print(`Hello, ${__stack.locals.name}!`)
-    await __ctx.audit({
-      type: "functionCall",
-      functionName: "print",
-      args: [`Hello, ${__stack.locals.name}!`],
-      result: undefined
-    })
     
     __stack.step++;
   }

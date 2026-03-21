@@ -374,12 +374,6 @@ const __graph = __ctx.graph;
     if (__step <= 1) {
       __self.__retryable = false;
       await saveItem(__stack.args.id)
-      await __ctx.audit({
-        type: "functionCall",
-        functionName: "saveItem",
-        args: [__stack.args.id],
-        result: undefined
-      })
       
       __stack.step++;
     }

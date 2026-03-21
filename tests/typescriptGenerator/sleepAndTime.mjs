@@ -272,12 +272,6 @@ let x: number = x_endTime - x_startTime;
   if (__step <= 2) {
     __self.__retryable = false;
     await print(__stack.locals.x)
-    await __ctx.audit({
-      type: "functionCall",
-      functionName: "print",
-      args: [__stack.locals.x],
-      result: undefined
-    })
     
     __stack.step++;
   }

@@ -359,12 +359,6 @@ if (isInterrupt(__stack.locals.result)) {
   if (__step <= 2) {
     __self.__retryable = false;
     await print(__stack.locals.result)
-    await __ctx.audit({
-      type: "functionCall",
-      functionName: "print",
-      args: [__stack.locals.result],
-      result: undefined
-    })
     
     __stack.step++;
   }

@@ -249,12 +249,6 @@ const __graph = __ctx.graph;
   if (__step <= 1) {
     __self.__retryable = false;
     await print(`lets race!`)
-    await __ctx.audit({
-      type: "functionCall",
-      functionName: "print",
-      args: [`lets race!`],
-      result: undefined
-    })
     
     __stack.step++;
   }
@@ -306,12 +300,6 @@ if (isInterrupt(__stack.locals.response1)) {
   if (__step <= 4) {
     __self.__retryable = false;
     await print(__stack.locals.response1)
-    await __ctx.audit({
-      type: "functionCall",
-      functionName: "print",
-      args: [__stack.locals.response1],
-      result: undefined
-    })
     
     __stack.step++;
   }
@@ -357,12 +345,6 @@ if (isInterrupt(__stack.locals.response2)) {
   if (__step <= 7) {
     __self.__retryable = false;
     await print(__stack.locals.response2)
-    await __ctx.audit({
-      type: "functionCall",
-      functionName: "print",
-      args: [__stack.locals.response2],
-      result: undefined
-    })
     
     __stack.step++;
   }

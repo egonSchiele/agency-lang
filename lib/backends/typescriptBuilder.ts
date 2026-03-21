@@ -77,7 +77,7 @@ import {
 
 import { $, ts } from "../ir/builders.js";
 import { printTs } from "../ir/prettyPrint.js";
-import { auditNode } from "../ir/audit.js";
+import { auditNode, makeAuditCall } from "../ir/audit.js";
 import type {
   TsElseIf,
   TsNode,
@@ -1119,7 +1119,15 @@ export class TypeScriptBuilder {
     const isBuiltinFunction = mappedName !== node.functionName;
 
     if (isBuiltinFunction) {
-      return ts.await(callNode);
+      // Emit functionCall audit for built-in functions.
+      // User-defined functions get their audit at function entry in processFunctionDefinition.
+      // We don't log arg values here to avoid re-evaluating side-effecting expressions.
+      const auditCall = makeAuditCall("functionCall", {
+        functionName: ts.str(node.functionName),
+        args: ts.obj({}),
+        result: ts.id("undefined"),
+      });
+      return ts.statements([auditCall, ts.await(callNode)]);
     }
     return callNode;
   }

@@ -70,7 +70,11 @@ export async function callHook<K extends keyof CallbackMap>(args: {
   const { callbacks, name, data } = args;
   const hook = callbacks[name];
   if (hook) {
-    return (await hook(data)) as CallbackReturn<K>;
+    try {
+      return (await hook(data)) as CallbackReturn<K>;
+    } catch (error) {
+      console.error(`[agency] ${name} callback error:`, error);
+    }
   }
   return undefined;
 }

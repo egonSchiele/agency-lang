@@ -58,14 +58,9 @@ export function auditNode(
         }),
       );
 
-    case "call":
-      return append(
-        makeAuditCall("functionCall", {
-          functionName: ts.str(printTs(node.callee)),
-          args: ts.arr(node.arguments),
-          result: ts.id("undefined"),
-        }),
-      );
+    // No "call" case — user-defined Agency functions get a functionCall audit
+    // at function entry (in processFunctionDefinition). Built-in function calls
+    // get their audit in processFunctionCall. This avoids re-evaluating arguments.
 
     case "return":
       if (node.expr) {
@@ -109,7 +104,7 @@ export function auditNode(
   }
 }
 
-function makeAuditCall<T extends AuditEntry["type"]>(type: T, fields: AuditFieldsOf<T>): TsNode {
+export function makeAuditCall<T extends AuditEntry["type"]>(type: T, fields: AuditFieldsOf<T>): TsNode {
   return $(ts.runtime.ctx)
     .prop("audit")
     .call([ts.obj({ type: ts.str(type), ...fields })])

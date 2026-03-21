@@ -1,0 +1,60 @@
+import { add, sideEffect } from "./tools.js"
+
+// User-defined function
+def double(n: number): number {
+  return n * 2
+}
+
+// User-defined function that calls an imported function
+def addWrapped(a: number, b: number): number {
+  return add(a, b)
+}
+
+// Test 1: bare function call
+node testBareFunctionCall(): number {
+  double(5)
+  return 0
+}
+
+// Test 2: function call assigned to a variable
+node testFunctionAssigned(): number {
+  result = double(5)
+  return result
+}
+
+// Test 3: function call passed as parameter to a function
+node testFunctionAsParam(): number {
+  result = double(add(1, 2))
+  return result
+}
+
+// Test 4: function call passed as parameter to a built-in function
+node testFunctionAsParamToBuiltin(): number {
+  print(double(5))
+  return 0
+}
+
+// Test 5: built-in function call
+node testBuiltinCall() {
+  print("hello")
+  return 0
+}
+
+// Test 6: built-in function call assigned to a variable
+node testBuiltinAssigned(): number {
+  result = add(3, 4)
+  return result
+}
+
+// Test 7: async function call
+node testAsyncCall(): number {
+  result = async double(5)
+  return result
+}
+
+// Test 8: shared variable assignment
+shared sharedResult = add(10, 20)
+
+node testSharedVar(): number {
+  return sharedResult
+}

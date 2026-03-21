@@ -1072,6 +1072,14 @@ export class TypeScriptBuilder {
       !this.isGraphNode(node.functionName) &&
       scope.type !== "global"
     ) {
+      // Async unassigned calls: register with pending promise store, no interrupt check
+      if (node.async) {
+        return ts.raw(
+          `__ctx.pendingPromises.add(${this.str(callNode)})`,
+        );
+      }
+
+      // Sync calls: check for interrupt result
       const tempVar = "__funcResult";
       const nodeContext = scope.type === "node";
       const returnBody = nodeContext
@@ -1084,7 +1092,10 @@ export class TypeScriptBuilder {
         ts.constDecl(tempVar, callNode),
         ts.if(
           ts.call(ts.id("isInterrupt"), [ts.id(tempVar)]),
-          ts.return(returnBody),
+          ts.statements([
+            ts.raw("await __ctx.pendingPromises.awaitAll()"),
+            ts.return(returnBody),
+          ]),
         ),
       ]);
     }

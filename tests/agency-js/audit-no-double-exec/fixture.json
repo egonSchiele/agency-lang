@@ -1,0 +1,38 @@
+{
+  "bareFunctionCall": {
+    "data": 0,
+    "callCounts": {}
+  },
+  "functionAssigned": {
+    "data": 10,
+    "callCounts": {}
+  },
+  "functionAsParam": {
+    "data": 6,
+    "callCounts": {
+      "add": 1
+    }
+  },
+  "functionAsParamToBuiltin": {
+    "data": 0,
+    "callCounts": {}
+  },
+  "builtinCall": {
+    "data": 0,
+    "callCounts": {}
+  },
+  "builtinAssigned": {
+    "data": 7,
+    "callCounts": {
+      "add": 1
+    }
+  },
+  "asyncCall": {
+    "data": 10,
+    "callCounts": {}
+  },
+  "sharedVar": {
+    "data": 30,
+    "callCounts": {}
+  }
+}

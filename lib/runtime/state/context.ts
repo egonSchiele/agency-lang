@@ -4,7 +4,9 @@ import { StatelogClient, StatelogConfig } from "../../statelogClient.js";
 import { SimpleMachine } from "../../simplemachine/index.js";
 import { nanoid } from "nanoid";
 import { SmolPromptConfig } from "@/index.js";
+import { callHook } from "../hooks.js";
 import type { AgencyCallbacks } from "../hooks.js";
+import type { AuditEntry, AuditEntryInput } from "../audit.js";
 
 /* bunch of stuff that every node/function in the runtime needs access to,
 that we don't want to pass as individual arguments everywhere */
@@ -59,7 +61,9 @@ export class RuntimeContext<T> {
   }
 
   createExecutionContext(): RuntimeContext<T> {
-    const execCtx = Object.create(RuntimeContext.prototype) as RuntimeContext<T>;
+    const execCtx = Object.create(
+      RuntimeContext.prototype,
+    ) as RuntimeContext<T>;
     execCtx.graph = this.graph;
     execCtx.smoltalkDefaults = this.smoltalkDefaults;
     execCtx.dirname = this.dirname;
@@ -106,5 +110,14 @@ export class RuntimeContext<T> {
     config: Partial<SmolPromptConfig> = {},
   ): Partial<SmolPromptConfig> {
     return { ...this.smoltalkDefaults, ...config };
+  }
+
+  async audit(entry: AuditEntryInput): Promise<void> {
+    const fullEntry = { ...entry, timestamp: Date.now() };
+    await callHook({
+      callbacks: this.callbacks,
+      name: "onAuditLog",
+      data: fullEntry as AuditEntry,
+    });
   }
 }

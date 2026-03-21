@@ -112,9 +112,24 @@ export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, 
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("simple.agency")
+  __ctx.globals.markInitialized("audit.agency")
 }
+export const __greetTool = {
+  name: "greet",
+  description: `No description provided.`,
+  schema: z.object({"name": z.string(), })
+};
+export const __greetToolParams = ["name"];
 const __toolRegistry = {
+  greet: {
+    definition: __greetTool,
+    handler: {
+      name: "greet",
+      params: __greetToolParams,
+      execute: greet,
+      isBuiltin: false
+    }
+  },
   readSkill: {
     definition: __readSkillTool,
     handler: {
@@ -224,6 +239,78 @@ const __toolRegistry = {
     }
   }
 };
+export async function greet(name: string, __state: InternalFunctionState | undefined = undefined) {
+  const __setupData = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+  if (!__ctx.globals.isInitialized("audit.agency")) {
+    __initializeGlobals(__ctx)
+  }
+  let __funcStartTime: number = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "greet",
+      args: {
+        name: name
+      },
+      isBuiltin: false
+    }
+  })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "greet",
+    args: {
+      name: name
+    },
+    result: undefined
+  })
+  __stack.args["name"] = name;
+  __self.__retryable = __self.__retryable ?? true;
+  try {
+    if (__step <= 0) {
+
+      __stack.step++;
+    }
+    if (__step <= 1) {
+      const __auditReturnValue = `Hello, ${__stack.args.name}!`;
+await __ctx.audit({
+        type: "return",
+        value: __auditReturnValue
+      })
+return __auditReturnValue
+      
+      __stack.step++;
+    }
+  } catch (__error) {
+    if (__error instanceof ToolCallError) {
+      __error.retryable = __error.retryable && __self.__retryable
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    __ctx.stateStack.pop()
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "greet",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
+}
+
+
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -243,37 +330,40 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-    
-    
+
     __stack.step++;
   }
   if (__step <= 1) {
-    __self.__removedTools = __self.__removedTools || [];
-__stack.locals.greeting = await runPrompt({
-      ctx: __ctx,
-      prompt: `say hello`,
-      messages: __threads.createAndReturnThread(),
-      clientConfig: {},
-      maxToolCallRounds: 10,
-      interruptData: __state?.interruptData,
-      removedTools: __self.__removedTools
-    });
-// return early from node if this is an interrupt
-if (isInterrupt(__stack.locals.greeting)) {
-      return {
-        messages: __threads,
-        data: __stack.locals.greeting
-      };
-    }
+    __stack.locals.x = 5;
     await __ctx.audit({
       type: "assignment",
-      variable: "__self.__removedTools",
-      value: __self.__removedTools
+      variable: "__stack.locals.x",
+      value: __stack.locals.x
     })
     
     __stack.step++;
   }
   if (__step <= 2) {
+    __stack.locals.greeting = await greet(`world`, {
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    });
+if (isInterrupt(__stack.locals.greeting)) {
+      return {
+        ...__state,
+        data: __stack.locals.greeting
+      };
+    }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.locals.greeting",
+      value: __stack.locals.greeting
+    })
+    
+    __stack.step++;
+  }
+  if (__step <= 3) {
     __self.__retryable = false;
     await print(__stack.locals.greeting)
     

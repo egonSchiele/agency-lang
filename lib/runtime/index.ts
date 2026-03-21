@@ -1,5 +1,6 @@
 export type { GraphState, InternalFunctionState } from "./types.js";
 export type { Interrupt, InterruptResponse } from "./interrupts.js";
+export type { AuditEntry, AuditEntryInput } from "./audit.js";
 export { RuntimeContext } from "./state/context.js";
 export { StateStack } from "./state/stateStack.js";
 export { GlobalStore } from "./state/globalStore.js";

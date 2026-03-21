@@ -106,6 +106,7 @@ export async function runNode({
     name: "onAgentStart",
     data: { nodeName, args: data, messages: messages || [] },
   });
+  await execCtx.audit({ type: "nodeEntry", nodeName });
   try {
     const threadStore = new ThreadStore();
     const result = await execCtx.graph.run(nodeName, {
@@ -114,6 +115,7 @@ export async function runNode({
       ctx: execCtx,
       isResume: false,
     }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
+    await execCtx.audit({ type: "nodeExit", nodeName });
     const returnObject = createReturnObject({
       result,
       globals: execCtx.globals,

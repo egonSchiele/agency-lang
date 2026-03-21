@@ -9,6 +9,7 @@ import type {
   StrategyJSON,
 } from "smoltalk";
 import type { RunNodeResult } from "./types.js";
+import type { AuditEntry } from "./audit.js";
 
 export type CallbackMap = {
   onAgentStart: {
@@ -46,6 +47,7 @@ export type CallbackMap = {
     | { type: "tool_call"; toolCall: ToolCallJSON }
     | { type: "done"; result: PromptResult }
     | { type: "error"; error: any };
+  onAuditLog: AuditEntry;
 };
 
 export type CallbackReturn<K extends keyof CallbackMap> = K extends
@@ -68,7 +70,11 @@ export async function callHook<K extends keyof CallbackMap>(args: {
   const { callbacks, name, data } = args;
   const hook = callbacks[name];
   if (hook) {
-    return (await hook(data)) as CallbackReturn<K>;
+    try {
+      return (await hook(data)) as CallbackReturn<K>;
+    } catch (error) {
+      console.error(`[agency] ${name} callback error:`, error);
+    }
   }
   return undefined;
 }

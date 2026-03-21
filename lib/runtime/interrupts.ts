@@ -107,6 +107,7 @@ export async function respondToInterrupt(args: {
   // start at the last node we visited
   const nodesTraversed = execCtx.stateStack.nodesTraversed || [];
   const nodeName = nodesTraversed[nodesTraversed.length - 1];
+  await execCtx.audit({ type: "interrupt", nodeName, args: interruptResponse });
   const result = await execCtx.graph.run(nodeName, {
     // todo user should be able to pass messages
     // in metadata

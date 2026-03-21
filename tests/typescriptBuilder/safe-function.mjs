@@ -284,6 +284,14 @@ const __graph = __ctx.graph;
       isBuiltin: false
     }
   })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "safeLookup",
+    args: {
+      id: id
+    },
+    result: undefined
+  })
   __stack.args["id"] = id;
   __self.__retryable = __self.__retryable ?? true;
   try {
@@ -292,7 +300,12 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 1) {
-      return await lookupItem(__stack.args.id)
+      const __auditReturnValue = await lookupItem(__stack.args.id);
+await __ctx.audit({
+        type: "return",
+        value: __auditReturnValue
+      })
+return __auditReturnValue
       
       __stack.step++;
     }
@@ -343,6 +356,14 @@ const __graph = __ctx.graph;
       isBuiltin: false
     }
   })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "unsafeSave",
+    args: {
+      id: id
+    },
+    result: undefined
+  })
   __stack.args["id"] = id;
   __self.__retryable = __self.__retryable ?? true;
   try {
@@ -357,7 +378,12 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 2) {
-      return await lookupItem(__stack.args.id)
+      const __auditReturnValue = await lookupItem(__stack.args.id);
+await __ctx.audit({
+        type: "return",
+        value: __auditReturnValue
+      })
+return __auditReturnValue
       
       __stack.step++;
     }
@@ -424,14 +450,24 @@ if (isInterrupt(__stack.locals.result)) {
         data: __stack.locals.result
       };
     }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__self.__removedTools",
+      value: __self.__removedTools
+    })
     
     __stack.step++;
   }
   if (__step <= 2) {
-    return {
+    const __auditReturnValue = {
       messages: __threads,
       data: __stack.locals.result
     };
+await __ctx.audit({
+      type: "return",
+      value: __auditReturnValue
+    })
+return __auditReturnValue;
     
     __stack.step++;
   }

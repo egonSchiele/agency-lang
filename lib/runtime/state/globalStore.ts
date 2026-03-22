@@ -31,6 +31,14 @@ export class GlobalStore {
     }));
   }
 
+  getTokenStats(): any {
+    return this.get(GlobalStore.INTERNAL_MODULE, "__tokenStats");
+  }
+
+  restoreTokenStats(stats: any): void {
+    this.set(GlobalStore.INTERNAL_MODULE, "__tokenStats", stats);
+  }
+
   static readonly INTERNAL_MODULE = "__internal";
 
   static withTokenStats(): GlobalStore {

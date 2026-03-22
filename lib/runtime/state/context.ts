@@ -1,6 +1,8 @@
 import { StateStack } from "../state/stateStack.js";
 import { GlobalStore } from "../state/globalStore.js";
 import { PendingPromiseStore } from "./pendingPromiseStore.js";
+import { CheckpointStore } from "./checkpointStore.js";
+import type { Checkpoint } from "./checkpointStore.js";
 import { StatelogClient, StatelogConfig } from "../../statelogClient.js";
 import { SimpleMachine } from "../../simplemachine/index.js";
 import { nanoid } from "nanoid";
@@ -16,6 +18,7 @@ export class RuntimeContext<T> {
   // serialized/deserialized to support durable execution
   stateStack: StateStack;
   globals: GlobalStore;
+  checkpoints: CheckpointStore;
   callbacks: AgencyCallbacks;
   onStreamLock: boolean;
   pendingPromises: PendingPromiseStore;
@@ -46,6 +49,7 @@ export class RuntimeContext<T> {
     this.statelogClient = new StatelogClient(statelogConfig);
     this.stateStack = new StateStack();
     this.globals = GlobalStore.withTokenStats();
+    this.checkpoints = new CheckpointStore();
     this.callbacks = {};
     this.onStreamLock = false;
     this.pendingPromises = new PendingPromiseStore();
@@ -73,6 +77,7 @@ export class RuntimeContext<T> {
     execCtx.statelogConfig = this.statelogConfig;
     execCtx.stateStack = new StateStack();
     execCtx.globals = GlobalStore.withTokenStats();
+    execCtx.checkpoints = new CheckpointStore();
     execCtx.callbacks = {};
     execCtx.onStreamLock = false;
     execCtx.pendingPromises = new PendingPromiseStore();
@@ -88,8 +93,18 @@ export class RuntimeContext<T> {
     this.pendingPromises.clear();
     this.stateStack = null as any;
     this.globals = null as any;
+    this.checkpoints = null as any;
     this.statelogClient = null as any;
     this.callbacks = null as any;
+  }
+
+  restoreState(checkpoint: Checkpoint): void {
+    const currentTokenStats = this.globals.getTokenStats();
+    this.stateStack = StateStack.fromJSON(checkpoint.stack);
+    this.stateStack.deserializeMode();
+    this.globals = GlobalStore.fromJSON(checkpoint.globals);
+    this.globals.restoreTokenStats(currentTokenStats);
+    this.pendingPromises.clear();
   }
 
   stateToJSON() {

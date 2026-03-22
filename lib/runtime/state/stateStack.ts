@@ -70,6 +70,10 @@ export class StateStack {
     return this.stack.pop();
   }
 
+  currentNodeId(): string | undefined {
+    return this.nodesTraversed[this.nodesTraversed.length - 1];
+  }
+
   toJSON(): StateStackJSON {
     return deepClone({
       stack: this.stack,

@@ -1,17 +1,21 @@
-import type { RuntimeContext } from "./state/context.js";
 import { CheckpointError, RestoreSignal } from "./errors.js";
 import type { RestoreOptions } from "./errors.js";
+import type { InternalFunctionState } from "./types.js";
 
-export async function checkpoint(ctx: RuntimeContext<any>): Promise<number> {
+export async function checkpoint(
+  __state: InternalFunctionState,
+): Promise<number> {
+  const ctx = __state.ctx;
   await ctx.pendingPromises.awaitAll();
   return ctx.checkpoints.create(ctx);
 }
 
 export function restore(
-  ctx: RuntimeContext<any>,
   checkpointId: number,
-  options?: RestoreOptions,
+  options: RestoreOptions,
+  __state?: InternalFunctionState,
 ): never {
+  const ctx = __state!.ctx;
   const cp = ctx.checkpoints.get(checkpointId);
   if (!cp)
     throw new CheckpointError(

@@ -6,7 +6,7 @@ node main() {
   sharedCounter = sharedCounter + 1
   counter = counter + 1
   if (sharedCounter < 3) {
-    restore(cp)
+    restore(cp, {})
   }
   return { sharedCounter: sharedCounter, counter: counter }
 }

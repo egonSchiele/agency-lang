@@ -4,7 +4,7 @@ def retryUntil(maxAttempts: number) {
   cp = checkpoint()
   attempts = attempts + 1
   if (attempts < maxAttempts) {
-    restore(cp)
+    restore(cp, {})
   }
   return attempts
 }

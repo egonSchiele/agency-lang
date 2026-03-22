@@ -4,7 +4,7 @@ node main() {
   cp = checkpoint()
   attempts = attempts + 1
   if (attempts < 3) {
-    restore(cp)
+    restore(cp, {})
   }
   return attempts
 }

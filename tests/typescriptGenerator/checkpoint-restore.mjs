@@ -249,7 +249,18 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
-    __stack.locals.cp = await checkpoint(__ctx);
+    __stack.locals.cp = await checkpoint({
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    });
+if (isInterrupt(__stack.locals.cp)) {
+      await __ctx.pendingPromises.awaitAll()
+      return {
+        ...__state,
+        data: __stack.locals.cp
+      };
+    }
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.cp",
@@ -269,7 +280,23 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 3) {
-    restore(__ctx, __stack.locals.cp)
+    const __funcResult = await restore(__stack.locals.cp, {}, {
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    });
+if (isInterrupt(__funcResult)) {
+      await __ctx.pendingPromises.awaitAll()
+      return {
+        ...__state,
+        data: __funcResult
+      };
+    }
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__funcResult",
+      value: __funcResult
+    })
     
     __stack.step++;
   }

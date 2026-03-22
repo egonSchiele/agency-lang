@@ -224,6 +224,10 @@ export class TypeScriptBuilder {
       .includes(functionName);
   }
 
+  // Runtime functions that need __state (ctx injection) like user-defined agency functions.
+  // These are imported from the runtime but need the functionCallConfig passed as the last arg.
+  private static RUNTIME_STATEFUL_FUNCTIONS = ["checkpoint", "restore"];
+
   private isAgencyFunction(
     functionName: string,
     context: "valueAccess" | "functionArg" | "topLevelStatement",
@@ -233,7 +237,8 @@ export class TypeScriptBuilder {
     }
     return (
       !!this.programInfo.functionDefinitions[functionName] ||
-      this.isImportedTool(functionName)
+      this.isImportedTool(functionName) ||
+      TypeScriptBuilder.RUNTIME_STATEFUL_FUNCTIONS.includes(functionName)
     );
   }
 
@@ -1072,10 +1077,6 @@ export class TypeScriptBuilder {
     const callNode = this.processFunctionCall(node);
     const scope = this.getCurrentScope();
 
-    if (node.functionName === "checkpoint" || node.functionName === "restore") {
-      return callNode;
-    }
-
     if (
       this.isAgencyFunction(node.functionName, "topLevelStatement") &&
       !this.isGraphNode(node.functionName) &&
@@ -1125,17 +1126,6 @@ export class TypeScriptBuilder {
       );
       const arg = argNodes.length > 0 ? argNodes[0] : ts.str("");
       return ts.throw(`new Error(${this.str(arg)})`);
-    }
-
-    if (node.functionName === "checkpoint") {
-      return ts.await(ts.call(ts.id("checkpoint"), [ts.runtime.ctx]));
-    }
-
-    if (node.functionName === "restore") {
-      const argNodes: TsNode[] = node.arguments.map((arg) =>
-        this.processNode(arg),
-      );
-      return ts.call(ts.id("restore"), [ts.runtime.ctx, ...argNodes]);
     }
 
     if (node.functionName === "llm") {
@@ -1432,23 +1422,6 @@ export class TypeScriptBuilder {
 
   private processAssignment(node: Assignment): TsNode {
     const { variableName, typeHint, value } = node;
-
-    if (value.type === "functionCall" && value.functionName === "checkpoint") {
-      return this.scopedAssign(
-        node.scope!,
-        variableName,
-        ts.await(ts.call(ts.id("checkpoint"), [ts.runtime.ctx])),
-        node.accessChain,
-      );
-    }
-
-    if (value.type === "functionCall" && value.functionName === "restore") {
-      // restore() never returns, but handle it if someone writes `x = restore(cp)`
-      const argNodes: TsNode[] = value.arguments.map((arg) =>
-        this.processNode(arg),
-      );
-      return ts.call(ts.id("restore"), [ts.runtime.ctx, ...argNodes]);
-    }
 
     if (value.type === "functionCall" && value.functionName === "llm") {
       return this.processLlmCall(variableName, typeHint, value, node.scope!);

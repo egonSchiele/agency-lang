@@ -2,6 +2,7 @@ import { deepClone } from "./utils.js";
 import { createReturnObject } from "./utils.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
+import { RestoreSignal } from "./errors.js";
 import * as smoltalk from "smoltalk";
 import { RuntimeContext } from "./state/context.js";
 import { GraphState } from "./types.js";
@@ -106,20 +107,33 @@ export async function respondToInterrupt(args: {
 
   // start at the last node we visited
   const nodesTraversed = execCtx.stateStack.nodesTraversed || [];
-  const nodeName = nodesTraversed[nodesTraversed.length - 1];
+  let nodeName = nodesTraversed[nodesTraversed.length - 1];
   await execCtx.audit({ type: "interrupt", nodeName, args: interruptResponse });
   try {
-    const result = await execCtx.graph.run(nodeName, {
-      // todo user should be able to pass messages
-      // in metadata
-      messages: new ThreadStore(),
-      data: {},
-      ctx: execCtx,
-      isResume: true,
-      interruptData,
-    }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
-    await execCtx.pendingPromises.awaitAll();
-    return createReturnObject({ result, globals: execCtx.globals });
+    while (true) {
+      try {
+        const result = await execCtx.graph.run(nodeName, {
+          // todo user should be able to pass messages
+          // in metadata
+          messages: new ThreadStore(),
+          data: {},
+          ctx: execCtx,
+          isResume: true,
+          interruptData,
+        }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
+        await execCtx.pendingPromises.awaitAll();
+        return createReturnObject({ result, globals: execCtx.globals });
+      } catch (e) {
+        if (e instanceof RestoreSignal) {
+          const cp = e.checkpoint;
+          execCtx.restoreState(cp);
+          nodeName = cp.nodeId;
+          execCtx.stateStack.nodesTraversed = [cp.nodeId];
+          continue;
+        }
+        throw e;
+      }
+    }
   } finally {
     execCtx.cleanup();
   }
@@ -210,23 +224,36 @@ export async function resumeFromState(args: {
   execCtx.globals = GlobalStore.fromJSON(args.state.globals);
 
   const nodesTraversed = execCtx.stateStack.nodesTraversed || [];
-  const nodeName = nodesTraversed[nodesTraversed.length - 1];
+  let nodeName = nodesTraversed[nodesTraversed.length - 1];
 
   if (!nodeName) {
     throw new Error("No resumable node found in state file.");
   }
 
   try {
-    const result = await execCtx.graph.run(nodeName, {
-      // todo: is this correct? Do we need to pass messages here?
-      messages: new ThreadStore(),
-      ctx: execCtx,
-      isResume: true,
-      data: {},
-      //interruptData
-    }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
-    await execCtx.pendingPromises.awaitAll();
-    return createReturnObject({ result, globals: execCtx.globals });
+    while (true) {
+      try {
+        const result = await execCtx.graph.run(nodeName, {
+          // todo: is this correct? Do we need to pass messages here?
+          messages: new ThreadStore(),
+          ctx: execCtx,
+          isResume: true,
+          data: {},
+          //interruptData
+        }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
+        await execCtx.pendingPromises.awaitAll();
+        return createReturnObject({ result, globals: execCtx.globals });
+      } catch (e) {
+        if (e instanceof RestoreSignal) {
+          const cp = e.checkpoint;
+          execCtx.restoreState(cp);
+          nodeName = cp.nodeId;
+          execCtx.stateStack.nodesTraversed = [cp.nodeId];
+          continue;
+        }
+        throw e;
+      }
+    }
   } finally {
     execCtx.cleanup();
   }

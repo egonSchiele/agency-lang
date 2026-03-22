@@ -28,6 +28,7 @@ export type InternalFunctionState = {
   ctx: RuntimeContext<GraphState>;
   interruptData?: InterruptData;
   isToolCall?: boolean;
+  stateStack?: StateStack;  // per-thread stack for async calls
 };
 
 export type NodeReturnValue<T> = {

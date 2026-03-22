@@ -2,6 +2,7 @@ import { MessageJSON } from "smoltalk";
 import { callHook } from "./hooks.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
+import { RestoreSignal } from "./errors.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { GraphState, InternalFunctionState, RunNodeResult } from "./types.js";
@@ -58,8 +59,8 @@ export function setupFunction(args: { state?: InternalFunctionState }): {
     };
   }
 
-  const ctx = state.ctx;
-  const stack = ctx.stateStack.getNewState();
+  const stateStack = state.stateStack ?? state.ctx.stateStack;
+  const stack = stateStack.getNewState();
   const step = stack.step;
   const self = stack.locals;
 
@@ -107,26 +108,43 @@ export async function runNode({
     data: { nodeName, args: data, messages: messages || [] },
   });
   await execCtx.audit({ type: "nodeEntry", nodeName });
+  let isResume = false;
   try {
-    const threadStore = new ThreadStore();
-    const result = await execCtx.graph.run(nodeName, {
-      messages: threadStore,
-      data,
-      ctx: execCtx,
-      isResume: false,
-    }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
-    await execCtx.pendingPromises.awaitAll();
-    await execCtx.audit({ type: "nodeExit", nodeName });
-    const returnObject = createReturnObject({
-      result,
-      globals: execCtx.globals,
-    });
-    await callHook({
-      callbacks: execCtx.callbacks,
-      name: "onAgentEnd",
-      data: { nodeName, result: returnObject },
-    });
-    return returnObject;
+    while (true) {
+      try {
+        const threadStore = new ThreadStore();
+        const result = await execCtx.graph.run(nodeName, {
+          messages: threadStore,
+          data,
+          ctx: execCtx,
+          isResume,
+        }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
+        await execCtx.pendingPromises.awaitAll();
+        await execCtx.audit({ type: "nodeExit", nodeName });
+        const returnObject = createReturnObject({
+          result,
+          globals: execCtx.globals,
+        });
+        await callHook({
+          callbacks: execCtx.callbacks,
+          name: "onAgentEnd",
+          data: { nodeName, result: returnObject },
+        });
+        return returnObject;
+      } catch (e) {
+        if (e instanceof RestoreSignal) {
+          const cp = e.checkpoint;
+          execCtx.restoreState(cp);
+          await execCtx.audit({ type: "restore", checkpointId: cp.id, nodeName: cp.nodeId });
+          nodeName = cp.nodeId;
+          data = {};
+          isResume = true;
+          execCtx.stateStack.nodesTraversed = [cp.nodeId];
+          continue;
+        }
+        throw e;
+      }
+    }
   } finally {
     execCtx.cleanup();
   }

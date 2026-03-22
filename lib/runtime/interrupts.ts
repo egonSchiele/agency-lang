@@ -2,8 +2,10 @@ import { deepClone } from "./utils.js";
 import { createReturnObject } from "./utils.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
+import { RestoreSignal } from "./errors.js";
 import * as smoltalk from "smoltalk";
 import { RuntimeContext } from "./state/context.js";
+import type { Checkpoint } from "./state/checkpointStore.js";
 import { GraphState } from "./types.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { color } from "termcolors";
@@ -57,7 +59,9 @@ export type Interrupt<T = any> = {
   type: "interrupt";
   data: T;
   interruptData?: InterruptData;
-  state?: InterruptState;
+  checkpointId?: number;
+  checkpoint?: Checkpoint;
+  state?: InterruptState;  // kept for backward compat migration shim
 };
 
 export function interrupt<T = any>(data: T): Interrupt<T> {
@@ -83,11 +87,28 @@ export async function respondToInterrupt(args: {
   const interruptResponse = deepClone(args.interruptResponse);
   const { ctx, metadata = {} } = args;
 
+  // Migration shim for old-format interrupts
+  if (interrupt.state && !interrupt.checkpoint) {
+    const nodesTraversed = interrupt.state.stack.nodesTraversed || [];
+    interrupt.checkpoint = {
+      id: -1,
+      stack: interrupt.state.stack,
+      globals: interrupt.state.globals,
+      nodeId: nodesTraversed[nodesTraversed.length - 1],
+    };
+  }
+
+  const checkpoint =
+    interrupt.checkpoint ??
+    (interrupt.checkpointId !== undefined
+      ? ctx.checkpoints?.get(interrupt.checkpointId)
+      : undefined);
+  if (!checkpoint) {
+    throw new Error("No checkpoint found for interrupt. The interrupt may have been created with an older format.");
+  }
+
   const execCtx = ctx.createExecutionContext();
-  const savedState = interrupt.state!;
-  execCtx.stateStack = StateStack.fromJSON(savedState.stack);
-  execCtx.stateStack.deserializeMode();
-  execCtx.globals = GlobalStore.fromJSON(savedState.globals);
+  execCtx.restoreState(checkpoint);
 
   if (metadata.callbacks) {
     execCtx.callbacks = metadata.callbacks;
@@ -104,22 +125,34 @@ export async function respondToInterrupt(args: {
     };
   }
 
-  // start at the last node we visited
-  const nodesTraversed = execCtx.stateStack.nodesTraversed || [];
-  const nodeName = nodesTraversed[nodesTraversed.length - 1];
+  let nodeName = checkpoint.nodeId;
   await execCtx.audit({ type: "interrupt", nodeName, args: interruptResponse });
   try {
-    const result = await execCtx.graph.run(nodeName, {
-      // todo user should be able to pass messages
-      // in metadata
-      messages: new ThreadStore(),
-      data: {},
-      ctx: execCtx,
-      isResume: true,
-      interruptData,
-    }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
-    await execCtx.pendingPromises.awaitAll();
-    return createReturnObject({ result, globals: execCtx.globals });
+    while (true) {
+      try {
+        const result = await execCtx.graph.run(nodeName, {
+          // todo user should be able to pass messages
+          // in metadata
+          messages: new ThreadStore(),
+          data: {},
+          ctx: execCtx,
+          isResume: true,
+          interruptData,
+        }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
+        await execCtx.pendingPromises.awaitAll();
+        return createReturnObject({ result, globals: execCtx.globals });
+      } catch (e) {
+        if (e instanceof RestoreSignal) {
+          const cp = e.checkpoint;
+          execCtx.restoreState(cp);
+          await execCtx.audit({ type: "restore", checkpointId: cp.id, nodeName: cp.nodeId });
+          nodeName = cp.nodeId;
+          execCtx.stateStack.nodesTraversed = [cp.nodeId];
+          continue;
+        }
+        throw e;
+      }
+    }
   } finally {
     execCtx.cleanup();
   }
@@ -210,23 +243,37 @@ export async function resumeFromState(args: {
   execCtx.globals = GlobalStore.fromJSON(args.state.globals);
 
   const nodesTraversed = execCtx.stateStack.nodesTraversed || [];
-  const nodeName = nodesTraversed[nodesTraversed.length - 1];
+  let nodeName = nodesTraversed[nodesTraversed.length - 1];
 
   if (!nodeName) {
     throw new Error("No resumable node found in state file.");
   }
 
   try {
-    const result = await execCtx.graph.run(nodeName, {
-      // todo: is this correct? Do we need to pass messages here?
-      messages: new ThreadStore(),
-      ctx: execCtx,
-      isResume: true,
-      data: {},
-      //interruptData
-    }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
-    await execCtx.pendingPromises.awaitAll();
-    return createReturnObject({ result, globals: execCtx.globals });
+    while (true) {
+      try {
+        const result = await execCtx.graph.run(nodeName, {
+          // todo: is this correct? Do we need to pass messages here?
+          messages: new ThreadStore(),
+          ctx: execCtx,
+          isResume: true,
+          data: {},
+          //interruptData
+        }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
+        await execCtx.pendingPromises.awaitAll();
+        return createReturnObject({ result, globals: execCtx.globals });
+      } catch (e) {
+        if (e instanceof RestoreSignal) {
+          const cp = e.checkpoint;
+          execCtx.restoreState(cp);
+          await execCtx.audit({ type: "restore", checkpointId: cp.id, nodeName: cp.nodeId });
+          nodeName = cp.nodeId;
+          execCtx.stateStack.nodesTraversed = [cp.nodeId];
+          continue;
+        }
+        throw e;
+      }
+    }
   } finally {
     execCtx.cleanup();
   }

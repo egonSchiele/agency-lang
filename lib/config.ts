@@ -153,4 +153,11 @@ export interface AgencyConfig {
   audit?: {
     logFile?: string;
   };
+
+  /** Checkpoint configuration */
+  checkpoints?: {
+    /** Maximum number of times a single checkpoint can be restored before throwing CheckpointError.
+     * Prevents infinite restore loops. Default: 100. */
+    maxRestores?: number;
+  };
 }

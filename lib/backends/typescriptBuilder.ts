@@ -117,6 +117,7 @@ export class TypeScriptBuilder {
   private loopVars: string[] = [];
   private insideMessageThread: boolean = false;
 
+
   private programInfo: ProgramInfo;
   private moduleId: string;
 
@@ -223,6 +224,10 @@ export class TypeScriptBuilder {
       .includes(functionName);
   }
 
+  // Runtime functions that need __state (ctx injection) like user-defined agency functions.
+  // These are imported from the runtime but need the functionCallConfig passed as the last arg.
+  private static RUNTIME_STATEFUL_FUNCTIONS = ["checkpoint", "getCheckpoint", "restore"];
+
   private isAgencyFunction(
     functionName: string,
     context: "valueAccess" | "functionArg" | "topLevelStatement",
@@ -232,7 +237,8 @@ export class TypeScriptBuilder {
     }
     return (
       !!this.programInfo.functionDefinitions[functionName] ||
-      this.isImportedTool(functionName)
+      this.isImportedTool(functionName) ||
+      TypeScriptBuilder.RUNTIME_STATEFUL_FUNCTIONS.includes(functionName)
     );
   }
 
@@ -1021,6 +1027,10 @@ export class TypeScriptBuilder {
         ts.statements(bodyCode),
         ts.statements([
           ts.if(
+            ts.raw("__error instanceof RestoreSignal"),
+            ts.statements([ts.throw("__error")]),
+          ),
+          ts.if(
             ts.raw("__error instanceof ToolCallError"),
             ts.statements([
               ts.raw(
@@ -1074,6 +1084,11 @@ export class TypeScriptBuilder {
     ) {
       // Async unassigned calls: register with pending promise store, no interrupt check
       if (node.async) {
+        // For agency functions, fork the stack for per-thread isolation
+        if (this.isAgencyFunction(node.functionName, "topLevelStatement") && !this.isGraphNode(node.functionName)) {
+          const callWithStack = this.generateFunctionCallExpression(node, "topLevelStatement", { stateStack: ts.raw("__ctx.forkStack()") });
+          return ts.raw(`__ctx.pendingPromises.add(${this.str(callWithStack)})`);
+        }
         return ts.raw(
           `__ctx.pendingPromises.add(${this.str(callNode)})`,
         );
@@ -1160,6 +1175,7 @@ export class TypeScriptBuilder {
   private generateFunctionCallExpression(
     node: FunctionCall,
     context: "valueAccess" | "functionArg" | "topLevelStatement",
+    options?: { stateStack?: TsNode },
   ): TsNode {
     const functionName =
       context === "valueAccess"
@@ -1185,6 +1201,7 @@ export class TypeScriptBuilder {
         ctx: ts.runtime.ctx,
         threads: threadsExpr,
         interruptData: ts.raw("__state?.interruptData"),
+        stateStack: options?.stateStack,
       });
       const call = ts.call(ts.id(functionName), [...argNodes, configObj]);
       return shouldAwait ? ts.await(call) : call;
@@ -1451,6 +1468,16 @@ export class TypeScriptBuilder {
       ];
 
       if (value.async) {
+        // For agency functions, fork the stack for per-thread isolation
+        if (this.isAgencyFunction(value.functionName, "topLevelStatement") && !this.isGraphNode(value.functionName)) {
+          stmts[stmts.length - 1] = this.scopedAssign(
+            node.scope!,
+            variableName,
+            this.generateFunctionCallExpression(value, "topLevelStatement", { stateStack: ts.raw("__ctx.forkStack()") }),
+            node.accessChain,
+          );
+        }
+
         // Async: register with pending promise store, store the key, skip interrupt check
         const pendingKeyVar = `__pendingKey_${variableName}`;
         stmts.push(
@@ -1974,16 +2001,21 @@ export class TypeScriptBuilder {
       }),
     });
 
+    const runtimeCtxArgs: Record<string, TsNode> = {
+      statelogConfig,
+      smoltalkDefaults,
+      dirname: ts.id("__dirname"),
+    };
+    if (this.agencyConfig.checkpoints?.maxRestores !== undefined) {
+      runtimeCtxArgs.maxRestores = ts.raw(
+        String(this.agencyConfig.checkpoints.maxRestores),
+      );
+    }
+
     let runtimeCtx: TsNode = ts.statements([
       ts.constDecl(
         "__globalCtx",
-        ts.new(ts.id("RuntimeContext"), [
-          ts.obj({
-            statelogConfig,
-            smoltalkDefaults,
-            dirname: ts.id("__dirname"),
-          }),
-        ]),
+        ts.new(ts.id("RuntimeContext"), [ts.obj(runtimeCtxArgs)]),
       ),
       ts.constDecl("graph", $(ts.runtime.globalCtx).prop("graph").done()),
     ]);

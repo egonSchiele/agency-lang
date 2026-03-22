@@ -89,6 +89,17 @@ export { isGenerator, handleStreamingResponse } from "./streaming.js";
 export { runPrompt } from "./prompt.js";
 export type { ToolHandler } from "./prompt.js";
 
-export { ToolCallError, ConcurrentInterruptError } from "./errors.js";
+export {
+  ToolCallError,
+  ConcurrentInterruptError,
+  CheckpointError,
+  RestoreSignal,
+} from "./errors.js";
+export type { RestoreOptions } from "./errors.js";
+
+export { checkpoint, getCheckpoint, restore } from "./checkpoint.js";
+
+export { CheckpointStore } from "./state/checkpointStore.js";
+export type { Checkpoint } from "./state/checkpointStore.js";
 
 export { setupNode, setupFunction, runNode } from "./node.js";

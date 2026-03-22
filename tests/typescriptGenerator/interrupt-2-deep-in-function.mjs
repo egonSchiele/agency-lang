@@ -9,6 +9,7 @@ import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse } 
 import {
   RuntimeContext, MessageThread, ThreadStore,
   setupNode, setupFunction, runNode, runPrompt, callHook,
+  checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
@@ -17,6 +18,7 @@ import {
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
   ToolCallError,
+  RestoreSignal,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
@@ -329,8 +331,10 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   return __resolvedValue;
   
 } else {
+  const __checkpointId = __ctx.checkpoints.create(__ctx);
   const __interruptResult = interrupt(`Agent wants to call the greet function with name: ${__stack.args.name} and age: ${__stack.args.age}`);
-  __interruptResult.state = __ctx.stateToJSON();
+  __interruptResult.checkpointId = __checkpointId;
+  __interruptResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
   
   
   return __interruptResult;
@@ -351,6 +355,9 @@ return __auditReturnValue
       __stack.step++;
     }
   } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
+    }
     if (__error instanceof ToolCallError) {
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
@@ -466,6 +473,9 @@ return __auditReturnValue
       __stack.step++;
     }
   } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
+    }
     if (__error instanceof ToolCallError) {
       __error.retryable = __error.retryable && __self.__retryable
       throw __error

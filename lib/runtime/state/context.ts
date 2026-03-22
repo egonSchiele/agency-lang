@@ -1,6 +1,8 @@
 import { StateStack } from "../state/stateStack.js";
 import { GlobalStore } from "../state/globalStore.js";
 import { PendingPromiseStore } from "./pendingPromiseStore.js";
+import { CheckpointStore } from "./checkpointStore.js";
+import type { Checkpoint } from "./checkpointStore.js";
 import { StatelogClient, StatelogConfig } from "../../statelogClient.js";
 import { SimpleMachine } from "../../simplemachine/index.js";
 import { nanoid } from "nanoid";
@@ -16,6 +18,7 @@ export class RuntimeContext<T> {
   // serialized/deserialized to support durable execution
   stateStack: StateStack;
   globals: GlobalStore;
+  checkpoints: CheckpointStore;
   callbacks: AgencyCallbacks;
   onStreamLock: boolean;
   pendingPromises: PendingPromiseStore;
@@ -31,11 +34,13 @@ export class RuntimeContext<T> {
 
   // stored so createExecutionContext can create new StatelogClients
   private statelogConfig: StatelogConfig;
+  private maxRestores: number;
 
   constructor(args: {
     statelogConfig: StatelogConfig;
     smoltalkDefaults: Partial<SmolPromptConfig>;
     dirname: string;
+    maxRestores?: number;
   }) {
     const statelogConfig = {
       ...args.statelogConfig,
@@ -43,9 +48,11 @@ export class RuntimeContext<T> {
     };
 
     this.statelogConfig = statelogConfig;
+    this.maxRestores = args.maxRestores ?? 100;
     this.statelogClient = new StatelogClient(statelogConfig);
     this.stateStack = new StateStack();
     this.globals = GlobalStore.withTokenStats();
+    this.checkpoints = new CheckpointStore(this.maxRestores);
     this.callbacks = {};
     this.onStreamLock = false;
     this.pendingPromises = new PendingPromiseStore();
@@ -73,6 +80,8 @@ export class RuntimeContext<T> {
     execCtx.statelogConfig = this.statelogConfig;
     execCtx.stateStack = new StateStack();
     execCtx.globals = GlobalStore.withTokenStats();
+    execCtx.maxRestores = this.maxRestores;
+    execCtx.checkpoints = new CheckpointStore(this.maxRestores);
     execCtx.callbacks = {};
     execCtx.onStreamLock = false;
     execCtx.pendingPromises = new PendingPromiseStore();
@@ -83,15 +92,30 @@ export class RuntimeContext<T> {
     return execCtx;
   }
 
+  forkStack(): StateStack {
+    return StateStack.fromJSON(this.stateStack.toJSON());
+  }
+
   /** Sever references held by an execution context so GC can reclaim them. */
   cleanup(): void {
     this.pendingPromises.clear();
     this.stateStack = null as any;
     this.globals = null as any;
+    this.checkpoints = null as any;
     this.statelogClient = null as any;
     this.callbacks = null as any;
   }
 
+  restoreState(checkpoint: Checkpoint): void {
+    const currentTokenStats = this.globals.getTokenStats();
+    this.stateStack = StateStack.fromJSON(checkpoint.stack);
+    this.stateStack.deserializeMode();
+    this.globals = GlobalStore.fromJSON(checkpoint.globals);
+    this.globals.restoreTokenStats(currentTokenStats);
+    this.pendingPromises.clear();
+  }
+
+  /** @deprecated Use checkpoints.create() instead */
   stateToJSON() {
     return {
       stack: this.stateStack.toJSON(),

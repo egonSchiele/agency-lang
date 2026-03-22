@@ -1,0 +1,13 @@
+def double(x: number): number {
+  return x * 2
+}
+
+def triple(x: number): number {
+  return x * 3
+}
+
+node main() {
+  a = async double(5)
+  b = async triple(5)
+  return { a: a, b: b }
+}

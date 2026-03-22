@@ -22,6 +22,7 @@ import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse } 
 import {
   RuntimeContext, MessageThread, ThreadStore,
   setupNode, setupFunction, runNode, runPrompt, callHook,
+  checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
@@ -30,6 +31,7 @@ import {
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
   ToolCallError,
+  RestoreSignal,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,

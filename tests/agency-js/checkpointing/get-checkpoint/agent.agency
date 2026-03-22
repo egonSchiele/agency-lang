@@ -1,0 +1,21 @@
+shared sharedVar = 0
+globalVar = 0
+
+def increment(amount: number) {
+  sharedVar = sharedVar + amount
+  globalVar = globalVar + amount
+  return amount
+}
+
+def modifyState(amount1: number) {
+  localVar = 10
+  total = amount1 + localVar
+  result = increment(total)
+  cid = checkpoint()
+  return cid
+}
+
+node main() {
+  cid = modifyState(3)
+  return getCheckpoint(cid)
+}

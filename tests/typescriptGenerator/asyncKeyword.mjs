@@ -9,6 +9,7 @@ import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse } 
 import {
   RuntimeContext, MessageThread, ThreadStore,
   setupNode, setupFunction, runNode, runPrompt, callHook,
+  checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
@@ -17,6 +18,7 @@ import {
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
   ToolCallError,
+  RestoreSignal,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
@@ -354,6 +356,9 @@ return __auditReturnValue
       __stack.step++;
     }
   } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
+    }
     if (__error instanceof ToolCallError) {
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
@@ -464,6 +469,9 @@ return __auditReturnValue
       __stack.step++;
     }
   } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
+    }
     if (__error instanceof ToolCallError) {
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
@@ -549,6 +557,9 @@ return __self.__promptVar
       __stack.step++;
     }
   } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
+    }
     if (__error instanceof ToolCallError) {
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
@@ -612,7 +623,8 @@ if (isInterrupt(__stack.locals.msg)) {
     __stack.locals.res2 = google(__stack.locals.msg, {
       ctx: __ctx,
       threads: new ThreadStore(),
-      interruptData: __state?.interruptData
+      interruptData: __state?.interruptData,
+      stateStack: __ctx.forkStack()
     });
 __self.__pendingKey_res2 = __ctx.pendingPromises.add(__stack.locals.res2, (val) => { __stack.locals.res2 = val; });
     await __ctx.audit({
@@ -627,7 +639,8 @@ __self.__pendingKey_res2 = __ctx.pendingPromises.add(__stack.locals.res2, (val) 
     __stack.locals.res1 = openai(__stack.locals.msg, {
       ctx: __ctx,
       threads: new ThreadStore(),
-      interruptData: __state?.interruptData
+      interruptData: __state?.interruptData,
+      stateStack: __ctx.forkStack()
     });
 __self.__pendingKey_res1 = __ctx.pendingPromises.add(__stack.locals.res1, (val) => { __stack.locals.res1 = val; });
     await __ctx.audit({

@@ -1,0 +1,15 @@
+shared attempts = 0
+
+def retryUntil(maxAttempts: number) {
+  cp = checkpoint()
+  attempts = attempts + 1
+  if (attempts < maxAttempts) {
+    restore(cp, {})
+  }
+  return attempts
+}
+
+node main() {
+  result = retryUntil(4)
+  return result
+}

@@ -1021,6 +1021,10 @@ export class TypeScriptBuilder {
         ts.statements(bodyCode),
         ts.statements([
           ts.if(
+            ts.raw("__error instanceof RestoreSignal"),
+            ts.statements([ts.throw("__error")]),
+          ),
+          ts.if(
             ts.raw("__error instanceof ToolCallError"),
             ts.statements([
               ts.raw(
@@ -1067,6 +1071,10 @@ export class TypeScriptBuilder {
     const callNode = this.processFunctionCall(node);
     const scope = this.getCurrentScope();
 
+    if (node.functionName === "checkpoint" || node.functionName === "restore") {
+      return callNode;
+    }
+
     if (
       this.isAgencyFunction(node.functionName, "topLevelStatement") &&
       !this.isGraphNode(node.functionName) &&
@@ -1111,6 +1119,17 @@ export class TypeScriptBuilder {
       );
       const arg = argNodes.length > 0 ? argNodes[0] : ts.str("");
       return ts.throw(`new Error(${this.str(arg)})`);
+    }
+
+    if (node.functionName === "checkpoint") {
+      return ts.await(ts.call(ts.id("checkpoint"), [ts.runtime.ctx]));
+    }
+
+    if (node.functionName === "restore") {
+      const argNodes: TsNode[] = node.arguments.map((arg) =>
+        this.processNode(arg),
+      );
+      return ts.call(ts.id("restore"), [ts.runtime.ctx, ...argNodes]);
     }
 
     if (node.functionName === "llm") {
@@ -1405,6 +1424,23 @@ export class TypeScriptBuilder {
 
   private processAssignment(node: Assignment): TsNode {
     const { variableName, typeHint, value } = node;
+
+    if (value.type === "functionCall" && value.functionName === "checkpoint") {
+      return this.scopedAssign(
+        node.scope!,
+        variableName,
+        ts.await(ts.call(ts.id("checkpoint"), [ts.runtime.ctx])),
+        node.accessChain,
+      );
+    }
+
+    if (value.type === "functionCall" && value.functionName === "restore") {
+      // restore() never returns, but handle it if someone writes `x = restore(cp)`
+      const argNodes: TsNode[] = value.arguments.map((arg) =>
+        this.processNode(arg),
+      );
+      return ts.call(ts.id("restore"), [ts.runtime.ctx, ...argNodes]);
+    }
 
     if (value.type === "functionCall" && value.functionName === "llm") {
       return this.processLlmCall(variableName, typeHint, value, node.scope!);

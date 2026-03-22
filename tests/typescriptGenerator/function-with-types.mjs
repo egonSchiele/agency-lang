@@ -9,6 +9,7 @@ import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse } 
 import {
   RuntimeContext, MessageThread, ThreadStore,
   setupNode, setupFunction, runNode, runPrompt, callHook,
+  checkpoint, restore,
   interrupt, isInterrupt,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
@@ -17,6 +18,7 @@ import {
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
   ToolCallError,
+  RestoreSignal,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
@@ -379,6 +381,9 @@ return __auditReturnValue
       __stack.step++;
     }
   } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
+    }
     if (__error instanceof ToolCallError) {
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
@@ -475,6 +480,9 @@ return __auditReturnValue
       __stack.step++;
     }
   } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
+    }
     if (__error instanceof ToolCallError) {
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
@@ -574,6 +582,9 @@ return __auditReturnValue
       __stack.step++;
     }
   } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
+    }
     if (__error instanceof ToolCallError) {
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
@@ -670,6 +681,9 @@ return __auditReturnValue
       __stack.step++;
     }
   } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
+    }
     if (__error instanceof ToolCallError) {
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
@@ -766,6 +780,9 @@ return __auditReturnValue
       __stack.step++;
     }
   } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
+    }
     if (__error instanceof ToolCallError) {
       __error.retryable = __error.retryable && __self.__retryable
       throw __error

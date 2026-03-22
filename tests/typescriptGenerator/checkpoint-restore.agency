@@ -1,0 +1,6 @@
+node main() {
+  cp = checkpoint()
+  x = 1
+  restore(cp)
+  return x
+}

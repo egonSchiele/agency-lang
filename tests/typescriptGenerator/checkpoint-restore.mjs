@@ -114,7 +114,7 @@ export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, 
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
 function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("forLoop.agency")
+  __ctx.globals.markInitialized("checkpoint-restore.agency")
 }
 const __toolRegistry = {
   readSkill: {
@@ -245,63 +245,44 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-    //  Basic for-of loop
-    
+
     __stack.step++;
   }
   if (__step <= 1) {
-    __stack.locals.items = [`a`, `b`, `c`];
+    __stack.locals.cp = await checkpoint(__ctx);
     await __ctx.audit({
       type: "assignment",
-      variable: "__stack.locals.items",
-      value: __stack.locals.items
+      variable: "__stack.locals.cp",
+      value: __stack.locals.cp
     })
     
     __stack.step++;
   }
   if (__step <= 2) {
-    __self.__retryable = false;
-    for (const item of __stack.locals.items) {
-      await print(item)
-      
-    }
-    
-    
-    //  Range-based for loop
-    
-    __stack.step++;
-  }
-  if (__step <= 3) {
-    __self.__retryable = false;
-    for (let i = 0; i < 5; i++) {
-      await print(i)
-      
-    }
-    
-    
-    //  Indexed for loop
-    
-    __stack.step++;
-  }
-  if (__step <= 4) {
-    __stack.locals.names = [`alice`, `bob`];
+    __stack.locals.x = 1;
     await __ctx.audit({
       type: "assignment",
-      variable: "__stack.locals.names",
-      value: __stack.locals.names
+      variable: "__stack.locals.x",
+      value: __stack.locals.x
     })
     
     __stack.step++;
   }
-  if (__step <= 5) {
-    __self.__retryable = false;
-    for (let index = 0; index < __stack.locals.names.length; index++) {
-      const name = __stack.locals.names[index];
-      await print(name)
-      
-      await print(index)
-      
-    }
+  if (__step <= 3) {
+    restore(__ctx, __stack.locals.cp)
+    
+    __stack.step++;
+  }
+  if (__step <= 4) {
+    const __auditReturnValue = {
+      messages: __threads,
+      data: __stack.locals.x
+    };
+await __ctx.audit({
+      type: "return",
+      value: __auditReturnValue
+    })
+return __auditReturnValue;
     
     __stack.step++;
   }

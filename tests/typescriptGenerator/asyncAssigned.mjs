@@ -345,10 +345,12 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
-    __stack.locals.x = compute(5, {
+    const __childStack_x = __ctx.forkStack()
+__stack.locals.x = compute(5, {
       ctx: __ctx,
       threads: new ThreadStore(),
-      interruptData: __state?.interruptData
+      interruptData: __state?.interruptData,
+      stateStack: __childStack_x
     });
 __self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
     await __ctx.audit({
@@ -360,10 +362,12 @@ __self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { _
     __stack.step++;
   }
   if (__step <= 2) {
-    __stack.locals.y = compute(10, {
+    const __childStack_y = __ctx.forkStack()
+__stack.locals.y = compute(10, {
       ctx: __ctx,
       threads: new ThreadStore(),
-      interruptData: __state?.interruptData
+      interruptData: __state?.interruptData,
+      stateStack: __childStack_y
     });
 __self.__pendingKey_y = __ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });
     await __ctx.audit({

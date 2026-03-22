@@ -116,6 +116,7 @@ export class TypeScriptBuilder {
   private parallelThreadVars: Record<string, string> = {};
   private loopVars: string[] = [];
   private insideMessageThread: boolean = false;
+  private anonCounter: number = 0;
 
   private programInfo: ProgramInfo;
   private moduleId: string;
@@ -1082,6 +1083,16 @@ export class TypeScriptBuilder {
     ) {
       // Async unassigned calls: register with pending promise store, no interrupt check
       if (node.async) {
+        // For agency functions, fork the stack for per-thread isolation
+        if (this.isAgencyFunction(node.functionName, "topLevelStatement") && !this.isGraphNode(node.functionName)) {
+          const childStackVar = `__childStack_anon_${this.anonCounter++}`;
+          const forkCall = ts.raw(`const ${childStackVar} = __ctx.forkStack()`);
+          const callWithStack = this.generateFunctionCallExpression(node, "topLevelStatement", { stateStack: ts.id(childStackVar) });
+          return ts.statements([
+            forkCall,
+            ts.raw(`__ctx.pendingPromises.add(${this.str(callWithStack)})`),
+          ]);
+        }
         return ts.raw(
           `__ctx.pendingPromises.add(${this.str(callNode)})`,
         );
@@ -1179,6 +1190,7 @@ export class TypeScriptBuilder {
   private generateFunctionCallExpression(
     node: FunctionCall,
     context: "valueAccess" | "functionArg" | "topLevelStatement",
+    options?: { stateStack?: TsNode },
   ): TsNode {
     const functionName =
       context === "valueAccess"
@@ -1204,6 +1216,7 @@ export class TypeScriptBuilder {
         ctx: ts.runtime.ctx,
         threads: threadsExpr,
         interruptData: ts.raw("__state?.interruptData"),
+        stateStack: options?.stateStack,
       });
       const call = ts.call(ts.id(functionName), [...argNodes, configObj]);
       return shouldAwait ? ts.await(call) : call;
@@ -1487,6 +1500,20 @@ export class TypeScriptBuilder {
       ];
 
       if (value.async) {
+        // For agency functions, fork the stack for per-thread isolation
+        if (this.isAgencyFunction(value.functionName, "topLevelStatement") && !this.isGraphNode(value.functionName)) {
+          const childStackVar = `__childStack_${variableName}`;
+          // Insert forkStack before the assignment (use ts.raw to avoid audit on the fork decl)
+          stmts.splice(0, 0, ts.raw(`const ${childStackVar} = __ctx.forkStack()`));
+          // Re-generate the assignment with the stateStack param
+          stmts[1] = this.scopedAssign(
+            node.scope!,
+            variableName,
+            this.generateFunctionCallExpression(value, "topLevelStatement", { stateStack: ts.id(childStackVar) }),
+            node.accessChain,
+          );
+        }
+
         // Async: register with pending promise store, store the key, skip interrupt check
         const pendingKeyVar = `__pendingKey_${variableName}`;
         stmts.push(

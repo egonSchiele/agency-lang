@@ -59,8 +59,8 @@ export function setupFunction(args: { state?: InternalFunctionState }): {
     };
   }
 
-  const ctx = state.ctx;
-  const stack = ctx.stateStack.getNewState();
+  const stateStack = state.stateStack ?? state.ctx.stateStack;
+  const stack = stateStack.getNewState();
   const step = stack.step;
   const self = stack.locals;
 

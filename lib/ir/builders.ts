@@ -447,16 +447,22 @@ export const ts = {
     ctx,
     threads,
     interruptData,
+    stateStack,
   }: {
     ctx: TsNode;
     threads: TsNode;
     interruptData: TsNode;
+    stateStack?: TsNode;
   }): TsNode {
-    return ts.obj({
+    const entries: Record<string, TsNode> = {
       ctx,
       threads,
       interruptData,
-    });
+    };
+    if (stateStack) {
+      entries.stateStack = stateStack;
+    }
+    return ts.obj(entries);
   },
 
   newThreadStore(): TsNode {

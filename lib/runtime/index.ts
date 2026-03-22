@@ -97,7 +97,7 @@ export {
 } from "./errors.js";
 export type { RestoreOptions } from "./errors.js";
 
-export { checkpoint, restore } from "./checkpoint.js";
+export { checkpoint, getCheckpoint, restore } from "./checkpoint.js";
 
 export { CheckpointStore } from "./state/checkpointStore.js";
 export type { Checkpoint } from "./state/checkpointStore.js";

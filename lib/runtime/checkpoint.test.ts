@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { checkpoint, restore } from "./checkpoint.js";
+import { checkpoint, getCheckpoint, restore } from "./checkpoint.js";
 import { CheckpointStore } from "./state/checkpointStore.js";
 import { StateStack } from "./state/stateStack.js";
 import { GlobalStore } from "./state/globalStore.js";
@@ -75,6 +75,27 @@ describe("checkpoint()", () => {
   });
 });
 
+describe("getCheckpoint()", () => {
+  it("should return the checkpoint object", async () => {
+    const ctx = makeMockCtx();
+    const state = makeState(ctx);
+    const id = await checkpoint(state);
+    const cp = getCheckpoint(id, state);
+    expect(cp).toBeDefined();
+    expect(cp.id).toBe(id);
+    expect(cp.nodeId).toBe("process");
+    expect(cp.stack).toBeDefined();
+    expect(cp.globals).toBeDefined();
+  });
+
+  it("should throw CheckpointError for missing checkpoint", () => {
+    const ctx = makeMockCtx();
+    const state = makeState(ctx);
+    expect(() => getCheckpoint(999, state)).toThrow(CheckpointError);
+    expect(() => getCheckpoint(999, state)).toThrow(/does not exist/);
+  });
+});
+
 describe("restore()", () => {
   it("should throw RestoreSignal", async () => {
     const ctx = makeMockCtx();
@@ -108,6 +129,22 @@ describe("restore()", () => {
       expect(e).toBeInstanceOf(RestoreSignal);
       const signal = e as RestoreSignal;
       expect(signal.options).toEqual(options);
+    }
+  });
+
+  it("should accept a checkpoint object instead of an id", async () => {
+    const ctx = makeMockCtx();
+    const state = makeState(ctx);
+    const id = await checkpoint(state);
+    const cp = getCheckpoint(id, state);
+
+    try {
+      restore(cp, {}, state);
+    } catch (e) {
+      expect(e).toBeInstanceOf(RestoreSignal);
+      const signal = e as RestoreSignal;
+      expect(signal.checkpoint.id).toBe(id);
+      expect(signal.checkpoint.nodeId).toBe("process");
     }
   });
 

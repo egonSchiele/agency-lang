@@ -14,7 +14,7 @@ import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse } 
 import {
   RuntimeContext, MessageThread, ThreadStore,
   setupNode, setupFunction, runNode, runPrompt, callHook,
-  checkpoint, restore,
+  checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,

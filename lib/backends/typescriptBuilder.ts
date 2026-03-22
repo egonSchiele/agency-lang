@@ -226,7 +226,7 @@ export class TypeScriptBuilder {
 
   // Runtime functions that need __state (ctx injection) like user-defined agency functions.
   // These are imported from the runtime but need the functionCallConfig passed as the last arg.
-  private static RUNTIME_STATEFUL_FUNCTIONS = ["checkpoint", "restore"];
+  private static RUNTIME_STATEFUL_FUNCTIONS = ["checkpoint", "getCheckpoint", "restore"];
 
   private isAgencyFunction(
     functionName: string,

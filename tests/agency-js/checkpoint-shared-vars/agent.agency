@@ -1,0 +1,12 @@
+shared sharedCounter = 0
+counter = 0
+
+node main() {
+  cp = checkpoint()
+  sharedCounter = sharedCounter + 1
+  counter = counter + 1
+  if (sharedCounter < 3) {
+    restore(cp)
+  }
+  return { sharedCounter: sharedCounter, counter: counter }
+}

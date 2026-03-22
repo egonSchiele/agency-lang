@@ -135,6 +135,7 @@ export async function runNode({
         if (e instanceof RestoreSignal) {
           const cp = e.checkpoint;
           execCtx.restoreState(cp);
+          await execCtx.audit({ type: "restore", checkpointId: cp.id, nodeName: cp.nodeId });
           nodeName = cp.nodeId;
           data = {};
           isResume = true;

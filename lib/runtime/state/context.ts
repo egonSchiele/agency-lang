@@ -117,6 +117,7 @@ export class RuntimeContext<T> {
     this.pendingPromises.clear();
   }
 
+  /** @deprecated Use checkpoints.create() instead */
   stateToJSON() {
     return {
       stack: this.stateStack.toJSON(),

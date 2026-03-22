@@ -53,6 +53,12 @@ export type InterruptAudit = AuditBase & {
   args: unknown;
 };
 
+export type RestoreAudit = AuditBase & {
+  type: "restore";
+  checkpointId: number;
+  nodeName: string;
+};
+
 export type AuditEntry =
   | AssignmentAudit
   | FunctionCallAudit
@@ -61,7 +67,8 @@ export type AuditEntry =
   | ToolCallAudit
   | NodeEntryAudit
   | NodeExitAudit
-  | InterruptAudit;
+  | InterruptAudit
+  | RestoreAudit;
 
 // Distributive Omit so that discriminated union members are preserved
 export type AuditEntryInput = AuditEntry extends infer T

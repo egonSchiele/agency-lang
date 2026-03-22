@@ -1,0 +1,61 @@
+{
+  "id": 0,
+  "stack": {
+    "stack": [
+      {
+        "args": {},
+        "locals": {},
+        "threads": {
+          "threads": {},
+          "counter": 0,
+          "activeStack": []
+        },
+        "step": 1
+      },
+      {
+        "args": {
+          "amount1": 3
+        },
+        "locals": {
+          "__retryable": true,
+          "localVar": 10,
+          "total": 13,
+          "result": 13
+        },
+        "threads": null,
+        "step": 4
+      }
+    ],
+    "other": {},
+    "mode": "serialize",
+    "deserializeStackLength": 0,
+    "nodesTraversed": ["main"]
+  },
+  "globals": {
+    "store": {
+      "__internal": {
+        "__tokenStats": {
+          "usage": {
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "cachedInputTokens": 0,
+            "totalTokens": 0
+          },
+          "cost": {
+            "inputCost": 0,
+            "outputCost": 0,
+            "totalCost": 0,
+            "currency": "USD"
+          }
+        }
+      },
+      "tests/agency-js/checkpointing/get-checkpoint/agent.agency": {
+        "globalVar": 13
+      }
+    },
+    "initializedModules": [
+      "tests/agency-js/checkpointing/get-checkpoint/agent.agency"
+    ]
+  },
+  "nodeId": "main"
+}

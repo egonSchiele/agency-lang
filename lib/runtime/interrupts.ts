@@ -98,7 +98,11 @@ export async function respondToInterrupt(args: {
     };
   }
 
-  const checkpoint = ctx.checkpoints?.get(interrupt.checkpointId!) ?? interrupt.checkpoint;
+  const checkpoint =
+    interrupt.checkpoint ??
+    (interrupt.checkpointId !== undefined
+      ? ctx.checkpoints?.get(interrupt.checkpointId)
+      : undefined);
   if (!checkpoint) {
     throw new Error("No checkpoint found for interrupt. The interrupt may have been created with an older format.");
   }

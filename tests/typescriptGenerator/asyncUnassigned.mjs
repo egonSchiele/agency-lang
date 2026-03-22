@@ -338,23 +338,21 @@ const __graph = __ctx.graph;
     __stack.step++;
   }
   if (__step <= 1) {
-    const __childStack_anon_0 = __ctx.forkStack()
-__ctx.pendingPromises.add(append(1, `hello`, {
+    __ctx.pendingPromises.add(append(1, `hello`, {
   ctx: __ctx,
   threads: new ThreadStore(),
   interruptData: __state?.interruptData,
-  stateStack: __childStack_anon_0
+  stateStack: __ctx.forkStack()
 }))
     
     __stack.step++;
   }
   if (__step <= 2) {
-    const __childStack_anon_1 = __ctx.forkStack()
-__ctx.pendingPromises.add(append(0.5, `world`, {
+    __ctx.pendingPromises.add(append(0.5, `world`, {
   ctx: __ctx,
   threads: new ThreadStore(),
   interruptData: __state?.interruptData,
-  stateStack: __childStack_anon_1
+  stateStack: __ctx.forkStack()
 }))
     
     __stack.step++;

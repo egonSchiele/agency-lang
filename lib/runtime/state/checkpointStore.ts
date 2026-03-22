@@ -27,12 +27,18 @@ export class CheckpointStore {
   }
 
   create(ctx: RuntimeContext<any>): number {
+    const nodeId = ctx.stateStack.currentNodeId();
+    if (!nodeId) {
+      throw new CheckpointError(
+        "Cannot create checkpoint: no current node id in state stack.",
+      );
+    }
     const id = this.counter++;
     this.checkpoints[id] = {
       id,
       stack: ctx.stateStack.toJSON(),
       globals: ctx.globals.toJSON(),
-      nodeId: ctx.stateStack.currentNodeId() || "",
+      nodeId,
     };
     return id;
   }
@@ -43,13 +49,16 @@ export class CheckpointStore {
 
   delete(id: number): void {
     delete this.checkpoints[id];
+    delete this.restoreCounts[id];
   }
 
   // Invalidate all checkpoints with id > the given id
   invalidateAfter(id: number): void {
     for (const key of Object.keys(this.checkpoints)) {
-      if (Number(key) > id) {
-        delete this.checkpoints[Number(key)];
+      const numericKey = Number(key);
+      if (numericKey > id) {
+        delete this.checkpoints[numericKey];
+        delete this.restoreCounts[numericKey];
       }
     }
   }

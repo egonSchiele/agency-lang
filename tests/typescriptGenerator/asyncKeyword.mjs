@@ -620,12 +620,11 @@ if (isInterrupt(__stack.locals.msg)) {
     __stack.step++;
   }
   if (__step <= 2) {
-    const __childStack_res2 = __ctx.forkStack()
-__stack.locals.res2 = google(__stack.locals.msg, {
+    __stack.locals.res2 = google(__stack.locals.msg, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData,
-      stateStack: __childStack_res2
+      stateStack: __ctx.forkStack()
     });
 __self.__pendingKey_res2 = __ctx.pendingPromises.add(__stack.locals.res2, (val) => { __stack.locals.res2 = val; });
     await __ctx.audit({
@@ -637,12 +636,11 @@ __self.__pendingKey_res2 = __ctx.pendingPromises.add(__stack.locals.res2, (val) 
     __stack.step++;
   }
   if (__step <= 3) {
-    const __childStack_res1 = __ctx.forkStack()
-__stack.locals.res1 = openai(__stack.locals.msg, {
+    __stack.locals.res1 = openai(__stack.locals.msg, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData,
-      stateStack: __childStack_res1
+      stateStack: __ctx.forkStack()
     });
 __self.__pendingKey_res1 = __ctx.pendingPromises.add(__stack.locals.res1, (val) => { __stack.locals.res1 = val; });
     await __ctx.audit({

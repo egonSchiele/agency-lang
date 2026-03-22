@@ -22,7 +22,6 @@ export class RuntimeContext<T> {
   callbacks: AgencyCallbacks;
   onStreamLock: boolean;
   pendingPromises: PendingPromiseStore;
-  childStacks: StateStack[];
   graph: SimpleMachine<T>;
 
   // we need a single statelog client instance that can be used across the entire execution of the graph,
@@ -35,11 +34,13 @@ export class RuntimeContext<T> {
 
   // stored so createExecutionContext can create new StatelogClients
   private statelogConfig: StatelogConfig;
+  private maxRestores: number;
 
   constructor(args: {
     statelogConfig: StatelogConfig;
     smoltalkDefaults: Partial<SmolPromptConfig>;
     dirname: string;
+    maxRestores?: number;
   }) {
     const statelogConfig = {
       ...args.statelogConfig,
@@ -47,14 +48,14 @@ export class RuntimeContext<T> {
     };
 
     this.statelogConfig = statelogConfig;
+    this.maxRestores = args.maxRestores ?? 100;
     this.statelogClient = new StatelogClient(statelogConfig);
     this.stateStack = new StateStack();
     this.globals = GlobalStore.withTokenStats();
-    this.checkpoints = new CheckpointStore();
+    this.checkpoints = new CheckpointStore(this.maxRestores);
     this.callbacks = {};
     this.onStreamLock = false;
     this.pendingPromises = new PendingPromiseStore();
-    this.childStacks = [];
     this.dirname = args.dirname;
 
     const graphConfig = {
@@ -79,11 +80,11 @@ export class RuntimeContext<T> {
     execCtx.statelogConfig = this.statelogConfig;
     execCtx.stateStack = new StateStack();
     execCtx.globals = GlobalStore.withTokenStats();
-    execCtx.checkpoints = new CheckpointStore();
+    execCtx.maxRestores = this.maxRestores;
+    execCtx.checkpoints = new CheckpointStore(this.maxRestores);
     execCtx.callbacks = {};
     execCtx.onStreamLock = false;
     execCtx.pendingPromises = new PendingPromiseStore();
-    execCtx.childStacks = [];
     execCtx.statelogClient = new StatelogClient({
       ...this.statelogConfig,
       traceId: nanoid(),
@@ -92,9 +93,7 @@ export class RuntimeContext<T> {
   }
 
   forkStack(): StateStack {
-    const child = new StateStack();
-    this.childStacks.push(child);
-    return child;
+    return StateStack.fromJSON(this.stateStack.toJSON());
   }
 
   /** Sever references held by an execution context so GC can reclaim them. */
@@ -105,7 +104,6 @@ export class RuntimeContext<T> {
     this.checkpoints = null as any;
     this.statelogClient = null as any;
     this.callbacks = null as any;
-    this.childStacks = null as any;
   }
 
   restoreState(checkpoint: Checkpoint): void {

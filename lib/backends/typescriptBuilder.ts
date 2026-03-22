@@ -116,7 +116,7 @@ export class TypeScriptBuilder {
   private parallelThreadVars: Record<string, string> = {};
   private loopVars: string[] = [];
   private insideMessageThread: boolean = false;
-  private anonCounter: number = 0;
+
 
   private programInfo: ProgramInfo;
   private moduleId: string;
@@ -1085,13 +1085,8 @@ export class TypeScriptBuilder {
       if (node.async) {
         // For agency functions, fork the stack for per-thread isolation
         if (this.isAgencyFunction(node.functionName, "topLevelStatement") && !this.isGraphNode(node.functionName)) {
-          const childStackVar = `__childStack_anon_${this.anonCounter++}`;
-          const forkCall = ts.raw(`const ${childStackVar} = __ctx.forkStack()`);
-          const callWithStack = this.generateFunctionCallExpression(node, "topLevelStatement", { stateStack: ts.id(childStackVar) });
-          return ts.statements([
-            forkCall,
-            ts.raw(`__ctx.pendingPromises.add(${this.str(callWithStack)})`),
-          ]);
+          const callWithStack = this.generateFunctionCallExpression(node, "topLevelStatement", { stateStack: ts.raw("__ctx.forkStack()") });
+          return ts.raw(`__ctx.pendingPromises.add(${this.str(callWithStack)})`);
         }
         return ts.raw(
           `__ctx.pendingPromises.add(${this.str(callNode)})`,
@@ -1502,14 +1497,10 @@ export class TypeScriptBuilder {
       if (value.async) {
         // For agency functions, fork the stack for per-thread isolation
         if (this.isAgencyFunction(value.functionName, "topLevelStatement") && !this.isGraphNode(value.functionName)) {
-          const childStackVar = `__childStack_${variableName}`;
-          // Insert forkStack before the assignment (use ts.raw to avoid audit on the fork decl)
-          stmts.splice(0, 0, ts.raw(`const ${childStackVar} = __ctx.forkStack()`));
-          // Re-generate the assignment with the stateStack param
-          stmts[1] = this.scopedAssign(
+          stmts[stmts.length - 1] = this.scopedAssign(
             node.scope!,
             variableName,
-            this.generateFunctionCallExpression(value, "topLevelStatement", { stateStack: ts.id(childStackVar) }),
+            this.generateFunctionCallExpression(value, "topLevelStatement", { stateStack: ts.raw("__ctx.forkStack()") }),
             node.accessChain,
           );
         }
@@ -2037,16 +2028,21 @@ export class TypeScriptBuilder {
       }),
     });
 
+    const runtimeCtxArgs: Record<string, TsNode> = {
+      statelogConfig,
+      smoltalkDefaults,
+      dirname: ts.id("__dirname"),
+    };
+    if (this.agencyConfig.checkpoints?.maxRestores !== undefined) {
+      runtimeCtxArgs.maxRestores = ts.raw(
+        String(this.agencyConfig.checkpoints.maxRestores),
+      );
+    }
+
     let runtimeCtx: TsNode = ts.statements([
       ts.constDecl(
         "__globalCtx",
-        ts.new(ts.id("RuntimeContext"), [
-          ts.obj({
-            statelogConfig,
-            smoltalkDefaults,
-            dirname: ts.id("__dirname"),
-          }),
-        ]),
+        ts.new(ts.id("RuntimeContext"), [ts.obj(runtimeCtxArgs)]),
       ),
       ts.constDecl("graph", $(ts.runtime.globalCtx).prop("graph").done()),
     ]);

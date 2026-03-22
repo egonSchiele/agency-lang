@@ -265,8 +265,10 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
 } else if (__state.interruptData?.interruptResponse?.type === "modify") {
   throw new Error("Interrupt response of type 'modify' is used for modifying tool call args. Use resolve instead.");
 } else {
+  const __checkpointId = __ctx.checkpoints.create(__ctx);
   const __interruptResult = interrupt(`What is your name?`);
-  __interruptResult.state = __ctx.stateToJSON();
+  __interruptResult.checkpointId = __checkpointId;
+  __interruptResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
   
   return { messages: __threads, data: __interruptResult };
   

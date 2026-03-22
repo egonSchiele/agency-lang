@@ -5,6 +5,7 @@ import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import { RestoreSignal } from "./errors.js";
 import * as smoltalk from "smoltalk";
 import { RuntimeContext } from "./state/context.js";
+import type { Checkpoint } from "./state/checkpointStore.js";
 import { GraphState } from "./types.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { color } from "termcolors";
@@ -58,7 +59,9 @@ export type Interrupt<T = any> = {
   type: "interrupt";
   data: T;
   interruptData?: InterruptData;
-  state?: InterruptState;
+  checkpointId?: number;
+  checkpoint?: Checkpoint;
+  state?: InterruptState;  // kept for backward compat migration shim
 };
 
 export function interrupt<T = any>(data: T): Interrupt<T> {
@@ -84,11 +87,24 @@ export async function respondToInterrupt(args: {
   const interruptResponse = deepClone(args.interruptResponse);
   const { ctx, metadata = {} } = args;
 
+  // Migration shim for old-format interrupts
+  if (interrupt.state && !interrupt.checkpoint) {
+    const nodesTraversed = interrupt.state.stack.nodesTraversed || [];
+    interrupt.checkpoint = {
+      id: -1,
+      stack: interrupt.state.stack,
+      globals: interrupt.state.globals,
+      nodeId: nodesTraversed[nodesTraversed.length - 1],
+    };
+  }
+
+  const checkpoint = ctx.checkpoints?.get(interrupt.checkpointId!) ?? interrupt.checkpoint;
+  if (!checkpoint) {
+    throw new Error("No checkpoint found for interrupt. The interrupt may have been created with an older format.");
+  }
+
   const execCtx = ctx.createExecutionContext();
-  const savedState = interrupt.state!;
-  execCtx.stateStack = StateStack.fromJSON(savedState.stack);
-  execCtx.stateStack.deserializeMode();
-  execCtx.globals = GlobalStore.fromJSON(savedState.globals);
+  execCtx.restoreState(checkpoint);
 
   if (metadata.callbacks) {
     execCtx.callbacks = metadata.callbacks;
@@ -105,9 +121,7 @@ export async function respondToInterrupt(args: {
     };
   }
 
-  // start at the last node we visited
-  const nodesTraversed = execCtx.stateStack.nodesTraversed || [];
-  let nodeName = nodesTraversed[nodesTraversed.length - 1];
+  let nodeName = checkpoint.nodeId;
   await execCtx.audit({ type: "interrupt", nodeName, args: interruptResponse });
   try {
     while (true) {

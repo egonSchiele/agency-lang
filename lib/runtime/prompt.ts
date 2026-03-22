@@ -472,7 +472,9 @@ export async function runPrompt(args: {
         model: clientConfig.model,
       });
 
-      interrupt.state = ctx.stateToJSON();
+      const checkpointId = ctx.checkpoints.create(ctx);
+      interrupt.checkpointId = checkpointId;
+      interrupt.checkpoint = ctx.checkpoints.get(checkpointId);
       return interrupt;
     }
 

@@ -316,8 +316,10 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   return __resolvedValue;
   
 } else {
+  const __checkpointId = __ctx.checkpoints.create(__ctx);
   const __interruptResult = interrupt(`Agent wants to call the greet function with name: ${__stack.args.name} and age: ${__stack.args.age}`);
-  __interruptResult.state = __ctx.stateToJSON();
+  __interruptResult.checkpointId = __checkpointId;
+  __interruptResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
   
   
   return __interruptResult;

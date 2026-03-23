@@ -3,7 +3,7 @@ import { RuntimeContext, StateStack, ThreadStore } from "./index.js";
 import { ThreadStoreJSON } from "./state/threadStore.js";
 import { SimpleMachine } from "@/simplemachine/graph.js";
 import { StatelogClient } from "@/statelogClient.js";
-import { InterruptData } from "./interrupts.js";
+import { InterruptData, InterruptBatch } from "./interrupts.js";
 
 export type GraphState = {
   messages: ThreadStore;
@@ -36,11 +36,13 @@ export type NodeReturnValue<T> = {
   messages: ThreadStore;
 };
 
-export type RunNodeResult<T> = {
-  messages: ThreadStoreJSON;
-  data: T;
-  tokens?: TokenStats;
-};
+export type RunNodeResult<T> =
+  | {
+      messages: ThreadStoreJSON;
+      data: T;
+      tokens?: TokenStats;
+    }
+  | InterruptBatch;
 
 export type TokenStats = {
   usage: TokenUsage;

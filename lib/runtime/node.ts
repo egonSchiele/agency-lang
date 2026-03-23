@@ -119,7 +119,19 @@ export async function runNode({
           ctx: execCtx,
           isResume,
         }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
-        await execCtx.pendingPromises.awaitAll();
+        const interrupts = await execCtx.pendingPromises.awaitAll();
+        if (interrupts.length > 0) {
+          const checkpointId = execCtx.checkpoints.create(execCtx);
+          const checkpoint = execCtx.checkpoints.get(checkpointId);
+          if (!checkpoint) {
+            throw new Error("Failed to retrieve checkpoint after creation");
+          }
+          return {
+            type: "interrupt_batch",
+            interrupts,
+            checkpoint,
+          };
+        }
         await execCtx.audit({ type: "nodeExit", nodeName });
         const returnObject = createReturnObject({
           result,

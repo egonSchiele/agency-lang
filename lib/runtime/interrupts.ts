@@ -9,6 +9,7 @@ import type { Checkpoint } from "./state/checkpointStore.js";
 import { GraphState } from "./types.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { color } from "termcolors";
+import { nanoid } from "nanoid";
 
 export type InterruptApprove = {
   type: "approve";
@@ -57,6 +58,7 @@ export type InterruptState = {
 
 export type Interrupt<T = any> = {
   type: "interrupt";
+  interrupt_id: string;    // nanoid — globally unique
   data: T;
   interruptData?: InterruptData;
   checkpointId?: number;
@@ -67,12 +69,23 @@ export type Interrupt<T = any> = {
 export function interrupt<T = any>(data: T): Interrupt<T> {
   return {
     type: "interrupt",
+    interrupt_id: nanoid(),
     data,
   };
 }
 
 export function isInterrupt(obj: any): obj is Interrupt {
   return obj && obj.type === "interrupt";
+}
+
+export type InterruptBatch = {
+  type: "interrupt_batch";
+  interrupts: Interrupt[];
+  checkpoint: Checkpoint;
+};
+
+export function isInterruptBatch(obj: any): obj is InterruptBatch {
+  return obj && obj.type === "interrupt_batch";
 }
 
 export async function respondToInterrupt(args: {

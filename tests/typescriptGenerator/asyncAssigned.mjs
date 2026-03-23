@@ -337,12 +337,21 @@ const __graph = __ctx.graph;
 
     __stack.step++;
   }
-  if (__step <= 1) {
-    __stack.locals.x = compute(5, {
+  if (__step <= 1 || (__stack.branches && __stack.branches[1])) {
+    let __forked
+if (__stack.branches && __stack.branches[__stack.step]) {
+  __forked = __stack.branches[__stack.step].stack;
+  __forked.deserializeMode();
+} else {
+  __forked = __ctx.forkStack();
+}
+__stack.branches = __stack.branches || {}
+__stack.branches[__stack.step] = { stack: __forked }
+__stack.locals.x = compute(5, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData,
-      stateStack: __ctx.forkStack()
+      stateStack: __forked
     });
 __self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
     await __ctx.audit({
@@ -353,12 +362,21 @@ __self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { _
     
     __stack.step++;
   }
-  if (__step <= 2) {
-    __stack.locals.y = compute(10, {
+  if (__step <= 2 || (__stack.branches && __stack.branches[2])) {
+    let __forked
+if (__stack.branches && __stack.branches[__stack.step]) {
+  __forked = __stack.branches[__stack.step].stack;
+  __forked.deserializeMode();
+} else {
+  __forked = __ctx.forkStack();
+}
+__stack.branches = __stack.branches || {}
+__stack.branches[__stack.step] = { stack: __forked }
+__stack.locals.y = compute(10, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData,
-      stateStack: __ctx.forkStack()
+      stateStack: __forked
     });
 __self.__pendingKey_y = __ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });
     await __ctx.audit({

@@ -330,22 +330,40 @@ const __graph = __ctx.graph;
 
     __stack.step++;
   }
-  if (__step <= 1) {
-    __ctx.pendingPromises.add(append(1, `hello`, {
+  if (__step <= 1 || (__stack.branches && __stack.branches[1])) {
+    let __forked
+if (__stack.branches && __stack.branches[__stack.step]) {
+  __forked = __stack.branches[__stack.step].stack;
+  __forked.deserializeMode();
+} else {
+  __forked = __ctx.forkStack();
+}
+__stack.branches = __stack.branches || {}
+__stack.branches[__stack.step] = { stack: __forked }
+__ctx.pendingPromises.add(append(1, `hello`, {
   ctx: __ctx,
   threads: new ThreadStore(),
   interruptData: __state?.interruptData,
-  stateStack: __ctx.forkStack()
+  stateStack: __forked
 }))
     
     __stack.step++;
   }
-  if (__step <= 2) {
-    __ctx.pendingPromises.add(append(0.5, `world`, {
+  if (__step <= 2 || (__stack.branches && __stack.branches[2])) {
+    let __forked
+if (__stack.branches && __stack.branches[__stack.step]) {
+  __forked = __stack.branches[__stack.step].stack;
+  __forked.deserializeMode();
+} else {
+  __forked = __ctx.forkStack();
+}
+__stack.branches = __stack.branches || {}
+__stack.branches[__stack.step] = { stack: __forked }
+__ctx.pendingPromises.add(append(0.5, `world`, {
   ctx: __ctx,
   threads: new ThreadStore(),
   interruptData: __state?.interruptData,
-  stateStack: __ctx.forkStack()
+  stateStack: __forked
 }))
     
     __stack.step++;

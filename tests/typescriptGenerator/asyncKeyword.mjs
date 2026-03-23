@@ -612,12 +612,21 @@ if (isInterrupt(__stack.locals.msg)) {
     
     __stack.step++;
   }
-  if (__step <= 2) {
-    __stack.locals.res2 = google(__stack.locals.msg, {
+  if (__step <= 2 || (__stack.branches && __stack.branches[2])) {
+    let __forked
+if (__stack.branches && __stack.branches[__stack.step]) {
+  __forked = __stack.branches[__stack.step].stack;
+  __forked.deserializeMode();
+} else {
+  __forked = __ctx.forkStack();
+}
+__stack.branches = __stack.branches || {}
+__stack.branches[__stack.step] = { stack: __forked }
+__stack.locals.res2 = google(__stack.locals.msg, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData,
-      stateStack: __ctx.forkStack()
+      stateStack: __forked
     });
 __self.__pendingKey_res2 = __ctx.pendingPromises.add(__stack.locals.res2, (val) => { __stack.locals.res2 = val; });
     await __ctx.audit({
@@ -628,12 +637,21 @@ __self.__pendingKey_res2 = __ctx.pendingPromises.add(__stack.locals.res2, (val) 
     
     __stack.step++;
   }
-  if (__step <= 3) {
-    __stack.locals.res1 = openai(__stack.locals.msg, {
+  if (__step <= 3 || (__stack.branches && __stack.branches[3])) {
+    let __forked
+if (__stack.branches && __stack.branches[__stack.step]) {
+  __forked = __stack.branches[__stack.step].stack;
+  __forked.deserializeMode();
+} else {
+  __forked = __ctx.forkStack();
+}
+__stack.branches = __stack.branches || {}
+__stack.branches[__stack.step] = { stack: __forked }
+__stack.locals.res1 = openai(__stack.locals.msg, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData,
-      stateStack: __ctx.forkStack()
+      stateStack: __forked
     });
 __self.__pendingKey_res1 = __ctx.pendingPromises.add(__stack.locals.res1, (val) => { __stack.locals.res1 = val; });
     await __ctx.audit({

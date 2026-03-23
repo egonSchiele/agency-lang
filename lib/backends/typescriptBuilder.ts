@@ -116,6 +116,7 @@ export class TypeScriptBuilder {
   private parallelThreadVars: Record<string, string> = {};
   private loopVars: string[] = [];
   private insideMessageThread: boolean = false;
+  private _asyncBranchCheckNeeded: boolean = false;
 
 
   private programInfo: ProgramInfo;
@@ -1086,8 +1087,15 @@ export class TypeScriptBuilder {
       if (node.async) {
         // For agency functions, fork the stack for per-thread isolation
         if (this.isAgencyFunction(node.functionName, "topLevelStatement") && !this.isGraphNode(node.functionName)) {
-          const callWithStack = this.generateFunctionCallExpression(node, "topLevelStatement", { stateStack: ts.raw("__ctx.forkStack()") });
-          return ts.raw(`__ctx.pendingPromises.add(${this.str(callWithStack)})`);
+          const callWithStack = this.generateFunctionCallExpression(node, "topLevelStatement", { stateStack: ts.raw("__forked") });
+          this._asyncBranchCheckNeeded = true;
+          return ts.statements([
+            ts.raw(`let __forked`),
+            ts.raw(`if (__stack.branches && __stack.branches[__stack.step]) {\n  __forked = __stack.branches[__stack.step].stack;\n  __forked.deserializeMode();\n} else {\n  __forked = __ctx.forkStack();\n}`),
+            ts.raw(`__stack.branches = __stack.branches || {}`),
+            ts.raw(`__stack.branches[__stack.step] = { stack: __forked }`),
+            ts.raw(`__ctx.pendingPromises.add(${this.str(callWithStack)})`),
+          ]);
         }
         return ts.raw(
           `__ctx.pendingPromises.add(${this.str(callNode)})`,
@@ -1470,10 +1478,17 @@ export class TypeScriptBuilder {
       if (value.async) {
         // For agency functions, fork the stack for per-thread isolation
         if (this.isAgencyFunction(value.functionName, "topLevelStatement") && !this.isGraphNode(value.functionName)) {
+          this._asyncBranchCheckNeeded = true;
+          stmts.unshift(
+            ts.raw(`let __forked`),
+            ts.raw(`if (__stack.branches && __stack.branches[__stack.step]) {\n  __forked = __stack.branches[__stack.step].stack;\n  __forked.deserializeMode();\n} else {\n  __forked = __ctx.forkStack();\n}`),
+            ts.raw(`__stack.branches = __stack.branches || {}`),
+            ts.raw(`__stack.branches[__stack.step] = { stack: __forked }`),
+          );
           stmts[stmts.length - 1] = this.scopedAssign(
             node.scope!,
             variableName,
-            this.generateFunctionCallExpression(value, "topLevelStatement", { stateStack: ts.raw("__ctx.forkStack()") }),
+            this.generateFunctionCallExpression(value, "topLevelStatement", { stateStack: ts.raw("__forked") }),
             node.accessChain,
           );
         }
@@ -1943,10 +1958,12 @@ export class TypeScriptBuilder {
     opts: { isInSafeFunction?: boolean } = {},
   ): TsStepBlock[] {
     const parts: TsNode[][] = [[]];
+    const branchCheckParts = new Set<number>();
     for (const stmt of body) {
       if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type)) {
         parts.push([]);
       }
+      const currentPartIndex = parts.length - 1;
       if (!opts.isInSafeFunction && this.containsImpureCall(stmt)) {
         parts[parts.length - 1].push(
           ts.assign(ts.self("__retryable"), ts.bool(false)),
@@ -1962,8 +1979,12 @@ export class TypeScriptBuilder {
           parts[parts.length - 1].push(audit.node);
         }
       }
+      if (this._asyncBranchCheckNeeded) {
+        branchCheckParts.add(currentPartIndex);
+        this._asyncBranchCheckNeeded = false;
+      }
     }
-    return parts.map((part, i) => ts.stepBlock(i, ts.statements(part)));
+    return parts.map((part, i) => ts.stepBlock(i, ts.statements(part), branchCheckParts.has(i)));
   }
 
   // ------- Imports and pre/post processing -------

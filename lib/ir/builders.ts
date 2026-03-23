@@ -347,8 +347,8 @@ export const ts = {
     return { kind: "functionReturn", value };
   },
 
-  stepBlock(stepIndex: number, body: TsNode): TsStepBlock {
-    return { kind: "stepBlock", stepIndex, body };
+  stepBlock(stepIndex: number, body: TsNode, branchCheck?: boolean): TsStepBlock {
+    return { kind: "stepBlock", stepIndex, body, ...(branchCheck ? { branchCheck } : {}) };
   },
 
   empty(): TsEmpty {

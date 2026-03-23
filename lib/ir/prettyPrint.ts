@@ -241,7 +241,10 @@ export function printTs(node: TsNode, indent = 0): string {
 
     case "stepBlock": {
       const stepBody = printBody(node.body, indent);
-      return `if (__step <= ${node.stepIndex}) {\n${stepBody}\n${ind(indent + 1)}__stack.step++;\n${ind(indent)}}`;
+      const guard = node.branchCheck
+        ? `if (__step <= ${node.stepIndex} || (__stack.branches && __stack.branches[${node.stepIndex}])) {`
+        : `if (__step <= ${node.stepIndex}) {`;
+      return `${guard}\n${stepBody}\n${ind(indent + 1)}__stack.step++;\n${ind(indent)}}`;
     }
 
     case "empty":

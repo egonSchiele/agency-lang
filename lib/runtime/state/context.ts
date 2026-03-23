@@ -93,7 +93,7 @@ export class RuntimeContext<T> {
   }
 
   forkStack(): StateStack {
-    return StateStack.fromJSON(this.stateStack.toJSON());
+    return new StateStack();
   }
 
   /** Sever references held by an execution context so GC can reclaim them. */

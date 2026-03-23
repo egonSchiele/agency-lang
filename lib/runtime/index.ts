@@ -91,7 +91,6 @@ export type { ToolHandler } from "./prompt.js";
 
 export {
   ToolCallError,
-  ConcurrentInterruptError,
   CheckpointError,
   RestoreSignal,
 } from "./errors.js";

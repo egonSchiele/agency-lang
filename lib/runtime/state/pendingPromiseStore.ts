@@ -1,5 +1,4 @@
-import { isInterrupt } from "../interrupts.js";
-import { ConcurrentInterruptError } from "../errors.js";
+import { isInterrupt, Interrupt } from "../interrupts.js";
 
 type PendingPromiseEntry = {
   promise: Promise<any>;
@@ -34,31 +33,27 @@ export class PendingPromiseStore {
     }
   }
 
-  async awaitAll(): Promise<void> {
+  async awaitAll(): Promise<Interrupt[]> {
     const keys = Object.keys(this.pending);
-    if (keys.length === 0) return;
+    if (keys.length === 0) return [];
 
     const entries = keys.map((k) => ({ key: k, entry: this.pending[k] }));
     this.pending = {};
 
     const results = await Promise.all(entries.map((e) => e.entry.promise));
 
+    const interrupts: Interrupt[] = [];
     for (let i = 0; i < entries.length; i++) {
       const { entry } = entries[i];
       const result = results[i];
 
       if (isInterrupt(result)) {
-        throw new ConcurrentInterruptError(
-          "An async function returned an interrupt while awaiting pending promises. " +
-          "Async interrupts from pending promises are not yet supported. " +
-          "Assign the async call to a variable if it may trigger an interrupt.",
-        );
-      }
-
-      if (entry.resolve) {
+        interrupts.push(result);
+      } else if (entry.resolve) {
         entry.resolve(result);
       }
     }
+    return interrupts;
   }
 
   clear(): void {

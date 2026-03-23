@@ -69,7 +69,7 @@ describe("StateStack branches serialization", () => {
       nodesTraversed: ["nodeA"],
     };
 
-    const restored = StateStack.fromJSON(json);
+    const restored = StateStack.fromJSON(json as any);
     expect(restored.stack).toHaveLength(1);
     expect(restored.nodesTraversed).toEqual(["nodeA"]);
 

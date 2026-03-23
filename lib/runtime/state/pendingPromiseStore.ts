@@ -1,5 +1,4 @@
-import { isInterrupt } from "../interrupts.js";
-import { ConcurrentInterruptError } from "../errors.js";
+import { isInterrupt, Interrupt } from "../interrupts.js";
 
 type PendingPromiseEntry = {
   promise: Promise<any>;
@@ -16,49 +15,77 @@ export class PendingPromiseStore {
     return key;
   }
 
-  async awaitPending(keys: string[]): Promise<void> {
+  // Returns the counter value at the current moment. Used to create a scope
+  // marker so that awaitScope can await only promises added after this point.
+  scopeMarker(): number {
+    return this.counter;
+  }
+
+  // Await all promises added since the given scope marker.
+  // Returns true if any resolved to an interrupt.
+  async awaitScope(marker: number): Promise<boolean> {
+    const keys = Object.keys(this.pending).filter((k) => {
+      const num = parseInt(k.replace("__pending_", ""), 10);
+      return num >= marker;
+    });
+    return this.awaitPending(keys);
+  }
+
+  // Await specific promises by key. Resolves them and calls their setters.
+  // Interrupt results are left in the store for awaitAll() to collect later.
+  // Returns true if any resolved to an interrupt.
+  async awaitPending(keys: string[]): Promise<boolean> {
     const entries = keys
       .map((k) => ({ key: k, entry: this.pending[k] }))
       .filter((e) => e.entry !== undefined);
 
-    if (entries.length === 0) return;
+    if (entries.length === 0) return false;
 
     const results = await Promise.all(entries.map((e) => e.entry!.promise));
 
+    let hasInterrupts = false;
     for (let i = 0; i < entries.length; i++) {
       const { key, entry } = entries[i];
-      if (entry!.resolve) {
-        entry!.resolve(results[i]);
+      const result = results[i];
+
+      if (isInterrupt(result)) {
+        if (entry!.resolve) {
+          entry!.resolve(result);
+        }
+        // Replace with an already-resolved promise so awaitAll can collect it.
+        this.pending[key] = { promise: Promise.resolve(result) };
+        hasInterrupts = true;
+      } else {
+        if (entry!.resolve) {
+          entry!.resolve(result);
+        }
+        delete this.pending[key];
       }
-      delete this.pending[key];
     }
+    return hasInterrupts;
   }
 
-  async awaitAll(): Promise<void> {
+  async awaitAll(): Promise<Interrupt[]> {
     const keys = Object.keys(this.pending);
-    if (keys.length === 0) return;
+    if (keys.length === 0) return [];
 
     const entries = keys.map((k) => ({ key: k, entry: this.pending[k] }));
     this.pending = {};
 
     const results = await Promise.all(entries.map((e) => e.entry.promise));
 
+    const interrupts: Interrupt[] = [];
     for (let i = 0; i < entries.length; i++) {
       const { entry } = entries[i];
       const result = results[i];
 
       if (isInterrupt(result)) {
-        throw new ConcurrentInterruptError(
-          "An async function returned an interrupt while awaiting pending promises. " +
-          "Async interrupts from pending promises are not yet supported. " +
-          "Assign the async call to a variable if it may trigger an interrupt.",
-        );
-      }
-
-      if (entry.resolve) {
+        interrupts.push(result);
+      } else if (entry.resolve) {
         entry.resolve(result);
       }
     }
+    return interrupts;
   }
 
   clear(): void {

@@ -1,0 +1,49 @@
+agency-lang (adit/concurrent-interrupts) $ pnpm run agency test tests/agency/interrupts/interrupt.test.json
+
+> agency-lang@0.0.84 agency /Users/adit/agency-lang
+> node ./dist/scripts/agency.js test tests/agency/interrupts/interrupt.test.json
+
+Running tests for tests/agency/interrupts/interrupt.test.json...
+
+Test 1/4: node=foo input=(none) interrupts=1
+Description: Test the greet function with name Adit and approve the interrupt
+
+tests/agency/interrupts/interrupt.agency → tests/agency/interrupts/interrupt.js
+Kya chal raha jai, Adit!
+  ✓ Exact match passed
+
+Test 2/4: node=bar input=(none)
+Description: Test the math function with 2 + 2
+
+/Users/adit/agency-lang/dist/lib/agents/judge.agency → __judge.js
+  ✓ LLM Judge passed (score: 100/90)
+    Reasoning: The actual output is identical to the expected output. Both strings present the math operation correctly, stating that 2 + 2 equals 4, which meets the criteria perfectly.
+
+Test 3/4: node=foo input=(none) interrupts=1
+Description: Test the greet function with name Adit and reject the interrupt
+
+Kya chal raha jai, Adit!
+  ✗ LLM Judge failed (score: 0/75)
+    Reasoning: The actual output does not indicate that the interrupt was rejected; instead, it is a casual statement in another language that does not relate to the expected response.
+    Actual Output:
+"Kya chal raha jai, Adit!"
+
+Test 4/4: node=foo input=(none) interrupts=1
+Description: Test the greet function with name Adit and modify the interrupt to use name Steve
+
+Kya chal raha jai, Adit!
+  ✗ Exact match failed
+    Expected: "Kya chal raha jai, Steve!"
+    Actual:   "Kya chal raha jai, Adit!"
+
+2/4 tests passed
+
+ FAIL  tests/agency/interrupts/interrupt.test.json
+
+ Test Files  1 failed | 0 passed (1)
+      Tests  2 failed | 2 passed (4)
+ ELIFECYCLE  Command failed with exit code 1.
+agency-lang (adit/concurrent-interrupts) $
+
+
+

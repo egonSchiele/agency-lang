@@ -347,8 +347,13 @@ export const ts = {
     return { kind: "functionReturn", value };
   },
 
-  stepBlock(stepIndex: number, body: TsNode): TsStepBlock {
-    return { kind: "stepBlock", stepIndex, body };
+  stepBlock(
+    stepIndex: number,
+    body: TsNode,
+    _branchCheck?: boolean,
+  ): TsStepBlock {
+    const branchCheck = _branchCheck ?? false;
+    return { kind: "stepBlock", stepIndex, body, branchCheck };
   },
 
   empty(): TsEmpty {
@@ -448,11 +453,13 @@ export const ts = {
     threads,
     interruptData,
     stateStack,
+    isForked,
   }: {
     ctx: TsNode;
     threads: TsNode;
     interruptData: TsNode;
     stateStack?: TsNode;
+    isForked?: boolean;
   }): TsNode {
     const entries: Record<string, TsNode> = {
       ctx,
@@ -461,6 +468,9 @@ export const ts = {
     };
     if (stateStack) {
       entries.stateStack = stateStack;
+    }
+    if (isForked) {
+      entries.isForked = ts.bool(true);
     }
     return ts.obj(entries);
   },

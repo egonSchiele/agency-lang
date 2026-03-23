@@ -1,16 +1,42 @@
 import { deepClone } from "../utils.js";
 import { ThreadStoreJSON } from "./threadStore.js";
 
+export type BranchState = {
+  // each branch gets its own state stack
+  // so it doesn't push/pop frames on other threads' stacks
+  stack: StateStack;
+
+  // if an interrupt is thrown in this branch,
+  // we save its info here
+  interrupt_id?: string;
+  interruptData?: any;
+};
+
+export type BranchStateJSON = {
+  stack: StateStackJSON;
+  interrupt_id?: string;
+  interruptData?: any;
+};
+
 // the state for each frame (a node, or a function call)
 export type State = {
   args: Record<string, any>;
   locals: Record<string, any>;
   threads: ThreadStoreJSON | null;
   step: number;
+  branches?: Record<number, BranchState>;
+};
+
+export type StateJSON = {
+  args: Record<string, any>;
+  locals: Record<string, any>;
+  threads: ThreadStoreJSON | null;
+  step: number;
+  branches?: Record<number, BranchStateJSON>;
 };
 
 export type StateStackJSON = {
-  stack: State[];
+  stack: StateJSON[];
   mode: "serialize" | "deserialize";
   other: Record<string, any>;
   deserializeStackLength: number;
@@ -75,18 +101,71 @@ export class StateStack {
   }
 
   toJSON(): StateStackJSON {
-    return deepClone({
-      stack: this.stack,
-      other: this.other,
+    return {
+      stack: this.stack.map((frame) => this.stackToJSON(frame)),
+      other: deepClone(this.other),
       mode: this.mode,
       deserializeStackLength: this.deserializeStackLength,
-      nodesTraversed: this.nodesTraversed,
-    });
+      nodesTraversed: [...this.nodesTraversed],
+    };
+  }
+
+  private branchToJSON(branch: BranchState): BranchStateJSON {
+    const json: BranchStateJSON = {
+      stack: branch.stack.toJSON(),
+    };
+    if (branch.interrupt_id) {
+      json.interrupt_id = branch.interrupt_id;
+    }
+    if (branch.interruptData) {
+      json.interruptData = deepClone(branch.interruptData);
+    }
+    return json;
+  }
+
+  private stackToJSON(state: State): StateJSON {
+    const json: StateJSON = {
+      args: deepClone(state.args),
+      locals: deepClone(state.locals),
+      threads: state.threads ? deepClone(state.threads) : null,
+      step: state.step,
+    };
+    if (state.branches) {
+      json.branches = {} as Record<number, BranchStateJSON>;
+      for (const [key, branch] of Object.entries(state.branches)) {
+        json.branches[key as unknown as number] = this.branchToJSON(branch);
+      }
+    }
+    return json;
   }
 
   static fromJSON(json: StateStackJSON): StateStack {
     const stateStack = new StateStack([], "serialize");
-    stateStack.stack = json.stack || [];
+    stateStack.stack = (json.stack || []).map((frame) => {
+      const restoredFrame: State = {
+        args: frame.args,
+        locals: frame.locals,
+        threads: frame.threads,
+        step: frame.step,
+      };
+      if ((frame as any).branches) {
+        restoredFrame.branches = {};
+        for (const [key, branch] of Object.entries(
+          (frame as any).branches as Record<string, BranchStateJSON>,
+        )) {
+          restoredFrame.branches[Number(key)] = {
+            stack: StateStack.fromJSON(branch.stack),
+            ...(branch.interrupt_id
+              ? { interrupt_id: branch.interrupt_id }
+              : {}),
+            ...(branch.interruptData
+              ? { interruptData: branch.interruptData }
+              : {}),
+          };
+        }
+      }
+      return restoredFrame;
+    });
     stateStack.nodesTraversed = json.nodesTraversed || [];
     stateStack.other = json.other || {};
     stateStack.mode = json.mode || "serialize";

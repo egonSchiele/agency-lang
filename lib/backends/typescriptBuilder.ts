@@ -3,6 +3,7 @@ import {
   AgencyNode,
   AgencyProgram,
   Assignment,
+  AwaitPending,
   InterpolationSegment,
   Literal,
   PromptSegment,
@@ -116,6 +117,8 @@ export class TypeScriptBuilder {
   private parallelThreadVars: Record<string, string> = {};
   private loopVars: string[] = [];
   private insideMessageThread: boolean = false;
+  private _asyncBranchCheckNeeded: boolean = false;
+  private _currentStepIndex: number = 0;
 
 
   private programInfo: ProgramInfo;
@@ -476,6 +479,8 @@ export class TypeScriptBuilder {
         return ts.empty();
       case "rawCode":
         return ts.raw(node.value);
+      case "awaitPending":
+        return this.processAwaitPending(node);
       case "messageThread":
         return this.processMessageThread(node);
       case "skill":
@@ -1021,6 +1026,12 @@ export class TypeScriptBuilder {
       ),
     );
 
+    // Scope marker for awaitScope — used by interrupt templates to await
+    // only the promises created in this function's scope
+    setupStmts.push(
+      ts.constDecl("__scopeMarker", ts.raw("__ctx.pendingPromises.scopeMarker()")),
+    );
+
     // Try/catch wrapping the body, with finally to always pop the state stack
     setupStmts.push(
       ts.tryCatch(
@@ -1044,7 +1055,7 @@ export class TypeScriptBuilder {
           ),
         ]),
         "__error",
-        ts.raw("__ctx.stateStack.pop()"),
+        ts.raw("if (!__state?.isForked && !__stack.hasChildInterrupts && !__stack.interrupted) { __setupData.stateStack.pop() }"),
       ),
     );
 
@@ -1086,8 +1097,16 @@ export class TypeScriptBuilder {
       if (node.async) {
         // For agency functions, fork the stack for per-thread isolation
         if (this.isAgencyFunction(node.functionName, "topLevelStatement") && !this.isGraphNode(node.functionName)) {
-          const callWithStack = this.generateFunctionCallExpression(node, "topLevelStatement", { stateStack: ts.raw("__ctx.forkStack()") });
-          return ts.raw(`__ctx.pendingPromises.add(${this.str(callWithStack)})`);
+          const callWithStack = this.generateFunctionCallExpression(node, "topLevelStatement", { stateStack: ts.raw("__forked") });
+          this._asyncBranchCheckNeeded = true;
+          const branchKey = this._currentStepIndex;
+          return ts.statements([
+            ts.raw(`let __forked`),
+            ts.raw(`if (__stack.branches && __stack.branches[${branchKey}]) {\n  __forked = __stack.branches[${branchKey}].stack;\n  __forked.deserializeMode();\n} else {\n  __forked = __ctx.forkStack();\n}`),
+            ts.raw(`__stack.branches = __stack.branches || {}`),
+            ts.raw(`__stack.branches[${branchKey}] = { stack: __forked }`),
+            ts.raw(`__ctx.pendingPromises.add(${this.str(callWithStack)})`),
+          ]);
         }
         return ts.raw(
           `__ctx.pendingPromises.add(${this.str(callNode)})`,
@@ -1108,7 +1127,6 @@ export class TypeScriptBuilder {
         ts.if(
           ts.call(ts.id("isInterrupt"), [ts.id(tempVar)]),
           ts.statements([
-            ts.raw("await __ctx.pendingPromises.awaitAll()"),
             ts.return(returnBody),
           ]),
         ),
@@ -1202,6 +1220,7 @@ export class TypeScriptBuilder {
         threads: threadsExpr,
         interruptData: ts.raw("__state?.interruptData"),
         stateStack: options?.stateStack,
+        isForked: node.async,
       });
       const call = ts.call(ts.id(functionName), [...argNodes, configObj]);
       return shouldAwait ? ts.await(call) : call;
@@ -1300,6 +1319,8 @@ export class TypeScriptBuilder {
         statelogClient: ts.ctx("statelogClient"),
         graph: ts.ctx("graph"),
       }),
+
+      ts.constDecl("__scopeMarker", ts.raw("__ctx.pendingPromises.scopeMarker()")),
 
       ts.callHook("onNodeStart", { nodeName: ts.str(nodeName) }),
     ];
@@ -1444,7 +1465,7 @@ export class TypeScriptBuilder {
       return ts.raw(
         renderInterruptAssignment.default({
           assignResolve: makeAssign(
-            "__state.interruptData.interruptResponse.value",
+            "__ir.value",
           ),
           assignApprove: makeAssign("true"),
           assignReject: makeAssign("false"),
@@ -1470,10 +1491,18 @@ export class TypeScriptBuilder {
       if (value.async) {
         // For agency functions, fork the stack for per-thread isolation
         if (this.isAgencyFunction(value.functionName, "topLevelStatement") && !this.isGraphNode(value.functionName)) {
+          this._asyncBranchCheckNeeded = true;
+          const branchKey = this._currentStepIndex;
+          stmts.unshift(
+            ts.raw(`let __forked`),
+            ts.raw(`if (__stack.branches && __stack.branches[${branchKey}]) {\n  __forked = __stack.branches[${branchKey}].stack;\n  __forked.deserializeMode();\n} else {\n  __forked = __ctx.forkStack();\n}`),
+            ts.raw(`__stack.branches = __stack.branches || {}`),
+            ts.raw(`__stack.branches[${branchKey}] = { stack: __forked }`),
+          );
           stmts[stmts.length - 1] = this.scopedAssign(
             node.scope!,
             variableName,
-            this.generateFunctionCallExpression(value, "topLevelStatement", { stateStack: ts.raw("__ctx.forkStack()") }),
+            this.generateFunctionCallExpression(value, "topLevelStatement", { stateStack: ts.raw("__forked") }),
             node.accessChain,
           );
         }
@@ -1487,7 +1516,7 @@ export class TypeScriptBuilder {
           ),
         );
       } else if (this.getCurrentScope().type !== "global") {
-        // Sync: interrupt check with awaitAll before return
+        // Sync: interrupt check — return immediately, runNode's awaitAll handles the rest
         const returnObj =
           this.getCurrentScope().type === "node"
             ? ts.obj([ts.setSpread(ts.runtime.state), ts.set("data", varRef)])
@@ -1495,10 +1524,7 @@ export class TypeScriptBuilder {
         stmts.push(
           ts.if(
             $(ts.id("isInterrupt")).call([varRef]).done(),
-            ts.statements([
-              ts.raw("await __ctx.pendingPromises.awaitAll()"),
-              ts.return(returnObj),
-            ]),
+            ts.return(returnObj),
           ),
         );
       }
@@ -1688,7 +1714,7 @@ export class TypeScriptBuilder {
     runPromptEntries.maxToolCallRounds = ts.num(
       this.agencyConfig.maxToolCallRounds || 10,
     );
-    runPromptEntries.interruptData = ts.raw("__state?.interruptData");
+    runPromptEntries.interruptData = ts.raw("__self.__interruptId ? __ctx.getInterruptData(__self.__interruptId) : __state?.interruptData");
     runPromptEntries.removedTools = ts.self("__removedTools");
 
     const runPromptCall = $(ts.id("runPrompt"))
@@ -1728,7 +1754,7 @@ export class TypeScriptBuilder {
         ts.if(
           $(ts.id("isInterrupt")).call([varRef]).done(),
           ts.statements([
-            ts.raw("await __ctx.pendingPromises.awaitAll()"),
+            ts.raw(`__self.__interruptId = ${this.str(varRef)}.interrupt_id`),
             returnExpr,
           ]),
         ),
@@ -1824,6 +1850,34 @@ export class TypeScriptBuilder {
     if (node.printTime) {
       stmts.push(ts.str("Time taken:"), ts.id(timingVarName), ts.str("ms"));
     }
+    return ts.statements(stmts);
+  }
+
+  private processAwaitPending(node: AwaitPending): TsNode {
+    const stmts: TsNode[] = [];
+
+    // 1. Generate the awaitPending call — returns true if any resolved to an interrupt
+    const keyArray = node.variables.map((v) => `__self.__pendingKey_${v.name}`).join(", ");
+    stmts.push(ts.raw(`const __hasInterrupts = await __ctx.pendingPromises.awaitPending([${keyArray}])`));
+
+    // 2. If there are interrupts, stop executing this function body.
+    //    Set hasChildInterrupts so the finally block won't pop the frame.
+    //    The interrupts stay in the flat PendingPromiseStore for awaitAll() to collect.
+    const scope = this.getCurrentScope();
+    const returnValue =
+      scope.type === "node"
+        ? ts.obj([ts.setSpread(ts.runtime.state), ts.set("data", ts.raw("undefined"))])
+        : ts.raw("undefined");
+    stmts.push(
+      ts.if(
+        ts.id("__hasInterrupts"),
+        ts.statements([
+          ts.raw("__stack.hasChildInterrupts = true"),
+          ts.return(returnValue),
+        ]),
+      ),
+    );
+
     return ts.statements(stmts);
   }
 
@@ -1943,10 +1997,13 @@ export class TypeScriptBuilder {
     opts: { isInSafeFunction?: boolean } = {},
   ): TsStepBlock[] {
     const parts: TsNode[][] = [[]];
+    const branchCheckParts = new Set<number>();
     for (const stmt of body) {
       if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type)) {
         parts.push([]);
       }
+      const currentPartIndex = parts.length - 1;
+      this._currentStepIndex = currentPartIndex;
       if (!opts.isInSafeFunction && this.containsImpureCall(stmt)) {
         parts[parts.length - 1].push(
           ts.assign(ts.self("__retryable"), ts.bool(false)),
@@ -1962,8 +2019,12 @@ export class TypeScriptBuilder {
           parts[parts.length - 1].push(audit.node);
         }
       }
+      if (this._asyncBranchCheckNeeded) {
+        branchCheckParts.add(currentPartIndex);
+        this._asyncBranchCheckNeeded = false;
+      }
     }
-    return parts.map((part, i) => ts.stepBlock(i, ts.statements(part)));
+    return parts.map((part, i) => ts.stepBlock(i, ts.statements(part), branchCheckParts.has(i)));
   }
 
   // ------- Imports and pre/post processing -------

@@ -275,6 +275,7 @@ export interface TsStepBlock {
   kind: "stepBlock";
   stepIndex: number;
   body: TsNode;
+  branchCheck?: boolean;
 }
 
 /** No-op node — produces no output. Used for AST nodes handled elsewhere (e.g. imports collected in a separate pass). */

@@ -1,0 +1,12 @@
+def a() {
+  response = interrupt("approve a?")
+}
+
+def b() {
+  response = interrupt("approve b?")
+}
+
+node main() {
+  async a()
+  async b()
+}

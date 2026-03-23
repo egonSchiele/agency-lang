@@ -1,0 +1,15 @@
+def a(): string {
+  response = interrupt("approve a?")
+  return "a done"
+}
+
+def b(): string {
+  response = interrupt("approve b?")
+  return "b done"
+}
+
+node main() {
+  x = async a()
+  y = async b()
+  return { x: x, y: y }
+}

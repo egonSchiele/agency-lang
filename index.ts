@@ -1,10 +1,4 @@
-import {
-  foo,
-  approveInterrupt,
-  rejectInterrupt,
-  modifyInterrupt,
-  resolveInterrupt,
-} from "./foo.js";
+import { foo, respondToInterrupts, isInterruptBatch } from "./foo.js";
 import readline from "readline";
 import type { StreamChunk } from "smoltalk";
 import { color } from "termcolors";
@@ -47,14 +41,20 @@ const callbacks = {
 
 async function main() {
   let finalState = (await foo({ callbacks })) as any;
-  // console.log("\nFinal result:", JSON.stringify(finalState, null, 2));
   let result = finalState.data;
-  while (isInterrupt(result)) {
+  console.log("\nFinal result:", JSON.stringify(finalState, null, 2));
+  while (isInterruptBatch(result)) {
+    const responses: Record<string, any> = {};
+    for (const intr of result.interrupts) {
+      responses[intr.interrupt_id] = { type: "approve" };
+    }
+
+    result = (await respondToInterrupts(result, responses)).data;
+    console.log("\nFinal result:", JSON.stringify(result, null, 2));
+  }
+  /*   while (isInterrupt(result)) {
     console.log("Execution interrupted with message:", result.data);
-    /*     const response = await input("Give a name: ");
-    finalState = await resolveInterrupt(result, response, { callbacks });
-    result = finalState.data;
- */ const response = await input("Do you want to approve? (yes/no) ");
+    const response = await input("Do you want to approve? (yes/no) ");
     if (response.toLowerCase() === "yes" || response.toLowerCase() === "y") {
       finalState = await approveInterrupt(result, { callbacks });
       result = finalState.data;
@@ -70,16 +70,17 @@ async function main() {
         { name: response },
         { callbacks },
       );
-      /* finalState = await modifyInterrupt(
+       finalState = await modifyInterrupt(
         result,
         { name: response },
         { callbacks },
-      ); */
+      ); 
       result = finalState.data;
     }
   }
 
-  console.log("\nFinal result:", JSON.stringify(result, null, 2));
+ */
+  //  console.log("\nFinal result:", JSON.stringify(result, null, 2));
 }
 
 main();

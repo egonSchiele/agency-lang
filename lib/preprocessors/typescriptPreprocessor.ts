@@ -4,6 +4,7 @@ import {
   AgencyNode,
   AgencyProgram,
   Assignment,
+  AwaitPending,
   FunctionCall,
   FunctionDefinition,
   getImportedNames,
@@ -651,7 +652,7 @@ export class TypescriptPreprocessor {
     }
 
     // Insert awaitPending calls before first usage
-    return this._insertAwaitPendingCalls(body, locationToVars);
+    return this._insertAwaitPendingCalls(body, locationToVars, asyncVarToAssignment);
   }
 
   /**
@@ -807,6 +808,7 @@ export class TypescriptPreprocessor {
   protected _insertAwaitPendingCalls(
     body: AgencyNode[],
     locationToVars: Record<string, string[]>,
+    asyncVarToAssignment: Record<string, AgencyNode>,
     currentPath: number[] = [],
   ): AgencyNode[] {
     const newBody: AgencyNode[] = [];
@@ -818,17 +820,23 @@ export class TypescriptPreprocessor {
       // Check if we need to insert awaitPending before this node
       if (locationToVars[locationKey]) {
         const vars = locationToVars[locationKey];
-        const keyArray = vars.map((v) => `__self.__pendingKey_${v}`).join(", ");
-        const awaitPendingCode: RawCode = {
-          type: "rawCode",
-          value: `await __ctx.pendingPromises.awaitPending([${keyArray}]);`,
+        const awaitPendingNode: AwaitPending = {
+          type: "awaitPending",
+          variables: vars.map((v) => {
+            const assignment = asyncVarToAssignment[v] as Assignment | undefined;
+            return {
+              name: v,
+              accessChain: assignment?.accessChain,
+              scope: assignment?.scope,
+            };
+          }),
         };
-        newBody.push(awaitPendingCode);
+        newBody.push(awaitPendingNode);
       }
 
       // Recursively process nested bodies
       if (node.type === "messageThread") {
-        node.body = this._insertAwaitPendingCalls(node.body, locationToVars, [
+        node.body = this._insertAwaitPendingCalls(node.body, locationToVars, asyncVarToAssignment, [
           ...currentPath,
           i,
         ]);
@@ -844,22 +852,26 @@ export class TypescriptPreprocessor {
             .map((n) => n.variableName);
 
           if (parallelAsyncVars.length > 0) {
-            const keyArray = parallelAsyncVars
-              .map((v) => `__self.__pendingKey_${v}`)
-              .join(", ");
             node.body.push({
-              type: "rawCode",
-              value: `await __ctx.pendingPromises.awaitPending([${keyArray}]);`,
+              type: "awaitPending",
+              variables: parallelAsyncVars.map((v) => {
+                const assignment = asyncVarToAssignment[v] as Assignment | undefined;
+                return {
+                  name: v,
+                  accessChain: assignment?.accessChain,
+                  scope: assignment?.scope,
+                };
+              }),
             });
           }
         }
       } else if (node.type === "timeBlock") {
-        node.body = this._insertAwaitPendingCalls(node.body, locationToVars, [
+        node.body = this._insertAwaitPendingCalls(node.body, locationToVars, asyncVarToAssignment, [
           ...currentPath,
           i,
         ]);
       } else if (node.type === "whileLoop") {
-        node.body = this._insertAwaitPendingCalls(node.body, locationToVars, [
+        node.body = this._insertAwaitPendingCalls(node.body, locationToVars, asyncVarToAssignment, [
           ...currentPath,
           i,
         ]);
@@ -867,12 +879,14 @@ export class TypescriptPreprocessor {
         node.thenBody = this._insertAwaitPendingCalls(
           node.thenBody,
           locationToVars,
+          asyncVarToAssignment,
           [...currentPath, i, 0],
         );
         if (node.elseBody) {
           node.elseBody = this._insertAwaitPendingCalls(
             node.elseBody,
             locationToVars,
+            asyncVarToAssignment,
             [...currentPath, i, 1],
           );
         }

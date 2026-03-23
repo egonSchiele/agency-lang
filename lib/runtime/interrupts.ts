@@ -8,7 +8,6 @@ import { RuntimeContext } from "./state/context.js";
 import type { Checkpoint } from "./state/checkpointStore.js";
 import { GraphState } from "./types.js";
 import { ThreadStore } from "./state/threadStore.js";
-import { color } from "termcolors";
 import { nanoid } from "nanoid";
 
 export type InterruptApprove = {
@@ -88,36 +87,18 @@ export function isInterruptBatch(obj: any): obj is InterruptBatch {
   return obj && obj.type === "interrupt_batch";
 }
 
-export async function respondToInterrupt(args: {
+export async function respondToInterrupts(args: {
   ctx: RuntimeContext<GraphState>;
-  interrupt: Interrupt;
-  interruptResponse: InterruptResponse;
+  checkpoint: Checkpoint;
+  responses: Record<string, InterruptResponse>;
   metadata?: Record<string, any>;
 }): Promise<any> {
-  // console.log(color.green(JSON.stringify({ args }, null, 2)));
-  //const { interrupt, interruptResponse, metadata = {} } = args;
-  const interrupt = deepClone(args.interrupt);
-  const interruptResponse = deepClone(args.interruptResponse);
   const { ctx, metadata = {} } = args;
+  const responses = deepClone(args.responses);
 
-  // Migration shim for old-format interrupts
-  if (interrupt.state && !interrupt.checkpoint) {
-    const nodesTraversed = interrupt.state.stack.nodesTraversed || [];
-    interrupt.checkpoint = {
-      id: -1,
-      stack: interrupt.state.stack,
-      globals: interrupt.state.globals,
-      nodeId: nodesTraversed[nodesTraversed.length - 1],
-    };
-  }
-
-  const checkpoint =
-    interrupt.checkpoint ??
-    (interrupt.checkpointId !== undefined
-      ? ctx.checkpoints?.get(interrupt.checkpointId)
-      : undefined);
+  const checkpoint = args.checkpoint;
   if (!checkpoint) {
-    throw new Error("No checkpoint found for interrupt. The interrupt may have been created with an older format.");
+    throw new Error("No checkpoint provided for respondToInterrupts.");
   }
 
   const execCtx = ctx.createExecutionContext();
@@ -127,38 +108,35 @@ export async function respondToInterrupt(args: {
     execCtx.callbacks = metadata.callbacks;
   }
 
-  const interruptData = interrupt.interruptData || {};
-
-  interruptData.interruptResponse = interruptResponse;
-
-  if (interruptResponse.type === "modify") {
-    interruptData.toolCall!.arguments = {
-      ...interruptData.toolCall!.arguments,
-      ...interruptResponse.newArguments,
-    };
-  }
+  // Store responses on the execution context so deserialization can access them
+  (execCtx as any).__interruptResponses = responses;
 
   let nodeName = checkpoint.nodeId;
-  await execCtx.audit({ type: "interrupt", nodeName, args: interruptResponse });
+
   try {
     while (true) {
       try {
         const result = await execCtx.graph.run(nodeName, {
-          // todo user should be able to pass messages
-          // in metadata
           messages: new ThreadStore(),
           data: {},
           ctx: execCtx,
           isResume: true,
-          interruptData,
         }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
-        await execCtx.pendingPromises.awaitAll();
+        const interrupts = await execCtx.pendingPromises.awaitAll();
+        if (interrupts.length > 0) {
+          const cpId = execCtx.checkpoints.create(execCtx);
+          const cp = execCtx.checkpoints.get(cpId);
+          return {
+            type: "interrupt_batch",
+            interrupts,
+            checkpoint: cp,
+          };
+        }
         return createReturnObject({ result, globals: execCtx.globals });
       } catch (e) {
         if (e instanceof RestoreSignal) {
           const cp = e.checkpoint;
           execCtx.restoreState(cp);
-          await execCtx.audit({ type: "restore", checkpointId: cp.id, nodeName: cp.nodeId });
           nodeName = cp.nodeId;
           execCtx.stateStack.nodesTraversed = [cp.nodeId];
           continue;
@@ -169,78 +147,6 @@ export async function respondToInterrupt(args: {
   } finally {
     execCtx.cleanup();
   }
-}
-
-export async function approveInterrupt({
-  ctx,
-  interrupt,
-  metadata,
-}: {
-  ctx: RuntimeContext<GraphState>;
-  interrupt: Interrupt;
-  metadata?: Record<string, any>;
-}): Promise<any> {
-  return await respondToInterrupt({
-    ctx,
-    interrupt,
-    interruptResponse: { type: "approve" },
-    metadata,
-  });
-}
-
-export async function modifyInterrupt({
-  ctx,
-  interrupt,
-  newArguments,
-  metadata,
-}: {
-  ctx: RuntimeContext<GraphState>;
-  interrupt: Interrupt;
-  newArguments: Record<string, any>;
-  metadata?: Record<string, any>;
-}): Promise<any> {
-  return await respondToInterrupt({
-    ctx,
-    interrupt,
-    interruptResponse: { type: "modify", newArguments },
-    metadata,
-  });
-}
-
-export async function rejectInterrupt({
-  ctx,
-  interrupt,
-  metadata,
-}: {
-  ctx: RuntimeContext<GraphState>;
-  interrupt: Interrupt;
-  metadata?: Record<string, any>;
-}): Promise<any> {
-  return await respondToInterrupt({
-    ctx,
-    interrupt,
-    interruptResponse: { type: "reject" },
-    metadata,
-  });
-}
-
-export async function resolveInterrupt({
-  ctx,
-  interrupt,
-  value,
-  metadata,
-}: {
-  ctx: RuntimeContext<GraphState>;
-  interrupt: Interrupt;
-  value: any;
-  metadata?: Record<string, any>;
-}): Promise<any> {
-  return await respondToInterrupt({
-    ctx,
-    interrupt,
-    interruptResponse: { type: "resolve", value },
-    metadata,
-  });
 }
 
 export async function resumeFromState(args: {

@@ -1,5 +1,5 @@
 export type { GraphState, InternalFunctionState } from "./types.js";
-export type { Interrupt, InterruptResponse, InterruptBatch } from "./interrupts.js";
+export type { Interrupt, InterruptResponse, InterruptBatch, InterruptData } from "./interrupts.js";
 export type { AuditEntry, AuditEntryInput } from "./audit.js";
 export { RuntimeContext } from "./state/context.js";
 export { StateStack } from "./state/stateStack.js";
@@ -77,11 +77,7 @@ export {
   interrupt,
   isInterrupt,
   isInterruptBatch,
-  respondToInterrupt,
-  approveInterrupt,
-  rejectInterrupt,
-  modifyInterrupt,
-  resolveInterrupt,
+  respondToInterrupts,
   resumeFromState,
 } from "./interrupts.js";
 

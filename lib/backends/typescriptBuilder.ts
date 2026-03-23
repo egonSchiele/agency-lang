@@ -981,6 +981,8 @@ export class TypeScriptBuilder {
         graph: ts.ctx("graph"),
       }),
 
+      ts.raw(`let __forked;`),
+
       // Ensure this module's globals are initialized on the current ctx.
       // The isInitialized flag lives on the GlobalStore and is serialized,
       // so on interrupt resume the restored store already has it set.
@@ -1101,7 +1103,7 @@ export class TypeScriptBuilder {
           this._asyncBranchCheckNeeded = true;
           const branchKey = this._currentStepIndex;
           return ts.statements([
-            ts.raw(`let __forked`),
+            //ts.raw(`let __forked`),
             ts.raw(`if (__stack.branches && __stack.branches[${branchKey}]) {\n  __forked = __stack.branches[${branchKey}].stack;\n  __forked.deserializeMode();\n} else {\n  __forked = __ctx.forkStack();\n}`),
             ts.raw(`__stack.branches = __stack.branches || {}`),
             ts.raw(`__stack.branches[${branchKey}] = { stack: __forked }`),
@@ -1118,9 +1120,9 @@ export class TypeScriptBuilder {
       const nodeContext = scope.type === "node";
       const returnBody = nodeContext
         ? ts.obj([
-            ts.setSpread(ts.runtime.state),
-            ts.set("data", ts.id(tempVar)),
-          ])
+          ts.setSpread(ts.runtime.state),
+          ts.set("data", ts.id(tempVar)),
+        ])
         : ts.obj({ data: ts.id(tempVar) });
       return ts.statements([
         ts.constDecl(tempVar, callNode),
@@ -1319,6 +1321,7 @@ export class TypeScriptBuilder {
         statelogClient: ts.ctx("statelogClient"),
         graph: ts.ctx("graph"),
       }),
+      ts.raw(`let __forked;`),
 
       ts.constDecl("__scopeMarker", ts.raw("__ctx.pendingPromises.scopeMarker()")),
 
@@ -1494,7 +1497,7 @@ export class TypeScriptBuilder {
           this._asyncBranchCheckNeeded = true;
           const branchKey = this._currentStepIndex;
           stmts.unshift(
-            ts.raw(`let __forked`),
+            //ts.raw(`let __forked`),
             ts.raw(`if (__stack.branches && __stack.branches[${branchKey}]) {\n  __forked = __stack.branches[${branchKey}].stack;\n  __forked.deserializeMode();\n} else {\n  __forked = __ctx.forkStack();\n}`),
             ts.raw(`__stack.branches = __stack.branches || {}`),
             ts.raw(`__stack.branches[${branchKey}] = { stack: __forked }`),
@@ -1601,9 +1604,9 @@ export class TypeScriptBuilder {
   ): TsNode {
     const _variableType = variableType ||
       this.getTypeHint(variableName) || {
-        type: "primitiveType" as const,
-        value: "string",
-      };
+      type: "primitiveType" as const,
+      value: "string",
+    };
 
     const zodSchema = mapTypeToZodSchema(
       _variableType,
@@ -1746,9 +1749,9 @@ export class TypeScriptBuilder {
       const isNodeContext = this.getCurrentScope().type === "node";
       const returnExpr = isNodeContext
         ? ts.nodeReturn({
-            messages: ts.runtime.threads,
-            data: varRef,
-          })
+          messages: ts.runtime.threads,
+          data: varRef,
+        })
         : ts.return(varRef);
       stmts.push(
         ts.if(
@@ -2189,8 +2192,8 @@ export class TypeScriptBuilder {
                   messages: ts.id("messages"),
                   callbacks: this.agencyConfig.audit?.logFile
                     ? ts.raw(
-                        "{ onAuditLog: __defaultonAuditLog, ...callbacks }",
-                      )
+                      "{ onAuditLog: __defaultonAuditLog, ...callbacks }",
+                    )
                     : ts.id("callbacks"),
                   initializeGlobals: ts.id("__initializeGlobals"),
                 }),

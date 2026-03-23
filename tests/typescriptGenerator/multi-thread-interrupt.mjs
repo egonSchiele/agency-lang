@@ -107,51 +107,36 @@ function tool(__name: string) {
 export { interrupt, isInterrupt, isInterruptBatch };
 export const respondToInterrupts = (checkpoint: Checkpoint, responses: Record<string, InterruptResponse>, metadata?: Record<string, any>) => _respondToInterrupts({ ctx: __globalCtx, checkpoint, responses, metadata });
 function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("asyncKeyword.agency")
+  __ctx.globals.markInitialized("multi-thread-interrupt.agency")
 }
-export const __openaiTool = {
-  name: "openai",
-  description: `No description provided.`,
-  schema: z.object({"msg": z.string(), })
-};
-export const __openaiToolParams = ["msg"];
-export const __googleTool = {
-  name: "google",
-  description: `No description provided.`,
-  schema: z.object({"msg": z.string(), })
-};
-export const __googleToolParams = ["msg"];
-export const __fibsTool = {
-  name: "fibs",
+export const __aTool = {
+  name: "a",
   description: `No description provided.`,
   schema: z.object({})
 };
-export const __fibsToolParams = [];
+export const __aToolParams = [];
+export const __bTool = {
+  name: "b",
+  description: `No description provided.`,
+  schema: z.object({})
+};
+export const __bToolParams = [];
 const __toolRegistry = {
-  openai: {
-    definition: __openaiTool,
+  a: {
+    definition: __aTool,
     handler: {
-      name: "openai",
-      params: __openaiToolParams,
-      execute: openai,
+      name: "a",
+      params: __aToolParams,
+      execute: a,
       isBuiltin: false
     }
   },
-  google: {
-    definition: __googleTool,
+  b: {
+    definition: __bTool,
     handler: {
-      name: "google",
-      params: __googleToolParams,
-      execute: google,
-      isBuiltin: false
-    }
-  },
-  fibs: {
-    definition: __fibsTool,
-    handler: {
-      name: "fibs",
-      params: __fibsToolParams,
-      execute: fibs,
+      name: "b",
+      params: __bToolParams,
+      execute: b,
       isBuiltin: false
     }
   },
@@ -264,7 +249,7 @@ const __toolRegistry = {
     }
   }
 };
-export async function openai(msg: string, __state: InternalFunctionState | undefined = undefined) {
+export async function a(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -276,7 +261,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
-  if (!__ctx.globals.isInitialized("asyncKeyword.agency")) {
+  if (!__ctx.globals.isInitialized("multi-thread-interrupt.agency")) {
     __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
@@ -284,234 +269,14 @@ const __graph = __ctx.graph;
     callbacks: __ctx.callbacks,
     name: "onFunctionStart",
     data: {
-      functionName: "openai",
-      args: {
-        msg: msg
-      },
-      isBuiltin: false
-    }
-  })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "openai",
-    args: {
-      msg: msg
-    },
-    result: undefined
-  })
-  __stack.args["msg"] = msg;
-  __self.__retryable = __self.__retryable ?? true;
-  try {
-    if (__step <= 0) {
-
-      __stack.step++;
-    }
-    if (__step <= 1) {
-      let __defaultTimeblockName_startTime: number = performance.now();
-__self.__removedTools = __self.__removedTools || [];
-__stack.locals.response = await runPrompt({
-        ctx: __ctx,
-        prompt: `Respond to this user message: ${__stack.args.msg}`,
-        messages: __threads.getOrCreateActive(),
-        clientConfig: {},
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-// return early from node if this is an interrupt
-if (isInterrupt(__stack.locals.response)) {
-        await __ctx.pendingPromises.awaitAll()
-        return __stack.locals.response;
-      }
-
-let __defaultTimeblockName_endTime: number = performance.now();
-let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultTimeblockName_startTime;
-"Time taken:"
-__defaultTimeblockName
-"ms"
-      await __ctx.audit({
-        type: "assignment",
-        variable: "__defaultTimeblockName_startTime",
-        value: __defaultTimeblockName_startTime
-      })
-      
-      
-      __stack.step++;
-    }
-    if (__step <= 2) {
-      const __auditReturnValue = `OpenAI response: ${__stack.locals.response}`;
-await __ctx.audit({
-        type: "return",
-        value: __auditReturnValue
-      })
-return __auditReturnValue
-      
-      __stack.step++;
-    }
-  } catch (__error) {
-    if (__error instanceof RestoreSignal) {
-      throw __error
-    }
-    if (__error instanceof ToolCallError) {
-      __error.retryable = __error.retryable && __self.__retryable
-      throw __error
-    }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
-  } finally {
-    __setupData.stateStack.pop()
-  }
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onFunctionEnd",
-    data: {
-      functionName: "openai",
-      timeTaken: performance.now() - __funcStartTime
-    }
-  })
-}
-
-
-export async function google(msg: string, __state: InternalFunctionState | undefined = undefined) {
-  const __setupData = setupFunction({
-    state: __state
-  });
-  // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
-const __step = __setupData.step;
-const __self = __setupData.self;
-const __threads = __setupData.threads;
-const __ctx = __state?.ctx || __globalCtx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
-  if (!__ctx.globals.isInitialized("asyncKeyword.agency")) {
-    __initializeGlobals(__ctx)
-  }
-  let __funcStartTime: number = performance.now();
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onFunctionStart",
-    data: {
-      functionName: "google",
-      args: {
-        msg: msg
-      },
-      isBuiltin: false
-    }
-  })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "google",
-    args: {
-      msg: msg
-    },
-    result: undefined
-  })
-  __stack.args["msg"] = msg;
-  __self.__retryable = __self.__retryable ?? true;
-  try {
-    if (__step <= 0) {
-
-      __stack.step++;
-    }
-    if (__step <= 1) {
-      __threads.active().setMessages([])
-      
-      __stack.step++;
-    }
-    if (__step <= 2) {
-      let __defaultTimeblockName_startTime: number = performance.now();
-__self.__removedTools = __self.__removedTools || [];
-__stack.locals.response = await runPrompt({
-        ctx: __ctx,
-        prompt: `Respond to this user message: ${__stack.args.msg}`,
-        messages: __threads.getOrCreateActive(),
-        clientConfig: {
-          "model": `gemini-2.5-flash-lite`
-        },
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-// return early from node if this is an interrupt
-if (isInterrupt(__stack.locals.response)) {
-        await __ctx.pendingPromises.awaitAll()
-        return __stack.locals.response;
-      }
-
-let __defaultTimeblockName_endTime: number = performance.now();
-let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultTimeblockName_startTime;
-"Time taken:"
-__defaultTimeblockName
-"ms"
-      await __ctx.audit({
-        type: "assignment",
-        variable: "__defaultTimeblockName_startTime",
-        value: __defaultTimeblockName_startTime
-      })
-      
-      __stack.step++;
-    }
-    if (__step <= 3) {
-      const __auditReturnValue = `Google response: ${__stack.locals.response}`;
-await __ctx.audit({
-        type: "return",
-        value: __auditReturnValue
-      })
-return __auditReturnValue
-      
-      __stack.step++;
-    }
-  } catch (__error) {
-    if (__error instanceof RestoreSignal) {
-      throw __error
-    }
-    if (__error instanceof ToolCallError) {
-      __error.retryable = __error.retryable && __self.__retryable
-      throw __error
-    }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
-  } finally {
-    __setupData.stateStack.pop()
-  }
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onFunctionEnd",
-    data: {
-      functionName: "google",
-      timeTaken: performance.now() - __funcStartTime
-    }
-  })
-}
-
-
-export async function fibs(__state: InternalFunctionState | undefined = undefined) {
-  const __setupData = setupFunction({
-    state: __state
-  });
-  // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
-const __step = __setupData.step;
-const __self = __setupData.self;
-const __threads = __setupData.threads;
-const __ctx = __state?.ctx || __globalCtx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
-  if (!__ctx.globals.isInitialized("asyncKeyword.agency")) {
-    __initializeGlobals(__ctx)
-  }
-  let __funcStartTime: number = performance.now();
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onFunctionStart",
-    data: {
-      functionName: "fibs",
+      functionName: "a",
       args: {},
       isBuiltin: false
     }
   })
   await __ctx.audit({
     type: "functionCall",
-    functionName: "fibs",
+    functionName: "a",
     args: {},
     result: undefined
   })
@@ -522,30 +287,38 @@ const __graph = __ctx.graph;
       __stack.step++;
     }
     if (__step <= 1) {
-      __self.__removedTools = __self.__removedTools || [];
-__stack.locals.__promptVar = await runPrompt({
-        ctx: __ctx,
-        prompt: `Generate the first 10 Fibonacci numbers`,
-        messages: __threads.getOrCreateActive(),
-        responseFormat: z.object({
-          response: z.array(z.number())
-        }),
-        clientConfig: {},
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-// return early from node if this is an interrupt
-if (isInterrupt(__stack.locals.__promptVar)) {
-        await __ctx.pendingPromises.awaitAll()
-        return __stack.locals.__promptVar;
-      }
-return __self.__promptVar
-      await __ctx.audit({
-        type: "assignment",
-        variable: "__self.__removedTools",
-        value: __self.__removedTools
-      })
+      // Remember this will be called both in a tool call context
+// and when the user is simply calling a function.
+
+// Check for a direct interruptResponse (single interrupt) or a batch response keyed by interrupt_id
+const __ir = __state.interruptData?.interruptResponse || (__ctx.__interruptResponses && __stack.locals.__interruptId ? __ctx.__interruptResponses[__stack.locals.__interruptId] : undefined);
+if (__ir?.type === "resolve") {
+  __stack.locals.response = __state.interruptData.interruptResponse.value;;
+  if (__state.interruptData) __state.interruptData.interruptResponse = null;
+  delete __ctx.__interruptResponses?.[__stack.locals.__interruptId];
+} else if (__ir?.type === "approve") {
+  __stack.locals.response = true;;
+  if (__state.interruptData) __state.interruptData.interruptResponse = null;
+  delete __ctx.__interruptResponses?.[__stack.locals.__interruptId];
+} else if (__ir?.type === "reject") {
+  // reject for tool calls handled separately
+  __stack.locals.response = false;;
+  if (__state.interruptData) __state.interruptData.interruptResponse = null;
+  delete __ctx.__interruptResponses?.[__stack.locals.__interruptId];
+} else if (__ir?.type === "modify") {
+  throw new Error("Interrupt response of type 'modify' is used for modifying tool call args. Use resolve instead.");
+} else {
+  const __interruptResult = interrupt(`approve a?`);
+  __stack.locals.__interruptId = __interruptResult.interrupt_id;
+  const __checkpointId = __ctx.checkpoints.create(__ctx);
+  __interruptResult.checkpointId = __checkpointId;
+  __interruptResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
+  
+  
+  return __interruptResult;
+  
+}
+
       
       __stack.step++;
     }
@@ -565,7 +338,103 @@ return __self.__promptVar
     callbacks: __ctx.callbacks,
     name: "onFunctionEnd",
     data: {
-      functionName: "fibs",
+      functionName: "a",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
+}
+
+
+export async function b(__state: InternalFunctionState | undefined = undefined) {
+  const __setupData = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+  if (!__ctx.globals.isInitialized("multi-thread-interrupt.agency")) {
+    __initializeGlobals(__ctx)
+  }
+  let __funcStartTime: number = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "b",
+      args: {},
+      isBuiltin: false
+    }
+  })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "b",
+    args: {},
+    result: undefined
+  })
+  __self.__retryable = __self.__retryable ?? true;
+  try {
+    if (__step <= 0) {
+
+      __stack.step++;
+    }
+    if (__step <= 1) {
+      // Remember this will be called both in a tool call context
+// and when the user is simply calling a function.
+
+// Check for a direct interruptResponse (single interrupt) or a batch response keyed by interrupt_id
+const __ir = __state.interruptData?.interruptResponse || (__ctx.__interruptResponses && __stack.locals.__interruptId ? __ctx.__interruptResponses[__stack.locals.__interruptId] : undefined);
+if (__ir?.type === "resolve") {
+  __stack.locals.response = __state.interruptData.interruptResponse.value;;
+  if (__state.interruptData) __state.interruptData.interruptResponse = null;
+  delete __ctx.__interruptResponses?.[__stack.locals.__interruptId];
+} else if (__ir?.type === "approve") {
+  __stack.locals.response = true;;
+  if (__state.interruptData) __state.interruptData.interruptResponse = null;
+  delete __ctx.__interruptResponses?.[__stack.locals.__interruptId];
+} else if (__ir?.type === "reject") {
+  // reject for tool calls handled separately
+  __stack.locals.response = false;;
+  if (__state.interruptData) __state.interruptData.interruptResponse = null;
+  delete __ctx.__interruptResponses?.[__stack.locals.__interruptId];
+} else if (__ir?.type === "modify") {
+  throw new Error("Interrupt response of type 'modify' is used for modifying tool call args. Use resolve instead.");
+} else {
+  const __interruptResult = interrupt(`approve b?`);
+  __stack.locals.__interruptId = __interruptResult.interrupt_id;
+  const __checkpointId = __ctx.checkpoints.create(__ctx);
+  __interruptResult.checkpointId = __checkpointId;
+  __interruptResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
+  
+  
+  return __interruptResult;
+  
+}
+
+      
+      __stack.step++;
+    }
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
+    }
+    if (__error instanceof ToolCallError) {
+      __error.retryable = __error.retryable && __self.__retryable
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    __setupData.stateStack.pop()
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "b",
       timeTaken: performance.now() - __funcStartTime
     }
   })
@@ -594,21 +463,22 @@ const __graph = __ctx.graph;
 
     __stack.step++;
   }
-  if (__step <= 1) {
-    __self.__retryable = false;
-    __stack.locals.msg = await input(`> `);
-if (isInterrupt(__stack.locals.msg)) {
-      await __ctx.pendingPromises.awaitAll()
-      return {
-        ...__state,
-        data: __stack.locals.msg
-      };
-    }
-    await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.msg",
-      value: __stack.locals.msg
-    })
+  if (__step <= 1 || (__stack.branches && __stack.branches[1])) {
+    let __forked
+if (__stack.branches && __stack.branches[1]) {
+  __forked = __stack.branches[1].stack;
+  __forked.deserializeMode();
+} else {
+  __forked = __ctx.forkStack();
+}
+__stack.branches = __stack.branches || {}
+__stack.branches[1] = { stack: __forked }
+__ctx.pendingPromises.add(a({
+  ctx: __ctx,
+  threads: new ThreadStore(),
+  interruptData: __state?.interruptData,
+  stateStack: __forked
+}))
     
     __stack.step++;
   }
@@ -622,63 +492,12 @@ if (__stack.branches && __stack.branches[2]) {
 }
 __stack.branches = __stack.branches || {}
 __stack.branches[2] = { stack: __forked }
-__stack.locals.res2 = google(__stack.locals.msg, {
-      ctx: __ctx,
-      threads: new ThreadStore(),
-      interruptData: __state?.interruptData,
-      stateStack: __forked
-    });
-__self.__pendingKey_res2 = __ctx.pendingPromises.add(__stack.locals.res2, (val) => { __stack.locals.res2 = val; });
-    await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.res2",
-      value: __stack.locals.res2
-    })
-    
-    __stack.step++;
-  }
-  if (__step <= 3 || (__stack.branches && __stack.branches[3])) {
-    let __forked
-if (__stack.branches && __stack.branches[3]) {
-  __forked = __stack.branches[3].stack;
-  __forked.deserializeMode();
-} else {
-  __forked = __ctx.forkStack();
-}
-__stack.branches = __stack.branches || {}
-__stack.branches[3] = { stack: __forked }
-__stack.locals.res1 = openai(__stack.locals.msg, {
-      ctx: __ctx,
-      threads: new ThreadStore(),
-      interruptData: __state?.interruptData,
-      stateStack: __forked
-    });
-__self.__pendingKey_res1 = __ctx.pendingPromises.add(__stack.locals.res1, (val) => { __stack.locals.res1 = val; });
-    await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.res1",
-      value: __stack.locals.res1
-    })
-    
-    __stack.step++;
-  }
-  if (__step <= 4) {
-    await __ctx.pendingPromises.awaitPending([__self.__pendingKey_res2, __self.__pendingKey_res1]);
-    __stack.step++;
-  }
-  if (__step <= 5) {
-    __stack.locals.results = Promise.race([__stack.locals.res1, __stack.locals.res2]);
-    await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.results",
-      value: __stack.locals.results
-    })
-    
-    __stack.step++;
-  }
-  if (__step <= 6) {
-    __self.__retryable = false;
-    await printJSON(__stack.locals.results)
+__ctx.pendingPromises.add(b({
+  ctx: __ctx,
+  threads: new ThreadStore(),
+  interruptData: __state?.interruptData,
+  stateStack: __forked
+}))
     
     __stack.step++;
   }
@@ -695,6 +514,7 @@ __self.__pendingKey_res1 = __ctx.pendingPromises.add(__stack.locals.res1, (val) 
     data: undefined
   };
 })
+
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
     ctx: __globalCtx,

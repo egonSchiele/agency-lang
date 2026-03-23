@@ -1,0 +1,31 @@
+results = []
+
+def a1() {
+  results.push("a1 done")
+}
+
+def a2(): string {
+  age = interrupt("How old are you?")
+  return age
+}
+
+def a(): string {
+  async a1()
+  x = async a2()
+  return x
+}
+
+def b(): string {
+  response = interrupt("What's your name?")
+  return response
+}
+
+def foo() {
+  x = async a()
+  y = async b()
+  return { a_result: x, b_result: y, results: results }
+}
+
+node main() {
+  return foo()
+}

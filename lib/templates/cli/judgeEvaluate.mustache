@@ -1,5 +1,17 @@
-import { judge, isInterrupt, approveInterrupt, rejectInterrupt, modifyInterrupt } from "./{{{judgeFilename:string}}}";
+import { judge, isInterrupt, isInterruptBatch, respondToInterrupts } from "./{{{judgeFilename:string}}}";
 import { writeFileSync } from "fs";
+
+function buildResponse(handler: any): any {
+  if (handler.action === "approve") {
+    return { type: "approve" };
+  } else if (handler.action === "reject") {
+    return { type: "reject" };
+  } else if (handler.action === "modify") {
+    return { type: "modify", newArguments: handler.modifiedArgs };
+  } else {
+    throw new Error("Unknown interrupt action: " + handler.action);
+  }
+}
 
 async function runJudge() {
   const actualOutput = {{{actualOutput:string}}};
@@ -12,35 +24,34 @@ async function runJudge() {
   const interruptHandlers = {{{interruptHandlersJSON?:string}}};
   let handlerIndex = 0;
 
-  while (isInterrupt(result.data)) {
-    if (handlerIndex >= interruptHandlers.length) {
-      throw new Error("Unexpected interrupt #" + (handlerIndex + 1) + ": \\"" + result.data.data + "\\". No handler provided.");
+  while (isInterrupt(result.data) || isInterruptBatch(result.data)) {
+    const batch = isInterruptBatch(result.data)
+      ? result.data
+      : { interrupts: [result.data], checkpoint: result.data.checkpoint };
+    const interrupts = batch.interrupts;
+
+    if (handlerIndex + interrupts.length > interruptHandlers.length) {
+      throw new Error("Unexpected interrupt(s) starting at #" + (handlerIndex + 1) + ". Not enough handlers provided.");
     }
 
-    const handler = interruptHandlers[handlerIndex];
-    const interruptData = result.data;
+    const responses: Record<string, any> = {};
+    for (const intr of interrupts) {
+      const handler = interruptHandlers[handlerIndex];
 
-    // Validate expected message if provided
-    if (handler.expectedMessage !== undefined && interruptData.data !== handler.expectedMessage) {
-      throw new Error(
-        "Interrupt #" + (handlerIndex + 1) + " message mismatch.\\n" +
-        "  Expected: \\"" + handler.expectedMessage + "\\"\\n" +
-        "  Actual: \\"" + interruptData.data + "\\""
-      );
+      // Validate expected message if provided
+      if (handler.expectedMessage !== undefined && intr.data !== handler.expectedMessage) {
+        throw new Error(
+          "Interrupt #" + (handlerIndex + 1) + " message mismatch.\\n" +
+          "  Expected: \\"" + handler.expectedMessage + "\\"\\n" +
+          "  Actual: \\"" + intr.data + "\\""
+        );
+      }
+
+      responses[intr.interrupt_id] = buildResponse(handler);
+      handlerIndex++;
     }
 
-    // Handle interrupt based on action
-    if (handler.action === "approve") {
-      result = await approveInterrupt(interruptData);
-    } else if (handler.action === "reject") {
-      result = await rejectInterrupt(interruptData);
-    } else if (handler.action === "modify") {
-      result = await modifyInterrupt(interruptData, handler.modifiedArgs);
-    } else {
-      throw new Error("Unknown interrupt action: " + handler.action);
-    }
-
-    handlerIndex++;
+    result = await respondToInterrupts(batch.checkpoint, responses);
   }
 
   // Check if we provided more handlers than interrupts that occurred

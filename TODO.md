@@ -133,3 +133,6 @@ Currently only TypeScript functions can be marked safe. We should be able to der
   3. Regenerate fixtures and run full test suite (make fixtures && pnpm test:run)
   4. The streaming.agency test fixture was reverted to the old stream llm(...) syntax — needs updating since that parser was removed
   5. skill() and mcp() functions (future, not part of this PR)
+
+
+  Use zod schemas in statestack fromjson func.

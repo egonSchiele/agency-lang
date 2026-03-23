@@ -5,17 +5,14 @@ import { z } from "zod";
 import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
-import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse } from "agency-lang/runtime";
+import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, Checkpoint } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt,
-  respondToInterrupt as _respondToInterrupt,
-  approveInterrupt as _approveInterrupt,
-  rejectInterrupt as _rejectInterrupt,
-  resolveInterrupt as _resolveInterrupt,
-  modifyInterrupt as _modifyInterrupt,
+  respondToInterrupts as _respondToInterrupts,
+  isInterruptBatch,
   resumeFromState as _resumeFromState,
   ToolCallError,
   RestoreSignal,
@@ -107,12 +104,8 @@ function tool(__name: string) {
 }
 
 // Interrupt re-exports bound to this module's context
-export { interrupt, isInterrupt };
-export const respondToInterrupt = (interrupt: Interrupt, response: InterruptResponse, metadata?: Record<string, any>) => _respondToInterrupt({ ctx: __globalCtx, interrupt, interruptResponse: response, metadata });
-export const approveInterrupt = (interrupt: Interrupt, metadata?: Record<string, any>) => _approveInterrupt({ ctx: __globalCtx, interrupt, metadata });
-export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, any>) => _rejectInterrupt({ ctx: __globalCtx, interrupt, metadata });
-export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
-export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
+export { interrupt, isInterrupt, isInterruptBatch };
+export const respondToInterrupts = (checkpoint: Checkpoint, responses: Record<string, InterruptResponse>, metadata?: Record<string, any>) => _respondToInterrupts({ ctx: __globalCtx, checkpoint, responses, metadata });
 function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("asyncUnassigned.agency")
 }
@@ -302,7 +295,7 @@ const __graph = __ctx.graph;
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    __setupData.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -337,22 +330,40 @@ const __graph = __ctx.graph;
 
     __stack.step++;
   }
-  if (__step <= 1) {
-    __ctx.pendingPromises.add(append(1, `hello`, {
+  if (__step <= 1 || (__stack.branches && __stack.branches[1])) {
+    let __forked
+if (__stack.branches && __stack.branches[1]) {
+  __forked = __stack.branches[1].stack;
+  __forked.deserializeMode();
+} else {
+  __forked = __ctx.forkStack();
+}
+__stack.branches = __stack.branches || {}
+__stack.branches[1] = { stack: __forked }
+__ctx.pendingPromises.add(append(1, `hello`, {
   ctx: __ctx,
   threads: new ThreadStore(),
   interruptData: __state?.interruptData,
-  stateStack: __ctx.forkStack()
+  stateStack: __forked
 }))
     
     __stack.step++;
   }
-  if (__step <= 2) {
-    __ctx.pendingPromises.add(append(0.5, `world`, {
+  if (__step <= 2 || (__stack.branches && __stack.branches[2])) {
+    let __forked
+if (__stack.branches && __stack.branches[2]) {
+  __forked = __stack.branches[2].stack;
+  __forked.deserializeMode();
+} else {
+  __forked = __ctx.forkStack();
+}
+__stack.branches = __stack.branches || {}
+__stack.branches[2] = { stack: __forked }
+__ctx.pendingPromises.add(append(0.5, `world`, {
   ctx: __ctx,
   threads: new ThreadStore(),
   interruptData: __state?.interruptData,
-  stateStack: __ctx.forkStack()
+  stateStack: __forked
 }))
     
     __stack.step++;

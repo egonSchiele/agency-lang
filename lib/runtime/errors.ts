@@ -24,10 +24,10 @@ export class RestoreSignal extends Error {
   }
 }
 
-export class ConcurrentInterruptError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ConcurrentInterruptError";
+export class InterruptBatchSignal extends Error {
+  constructor() {
+    super("InterruptBatchSignal");
+    this.name = "InterruptBatchSignal";
   }
 }
 

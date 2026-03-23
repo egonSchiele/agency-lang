@@ -5,17 +5,14 @@ import { z } from "zod";
 import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
-import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse } from "agency-lang/runtime";
+import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, Checkpoint } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt,
-  respondToInterrupt as _respondToInterrupt,
-  approveInterrupt as _approveInterrupt,
-  rejectInterrupt as _rejectInterrupt,
-  resolveInterrupt as _resolveInterrupt,
-  modifyInterrupt as _modifyInterrupt,
+  respondToInterrupts as _respondToInterrupts,
+  isInterruptBatch,
   resumeFromState as _resumeFromState,
   ToolCallError,
   RestoreSignal,
@@ -107,12 +104,8 @@ function tool(__name: string) {
 }
 
 // Interrupt re-exports bound to this module's context
-export { interrupt, isInterrupt };
-export const respondToInterrupt = (interrupt: Interrupt, response: InterruptResponse, metadata?: Record<string, any>) => _respondToInterrupt({ ctx: __globalCtx, interrupt, interruptResponse: response, metadata });
-export const approveInterrupt = (interrupt: Interrupt, metadata?: Record<string, any>) => _approveInterrupt({ ctx: __globalCtx, interrupt, metadata });
-export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, any>) => _rejectInterrupt({ ctx: __globalCtx, interrupt, metadata });
-export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
-export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
+export { interrupt, isInterrupt, isInterruptBatch };
+export const respondToInterrupts = (checkpoint: Checkpoint, responses: Record<string, InterruptResponse>, metadata?: Record<string, any>) => _respondToInterrupts({ ctx: __globalCtx, checkpoint, responses, metadata });
 function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("interrupt-in-node.agency")
 }
@@ -290,34 +283,39 @@ const __graph = __ctx.graph;
       // Remember this will be called both in a tool call context
 // and when the user is simply calling a function.
 
-if (__state.interruptData?.interruptResponse?.type === "approve") {
+// Check for a direct interruptResponse (single interrupt) or a batch response keyed by interrupt_id
+const __ir = __state.interruptData?.interruptResponse || (__ctx.__interruptResponses && __stack.locals.__interruptId ? __ctx.__interruptResponses[__stack.locals.__interruptId] : undefined);
+if (__ir?.type === "approve") {
   // approved, clear interrupt response and continue execution
-  __state.interruptData.interruptResponse = null;
-} else if (__state.interruptData?.interruptResponse?.type === "reject" && !__state.isToolCall) {
+  if (__state.interruptData) __state.interruptData.interruptResponse = null;
+  delete __ctx.__interruptResponses?.[__stack.locals.__interruptId];
+} else if (__ir?.type === "reject" && !__state.isToolCall) {
   // rejected, clear interrupt response and return early
   // tool calls will instead tell the llm that the call was rejected
-  __state.interruptData.interruptResponse = null;
+  if (__state.interruptData) __state.interruptData.interruptResponse = null;
+  delete __ctx.__interruptResponses?.[__stack.locals.__interruptId];
   
   
   return null;
   
-} else if (__state.interruptData?.interruptResponse?.type === "modify") {
+} else if (__ir?.type === "modify") {
   if (__state.isToolCall) {
     // continue, args will get modified in the tool call handler
   } else {
     throw new Error("Interrupt response of type 'modify' is not supported outside of tool calls yet.");
   }
-} else if (__state.interruptData?.interruptResponse?.type === "resolve") {
+} else if (__ir?.type === "resolve") {
   console.log(JSON.stringify(__state.interruptData, null, 2));
   throw new Error("Interrupt response of type 'resolve' cannot be returned from an interrupt call. It can only be assigned to a variable.");
-  const __resolvedValue = __state.interruptData.interruptResponse.value;
+  const __resolvedValue = __ir.value;
   
   
   return __resolvedValue;
   
 } else {
-  const __checkpointId = __ctx.checkpoints.create(__ctx);
   const __interruptResult = interrupt(`Agent wants to call the greet function with name: ${__stack.args.name} and age: ${__stack.args.age}`);
+  __stack.locals.__interruptId = __interruptResult.interrupt_id;
+  const __checkpointId = __ctx.checkpoints.create(__ctx);
   __interruptResult.checkpointId = __checkpointId;
   __interruptResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
   
@@ -349,7 +347,7 @@ return __auditReturnValue
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    __setupData.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,

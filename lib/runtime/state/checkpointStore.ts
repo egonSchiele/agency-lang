@@ -43,8 +43,12 @@ export class CheckpointStore {
     return id;
   }
 
-  get(id: number): Checkpoint | undefined {
-    return this.checkpoints[id];
+  get(id: number): Checkpoint {
+    const cp = this.checkpoints[id];
+    if (!cp) {
+      throw new CheckpointError(`Checkpoint with id ${id} not found.`);
+    }
+    return cp;
   }
 
   delete(id: number): void {

@@ -157,6 +157,16 @@ export class RuntimeContext<T> {
     const currentTokenStats = this.globals.getTokenStats();
     this.stateStack = StateStack.fromJSON(checkpoint.stack);
     this.stateStack.deserializeMode();
+
+    // The checkpoint stack has frames for all nodes traversed (e.g. bar → foo),
+    // but we resume only at the last node. Strip frames from earlier nodes so
+    // deserialization hands the correct frame to each setupNode/setupFunction.
+    const staleNodeCount = this.stateStack.nodesTraversed.length - 1;
+    if (staleNodeCount > 0) {
+      this.stateStack.stack.splice(0, staleNodeCount);
+      this.stateStack.deserializeStackLength -= staleNodeCount;
+    }
+
     this.globals = GlobalStore.fromJSON(checkpoint.globals);
     this.globals.restoreTokenStats(currentTokenStats);
     this.pendingPromises.clear();

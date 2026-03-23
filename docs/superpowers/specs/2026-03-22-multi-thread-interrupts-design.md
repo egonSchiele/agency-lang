@@ -55,9 +55,18 @@ This means the problem reduces to **serializing and deserializing a tree of stat
 
 The `State` type gains an optional `branches` field. Each branch represents a forked state stack from an async call, keyed by `__stack.step` (the step counter at the point the async call was made).
 
+At runtime, branches hold live `StateStack` instances. In serialized form, they hold `StateStackJSON`. We use separate types for clarity:
+
 ```ts
 type BranchState = {
-  stack: StateStack;        // live during execution; StateStackJSON when serialized
+  stack: StateStack;
+  interrupt_id?: string;        // nanoid, set when this thread interrupted
+  interruptData?: InterruptData;
+};
+
+type BranchStateJSON = {
+  stack: StateStackJSON;
+  interrupt_id?: string;
   interruptData?: InterruptData;
 };
 
@@ -66,7 +75,15 @@ type State = {
   locals: Record<string, any>;
   threads: ThreadStoreJSON | null;
   step: number;
-  branches?: Record<number, BranchState>;  // keyed by __stack.step
+  branches?: Record<number, BranchState>;  // live — keyed by __stack.step
+};
+
+type StateJSON = {
+  args: Record<string, any>;
+  locals: Record<string, any>;
+  threads: ThreadStoreJSON | null;
+  step: number;
+  branches?: Record<number, BranchStateJSON>;  // serialized
 };
 ```
 
@@ -123,11 +140,9 @@ __stack.branches[__stack.step] = { stack: __forked };
 __ctx.pendingPromises.add(a({ ctx: __ctx, stateStack: __forked }));
 ```
 
-The parent frame holds a live reference to each child's forked StateStack. As async threads run and modify their stacks (pushing/popping frames, incrementing step counters), the parent's branches stay up to date via the same object reference.
+The parent frame holds a live reference to each child's forked `StateStack` object — `__stack.branches[step].stack` and the async function's stack are the same JS object reference. As async threads run and modify their stacks, the parent's branches stay up to date automatically.
 
-When checkpointing, `StateStack.toJSON()` deep-clones the stack array. It needs to also serialize each branch's StateStack by calling `toJSON()` recursively. `StateStack.fromJSON()` needs to reconstruct live StateStack objects from serialized branches.
-
-The tree builds itself bottom-up: A's `awaitAll` runs before foo's `awaitAll`, so A's frame already has branches for A1 and A2 by the time foo captures A's forked stack.
+**Serialization**: The existing `StateStack.toJSON()` uses `deepClone` (`JSON.parse(JSON.stringify(...))`), which will not correctly serialize live `StateStack` instances in branches — `JSON.stringify` does not call `toJSON()` on class instances. The serialization must be updated to explicitly walk `branches` on each frame and call `toJSON()` recursively on each branch's `StateStack`. Similarly, `StateStack.fromJSON()` must reconstruct live `StateStack` objects from the serialized `BranchStateJSON` entries.
 
 `PendingPromiseStore` does not need to track forked stacks or step numbers — it remains unchanged. The tree structure is maintained entirely by the frames themselves.
 
@@ -193,7 +208,9 @@ async awaitAll(): Promise<Interrupt[]> {
 }
 ```
 
-Interrupts nest: A2's interrupt is discovered by A's `awaitAll`, which causes A to return something containing an interrupt. Foo's `awaitAll` discovers that too. As interrupts bubble up, they are flattened into a single list. By the time they reach `runNode`, we have a flat array of all interrupts from all levels of the tree.
+**How interrupts are collected**: All pending promises from all levels of nesting register on the shared `RuntimeContext.pendingPromises`. Functions do not have their own `awaitAll` — only `runNode` calls `awaitAll` at the top level. So when A calls `async a1()` and `async a2()`, those promises register on the same `PendingPromiseStore` as A and B themselves. When `awaitAll` runs in `runNode`, it sees all promises flat: A, B, A1, A2. A2's and B's promises resolve with interrupt objects; A1's and A's resolve with normal values. The interrupts are collected into a flat list regardless of nesting depth.
+
+The nesting information is NOT lost — it's preserved in the branch tree on the frames. But interrupt collection itself is flat.
 
 `ConcurrentInterruptError` is removed entirely.
 
@@ -265,11 +282,13 @@ if (batch.type === "interrupt_batch") {
 Internally, `respondToInterrupts`:
 
 1. Validates that all interrupt IDs in the batch have corresponding responses (throws if any are missing)
-2. Restores state from the checkpoint (which contains the full tree)
-3. Injects each interrupt response into the correct branch's `interruptData`, matching by `interrupt_id`
-4. Re-executes from the root node — the tree gets deserialized, each thread resumes
+2. Restores state from the checkpoint (which contains the full tree of branches)
+3. Re-executes from the root node, passing the `responses` map down through execution
+4. During deserialization, when a thread reaches an interrupt point, it finds the `interrupt_id` in the deserialized state and looks up the matching response from the `responses` map
 5. If resumed threads trigger new interrupts, returns another `InterruptBatch`
 6. Otherwise returns the final result
+
+**Interrupt-to-response matching**: The `interrupt_id` connects interrupts to responses at deserialization time. When an interrupt is created during original execution, it gets a nanoid. That same nanoid appears both on the `Interrupt` object returned to the caller AND in the serialized state tree (stored alongside the interrupted frame). On resume, when deserialization reaches an interrupt point, the code finds the `interrupt_id` in the deserialized state and looks up the corresponding response from the caller's `responses` map. No tracing from promises to branches is needed — the `interrupt_id` is the only link required. The exact location where `interrupt_id` is stored in the serialized state (e.g., on the `State` frame, as a local variable, or on the `BranchState`) is an implementation detail.
 
 The old single-interrupt functions (`approveInterrupt`, `rejectInterrupt`, `modifyInterrupt`, `resolveInterrupt`, `respondToInterrupt`) are replaced by `respondToInterrupts`.
 
@@ -290,8 +309,8 @@ The old single-interrupt functions (`approveInterrupt`, `rejectInterrupt`, `modi
 ## Files to modify
 
 ### Runtime
-- `lib/runtime/state/stateStack.ts` — add `branches` to `State` type, update `toJSON`/`fromJSON` to serialize/deserialize branches recursively
-- `lib/runtime/state/pendingPromiseStore.ts` — change `awaitAll` to return `Interrupt[]` instead of throwing `ConcurrentInterruptError`
+- `lib/runtime/state/stateStack.ts` — add `branches` to `State` type, add `BranchState`/`BranchStateJSON` types, update `toJSON`/`fromJSON` to serialize/deserialize branches recursively (cannot rely on `deepClone` for `StateStack` instances)
+- `lib/runtime/state/pendingPromiseStore.ts` — change `awaitAll` to return `Interrupt[]` instead of throwing `ConcurrentInterruptError` (no other changes needed)
 - `lib/runtime/interrupts.ts` — add `InterruptBatch` type, add `respondToInterrupts`, remove old single-interrupt functions, add `interrupt_id` to `Interrupt`
 - `lib/runtime/state/context.ts` — no changes expected (forkStack stays as-is)
 - `lib/runtime/node.ts` — update `runNode` to handle interrupt arrays from `awaitAll` and return `InterruptBatch`

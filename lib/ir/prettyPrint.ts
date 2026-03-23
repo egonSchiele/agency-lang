@@ -244,7 +244,9 @@ export function printTs(node: TsNode, indent = 0): string {
       const guard = node.branchCheck
         ? `if (__step <= ${node.stepIndex} || (__stack.branches && __stack.branches[${node.stepIndex}])) {`
         : `if (__step <= ${node.stepIndex}) {`;
-      return `${guard}\n${stepBody}\n${ind(indent + 1)}__stack.step++;\n${ind(indent)}}`;
+      return `${guard}
+      ${stepBody}
+      ${ind(indent + 1)}__stack.step++;\n${ind(indent)}}`;
     }
 
     case "empty":

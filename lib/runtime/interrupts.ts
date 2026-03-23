@@ -57,12 +57,12 @@ export type InterruptState = {
 
 export type Interrupt<T = any> = {
   type: "interrupt";
-  interrupt_id: string;    // nanoid — globally unique
+  interrupt_id: string; // nanoid — globally unique
   data: T;
   interruptData?: InterruptData;
   checkpointId?: number;
   checkpoint?: Checkpoint;
-  state?: InterruptState;  // kept for backward compat migration shim
+  state?: InterruptState; // kept for backward compat migration shim
 };
 
 export function interrupt<T = any>(data: T): Interrupt<T> {
@@ -85,6 +85,19 @@ export type InterruptBatch = {
 
 export function isInterruptBatch(obj: any): obj is InterruptBatch {
   return obj && obj.type === "interrupt_batch";
+}
+
+function interruptBatch(
+  interrupts: Interrupt[],
+  execCtx: RuntimeContext<any>,
+): InterruptBatch {
+  const cpId = execCtx.checkpoints.create(execCtx);
+  const cp = execCtx.checkpoints.get(cpId);
+  return {
+    type: "interrupt_batch",
+    interrupts,
+    checkpoint: cp,
+  };
 }
 
 export async function respondToInterrupts(args: {
@@ -116,33 +129,25 @@ export async function respondToInterrupts(args: {
   try {
     while (true) {
       try {
-        const result = await execCtx.graph.run(nodeName, {
-          messages: new ThreadStore(),
-          data: {},
-          ctx: execCtx,
-          isResume: true,
-        }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
+        const result = await execCtx.graph.run(
+          nodeName,
+          {
+            messages: new ThreadStore(),
+            data: {},
+            ctx: execCtx,
+            isResume: true,
+          },
+          { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) },
+        );
         const interrupts = await execCtx.pendingPromises.awaitAll();
         if (interrupts.length > 0) {
-          const cpId = execCtx.checkpoints.create(execCtx);
-          const cp = execCtx.checkpoints.get(cpId);
-          return {
-            type: "interrupt_batch",
-            interrupts,
-            checkpoint: cp,
-          };
+          return interruptBatch(interrupts, execCtx);
         }
         return createReturnObject({ result, globals: execCtx.globals });
       } catch (e) {
         if (e instanceof InterruptBatchSignal) {
           const interrupts = await execCtx.pendingPromises.awaitAll();
-          const cpId = execCtx.checkpoints.create(execCtx);
-          const cp = execCtx.checkpoints.get(cpId);
-          return {
-            type: "interrupt_batch",
-            interrupts,
-            checkpoint: cp,
-          };
+          return interruptBatch(interrupts, execCtx);
         }
         if (e instanceof RestoreSignal) {
           const cp = e.checkpoint;
@@ -181,21 +186,29 @@ export async function resumeFromState(args: {
   try {
     while (true) {
       try {
-        const result = await execCtx.graph.run(nodeName, {
-          // todo: is this correct? Do we need to pass messages here?
-          messages: new ThreadStore(),
-          ctx: execCtx,
-          isResume: true,
-          data: {},
-          //interruptData
-        }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
+        const result = await execCtx.graph.run(
+          nodeName,
+          {
+            // todo: is this correct? Do we need to pass messages here?
+            messages: new ThreadStore(),
+            ctx: execCtx,
+            isResume: true,
+            data: {},
+            //interruptData
+          },
+          { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) },
+        );
         await execCtx.pendingPromises.awaitAll();
         return createReturnObject({ result, globals: execCtx.globals });
       } catch (e) {
         if (e instanceof RestoreSignal) {
           const cp = e.checkpoint;
           execCtx.restoreState(cp);
-          await execCtx.audit({ type: "restore", checkpointId: cp.id, nodeName: cp.nodeId });
+          await execCtx.audit({
+            type: "restore",
+            checkpointId: cp.id,
+            nodeName: cp.nodeId,
+          });
           nodeName = cp.nodeId;
           execCtx.stateStack.nodesTraversed = [cp.nodeId];
           continue;

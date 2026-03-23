@@ -142,6 +142,8 @@ __ctx.pendingPromises.add(a({ ctx: __ctx, stateStack: __forked }));
 
 The parent frame holds a live reference to each child's forked `StateStack` object — `__stack.branches[step].stack` and the async function's stack are the same JS object reference. As async threads run and modify their stacks, the parent's branches stay up to date automatically.
 
+**`forkStack` changes**: The current `forkStack()` creates a deep clone of the *entire* parent state stack (all frames). This means A's forked stack would contain copies of main's and foo's frames plus A's own frame — duplicating parent frames that already exist on the main stack. For the tree design, `forkStack` should be changed to create an **empty** `StateStack`. The async function then pushes its own frame onto this empty stack via `setupFunction` as usual. This avoids duplication: parent frames live on the main stack, child frames live on their branch stacks. The serialized tree in the JSON example above reflects this — each branch contains only its own frames.
+
 **Serialization**: The existing `StateStack.toJSON()` uses `deepClone` (`JSON.parse(JSON.stringify(...))`), which will not correctly serialize live `StateStack` instances in branches — `JSON.stringify` does not call `toJSON()` on class instances. The serialization must be updated to explicitly walk `branches` on each frame and call `toJSON()` recursively on each branch's `StateStack`. Similarly, `StateStack.fromJSON()` must reconstruct live `StateStack` objects from the serialized `BranchStateJSON` entries.
 
 `PendingPromiseStore` does not need to track forked stacks or step numbers — it remains unchanged. The tree structure is maintained entirely by the frames themselves.
@@ -213,6 +215,26 @@ async awaitAll(): Promise<Interrupt[]> {
 The nesting information is NOT lost — it's preserved in the branch tree on the frames. But interrupt collection itself is flat.
 
 `ConcurrentInterruptError` is removed entirely.
+
+**`runNode` control flow**: Currently `runNode` calls `await execCtx.pendingPromises.awaitAll()` after the graph run and ignores the return value. The new flow:
+
+```ts
+// In runNode, after graph.run completes:
+const interrupts = await execCtx.pendingPromises.awaitAll();
+if (interrupts.length > 0) {
+  // Create a checkpoint capturing the full tree (branches on frames are included via toJSON)
+  const checkpoint = execCtx.checkpoints.create(execCtx);
+  return {
+    type: "interrupt_batch",
+    interrupts,
+    checkpoint,
+  };
+}
+// No interrupts — return normal result
+return createReturnObject({ result, globals: execCtx.globals });
+```
+
+The checkpoint is taken after `awaitAll` returns (all threads have settled), so the tree of branches is fully assembled on the frames. `toJSON` serializes the complete tree.
 
 ### 5. Interrupt batch — return type and IDs
 
@@ -312,7 +334,7 @@ The old single-interrupt functions (`approveInterrupt`, `rejectInterrupt`, `modi
 - `lib/runtime/state/stateStack.ts` — add `branches` to `State` type, add `BranchState`/`BranchStateJSON` types, update `toJSON`/`fromJSON` to serialize/deserialize branches recursively (cannot rely on `deepClone` for `StateStack` instances)
 - `lib/runtime/state/pendingPromiseStore.ts` — change `awaitAll` to return `Interrupt[]` instead of throwing `ConcurrentInterruptError` (no other changes needed)
 - `lib/runtime/interrupts.ts` — add `InterruptBatch` type, add `respondToInterrupts`, remove old single-interrupt functions, add `interrupt_id` to `Interrupt`
-- `lib/runtime/state/context.ts` — no changes expected (forkStack stays as-is)
+- `lib/runtime/state/context.ts` — change `forkStack` to create an empty `StateStack` instead of cloning the full parent stack
 - `lib/runtime/node.ts` — update `runNode` to handle interrupt arrays from `awaitAll` and return `InterruptBatch`
 - `lib/runtime/errors.ts` — remove `ConcurrentInterruptError`
 - `lib/runtime/index.ts` — update exports

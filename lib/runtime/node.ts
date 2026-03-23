@@ -4,6 +4,7 @@ import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
 import { RestoreSignal, InterruptBatchSignal } from "./errors.js";
 import { State, StateStack } from "./state/stateStack.js";
+import type { Checkpoint } from "./state/checkpointStore.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { GraphState, InternalFunctionState, RunNodeResult } from "./types.js";
 import { createReturnObject } from "./utils.js";
@@ -153,24 +154,52 @@ export async function runNode({
           // Each interrupt has its own per-function checkpoint (created inside the function
           // before the finally block popped the forked stack). The batch checkpoint needs
           // correct branch states. We reconstruct them from the per-function checkpoints.
-          const nodeFrame = execCtx.stateStack.stack[execCtx.stateStack.stack.length - 1];
-          if (nodeFrame && nodeFrame.branches) {
-            for (const intr of interrupts) {
-              const perFuncCp = intr.checkpointId != null
-                ? execCtx.checkpoints.get(intr.checkpointId)
-                : undefined;
-              if (perFuncCp) {
-                // The per-function checkpoint's node frame has serialized branches with the
-                // function's forked stack still intact. Copy them into the current node frame,
-                // converting from JSON back to live StateStack objects.
-                const perFuncFrame = perFuncCp.stack.stack[0];
-                if (perFuncFrame?.branches) {
-                  for (const branchKey of Object.keys(perFuncFrame.branches)) {
-                    const branchJSON = (perFuncFrame.branches as Record<string, any>)[branchKey];
+          //
+          // For nested async calls (e.g. foo() -> async a() -> async a2() with interrupt),
+          // intermediate function frames may have been popped by finally blocks before we get
+          // here. The per-function checkpoints captured the full stack before those pops.
+          // We find the checkpoint with the deepest stack and use it as a base, then merge
+          // branches from other checkpoints into the matching frames.
+          const perFuncCheckpoints: Checkpoint[] = [];
+          for (const intr of interrupts) {
+            const perFuncCp = intr.checkpointId != null
+              ? execCtx.checkpoints.get(intr.checkpointId)
+              : undefined;
+            if (perFuncCp) {
+              perFuncCheckpoints.push(perFuncCp);
+            }
+          }
+
+          if (perFuncCheckpoints.length > 0) {
+            // Sort by stack depth descending — the deepest checkpoint has the most context.
+            perFuncCheckpoints.sort((a, b) => b.stack.stack.length - a.stack.stack.length);
+            const baseCheckpoint = perFuncCheckpoints[0];
+
+            // Restore the stateStack from the deepest checkpoint to recover any
+            // intermediate function frames that were popped.
+            execCtx.stateStack = StateStack.fromJSON(baseCheckpoint.stack);
+
+            // Merge branches from other checkpoints into the restored stack.
+            for (let cpIdx = 1; cpIdx < perFuncCheckpoints.length; cpIdx++) {
+              const otherCp = perFuncCheckpoints[cpIdx];
+              // Walk through each frame and merge branches
+              for (let frameIdx = 0; frameIdx < otherCp.stack.stack.length && frameIdx < execCtx.stateStack.stack.length; frameIdx++) {
+                const targetFrame = execCtx.stateStack.stack[frameIdx];
+                const sourceFrame = otherCp.stack.stack[frameIdx];
+                if (sourceFrame.branches && targetFrame) {
+                  if (!targetFrame.branches) {
+                    targetFrame.branches = {};
+                  }
+                  for (const branchKey of Object.keys(sourceFrame.branches)) {
+                    const branchJSON = (sourceFrame.branches as Record<string, any>)[branchKey];
                     if (branchJSON?.stack?.stack?.length > 0) {
-                      (nodeFrame.branches as Record<number, any>)[Number(branchKey)] = {
-                        stack: StateStack.fromJSON(branchJSON.stack),
-                      };
+                      const existingBranch = (targetFrame.branches as Record<string, any>)[branchKey];
+                      // Only overwrite if the other checkpoint has a non-empty branch where our base is empty
+                      if (!existingBranch || !existingBranch.stack || existingBranch.stack.stack?.length === 0) {
+                        (targetFrame.branches as Record<number, any>)[Number(branchKey)] = {
+                          stack: StateStack.fromJSON(branchJSON.stack),
+                        };
+                      }
                     }
                   }
                 }

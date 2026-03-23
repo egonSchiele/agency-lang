@@ -1033,6 +1033,10 @@ export class TypeScriptBuilder {
             ts.statements([ts.throw("__error")]),
           ),
           ts.if(
+            ts.raw("__error instanceof InterruptBatchSignal"),
+            ts.statements([ts.throw("__error")]),
+          ),
+          ts.if(
             ts.raw("__error instanceof ToolCallError"),
             ts.statements([
               ts.raw(
@@ -1454,7 +1458,7 @@ export class TypeScriptBuilder {
       return ts.raw(
         renderInterruptAssignment.default({
           assignResolve: makeAssign(
-            "__state.interruptData.interruptResponse.value",
+            "__ir.value",
           ),
           assignApprove: makeAssign("true"),
           assignReject: makeAssign("false"),

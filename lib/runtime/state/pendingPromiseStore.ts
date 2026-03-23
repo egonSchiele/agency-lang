@@ -23,13 +23,37 @@ export class PendingPromiseStore {
 
     if (entries.length === 0) return;
 
-    const results = await Promise.all(entries.map((e) => e.entry!.promise));
+    // Wrap each promise to catch InterruptBatchSignal from nested async calls.
+    // When a function contains its own async calls that produce interrupts,
+    // it throws InterruptBatchSignal. Those interrupts are already stored in
+    // this shared PendingPromiseStore, so we just need to note that this
+    // branch has interrupts rather than letting the rejection propagate.
+    const NESTED_INTERRUPT = Symbol("nested_interrupt");
+    const results = await Promise.all(
+      entries.map((e) =>
+        e.entry!.promise.catch((err: any) => {
+          if (
+            err instanceof InterruptBatchSignal ||
+            (err && err.originalError instanceof InterruptBatchSignal)
+          ) {
+            return NESTED_INTERRUPT;
+          }
+          throw err;
+        })
+      )
+    );
 
     let hasInterrupts = false;
     for (let i = 0; i < entries.length; i++) {
       const { key, entry } = entries[i];
       const result = results[i];
-      if (isInterrupt(result)) {
+      if (result === NESTED_INTERRUPT) {
+        // This branch had nested async calls that produced interrupts.
+        // The interrupts are already in the pending store from the nested awaitPending.
+        // Remove this entry since the function didn't produce a usable result.
+        delete this.pending[key];
+        hasInterrupts = true;
+      } else if (isInterrupt(result)) {
         // Keep interrupts in the pending store so awaitAll() can collect them.
         // Replace the promise with an already-resolved one holding the interrupt.
         this.pending[key] = { promise: Promise.resolve(result), resolve: entry!.resolve };

@@ -21,6 +21,7 @@ import {
   resumeFromState as _resumeFromState,
   ToolCallError,
   RestoreSignal,
+  InterruptBatchSignal,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,

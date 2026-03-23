@@ -90,6 +90,7 @@ export {
   ToolCallError,
   CheckpointError,
   RestoreSignal,
+  InterruptBatchSignal,
 } from "./errors.js";
 export type { RestoreOptions } from "./errors.js";
 

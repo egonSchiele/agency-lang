@@ -24,6 +24,13 @@ export class RestoreSignal extends Error {
   }
 }
 
+export class InterruptBatchSignal extends Error {
+  constructor() {
+    super("InterruptBatchSignal");
+    this.name = "InterruptBatchSignal";
+  }
+}
+
 export class ToolCallError extends Error {
   retryable: boolean;
   originalError: unknown;

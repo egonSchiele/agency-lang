@@ -358,7 +358,7 @@ return __auditReturnValue
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    __setupData.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -471,7 +471,7 @@ return __auditReturnValue
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    __setupData.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -559,7 +559,7 @@ return __self.__promptVar
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    __setupData.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -614,14 +614,14 @@ if (isInterrupt(__stack.locals.msg)) {
   }
   if (__step <= 2 || (__stack.branches && __stack.branches[2])) {
     let __forked
-if (__stack.branches && __stack.branches[__stack.step]) {
-  __forked = __stack.branches[__stack.step].stack;
+if (__stack.branches && __stack.branches[2]) {
+  __forked = __stack.branches[2].stack;
   __forked.deserializeMode();
 } else {
   __forked = __ctx.forkStack();
 }
 __stack.branches = __stack.branches || {}
-__stack.branches[__stack.step] = { stack: __forked }
+__stack.branches[2] = { stack: __forked }
 __stack.locals.res2 = google(__stack.locals.msg, {
       ctx: __ctx,
       threads: new ThreadStore(),
@@ -639,14 +639,14 @@ __self.__pendingKey_res2 = __ctx.pendingPromises.add(__stack.locals.res2, (val) 
   }
   if (__step <= 3 || (__stack.branches && __stack.branches[3])) {
     let __forked
-if (__stack.branches && __stack.branches[__stack.step]) {
-  __forked = __stack.branches[__stack.step].stack;
+if (__stack.branches && __stack.branches[3]) {
+  __forked = __stack.branches[3].stack;
   __forked.deserializeMode();
 } else {
   __forked = __ctx.forkStack();
 }
 __stack.branches = __stack.branches || {}
-__stack.branches[__stack.step] = { stack: __forked }
+__stack.branches[3] = { stack: __forked }
 __stack.locals.res1 = openai(__stack.locals.msg, {
       ctx: __ctx,
       threads: new ThreadStore(),

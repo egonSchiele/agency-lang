@@ -2,7 +2,7 @@ import { MessageJSON } from "smoltalk";
 import { callHook } from "./hooks.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
-import { RestoreSignal } from "./errors.js";
+import { RestoreSignal, InterruptBatchSignal } from "./errors.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { GraphState, InternalFunctionState, RunNodeResult } from "./types.js";
@@ -45,6 +45,7 @@ export function setupFunction(args: { state?: InternalFunctionState }): {
   step: number;
   self: Record<string, any>;
   threads: ThreadStore;
+  stateStack: StateStack;
 } {
   const { state } = args;
   if (state === undefined) {
@@ -56,6 +57,7 @@ export function setupFunction(args: { state?: InternalFunctionState }): {
       step: 0,
       self: stack.locals,
       threads: new ThreadStore(),
+      stateStack,
     };
   }
 
@@ -68,7 +70,7 @@ export function setupFunction(args: { state?: InternalFunctionState }): {
   // if being called as a tool, we won't have threads, but we'll create an empty ThreadStore here.
   const threads = state.threads || new ThreadStore();
 
-  return { stack, step, self, threads };
+  return { stack, step, self, threads, stateStack };
 }
 
 export async function runNode({
@@ -144,6 +146,49 @@ export async function runNode({
         });
         return returnObject;
       } catch (e) {
+        if (e instanceof InterruptBatchSignal) {
+          // awaitPending detected interrupts among the async results.
+          const interrupts = await execCtx.pendingPromises.awaitAll();
+
+          // Each interrupt has its own per-function checkpoint (created inside the function
+          // before the finally block popped the forked stack). The batch checkpoint needs
+          // correct branch states. We reconstruct them from the per-function checkpoints.
+          const nodeFrame = execCtx.stateStack.stack[execCtx.stateStack.stack.length - 1];
+          if (nodeFrame && nodeFrame.branches) {
+            for (const intr of interrupts) {
+              const perFuncCp = intr.checkpointId != null
+                ? execCtx.checkpoints.get(intr.checkpointId)
+                : undefined;
+              if (perFuncCp) {
+                // The per-function checkpoint's node frame has serialized branches with the
+                // function's forked stack still intact. Copy them into the current node frame,
+                // converting from JSON back to live StateStack objects.
+                const perFuncFrame = perFuncCp.stack.stack[0];
+                if (perFuncFrame?.branches) {
+                  for (const branchKey of Object.keys(perFuncFrame.branches)) {
+                    const branchJSON = (perFuncFrame.branches as Record<string, any>)[branchKey];
+                    if (branchJSON?.stack?.stack?.length > 0) {
+                      (nodeFrame.branches as Record<number, any>)[Number(branchKey)] = {
+                        stack: StateStack.fromJSON(branchJSON.stack),
+                      };
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          const checkpointId = execCtx.checkpoints.create(execCtx);
+          const checkpoint = execCtx.checkpoints.get(checkpointId);
+          if (!checkpoint) {
+            throw new Error("Failed to retrieve checkpoint after creation");
+          }
+          return {
+            type: "interrupt_batch",
+            interrupts,
+            checkpoint,
+          };
+        }
         if (e instanceof RestoreSignal) {
           const cp = e.checkpoint;
           execCtx.restoreState(cp);

@@ -117,6 +117,7 @@ export class TypeScriptBuilder {
   private loopVars: string[] = [];
   private insideMessageThread: boolean = false;
   private _asyncBranchCheckNeeded: boolean = false;
+  private _currentStepIndex: number = 0;
 
 
   private programInfo: ProgramInfo;
@@ -1045,7 +1046,7 @@ export class TypeScriptBuilder {
           ),
         ]),
         "__error",
-        ts.raw("__ctx.stateStack.pop()"),
+        ts.raw("__setupData.stateStack.pop()"),
       ),
     );
 
@@ -1089,11 +1090,12 @@ export class TypeScriptBuilder {
         if (this.isAgencyFunction(node.functionName, "topLevelStatement") && !this.isGraphNode(node.functionName)) {
           const callWithStack = this.generateFunctionCallExpression(node, "topLevelStatement", { stateStack: ts.raw("__forked") });
           this._asyncBranchCheckNeeded = true;
+          const branchKey = this._currentStepIndex;
           return ts.statements([
             ts.raw(`let __forked`),
-            ts.raw(`if (__stack.branches && __stack.branches[__stack.step]) {\n  __forked = __stack.branches[__stack.step].stack;\n  __forked.deserializeMode();\n} else {\n  __forked = __ctx.forkStack();\n}`),
+            ts.raw(`if (__stack.branches && __stack.branches[${branchKey}]) {\n  __forked = __stack.branches[${branchKey}].stack;\n  __forked.deserializeMode();\n} else {\n  __forked = __ctx.forkStack();\n}`),
             ts.raw(`__stack.branches = __stack.branches || {}`),
-            ts.raw(`__stack.branches[__stack.step] = { stack: __forked }`),
+            ts.raw(`__stack.branches[${branchKey}] = { stack: __forked }`),
             ts.raw(`__ctx.pendingPromises.add(${this.str(callWithStack)})`),
           ]);
         }
@@ -1479,11 +1481,12 @@ export class TypeScriptBuilder {
         // For agency functions, fork the stack for per-thread isolation
         if (this.isAgencyFunction(value.functionName, "topLevelStatement") && !this.isGraphNode(value.functionName)) {
           this._asyncBranchCheckNeeded = true;
+          const branchKey = this._currentStepIndex;
           stmts.unshift(
             ts.raw(`let __forked`),
-            ts.raw(`if (__stack.branches && __stack.branches[__stack.step]) {\n  __forked = __stack.branches[__stack.step].stack;\n  __forked.deserializeMode();\n} else {\n  __forked = __ctx.forkStack();\n}`),
+            ts.raw(`if (__stack.branches && __stack.branches[${branchKey}]) {\n  __forked = __stack.branches[${branchKey}].stack;\n  __forked.deserializeMode();\n} else {\n  __forked = __ctx.forkStack();\n}`),
             ts.raw(`__stack.branches = __stack.branches || {}`),
-            ts.raw(`__stack.branches[__stack.step] = { stack: __forked }`),
+            ts.raw(`__stack.branches[${branchKey}] = { stack: __forked }`),
           );
           stmts[stmts.length - 1] = this.scopedAssign(
             node.scope!,
@@ -1964,6 +1967,7 @@ export class TypeScriptBuilder {
         parts.push([]);
       }
       const currentPartIndex = parts.length - 1;
+      this._currentStepIndex = currentPartIndex;
       if (!opts.isInSafeFunction && this.containsImpureCall(stmt)) {
         parts[parts.length - 1].push(
           ts.assign(ts.self("__retryable"), ts.bool(false)),

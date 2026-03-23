@@ -439,7 +439,7 @@ __threads.popActive()
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    __setupData.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,

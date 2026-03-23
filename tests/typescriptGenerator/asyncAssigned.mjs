@@ -302,7 +302,7 @@ return __auditReturnValue
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    __setupData.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -339,14 +339,14 @@ const __graph = __ctx.graph;
   }
   if (__step <= 1 || (__stack.branches && __stack.branches[1])) {
     let __forked
-if (__stack.branches && __stack.branches[__stack.step]) {
-  __forked = __stack.branches[__stack.step].stack;
+if (__stack.branches && __stack.branches[1]) {
+  __forked = __stack.branches[1].stack;
   __forked.deserializeMode();
 } else {
   __forked = __ctx.forkStack();
 }
 __stack.branches = __stack.branches || {}
-__stack.branches[__stack.step] = { stack: __forked }
+__stack.branches[1] = { stack: __forked }
 __stack.locals.x = compute(5, {
       ctx: __ctx,
       threads: new ThreadStore(),
@@ -364,14 +364,14 @@ __self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { _
   }
   if (__step <= 2 || (__stack.branches && __stack.branches[2])) {
     let __forked
-if (__stack.branches && __stack.branches[__stack.step]) {
-  __forked = __stack.branches[__stack.step].stack;
+if (__stack.branches && __stack.branches[2]) {
+  __forked = __stack.branches[2].stack;
   __forked.deserializeMode();
 } else {
   __forked = __ctx.forkStack();
 }
 __stack.branches = __stack.branches || {}
-__stack.branches[__stack.step] = { stack: __forked }
+__stack.branches[2] = { stack: __forked }
 __stack.locals.y = compute(10, {
       ctx: __ctx,
       threads: new ThreadStore(),

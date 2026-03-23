@@ -290,21 +290,27 @@ const __graph = __ctx.graph;
       // Remember this will be called both in a tool call context
 // and when the user is simply calling a function.
 
-if (__state.interruptData?.interruptResponse?.type === "resolve") {
+// Check for a direct interruptResponse (single interrupt) or a batch response keyed by interrupt_id
+const __ir = __state.interruptData?.interruptResponse || (__ctx.__interruptResponses && __stack.locals.__interruptId ? __ctx.__interruptResponses[__stack.locals.__interruptId] : undefined);
+if (__ir?.type === "resolve") {
   __stack.locals.response = __state.interruptData.interruptResponse.value;;
-  __state.interruptData.interruptResponse = null;
-} else if (__state.interruptData?.interruptResponse?.type === "approve") {
+  if (__state.interruptData) __state.interruptData.interruptResponse = null;
+  delete __ctx.__interruptResponses?.[__stack.locals.__interruptId];
+} else if (__ir?.type === "approve") {
   __stack.locals.response = true;;
-  __state.interruptData.interruptResponse = null;
-} else if (__state.interruptData?.interruptResponse?.type === "reject") {
+  if (__state.interruptData) __state.interruptData.interruptResponse = null;
+  delete __ctx.__interruptResponses?.[__stack.locals.__interruptId];
+} else if (__ir?.type === "reject") {
   // reject for tool calls handled separately
   __stack.locals.response = false;;
-  __state.interruptData.interruptResponse = null;
-} else if (__state.interruptData?.interruptResponse?.type === "modify") {
+  if (__state.interruptData) __state.interruptData.interruptResponse = null;
+  delete __ctx.__interruptResponses?.[__stack.locals.__interruptId];
+} else if (__ir?.type === "modify") {
   throw new Error("Interrupt response of type 'modify' is used for modifying tool call args. Use resolve instead.");
 } else {
-  const __checkpointId = __ctx.checkpoints.create(__ctx);
   const __interruptResult = interrupt(`approve a?`);
+  __stack.locals.__interruptId = __interruptResult.interrupt_id;
+  const __checkpointId = __ctx.checkpoints.create(__ctx);
   __interruptResult.checkpointId = __checkpointId;
   __interruptResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
   
@@ -326,7 +332,7 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    __setupData.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -380,21 +386,27 @@ const __graph = __ctx.graph;
       // Remember this will be called both in a tool call context
 // and when the user is simply calling a function.
 
-if (__state.interruptData?.interruptResponse?.type === "resolve") {
+// Check for a direct interruptResponse (single interrupt) or a batch response keyed by interrupt_id
+const __ir = __state.interruptData?.interruptResponse || (__ctx.__interruptResponses && __stack.locals.__interruptId ? __ctx.__interruptResponses[__stack.locals.__interruptId] : undefined);
+if (__ir?.type === "resolve") {
   __stack.locals.response = __state.interruptData.interruptResponse.value;;
-  __state.interruptData.interruptResponse = null;
-} else if (__state.interruptData?.interruptResponse?.type === "approve") {
+  if (__state.interruptData) __state.interruptData.interruptResponse = null;
+  delete __ctx.__interruptResponses?.[__stack.locals.__interruptId];
+} else if (__ir?.type === "approve") {
   __stack.locals.response = true;;
-  __state.interruptData.interruptResponse = null;
-} else if (__state.interruptData?.interruptResponse?.type === "reject") {
+  if (__state.interruptData) __state.interruptData.interruptResponse = null;
+  delete __ctx.__interruptResponses?.[__stack.locals.__interruptId];
+} else if (__ir?.type === "reject") {
   // reject for tool calls handled separately
   __stack.locals.response = false;;
-  __state.interruptData.interruptResponse = null;
-} else if (__state.interruptData?.interruptResponse?.type === "modify") {
+  if (__state.interruptData) __state.interruptData.interruptResponse = null;
+  delete __ctx.__interruptResponses?.[__stack.locals.__interruptId];
+} else if (__ir?.type === "modify") {
   throw new Error("Interrupt response of type 'modify' is used for modifying tool call args. Use resolve instead.");
 } else {
-  const __checkpointId = __ctx.checkpoints.create(__ctx);
   const __interruptResult = interrupt(`approve b?`);
+  __stack.locals.__interruptId = __interruptResult.interrupt_id;
+  const __checkpointId = __ctx.checkpoints.create(__ctx);
   __interruptResult.checkpointId = __checkpointId;
   __interruptResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
   
@@ -416,7 +428,7 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    __setupData.stateStack.pop()
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -453,14 +465,14 @@ const __graph = __ctx.graph;
   }
   if (__step <= 1 || (__stack.branches && __stack.branches[1])) {
     let __forked
-if (__stack.branches && __stack.branches[__stack.step]) {
-  __forked = __stack.branches[__stack.step].stack;
+if (__stack.branches && __stack.branches[1]) {
+  __forked = __stack.branches[1].stack;
   __forked.deserializeMode();
 } else {
   __forked = __ctx.forkStack();
 }
 __stack.branches = __stack.branches || {}
-__stack.branches[__stack.step] = { stack: __forked }
+__stack.branches[1] = { stack: __forked }
 __ctx.pendingPromises.add(a({
   ctx: __ctx,
   threads: new ThreadStore(),
@@ -472,14 +484,14 @@ __ctx.pendingPromises.add(a({
   }
   if (__step <= 2 || (__stack.branches && __stack.branches[2])) {
     let __forked
-if (__stack.branches && __stack.branches[__stack.step]) {
-  __forked = __stack.branches[__stack.step].stack;
+if (__stack.branches && __stack.branches[2]) {
+  __forked = __stack.branches[2].stack;
   __forked.deserializeMode();
 } else {
   __forked = __ctx.forkStack();
 }
 __stack.branches = __stack.branches || {}
-__stack.branches[__stack.step] = { stack: __forked }
+__stack.branches[2] = { stack: __forked }
 __ctx.pendingPromises.add(b({
   ctx: __ctx,
   threads: new ThreadStore(),

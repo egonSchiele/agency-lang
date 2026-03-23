@@ -6,29 +6,33 @@ import { apply } from "typestache";
 export const template = `// Remember this will be called both in a tool call context
 // and when the user is simply calling a function.
 
-if (__state.interruptData?.interruptResponse?.type === "approve") {
+// Check for a direct interruptResponse (single interrupt) or a batch response keyed by interrupt_id
+const __ir = __state.interruptData?.interruptResponse || (__ctx.__interruptResponses && __stack.locals.__interruptId ? __ctx.__interruptResponses[__stack.locals.__interruptId] : undefined);
+if (__ir?.type === "approve") {
   // approved, clear interrupt response and continue execution
-  __state.interruptData.interruptResponse = null;
-} else if (__state.interruptData?.interruptResponse?.type === "reject" && !__state.isToolCall) {
+  if (__state.interruptData) __state.interruptData.interruptResponse = null;
+  delete __ctx.__interruptResponses?.[__stack.locals.__interruptId];
+} else if (__ir?.type === "reject" && !__state.isToolCall) {
   // rejected, clear interrupt response and return early
   // tool calls will instead tell the llm that the call was rejected
-  __state.interruptData.interruptResponse = null;
+  if (__state.interruptData) __state.interruptData.interruptResponse = null;
+  delete __ctx.__interruptResponses?.[__stack.locals.__interruptId];
   {{#nodeContext}}
   return { messages: __threads, data: null };
   {{/nodeContext}}
   {{^nodeContext}}
   return null;
   {{/nodeContext}}
-} else if (__state.interruptData?.interruptResponse?.type === "modify") {
+} else if (__ir?.type === "modify") {
   if (__state.isToolCall) {
     // continue, args will get modified in the tool call handler
   } else {
     throw new Error("Interrupt response of type 'modify' is not supported outside of tool calls yet.");
   }
-} else if (__state.interruptData?.interruptResponse?.type === "resolve") {
+} else if (__ir?.type === "resolve") {
   console.log(JSON.stringify(__state.interruptData, null, 2));
   throw new Error("Interrupt response of type 'resolve' cannot be returned from an interrupt call. It can only be assigned to a variable.");
-  const __resolvedValue = __state.interruptData.interruptResponse.value;
+  const __resolvedValue = __ir.value;
   {{#nodeContext}}
   return { messages: __threads, data: __resolvedValue };
   {{/nodeContext}}
@@ -36,8 +40,9 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   return __resolvedValue;
   {{/nodeContext}}
 } else {
-  const __checkpointId = __ctx.checkpoints.create(__ctx);
   const __interruptResult = interrupt({{{interruptArgs}}});
+  __stack.locals.__interruptId = __interruptResult.interrupt_id;
+  const __checkpointId = __ctx.checkpoints.create(__ctx);
   __interruptResult.checkpointId = __checkpointId;
   __interruptResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
   {{#nodeContext}}

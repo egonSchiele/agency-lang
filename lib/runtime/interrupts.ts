@@ -2,7 +2,7 @@ import { deepClone } from "./utils.js";
 import { createReturnObject } from "./utils.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
-import { RestoreSignal } from "./errors.js";
+import { RestoreSignal, InterruptBatchSignal } from "./errors.js";
 import * as smoltalk from "smoltalk";
 import { RuntimeContext } from "./state/context.js";
 import type { Checkpoint } from "./state/checkpointStore.js";
@@ -134,6 +134,16 @@ export async function respondToInterrupts(args: {
         }
         return createReturnObject({ result, globals: execCtx.globals });
       } catch (e) {
+        if (e instanceof InterruptBatchSignal) {
+          const interrupts = await execCtx.pendingPromises.awaitAll();
+          const cpId = execCtx.checkpoints.create(execCtx);
+          const cp = execCtx.checkpoints.get(cpId);
+          return {
+            type: "interrupt_batch",
+            interrupts,
+            checkpoint: cp,
+          };
+        }
         if (e instanceof RestoreSignal) {
           const cp = e.checkpoint;
           execCtx.restoreState(cp);

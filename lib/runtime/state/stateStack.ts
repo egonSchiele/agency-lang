@@ -51,6 +51,10 @@ export class StateStack {
   deserializeStackLength: number = 0;
   nodesTraversed: string[] = [];
 
+  // currently not serialized, but used to track if we've hit an interrupt in the current branch
+  interrupted: boolean = false;
+  hasChildInterrupts: boolean = false;
+
   constructor(
     stack: State[] = [],
     mode: "serialize" | "deserialize" = "serialize",

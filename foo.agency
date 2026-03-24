@@ -1,11 +1,11 @@
 def greet(name: string): string {
-  return interrupt("Greet function called. Do you want to approve?")
+  //  return interrupt("Greet function called. Do you want to approve?")
   return "Howdy, ${name}!!!!!!"
 }
 
-node foo() {
+node main() {
   result: string = llm("Use the greet function to greet Adit. Return ONLY the result of the function call, nothing else.", { 
     tools: [greet]
   })
-  return result
+  print(result)
 }

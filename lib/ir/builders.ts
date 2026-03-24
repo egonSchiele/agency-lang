@@ -42,6 +42,7 @@ import type {
   TsBreak,
   TsContinue,
   TsPostfixOp,
+  TsTernary,
 } from "./tsIR.js";
 
 export { $, TsChain } from "./fluent.js";
@@ -53,6 +54,10 @@ export const ts = {
 
   statements(body: TsNode[]): TsStatements {
     return { kind: "statements", body };
+  },
+
+  statementsPush(statement: TsStatements, ...stmts: TsNode[]): TsStatements {
+    return { kind: "statements", body: [...statement.body, ...stmts] };
   },
 
   importDecl(opts: {
@@ -448,6 +453,18 @@ export const ts = {
     return ts.raw(`throw ${code}`);
   },
 
+  and(...conditions: TsNode[]): TsNode {
+    return { kind: "and", operands: conditions };
+  },
+
+  or(...conditions: TsNode[]): TsNode {
+    return { kind: "or", operands: conditions };
+  },
+
+  not(condition: TsNode): TsNode {
+    return { kind: "not", operand: condition };
+  },
+
   functionCallConfig({
     ctx,
     threads,
@@ -540,6 +557,10 @@ export const ts = {
       ts.str(varName),
       value,
     ]);
+  },
+
+  ternary(condition: TsNode, trueExpr: TsNode, falseExpr: TsNode): TsTernary {
+    return { kind: "ternary", condition, trueExpr, falseExpr };
   },
 
   /** Predefined runtime identifiers */

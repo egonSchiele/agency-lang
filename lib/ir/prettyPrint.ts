@@ -260,6 +260,18 @@ export function printTs(node: TsNode, indent = 0): string {
 
     case "postfixOp":
       return `${printTs(node.operand, indent)}${node.op}`;
+    case "and":
+      return `(${node.operands.map((o) => printTs(o, indent)).join(" && ")})`;
+    case "or":
+      return `(${node.operands.map((o) => printTs(o, indent)).join(" || ")})`;
+    case "not":
+      return `!${printTs(node.operand, indent)}`;
+    case "ternary": {
+      const condition = printTs(node.condition, indent);
+      const trueExpr = printTs(node.trueExpr, indent);
+      const falseExpr = printTs(node.falseExpr, indent);
+      return `(${condition} ? (${trueExpr}) : (${falseExpr}))`;
+    }
 
     default: {
       const _exhaustive: never = node;

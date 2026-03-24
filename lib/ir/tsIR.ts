@@ -36,7 +36,11 @@ export type TsNode =
   | TsEmpty
   | TsBreak
   | TsContinue
-  | TsPostfixOp;
+  | TsPostfixOp
+  | TsAnd
+  | TsOr
+  | TsNot
+  | TsTernary;
 
 /** Escape hatch: verbatim string */
 export interface TsRaw {
@@ -296,4 +300,26 @@ export interface TsPostfixOp {
   kind: "postfixOp";
   operand: TsNode;
   op: "++" | "--";
+}
+
+export interface TsAnd {
+  kind: "and";
+  operands: TsNode[];
+}
+
+export interface TsOr {
+  kind: "or";
+  operands: TsNode[];
+}
+
+export interface TsNot {
+  kind: "not";
+  operand: TsNode;
+}
+
+export interface TsTernary {
+  kind: "ternary";
+  condition: TsNode;
+  trueExpr: TsNode;
+  falseExpr: TsNode;
 }

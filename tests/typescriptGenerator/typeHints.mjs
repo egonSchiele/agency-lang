@@ -237,6 +237,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -245,12 +246,12 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
+          
     
-    
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 1) {
-    __self.__removedTools = __self.__removedTools || [];
+          __self.__removedTools = __self.__removedTools || [];
 __stack.locals.count = await runPrompt({
       ctx: __ctx,
       prompt: `the number 42`,
@@ -280,10 +281,10 @@ if (isInterrupt(__stack.locals.count)) {
     
     
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    __self.__removedTools = __self.__removedTools || [];
+          __self.__removedTools = __self.__removedTools || [];
 __stack.locals.message = await runPrompt({
       ctx: __ctx,
       prompt: `a greeting message`,
@@ -308,19 +309,19 @@ if (isInterrupt(__stack.locals.message)) {
     })
     
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 3) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(__stack.locals.count)
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 4) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(__stack.locals.message)
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

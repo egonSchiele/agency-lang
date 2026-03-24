@@ -253,6 +253,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   if (!__ctx.globals.isInitialized("asyncAssigned.agency")) {
     __initializeGlobals(__ctx)
   }
@@ -280,24 +281,24 @@ const __graph = __ctx.graph;
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {
-
-      __stack.step++;
+      
+            __stack.step++;
     }
     if (__step <= 1) {
-      __self.__retryable = false;
+            __self.__retryable = false;
       await sleep(0.1)
       
-      __stack.step++;
+            __stack.step++;
     }
     if (__step <= 2) {
-      const __auditReturnValue = __stack.args.val * 2;
+            const __auditReturnValue = __stack.args.val * 2;
 await __ctx.audit({
         type: "return",
         value: __auditReturnValue
       })
 return __auditReturnValue
       
-      __stack.step++;
+            __stack.step++;
     }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -309,7 +310,7 @@ return __auditReturnValue
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -333,6 +334,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -341,47 +343,69 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-
-    __stack.step++;
+      
+          __stack.step++;
   }
-  if (__step <= 1) {
-    __stack.locals.x = compute(5, {
+  if (__step <= 1 || (__stack.branches && __stack.branches[1])) {
+          if ((__stack.branches && __stack.branches[1])) {
+      __forked = __stack.branches[1].stack;
+      __forked.deserializeMode()
+    } else {
+      __forked = __ctx.forkStack();
+    }
+__stack.branches = (__stack.branches || {});
+__stack.branches[1] = {
+      stack: __forked
+    };
+__stack.locals.x = compute(5, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData,
-      stateStack: __ctx.forkStack()
+      stateStack: __forked,
+      isForked: true
     });
 __self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
     await __ctx.audit({
       type: "assignment",
-      variable: "__stack.locals.x",
-      value: __stack.locals.x
+      variable: "__stack.branches",
+      value: __stack.branches
     })
     
-    __stack.step++;
+          __stack.step++;
   }
-  if (__step <= 2) {
-    __stack.locals.y = compute(10, {
+  if (__step <= 2 || (__stack.branches && __stack.branches[2])) {
+          if ((__stack.branches && __stack.branches[2])) {
+      __forked = __stack.branches[2].stack;
+      __forked.deserializeMode()
+    } else {
+      __forked = __ctx.forkStack();
+    }
+__stack.branches = (__stack.branches || {});
+__stack.branches[2] = {
+      stack: __forked
+    };
+__stack.locals.y = compute(10, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData,
-      stateStack: __ctx.forkStack()
+      stateStack: __forked,
+      isForked: true
     });
 __self.__pendingKey_y = __ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });
     await __ctx.audit({
       type: "assignment",
-      variable: "__stack.locals.y",
-      value: __stack.locals.y
+      variable: "__stack.branches",
+      value: __stack.branches
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 3) {
-    await __ctx.pendingPromises.awaitPending([__self.__pendingKey_x, __self.__pendingKey_y]);
-    __stack.step++;
+          await __ctx.pendingPromises.awaitPending([__self.__pendingKey_x, __self.__pendingKey_y]);
+          __stack.step++;
   }
   if (__step <= 4) {
-    const __auditReturnValue = {
+          const __auditReturnValue = {
       messages: __threads,
       data: [__stack.locals.x, __stack.locals.y]
     };
@@ -391,7 +415,7 @@ await __ctx.audit({
     })
 return __auditReturnValue;
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

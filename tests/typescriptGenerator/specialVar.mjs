@@ -237,6 +237,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -245,17 +246,17 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-
-    __stack.step++;
+      
+          __stack.step++;
   }
   if (__step <= 1) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(`lets race!`)
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     __stack.locals.msg = await input(`> `);
 if (isInterrupt(__stack.locals.msg)) {
       await __ctx.pendingPromises.awaitAll()
@@ -271,10 +272,10 @@ if (isInterrupt(__stack.locals.msg)) {
     })
     
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 3) {
-    __self.__removedTools = __self.__removedTools || [];
+          __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response1 = await runPrompt({
       ctx: __ctx,
       prompt: `${__stack.locals.msg}`,
@@ -299,16 +300,16 @@ if (isInterrupt(__stack.locals.response1)) {
     })
     
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 4) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(__stack.locals.response1)
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 5) {
-    __client = __getClientWithConfig({
+          __client = __getClientWithConfig({
       model: "`gemini-2.5-flash-lite`"
     });
     await __ctx.audit({
@@ -317,10 +318,10 @@ if (isInterrupt(__stack.locals.response1)) {
       value: __client
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 6) {
-    __self.__removedTools = __self.__removedTools || [];
+          __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response2 = await runPrompt({
       ctx: __ctx,
       prompt: `${__stack.locals.msg}`,
@@ -345,16 +346,16 @@ if (isInterrupt(__stack.locals.response2)) {
     })
     
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 7) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(__stack.locals.response2)
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 8) {
-    const __auditReturnValue = {
+          const __auditReturnValue = {
       messages: __threads,
       data: [__stack.locals.response1, __stack.locals.response2]
     };
@@ -364,7 +365,7 @@ await __ctx.audit({
     })
 return __auditReturnValue;
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

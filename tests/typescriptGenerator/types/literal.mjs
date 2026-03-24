@@ -237,6 +237,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -245,12 +246,12 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
+          
     
-    
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 1) {
-    __self.__removedTools = __self.__removedTools || [];
+          __self.__removedTools = __self.__removedTools || [];
 __stack.locals.foo = await runPrompt({
       ctx: __ctx,
       prompt: `the string hi`,
@@ -280,10 +281,10 @@ if (isInterrupt(__stack.locals.foo)) {
     
     
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    __self.__removedTools = __self.__removedTools || [];
+          __self.__removedTools = __self.__removedTools || [];
 __stack.locals.bar = await runPrompt({
       ctx: __ctx,
       prompt: `the number 42`,
@@ -313,10 +314,10 @@ if (isInterrupt(__stack.locals.bar)) {
     
     
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 3) {
-    __self.__removedTools = __self.__removedTools || [];
+          __self.__removedTools = __self.__removedTools || [];
 __stack.locals.baz = await runPrompt({
       ctx: __ctx,
       prompt: `the boolean true`,
@@ -343,7 +344,7 @@ if (isInterrupt(__stack.locals.baz)) {
       value: __self.__removedTools
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

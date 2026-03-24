@@ -237,6 +237,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -245,31 +246,31 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-    //  Basic if statement with boolean variable
+          //  Basic if statement with boolean variable
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 1) {
-    __stack.locals.flag = true;
+          __stack.locals.flag = true;
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.flag",
       value: __stack.locals.flag
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    if (__stack.locals.flag) {
+          if (__stack.locals.flag) {
       __stack.locals.result = `condition was true`;
       
     }
     
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 3) {
-    if (await isReady()) {
+          if (await isReady()) {
       __stack.locals.status = `ready`;
       
     }
@@ -277,10 +278,10 @@ const __graph = __ctx.graph;
     
     //  If statement with property access
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 4) {
-    __stack.locals.obj = {
+          __stack.locals.obj = {
       "active": true
     };
     await __ctx.audit({
@@ -289,10 +290,10 @@ const __graph = __ctx.graph;
       value: __stack.locals.obj
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 5) {
-    if (__stack.locals.obj.active) {
+          if (__stack.locals.obj.active) {
       __stack.locals.message = `object is active`;
       
     }
@@ -300,20 +301,20 @@ const __graph = __ctx.graph;
     
     //  Nested if statements
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 6) {
-    __stack.locals.outer = true;
+          __stack.locals.outer = true;
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.outer",
       value: __stack.locals.outer
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 7) {
-    if (__stack.locals.outer) {
+          if (__stack.locals.outer) {
       __stack.locals.inner = false;
       
       if (__stack.locals.inner) {
@@ -338,20 +339,20 @@ const __graph = __ctx.graph;
     
     //  Multiple statements in then body
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 8) {
-    __stack.locals.condition = true;
+          __stack.locals.condition = true;
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.condition",
       value: __stack.locals.condition
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 9) {
-    if (__stack.locals.condition) {
+          if (__stack.locals.condition) {
       __stack.locals.a = 1;
       
       __stack.locals.b = 2;
@@ -363,20 +364,20 @@ const __graph = __ctx.graph;
     
     //  Multiple statements in both then and else bodies
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 10) {
-    __stack.locals.value = false;
+          __stack.locals.value = false;
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.value",
       value: __stack.locals.value
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 11) {
-    if (__stack.locals.value) {
+          if (__stack.locals.value) {
       __stack.locals.x = 10;
       
       __stack.locals.y = 20;
@@ -386,10 +387,10 @@ const __graph = __ctx.graph;
     
     //  Basic else
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 12) {
-    if (__stack.locals.flag) {
+          if (__stack.locals.flag) {
       __stack.locals.result = `yes`;
       
     } else {
@@ -400,10 +401,10 @@ const __graph = __ctx.graph;
     
     //  else if chain
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 13) {
-    if (__stack.locals.a == 1) {
+          if (__stack.locals.a == 1) {
       __stack.locals.result = `one`;
       
     } else if (__stack.locals.a == 2) {
@@ -414,7 +415,7 @@ const __graph = __ctx.graph;
       
     }
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

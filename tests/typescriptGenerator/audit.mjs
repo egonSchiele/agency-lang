@@ -253,6 +253,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   if (!__ctx.globals.isInitialized("audit.agency")) {
     __initializeGlobals(__ctx)
   }
@@ -280,18 +281,18 @@ const __graph = __ctx.graph;
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {
-
-      __stack.step++;
+      
+            __stack.step++;
     }
     if (__step <= 1) {
-      const __auditReturnValue = `Hello, ${__stack.args.name}!`;
+            const __auditReturnValue = `Hello, ${__stack.args.name}!`;
 await __ctx.audit({
         type: "return",
         value: __auditReturnValue
       })
 return __auditReturnValue
       
-      __stack.step++;
+            __stack.step++;
     }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -303,7 +304,7 @@ return __auditReturnValue
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -327,6 +328,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -335,21 +337,21 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-
-    __stack.step++;
+      
+          __stack.step++;
   }
   if (__step <= 1) {
-    __stack.locals.x = 5;
+          __stack.locals.x = 5;
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.x",
       value: __stack.locals.x
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    __stack.locals.greeting = await greet(`world`, {
+          __stack.locals.greeting = await greet(`world`, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
@@ -367,13 +369,13 @@ if (isInterrupt(__stack.locals.greeting)) {
       value: __stack.locals.greeting
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 3) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(__stack.locals.greeting)
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

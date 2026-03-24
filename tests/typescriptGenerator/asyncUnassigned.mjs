@@ -253,6 +253,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   if (!__ctx.globals.isInitialized("asyncUnassigned.agency")) {
     __initializeGlobals(__ctx)
   }
@@ -283,14 +284,14 @@ const __graph = __ctx.graph;
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {
-
-      __stack.step++;
+      
+            __stack.step++;
     }
     if (__step <= 1) {
-      __self.__retryable = false;
+            __self.__retryable = false;
       await sleep(__stack.args.sleepTime)
       
-      __stack.step++;
+            __stack.step++;
     }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -302,7 +303,7 @@ const __graph = __ctx.graph;
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -326,6 +327,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -334,31 +336,63 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-
-    __stack.step++;
+      
+          __stack.step++;
   }
-  if (__step <= 1) {
-    __ctx.pendingPromises.add(append(1, `hello`, {
+  if (__step <= 1 || (__stack.branches && __stack.branches[1])) {
+          if ((__stack.branches && __stack.branches[1])) {
+      __forked = __stack.branches[1].stack;
+      __forked.deserializeMode()
+    } else {
+      __forked = __ctx.forkStack();
+    }
+__stack.branches = (__stack.branches || {});
+__stack.branches[1] = {
+      stack: __forked
+    };
+__ctx.pendingPromises.add(append(1, `hello`, {
   ctx: __ctx,
   threads: new ThreadStore(),
   interruptData: __state?.interruptData,
-  stateStack: __ctx.forkStack()
+  stateStack: __forked,
+  isForked: true
 }))
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.branches",
+      value: __stack.branches
+    })
     
-    __stack.step++;
+          __stack.step++;
   }
-  if (__step <= 2) {
-    __ctx.pendingPromises.add(append(0.5, `world`, {
+  if (__step <= 2 || (__stack.branches && __stack.branches[2])) {
+          if ((__stack.branches && __stack.branches[2])) {
+      __forked = __stack.branches[2].stack;
+      __forked.deserializeMode()
+    } else {
+      __forked = __ctx.forkStack();
+    }
+__stack.branches = (__stack.branches || {});
+__stack.branches[2] = {
+      stack: __forked
+    };
+__ctx.pendingPromises.add(append(0.5, `world`, {
   ctx: __ctx,
   threads: new ThreadStore(),
   interruptData: __state?.interruptData,
-  stateStack: __ctx.forkStack()
+  stateStack: __forked,
+  isForked: true
 }))
+    await __ctx.audit({
+      type: "assignment",
+      variable: "__stack.branches",
+      value: __stack.branches
+    })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 3) {
-    const __auditReturnValue = {
+          const __auditReturnValue = {
       messages: __threads,
       data: `done`
     };
@@ -368,7 +402,7 @@ await __ctx.audit({
     })
 return __auditReturnValue;
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

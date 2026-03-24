@@ -237,6 +237,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -245,17 +246,17 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-
-    __stack.step++;
+      
+          __stack.step++;
   }
   if (__step <= 1) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(`What is your name?`)
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     __stack.locals.name = await input(`> `);
 if (isInterrupt(__stack.locals.name)) {
       await __ctx.pendingPromises.awaitAll()
@@ -270,13 +271,13 @@ if (isInterrupt(__stack.locals.name)) {
       value: __stack.locals.name
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 3) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(`Hello, ${__stack.locals.name}!`)
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

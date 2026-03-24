@@ -237,6 +237,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -245,11 +246,11 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-
-    __stack.step++;
+      
+          __stack.step++;
   }
   if (__step <= 1) {
-    __stack.locals.cp = await checkpoint({
+          __stack.locals.cp = await checkpoint({
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
@@ -267,20 +268,20 @@ if (isInterrupt(__stack.locals.cp)) {
       value: __stack.locals.cp
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    __stack.locals.x = 1;
+          __stack.locals.x = 1;
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.x",
       value: __stack.locals.x
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 3) {
-    const __funcResult = await restore(__stack.locals.cp, {}, {
+          const __funcResult = await restore(__stack.locals.cp, {}, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
@@ -298,10 +299,10 @@ if (isInterrupt(__funcResult)) {
       value: __funcResult
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 4) {
-    const __auditReturnValue = {
+          const __auditReturnValue = {
       messages: __threads,
       data: __stack.locals.x
     };
@@ -311,7 +312,7 @@ await __ctx.audit({
     })
 return __auditReturnValue;
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

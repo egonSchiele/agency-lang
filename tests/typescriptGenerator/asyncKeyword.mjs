@@ -283,6 +283,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   if (!__ctx.globals.isInitialized("asyncKeyword.agency")) {
     __initializeGlobals(__ctx)
   }
@@ -310,11 +311,11 @@ const __graph = __ctx.graph;
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {
-
-      __stack.step++;
+      
+            __stack.step++;
     }
     if (__step <= 1) {
-      let __defaultTimeblockName_startTime: number = performance.now();
+            let __defaultTimeblockName_startTime: number = performance.now();
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt({
         ctx: __ctx,
@@ -343,17 +344,17 @@ __defaultTimeblockName
       })
       
       
-      __stack.step++;
+            __stack.step++;
     }
     if (__step <= 2) {
-      const __auditReturnValue = `OpenAI response: ${__stack.locals.response}`;
+            const __auditReturnValue = `OpenAI response: ${__stack.locals.response}`;
 await __ctx.audit({
         type: "return",
         value: __auditReturnValue
       })
 return __auditReturnValue
       
-      __stack.step++;
+            __stack.step++;
     }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -365,7 +366,7 @@ return __auditReturnValue
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -390,6 +391,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   if (!__ctx.globals.isInitialized("asyncKeyword.agency")) {
     __initializeGlobals(__ctx)
   }
@@ -417,16 +419,16 @@ const __graph = __ctx.graph;
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {
-
-      __stack.step++;
+      
+            __stack.step++;
     }
     if (__step <= 1) {
-      __threads.active().setMessages([])
+            __threads.active().setMessages([])
       
-      __stack.step++;
+            __stack.step++;
     }
     if (__step <= 2) {
-      let __defaultTimeblockName_startTime: number = performance.now();
+            let __defaultTimeblockName_startTime: number = performance.now();
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt({
         ctx: __ctx,
@@ -456,17 +458,17 @@ __defaultTimeblockName
         value: __defaultTimeblockName_startTime
       })
       
-      __stack.step++;
+            __stack.step++;
     }
     if (__step <= 3) {
-      const __auditReturnValue = `Google response: ${__stack.locals.response}`;
+            const __auditReturnValue = `Google response: ${__stack.locals.response}`;
 await __ctx.audit({
         type: "return",
         value: __auditReturnValue
       })
 return __auditReturnValue
       
-      __stack.step++;
+            __stack.step++;
     }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -478,7 +480,7 @@ return __auditReturnValue
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -503,6 +505,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   if (!__ctx.globals.isInitialized("asyncKeyword.agency")) {
     __initializeGlobals(__ctx)
   }
@@ -525,11 +528,11 @@ const __graph = __ctx.graph;
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {
-
-      __stack.step++;
+      
+            __stack.step++;
     }
     if (__step <= 1) {
-      __self.__removedTools = __self.__removedTools || [];
+            __self.__removedTools = __self.__removedTools || [];
 __stack.locals.__promptVar = await runPrompt({
         ctx: __ctx,
         prompt: `Generate the first 10 Fibonacci numbers`,
@@ -554,7 +557,7 @@ return __self.__promptVar
         value: __self.__removedTools
       })
       
-      __stack.step++;
+            __stack.step++;
     }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -566,7 +569,7 @@ return __self.__promptVar
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -590,6 +593,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -598,11 +602,11 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-
-    __stack.step++;
+      
+          __stack.step++;
   }
   if (__step <= 1) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     __stack.locals.msg = await input(`> `);
 if (isInterrupt(__stack.locals.msg)) {
       await __ctx.pendingPromises.awaitAll()
@@ -617,59 +621,81 @@ if (isInterrupt(__stack.locals.msg)) {
       value: __stack.locals.msg
     })
     
-    __stack.step++;
+          __stack.step++;
   }
-  if (__step <= 2) {
-    __stack.locals.res2 = google(__stack.locals.msg, {
+  if (__step <= 2 || (__stack.branches && __stack.branches[2])) {
+          if ((__stack.branches && __stack.branches[2])) {
+      __forked = __stack.branches[2].stack;
+      __forked.deserializeMode()
+    } else {
+      __forked = __ctx.forkStack();
+    }
+__stack.branches = (__stack.branches || {});
+__stack.branches[2] = {
+      stack: __forked
+    };
+__stack.locals.res2 = google(__stack.locals.msg, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData,
-      stateStack: __ctx.forkStack()
+      stateStack: __forked,
+      isForked: true
     });
 __self.__pendingKey_res2 = __ctx.pendingPromises.add(__stack.locals.res2, (val) => { __stack.locals.res2 = val; });
     await __ctx.audit({
       type: "assignment",
-      variable: "__stack.locals.res2",
-      value: __stack.locals.res2
+      variable: "__stack.branches",
+      value: __stack.branches
     })
     
-    __stack.step++;
+          __stack.step++;
   }
-  if (__step <= 3) {
-    __stack.locals.res1 = openai(__stack.locals.msg, {
+  if (__step <= 3 || (__stack.branches && __stack.branches[3])) {
+          if ((__stack.branches && __stack.branches[3])) {
+      __forked = __stack.branches[3].stack;
+      __forked.deserializeMode()
+    } else {
+      __forked = __ctx.forkStack();
+    }
+__stack.branches = (__stack.branches || {});
+__stack.branches[3] = {
+      stack: __forked
+    };
+__stack.locals.res1 = openai(__stack.locals.msg, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData,
-      stateStack: __ctx.forkStack()
+      stateStack: __forked,
+      isForked: true
     });
 __self.__pendingKey_res1 = __ctx.pendingPromises.add(__stack.locals.res1, (val) => { __stack.locals.res1 = val; });
     await __ctx.audit({
       type: "assignment",
-      variable: "__stack.locals.res1",
-      value: __stack.locals.res1
+      variable: "__stack.branches",
+      value: __stack.branches
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 4) {
-    await __ctx.pendingPromises.awaitPending([__self.__pendingKey_res2, __self.__pendingKey_res1]);
-    __stack.step++;
+          await __ctx.pendingPromises.awaitPending([__self.__pendingKey_res2, __self.__pendingKey_res1]);
+          __stack.step++;
   }
   if (__step <= 5) {
-    __stack.locals.results = Promise.race([__stack.locals.res1, __stack.locals.res2]);
+          __stack.locals.results = Promise.race([__stack.locals.res1, __stack.locals.res2]);
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.results",
       value: __stack.locals.results
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 6) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await printJSON(__stack.locals.results)
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

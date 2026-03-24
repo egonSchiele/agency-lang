@@ -237,6 +237,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -245,11 +246,11 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-
-    __stack.step++;
+      
+          __stack.step++;
   }
   if (__step <= 1) {
-    __self.__removedTools = __self.__removedTools || [];
+          __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt({
       ctx: __ctx,
       prompt: `Generate a response word by word`,
@@ -275,17 +276,17 @@ if (isInterrupt(__stack.locals.response)) {
       value: __self.__removedTools
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(__stack.locals.response)
     
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 3) {
-    __self.__removedTools = __self.__removedTools || [];
+          __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response2 = await runPrompt({
       ctx: __ctx,
       prompt: `Generate a response word by word, but with a different model`,
@@ -312,13 +313,13 @@ if (isInterrupt(__stack.locals.response2)) {
       value: __self.__removedTools
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 4) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(__stack.locals.response2)
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

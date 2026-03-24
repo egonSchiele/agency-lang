@@ -237,6 +237,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -245,21 +246,21 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-
-    __stack.step++;
+      
+          __stack.step++;
   }
   if (__step <= 1) {
-    __stack.locals.name = `Alice`;
+          __stack.locals.name = `Alice`;
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.name",
       value: __stack.locals.name
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    __self.__removedTools = __self.__removedTools || [];
+          __self.__removedTools = __self.__removedTools || [];
 __stack.locals.greeting = await runPrompt({
       ctx: __ctx,
       prompt: `say hi to ${__stack.locals.name}`,
@@ -283,13 +284,13 @@ if (isInterrupt(__stack.locals.greeting)) {
       value: __self.__removedTools
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 3) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(__stack.locals.greeting)
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

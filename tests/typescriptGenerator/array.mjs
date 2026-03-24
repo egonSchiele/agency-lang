@@ -237,6 +237,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -245,12 +246,12 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
+          
     
-    
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 1) {
-    __self.__removedTools = __self.__removedTools || [];
+          __self.__removedTools = __self.__removedTools || [];
 __stack.locals.numbers = await runPrompt({
       ctx: __ctx,
       prompt: `the first 5 prime numbers`,
@@ -277,19 +278,19 @@ if (isInterrupt(__stack.locals.numbers)) {
       value: __self.__removedTools
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(__stack.locals.numbers)
     
     
     
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 3) {
-    __self.__removedTools = __self.__removedTools || [];
+          __self.__removedTools = __self.__removedTools || [];
 __stack.locals.greetings = await runPrompt({
       ctx: __ctx,
       prompt: `a list of 3 common greetings in different languages`,
@@ -316,13 +317,13 @@ if (isInterrupt(__stack.locals.greetings)) {
       value: __self.__removedTools
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 4) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(__stack.locals.greetings)
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

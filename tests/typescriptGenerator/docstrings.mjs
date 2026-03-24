@@ -308,6 +308,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   if (!__ctx.globals.isInitialized("docstrings.agency")) {
     __initializeGlobals(__ctx)
   }
@@ -338,8 +339,8 @@ const __graph = __ctx.graph;
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {
-
-      __stack.step++;
+      
+            __stack.step++;
     }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -351,7 +352,7 @@ const __graph = __ctx.graph;
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -376,6 +377,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   if (!__ctx.globals.isInitialized("docstrings.agency")) {
     __initializeGlobals(__ctx)
   }
@@ -403,8 +405,8 @@ const __graph = __ctx.graph;
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {
-
-      __stack.step++;
+      
+            __stack.step++;
     }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -416,7 +418,7 @@ const __graph = __ctx.graph;
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -441,6 +443,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   if (!__ctx.globals.isInitialized("docstrings.agency")) {
     __initializeGlobals(__ctx)
   }
@@ -471,8 +474,8 @@ const __graph = __ctx.graph;
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {
-
-      __stack.step++;
+      
+            __stack.step++;
     }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -484,7 +487,7 @@ const __graph = __ctx.graph;
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -509,6 +512,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   if (!__ctx.globals.isInitialized("docstrings.agency")) {
     __initializeGlobals(__ctx)
   }
@@ -531,8 +535,8 @@ const __graph = __ctx.graph;
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {
-
-      __stack.step++;
+      
+            __stack.step++;
     }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -544,7 +548,7 @@ const __graph = __ctx.graph;
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
   }
   await callHook({
     callbacks: __ctx.callbacks,

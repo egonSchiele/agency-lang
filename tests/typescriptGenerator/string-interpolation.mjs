@@ -237,6 +237,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -245,18 +246,18 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-
-    __stack.step++;
+      
+          __stack.step++;
   }
   if (__step <= 1) {
-    __stack.locals.greeting = `Hello, my name is ${name} and I am ${age} years old.`;
+          __stack.locals.greeting = `Hello, my name is ${name} and I am ${age} years old.`;
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.greeting",
       value: __stack.locals.greeting
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

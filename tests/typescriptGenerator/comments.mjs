@@ -272,6 +272,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   if (!__ctx.globals.isInitialized("comments.agency")) {
     __initializeGlobals(__ctx)
   }
@@ -294,12 +295,12 @@ const __graph = __ctx.graph;
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {
-      //  Comment inside function
+            //  Comment inside function
       
-      __stack.step++;
+            __stack.step++;
     }
     if (__step <= 1) {
-      __stack.locals.message = `Hello, World!`;
+            __stack.locals.message = `Hello, World!`;
       await __ctx.audit({
         type: "assignment",
         variable: "__stack.locals.message",
@@ -308,17 +309,17 @@ const __graph = __ctx.graph;
       
       //  Another comment
       
-      __stack.step++;
+            __stack.step++;
     }
     if (__step <= 2) {
-      const __auditReturnValue = __stack.locals.message;
+            const __auditReturnValue = __stack.locals.message;
 await __ctx.audit({
         type: "return",
         value: __auditReturnValue
       })
 return __auditReturnValue
       
-      __stack.step++;
+            __stack.step++;
     }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -330,7 +331,7 @@ return __auditReturnValue
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -354,6 +355,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -362,12 +364,12 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-    //  Comment before function call
+          //  Comment before function call
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 1) {
-    __stack.locals.result = await greet({
+          __stack.locals.result = await greet({
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
@@ -385,10 +387,10 @@ if (isInterrupt(__stack.locals.result)) {
       value: __stack.locals.result
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(__stack.locals.result)
     
     
@@ -398,10 +400,10 @@ if (isInterrupt(__stack.locals.result)) {
     
     
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 3) {
-    __stack.locals.age = 25;
+          __stack.locals.age = 25;
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.age",
@@ -411,20 +413,20 @@ if (isInterrupt(__stack.locals.result)) {
     
     //  2. Before conditionals
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 4) {
-    __stack.locals.status = `active`;
+          __stack.locals.status = `active`;
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.status",
       value: __stack.locals.status
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 5) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     switch (__stack.locals.status) {
       case `inactive`:
         await print(`Stopped`)
@@ -434,7 +436,7 @@ if (isInterrupt(__stack.locals.result)) {
     
     //  Final comment at end of file
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

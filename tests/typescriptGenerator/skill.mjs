@@ -237,6 +237,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -248,11 +249,11 @@ const __graph = __ctx.graph;
     __stack.args["input"] = __state.data.input;
   }
   if (__step <= 0) {
-    
-    __stack.step++;
+          
+          __stack.step++;
   }
   if (__step <= 1) {
-    __self.__removedTools = __self.__removedTools || [];
+          __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
       ctx: __ctx,
       prompt: `Analyzing: ${__stack.args.input}`,
@@ -276,7 +277,7 @@ if (isInterrupt(__stack.locals.result)) {
       value: __self.__removedTools
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

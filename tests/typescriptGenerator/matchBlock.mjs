@@ -237,6 +237,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -245,25 +246,25 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-    //  Test match blocks (pattern matching)
+          //  Test match blocks (pattern matching)
     
     
     //  Simple match with string literals
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 1) {
-    __stack.locals.action = `start`;
+          __stack.locals.action = `start`;
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.action",
       value: __stack.locals.action
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     switch (__stack.locals.action) {
       case `start`:
         await print(`Starting...`)
@@ -282,20 +283,20 @@ const __graph = __ctx.graph;
     
     //  Match with number literals
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 3) {
-    __stack.locals.statusCode = 200;
+          __stack.locals.statusCode = 200;
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.statusCode",
       value: __stack.locals.statusCode
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 4) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     switch (__stack.locals.statusCode) {
       case 200:
         await print(`OK`)
@@ -314,30 +315,30 @@ const __graph = __ctx.graph;
     
     //  Match with variable assignment in body
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 5) {
-    __stack.locals.grade = `A`;
+          __stack.locals.grade = `A`;
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.grade",
       value: __stack.locals.grade
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 6) {
-    __stack.locals.points = 0;
+          __stack.locals.points = 0;
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.points",
       value: __stack.locals.points
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 7) {
-    switch (__stack.locals.grade) {
+          switch (__stack.locals.grade) {
       case `A`:
         __stack.locals.a = 100;
         break;
@@ -358,20 +359,20 @@ const __graph = __ctx.graph;
     
     //  Match with function calls in body
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 8) {
-    __stack.locals.level = `debug`;
+          __stack.locals.level = `debug`;
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.level",
       value: __stack.locals.level
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 9) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     switch (__stack.locals.level) {
       case `debug`:
         await print(`Debug mode enabled`)
@@ -390,20 +391,20 @@ const __graph = __ctx.graph;
     
     //  Match with array results
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 10) {
-    __stack.locals.resultType = `array`;
+          __stack.locals.resultType = `array`;
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.resultType",
       value: __stack.locals.resultType
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 11) {
-    switch (__stack.locals.resultType) {
+          switch (__stack.locals.resultType) {
       case `array`:
         __stack.locals.data1 = [1, 2, 3];
         break;
@@ -421,20 +422,20 @@ const __graph = __ctx.graph;
     
     //  Match with object results
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 12) {
-    __stack.locals.format = `json`;
+          __stack.locals.format = `json`;
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.format",
       value: __stack.locals.format
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 13) {
-    switch (__stack.locals.format) {
+          switch (__stack.locals.format) {
       case `xml`:
         __stack.locals.output1 = {
           "type": `xml`,
@@ -461,7 +462,7 @@ const __graph = __ctx.graph;
         break;
     }
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

@@ -237,6 +237,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -245,11 +246,11 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-
-    __stack.step++;
+      
+          __stack.step++;
   }
   if (__step <= 1) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     __stack.locals.message = await input(`Please enter a message: `);
 if (isInterrupt(__stack.locals.message)) {
       await __ctx.pendingPromises.awaitAll()
@@ -265,10 +266,10 @@ if (isInterrupt(__stack.locals.message)) {
     })
     
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    __self.__removedTools = __self.__removedTools || [];
+          __self.__removedTools = __self.__removedTools || [];
 __stack.locals.sentiment = await runPrompt({
       ctx: __ctx,
       prompt: `Categorize the sentiment in this message: ${__stack.locals.message}`,
@@ -295,13 +296,13 @@ if (isInterrupt(__stack.locals.sentiment)) {
       value: __self.__removedTools
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 3) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(__stack.locals.sentiment)
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

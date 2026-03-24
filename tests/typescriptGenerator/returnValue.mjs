@@ -237,6 +237,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -245,21 +246,21 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-
-    __stack.step++;
+      
+          __stack.step++;
   }
   if (__step <= 1) {
-    __stack.locals.x = 42;
+          __stack.locals.x = 42;
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.x",
       value: __stack.locals.x
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    const __auditReturnValue = {
+          const __auditReturnValue = {
       messages: __threads,
       data: __stack.locals.x
     };
@@ -269,7 +270,7 @@ await __ctx.audit({
     })
 return __auditReturnValue;
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

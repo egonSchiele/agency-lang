@@ -237,6 +237,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -245,22 +246,22 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-    //  Basic for-of loop
+          //  Basic for-of loop
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 1) {
-    __stack.locals.items = [`a`, `b`, `c`];
+          __stack.locals.items = [`a`, `b`, `c`];
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.items",
       value: __stack.locals.items
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     for (const item of __stack.locals.items) {
       await print(item)
       
@@ -269,10 +270,10 @@ const __graph = __ctx.graph;
     
     //  Range-based for loop
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 3) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     for (let i = 0; i < 5; i++) {
       await print(i)
       
@@ -281,20 +282,20 @@ const __graph = __ctx.graph;
     
     //  Indexed for loop
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 4) {
-    __stack.locals.names = [`alice`, `bob`];
+          __stack.locals.names = [`alice`, `bob`];
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.names",
       value: __stack.locals.names
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 5) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     for (let index = 0; index < __stack.locals.names.length; index++) {
       const name = __stack.locals.names[index];
       await print(name)
@@ -303,7 +304,7 @@ const __graph = __ctx.graph;
       
     }
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

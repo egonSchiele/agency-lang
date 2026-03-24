@@ -237,6 +237,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -245,12 +246,12 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
+          
     
-    
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 1) {
-    __self.__removedTools = __self.__removedTools || [];
+          __self.__removedTools = __self.__removedTools || [];
 __stack.locals.url = await runPrompt({
       ctx: __ctx,
       prompt: `extract the hostname and port from 'https://example.com:8080'`,
@@ -278,13 +279,13 @@ if (isInterrupt(__stack.locals.url)) {
     })
     
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(__stack.locals.url)
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

@@ -253,6 +253,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   if (!__ctx.globals.isInitialized("function.agency")) {
     __initializeGlobals(__ctx)
   }
@@ -275,18 +276,18 @@ const __graph = __ctx.graph;
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {
-
-      __stack.step++;
+      
+            __stack.step++;
     }
     if (__step <= 1) {
-      __stack.locals.foo = 1;
+            __stack.locals.foo = 1;
       await __ctx.audit({
         type: "assignment",
         variable: "__stack.locals.foo",
         value: __stack.locals.foo
       })
       
-      __stack.step++;
+            __stack.step++;
     }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -298,7 +299,7 @@ const __graph = __ctx.graph;
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -322,6 +323,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -330,11 +332,11 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-
-    __stack.step++;
+      
+          __stack.step++;
   }
   if (__step <= 1) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(await test({
       ctx: __ctx,
       threads: new ThreadStore(),
@@ -342,10 +344,10 @@ const __graph = __ctx.graph;
     }))
     
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    export async function add(a: any, b: any, __state: InternalFunctionState | undefined = undefined) {
+          export async function add(a: any, b: any, __state: InternalFunctionState | undefined = undefined) {
       const __setupData = setupFunction({
         state: __state
       });
@@ -357,6 +359,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+      let __forked;
       if (!__ctx.globals.isInitialized("function.agency")) {
         __initializeGlobals(__ctx)
       }
@@ -387,9 +390,9 @@ const __graph = __ctx.graph;
       __self.__retryable = __self.__retryable ?? true;
       try {
         if (__step <= 0) {
-          //  multi-param function
+                //  multi-param function
           
-          __stack.step++;
+                __stack.step++;
         }
       } catch (__error) {
         if (__error instanceof RestoreSignal) {
@@ -401,7 +404,7 @@ const __graph = __ctx.graph;
         }
         throw new ToolCallError(__error, { retryable: __self.__retryable })
       } finally {
-        __ctx.stateStack.pop()
+        if (!__state?.isForked) { __ctx.stateStack.pop() }
       }
       await callHook({
         callbacks: __ctx.callbacks,
@@ -413,7 +416,7 @@ const __graph = __ctx.graph;
       })
     }
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

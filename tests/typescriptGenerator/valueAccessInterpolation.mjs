@@ -237,6 +237,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -245,11 +246,11 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-
-    __stack.step++;
+      
+          __stack.step++;
   }
   if (__step <= 1) {
-    __stack.locals.user = {
+          __stack.locals.user = {
       "name": `Alice`,
       "age": 30
     };
@@ -259,20 +260,20 @@ const __graph = __ctx.graph;
       value: __stack.locals.user
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    __stack.locals.greeting = `Hello, ${__stack.locals.user.name}!`;
+          __stack.locals.greeting = `Hello, ${__stack.locals.user.name}!`;
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.greeting",
       value: __stack.locals.greeting
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 3) {
-    __self.__removedTools = __self.__removedTools || [];
+          __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
       ctx: __ctx,
       prompt: `Tell me about ${__stack.locals.user.name} who is ${__stack.locals.user.age} years old`,
@@ -296,13 +297,13 @@ if (isInterrupt(__stack.locals.result)) {
       value: __self.__removedTools
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 4) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(__stack.locals.result)
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

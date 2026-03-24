@@ -313,6 +313,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   if (!__ctx.globals.isInitialized("function-with-types.agency")) {
     __initializeGlobals(__ctx)
   }
@@ -343,11 +344,11 @@ const __graph = __ctx.graph;
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {
-
-      __stack.step++;
+      
+            __stack.step++;
     }
     if (__step <= 1) {
-      __self.__removedTools = __self.__removedTools || [];
+            __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
         ctx: __ctx,
         prompt: `add ${__stack.args.x} and ${__stack.args.y}`,
@@ -368,17 +369,17 @@ if (isInterrupt(__stack.locals.result)) {
         value: __self.__removedTools
       })
       
-      __stack.step++;
+            __stack.step++;
     }
     if (__step <= 2) {
-      const __auditReturnValue = __stack.locals.result;
+            const __auditReturnValue = __stack.locals.result;
 await __ctx.audit({
         type: "return",
         value: __auditReturnValue
       })
 return __auditReturnValue
       
-      __stack.step++;
+            __stack.step++;
     }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -390,7 +391,7 @@ return __auditReturnValue
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -415,6 +416,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   if (!__ctx.globals.isInitialized("function-with-types.agency")) {
     __initializeGlobals(__ctx)
   }
@@ -442,11 +444,11 @@ const __graph = __ctx.graph;
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {
-
-      __stack.step++;
+      
+            __stack.step++;
     }
     if (__step <= 1) {
-      __self.__removedTools = __self.__removedTools || [];
+            __self.__removedTools = __self.__removedTools || [];
 __stack.locals.message = await runPrompt({
         ctx: __ctx,
         prompt: `Hello ${__stack.args.name}!`,
@@ -467,17 +469,17 @@ if (isInterrupt(__stack.locals.message)) {
         value: __self.__removedTools
       })
       
-      __stack.step++;
+            __stack.step++;
     }
     if (__step <= 2) {
-      const __auditReturnValue = __stack.locals.message;
+            const __auditReturnValue = __stack.locals.message;
 await __ctx.audit({
         type: "return",
         value: __auditReturnValue
       })
 return __auditReturnValue
       
-      __stack.step++;
+            __stack.step++;
     }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -489,7 +491,7 @@ return __auditReturnValue
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -514,6 +516,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   if (!__ctx.globals.isInitialized("function-with-types.agency")) {
     __initializeGlobals(__ctx)
   }
@@ -544,11 +547,11 @@ const __graph = __ctx.graph;
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {
-
-      __stack.step++;
+      
+            __stack.step++;
     }
     if (__step <= 1) {
-      __self.__removedTools = __self.__removedTools || [];
+            __self.__removedTools = __self.__removedTools || [];
 __stack.locals.output = await runPrompt({
         ctx: __ctx,
         prompt: `${__stack.args.label}: ${__stack.args.count}`,
@@ -569,17 +572,17 @@ if (isInterrupt(__stack.locals.output)) {
         value: __self.__removedTools
       })
       
-      __stack.step++;
+            __stack.step++;
     }
     if (__step <= 2) {
-      const __auditReturnValue = __stack.locals.output;
+            const __auditReturnValue = __stack.locals.output;
 await __ctx.audit({
         type: "return",
         value: __auditReturnValue
       })
 return __auditReturnValue
       
-      __stack.step++;
+            __stack.step++;
     }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -591,7 +594,7 @@ return __auditReturnValue
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -616,6 +619,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   if (!__ctx.globals.isInitialized("function-with-types.agency")) {
     __initializeGlobals(__ctx)
   }
@@ -643,11 +647,11 @@ const __graph = __ctx.graph;
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {
-
-      __stack.step++;
+      
+            __stack.step++;
     }
     if (__step <= 1) {
-      __self.__removedTools = __self.__removedTools || [];
+            __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
         ctx: __ctx,
         prompt: `Processing array with ${__stack.args.items} items`,
@@ -668,17 +672,17 @@ if (isInterrupt(__stack.locals.result)) {
         value: __self.__removedTools
       })
       
-      __stack.step++;
+            __stack.step++;
     }
     if (__step <= 2) {
-      const __auditReturnValue = __stack.locals.result;
+            const __auditReturnValue = __stack.locals.result;
 await __ctx.audit({
         type: "return",
         value: __auditReturnValue
       })
 return __auditReturnValue
       
-      __stack.step++;
+            __stack.step++;
     }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -690,7 +694,7 @@ return __auditReturnValue
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -715,6 +719,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   if (!__ctx.globals.isInitialized("function-with-types.agency")) {
     __initializeGlobals(__ctx)
   }
@@ -742,11 +747,11 @@ const __graph = __ctx.graph;
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {
-
-      __stack.step++;
+      
+            __stack.step++;
     }
     if (__step <= 1) {
-      __self.__removedTools = __self.__removedTools || [];
+            __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
         ctx: __ctx,
         prompt: `Received value: ${__stack.args.value}`,
@@ -767,17 +772,17 @@ if (isInterrupt(__stack.locals.result)) {
         value: __self.__removedTools
       })
       
-      __stack.step++;
+            __stack.step++;
     }
     if (__step <= 2) {
-      const __auditReturnValue = __stack.locals.result;
+            const __auditReturnValue = __stack.locals.result;
 await __ctx.audit({
         type: "return",
         value: __auditReturnValue
       })
 return __auditReturnValue
       
-      __stack.step++;
+            __stack.step++;
     }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -789,7 +794,7 @@ return __auditReturnValue
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -813,6 +818,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -821,17 +827,17 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-
-    __stack.step++;
+      
+          __stack.step++;
   }
   if (__step <= 1) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(`This is a node with a return type`)
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    const __auditReturnValue = {
+          const __auditReturnValue = {
       messages: __threads,
       data: `Node completed`
     };
@@ -841,7 +847,7 @@ await __ctx.audit({
     })
 return __auditReturnValue;
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -869,6 +875,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -877,12 +884,12 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-    //  Call the functions
+          //  Call the functions
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 1) {
-    __stack.locals.sum = await add(5, 10, {
+          __stack.locals.sum = await add(5, 10, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
@@ -900,10 +907,10 @@ if (isInterrupt(__stack.locals.sum)) {
       value: __stack.locals.sum
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    __stack.locals.greeting = await greet(`Alice`, {
+          __stack.locals.greeting = await greet(`Alice`, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
@@ -921,10 +928,10 @@ if (isInterrupt(__stack.locals.greeting)) {
       value: __stack.locals.greeting
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 3) {
-    __stack.locals.labeled = await mixed(42, `Answer`, {
+          __stack.locals.labeled = await mixed(42, `Answer`, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
@@ -942,10 +949,10 @@ if (isInterrupt(__stack.locals.labeled)) {
       value: __stack.locals.labeled
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 4) {
-    __stack.locals.processed = await processArray([1, 2, 3, 4, 5], {
+          __stack.locals.processed = await processArray([1, 2, 3, 4, 5], {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
@@ -963,10 +970,10 @@ if (isInterrupt(__stack.locals.processed)) {
       value: __stack.locals.processed
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 5) {
-    __stack.locals.flexResult = await flexible(`test`, {
+          __stack.locals.flexResult = await flexible(`test`, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
@@ -984,7 +991,7 @@ if (isInterrupt(__stack.locals.flexResult)) {
       value: __stack.locals.flexResult
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

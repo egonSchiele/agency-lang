@@ -237,6 +237,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -245,11 +246,11 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-
-    __stack.step++;
+      
+          __stack.step++;
   }
   if (__step <= 1) {
-    // Remember this will be called both in a tool call context
+          // Remember this will be called both in a tool call context
 // and when the user is simply calling a function.
 
 if (__state.interruptData?.interruptResponse?.type === "resolve") {
@@ -276,10 +277,10 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
 }
 
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    __self.__removedTools = __self.__removedTools || [];
+          __self.__removedTools = __self.__removedTools || [];
 __stack.locals.greeting = await runPrompt({
       ctx: __ctx,
       prompt: `Say hello to {name}`,
@@ -303,10 +304,10 @@ if (isInterrupt(__stack.locals.greeting)) {
       value: __self.__removedTools
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 3) {
-    const __auditReturnValue = {
+          const __auditReturnValue = {
       messages: __threads,
       data: __stack.locals.greeting
     };
@@ -316,7 +317,7 @@ await __ctx.audit({
     })
 return __auditReturnValue;
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

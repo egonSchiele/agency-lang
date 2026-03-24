@@ -253,6 +253,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   if (!__ctx.globals.isInitialized("interrupt-in-node.agency")) {
     __initializeGlobals(__ctx)
   }
@@ -283,11 +284,11 @@ const __graph = __ctx.graph;
   __self.__retryable = __self.__retryable ?? true;
   try {
     if (__step <= 0) {
-
-      __stack.step++;
+      
+            __stack.step++;
     }
     if (__step <= 1) {
-      // Remember this will be called both in a tool call context
+            // Remember this will be called both in a tool call context
 // and when the user is simply calling a function.
 
 if (__state.interruptData?.interruptResponse?.type === "approve") {
@@ -327,17 +328,17 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
 }
 
       
-      __stack.step++;
+            __stack.step++;
     }
     if (__step <= 2) {
-      const __auditReturnValue = `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`;
+            const __auditReturnValue = `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`;
 await __ctx.audit({
         type: "return",
         value: __auditReturnValue
       })
 return __auditReturnValue
       
-      __stack.step++;
+            __stack.step++;
     }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -349,7 +350,7 @@ return __auditReturnValue
     }
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
-    __ctx.stateStack.pop()
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -373,6 +374,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -385,18 +387,18 @@ const __graph = __ctx.graph;
     __stack.args["age"] = __state.data.age;
   }
   if (__step <= 0) {
-
-    __stack.step++;
+      
+          __stack.step++;
   }
   if (__step <= 1) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`)
     
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    __self.__removedTools = __self.__removedTools || [];
+          __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt({
       ctx: __ctx,
       prompt: `Greet the user with their name: ${__stack.args.name} and age ${__stack.args.age} using the greet function.`,
@@ -423,16 +425,16 @@ if (isInterrupt(__stack.locals.response)) {
       value: __self.__removedTools
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 3) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(`Greeted, age is still ${__stack.args.age}...`)
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 4) {
-    const __auditReturnValue = {
+          const __auditReturnValue = {
       messages: __threads,
       data: __stack.locals.response
     };
@@ -442,7 +444,7 @@ await __ctx.audit({
     })
 return __auditReturnValue;
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,
@@ -470,6 +472,7 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
+  let __forked;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
@@ -481,27 +484,27 @@ const __graph = __ctx.graph;
     __stack.args["name"] = __state.data.name;
   }
   if (__step <= 0) {
-
-    __stack.step++;
+      
+          __stack.step++;
   }
   if (__step <= 1) {
-    __self.__retryable = false;
+          __self.__retryable = false;
     await print(`Saying hi to ${__stack.args.name}...`)
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 2) {
-    __stack.locals.age = 30;
+          __stack.locals.age = 30;
     await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.age",
       value: __stack.locals.age
     })
     
-    __stack.step++;
+          __stack.step++;
   }
   if (__step <= 3) {
-    const __auditReturnValue = goToNode("foo2", {
+          const __auditReturnValue = goToNode("foo2", {
       messages: __stack.messages,
       ctx: __ctx,
       data: {
@@ -515,7 +518,7 @@ await __ctx.audit({
     })
 return __auditReturnValue
     
-    __stack.step++;
+          __stack.step++;
   }
   await callHook({
     callbacks: __ctx.callbacks,

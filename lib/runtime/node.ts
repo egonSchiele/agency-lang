@@ -3,6 +3,7 @@ import { callHook } from "./hooks.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
 import { RestoreSignal } from "./errors.js";
+import { isInterrupt } from "./interrupts.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { GraphState, InternalFunctionState, RunNodeResult } from "./types.js";
@@ -45,6 +46,7 @@ export function setupFunction(args: { state?: InternalFunctionState }): {
   step: number;
   self: Record<string, any>;
   threads: ThreadStore;
+  stateStack: StateStack;
 } {
   const { state } = args;
   if (state === undefined) {
@@ -56,6 +58,7 @@ export function setupFunction(args: { state?: InternalFunctionState }): {
       step: 0,
       self: stack.locals,
       threads: new ThreadStore(),
+      stateStack,
     };
   }
 
@@ -68,7 +71,7 @@ export function setupFunction(args: { state?: InternalFunctionState }): {
   // if being called as a tool, we won't have threads, but we'll create an empty ThreadStore here.
   const threads = state.threads || new ThreadStore();
 
-  return { stack, step, self, threads };
+  return { stack, step, self, threads, stateStack };
 }
 
 export async function runNode({
@@ -119,7 +122,32 @@ export async function runNode({
           ctx: execCtx,
           isResume,
         }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
-        await execCtx.pendingPromises.awaitAll();
+        // Collect interrupts from both paths:
+        // - Sync: interrupt returned directly as graph result (result.data)
+        // - Async: interrupts left in PendingPromiseStore by awaitPending
+        const asyncInterrupts = await execCtx.pendingPromises.awaitAll();
+        const allInterrupts = [...asyncInterrupts];
+        if (isInterrupt(result?.data)) {
+          allInterrupts.push(result.data);
+        }
+        if (allInterrupts.length > 0) {
+          const checkpointId = execCtx.checkpoints.create(execCtx);
+          const checkpoint = execCtx.checkpoints.get(checkpointId);
+          if (!checkpoint) {
+            throw new Error("Failed to retrieve checkpoint after creation");
+          }
+          return createReturnObject({
+            result: {
+              data: {
+                type: "interrupt_batch",
+                interrupts: allInterrupts,
+                checkpoint,
+              },
+              messages: result?.messages || new ThreadStore(),
+            },
+            globals: execCtx.globals,
+          });
+        }
         await execCtx.audit({ type: "nodeExit", nodeName });
         const returnObject = createReturnObject({
           result,

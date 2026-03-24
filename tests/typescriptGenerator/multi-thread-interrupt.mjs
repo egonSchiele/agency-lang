@@ -1,4 +1,3 @@
-import { lookupItem, saveItem } from "./tools.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -108,36 +107,36 @@ function tool(__name: string) {
 export { interrupt, isInterrupt, isInterruptBatch };
 export const respondToInterrupts = (batch: any, responses: Record<string, InterruptResponse>, metadata?: Record<string, any>) => _respondToInterrupts({ ctx: __globalCtx, batch, responses, metadata });
 function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("safe-function.agency")
+  __ctx.globals.markInitialized("multi-thread-interrupt.agency")
 }
-export const __safeLookupTool = {
-  name: "safeLookup",
+export const __aTool = {
+  name: "a",
   description: `No description provided.`,
-  schema: z.object({"id": z.string(), })
+  schema: z.object({})
 };
-export const __safeLookupToolParams = ["id"];
-export const __unsafeSaveTool = {
-  name: "unsafeSave",
+export const __aToolParams = [];
+export const __bTool = {
+  name: "b",
   description: `No description provided.`,
-  schema: z.object({"id": z.string(), })
+  schema: z.object({})
 };
-export const __unsafeSaveToolParams = ["id"];
+export const __bToolParams = [];
 const __toolRegistry = {
-  safeLookup: {
-    definition: __safeLookupTool,
+  a: {
+    definition: __aTool,
     handler: {
-      name: "safeLookup",
-      params: __safeLookupToolParams,
-      execute: safeLookup,
+      name: "a",
+      params: __aToolParams,
+      execute: a,
       isBuiltin: false
     }
   },
-  unsafeSave: {
-    definition: __unsafeSaveTool,
+  b: {
+    definition: __bTool,
     handler: {
-      name: "unsafeSave",
-      params: __unsafeSaveToolParams,
-      execute: unsafeSave,
+      name: "b",
+      params: __bToolParams,
+      execute: b,
       isBuiltin: false
     }
   },
@@ -250,9 +249,7 @@ const __toolRegistry = {
     }
   }
 };
-
-
-export async function safeLookup(id: string, __state: InternalFunctionState | undefined = undefined) {
+export async function a(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -264,7 +261,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
-  if (!__ctx.globals.isInitialized("safe-function.agency")) {
+  if (!__ctx.globals.isInitialized("multi-thread-interrupt.agency")) {
     __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
@@ -272,22 +269,17 @@ const __graph = __ctx.graph;
     callbacks: __ctx.callbacks,
     name: "onFunctionStart",
     data: {
-      functionName: "safeLookup",
-      args: {
-        id: id
-      },
+      functionName: "a",
+      args: {},
       isBuiltin: false
     }
   })
   await __ctx.audit({
     type: "functionCall",
-    functionName: "safeLookup",
-    args: {
-      id: id
-    },
+    functionName: "a",
+    args: {},
     result: undefined
   })
-  __stack.args["id"] = id;
   __self.__retryable = __self.__retryable ?? true;
   const __scopeMarker = __ctx.pendingPromises.scopeMarker();
   try {
@@ -296,12 +288,30 @@ const __graph = __ctx.graph;
             __stack.step++;
     }
     if (__step <= 1) {
-            const __auditReturnValue = await lookupItem(__stack.args.id);
-await __ctx.audit({
-        type: "return",
-        value: __auditReturnValue
-      })
-return __auditReturnValue
+            // Check for a batch response keyed by interrupt_id
+const __interruptData = __stack.locals.__interruptId ? __ctx.getInterruptData(__stack.locals.__interruptId) : undefined;
+const __ir = __interruptData?.interruptResponse;
+if (__interruptData) {
+  __state.interruptData = __interruptData;
+}
+if (__ir?.type === "resolve") {
+  __stack.locals.response = __ir.value;;
+} else if (__ir?.type === "approve") {
+  __stack.locals.response = true;;
+} else if (__ir?.type === "reject") {
+  __stack.locals.response = false;;
+} else if (__ir?.type === "modify") {
+  throw new Error("Interrupt response of type 'modify' is used for modifying tool call args. Use resolve instead.");
+} else if (!__ir) {
+  const __interruptResult = interrupt(`approve a?`);
+  __stack.locals.__interruptId = __interruptResult.interrupt_id;
+  __stack.interrupted = true;
+  
+  
+  return __interruptResult;
+  
+}
+
       
             __stack.step++;
     }
@@ -321,14 +331,14 @@ return __auditReturnValue
     callbacks: __ctx.callbacks,
     name: "onFunctionEnd",
     data: {
-      functionName: "safeLookup",
+      functionName: "a",
       timeTaken: performance.now() - __funcStartTime
     }
   })
 }
 
 
-export async function unsafeSave(id: string, __state: InternalFunctionState | undefined = undefined) {
+export async function b(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -340,7 +350,7 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
-  if (!__ctx.globals.isInitialized("safe-function.agency")) {
+  if (!__ctx.globals.isInitialized("multi-thread-interrupt.agency")) {
     __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
@@ -348,22 +358,17 @@ const __graph = __ctx.graph;
     callbacks: __ctx.callbacks,
     name: "onFunctionStart",
     data: {
-      functionName: "unsafeSave",
-      args: {
-        id: id
-      },
+      functionName: "b",
+      args: {},
       isBuiltin: false
     }
   })
   await __ctx.audit({
     type: "functionCall",
-    functionName: "unsafeSave",
-    args: {
-      id: id
-    },
+    functionName: "b",
+    args: {},
     result: undefined
   })
-  __stack.args["id"] = id;
   __self.__retryable = __self.__retryable ?? true;
   const __scopeMarker = __ctx.pendingPromises.scopeMarker();
   try {
@@ -372,18 +377,30 @@ const __graph = __ctx.graph;
             __stack.step++;
     }
     if (__step <= 1) {
-            __self.__retryable = false;
-      await saveItem(__stack.args.id)
-      
-            __stack.step++;
-    }
-    if (__step <= 2) {
-            const __auditReturnValue = await lookupItem(__stack.args.id);
-await __ctx.audit({
-        type: "return",
-        value: __auditReturnValue
-      })
-return __auditReturnValue
+            // Check for a batch response keyed by interrupt_id
+const __interruptData = __stack.locals.__interruptId ? __ctx.getInterruptData(__stack.locals.__interruptId) : undefined;
+const __ir = __interruptData?.interruptResponse;
+if (__interruptData) {
+  __state.interruptData = __interruptData;
+}
+if (__ir?.type === "resolve") {
+  __stack.locals.response = __ir.value;;
+} else if (__ir?.type === "approve") {
+  __stack.locals.response = true;;
+} else if (__ir?.type === "reject") {
+  __stack.locals.response = false;;
+} else if (__ir?.type === "modify") {
+  throw new Error("Interrupt response of type 'modify' is used for modifying tool call args. Use resolve instead.");
+} else if (!__ir) {
+  const __interruptResult = interrupt(`approve b?`);
+  __stack.locals.__interruptId = __interruptResult.interrupt_id;
+  __stack.interrupted = true;
+  
+  
+  return __interruptResult;
+  
+}
+
       
             __stack.step++;
     }
@@ -403,7 +420,7 @@ return __auditReturnValue
     callbacks: __ctx.callbacks,
     name: "onFunctionEnd",
     data: {
-      functionName: "unsafeSave",
+      functionName: "b",
       timeTaken: performance.now() - __funcStartTime
     }
   })
@@ -430,49 +447,46 @@ const __graph = __ctx.graph;
     }
   })
   if (__step <= 0) {
-          
+      
           __stack.step++;
   }
-  if (__step <= 1) {
-          __self.__removedTools = __self.__removedTools || [];
-__stack.locals.result = await runPrompt({
-      ctx: __ctx,
-      prompt: `Use the tools`,
-      messages: __threads.createAndReturnThread(),
-      clientConfig: {
-        tools: [tool("safeLookup"), tool("unsafeSave")],
-        ...{}
-      },
-      maxToolCallRounds: 10,
-      interruptData: __self.__interruptId ? __ctx.getInterruptData(__self.__interruptId) : __state?.interruptData,
-      removedTools: __self.__removedTools
-    });
-// return early from node if this is an interrupt
-if (isInterrupt(__stack.locals.result)) {
-      __self.__interruptId = __stack.locals.result.interrupt_id
-      return {
-        messages: __threads,
-        data: __stack.locals.result
-      };
-    }
-    await __ctx.audit({
-      type: "assignment",
-      variable: "__self.__removedTools",
-      value: __self.__removedTools
-    })
+  if (__step <= 1 || (__stack.branches && __stack.branches[1])) {
+          let __forked
+if (__stack.branches && __stack.branches[1]) {
+  __forked = __stack.branches[1].stack;
+  __forked.deserializeMode();
+} else {
+  __forked = __ctx.forkStack();
+}
+__stack.branches = __stack.branches || {}
+__stack.branches[1] = { stack: __forked }
+__ctx.pendingPromises.add(a({
+  ctx: __ctx,
+  threads: new ThreadStore(),
+  interruptData: __state?.interruptData,
+  stateStack: __forked,
+  isForked: true
+}))
     
           __stack.step++;
   }
-  if (__step <= 2) {
-          const __auditReturnValue = {
-      messages: __threads,
-      data: __stack.locals.result
-    };
-await __ctx.audit({
-      type: "return",
-      value: __auditReturnValue
-    })
-return __auditReturnValue;
+  if (__step <= 2 || (__stack.branches && __stack.branches[2])) {
+          let __forked
+if (__stack.branches && __stack.branches[2]) {
+  __forked = __stack.branches[2].stack;
+  __forked.deserializeMode();
+} else {
+  __forked = __ctx.forkStack();
+}
+__stack.branches = __stack.branches || {}
+__stack.branches[2] = { stack: __forked }
+__ctx.pendingPromises.add(b({
+  ctx: __ctx,
+  threads: new ThreadStore(),
+  interruptData: __state?.interruptData,
+  stateStack: __forked,
+  isForked: true
+}))
     
           __stack.step++;
   }

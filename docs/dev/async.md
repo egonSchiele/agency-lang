@@ -475,6 +475,39 @@ So the mismatched pops don't corrupt in-memory execution.
 
 **Why this does break serialization:** When `stateStack.toJSON()` is called, it serializes `this.stack` — the array. If a frame was prematurely popped from the array by the wrong thread, it won't appear in the serialized output. On resume, that frame's state (locals, step counter, threads) is lost. This is why phase 1 awaits all async calls before any serialization occurs — by that point, all frames have been popped and the stateStack is empty. It also means we cannot reliably serialize the stateStack while async calls are in flight, which is one of the reasons phase 2 (interrupt queues) is complex — see below.
 
+### Async calls are not allowed inside loops
+
+Async function calls (`async func()`) are not allowed inside `while` or `for` loops. The compiler will reject them with an error at compile time.
+
+**Why:** Agency's interrupt resumption relies on a branch system that tracks forked state stacks for each async call. Branches are keyed by the step index of the statement that contains the async call. Inside a loop, the entire loop body is a single step, so all async calls within it — across all iterations — share the same branch key. This causes collisions:
+
+1. Two async calls in the same iteration (e.g., `async compute(i)` and `async record(i)`) overwrite each other's branch data.
+2. Across iterations, a new call finds the previous iteration's branch data and incorrectly enters deserialization mode.
+
+The result is corrupted state: promises resolve to `null`, side effects are lost, and interrupt resumption breaks.
+
+**Workaround:** Move the async call into a separate function that is called from the loop:
+
+```agency
+def processItem(i: number): number {
+  x = async compute(i)
+  async record(i)
+  return x
+}
+
+node main() {
+  results = []
+  i = 0
+  while (i < 3) {
+    results.push(processItem(i))
+    i = i + 1
+  }
+  return results
+}
+```
+
+Or remove the `async` keyword if concurrency within the loop body isn't needed.
+
 ### Functions must not trigger node transitions
 
 Functions (`def`) must not call graph nodes. This is enforced at compile time by the type checker. The reason: a node call returns a `GoToNode` object that tells SimpleMachine to transition. If a function returns a `GoToNode`, it would need to propagate up through the call chain to the node level, which is not how functions work (they return values, not graph transitions).

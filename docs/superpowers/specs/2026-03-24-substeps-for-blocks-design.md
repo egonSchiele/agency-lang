@@ -41,7 +41,9 @@ The same problem affects thread blocks, match blocks, and loops. This design add
 
 ## Design
 
-### 1. TsStepBlock IR Changes
+### 1. IR Changes
+
+#### TsStepBlock: subStep field
 
 Add a `subStep` field to `TsStepBlock`:
 
@@ -67,15 +69,35 @@ The builder's `stepBlock` factory function gains the optional `subStep` paramete
 
 Note: The `__substep_*` and `__condbranch_*` prefixes are reserved for internal use. The compiler should reject user-defined variables with these prefixes.
 
+#### TsIfSteps: new IR node
+
+If the codegen for if/else substeps adds too much complexity to the builder, introduce a new `TsIfSteps` IR node and `ts.ifSteps` builder function. This pushes the substep codegen mechanics into the IR layer:
+
+```typescript
+export interface TsIfSteps {
+  kind: "ifSteps";
+  /** The substep path for naming variables (e.g. [3] or [2, 1]) */
+  subStepPath: number[];
+  /** The branches, each with a condition IR node and a body of TsNode[] */
+  branches: { condition: TsNode; body: TsNode[] }[];
+  /** Optional else body */
+  elseBranch?: TsNode[];
+}
+```
+
+The pretty printer for `TsIfSteps` handles all the condbranch tracking, substep guard emission, and counter incrementing. The builder simply constructs a `ts.ifSteps(...)` node with the conditions and bodies, and the IR layer handles the rest.
+
+Whether to use `TsIfSteps` or inline the codegen in the builder is an implementation decision. If the builder code is straightforward, `TsIfSteps` is not needed. If it adds significant complexity, `TsIfSteps` keeps the builder clean.
+
 ### 2. Builder Changes
 
-The builder gains a new instance variable `_subStepPath: number[]`, initialized to `[]`. As the builder enters a block body (e.g. an if branch), it pushes the current substep index onto this path. When it exits, it pops. This path is passed as the `subStep` field on `TsStepBlock` nodes created within block bodies.
+The builder gains a new instance variable `_subStepPath: number[]`, initialized to `[]`. As the builder enters a block body (e.g. an if branch), it pushes the current substep index onto this path. When it exits, it pops. This path is passed as the `subStep` field on `TsStepBlock` nodes (or as `subStepPath` on `TsIfSteps` nodes) created within block bodies.
 
-When processing an if/else block inside a step-counted body, the builder bypasses the normal `TsIf` IR node and instead emits the condbranch tracking + substep structure directly. `TsIf` continues to be used for if/else blocks that appear outside of step-counted bodies (e.g. in non-node helper code).
+When processing an if/else block inside a step-counted body, the builder bypasses the normal `TsIf` IR node. Instead, it either emits the condbranch tracking + substep structure directly, or constructs a `TsIfSteps` IR node and lets the pretty printer handle it. `TsIf` continues to be used for if/else blocks that appear outside of step-counted bodies (e.g. in non-node helper code).
 
 ### 3. If/Else Substep Generation
 
-When the builder processes an if/else block at step index `N`, it emits:
+When the builder processes an if/else block at step index `N`, the generated code (whether emitted directly or via `TsIfSteps`) does the following:
 
 1. **Condition branch tracking:** Evaluate the condition once and store the result as an integer in `__stack.locals.__condbranch_N`. On resume, the stored value is used instead of re-evaluating.
 2. **Branch dispatch:** Use the stored condbranch value to select which branch body to enter.

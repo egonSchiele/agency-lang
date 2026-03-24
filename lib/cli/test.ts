@@ -519,6 +519,12 @@ export async function testTs(config: AgencyConfig, inputPaths: string[]) {
 
     for (const dir of testDirs) {
       const dirName = path.basename(dir);
+
+      if (fs.existsSync(path.join(dir, "skip"))) {
+        console.log(color.yellow(`\nSkipping JS test: ${dirName}`));
+        continue;
+      }
+
       console.log(color.yellow(`\nRunning JS test: ${dirName}`));
 
       const agencyFile = findAgencyFile(dir);

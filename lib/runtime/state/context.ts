@@ -92,8 +92,39 @@ export class RuntimeContext<T> {
     return execCtx;
   }
 
+  /* Let's chat through what's going on here. Because since this function
+  is called "fork"Stack, you may think that it clone the current stateStack.
+  And that's exactly what I had earlier:
+
+  ```
+  return StateStack.fromJSON(this.stateStack.toJSON());
+  ```
+
+  This function was created for asynchronous threads, so we could keep track
+  of their state. But the way we store the state is for each async thread,
+  in branches. It's execution starts at the point it is defined. It doesn't
+  have any previous state it's not going to wind up to back to a point *before*
+  it was defined.
+  Another way to think about it: Suppose node main, calls function foo,
+  calls function A, which creates an async thread function A1, and A1 throws an interrupt:
+
+  ```
+    main -> foo -> A -> A1 (async thread) -> interrupt
+  ```
+
+  When we resume from the interrupt, we deserialize up to A1 using A's state stack.
+  And from that point, we deserialize A1 using A1's state stack. So A1's state stack
+  should *only* contain the state created after the A1 thread was initialized.
+  Otherwise, there will be a bunch of extra frames on the state stack related
+  to calling through our A1, which will be a mismatch.
+
+  I'm still leaving this function because I think its name helps explain what
+  is happening, and also because it's easier to find the code that creates these
+  async threads. But we could just replace all calls to `forkStack`
+  with `new StateStack()`.
+  */
   forkStack(): StateStack {
-    return StateStack.fromJSON(this.stateStack.toJSON());
+    return new StateStack();
   }
 
   /** Sever references held by an execution context so GC can reclaim them. */
@@ -110,6 +141,16 @@ export class RuntimeContext<T> {
     const currentTokenStats = this.globals.getTokenStats();
     this.stateStack = StateStack.fromJSON(checkpoint.stack);
     this.stateStack.deserializeMode();
+
+    // The checkpoint stack has frames for all nodes traversed (e.g. bar → foo),
+    // but we resume only at the last node. Strip frames from earlier nodes so
+    // deserialization hands the correct frame to each setupNode/setupFunction.
+    // const staleNodeCount = this.stateStack.nodesTraversed.length - 1;
+    // if (staleNodeCount > 0) {
+    //   this.stateStack.stack.splice(0, staleNodeCount);
+    //   this.stateStack.deserializeStackLength -= staleNodeCount;
+    // }
+
     this.globals = GlobalStore.fromJSON(checkpoint.globals);
     this.globals.restoreTokenStats(currentTokenStats);
     this.pendingPromises.clear();

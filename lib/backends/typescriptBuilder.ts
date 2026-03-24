@@ -3,7 +3,6 @@ import {
   AgencyNode,
   AgencyProgram,
   Assignment,
-  InterpolationSegment,
   Literal,
   PromptSegment,
   Scope,
@@ -65,7 +64,7 @@ import { MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
-import { escape, mergeDeep, uniq } from "../utils.js";
+import { escape, mergeDeep } from "../utils.js";
 import {
   generateBuiltinHelpers,
   mapFunctionName,
@@ -75,9 +74,9 @@ import {
   mapTypeToZodSchema,
 } from "./typescriptGenerator/typeToZodSchema.js";
 
+import { auditNode, makeAuditCall } from "../ir/audit.js";
 import { $, ts } from "../ir/builders.js";
 import { printTs } from "../ir/prettyPrint.js";
-import { auditNode, makeAuditCall } from "../ir/audit.js";
 import type {
   TsElseIf,
   TsNode,
@@ -117,6 +116,24 @@ export class TypeScriptBuilder {
   private loopVars: string[] = [];
   private insideMessageThread: boolean = false;
 
+  /*
+  We break up every function and node body into steps,
+  and wrap each statement in an if statement. If that statement
+  contains an async function call, we also need to check
+  whether we have branch data for this function call already,
+  which would indicate that we are returning from an interrupt,
+  and need to deserialize the state for this branch. This property
+  is here as a flag to indicate that the branch check is needed,
+  because this statement contains an async function call.
+  */
+  private _asyncBranchCheckNeeded: boolean = false;
+
+  /* This keeps track of what step we are on when in processBodyAsParts,
+  because if there's an async function call, we will need to create
+  a new branch for it, and for that we will need its branch index,
+  which will be the value of the current step
+  */
+  private _currentStepIndex: number = 0;
 
   private programInfo: ProgramInfo;
   private moduleId: string;
@@ -217,6 +234,32 @@ export class TypeScriptBuilder {
     return getVisibleTypes(this.programInfo.typeHints, this.currentScopeKey());
   }
 
+  private forkBranchSetup(branchKey: number): TsNode[] {
+    const stackBranches = ts.prop(ts.runtime.stack, "branches");
+    const branchWithBranchKey = ts.index(stackBranches, ts.num(branchKey));
+
+    // forked is a state stack that we will either get from the branch data (if returning from an interrupt)
+    // or create new by forking the current stack (if first time hitting this async call)
+    const forked = ts.id("__forked");
+    return [
+      ts.if(
+        ts.and(stackBranches, branchWithBranchKey),
+        ts.statements([
+          ts.assign(forked, ts.prop(branchWithBranchKey, "stack")),
+          ts.call(ts.prop(forked, "deserializeMode")),
+        ]),
+        {
+          elseBody: ts.assign(
+            forked,
+            ts.call(ts.prop(ts.runtime.ctx, "forkStack")),
+          ),
+        },
+      ),
+      ts.assign(stackBranches, ts.or(stackBranches, ts.obj({}))),
+      ts.assign(branchWithBranchKey, ts.obj({ stack: forked })),
+    ];
+  }
+
   private isImportedTool(functionName: string): boolean {
     return this.programInfo.importedTools
       .map((node) => node.importedTools)
@@ -226,7 +269,11 @@ export class TypeScriptBuilder {
 
   // Runtime functions that need __state (ctx injection) like user-defined agency functions.
   // These are imported from the runtime but need the functionCallConfig passed as the last arg.
-  private static RUNTIME_STATEFUL_FUNCTIONS = ["checkpoint", "getCheckpoint", "restore"];
+  private static RUNTIME_STATEFUL_FUNCTIONS = [
+    "checkpoint",
+    "getCheckpoint",
+    "restore",
+  ];
 
   private isAgencyFunction(
     functionName: string,
@@ -976,6 +1023,8 @@ export class TypeScriptBuilder {
         graph: ts.ctx("graph"),
       }),
 
+      ts.raw(`let __forked;`),
+
       // Ensure this module's globals are initialized on the current ctx.
       // The isInitialized flag lives on the GlobalStore and is serialized,
       // so on interrupt resume the restored store already has it set.
@@ -1044,7 +1093,9 @@ export class TypeScriptBuilder {
           ),
         ]),
         "__error",
-        ts.raw("__ctx.stateStack.pop()"),
+        // we pop the state stack in the finally block, but only if:
+        // - this stack wasn't forked
+        ts.raw("if (!__state?.isForked) { __ctx.stateStack.pop() }"),
       ),
     );
 
@@ -1085,13 +1136,26 @@ export class TypeScriptBuilder {
       // Async unassigned calls: register with pending promise store, no interrupt check
       if (node.async) {
         // For agency functions, fork the stack for per-thread isolation
-        if (this.isAgencyFunction(node.functionName, "topLevelStatement") && !this.isGraphNode(node.functionName)) {
-          const callWithStack = this.generateFunctionCallExpression(node, "topLevelStatement", { stateStack: ts.raw("__ctx.forkStack()") });
-          return ts.raw(`__ctx.pendingPromises.add(${this.str(callWithStack)})`);
+        if (
+          this.isAgencyFunction(node.functionName, "topLevelStatement") &&
+          !this.isGraphNode(node.functionName)
+        ) {
+          this._asyncBranchCheckNeeded = true;
+          const branchKey = this._currentStepIndex;
+          let statements = ts.statements(this.forkBranchSetup(branchKey));
+          const callWithStack = this.generateFunctionCallExpression(
+            node,
+            "topLevelStatement",
+            { stateStack: ts.id("__forked") },
+          );
+
+          statements = ts.statementsPush(
+            statements,
+            ts.raw(`__ctx.pendingPromises.add(${this.str(callWithStack)})`),
+          );
+          return statements;
         }
-        return ts.raw(
-          `__ctx.pendingPromises.add(${this.str(callNode)})`,
-        );
+        return ts.raw(`__ctx.pendingPromises.add(${this.str(callNode)})`);
       }
 
       // Sync calls: check for interrupt result
@@ -1202,6 +1266,7 @@ export class TypeScriptBuilder {
         threads: threadsExpr,
         interruptData: ts.raw("__state?.interruptData"),
         stateStack: options?.stateStack,
+        isForked: node.async,
       });
       const call = ts.call(ts.id(functionName), [...argNodes, configObj]);
       return shouldAwait ? ts.await(call) : call;
@@ -1300,6 +1365,7 @@ export class TypeScriptBuilder {
         statelogClient: ts.ctx("statelogClient"),
         graph: ts.ctx("graph"),
       }),
+      ts.raw(`let __forked;`),
 
       ts.callHook("onNodeStart", { nodeName: ts.str(nodeName) }),
     ];
@@ -1469,11 +1535,19 @@ export class TypeScriptBuilder {
 
       if (value.async) {
         // For agency functions, fork the stack for per-thread isolation
-        if (this.isAgencyFunction(value.functionName, "topLevelStatement") && !this.isGraphNode(value.functionName)) {
+        if (
+          this.isAgencyFunction(value.functionName, "topLevelStatement") &&
+          !this.isGraphNode(value.functionName)
+        ) {
+          this._asyncBranchCheckNeeded = true;
+          const branchKey = this._currentStepIndex;
+          stmts.unshift(...this.forkBranchSetup(branchKey));
           stmts[stmts.length - 1] = this.scopedAssign(
             node.scope!,
             variableName,
-            this.generateFunctionCallExpression(value, "topLevelStatement", { stateStack: ts.raw("__ctx.forkStack()") }),
+            this.generateFunctionCallExpression(value, "topLevelStatement", {
+              stateStack: ts.id("__forked"),
+            }),
             node.accessChain,
           );
         }
@@ -1483,7 +1557,9 @@ export class TypeScriptBuilder {
         stmts.push(
           ts.assign(
             ts.self(pendingKeyVar),
-            ts.raw(`__ctx.pendingPromises.add(${this.str(varRef)}, (val) => { ${this.str(varRef)} = val; })`),
+            ts.raw(
+              `__ctx.pendingPromises.add(${this.str(varRef)}, (val) => { ${this.str(varRef)} = val; })`,
+            ),
           ),
         );
       } else if (this.getCurrentScope().type !== "global") {
@@ -1710,7 +1786,9 @@ export class TypeScriptBuilder {
       stmts.push(
         ts.assign(
           ts.self(pendingKeyVar),
-          ts.raw(`__ctx.pendingPromises.add(${this.str(varRef)}, (val) => { ${this.str(varRef)} = val; })`),
+          ts.raw(
+            `__ctx.pendingPromises.add(${this.str(varRef)}, (val) => { ${this.str(varRef)} = val; })`,
+          ),
         ),
       );
     } else {
@@ -1943,10 +2021,16 @@ export class TypeScriptBuilder {
     opts: { isInSafeFunction?: boolean } = {},
   ): TsStepBlock[] {
     const parts: TsNode[][] = [[]];
+    const branchCheckParts = new Set<number>();
     for (const stmt of body) {
       if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type)) {
         parts.push([]);
       }
+
+      // This is because if there's an async function call on this step
+      // we will need to create a new branch for it, and its branch index,
+      // will be the value of the step for this statement.
+      this._currentStepIndex = parts.length - 1;
       if (!opts.isInSafeFunction && this.containsImpureCall(stmt)) {
         parts[parts.length - 1].push(
           ts.assign(ts.self("__retryable"), ts.bool(false)),
@@ -1962,8 +2046,14 @@ export class TypeScriptBuilder {
           parts[parts.length - 1].push(audit.node);
         }
       }
+      if (this._asyncBranchCheckNeeded) {
+        branchCheckParts.add(this._currentStepIndex);
+        this._asyncBranchCheckNeeded = false;
+      }
     }
-    return parts.map((part, i) => ts.stepBlock(i, ts.statements(part)));
+    return parts.map((part, i) =>
+      ts.stepBlock(i, ts.statements(part), branchCheckParts.has(i)),
+    );
   }
 
   // ------- Imports and pre/post processing -------

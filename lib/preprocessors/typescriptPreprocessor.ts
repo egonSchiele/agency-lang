@@ -122,6 +122,7 @@ export class TypescriptPreprocessor {
     this.filterExcludedNodeTypes();
     this.filterExcludedBuiltinFunctions();
     this.validateFetchDomains();
+    this.validateNoAsyncInLoops();
     this.resolveVariableScopes();
     return this.program;
   }
@@ -1198,6 +1199,27 @@ export class TypescriptPreprocessor {
       return urlObj.hostname;
     } catch {
       return null; // Invalid URL
+    }
+  }
+
+  /**
+   * Validate that no async function calls appear inside loops.
+   * Async calls inside loops can't be properly serialized for interrupt
+   * resumption because multiple iterations share the same step block,
+   * causing branch key collisions.
+   */
+  protected validateNoAsyncInLoops(): void {
+    const loopTypes = ["forLoop", "whileLoop"];
+    for (const { node, ancestors } of walkNodesArray(this.program.nodes)) {
+      if (node.type === "functionCall" && node.async) {
+        const insideLoop = ancestors.some((a) => loopTypes.includes(a.type));
+        if (insideLoop) {
+          throw new Error(
+            `Async function call "${node.functionName}()" is not allowed inside a loop. ` +
+              `Move the async call into a separate function, or remove the "async" keyword.`,
+          );
+        }
+      }
     }
   }
 

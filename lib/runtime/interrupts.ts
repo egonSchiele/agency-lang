@@ -9,6 +9,7 @@ import type { Checkpoint } from "./state/checkpointStore.js";
 import { GraphState } from "./types.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { color } from "termcolors";
+import { nanoid } from "nanoid";
 
 export type InterruptApprove = {
   type: "approve";
@@ -57,16 +58,18 @@ export type InterruptState = {
 
 export type Interrupt<T = any> = {
   type: "interrupt";
+  //interruptId: string; // nanoid — globally unique
   data: T;
   interruptData?: InterruptData;
   checkpointId?: number;
   checkpoint?: Checkpoint;
-  state?: InterruptState;  // kept for backward compat migration shim
+  state?: InterruptState; // kept for backward compat migration shim
 };
 
 export function interrupt<T = any>(data: T): Interrupt<T> {
   return {
     type: "interrupt",
+    //interruptId: nanoid(),
     data,
   };
 }
@@ -75,6 +78,30 @@ export function isInterrupt(obj: any): obj is Interrupt {
   return obj && obj.type === "interrupt";
 }
 
+// if we ever end up supporting multiple interrupts at once
+/* export type InterruptBatch = {
+  type: "interrupt_batch";
+  interrupts: Interrupt[];
+  checkpoint: Checkpoint;
+};
+
+export function isInterruptBatch(obj: any): obj is InterruptBatch {
+  return obj && obj.type === "interrupt_batch";
+}
+
+function interruptBatch(
+  interrupts: Interrupt[],
+  execCtx: RuntimeContext<any>,
+): InterruptBatch {
+  const cpId = execCtx.checkpoints.create(execCtx);
+  const cp = execCtx.checkpoints.get(cpId);
+  return {
+    type: "interrupt_batch",
+    interrupts,
+    checkpoint: cp,
+  };
+}
+ */
 export async function respondToInterrupt(args: {
   ctx: RuntimeContext<GraphState>;
   interrupt: Interrupt;
@@ -104,7 +131,9 @@ export async function respondToInterrupt(args: {
       ? ctx.checkpoints?.get(interrupt.checkpointId)
       : undefined);
   if (!checkpoint) {
-    throw new Error("No checkpoint found for interrupt. The interrupt may have been created with an older format.");
+    throw new Error(
+      "No checkpoint found for interrupt. The interrupt may have been created with an older format.",
+    );
   }
 
   const execCtx = ctx.createExecutionContext();
@@ -130,22 +159,30 @@ export async function respondToInterrupt(args: {
   try {
     while (true) {
       try {
-        const result = await execCtx.graph.run(nodeName, {
-          // todo user should be able to pass messages
-          // in metadata
-          messages: new ThreadStore(),
-          data: {},
-          ctx: execCtx,
-          isResume: true,
-          interruptData,
-        }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
+        const result = await execCtx.graph.run(
+          nodeName,
+          {
+            // todo user should be able to pass messages
+            // in metadata
+            messages: new ThreadStore(),
+            data: {},
+            ctx: execCtx,
+            isResume: true,
+            interruptData,
+          },
+          { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) },
+        );
         await execCtx.pendingPromises.awaitAll();
         return createReturnObject({ result, globals: execCtx.globals });
       } catch (e) {
         if (e instanceof RestoreSignal) {
           const cp = e.checkpoint;
           execCtx.restoreState(cp);
-          await execCtx.audit({ type: "restore", checkpointId: cp.id, nodeName: cp.nodeId });
+          await execCtx.audit({
+            type: "restore",
+            checkpointId: cp.id,
+            nodeName: cp.nodeId,
+          });
           nodeName = cp.nodeId;
           execCtx.stateStack.nodesTraversed = [cp.nodeId];
           continue;
@@ -252,21 +289,29 @@ export async function resumeFromState(args: {
   try {
     while (true) {
       try {
-        const result = await execCtx.graph.run(nodeName, {
-          // todo: is this correct? Do we need to pass messages here?
-          messages: new ThreadStore(),
-          ctx: execCtx,
-          isResume: true,
-          data: {},
-          //interruptData
-        }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
+        const result = await execCtx.graph.run(
+          nodeName,
+          {
+            // todo: is this correct? Do we need to pass messages here?
+            messages: new ThreadStore(),
+            ctx: execCtx,
+            isResume: true,
+            data: {},
+            //interruptData
+          },
+          { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) },
+        );
         await execCtx.pendingPromises.awaitAll();
         return createReturnObject({ result, globals: execCtx.globals });
       } catch (e) {
         if (e instanceof RestoreSignal) {
           const cp = e.checkpoint;
           execCtx.restoreState(cp);
-          await execCtx.audit({ type: "restore", checkpointId: cp.id, nodeName: cp.nodeId });
+          await execCtx.audit({
+            type: "restore",
+            checkpointId: cp.id,
+            nodeName: cp.nodeId,
+          });
           nodeName = cp.nodeId;
           execCtx.stateStack.nodesTraversed = [cp.nodeId];
           continue;

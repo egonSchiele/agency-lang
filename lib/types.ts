@@ -25,7 +25,9 @@ import { TimeBlock } from "./types/timeBlock.js";
 import { UsesTool } from "./types/tools.js";
 import { TypeAlias, TypeHint, VariableType } from "./types/typeHints.js";
 import { WhileLoop } from "./types/whileLoop.js";
+import { AwaitPending } from "./types/awaitPending.js";
 export * from "./types/access.js";
+export * from "./types/awaitPending.js";
 export * from "./types/dataStructures.js";
 export * from "./types/function.js";
 export * from "./types/graphNode.js";
@@ -202,7 +204,8 @@ export type AgencyNode =
   | Skill
   | BinOpExpression
   | Keyword
-  | ForLoop;
+  | ForLoop
+  | AwaitPending;
 
 export type AgencyProgram = {
   type: "agencyProgram";

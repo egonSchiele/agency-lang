@@ -42,6 +42,7 @@ import type {
   TsBreak,
   TsContinue,
   TsPostfixOp,
+  TsTernary,
 } from "./tsIR.js";
 
 export { $, TsChain } from "./fluent.js";
@@ -53,6 +54,10 @@ export const ts = {
 
   statements(body: TsNode[]): TsStatements {
     return { kind: "statements", body };
+  },
+
+  statementsPush(statement: TsStatements, ...stmts: TsNode[]): TsStatements {
+    return { kind: "statements", body: [...statement.body, ...stmts] };
   },
 
   importDecl(opts: {
@@ -347,8 +352,13 @@ export const ts = {
     return { kind: "functionReturn", value };
   },
 
-  stepBlock(stepIndex: number, body: TsNode): TsStepBlock {
-    return { kind: "stepBlock", stepIndex, body };
+  stepBlock(
+    stepIndex: number,
+    body: TsNode,
+    _branchCheck?: boolean,
+  ): TsStepBlock {
+    const branchCheck = _branchCheck ?? false;
+    return { kind: "stepBlock", stepIndex, body, branchCheck };
   },
 
   empty(): TsEmpty {
@@ -443,16 +453,30 @@ export const ts = {
     return ts.raw(`throw ${code}`);
   },
 
+  and(...conditions: TsNode[]): TsNode {
+    return { kind: "and", operands: conditions };
+  },
+
+  or(...conditions: TsNode[]): TsNode {
+    return { kind: "or", operands: conditions };
+  },
+
+  not(condition: TsNode): TsNode {
+    return { kind: "not", operand: condition };
+  },
+
   functionCallConfig({
     ctx,
     threads,
     interruptData,
     stateStack,
+    isForked,
   }: {
     ctx: TsNode;
     threads: TsNode;
     interruptData: TsNode;
     stateStack?: TsNode;
+    isForked?: boolean;
   }): TsNode {
     const entries: Record<string, TsNode> = {
       ctx,
@@ -461,6 +485,9 @@ export const ts = {
     };
     if (stateStack) {
       entries.stateStack = stateStack;
+    }
+    if (isForked) {
+      entries.isForked = ts.bool(true);
     }
     return ts.obj(entries);
   },
@@ -530,6 +557,10 @@ export const ts = {
       ts.str(varName),
       value,
     ]);
+  },
+
+  ternary(condition: TsNode, trueExpr: TsNode, falseExpr: TsNode): TsTernary {
+    return { kind: "ternary", condition, trueExpr, falseExpr };
   },
 
   /** Predefined runtime identifiers */

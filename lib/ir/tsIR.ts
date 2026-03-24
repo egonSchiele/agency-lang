@@ -36,7 +36,11 @@ export type TsNode =
   | TsEmpty
   | TsBreak
   | TsContinue
-  | TsPostfixOp;
+  | TsPostfixOp
+  | TsAnd
+  | TsOr
+  | TsNot
+  | TsTernary;
 
 /** Escape hatch: verbatim string */
 export interface TsRaw {
@@ -275,6 +279,7 @@ export interface TsStepBlock {
   kind: "stepBlock";
   stepIndex: number;
   body: TsNode;
+  branchCheck?: boolean;
 }
 
 /** No-op node — produces no output. Used for AST nodes handled elsewhere (e.g. imports collected in a separate pass). */
@@ -295,4 +300,26 @@ export interface TsPostfixOp {
   kind: "postfixOp";
   operand: TsNode;
   op: "++" | "--";
+}
+
+export interface TsAnd {
+  kind: "and";
+  operands: TsNode[];
+}
+
+export interface TsOr {
+  kind: "or";
+  operands: TsNode[];
+}
+
+export interface TsNot {
+  kind: "not";
+  operand: TsNode;
+}
+
+export interface TsTernary {
+  kind: "ternary";
+  condition: TsNode;
+  trueExpr: TsNode;
+  falseExpr: TsNode;
 }

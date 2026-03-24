@@ -241,7 +241,12 @@ export function printTs(node: TsNode, indent = 0): string {
 
     case "stepBlock": {
       const stepBody = printBody(node.body, indent);
-      return `if (__step <= ${node.stepIndex}) {\n${stepBody}\n${ind(indent + 1)}__stack.step++;\n${ind(indent)}}`;
+      const guard = node.branchCheck
+        ? `if (__step <= ${node.stepIndex} || (__stack.branches && __stack.branches[${node.stepIndex}])) {`
+        : `if (__step <= ${node.stepIndex}) {`;
+      return `${guard}
+      ${stepBody}
+      ${ind(indent + 1)}__stack.step++;\n${ind(indent)}}`;
     }
 
     case "empty":
@@ -255,6 +260,18 @@ export function printTs(node: TsNode, indent = 0): string {
 
     case "postfixOp":
       return `${printTs(node.operand, indent)}${node.op}`;
+    case "and":
+      return `(${node.operands.map((o) => printTs(o, indent)).join(" && ")})`;
+    case "or":
+      return `(${node.operands.map((o) => printTs(o, indent)).join(" || ")})`;
+    case "not":
+      return `!${printTs(node.operand, indent)}`;
+    case "ternary": {
+      const condition = printTs(node.condition, indent);
+      const trueExpr = printTs(node.trueExpr, indent);
+      const falseExpr = printTs(node.falseExpr, indent);
+      return `(${condition} ? (${trueExpr}) : (${falseExpr}))`;
+    }
 
     default: {
       const _exhaustive: never = node;

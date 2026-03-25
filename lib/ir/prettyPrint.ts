@@ -367,7 +367,7 @@ export function printTs(node: TsNode, indent = 0): string {
       return renderForSteps.default({
         init: stripSemicolon(printTs(node.init, indent + 1)),
         condition: printTs(node.condition, indent + 1),
-        update: printTs(node.update, indent + 1),
+        update: stripSemicolon(printTs(node.update, indent + 1)),
         hasItemDecl: !!node.itemDecl,
         itemDecl: node.itemDecl ? printTs(node.itemDecl, indent + 1) : "",
         subStore,

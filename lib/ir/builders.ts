@@ -42,6 +42,7 @@ import type {
   TsIfStepsBranch,
   TsThreadSteps,
   TsWhileSteps,
+  TsForSteps,
   TsEmpty,
   TsBreak,
   TsContinue,
@@ -390,6 +391,18 @@ export const ts = {
     resetKeys: string[],
   ): TsWhileSteps {
     return { kind: "whileSteps", subStepPath, condition, body, resetKeys };
+  },
+
+  forSteps(
+    subStepPath: number[],
+    init: TsNode,
+    condition: TsNode,
+    update: TsNode,
+    body: TsNode[],
+    resetKeys: string[],
+    itemDecl?: TsNode,
+  ): TsForSteps {
+    return { kind: "forSteps", subStepPath, init, condition, update, itemDecl, body, resetKeys };
   },
 
   empty(): TsEmpty {

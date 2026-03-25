@@ -507,7 +507,7 @@ export class TypeScriptBuilder {
         this.importStatements.push(this.processImportToolStatement(node));
         return ts.empty();
       case "forLoop":
-        return this.processForLoop(node);
+        return this.processForLoopWithSteps(node);
       case "whileLoop":
         return this.processWhileLoopWithSteps(node);
       case "ifElse":
@@ -719,15 +719,34 @@ export class TypeScriptBuilder {
     return ts.ifSteps(subStepPath, branches, elseBranch);
   }
 
-  private processForLoop(node: ForLoop): TsNode {
+  private processForLoopWithSteps(node: ForLoop): TsNode {
     // Register loop variables so they bypass scope resolution
     this.loopVars.push(node.itemVar);
     if (node.indexVar) {
       this.loopVars.push(node.indexVar);
     }
 
-    const bodyStmts = node.body.map((stmt) => this.processStatement(stmt));
-    const body = ts.statements(bodyStmts);
+    const subStepPath = [...this._subStepPath];
+    const subKey = subStepPath.join("_");
+    const resetKeys: string[] = [];
+
+    const bodyNodes = node.body.map((stmt, i) => {
+      this._subStepPath = [...subStepPath];
+      this._subStepPath.push(i);
+      const result = this.processStatement(stmt);
+      const nestedKey = subKey ? `${subKey}_${i}` : `${i}`;
+      if (stmt.type === "ifElse" || stmt.type === "matchBlock") {
+        resetKeys.push(`__condbranch_${nestedKey}`);
+        resetKeys.push(`__substep_${nestedKey}`);
+      } else if (stmt.type === "whileLoop" || stmt.type === "forLoop") {
+        resetKeys.push(`__iteration_${nestedKey}`);
+        resetKeys.push(`__substep_${nestedKey}`);
+      } else if (stmt.type === "messageThread") {
+        resetKeys.push(`__substep_${nestedKey}`);
+      }
+      this._subStepPath.pop();
+      return result;
+    });
 
     // Unregister loop variables
     this.loopVars = this.loopVars.filter(
@@ -746,11 +765,13 @@ export class TypeScriptBuilder {
         args.length >= 2
           ? this.processNode(args[1])
           : this.processNode(args[0]);
-      return ts.forC(
+      return ts.forSteps(
+        subStepPath,
         ts.letDecl(node.itemVar, startNode),
         ts.binOp(ts.id(node.itemVar), "<", endNode),
         ts.postfix(ts.id(node.itemVar), "++"),
-        body,
+        bodyNodes,
+        resetKeys,
       );
     }
 
@@ -758,24 +779,28 @@ export class TypeScriptBuilder {
 
     // Indexed form: for (item, index in collection)
     if (node.indexVar) {
-      const indexedBody = ts.statements([
-        ts.varDecl(
-          "const",
-          node.itemVar,
-          ts.index(iterableNode, ts.id(node.indexVar)),
-        ),
-        ...bodyStmts,
-      ]);
-      return ts.forC(
+      return ts.forSteps(
+        subStepPath,
         ts.letDecl(node.indexVar, ts.num(0)),
         ts.binOp(ts.id(node.indexVar), "<", ts.prop(iterableNode, "length")),
         ts.postfix(ts.id(node.indexVar), "++"),
-        indexedBody,
+        bodyNodes,
+        resetKeys,
+        ts.varDecl("const", node.itemVar, ts.index(iterableNode, ts.id(node.indexVar))),
       );
     }
 
-    // Basic form: for (item in collection)
-    return ts.forOf(node.itemVar, iterableNode, body);
+    // Basic form: for (item in collection) — convert to indexed loop
+    const indexVar = `__i_${subKey}`;
+    return ts.forSteps(
+      subStepPath,
+      ts.letDecl(indexVar, ts.num(0)),
+      ts.binOp(ts.id(indexVar), "<", ts.prop(iterableNode, "length")),
+      ts.postfix(ts.id(indexVar), "++"),
+      bodyNodes,
+      resetKeys,
+      ts.varDecl("const", node.itemVar, ts.index(iterableNode, ts.id(indexVar))),
+    );
   }
 
   private processWhileLoopWithSteps(node: WhileLoop): TsNode {

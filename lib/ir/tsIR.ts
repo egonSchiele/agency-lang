@@ -36,6 +36,7 @@ export type TsNode =
   | TsIfSteps
   | TsThreadSteps
   | TsWhileSteps
+  | TsForSteps
   | TsEmpty
   | TsBreak
   | TsContinue
@@ -317,6 +318,25 @@ export interface TsWhileSteps {
   /** The body statements (each gets a substep guard) */
   body: TsNode[];
   /** Local variable keys to reset at end of each iteration (nested condbranch/substep/iteration values) */
+  resetKeys: string[];
+}
+
+/** A for loop with iteration tracking and substep guards for each body statement. */
+export interface TsForSteps {
+  kind: "forSteps";
+  /** The substep path for naming variables */
+  subStepPath: number[];
+  /** Loop initialization (e.g. let i = 0) */
+  init: TsNode;
+  /** Loop condition (e.g. i < 10) */
+  condition: TsNode;
+  /** Loop update (e.g. i++) */
+  update: TsNode;
+  /** Optional: extract item from collection by index at start of each iteration */
+  itemDecl?: TsNode;
+  /** The body statements (each gets a substep guard) */
+  body: TsNode[];
+  /** Local variable keys to reset at end of each iteration */
   resetKeys: string[];
 }
 

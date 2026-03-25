@@ -262,10 +262,35 @@ const __graph = __ctx.graph;
   }
   if (__step <= 2) {
           __self.__retryable = false;
-    for (const item of __stack.locals.items) {
-      await print(item)
-      
-    }
+    __stack.locals.__iteration_2 = __stack.locals.__iteration_2 ?? 0;
+let __currentIter_2 = 0;
+for (let __i_2 = 0; __i_2 < __stack.locals.items.length; __i_2++) {
+  if (__currentIter_2 < __stack.locals.__iteration_2) {
+    __currentIter_2++;
+    continue;
+  }
+
+  const item = __stack.locals.items[__i_2];
+
+  __stack.locals.__substep_2 = __stack.locals.__substep_2 ?? 0;
+
+  if (__stack.locals.__substep_2 <= 0) {
+    await print(item)
+
+    __stack.locals.__substep_2 = 1;
+  }
+
+  if (__stack.locals.__substep_2 <= 1) {
+    
+
+    __stack.locals.__substep_2 = 2;
+  }
+
+  __stack.locals.__substep_2 = 0;
+
+  __stack.locals.__iteration_2++;
+  __currentIter_2++;
+}
     
     
     //  Range-based for loop
@@ -274,10 +299,33 @@ const __graph = __ctx.graph;
   }
   if (__step <= 3) {
           __self.__retryable = false;
-    for (let i = 0; i < 5; i++) {
-      await print(i)
-      
-    }
+    __stack.locals.__iteration_3 = __stack.locals.__iteration_3 ?? 0;
+let __currentIter_3 = 0;
+for (let i = 0; i < 5; i++) {
+  if (__currentIter_3 < __stack.locals.__iteration_3) {
+    __currentIter_3++;
+    continue;
+  }
+
+  __stack.locals.__substep_3 = __stack.locals.__substep_3 ?? 0;
+
+  if (__stack.locals.__substep_3 <= 0) {
+    await print(i)
+
+    __stack.locals.__substep_3 = 1;
+  }
+
+  if (__stack.locals.__substep_3 <= 1) {
+    
+
+    __stack.locals.__substep_3 = 2;
+  }
+
+  __stack.locals.__substep_3 = 0;
+
+  __stack.locals.__iteration_3++;
+  __currentIter_3++;
+}
     
     
     //  Indexed for loop
@@ -296,13 +344,47 @@ const __graph = __ctx.graph;
   }
   if (__step <= 5) {
           __self.__retryable = false;
-    for (let index = 0; index < __stack.locals.names.length; index++) {
-      const name = __stack.locals.names[index];
-      await print(name)
-      
-      await print(index)
-      
-    }
+    __stack.locals.__iteration_5 = __stack.locals.__iteration_5 ?? 0;
+let __currentIter_5 = 0;
+for (let index = 0; index < __stack.locals.names.length; index++) {
+  if (__currentIter_5 < __stack.locals.__iteration_5) {
+    __currentIter_5++;
+    continue;
+  }
+
+  const name = __stack.locals.names[index];
+
+  __stack.locals.__substep_5 = __stack.locals.__substep_5 ?? 0;
+
+  if (__stack.locals.__substep_5 <= 0) {
+    await print(name)
+
+    __stack.locals.__substep_5 = 1;
+  }
+
+  if (__stack.locals.__substep_5 <= 1) {
+    
+
+    __stack.locals.__substep_5 = 2;
+  }
+
+  if (__stack.locals.__substep_5 <= 2) {
+    await print(index)
+
+    __stack.locals.__substep_5 = 3;
+  }
+
+  if (__stack.locals.__substep_5 <= 3) {
+    
+
+    __stack.locals.__substep_5 = 4;
+  }
+
+  __stack.locals.__substep_5 = 0;
+
+  __stack.locals.__iteration_5++;
+  __currentIter_5++;
+}
     
           __stack.step++;
   }

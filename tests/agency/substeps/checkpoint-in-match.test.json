@@ -1,0 +1,12 @@
+{
+  "sourceFile": "checkpoint-in-match.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Checkpoint with match block restores and re-enters correct branch",
+      "input": "\"go\"",
+      "expectedOutput": "\"before,go,before,go,\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

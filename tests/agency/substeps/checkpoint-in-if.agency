@@ -1,0 +1,14 @@
+shared log = ""
+
+node main(x: number) {
+  cp = checkpoint()
+  log = log + "before,"
+  if (x > 5) {
+    log = log + "branch,"
+    if (log == "before,branch,") {
+      restore(cp, {})
+    }
+    log = log + "done,"
+  }
+  return log
+}

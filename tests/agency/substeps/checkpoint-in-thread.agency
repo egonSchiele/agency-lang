@@ -1,0 +1,14 @@
+shared log = ""
+
+node main() {
+  cp = checkpoint()
+  log = log + "before,"
+  thread {
+    log = log + "thread,"
+    if (log == "before,thread,") {
+      restore(cp, {})
+    }
+    log = log + "done,"
+  }
+  return log
+}

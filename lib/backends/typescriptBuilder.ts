@@ -730,7 +730,6 @@ export class TypeScriptBuilder {
     const subKey = subStepPath.join("_");
 
     const bodyNodes = node.body.map((stmt, i) => {
-      this._subStepPath = [...subStepPath];
       this._subStepPath.push(i);
       const result = this.processStatement(stmt);
       this._subStepPath.pop();
@@ -756,42 +755,42 @@ export class TypeScriptBuilder {
         args.length >= 2
           ? this.processNode(args[1])
           : this.processNode(args[0]);
-      return ts.forSteps(
+      return ts.forSteps({
         subStepPath,
-        ts.letDecl(node.itemVar, startNode),
-        ts.binOp(ts.id(node.itemVar), "<", endNode),
-        ts.postfix(ts.id(node.itemVar), "++"),
-        bodyNodes,
+        init: ts.letDecl(node.itemVar, startNode),
+        condition: ts.binOp(ts.id(node.itemVar), "<", endNode),
+        update: ts.postfix(ts.id(node.itemVar), "++"),
+        body: bodyNodes,
         resetKeys,
-      );
+      });
     }
 
     const iterableNode = this.processNode(node.iterable);
 
     // Indexed form: for (item, index in collection)
     if (node.indexVar) {
-      return ts.forSteps(
+      return ts.forSteps({
         subStepPath,
-        ts.letDecl(node.indexVar, ts.num(0)),
-        ts.binOp(ts.id(node.indexVar), "<", ts.prop(iterableNode, "length")),
-        ts.postfix(ts.id(node.indexVar), "++"),
-        bodyNodes,
+        init: ts.letDecl(node.indexVar, ts.num(0)),
+        condition: ts.binOp(ts.id(node.indexVar), "<", ts.prop(iterableNode, "length")),
+        update: ts.postfix(ts.id(node.indexVar), "++"),
+        body: bodyNodes,
         resetKeys,
-        ts.varDecl("const", node.itemVar, ts.index(iterableNode, ts.id(node.indexVar))),
-      );
+        itemDecl: ts.varDecl("const", node.itemVar, ts.index(iterableNode, ts.id(node.indexVar))),
+      });
     }
 
     // Basic form: for (item in collection) — convert to indexed loop
     const indexVar = `__i_${subKey}`;
-    return ts.forSteps(
+    return ts.forSteps({
       subStepPath,
-      ts.letDecl(indexVar, ts.num(0)),
-      ts.binOp(ts.id(indexVar), "<", ts.prop(iterableNode, "length")),
-      ts.postfix(ts.id(indexVar), "++"),
-      bodyNodes,
+      init: ts.letDecl(indexVar, ts.num(0)),
+      condition: ts.binOp(ts.id(indexVar), "<", ts.prop(iterableNode, "length")),
+      update: ts.postfix(ts.id(indexVar), "++"),
+      body: bodyNodes,
       resetKeys,
-      ts.varDecl("const", node.itemVar, ts.index(iterableNode, ts.id(indexVar))),
-    );
+      itemDecl: ts.varDecl("const", node.itemVar, ts.index(iterableNode, ts.id(indexVar))),
+    });
   }
 
   /** Recursively collect all tracking variable keys (condbranch, substep, iteration)
@@ -1224,9 +1223,9 @@ export class TypeScriptBuilder {
       const nodeContext = scope.type === "node";
       const returnBody = nodeContext
         ? ts.obj([
-            ts.setSpread(ts.runtime.state),
-            ts.set("data", ts.id(tempVar)),
-          ])
+          ts.setSpread(ts.runtime.state),
+          ts.set("data", ts.id(tempVar)),
+        ])
         : ts.obj({ data: ts.id(tempVar) });
       return ts.statements([
         ts.constDecl(tempVar, callNode),
@@ -1710,9 +1709,9 @@ export class TypeScriptBuilder {
   ): TsNode {
     const _variableType = variableType ||
       this.getTypeHint(variableName) || {
-        type: "primitiveType" as const,
-        value: "string",
-      };
+      type: "primitiveType" as const,
+      value: "string",
+    };
 
     const zodSchema = mapTypeToZodSchema(
       _variableType,
@@ -1855,9 +1854,9 @@ export class TypeScriptBuilder {
       const isNodeContext = this.getCurrentScope().type === "node";
       const returnExpr = isNodeContext
         ? ts.nodeReturn({
-            messages: ts.runtime.threads,
-            data: varRef,
-          })
+          messages: ts.runtime.threads,
+          data: varRef,
+        })
         : ts.return(varRef);
       stmts.push(
         ts.if(
@@ -2194,8 +2193,8 @@ export class TypeScriptBuilder {
                   messages: ts.id("messages"),
                   callbacks: this.agencyConfig.audit?.logFile
                     ? ts.raw(
-                        "{ onAuditLog: __defaultonAuditLog, ...callbacks }",
-                      )
+                      "{ onAuditLog: __defaultonAuditLog, ...callbacks }",
+                    )
                     : ts.id("callbacks"),
                   initializeGlobals: ts.id("__initializeGlobals"),
                 }),

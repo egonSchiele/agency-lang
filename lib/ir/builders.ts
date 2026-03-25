@@ -393,16 +393,16 @@ export const ts = {
     return { kind: "whileSteps", subStepPath, condition, body, resetKeys };
   },
 
-  forSteps(
-    subStepPath: number[],
-    init: TsNode,
-    condition: TsNode,
-    update: TsNode,
-    body: TsNode[],
-    resetKeys: string[],
-    itemDecl?: TsNode,
-  ): TsForSteps {
-    return { kind: "forSteps", subStepPath, init, condition, update, itemDecl, body, resetKeys };
+  forSteps(opts: {
+    subStepPath: number[];
+    init: TsNode;
+    condition: TsNode;
+    update: TsNode;
+    body: TsNode[];
+    resetKeys: string[];
+    itemDecl?: TsNode;
+  }): TsForSteps {
+    return { kind: "forSteps", ...opts };
   },
 
   empty(): TsEmpty {

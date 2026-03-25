@@ -1,0 +1,14 @@
+node main() {
+  result = ""
+  for (i in range(4)) {
+    if (i == 0) {
+      result = result + "a"
+    } else if (i == 2) {
+      y = interrupt("i is 2")
+      result = result + y
+    } else {
+      result = result + "x"
+    }
+  }
+  return result
+}

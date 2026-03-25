@@ -1,0 +1,13 @@
+node main() {
+  total = 0
+  for (i in range(6)) {
+    if (i == 2) {
+      y = interrupt("i is 2")
+    }
+    if (i == 4) {
+      y = interrupt("i is 4")
+    }
+    total = total + i
+  }
+  return total
+}

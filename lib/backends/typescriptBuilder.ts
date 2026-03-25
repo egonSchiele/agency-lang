@@ -507,9 +507,9 @@ export class TypeScriptBuilder {
         this.importStatements.push(this.processImportToolStatement(node));
         return ts.empty();
       case "forLoop":
-        return this.processForLoop(node);
+        return this.processForLoopWithSteps(node);
       case "whileLoop":
-        return this.processWhileLoop(node);
+        return this.processWhileLoopWithSteps(node);
       case "ifElse":
         return this.processIfElseWithSteps(node);
       case "specialVar":
@@ -719,15 +719,22 @@ export class TypeScriptBuilder {
     return ts.ifSteps(subStepPath, branches, elseBranch);
   }
 
-  private processForLoop(node: ForLoop): TsNode {
+  private processForLoopWithSteps(node: ForLoop): TsNode {
     // Register loop variables so they bypass scope resolution
     this.loopVars.push(node.itemVar);
     if (node.indexVar) {
       this.loopVars.push(node.indexVar);
     }
 
-    const bodyStmts = node.body.map((stmt) => this.processStatement(stmt));
-    const body = ts.statements(bodyStmts);
+    const subStepPath = [...this._subStepPath];
+    const subKey = subStepPath.join("_");
+
+    const bodyNodes = node.body.map((stmt, i) => {
+      this._subStepPath.push(i);
+      const result = this.processStatement(stmt);
+      this._subStepPath.pop();
+      return result;
+    });
 
     // Unregister loop variables
     this.loopVars = this.loopVars.filter(
@@ -746,43 +753,53 @@ export class TypeScriptBuilder {
         args.length >= 2
           ? this.processNode(args[1])
           : this.processNode(args[0]);
-      return ts.forC(
-        ts.letDecl(node.itemVar, startNode),
-        ts.binOp(ts.id(node.itemVar), "<", endNode),
-        ts.postfix(ts.id(node.itemVar), "++"),
-        body,
-      );
+      return ts.forSteps({
+        subStepPath,
+        init: ts.letDecl(node.itemVar, startNode),
+        condition: ts.binOp(ts.id(node.itemVar), "<", endNode),
+        update: ts.postfix(ts.id(node.itemVar), "++"),
+        body: bodyNodes,
+      });
     }
 
     const iterableNode = this.processNode(node.iterable);
 
     // Indexed form: for (item, index in collection)
     if (node.indexVar) {
-      const indexedBody = ts.statements([
-        ts.varDecl(
-          "const",
-          node.itemVar,
-          ts.index(iterableNode, ts.id(node.indexVar)),
-        ),
-        ...bodyStmts,
-      ]);
-      return ts.forC(
-        ts.letDecl(node.indexVar, ts.num(0)),
-        ts.binOp(ts.id(node.indexVar), "<", ts.prop(iterableNode, "length")),
-        ts.postfix(ts.id(node.indexVar), "++"),
-        indexedBody,
-      );
+      return ts.forSteps({
+        subStepPath,
+        init: ts.letDecl(node.indexVar, ts.num(0)),
+        condition: ts.binOp(ts.id(node.indexVar), "<", ts.prop(iterableNode, "length")),
+        update: ts.postfix(ts.id(node.indexVar), "++"),
+        body: bodyNodes,
+        itemDecl: ts.varDecl("const", node.itemVar, ts.index(iterableNode, ts.id(node.indexVar))),
+      });
     }
 
-    // Basic form: for (item in collection)
-    return ts.forOf(node.itemVar, iterableNode, body);
+    // Basic form: for (item in collection) — convert to indexed loop
+    const indexVar = `__i_${subKey}`;
+    return ts.forSteps({
+      subStepPath,
+      init: ts.letDecl(indexVar, ts.num(0)),
+      condition: ts.binOp(ts.id(indexVar), "<", ts.prop(iterableNode, "length")),
+      update: ts.postfix(ts.id(indexVar), "++"),
+      body: bodyNodes,
+      itemDecl: ts.varDecl("const", node.itemVar, ts.index(iterableNode, ts.id(indexVar))),
+    });
   }
 
-  private processWhileLoop(node: WhileLoop): TsNode {
-    return ts.while(
-      this.processNode(node.condition),
-      ts.statements(node.body.map((stmt) => this.processStatement(stmt))),
-    );
+  private processWhileLoopWithSteps(node: WhileLoop): TsNode {
+    const subStepPath = [...this._subStepPath];
+    const condition = this.processNode(node.condition);
+
+    const bodyNodes = node.body.map((stmt, i) => {
+      this._subStepPath.push(i);
+      const result = this.processStatement(stmt);
+      this._subStepPath.pop();
+      return result;
+    });
+
+    return ts.whileSteps(subStepPath, condition, bodyNodes);
   }
 
   private processMatchBlockWithSteps(node: MatchBlock): TsNode {
@@ -1168,9 +1185,9 @@ export class TypeScriptBuilder {
       const nodeContext = scope.type === "node";
       const returnBody = nodeContext
         ? ts.obj([
-            ts.setSpread(ts.runtime.state),
-            ts.set("data", ts.id(tempVar)),
-          ])
+          ts.setSpread(ts.runtime.state),
+          ts.set("data", ts.id(tempVar)),
+        ])
         : ts.obj({ data: ts.id(tempVar) });
       return ts.statements([
         ts.constDecl(tempVar, callNode),
@@ -1654,9 +1671,9 @@ export class TypeScriptBuilder {
   ): TsNode {
     const _variableType = variableType ||
       this.getTypeHint(variableName) || {
-        type: "primitiveType" as const,
-        value: "string",
-      };
+      type: "primitiveType" as const,
+      value: "string",
+    };
 
     const zodSchema = mapTypeToZodSchema(
       _variableType,
@@ -1799,9 +1816,9 @@ export class TypeScriptBuilder {
       const isNodeContext = this.getCurrentScope().type === "node";
       const returnExpr = isNodeContext
         ? ts.nodeReturn({
-            messages: ts.runtime.threads,
-            data: varRef,
-          })
+          messages: ts.runtime.threads,
+          data: varRef,
+        })
         : ts.return(varRef);
       stmts.push(
         ts.if(
@@ -2138,8 +2155,8 @@ export class TypeScriptBuilder {
                   messages: ts.id("messages"),
                   callbacks: this.agencyConfig.audit?.logFile
                     ? ts.raw(
-                        "{ onAuditLog: __defaultonAuditLog, ...callbacks }",
-                      )
+                      "{ onAuditLog: __defaultonAuditLog, ...callbacks }",
+                    )
                     : ts.id("callbacks"),
                   initializeGlobals: ts.id("__initializeGlobals"),
                 }),

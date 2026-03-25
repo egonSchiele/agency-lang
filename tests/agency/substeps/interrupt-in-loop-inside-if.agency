@@ -1,0 +1,15 @@
+node main(x: number) {
+  total = 0
+  if (x > 5) {
+    for (i in range(4)) {
+      if (i == 2) {
+        y = interrupt("loop interrupt")
+      }
+      total = total + i
+    }
+    total = total + 100
+  } else {
+    total = -1
+  }
+  return total
+}

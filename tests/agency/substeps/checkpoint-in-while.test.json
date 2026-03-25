@@ -1,0 +1,12 @@
+{
+  "sourceFile": "checkpoint-in-while.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Checkpoint with while loop restores and re-executes all iterations",
+      "input": "",
+      "expectedOutput": "\"start,012start,012\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

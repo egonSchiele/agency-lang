@@ -1,0 +1,11 @@
+node main() {
+  items = ["a", "b", "c", "d"]
+  result = ""
+  for (item in items) {
+    if (item == "c") {
+      y = interrupt("found c")
+    }
+    result = result + item
+  }
+  return result
+}

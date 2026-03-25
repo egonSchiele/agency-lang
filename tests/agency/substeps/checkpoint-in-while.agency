@@ -1,0 +1,15 @@
+shared log = ""
+
+node main() {
+  cp = checkpoint()
+  log = log + "start,"
+  x = 0
+  while (x < 3) {
+    log = log + x
+    x = x + 1
+  }
+  if (log == "start,012") {
+    restore(cp, {})
+  }
+  return log
+}

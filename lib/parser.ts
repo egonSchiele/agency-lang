@@ -29,7 +29,6 @@ import {
   ifParser,
   messageThreadParser,
   sharedAssignmentParser,
-  timeBlockParser,
   whileLoopParser,
 } from "./parsers/function.js";
 import {
@@ -66,7 +65,6 @@ export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
         whileLoopParser,
         typeHintParser,
         matchBlockParser,
-        timeBlockParser,
         messageThreadParser,
         skillParser,
         functionParser,

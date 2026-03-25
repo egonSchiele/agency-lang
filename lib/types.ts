@@ -21,7 +21,6 @@ import { MessageThread } from "./types/messageThread.js";
 import { ReturnStatement } from "./types/returnStatement.js";
 import { Skill } from "./types/skill.js";
 import { SpecialVar } from "./types/specialVar.js";
-import { TimeBlock } from "./types/timeBlock.js";
 import { UsesTool } from "./types/tools.js";
 import { TypeAlias, TypeHint, VariableType } from "./types/typeHints.js";
 import { WhileLoop } from "./types/whileLoop.js";
@@ -37,7 +36,6 @@ export * from "./types/literals.js";
 export * from "./types/matchBlock.js";
 export * from "./types/returnStatement.js";
 export * from "./types/specialVar.js";
-export * from "./types/timeBlock.js";
 export * from "./types/tools.js";
 export * from "./types/typeHints.js";
 export * from "./types/whileLoop.js";
@@ -144,7 +142,6 @@ export type Assignment = {
     | FunctionCall
     | AgencyObject
     | AgencyArray
-    | TimeBlock
     | MessageThread
     | BinOpExpression;
 };
@@ -197,7 +194,6 @@ export type AgencyNode =
   | WhileLoop
   | IfElse
   | SpecialVar
-  | TimeBlock
   | NewLine
   | RawCode
   | MessageThread

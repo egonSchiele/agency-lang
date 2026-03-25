@@ -163,4 +163,4 @@ The `TypeChecker` class in `lib/typeChecker.ts` operates in multiple passes:
    - Validates function call argument types and arity
    - Validates return statement types against declared return types
 
-The checker uses `walkNodes()` from `lib/utils/node.ts` to traverse nested AST structures (if/else, while loops, time blocks, etc.) and `formatTypeHint()` from `lib/cli/util.ts` to render types in error messages.
+The checker uses `walkNodes()` from `lib/utils/node.ts` to traverse nested AST structures (if/else, while loops, etc.) and `formatTypeHint()` from `lib/cli/util.ts` to render types in error messages.

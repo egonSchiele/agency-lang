@@ -435,8 +435,6 @@ export class TypeChecker {
         }
       } else if (node.type === "whileLoop") {
         this.collectVariableTypes(node.body, vars, scopeName);
-      } else if (node.type === "timeBlock") {
-        this.collectVariableTypes(node.body, vars, scopeName);
       } else if (node.type === "messageThread") {
         this.collectVariableTypes(node.body, vars, scopeName);
       }

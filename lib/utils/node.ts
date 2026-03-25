@@ -153,8 +153,6 @@ export function* getAllVariablesInBody(
       yield* getAllVariablesInBody(node.body);
     } else if (node.type === "whileLoop") {
       yield* getAllVariablesInBody(node.body);
-    } else if (node.type === "timeBlock") {
-      yield* getAllVariablesInBody(node.body);
     } else if (node.type === "messageThread") {
       yield* getAllVariablesInBody(node.body);
     }
@@ -211,8 +209,6 @@ export function* walkNodes(
       yield* walkNodes(node.body, [...ancestors, node], scopes);
     } else if (node.type === "whileLoop") {
       yield* walkNodes([node.condition], [...ancestors, node], scopes);
-      yield* walkNodes(node.body, [...ancestors, node], scopes);
-    } else if (node.type === "timeBlock") {
       yield* walkNodes(node.body, [...ancestors, node], scopes);
     } else if (node.type === "messageThread") {
       /* console.log(

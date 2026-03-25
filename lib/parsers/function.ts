@@ -1,4 +1,3 @@
-import { TimeBlock } from "@/types/timeBlock.js";
 import {
   capture,
   captureCaptures,
@@ -93,7 +92,6 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
       capture(
         or(
           binOpParser,
-          timeBlockParser,
           messageThreadParser,
           booleanParser,
           valueAccessParser,
@@ -166,7 +164,6 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
         whileLoopParser,
         matchBlockParser,
         ifParser,
-        timeBlockParser,
         messageThreadParser,
         multiLineCommentParser,
         skillParser,
@@ -184,24 +181,6 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
   return parser(input);
 };
 
-export const _timeBlockParser: Parser<TimeBlock> = trace(
-  "timeBlockParser",
-  seqC(
-    set("type", "timeBlock"),
-    str("time"),
-    optionalSpaces,
-    char("{"),
-    captureCaptures(
-      parseError(
-        "expected block body followed by `}`",
-        spaces,
-        capture(bodyParser, "body"),
-        optionalSpacesOrNewline,
-        char("}"),
-      ),
-    ),
-  ),
-);
 export const _messageThreadParser: Parser<MessageThread> = trace(
   "_messageThreadParser",
   seqC(
@@ -264,36 +243,6 @@ export const messageThreadParser: Parser<MessageThread> = or(
   _messageThreadParser,
   _submessageThreadParser,
   _parallelThreadParser,
-);
-
-export const printTimeBlockParser: Parser<TimeBlock> = trace(
-  "timeBlockParser",
-  map(
-    seqC(
-      set("type", "timeBlock"),
-      str("printTime"),
-      optionalSpaces,
-      char("{"),
-      captureCaptures(
-        parseError(
-          "expected block body followed by `}`",
-          spaces,
-          capture(bodyParser, "body"),
-          optionalSpacesOrNewline,
-          char("}"),
-        ),
-      ),
-    ),
-    (result) => ({
-      ...result,
-      printTime: true,
-    }),
-  ),
-);
-
-export const timeBlockParser: Parser<TimeBlock> = or(
-  printTimeBlockParser,
-  _timeBlockParser,
 );
 
 const elseClauseParser: Parser<AgencyNode[]> = (input: string) => {

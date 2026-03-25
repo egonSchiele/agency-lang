@@ -103,69 +103,6 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
       }
     });
 
-    it("should add Promise.all when variable is defined in TimeBlock and used in parent body", () => {
-      const program: AgencyProgram = {
-        type: "agencyProgram",
-        nodes: [
-          {
-            type: "graphNode",
-            nodeName: "main",
-            parameters: [],
-            body: [
-              {
-                type: "timeBlock",
-                body: [
-                  {
-                    type: "assignment",
-                    variableName: "result",
-                    typeHint: { type: "primitiveType", value: "string" },
-                    value: {
-                      type: "functionCall",
-                      functionName: "llm",
-                      arguments: [{ type: "string", segments: [
-                        {
-                          type: "text",
-                          value: "Get result",
-                        },
-                      ] }],
-                      async: true,
-                    },
-                  },
-                ],
-              },
-              {
-                type: "functionCall",
-                functionName: "print",
-                arguments: [
-                  {
-                    type: "variableName",
-                    value: "result",
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      };
-
-      const preprocessor = new TypescriptPreprocessor(program);
-      const result = preprocessor.preprocess();
-
-      const mainNode = result.nodes[0];
-      expect(mainNode.type).toBe("graphNode");
-      if (mainNode.type !== "graphNode") return;
-
-      // Check that Promise.all was inserted before the print call
-      const promiseAllNode = mainNode.body.find(
-        (node) => node.type === "rawCode",
-      );
-      expect(promiseAllNode).toBeDefined();
-      if (promiseAllNode?.type === "rawCode") {
-        expect(promiseAllNode.value).toContain("awaitPending");
-        expect(promiseAllNode.value).toContain("__self.__pendingKey_result");
-      }
-    });
-
     it("should add Promise.all when variable is defined in parent and used in parent (existing behavior)", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",
@@ -943,7 +880,8 @@ describe("TypescriptPreprocessor - Promise.all handling", () => {
                 ],
               },
               {
-                type: "timeBlock",
+                type: "messageThread",
+                threadType: "thread",
                 body: [
                   {
                     type: "assignment",

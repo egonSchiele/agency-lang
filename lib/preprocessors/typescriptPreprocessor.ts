@@ -10,7 +10,6 @@ import {
   IfElse,
   RawCode,
   ScopeType,
-  TimeBlock,
   WhileLoop,
 } from "@/types.js";
 import { MessageThread } from "@/types/messageThread.js";
@@ -612,7 +611,7 @@ export class TypescriptPreprocessor {
     }
  */
     // Pass 1: Collect all async variables defined in this body and nested non-function bodies
-    // Variables in MessageThread, TimeBlock, WhileLoop, IfElse are scoped to the containing function/node
+    // Variables in MessageThread, WhileLoop, IfElse are scoped to the containing function/node
     const asyncVarToAssignment: Record<string, AgencyNode> = {};
     this._collectAsyncVariablesInScope(body, asyncVarToAssignment);
 
@@ -682,8 +681,6 @@ export class TypescriptPreprocessor {
       // Recursively collect from nested bodies that share the same scope
       if (node.type === "messageThread") {
         this._collectAsyncVariablesInScope(node.body, asyncVarToAssignment);
-      } else if (node.type === "timeBlock") {
-        this._collectAsyncVariablesInScope(node.body, asyncVarToAssignment);
       } else if (node.type === "whileLoop") {
         this._collectAsyncVariablesInScope(node.body, asyncVarToAssignment);
       } else if (node.type === "ifElse") {
@@ -735,14 +732,6 @@ export class TypescriptPreprocessor {
           [...bodyPath, i],
         );
         if (found) return found;
-      } else if (node.type === "timeBlock") {
-        const found = this._findFirstUsageInScope(
-          node.body,
-          varName,
-          assignmentNode,
-          [...bodyPath, i],
-        );
-        if (found) return found;
       } else if (node.type === "whileLoop") {
         const found = this._findFirstUsageInScope(
           node.body,
@@ -785,7 +774,6 @@ export class TypescriptPreprocessor {
     // (that's done separately in _findFirstUsageInScope)
     if (
       node.type === "messageThread" ||
-      node.type === "timeBlock" ||
       node.type === "whileLoop" ||
       node.type === "function" ||
       node.type === "graphNode"
@@ -854,11 +842,6 @@ export class TypescriptPreprocessor {
             });
           }
         }
-      } else if (node.type === "timeBlock") {
-        node.body = this._insertAwaitPendingCalls(node.body, locationToVars, [
-          ...currentPath,
-          i,
-        ]);
       } else if (node.type === "whileLoop") {
         node.body = this._insertAwaitPendingCalls(node.body, locationToVars, [
           ...currentPath,
@@ -892,14 +875,12 @@ export class TypescriptPreprocessor {
     | AgencyNode
     | IfElse
     | WhileLoop
-    | TimeBlock
     | MessageThread {
     return (
       node.type === "function" ||
       node.type === "graphNode" ||
       node.type === "ifElse" ||
       node.type === "whileLoop" ||
-      node.type === "timeBlock" ||
       node.type === "messageThread"
     );
   }
@@ -953,8 +934,6 @@ export class TypescriptPreprocessor {
           node.elseBody = this.filterNodesByType(node.elseBody, excludeSet);
         }
       } else if (node.type === "whileLoop") {
-        node.body = this.filterNodesByType(node.body, excludeSet);
-      } else if (node.type === "timeBlock") {
         node.body = this.filterNodesByType(node.body, excludeSet);
       } else if (node.type === "messageThread") {
         node.body = this.filterNodesByType(node.body, excludeSet);
@@ -1049,8 +1028,6 @@ export class TypescriptPreprocessor {
           );
         }
       } else if (node.type === "whileLoop") {
-        node.body = this.filterBuiltinFunctionCalls(node.body, excludeSet);
-      } else if (node.type === "timeBlock") {
         node.body = this.filterBuiltinFunctionCalls(node.body, excludeSet);
       } else if (node.type === "messageThread") {
         node.body = this.filterBuiltinFunctionCalls(node.body, excludeSet);

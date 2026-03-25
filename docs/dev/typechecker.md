@@ -55,7 +55,7 @@ This pass also handles:
 - **`importStatement`**: all imported names are registered as `"any"`
 - **`forLoop`**: the item variable gets the array's element type (or `"any"` if the iterable isn't a known array type), the index variable gets `number`, and the loop body is recursively collected
 
-After the assignment pass, the checker walks into nested blocks (`ifElse`, `whileLoop`, `timeBlock`, `messageThread`) to collect any variable types declared inside them.
+After the assignment pass, the checker walks into nested blocks (`ifElse`, `whileLoop`, `messageThread`) to collect any variable types declared inside them.
 
 ### Checking phase
 

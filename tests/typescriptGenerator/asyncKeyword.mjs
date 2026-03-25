@@ -315,8 +315,7 @@ const __graph = __ctx.graph;
             __stack.step++;
     }
     if (__step <= 1) {
-            let __defaultTimeblockName_startTime: number = performance.now();
-__self.__removedTools = __self.__removedTools || [];
+            __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt({
         ctx: __ctx,
         prompt: `Respond to this user message: ${__stack.args.msg}`,
@@ -331,18 +330,11 @@ if (isInterrupt(__stack.locals.response)) {
         await __ctx.pendingPromises.awaitAll()
         return __stack.locals.response;
       }
-
-let __defaultTimeblockName_endTime: number = performance.now();
-let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultTimeblockName_startTime;
-"Time taken:"
-__defaultTimeblockName
-"ms"
       await __ctx.audit({
         type: "assignment",
-        variable: "__defaultTimeblockName_startTime",
-        value: __defaultTimeblockName_startTime
+        variable: "__self.__removedTools",
+        value: __self.__removedTools
       })
-      
       
             __stack.step++;
     }
@@ -428,8 +420,7 @@ const __graph = __ctx.graph;
             __stack.step++;
     }
     if (__step <= 2) {
-            let __defaultTimeblockName_startTime: number = performance.now();
-__self.__removedTools = __self.__removedTools || [];
+            __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt({
         ctx: __ctx,
         prompt: `Respond to this user message: ${__stack.args.msg}`,
@@ -446,16 +437,10 @@ if (isInterrupt(__stack.locals.response)) {
         await __ctx.pendingPromises.awaitAll()
         return __stack.locals.response;
       }
-
-let __defaultTimeblockName_endTime: number = performance.now();
-let __defaultTimeblockName: number = __defaultTimeblockName_endTime - __defaultTimeblockName_startTime;
-"Time taken:"
-__defaultTimeblockName
-"ms"
       await __ctx.audit({
         type: "assignment",
-        variable: "__defaultTimeblockName_startTime",
-        value: __defaultTimeblockName_startTime
+        variable: "__self.__removedTools",
+        value: __self.__removedTools
       })
       
             __stack.step++;

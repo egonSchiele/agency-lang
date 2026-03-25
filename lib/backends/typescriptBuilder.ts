@@ -21,7 +21,6 @@ import {
   TYPES_THAT_DONT_TRIGGER_NEW_PART,
 } from "@/config.js";
 import { SpecialVar } from "@/types/specialVar.js";
-import { TimeBlock } from "@/types/timeBlock.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
 import * as renderInterruptReturn from "../templates/backends/typescriptGenerator/interruptReturn.js";
@@ -516,8 +515,6 @@ export class TypeScriptBuilder {
         return this.processIfElseWithSteps(node);
       case "specialVar":
         return this.processSpecialVar(node);
-      case "timeBlock":
-        return this.processTimeBlock(node, `__defaultTimeblockName`);
       case "newLine":
         return ts.empty();
       case "rawCode":
@@ -1588,8 +1585,6 @@ export class TypeScriptBuilder {
         );
       }
       return ts.statements(stmts);
-    } else if (value.type === "timeBlock") {
-      return this.processTimeBlock(value, variableName);
     } else if (value.type === "messageThread") {
       return this.processMessageThread(value, node);
     } else {
@@ -1892,26 +1887,6 @@ export class TypeScriptBuilder {
       default:
         throw new Error(`Unhandled SpecialVar name: ${node.name}`);
     }
-  }
-
-  private processTimeBlock(node: TimeBlock, timingVarName: string): TsNode {
-    const bodyNodes = node.body.map((stmt) => this.processNode(stmt));
-    const stmts: TsNode[] = [
-      ts.time(`${timingVarName}_startTime`),
-      ...bodyNodes,
-      ts.time(`${timingVarName}_endTime`),
-      ts.letDecl(
-        timingVarName,
-        $(ts.id(`${timingVarName}_endTime`))
-          .minus(ts.id(`${timingVarName}_startTime`))
-          .done(),
-        "number",
-      ),
-    ];
-    if (node.printTime) {
-      stmts.push(ts.str("Time taken:"), ts.id(timingVarName), ts.str("ms"));
-    }
-    return ts.statements(stmts);
   }
 
   private processMessageThread(

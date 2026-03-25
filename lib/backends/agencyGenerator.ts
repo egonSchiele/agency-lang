@@ -18,7 +18,6 @@ import {
   VariableType,
 } from "../types.js";
 
-import { TimeBlock } from "@/types/timeBlock.js";
 import { AccessChainElement, ValueAccess } from "../types/access.js";
 import { AgencyArray, AgencyObject } from "../types/dataStructures.js";
 import { FunctionCall, FunctionDefinition } from "../types/function.js";
@@ -225,8 +224,6 @@ export class AgencyGenerator {
         return this.processIfElse(node);
       case "specialVar":
         return this.processSpecialVar(node);
-      case "timeBlock":
-        return this.processTimeBlock(node);
       case "newLine":
         return this.processNewLine(node);
       case "rawCode":
@@ -382,26 +379,8 @@ export class AgencyGenerator {
       ? `${node.variableName}${chainStr}: ${variableTypeToString(node.typeHint, this.typeAliases)}`
       : `${node.variableName}${chainStr}`;
     const prefix = node.shared ? "shared " : "";
-    if (node.value.type === "timeBlock") {
-      const code = this.processTimeBlock(node.value);
-      return this.indentStr(`${prefix}${varName} = ${code.trim()}\n`);
-    }
     let valueCode = this.processNode(node.value).trim();
     return this.indentStr(`${prefix}${varName} = ${valueCode}`);
-  }
-
-  protected processTimeBlock(node: TimeBlock): string {
-    this.increaseIndent();
-    const bodyCodes: string[] = [];
-    for (const stmt of node.body) {
-      bodyCodes.push(this.processNode(stmt));
-    }
-    this.decreaseIndent();
-    const bodyCodeStr = bodyCodes.join("");
-    const timeBlockName = node.printTime ? "printTime" : "time";
-    return this.indentStr(
-      `${timeBlockName} {\n${bodyCodeStr}${this.indentStr("}")}`,
-    );
   }
 
   protected generateLiteral(literal: Literal): string {

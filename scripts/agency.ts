@@ -11,7 +11,7 @@ import {
   run,
 } from "@/cli/commands.js";
 import { evaluate } from "@/cli/evaluate.js";
-import { fixtures, test, testTs, TestStats, mergeStats } from "@/cli/test.js";
+import { fixtures, test, testTs, testParallel, collectTestFiles, TestStats, mergeStats } from "@/cli/test.js";
 import { AgencyConfig } from "@/config.js";
 import { _parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
@@ -194,15 +194,23 @@ program
   .description("Run tests")
   .argument("[inputs...]", "Paths to .test.json files or directories")
   .option("--js", "Run JavaScript integration tests")
+  .option("--parallel <n>", "Run test files in parallel with N concurrency", parseInt)
   .action(
     async (
       testFile: string[],
-      opts: { js?: boolean; genFixtures?: boolean },
+      opts: { js?: boolean; genFixtures?: boolean; parallel?: number },
     ) => {
       if (opts.js) {
         await testTs(getConfig(), testFile);
+        return;
+      }
+
+      let totals: TestStats;
+      if (opts.parallel) {
+        const files = collectTestFiles(testFile);
+        totals = await testParallel(getConfig(), files, opts.parallel);
       } else {
-        let totals: TestStats = {
+        totals = {
           passed: 0,
           failed: 0,
           filesPassed: 0,
@@ -213,34 +221,35 @@ program
           const stats = await test(getConfig(), file);
           totals = mergeStats(totals, stats);
         }
-        const totalFiles = totals.filesPassed + totals.filesFailed;
-        const totalTests = totals.passed + totals.failed;
-        if (totalFiles > 0) {
-          const filesStatus = [
-            totals.filesFailed > 0 ? `${totals.filesFailed} failed` : "",
-            `${totals.filesPassed} passed`,
-          ]
-            .filter(Boolean)
-            .join(" | ");
-          const testsStatus = [
-            totals.failed > 0 ? `${totals.failed} failed` : "",
-            `${totals.passed} passed`,
-          ]
-            .filter(Boolean)
-            .join(" | ");
-          if (totals.failedFiles.length > 0) {
-            console.log("");
-            for (const file of totals.failedFiles) {
-              console.log(color.red(` FAIL  ${file}`));
-            }
+      }
+
+      const totalFiles = totals.filesPassed + totals.filesFailed;
+      const totalTests = totals.passed + totals.failed;
+      if (totalFiles > 0) {
+        const filesStatus = [
+          totals.filesFailed > 0 ? `${totals.filesFailed} failed` : "",
+          `${totals.filesPassed} passed`,
+        ]
+          .filter(Boolean)
+          .join(" | ");
+        const testsStatus = [
+          totals.failed > 0 ? `${totals.failed} failed` : "",
+          `${totals.passed} passed`,
+        ]
+          .filter(Boolean)
+          .join(" | ");
+        if (totals.failedFiles.length > 0) {
+          console.log("");
+          for (const file of totals.failedFiles) {
+            console.log(color.red(` FAIL  ${file}`));
           }
-          const colorFn = totals.failed > 0 ? color.red : color.green;
-          console.log(colorFn(`\n Test Files  ${filesStatus} (${totalFiles})`));
-          console.log(colorFn(`      Tests  ${testsStatus} (${totalTests})`));
         }
-        if (totals.failed > 0) {
-          process.exit(1);
-        }
+        const colorFn = totals.failed > 0 ? color.red : color.green;
+        console.log(colorFn(`\n Test Files  ${filesStatus} (${totalFiles})`));
+        console.log(colorFn(`      Tests  ${testsStatus} (${totalTests})`));
+      }
+      if (totals.failed > 0) {
+        process.exit(1);
       }
     },
   );

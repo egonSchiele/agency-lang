@@ -35,6 +35,7 @@ export type TsNode =
   | TsStepBlock
   | TsIfSteps
   | TsThreadSteps
+  | TsWhileSteps
   | TsEmpty
   | TsBreak
   | TsContinue
@@ -303,6 +304,20 @@ export interface TsThreadSteps {
   body: TsNode[];
   /** The cleanup statements (cloneMessages + popActive) */
   cleanup: TsNode[];
+}
+
+/** A while loop with iteration tracking and substep guards for each body statement.
+ * Tracks which iteration to resume on and which substep within that iteration. */
+export interface TsWhileSteps {
+  kind: "whileSteps";
+  /** The substep path for naming variables */
+  subStepPath: number[];
+  /** The loop condition */
+  condition: TsNode;
+  /** The body statements (each gets a substep guard) */
+  body: TsNode[];
+  /** Local variable keys to reset at end of each iteration (nested condbranch/substep/iteration values) */
+  resetKeys: string[];
 }
 
 /** A branch in a TsIfSteps node */

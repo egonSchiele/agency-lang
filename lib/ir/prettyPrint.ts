@@ -3,6 +3,7 @@ import * as renderSubstepBlock from "../templates/backends/typescriptGenerator/s
 import * as renderIfStepsCondbranch from "../templates/backends/typescriptGenerator/ifStepsCondbranch.js";
 import * as renderIfStepsBranchDispatch from "../templates/backends/typescriptGenerator/ifStepsBranchDispatch.js";
 import * as renderThreadSteps from "../templates/backends/typescriptGenerator/threadSteps.js";
+import * as renderWhileSteps from "../templates/backends/typescriptGenerator/whileSteps.js";
 
 const INDENT = "  ";
 
@@ -328,6 +329,28 @@ export function printTs(node: TsNode, indent = 0): string {
           nextIndex: i + 2,
         })),
         cleanup: node.cleanup.map((s) => printTs(s, indent)).join("\n") + ";\n",
+      });
+    }
+
+    case "whileSteps": {
+      const subKey = node.subStepPath.join("_");
+      const subStore = `__stack.locals.__substep_${subKey}`;
+      const iterStore = `__stack.locals.__iteration_${subKey}`;
+      const currentIterVar = `__currentIter_${subKey}`;
+      const ensureNewline = (s: string) => s.endsWith("\n") ? s : s + "\n";
+
+      return renderWhileSteps.default({
+        condition: printTs(node.condition, indent + 1),
+        subStore,
+        iterStore,
+        currentIterVar,
+        bodyStatements: node.body.map((stmt, i) => ({
+          subStore,
+          index: i,
+          code: ensureNewline(printTs(stmt, indent + 2)),
+          nextIndex: i + 1,
+        })),
+        resetKeys: node.resetKeys,
       });
     }
 

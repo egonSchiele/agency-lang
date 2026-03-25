@@ -509,7 +509,7 @@ export class TypeScriptBuilder {
       case "forLoop":
         return this.processForLoop(node);
       case "whileLoop":
-        return this.processWhileLoop(node);
+        return this.processWhileLoopWithSteps(node);
       case "ifElse":
         return this.processIfElseWithSteps(node);
       case "specialVar":
@@ -778,11 +778,34 @@ export class TypeScriptBuilder {
     return ts.forOf(node.itemVar, iterableNode, body);
   }
 
-  private processWhileLoop(node: WhileLoop): TsNode {
-    return ts.while(
-      this.processNode(node.condition),
-      ts.statements(node.body.map((stmt) => this.processStatement(stmt))),
-    );
+  private processWhileLoopWithSteps(node: WhileLoop): TsNode {
+    const subStepPath = [...this._subStepPath];
+    const subKey = subStepPath.join("_");
+    const condition = this.processNode(node.condition);
+
+    // Collect reset keys for nested blocks (condbranch, substep, iteration)
+    const resetKeys: string[] = [];
+
+    const bodyNodes = node.body.map((stmt, i) => {
+      this._subStepPath = [...subStepPath];
+      this._subStepPath.push(i);
+      const result = this.processStatement(stmt);
+      // If this statement produces nested tracking vars, add reset keys
+      const nestedKey = subKey ? `${subKey}_${i}` : `${i}`;
+      if (stmt.type === "ifElse" || stmt.type === "matchBlock") {
+        resetKeys.push(`__condbranch_${nestedKey}`);
+        resetKeys.push(`__substep_${nestedKey}`);
+      } else if (stmt.type === "whileLoop") {
+        resetKeys.push(`__iteration_${nestedKey}`);
+        resetKeys.push(`__substep_${nestedKey}`);
+      } else if (stmt.type === "messageThread") {
+        resetKeys.push(`__substep_${nestedKey}`);
+      }
+      this._subStepPath.pop();
+      return result;
+    });
+
+    return ts.whileSteps(subStepPath, condition, bodyNodes, resetKeys);
   }
 
   private processMatchBlockWithSteps(node: MatchBlock): TsNode {

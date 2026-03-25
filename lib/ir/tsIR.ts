@@ -317,8 +317,6 @@ export interface TsWhileSteps {
   condition: TsNode;
   /** The body statements (each gets a substep guard) */
   body: TsNode[];
-  /** Local variable keys to reset at end of each iteration (nested condbranch/substep/iteration values) */
-  resetKeys: string[];
 }
 
 /** A for loop with iteration tracking and substep guards for each body statement. */
@@ -336,8 +334,6 @@ export interface TsForSteps {
   itemDecl?: TsNode;
   /** The body statements (each gets a substep guard) */
   body: TsNode[];
-  /** Local variable keys to reset at end of each iteration */
-  resetKeys: string[];
 }
 
 /** A branch in a TsIfSteps node */

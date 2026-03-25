@@ -18,9 +18,9 @@ while ({{{condition}}}) {
   }
 {{/bodyStatements}}
   {{{subStore}}} = 0;
-{{#resetKeys}}
-  delete __stack.locals.{{{this}}};
-{{/resetKeys}}
+  __stack.clearLocalsWithPrefix("__condbranch_{{{subKey}}}_");
+  __stack.clearLocalsWithPrefix("__substep_{{{subKey}}}_");
+  __stack.clearLocalsWithPrefix("__iteration_{{{subKey}}}_");
   {{{iterStore}}}++;
   {{{currentIterVar}}}++;
 }`;
@@ -36,8 +36,7 @@ export type TemplateType = {
     code: string | boolean | number;
     nextIndex: string | boolean | number;
   }[];
-  resetKeys: {
-  }[];
+  subKey: string | boolean | number;
 };
 
 const render = (args: TemplateType) => {

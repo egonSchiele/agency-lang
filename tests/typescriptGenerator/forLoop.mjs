@@ -287,7 +287,9 @@ for (let __i_2 = 0; __i_2 < __stack.locals.items.length; __i_2++) {
   }
 
   __stack.locals.__substep_2 = 0;
-
+  __stack.clearLocalsWithPrefix("__condbranch_2_");
+  __stack.clearLocalsWithPrefix("__substep_2_");
+  __stack.clearLocalsWithPrefix("__iteration_2_");
   __stack.locals.__iteration_2++;
   __currentIter_2++;
 }
@@ -322,7 +324,9 @@ for (let i = 0; i < 5; i++) {
   }
 
   __stack.locals.__substep_3 = 0;
-
+  __stack.clearLocalsWithPrefix("__condbranch_3_");
+  __stack.clearLocalsWithPrefix("__substep_3_");
+  __stack.clearLocalsWithPrefix("__iteration_3_");
   __stack.locals.__iteration_3++;
   __currentIter_3++;
 }
@@ -381,7 +385,9 @@ for (let index = 0; index < __stack.locals.names.length; index++) {
   }
 
   __stack.locals.__substep_5 = 0;
-
+  __stack.clearLocalsWithPrefix("__condbranch_5_");
+  __stack.clearLocalsWithPrefix("__substep_5_");
+  __stack.clearLocalsWithPrefix("__iteration_5_");
   __stack.locals.__iteration_5++;
   __currentIter_5++;
 }

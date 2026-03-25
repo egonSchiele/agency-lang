@@ -343,6 +343,7 @@ export function printTs(node: TsNode, indent = 0): string {
       return renderWhileSteps.default({
         condition: printTs(node.condition, indent + 1),
         subStore,
+        subKey,
         iterStore,
         currentIterVar,
         bodyStatements: node.body.map((stmt, i) => ({
@@ -351,7 +352,6 @@ export function printTs(node: TsNode, indent = 0): string {
           code: ensureNewline(printTs(stmt, indent + 2)),
           nextIndex: i + 1,
         })),
-        resetKeys: node.resetKeys,
       });
     }
 
@@ -371,6 +371,7 @@ export function printTs(node: TsNode, indent = 0): string {
         hasItemDecl: !!node.itemDecl,
         itemDecl: node.itemDecl ? printTs(node.itemDecl, indent + 1) : "",
         subStore,
+        subKey,
         iterStore,
         currentIterVar,
         bodyStatements: node.body.map((stmt, i) => ({
@@ -379,7 +380,6 @@ export function printTs(node: TsNode, indent = 0): string {
           code: ensureNewline(printTs(stmt, indent + 2)),
           nextIndex: i + 1,
         })),
-        resetKeys: node.resetKeys,
       });
     }
 

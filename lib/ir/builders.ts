@@ -388,9 +388,8 @@ export const ts = {
     subStepPath: number[],
     condition: TsNode,
     body: TsNode[],
-    resetKeys: string[],
   ): TsWhileSteps {
-    return { kind: "whileSteps", subStepPath, condition, body, resetKeys };
+    return { kind: "whileSteps", subStepPath, condition, body };
   },
 
   forSteps(opts: {
@@ -399,7 +398,6 @@ export const ts = {
     condition: TsNode;
     update: TsNode;
     body: TsNode[];
-    resetKeys: string[];
     itemDecl?: TsNode;
   }): TsForSteps {
     return { kind: "forSteps", ...opts };

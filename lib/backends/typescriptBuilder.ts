@@ -736,8 +736,6 @@ export class TypeScriptBuilder {
       return result;
     });
 
-    const resetKeys = this.collectResetKeys(node.body, subKey);
-
     // Unregister loop variables
     this.loopVars = this.loopVars.filter(
       (v) => v !== node.itemVar && v !== node.indexVar,
@@ -761,7 +759,6 @@ export class TypeScriptBuilder {
         condition: ts.binOp(ts.id(node.itemVar), "<", endNode),
         update: ts.postfix(ts.id(node.itemVar), "++"),
         body: bodyNodes,
-        resetKeys,
       });
     }
 
@@ -775,7 +772,6 @@ export class TypeScriptBuilder {
         condition: ts.binOp(ts.id(node.indexVar), "<", ts.prop(iterableNode, "length")),
         update: ts.postfix(ts.id(node.indexVar), "++"),
         body: bodyNodes,
-        resetKeys,
         itemDecl: ts.varDecl("const", node.itemVar, ts.index(iterableNode, ts.id(node.indexVar))),
       });
     }
@@ -788,44 +784,12 @@ export class TypeScriptBuilder {
       condition: ts.binOp(ts.id(indexVar), "<", ts.prop(iterableNode, "length")),
       update: ts.postfix(ts.id(indexVar), "++"),
       body: bodyNodes,
-      resetKeys,
       itemDecl: ts.varDecl("const", node.itemVar, ts.index(iterableNode, ts.id(indexVar))),
     });
   }
 
-  /** Recursively collect all tracking variable keys (condbranch, substep, iteration)
-   * that would be created by processing the given body statements at the given path prefix. */
-  private collectResetKeys(body: AgencyNode[], pathPrefix: string): string[] {
-    const keys: string[] = [];
-    for (let i = 0; i < body.length; i++) {
-      const stmt = body[i];
-      const key = pathPrefix ? `${pathPrefix}_${i}` : `${i}`;
-      if (stmt.type === "ifElse") {
-        keys.push(`__condbranch_${key}`, `__substep_${key}`);
-        // Recurse into then/else bodies
-        keys.push(...this.collectResetKeys(stmt.thenBody, key));
-        if (stmt.elseBody) {
-          keys.push(...this.collectResetKeys(stmt.elseBody, key));
-        }
-      } else if (stmt.type === "matchBlock") {
-        keys.push(`__condbranch_${key}`, `__substep_${key}`);
-      } else if (stmt.type === "whileLoop") {
-        keys.push(`__iteration_${key}`, `__substep_${key}`);
-        keys.push(...this.collectResetKeys(stmt.body, key));
-      } else if (stmt.type === "forLoop") {
-        keys.push(`__iteration_${key}`, `__substep_${key}`);
-        keys.push(...this.collectResetKeys(stmt.body, key));
-      } else if (stmt.type === "messageThread") {
-        keys.push(`__substep_${key}`);
-        keys.push(...this.collectResetKeys(stmt.body, key));
-      }
-    }
-    return keys;
-  }
-
   private processWhileLoopWithSteps(node: WhileLoop): TsNode {
     const subStepPath = [...this._subStepPath];
-    const subKey = subStepPath.join("_");
     const condition = this.processNode(node.condition);
 
     const bodyNodes = node.body.map((stmt, i) => {
@@ -835,8 +799,7 @@ export class TypeScriptBuilder {
       return result;
     });
 
-    const resetKeys = this.collectResetKeys(node.body, subKey);
-    return ts.whileSteps(subStepPath, condition, bodyNodes, resetKeys);
+    return ts.whileSteps(subStepPath, condition, bodyNodes);
   }
 
   private processMatchBlockWithSteps(node: MatchBlock): TsNode {

@@ -339,15 +339,15 @@ const __graph = __ctx.graph;
       
           __stack.step++;
   }
-  if (__step <= 1 || (__stack.branches && __stack.branches[1])) {
-          if ((__stack.branches && __stack.branches[1])) {
-      __forked = __stack.branches[1].stack;
+  if (__step <= 1 || (__stack.branches && __stack.branches["1"])) {
+          if ((__stack.branches && __stack.branches["1"])) {
+      __forked = __stack.branches["1"].stack;
       __forked.deserializeMode()
     } else {
       __forked = __ctx.forkStack();
     }
 __stack.branches = (__stack.branches || {});
-__stack.branches[1] = {
+__stack.branches["1"] = {
       stack: __forked
     };
 __ctx.pendingPromises.add(append(1, `hello`, {
@@ -365,15 +365,15 @@ __ctx.pendingPromises.add(append(1, `hello`, {
     
           __stack.step++;
   }
-  if (__step <= 2 || (__stack.branches && __stack.branches[2])) {
-          if ((__stack.branches && __stack.branches[2])) {
-      __forked = __stack.branches[2].stack;
+  if (__step <= 2 || (__stack.branches && __stack.branches["2"])) {
+          if ((__stack.branches && __stack.branches["2"])) {
+      __forked = __stack.branches["2"].stack;
       __forked.deserializeMode()
     } else {
       __forked = __ctx.forkStack();
     }
 __stack.branches = (__stack.branches || {});
-__stack.branches[2] = {
+__stack.branches["2"] = {
       stack: __forked
     };
 __ctx.pendingPromises.add(append(0.5, `world`, {

@@ -1,0 +1,13 @@
+node main(x: number, y: number) {
+  result = "start"
+  if (x > 5) {
+    result = "outer"
+    if (y > 3) {
+      result = "inner"
+      return interrupt("check")
+      result = "confirmed inner"
+    }
+    result = result + " done"
+  }
+  return result
+}

@@ -623,15 +623,15 @@ if (isInterrupt(__stack.locals.msg)) {
     
           __stack.step++;
   }
-  if (__step <= 2 || (__stack.branches && __stack.branches[2])) {
-          if ((__stack.branches && __stack.branches[2])) {
-      __forked = __stack.branches[2].stack;
+  if (__step <= 2 || (__stack.branches && __stack.branches["2"])) {
+          if ((__stack.branches && __stack.branches["2"])) {
+      __forked = __stack.branches["2"].stack;
       __forked.deserializeMode()
     } else {
       __forked = __ctx.forkStack();
     }
 __stack.branches = (__stack.branches || {});
-__stack.branches[2] = {
+__stack.branches["2"] = {
       stack: __forked
     };
 __stack.locals.res2 = google(__stack.locals.msg, {
@@ -650,15 +650,15 @@ __self.__pendingKey_res2 = __ctx.pendingPromises.add(__stack.locals.res2, (val) 
     
           __stack.step++;
   }
-  if (__step <= 3 || (__stack.branches && __stack.branches[3])) {
-          if ((__stack.branches && __stack.branches[3])) {
-      __forked = __stack.branches[3].stack;
+  if (__step <= 3 || (__stack.branches && __stack.branches["3"])) {
+          if ((__stack.branches && __stack.branches["3"])) {
+      __forked = __stack.branches["3"].stack;
       __forked.deserializeMode()
     } else {
       __forked = __ctx.forkStack();
     }
 __stack.branches = (__stack.branches || {});
-__stack.branches[3] = {
+__stack.branches["3"] = {
       stack: __forked
     };
 __stack.locals.res1 = openai(__stack.locals.msg, {

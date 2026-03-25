@@ -1,0 +1,12 @@
+node main() {
+  thread {
+    a = 1
+    thread {
+      b = 2
+      c = interrupt("inner check")
+      d = 4
+    }
+    e = 5
+  }
+  return [a, b, c, d, e]
+}

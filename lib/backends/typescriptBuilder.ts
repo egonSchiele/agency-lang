@@ -128,12 +128,11 @@ export class TypeScriptBuilder {
   */
   private _asyncBranchCheckNeeded: boolean = false;
 
-  /* This keeps track of what step we are on when in processBodyAsParts,
-  because if there's an async function call, we will need to create
-  a new branch for it, and for that we will need its branch index,
-  which will be the value of the current step
-  */
-  private _currentStepIndex: number = 0;
+  /** Tracks the current substep nesting path. Empty when at the top level
+   * of a stepped body. Non-empty when inside a block (if/else, etc.) that
+   * has been broken into substeps. Used to generate unique variable names
+   * like __substep_3_1 for nested blocks. */
+  private _subStepPath: number[] = [];
 
   private programInfo: ProgramInfo;
   private moduleId: string;
@@ -234,9 +233,9 @@ export class TypeScriptBuilder {
     return getVisibleTypes(this.programInfo.typeHints, this.currentScopeKey());
   }
 
-  private forkBranchSetup(branchKey: number): TsNode[] {
+  private forkBranchSetup(branchKey: string): TsNode[] {
     const stackBranches = ts.prop(ts.runtime.stack, "branches");
-    const branchWithBranchKey = ts.index(stackBranches, ts.num(branchKey));
+    const branchWithBranchKey = ts.index(stackBranches, ts.str(branchKey));
 
     // forked is a state stack that we will either get from the branch data (if returning from an interrupt)
     // or create new by forking the current stack (if first time hitting this async call)
@@ -483,7 +482,7 @@ export class TypeScriptBuilder {
       case "multiLineComment":
         return ts.empty();
       case "matchBlock":
-        return this.processMatchBlock(node);
+        return this.processMatchBlockWithSteps(node);
       case "number":
       case "multiLineString":
       case "string":
@@ -514,7 +513,7 @@ export class TypeScriptBuilder {
       case "whileLoop":
         return this.processWhileLoop(node);
       case "ifElse":
-        return this.processIfElse(node);
+        return this.processIfElseWithSteps(node);
       case "specialVar":
         return this.processSpecialVar(node);
       case "timeBlock":
@@ -673,16 +672,28 @@ export class TypeScriptBuilder {
     });
   }
 
-  private processIfElse(node: IfElse): TsNode {
-    const condition = this.processNode(node.condition);
-    const body = ts.statements(
-      node.thenBody.map((stmt) => this.processStatement(stmt)),
-    );
+  private processIfElseWithSteps(node: IfElse): TsNode {
+    const subStepPath = [...this._subStepPath];
 
-    const elseIfs: TsElseIf[] = [];
-    let elseBody: TsNode | undefined;
+    // Process a branch body, pushing/popping each statement's index onto _subStepPath
+    const processBranchBody = (body: AgencyNode[]): TsNode[] => {
+      return body.map((stmt, i) => {
+        this._subStepPath.push(i);
+        const result = this.processStatement(stmt);
+        this._subStepPath.pop();
+        return result;
+      });
+    };
 
-    // Flatten the else-if chain into elseIfs[], leaving only the final else as elseBody
+    // Flatten the else-if chain
+    const branches: { condition: TsNode; body: TsNode[] }[] = [];
+    let elseBranch: TsNode[] | undefined;
+
+    branches.push({
+      condition: this.processNode(node.condition),
+      body: processBranchBody(node.thenBody),
+    });
+
     let current: IfElse | undefined =
       node.elseBody?.length === 1 && node.elseBody[0].type === "ifElse"
         ? (node.elseBody[0] as IfElse)
@@ -690,11 +701,9 @@ export class TypeScriptBuilder {
     let remainingElse = current ? undefined : node.elseBody;
 
     while (current) {
-      elseIfs.push({
+      branches.push({
         condition: this.processNode(current.condition),
-        body: ts.statements(
-          current.thenBody.map((stmt) => this.processStatement(stmt)),
-        ),
+        body: processBranchBody(current.thenBody),
       });
       if (
         current.elseBody?.length === 1 &&
@@ -708,16 +717,10 @@ export class TypeScriptBuilder {
     }
 
     if (remainingElse && remainingElse.length > 0) {
-      elseBody = ts.statements(
-        remainingElse.map((stmt) => this.processStatement(stmt)),
-      );
+      elseBranch = processBranchBody(remainingElse);
     }
 
-    return ts.if(
-      condition,
-      body,
-      elseIfs.length > 0 || elseBody ? { elseIfs, elseBody } : undefined,
-    );
+    return ts.ifSteps(subStepPath, branches, elseBranch);
   }
 
   private processForLoop(node: ForLoop): TsNode {
@@ -786,22 +789,28 @@ export class TypeScriptBuilder {
     );
   }
 
-  private processMatchBlock(node: MatchBlock): TsNode {
-    const cases = node.cases
-      .filter((c) => c.type !== "comment")
-      .map((c) => {
-        const caseItem = c as MatchBlockCase;
-        const test =
-          caseItem.caseValue === "_"
-            ? undefined
-            : this.processNode(caseItem.caseValue);
-        const body = ts.statements([
-          this.processNode(caseItem.body),
-          ts.break(),
-        ]);
-        return { test, body };
-      });
-    return ts.switch(this.processNode(node.expression), cases);
+  private processMatchBlockWithSteps(node: MatchBlock): TsNode {
+    const subStepPath = [...this._subStepPath];
+    const expression = this.processNode(node.expression);
+
+    const filteredCases = node.cases
+      .filter((c) => c.type !== "comment") as MatchBlockCase[];
+
+    const branches: { condition: TsNode; body: TsNode[] }[] = [];
+    let elseBranch: TsNode[] | undefined;
+
+    for (const caseItem of filteredCases) {
+      if (caseItem.caseValue === "_") {
+        elseBranch = [this.processNode(caseItem.body)];
+      } else {
+        branches.push({
+          condition: ts.binOp(expression, "===", this.processNode(caseItem.caseValue)),
+          body: [this.processNode(caseItem.body)],
+        });
+      }
+    }
+
+    return ts.ifSteps(subStepPath, branches, elseBranch);
   }
 
   private processImportStatement(node: ImportStatement): TsNode {
@@ -1141,7 +1150,7 @@ export class TypeScriptBuilder {
           !this.isGraphNode(node.functionName)
         ) {
           this._asyncBranchCheckNeeded = true;
-          const branchKey = this._currentStepIndex;
+          const branchKey = this._subStepPath.join("_");
           let statements = ts.statements(this.forkBranchSetup(branchKey));
           const callWithStack = this.generateFunctionCallExpression(
             node,
@@ -1540,7 +1549,7 @@ export class TypeScriptBuilder {
           !this.isGraphNode(value.functionName)
         ) {
           this._asyncBranchCheckNeeded = true;
-          const branchKey = this._currentStepIndex;
+          const branchKey = this._subStepPath.join("_");
           stmts.unshift(...this.forkBranchSetup(branchKey));
           stmts[stmts.length - 1] = this.scopedAssign(
             node.scope!,
@@ -1913,13 +1922,12 @@ export class TypeScriptBuilder {
       return this.processParallelThread(node, assignTo);
     }
 
-    const prevInsideMessageThread = this.insideMessageThread;
-    this.insideMessageThread = true;
-    const bodyNodes = node.body.map((stmt) => this.processNode(stmt));
-    this.insideMessageThread = prevInsideMessageThread;
+    const subStepPath = [...this._subStepPath];
     const createMethod =
       node.threadType === "subthread" ? "createSubthread" : "create";
-    const stmts: TsNode[] = [
+
+    // Setup: create thread + push active
+    const setup: TsNode[] = [
       ts.varDecl(
         "const",
         "__tid",
@@ -1929,10 +1937,24 @@ export class TypeScriptBuilder {
         .prop("pushActive")
         .call([ts.id("__tid")])
         .done(),
-      ...bodyNodes,
     ];
+
+    // Body: process each statement with substep tracking
+    const prevInsideMessageThread = this.insideMessageThread;
+    this.insideMessageThread = true;
+    const bodyNodes = node.body.map((stmt, i) => {
+      this._subStepPath = [...subStepPath];
+      this._subStepPath.push(i + 1); // +1 because setup is substep 0
+      const result = this.processStatement(stmt);
+      this._subStepPath.pop();
+      return result;
+    });
+    this.insideMessageThread = prevInsideMessageThread;
+
+    // Cleanup: cloneMessages (if assigned) + popActive
+    const cleanup: TsNode[] = [];
     if (assignTo) {
-      stmts.push(
+      cleanup.push(
         this.scopedAssign(
           assignTo.scope!,
           assignTo.variableName,
@@ -1941,8 +1963,9 @@ export class TypeScriptBuilder {
         ),
       );
     }
-    stmts.push($(ts.runtime.threads).prop("popActive").call().done());
-    return ts.raw(`{\n${this.str(ts.statements(stmts))}\n}`);
+    cleanup.push($(ts.runtime.threads).prop("popActive").call().done());
+
+    return ts.threadSteps(subStepPath, createMethod, setup, bodyNodes, cleanup);
   }
 
   private processParallelThread(
@@ -2021,16 +2044,15 @@ export class TypeScriptBuilder {
     opts: { isInSafeFunction?: boolean } = {},
   ): TsStepBlock[] {
     const parts: TsNode[][] = [[]];
-    const branchCheckParts = new Set<number>();
+    // Maps step index to the branch key (subStepPath) captured at processing time
+    const branchKeys: Record<number, string> = {};
     for (const stmt of body) {
       if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type)) {
         parts.push([]);
       }
 
-      // This is because if there's an async function call on this step
-      // we will need to create a new branch for it, and its branch index,
-      // will be the value of the step for this statement.
-      this._currentStepIndex = parts.length - 1;
+      const stepIndex = parts.length - 1;
+      this._subStepPath.push(stepIndex);
       if (!opts.isInSafeFunction && this.containsImpureCall(stmt)) {
         parts[parts.length - 1].push(
           ts.assign(ts.self("__retryable"), ts.bool(false)),
@@ -2047,12 +2069,13 @@ export class TypeScriptBuilder {
         }
       }
       if (this._asyncBranchCheckNeeded) {
-        branchCheckParts.add(this._currentStepIndex);
+        branchKeys[stepIndex] = this._subStepPath.join("_");
         this._asyncBranchCheckNeeded = false;
       }
+      this._subStepPath.pop();
     }
     return parts.map((part, i) =>
-      ts.stepBlock(i, ts.statements(part), branchCheckParts.has(i)),
+      ts.stepBlock(i, ts.statements(part), branchKeys[i]),
     );
   }
 

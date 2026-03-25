@@ -1,0 +1,15 @@
+def double(val: number): number {
+  sleep(0.05)
+  return val * 2
+}
+
+node main(x: number) {
+  if (x > 5) {
+    a = async double(x)
+    b = async double(x + 1)
+    result = [a, b]
+  } else {
+    result = [0, 0]
+  }
+  return result
+}

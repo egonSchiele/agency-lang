@@ -1,4 +1,8 @@
 import type { TsNode, TsParam, TsScopedVar } from "./tsIR.js";
+import * as renderSubstepBlock from "../templates/backends/typescriptGenerator/substepBlock.js";
+import * as renderIfStepsCondbranch from "../templates/backends/typescriptGenerator/ifStepsCondbranch.js";
+import * as renderIfStepsBranchDispatch from "../templates/backends/typescriptGenerator/ifStepsBranchDispatch.js";
+import * as renderThreadSteps from "../templates/backends/typescriptGenerator/threadSteps.js";
 
 const INDENT = "  ";
 
@@ -241,12 +245,90 @@ export function printTs(node: TsNode, indent = 0): string {
 
     case "stepBlock": {
       const stepBody = printBody(node.body, indent);
-      const guard = node.branchCheck
-        ? `if (__step <= ${node.stepIndex} || (__stack.branches && __stack.branches[${node.stepIndex}])) {`
+      if (node.subStep) {
+        const subKey = node.subStep.join("_");
+        return renderSubstepBlock.default({
+          guardVar: `__sub_${subKey}`,
+          stepIndex: node.stepIndex,
+          body: stepBody,
+          counterExpr: `__stack.locals.__substep_${subKey}`,
+          nextIndex: node.stepIndex + 1,
+        });
+      }
+      const guard = node.branchKey
+        ? `if (__step <= ${node.stepIndex} || (__stack.branches && __stack.branches["${node.branchKey}"])) {`
         : `if (__step <= ${node.stepIndex}) {`;
       return `${guard}
       ${stepBody}
       ${ind(indent + 1)}__stack.step++;\n${ind(indent)}}`;
+    }
+
+    case "ifSteps": {
+      const subKey = node.subStepPath.join("_");
+      const condbranchVar = `__condbranch_${subKey}`;
+      const condbranchStore = `__stack.locals.__condbranch_${subKey}`;
+      const subVar = `__sub_${subKey}`;
+      const subStore = `__stack.locals.__substep_${subKey}`;
+
+      const condbranchCode = renderIfStepsCondbranch.default({
+        condbranchStore,
+        condbranchVar,
+        subVar,
+        subStore,
+        branches: node.branches.map((b, i) => ({
+          condition: printTs(b.condition, indent + 1),
+          condbranchStore,
+          index: i,
+          first: i === 0,
+        })),
+        hasElse: !!node.elseBranch,
+        elseIndex: node.branches.length,
+      });
+
+      const allBranches = [...node.branches.map(b => b.body)];
+      if (node.elseBranch) allBranches.push(node.elseBranch);
+
+      const dispatchCode = renderIfStepsBranchDispatch.default({
+        allBranches: allBranches.map((body, branchIdx) => ({
+          branchIndex: branchIdx,
+          first: branchIdx === 0,
+          condbranchVar,
+          subVar,
+          subStore,
+          statements: body.map((stmt, stmtIdx) => ({
+            stmtIndex: stmtIdx,
+            stmtCode: printTs(stmt, indent + 2),
+            nextIndex: stmtIdx + 1,
+            subVar,
+            subStore,
+          })),
+        })),
+      });
+
+      return condbranchCode + "\n" + dispatchCode;
+    }
+
+    case "threadSteps": {
+      const subKey = node.subStepPath.join("_");
+      const subVar = `__sub_${subKey}`;
+      const subStore = `__stack.locals.__substep_${subKey}`;
+
+      // Ensure each code block ends with a newline to prevent line concatenation
+      const ensureNewline = (s: string) => s.endsWith("\n") ? s : s + "\n";
+
+      return renderThreadSteps.default({
+        subVar,
+        subStore,
+        setup: ensureNewline(node.setup.map((s) => printTs(s, indent + 1)).join("\n")),
+        bodyStatements: node.body.map((stmt, i) => ({
+          subVar,
+          subStore,
+          index: i + 1,
+          code: ensureNewline(printTs(stmt, indent + 1)),
+          nextIndex: i + 2,
+        })),
+        cleanup: node.cleanup.map((s) => printTs(s, indent)).join("\n") + ";\n",
+      });
     }
 
     case "empty":

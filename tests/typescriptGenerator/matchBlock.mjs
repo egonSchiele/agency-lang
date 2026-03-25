@@ -265,20 +265,60 @@ const __graph = __ctx.graph;
   }
   if (__step <= 2) {
           __self.__retryable = false;
-    switch (__stack.locals.action) {
-      case `start`:
-        await print(`Starting...`)
-        break;
-      case `stop`:
-        await print(`Stopping...`)
-        break;
-      case `restart`:
-        await print(`Restarting...`)
-        break;
-      default:
-        await print(`Unknown action`)
-        break;
-    }
+    if (__stack.locals.__condbranch_2 === undefined) {
+
+  if (__stack.locals.action === `start`) {
+    __stack.locals.__condbranch_2 = 0;
+
+  } else if (__stack.locals.action === `stop`) {
+    __stack.locals.__condbranch_2 = 1;
+
+  } else if (__stack.locals.action === `restart`) {
+    __stack.locals.__condbranch_2 = 2;
+
+
+  } else {
+    __stack.locals.__condbranch_2 = 3;
+  }
+
+
+}
+const __condbranch_2 = __stack.locals.__condbranch_2;
+const __sub_2 = __stack.locals.__substep_2 ?? 0;
+
+if (__condbranch_2 === 0) {
+
+  if (__sub_2 <= 0) {
+    await print(`Starting...`)
+    __stack.locals.__substep_2 = 1;
+  }
+
+
+} else if (__condbranch_2 === 1) {
+
+  if (__sub_2 <= 0) {
+    await print(`Stopping...`)
+    __stack.locals.__substep_2 = 1;
+  }
+
+
+} else if (__condbranch_2 === 2) {
+
+  if (__sub_2 <= 0) {
+    await print(`Restarting...`)
+    __stack.locals.__substep_2 = 1;
+  }
+
+
+} else if (__condbranch_2 === 3) {
+
+  if (__sub_2 <= 0) {
+    await print(`Unknown action`)
+    __stack.locals.__substep_2 = 1;
+  }
+
+
+}
     
     
     //  Match with number literals
@@ -297,20 +337,60 @@ const __graph = __ctx.graph;
   }
   if (__step <= 4) {
           __self.__retryable = false;
-    switch (__stack.locals.statusCode) {
-      case 200:
-        await print(`OK`)
-        break;
-      case 404:
-        await print(`Not Found`)
-        break;
-      case 500:
-        await print(`Internal Server Error`)
-        break;
-      default:
-        await print(`Unknown status`)
-        break;
-    }
+    if (__stack.locals.__condbranch_4 === undefined) {
+
+  if (__stack.locals.statusCode === 200) {
+    __stack.locals.__condbranch_4 = 0;
+
+  } else if (__stack.locals.statusCode === 404) {
+    __stack.locals.__condbranch_4 = 1;
+
+  } else if (__stack.locals.statusCode === 500) {
+    __stack.locals.__condbranch_4 = 2;
+
+
+  } else {
+    __stack.locals.__condbranch_4 = 3;
+  }
+
+
+}
+const __condbranch_4 = __stack.locals.__condbranch_4;
+const __sub_4 = __stack.locals.__substep_4 ?? 0;
+
+if (__condbranch_4 === 0) {
+
+  if (__sub_4 <= 0) {
+    await print(`OK`)
+    __stack.locals.__substep_4 = 1;
+  }
+
+
+} else if (__condbranch_4 === 1) {
+
+  if (__sub_4 <= 0) {
+    await print(`Not Found`)
+    __stack.locals.__substep_4 = 1;
+  }
+
+
+} else if (__condbranch_4 === 2) {
+
+  if (__sub_4 <= 0) {
+    await print(`Internal Server Error`)
+    __stack.locals.__substep_4 = 1;
+  }
+
+
+} else if (__condbranch_4 === 3) {
+
+  if (__sub_4 <= 0) {
+    await print(`Unknown status`)
+    __stack.locals.__substep_4 = 1;
+  }
+
+
+}
     
     
     //  Match with variable assignment in body
@@ -338,23 +418,71 @@ const __graph = __ctx.graph;
           __stack.step++;
   }
   if (__step <= 7) {
-          switch (__stack.locals.grade) {
-      case `A`:
-        __stack.locals.a = 100;
-        break;
-      case `B`:
-        __stack.locals.b = 85;
-        break;
-      case `C`:
-        __stack.locals.c = 70;
-        break;
-      case `D`:
-        __stack.locals.d = 55;
-        break;
-      default:
-        __stack.locals.e = 0;
-        break;
-    }
+          if (__stack.locals.__condbranch_7 === undefined) {
+
+  if (__stack.locals.grade === `A`) {
+    __stack.locals.__condbranch_7 = 0;
+
+  } else if (__stack.locals.grade === `B`) {
+    __stack.locals.__condbranch_7 = 1;
+
+  } else if (__stack.locals.grade === `C`) {
+    __stack.locals.__condbranch_7 = 2;
+
+  } else if (__stack.locals.grade === `D`) {
+    __stack.locals.__condbranch_7 = 3;
+
+
+  } else {
+    __stack.locals.__condbranch_7 = 4;
+  }
+
+
+}
+const __condbranch_7 = __stack.locals.__condbranch_7;
+const __sub_7 = __stack.locals.__substep_7 ?? 0;
+
+if (__condbranch_7 === 0) {
+
+  if (__sub_7 <= 0) {
+    __stack.locals.a = 100;
+    __stack.locals.__substep_7 = 1;
+  }
+
+
+} else if (__condbranch_7 === 1) {
+
+  if (__sub_7 <= 0) {
+    __stack.locals.b = 85;
+    __stack.locals.__substep_7 = 1;
+  }
+
+
+} else if (__condbranch_7 === 2) {
+
+  if (__sub_7 <= 0) {
+    __stack.locals.c = 70;
+    __stack.locals.__substep_7 = 1;
+  }
+
+
+} else if (__condbranch_7 === 3) {
+
+  if (__sub_7 <= 0) {
+    __stack.locals.d = 55;
+    __stack.locals.__substep_7 = 1;
+  }
+
+
+} else if (__condbranch_7 === 4) {
+
+  if (__sub_7 <= 0) {
+    __stack.locals.e = 0;
+    __stack.locals.__substep_7 = 1;
+  }
+
+
+}
     
     
     //  Match with function calls in body
@@ -373,20 +501,63 @@ const __graph = __ctx.graph;
   }
   if (__step <= 9) {
           __self.__retryable = false;
-    switch (__stack.locals.level) {
-      case `debug`:
-        await print(`Debug mode enabled`)
-        break;
-      case `info`:
-        await print(`Info level logging`)
-        break;
-      case `warn`:
-        await print(`Warning level`)
-        break;
-      case `error`:
-        await print(`Error level`)
-        break;
-    }
+    if (__stack.locals.__condbranch_9 === undefined) {
+
+  if (__stack.locals.level === `debug`) {
+    __stack.locals.__condbranch_9 = 0;
+
+  } else if (__stack.locals.level === `info`) {
+    __stack.locals.__condbranch_9 = 1;
+
+  } else if (__stack.locals.level === `warn`) {
+    __stack.locals.__condbranch_9 = 2;
+
+  } else if (__stack.locals.level === `error`) {
+    __stack.locals.__condbranch_9 = 3;
+
+
+
+  } else {
+    __stack.locals.__condbranch_9 = -1;
+  }
+
+}
+const __condbranch_9 = __stack.locals.__condbranch_9;
+const __sub_9 = __stack.locals.__substep_9 ?? 0;
+
+if (__condbranch_9 === 0) {
+
+  if (__sub_9 <= 0) {
+    await print(`Debug mode enabled`)
+    __stack.locals.__substep_9 = 1;
+  }
+
+
+} else if (__condbranch_9 === 1) {
+
+  if (__sub_9 <= 0) {
+    await print(`Info level logging`)
+    __stack.locals.__substep_9 = 1;
+  }
+
+
+} else if (__condbranch_9 === 2) {
+
+  if (__sub_9 <= 0) {
+    await print(`Warning level`)
+    __stack.locals.__substep_9 = 1;
+  }
+
+
+} else if (__condbranch_9 === 3) {
+
+  if (__sub_9 <= 0) {
+    await print(`Error level`)
+    __stack.locals.__substep_9 = 1;
+  }
+
+
+}
     
     
     //  Match with array results
@@ -404,20 +575,52 @@ const __graph = __ctx.graph;
           __stack.step++;
   }
   if (__step <= 11) {
-          switch (__stack.locals.resultType) {
-      case `array`:
-        __stack.locals.data1 = [1, 2, 3];
-        break;
-      case `object`:
-        __stack.locals.data2 = {
+          if (__stack.locals.__condbranch_11 === undefined) {
+
+  if (__stack.locals.resultType === `array`) {
+    __stack.locals.__condbranch_11 = 0;
+
+  } else if (__stack.locals.resultType === `object`) {
+    __stack.locals.__condbranch_11 = 1;
+
+
+  } else {
+    __stack.locals.__condbranch_11 = 2;
+  }
+
+
+}
+const __condbranch_11 = __stack.locals.__condbranch_11;
+const __sub_11 = __stack.locals.__substep_11 ?? 0;
+
+if (__condbranch_11 === 0) {
+
+  if (__sub_11 <= 0) {
+    __stack.locals.data1 = [1, 2, 3];
+    __stack.locals.__substep_11 = 1;
+  }
+
+
+} else if (__condbranch_11 === 1) {
+
+  if (__sub_11 <= 0) {
+    __stack.locals.data2 = {
           "x": 1,
           "y": 2
         };
-        break;
-      default:
-        __stack.locals.data3 = [];
-        break;
-    }
+    __stack.locals.__substep_11 = 1;
+  }
+
+
+} else if (__condbranch_11 === 2) {
+
+  if (__sub_11 <= 0) {
+    __stack.locals.data3 = [];
+    __stack.locals.__substep_11 = 1;
+  }
+
+
+}
     
     
     //  Match with object results
@@ -435,32 +638,72 @@ const __graph = __ctx.graph;
           __stack.step++;
   }
   if (__step <= 13) {
-          switch (__stack.locals.format) {
-      case `xml`:
-        __stack.locals.output1 = {
+          if (__stack.locals.__condbranch_13 === undefined) {
+
+  if (__stack.locals.format === `xml`) {
+    __stack.locals.__condbranch_13 = 0;
+
+  } else if (__stack.locals.format === `json`) {
+    __stack.locals.__condbranch_13 = 1;
+
+  } else if (__stack.locals.format === `csv`) {
+    __stack.locals.__condbranch_13 = 2;
+
+
+  } else {
+    __stack.locals.__condbranch_13 = 3;
+  }
+
+
+}
+const __condbranch_13 = __stack.locals.__condbranch_13;
+const __sub_13 = __stack.locals.__substep_13 ?? 0;
+
+if (__condbranch_13 === 0) {
+
+  if (__sub_13 <= 0) {
+    __stack.locals.output1 = {
           "type": `xml`,
           "ext": `.xml`
         };
-        break;
-      case `json`:
-        __stack.locals.output2 = {
+    __stack.locals.__substep_13 = 1;
+  }
+
+
+} else if (__condbranch_13 === 1) {
+
+  if (__sub_13 <= 0) {
+    __stack.locals.output2 = {
           "type": `json`,
           "ext": `.json`
         };
-        break;
-      case `csv`:
-        __stack.locals.output3 = {
+    __stack.locals.__substep_13 = 1;
+  }
+
+
+} else if (__condbranch_13 === 2) {
+
+  if (__sub_13 <= 0) {
+    __stack.locals.output3 = {
           "type": `csv`,
           "ext": `.csv`
         };
-        break;
-      default:
-        __stack.locals.output4 = {
+    __stack.locals.__substep_13 = 1;
+  }
+
+
+} else if (__condbranch_13 === 3) {
+
+  if (__sub_13 <= 0) {
+    __stack.locals.output4 = {
           "type": `unknown`,
           "ext": ``
         };
-        break;
-    }
+    __stack.locals.__substep_13 = 1;
+  }
+
+
+}
     
           __stack.step++;
   }

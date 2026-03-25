@@ -24,7 +24,7 @@ export type State = {
   locals: Record<string, any>;
   threads: ThreadStoreJSON | null;
   step: number;
-  branches?: Record<number, BranchState>;
+  branches?: Record<string, BranchState>;
 };
 
 export type StateJSON = {
@@ -32,7 +32,7 @@ export type StateJSON = {
   locals: Record<string, any>;
   threads: ThreadStoreJSON | null;
   step: number;
-  branches?: Record<number, BranchStateJSON>;
+  branches?: Record<string, BranchStateJSON>;
 };
 
 export type StateStackJSON = {

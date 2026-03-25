@@ -280,29 +280,45 @@ const __graph = __ctx.graph;
             __stack.step++;
     }
     if (__step <= 1) {
-            {
-const __tid = __threads.create();
+            const __sub_1 = __stack.locals.__substep_1 ?? 0;
+if (__sub_1 <= 0) {
+  const __tid = __threads.create();
 __threads.pushActive(__tid)
-__self.__removedTools = __self.__removedTools || [];
-__stack.locals.res1 = await runPrompt({
-  ctx: __ctx,
-  prompt: `What are the first 5 prime numbers?`,
-  messages: __threads.getOrCreateActive(),
-  responseFormat: z.object({
-    response: z.array(z.number())
-  }),
-  clientConfig: {},
-  maxToolCallRounds: 10,
-  interruptData: __state?.interruptData,
-  removedTools: __self.__removedTools
-});
-// return early from node if this is an interrupt
-if (isInterrupt(__stack.locals.res1)) {
-  await __ctx.pendingPromises.awaitAll()
-  return __stack.locals.res1;
+
+  __stack.locals.__substep_1 = 1;
 }
 
-{
+if (__sub_1 <= 1) {
+  __self.__removedTools = __self.__removedTools || [];
+__stack.locals.res1 = await runPrompt({
+          ctx: __ctx,
+          prompt: `What are the first 5 prime numbers?`,
+          messages: __threads.getOrCreateActive(),
+          responseFormat: z.object({
+            response: z.array(z.number())
+          }),
+          clientConfig: {},
+          maxToolCallRounds: 10,
+          interruptData: __state?.interruptData,
+          removedTools: __self.__removedTools
+        });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.res1)) {
+          await __ctx.pendingPromises.awaitAll()
+          return __stack.locals.res1;
+        }
+
+  __stack.locals.__substep_1 = 2;
+}
+
+if (__sub_1 <= 2) {
+  
+
+  __stack.locals.__substep_1 = 3;
+}
+
+if (__sub_1 <= 3) {
+  {
 const __ptid_res2 = __threads.create();
 const __ptid_res3 = __threads.create();
 __self.__removedTools = __self.__removedTools || [];
@@ -346,8 +362,18 @@ if (isInterrupt(__stack.locals.res3)) {
 [__stack.locals.res2, __stack.locals.res3] = await Promise.all([__stack.locals.res2, __stack.locals.res3]);
 }
 
-__threads.popActive()
+  __stack.locals.__substep_1 = 4;
 }
+
+if (__sub_1 <= 4) {
+  
+
+  __stack.locals.__substep_1 = 5;
+}
+
+__threads.popActive();
+
+
       
             __stack.step++;
     }

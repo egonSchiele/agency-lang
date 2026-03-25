@@ -38,6 +38,9 @@ import type {
   TsScopedVar,
   TsFunctionReturn,
   TsStepBlock,
+  TsIfSteps,
+  TsIfStepsBranch,
+  TsThreadSteps,
   TsEmpty,
   TsBreak,
   TsContinue,
@@ -355,10 +358,28 @@ export const ts = {
   stepBlock(
     stepIndex: number,
     body: TsNode,
-    _branchCheck?: boolean,
+    _branchKey?: string,
+    _subStep?: number[],
   ): TsStepBlock {
-    const branchCheck = _branchCheck ?? false;
-    return { kind: "stepBlock", stepIndex, body, branchCheck };
+    return { kind: "stepBlock", stepIndex, body, branchKey: _branchKey, subStep: _subStep };
+  },
+
+  ifSteps(
+    subStepPath: number[],
+    branches: TsIfStepsBranch[],
+    elseBranch?: TsNode[],
+  ): TsIfSteps {
+    return { kind: "ifSteps", subStepPath, branches, elseBranch };
+  },
+
+  threadSteps(
+    subStepPath: number[],
+    createMethod: string,
+    setup: TsNode[],
+    body: TsNode[],
+    cleanup: TsNode[],
+  ): TsThreadSteps {
+    return { kind: "threadSteps", subStepPath, createMethod, setup, body, cleanup };
   },
 
   empty(): TsEmpty {

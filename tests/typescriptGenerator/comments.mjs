@@ -427,11 +427,30 @@ if (isInterrupt(__stack.locals.result)) {
   }
   if (__step <= 5) {
           __self.__retryable = false;
-    switch (__stack.locals.status) {
-      case `inactive`:
-        await print(`Stopped`)
-        break;
-    }
+    if (__stack.locals.__condbranch_5 === undefined) {
+
+  if (__stack.locals.status === `inactive`) {
+    __stack.locals.__condbranch_5 = 0;
+
+
+
+  } else {
+    __stack.locals.__condbranch_5 = -1;
+  }
+
+}
+const __condbranch_5 = __stack.locals.__condbranch_5;
+const __sub_5 = __stack.locals.__substep_5 ?? 0;
+
+if (__condbranch_5 === 0) {
+
+  if (__sub_5 <= 0) {
+    await print(`Stopped`)
+    __stack.locals.__substep_5 = 1;
+  }
+
+
+}
     
     
     //  Final comment at end of file

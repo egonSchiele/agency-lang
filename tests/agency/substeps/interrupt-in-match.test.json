@@ -1,0 +1,33 @@
+{
+  "sourceFile": "interrupt-in-match.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Match block with interrupt in stop case, resolved with value",
+      "input": "\"stop\"",
+      "expectedOutput": "\"stopped\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        {
+          "action": "resolve",
+          "expectedMessage": "confirm stop",
+          "resolvedValue": "stopped"
+        }
+      ]
+    },
+    {
+      "nodeName": "main",
+      "description": "Match block takes start case without interrupt",
+      "input": "\"start\"",
+      "expectedOutput": "\"starting\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "main",
+      "description": "Match block takes default case without interrupt",
+      "input": "\"other\"",
+      "expectedOutput": "\"unknown\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

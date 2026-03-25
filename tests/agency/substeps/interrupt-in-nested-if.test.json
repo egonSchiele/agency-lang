@@ -1,0 +1,18 @@
+{
+  "sourceFile": "interrupt-in-nested-if.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Interrupt inside nested if resumes both inner and outer correctly",
+      "input": "10, 5",
+      "expectedOutput": "\"confirmed inner done\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "check"
+        }
+      ]
+    }
+  ]
+}

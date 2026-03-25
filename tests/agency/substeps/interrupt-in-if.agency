@@ -1,0 +1,11 @@
+node main(x: number) {
+  result = "start"
+  if (x > 5) {
+    result = "big"
+    return interrupt("check")
+    result = "confirmed big"
+  } else {
+    result = "small"
+  }
+  return result
+}

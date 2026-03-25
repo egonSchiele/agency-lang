@@ -1,0 +1,8 @@
+node main() {
+  thread {
+    x = 1
+    y = interrupt("check")
+    z = 3
+  }
+  return [x, y, z]
+}

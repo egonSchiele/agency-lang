@@ -1,0 +1,12 @@
+const {{{subVar}}} = {{{subStore}}} ?? 0;
+if ({{{subVar}}} <= 0) {
+  {{{setup}}}
+  {{{subStore}}} = 1;
+}
+{{#bodyStatements}}
+if ({{{this.subVar}}} <= {{{this.index}}}) {
+  {{{this.code}}}
+  {{{this.subStore}}} = {{{this.nextIndex}}};
+}
+{{/bodyStatements}}
+{{{cleanup}}}

@@ -280,130 +280,246 @@ const __graph = __ctx.graph;
             __stack.step++;
     }
     if (__step <= 1) {
-            {
-const __tid = __threads.create();
+            const __sub_1 = __stack.locals.__substep_1 ?? 0;
+if (__sub_1 <= 0) {
+  const __tid = __threads.create();
 __threads.pushActive(__tid)
-__self.__removedTools = __self.__removedTools || [];
+
+  __stack.locals.__substep_1 = 1;
+}
+
+if (__sub_1 <= 1) {
+  __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res1 = await runPrompt({
-  ctx: __ctx,
-  prompt: `What are the first 5 prime numbers?`,
-  messages: __threads.getOrCreateActive(),
-  responseFormat: z.object({
-    response: z.array(z.number())
-  }),
-  clientConfig: {},
-  maxToolCallRounds: 10,
-  interruptData: __state?.interruptData,
-  removedTools: __self.__removedTools
-});
+          ctx: __ctx,
+          prompt: `What are the first 5 prime numbers?`,
+          messages: __threads.getOrCreateActive(),
+          responseFormat: z.object({
+            response: z.array(z.number())
+          }),
+          clientConfig: {},
+          maxToolCallRounds: 10,
+          interruptData: __state?.interruptData,
+          removedTools: __self.__removedTools
+        });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res1)) {
-  await __ctx.pendingPromises.awaitAll()
-  return __stack.locals.res1;
+          await __ctx.pendingPromises.awaitAll()
+          return __stack.locals.res1;
+        }
+
+  __stack.locals.__substep_1 = 2;
 }
 
-{
-const __tid = __threads.createSubthread();
+if (__sub_1 <= 2) {
+  
+
+  __stack.locals.__substep_1 = 3;
+}
+
+if (__sub_1 <= 3) {
+  const __sub_1_3 = __stack.locals.__substep_1_3 ?? 0;
+if (__sub_1_3 <= 0) {
+  const __tid = __threads.createSubthread();
 __threads.pushActive(__tid)
-__self.__removedTools = __self.__removedTools || [];
+
+  __stack.locals.__substep_1_3 = 1;
+}
+
+if (__sub_1_3 <= 1) {
+  __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res2 = await runPrompt({
-  ctx: __ctx,
-  prompt: `What are the next 2 prime numbers after those?`,
-  messages: __threads.getOrCreateActive(),
-  responseFormat: z.object({
-    response: z.array(z.number())
-  }),
-  clientConfig: {},
-  maxToolCallRounds: 10,
-  interruptData: __state?.interruptData,
-  removedTools: __self.__removedTools
-});
+            ctx: __ctx,
+            prompt: `What are the next 2 prime numbers after those?`,
+            messages: __threads.getOrCreateActive(),
+            responseFormat: z.object({
+              response: z.array(z.number())
+            }),
+            clientConfig: {},
+            maxToolCallRounds: 10,
+            interruptData: __state?.interruptData,
+            removedTools: __self.__removedTools
+          });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res2)) {
-  await __ctx.pendingPromises.awaitAll()
-  return __stack.locals.res2;
+            await __ctx.pendingPromises.awaitAll()
+            return __stack.locals.res2;
+          }
+
+  __stack.locals.__substep_1_3 = 2;
 }
 
-{
-const __tid = __threads.createSubthread();
+if (__sub_1_3 <= 2) {
+  
+
+  __stack.locals.__substep_1_3 = 3;
+}
+
+if (__sub_1_3 <= 3) {
+  const __sub_1_3_3 = __stack.locals.__substep_1_3_3 ?? 0;
+if (__sub_1_3_3 <= 0) {
+  const __tid = __threads.createSubthread();
 __threads.pushActive(__tid)
-__self.__removedTools = __self.__removedTools || [];
+
+  __stack.locals.__substep_1_3_3 = 1;
+}
+
+if (__sub_1_3_3 <= 1) {
+  __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res3 = await runPrompt({
-  ctx: __ctx,
-  prompt: `And what is the sum of all those numbers combined?`,
-  messages: __threads.getOrCreateActive(),
-  responseFormat: z.object({
-    response: z.number()
-  }),
-  clientConfig: {},
-  maxToolCallRounds: 10,
-  interruptData: __state?.interruptData,
-  removedTools: __self.__removedTools
-});
+              ctx: __ctx,
+              prompt: `And what is the sum of all those numbers combined?`,
+              messages: __threads.getOrCreateActive(),
+              responseFormat: z.object({
+                response: z.number()
+              }),
+              clientConfig: {},
+              maxToolCallRounds: 10,
+              interruptData: __state?.interruptData,
+              removedTools: __self.__removedTools
+            });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res3)) {
-  await __ctx.pendingPromises.awaitAll()
-  return __stack.locals.res3;
+              await __ctx.pendingPromises.awaitAll()
+              return __stack.locals.res3;
+            }
+
+  __stack.locals.__substep_1_3_3 = 2;
 }
 
-__threads.popActive()
+if (__sub_1_3_3 <= 2) {
+  
+
+  __stack.locals.__substep_1_3_3 = 3;
 }
 
-{
-const __tid = __threads.create();
+__threads.popActive();
+
+
+  __stack.locals.__substep_1_3 = 4;
+}
+
+if (__sub_1_3 <= 4) {
+  
+
+  __stack.locals.__substep_1_3 = 5;
+}
+
+if (__sub_1_3 <= 5) {
+  const __sub_1_3_5 = __stack.locals.__substep_1_3_5 ?? 0;
+if (__sub_1_3_5 <= 0) {
+  const __tid = __threads.create();
 __threads.pushActive(__tid)
-__self.__removedTools = __self.__removedTools || [];
+
+  __stack.locals.__substep_1_3_5 = 1;
+}
+
+if (__sub_1_3_5 <= 1) {
+  __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res5 = await runPrompt({
-  ctx: __ctx,
-  prompt: `And what is the sum of all those numbers combined?`,
-  messages: __threads.getOrCreateActive(),
-  responseFormat: z.object({
-    response: z.number()
-  }),
-  clientConfig: {},
-  maxToolCallRounds: 10,
-  interruptData: __state?.interruptData,
-  removedTools: __self.__removedTools
-});
+              ctx: __ctx,
+              prompt: `And what is the sum of all those numbers combined?`,
+              messages: __threads.getOrCreateActive(),
+              responseFormat: z.object({
+                response: z.number()
+              }),
+              clientConfig: {},
+              maxToolCallRounds: 10,
+              interruptData: __state?.interruptData,
+              removedTools: __self.__removedTools
+            });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res5)) {
-  await __ctx.pendingPromises.awaitAll()
-  return __stack.locals.res5;
+              await __ctx.pendingPromises.awaitAll()
+              return __stack.locals.res5;
+            }
+
+  __stack.locals.__substep_1_3_5 = 2;
 }
 
-__threads.popActive()
+if (__sub_1_3_5 <= 2) {
+  
+
+  __stack.locals.__substep_1_3_5 = 3;
 }
 
-__threads.popActive()
+__threads.popActive();
+
+
+  __stack.locals.__substep_1_3 = 6;
 }
 
-{
-const __tid = __threads.createSubthread();
+if (__sub_1_3 <= 6) {
+  
+
+  __stack.locals.__substep_1_3 = 7;
+}
+
+__threads.popActive();
+
+
+  __stack.locals.__substep_1 = 4;
+}
+
+if (__sub_1 <= 4) {
+  
+
+  __stack.locals.__substep_1 = 5;
+}
+
+if (__sub_1 <= 5) {
+  const __sub_1_5 = __stack.locals.__substep_1_5 ?? 0;
+if (__sub_1_5 <= 0) {
+  const __tid = __threads.createSubthread();
 __threads.pushActive(__tid)
-__self.__removedTools = __self.__removedTools || [];
+
+  __stack.locals.__substep_1_5 = 1;
+}
+
+if (__sub_1_5 <= 1) {
+  __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res4 = await runPrompt({
-  ctx: __ctx,
-  prompt: `And what is the sum of all those numbers combined?`,
-  messages: __threads.getOrCreateActive(),
-  responseFormat: z.object({
-    response: z.number()
-  }),
-  clientConfig: {},
-  maxToolCallRounds: 10,
-  interruptData: __state?.interruptData,
-  removedTools: __self.__removedTools
-});
+            ctx: __ctx,
+            prompt: `And what is the sum of all those numbers combined?`,
+            messages: __threads.getOrCreateActive(),
+            responseFormat: z.object({
+              response: z.number()
+            }),
+            clientConfig: {},
+            maxToolCallRounds: 10,
+            interruptData: __state?.interruptData,
+            removedTools: __self.__removedTools
+          });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res4)) {
-  await __ctx.pendingPromises.awaitAll()
-  return __stack.locals.res4;
+            await __ctx.pendingPromises.awaitAll()
+            return __stack.locals.res4;
+          }
+
+  __stack.locals.__substep_1_5 = 2;
 }
 
-__threads.popActive()
+if (__sub_1_5 <= 2) {
+  
+
+  __stack.locals.__substep_1_5 = 3;
 }
 
-__threads.popActive()
+__threads.popActive();
+
+
+  __stack.locals.__substep_1 = 6;
 }
+
+if (__sub_1 <= 6) {
+  
+
+  __stack.locals.__substep_1 = 7;
+}
+
+__threads.popActive();
+
+
       
             __stack.step++;
     }
@@ -484,145 +600,261 @@ const __graph = __ctx.graph;
           __stack.step++;
   }
   if (__step <= 1) {
-          {
-const __tid = __threads.create();
+          const __sub_1 = __stack.locals.__substep_1 ?? 0;
+if (__sub_1 <= 0) {
+  const __tid = __threads.create();
 __threads.pushActive(__tid)
-__self.__removedTools = __self.__removedTools || [];
+
+  __stack.locals.__substep_1 = 1;
+}
+
+if (__sub_1 <= 1) {
+  __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res1 = await runPrompt({
-  ctx: __ctx,
-  prompt: `What are the first 5 prime numbers?`,
-  messages: __threads.getOrCreateActive(),
-  responseFormat: z.object({
-    response: z.array(z.number())
-  }),
-  clientConfig: {},
-  maxToolCallRounds: 10,
-  interruptData: __state?.interruptData,
-  removedTools: __self.__removedTools
-});
+        ctx: __ctx,
+        prompt: `What are the first 5 prime numbers?`,
+        messages: __threads.getOrCreateActive(),
+        responseFormat: z.object({
+          response: z.array(z.number())
+        }),
+        clientConfig: {},
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
+      });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res1)) {
-  await __ctx.pendingPromises.awaitAll()
-  return {
-    messages: __threads,
-    data: __stack.locals.res1
-  };
+        await __ctx.pendingPromises.awaitAll()
+        return {
+          messages: __threads,
+          data: __stack.locals.res1
+        };
+      }
+
+  __stack.locals.__substep_1 = 2;
 }
 
-{
-const __tid = __threads.createSubthread();
+if (__sub_1 <= 2) {
+  
+
+  __stack.locals.__substep_1 = 3;
+}
+
+if (__sub_1 <= 3) {
+  const __sub_1_3 = __stack.locals.__substep_1_3 ?? 0;
+if (__sub_1_3 <= 0) {
+  const __tid = __threads.createSubthread();
 __threads.pushActive(__tid)
-__self.__removedTools = __self.__removedTools || [];
+
+  __stack.locals.__substep_1_3 = 1;
+}
+
+if (__sub_1_3 <= 1) {
+  __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res2 = await runPrompt({
-  ctx: __ctx,
-  prompt: `What are the next 2 prime numbers after those?`,
-  messages: __threads.getOrCreateActive(),
-  responseFormat: z.object({
-    response: z.array(z.number())
-  }),
-  clientConfig: {},
-  maxToolCallRounds: 10,
-  interruptData: __state?.interruptData,
-  removedTools: __self.__removedTools
-});
+          ctx: __ctx,
+          prompt: `What are the next 2 prime numbers after those?`,
+          messages: __threads.getOrCreateActive(),
+          responseFormat: z.object({
+            response: z.array(z.number())
+          }),
+          clientConfig: {},
+          maxToolCallRounds: 10,
+          interruptData: __state?.interruptData,
+          removedTools: __self.__removedTools
+        });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res2)) {
-  await __ctx.pendingPromises.awaitAll()
-  return {
-    messages: __threads,
-    data: __stack.locals.res2
-  };
+          await __ctx.pendingPromises.awaitAll()
+          return {
+            messages: __threads,
+            data: __stack.locals.res2
+          };
+        }
+
+  __stack.locals.__substep_1_3 = 2;
 }
 
-{
-const __tid = __threads.createSubthread();
+if (__sub_1_3 <= 2) {
+  
+
+  __stack.locals.__substep_1_3 = 3;
+}
+
+if (__sub_1_3 <= 3) {
+  const __sub_1_3_3 = __stack.locals.__substep_1_3_3 ?? 0;
+if (__sub_1_3_3 <= 0) {
+  const __tid = __threads.createSubthread();
 __threads.pushActive(__tid)
-__self.__removedTools = __self.__removedTools || [];
+
+  __stack.locals.__substep_1_3_3 = 1;
+}
+
+if (__sub_1_3_3 <= 1) {
+  __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res3 = await runPrompt({
-  ctx: __ctx,
-  prompt: `And what is the sum of all those numbers combined?`,
-  messages: __threads.getOrCreateActive(),
-  responseFormat: z.object({
-    response: z.number()
-  }),
-  clientConfig: {},
-  maxToolCallRounds: 10,
-  interruptData: __state?.interruptData,
-  removedTools: __self.__removedTools
-});
+            ctx: __ctx,
+            prompt: `And what is the sum of all those numbers combined?`,
+            messages: __threads.getOrCreateActive(),
+            responseFormat: z.object({
+              response: z.number()
+            }),
+            clientConfig: {},
+            maxToolCallRounds: 10,
+            interruptData: __state?.interruptData,
+            removedTools: __self.__removedTools
+          });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res3)) {
-  await __ctx.pendingPromises.awaitAll()
-  return {
-    messages: __threads,
-    data: __stack.locals.res3
-  };
+            await __ctx.pendingPromises.awaitAll()
+            return {
+              messages: __threads,
+              data: __stack.locals.res3
+            };
+          }
+
+  __stack.locals.__substep_1_3_3 = 2;
 }
 
-__threads.popActive()
+if (__sub_1_3_3 <= 2) {
+  
+
+  __stack.locals.__substep_1_3_3 = 3;
 }
 
-{
-const __tid = __threads.create();
+__threads.popActive();
+
+
+  __stack.locals.__substep_1_3 = 4;
+}
+
+if (__sub_1_3 <= 4) {
+  
+
+  __stack.locals.__substep_1_3 = 5;
+}
+
+if (__sub_1_3 <= 5) {
+  const __sub_1_3_5 = __stack.locals.__substep_1_3_5 ?? 0;
+if (__sub_1_3_5 <= 0) {
+  const __tid = __threads.create();
 __threads.pushActive(__tid)
-__self.__removedTools = __self.__removedTools || [];
+
+  __stack.locals.__substep_1_3_5 = 1;
+}
+
+if (__sub_1_3_5 <= 1) {
+  __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res5 = await runPrompt({
-  ctx: __ctx,
-  prompt: `And what is the sum of all those numbers combined?`,
-  messages: __threads.getOrCreateActive(),
-  responseFormat: z.object({
-    response: z.number()
-  }),
-  clientConfig: {},
-  maxToolCallRounds: 10,
-  interruptData: __state?.interruptData,
-  removedTools: __self.__removedTools
-});
+            ctx: __ctx,
+            prompt: `And what is the sum of all those numbers combined?`,
+            messages: __threads.getOrCreateActive(),
+            responseFormat: z.object({
+              response: z.number()
+            }),
+            clientConfig: {},
+            maxToolCallRounds: 10,
+            interruptData: __state?.interruptData,
+            removedTools: __self.__removedTools
+          });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res5)) {
-  await __ctx.pendingPromises.awaitAll()
-  return {
-    messages: __threads,
-    data: __stack.locals.res5
-  };
+            await __ctx.pendingPromises.awaitAll()
+            return {
+              messages: __threads,
+              data: __stack.locals.res5
+            };
+          }
+
+  __stack.locals.__substep_1_3_5 = 2;
 }
 
-__threads.popActive()
+if (__sub_1_3_5 <= 2) {
+  
+
+  __stack.locals.__substep_1_3_5 = 3;
 }
 
-__threads.popActive()
+__threads.popActive();
+
+
+  __stack.locals.__substep_1_3 = 6;
 }
 
-{
-const __tid = __threads.createSubthread();
+if (__sub_1_3 <= 6) {
+  
+
+  __stack.locals.__substep_1_3 = 7;
+}
+
+__threads.popActive();
+
+
+  __stack.locals.__substep_1 = 4;
+}
+
+if (__sub_1 <= 4) {
+  
+
+  __stack.locals.__substep_1 = 5;
+}
+
+if (__sub_1 <= 5) {
+  const __sub_1_5 = __stack.locals.__substep_1_5 ?? 0;
+if (__sub_1_5 <= 0) {
+  const __tid = __threads.createSubthread();
 __threads.pushActive(__tid)
-__self.__removedTools = __self.__removedTools || [];
+
+  __stack.locals.__substep_1_5 = 1;
+}
+
+if (__sub_1_5 <= 1) {
+  __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res4 = await runPrompt({
-  ctx: __ctx,
-  prompt: `And what is the sum of all those numbers combined?`,
-  messages: __threads.getOrCreateActive(),
-  responseFormat: z.object({
-    response: z.number()
-  }),
-  clientConfig: {},
-  maxToolCallRounds: 10,
-  interruptData: __state?.interruptData,
-  removedTools: __self.__removedTools
-});
+          ctx: __ctx,
+          prompt: `And what is the sum of all those numbers combined?`,
+          messages: __threads.getOrCreateActive(),
+          responseFormat: z.object({
+            response: z.number()
+          }),
+          clientConfig: {},
+          maxToolCallRounds: 10,
+          interruptData: __state?.interruptData,
+          removedTools: __self.__removedTools
+        });
 // return early from node if this is an interrupt
 if (isInterrupt(__stack.locals.res4)) {
-  await __ctx.pendingPromises.awaitAll()
-  return {
-    messages: __threads,
-    data: __stack.locals.res4
-  };
+          await __ctx.pendingPromises.awaitAll()
+          return {
+            messages: __threads,
+            data: __stack.locals.res4
+          };
+        }
+
+  __stack.locals.__substep_1_5 = 2;
 }
 
-__threads.popActive()
+if (__sub_1_5 <= 2) {
+  
+
+  __stack.locals.__substep_1_5 = 3;
 }
 
-__threads.popActive()
+__threads.popActive();
+
+
+  __stack.locals.__substep_1 = 6;
 }
+
+if (__sub_1 <= 6) {
+  
+
+  __stack.locals.__substep_1 = 7;
+}
+
+__threads.popActive();
+
+
     
           __stack.step++;
   }

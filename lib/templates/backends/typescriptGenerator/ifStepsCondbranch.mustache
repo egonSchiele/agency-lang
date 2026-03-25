@@ -1,0 +1,18 @@
+if ({{{condbranchStore}}} === undefined) {
+{{#branches}}
+  {{#this.first}}if{{/this.first}}{{^this.first}}} else if{{/this.first}} ({{{this.condition}}}) {
+    {{{this.condbranchStore}}} = {{{this.index}}};
+{{/branches}}
+{{#hasElse}}
+  } else {
+    {{{condbranchStore}}} = {{{elseIndex}}};
+  }
+{{/hasElse}}
+{{^hasElse}}
+  } else {
+    {{{condbranchStore}}} = -1;
+  }
+{{/hasElse}}
+}
+const {{{condbranchVar}}} = {{{condbranchStore}}};
+const {{{subVar}}} = {{{subStore}}} ?? 0;

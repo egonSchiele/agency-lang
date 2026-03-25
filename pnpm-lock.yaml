@@ -45,8 +45,8 @@ importers:
         specifier: github:egonSchiele/termcolors
         version: https://codeload.github.com/egonSchiele/termcolors/tar.gz/d5c1f497618398ce1440d2383d2aad2642e4051f
       typestache:
-        specifier: ^0.4.4
-        version: 0.4.4
+        specifier: ^0.5.0
+        version: 0.5.0
       zod:
         specifier: ^4.3.5
         version: 4.3.5
@@ -592,8 +592,8 @@ packages:
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
 
-  '@types/node@22.19.6':
-    resolution: {integrity: sha512-qm+G8HuG6hOHQigsi7VGuLjUVu6TtBo/F05zvX04Mw2uCg9Dv0Qxy3Qw7j41SidlTcl5D/5yg0SEZqOB+EqZnQ==}
+  '@types/node@22.19.15':
+    resolution: {integrity: sha512-F0R/h2+dsy5wJAUe3tAU6oqa2qbWY5TpNfL/RGmo1y38hiyO1w3x2jPtt76wmuaJI4DQnOBu21cNXQ2STIUUWg==}
 
   '@types/node@25.0.6':
     resolution: {integrity: sha512-NNu0sjyNxpoiW3YuVFfNz7mxSQ+S4X2G28uqg2s+CzoqoQjLPsWSbsFFyztIAqt2vb8kfEAsJNepMGPTxFDx3Q==}
@@ -1454,8 +1454,8 @@ packages:
     engines: {node: '>=14.17'}
     hasBin: true
 
-  typestache@0.4.4:
-    resolution: {integrity: sha512-KBovlinBx3jy9Vbh/slgZ3vaX12LLNcpLtHreMe1SLKHiJqBV1LPSpEE6tcyAWFtYGGCmklWwtpbq+P5DFRoaA==}
+  typestache@0.5.0:
+    resolution: {integrity: sha512-ZIiZUau3wKHM3KQ64zhpkcvZ9G1mbnWBOM4fxYJlCI+IQel4/Xl4nS6ARWhryOmOh58v0JiefnZSlkGon5Si7A==}
     hasBin: true
 
   undici-types@6.21.0:
@@ -1956,7 +1956,7 @@ snapshots:
 
   '@types/estree@1.0.8': {}
 
-  '@types/node@22.19.6':
+  '@types/node@22.19.15':
     dependencies:
       undici-types: 6.21.0
 
@@ -2898,9 +2898,9 @@ snapshots:
 
   typescript@5.9.3: {}
 
-  typestache@0.4.4:
+  typestache@0.5.0:
     dependencies:
-      '@types/node': 22.19.6
+      '@types/node': 22.19.15
       commander: 14.0.3
       tarsec: 0.0.18
       typescript: 5.9.3

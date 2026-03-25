@@ -193,6 +193,8 @@ https://github.com/egonSchiele/tarsec/tree/main/tutorials
 
 See `docs/TESTING.md` for the full testing guide.
 
+Agency execution tests (`tests/agency/`) do NOT require LLM calls. They can test pure logic, interrupts, async calls, etc. without any LLM involvement. Use them for any runtime behavior test.
+
 
 ## Typechecker
 See docs/dev/typechecker.md and docs/typeChecker.md for more information. Code it at lib/typeChecker.ts.

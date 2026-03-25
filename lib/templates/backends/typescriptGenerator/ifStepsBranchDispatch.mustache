@@ -1,0 +1,10 @@
+{{#allBranches}}
+{{#this.first}}if{{/this.first}}{{^this.first}}} else if{{/this.first}} ({{{this.condbranchVar}}} === {{{this.branchIndex}}}) {
+{{#this.statements}}
+  if ({{{this.subVar}}} <= {{{this.stmtIndex}}}) {
+    {{{this.stmtCode}}}
+    {{{this.subStore}}} = {{{this.nextIndex}}};
+  }
+{{/this.statements}}
+{{/allBranches}}
+}

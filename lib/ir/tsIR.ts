@@ -33,6 +33,8 @@ export type TsNode =
   | TsScopedVar
   | TsFunctionReturn
   | TsStepBlock
+  | TsIfSteps
+  | TsThreadSteps
   | TsEmpty
   | TsBreak
   | TsContinue
@@ -274,12 +276,53 @@ export interface TsFunctionReturn {
   value: TsNode;
 }
 
-/** A resumable step block — wraps body in `if (__step <= N) { ... __stack.step++; }` */
+/** A resumable step block — wraps body in `if (__step <= N) { ... __stack.step++; }`.
+ * When subStep is set, uses substep variable names instead (e.g. __sub_3, __substep_3).
+ * When branchKey is set, the guard also checks for branch data at that key. */
 export interface TsStepBlock {
   kind: "stepBlock";
   stepIndex: number;
   body: TsNode;
-  branchCheck?: boolean;
+  branchKey?: string;
+  subStep?: number[];
+}
+
+/** A thread block with substep guards for each body statement.
+ * Thread setup (create+pushActive) is substep 0, body statements
+ * follow, and cleanup (cloneMessages+popActive) runs after all
+ * substeps complete. */
+export interface TsThreadSteps {
+  kind: "threadSteps";
+  /** The substep path for naming variables */
+  subStepPath: number[];
+  /** The thread creation method — "create" or "createSubthread" */
+  createMethod: string;
+  /** The setup statements (create + pushActive) */
+  setup: TsNode[];
+  /** The body statements (each gets a substep guard) */
+  body: TsNode[];
+  /** The cleanup statements (cloneMessages + popActive) */
+  cleanup: TsNode[];
+}
+
+/** A branch in a TsIfSteps node */
+export interface TsIfStepsBranch {
+  condition: TsNode;
+  body: TsNode[];
+}
+
+/** An if/else block with substep guards for each branch body.
+ * Handles condbranch tracking (which branch was taken) and substep
+ * guards within each branch. Used inside step-counted bodies to
+ * enable precise mid-block interrupt resumption. */
+export interface TsIfSteps {
+  kind: "ifSteps";
+  /** The substep path for naming variables (e.g. [3] or [2, 1]) */
+  subStepPath: number[];
+  /** The branches — first is the "if", rest are "else if" */
+  branches: TsIfStepsBranch[];
+  /** Optional else body */
+  elseBranch?: TsNode[];
 }
 
 /** No-op node — produces no output. Used for AST nodes handled elsewhere (e.g. imports collected in a separate pass). */

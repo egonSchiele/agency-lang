@@ -728,25 +728,16 @@ export class TypeScriptBuilder {
 
     const subStepPath = [...this._subStepPath];
     const subKey = subStepPath.join("_");
-    const resetKeys: string[] = [];
 
     const bodyNodes = node.body.map((stmt, i) => {
       this._subStepPath = [...subStepPath];
       this._subStepPath.push(i);
       const result = this.processStatement(stmt);
-      const nestedKey = subKey ? `${subKey}_${i}` : `${i}`;
-      if (stmt.type === "ifElse" || stmt.type === "matchBlock") {
-        resetKeys.push(`__condbranch_${nestedKey}`);
-        resetKeys.push(`__substep_${nestedKey}`);
-      } else if (stmt.type === "whileLoop" || stmt.type === "forLoop") {
-        resetKeys.push(`__iteration_${nestedKey}`);
-        resetKeys.push(`__substep_${nestedKey}`);
-      } else if (stmt.type === "messageThread") {
-        resetKeys.push(`__substep_${nestedKey}`);
-      }
       this._subStepPath.pop();
       return result;
     });
+
+    const resetKeys = this.collectResetKeys(node.body, subKey);
 
     // Unregister loop variables
     this.loopVars = this.loopVars.filter(
@@ -803,33 +794,50 @@ export class TypeScriptBuilder {
     );
   }
 
+  /** Recursively collect all tracking variable keys (condbranch, substep, iteration)
+   * that would be created by processing the given body statements at the given path prefix. */
+  private collectResetKeys(body: AgencyNode[], pathPrefix: string): string[] {
+    const keys: string[] = [];
+    for (let i = 0; i < body.length; i++) {
+      const stmt = body[i];
+      const key = pathPrefix ? `${pathPrefix}_${i}` : `${i}`;
+      if (stmt.type === "ifElse") {
+        keys.push(`__condbranch_${key}`, `__substep_${key}`);
+        // Recurse into then/else bodies
+        keys.push(...this.collectResetKeys(stmt.thenBody, key));
+        if (stmt.elseBody) {
+          keys.push(...this.collectResetKeys(stmt.elseBody, key));
+        }
+      } else if (stmt.type === "matchBlock") {
+        keys.push(`__condbranch_${key}`, `__substep_${key}`);
+      } else if (stmt.type === "whileLoop") {
+        keys.push(`__iteration_${key}`, `__substep_${key}`);
+        keys.push(...this.collectResetKeys(stmt.body, key));
+      } else if (stmt.type === "forLoop") {
+        keys.push(`__iteration_${key}`, `__substep_${key}`);
+        keys.push(...this.collectResetKeys(stmt.body, key));
+      } else if (stmt.type === "messageThread") {
+        keys.push(`__substep_${key}`);
+        keys.push(...this.collectResetKeys(stmt.body, key));
+      }
+    }
+    return keys;
+  }
+
   private processWhileLoopWithSteps(node: WhileLoop): TsNode {
     const subStepPath = [...this._subStepPath];
     const subKey = subStepPath.join("_");
     const condition = this.processNode(node.condition);
 
-    // Collect reset keys for nested blocks (condbranch, substep, iteration)
-    const resetKeys: string[] = [];
-
     const bodyNodes = node.body.map((stmt, i) => {
       this._subStepPath = [...subStepPath];
       this._subStepPath.push(i);
       const result = this.processStatement(stmt);
-      // If this statement produces nested tracking vars, add reset keys
-      const nestedKey = subKey ? `${subKey}_${i}` : `${i}`;
-      if (stmt.type === "ifElse" || stmt.type === "matchBlock") {
-        resetKeys.push(`__condbranch_${nestedKey}`);
-        resetKeys.push(`__substep_${nestedKey}`);
-      } else if (stmt.type === "whileLoop") {
-        resetKeys.push(`__iteration_${nestedKey}`);
-        resetKeys.push(`__substep_${nestedKey}`);
-      } else if (stmt.type === "messageThread") {
-        resetKeys.push(`__substep_${nestedKey}`);
-      }
       this._subStepPath.pop();
       return result;
     });
 
+    const resetKeys = this.collectResetKeys(node.body, subKey);
     return ts.whileSteps(subStepPath, condition, bodyNodes, resetKeys);
   }
 

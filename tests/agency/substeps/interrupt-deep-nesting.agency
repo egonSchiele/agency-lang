@@ -1,0 +1,12 @@
+node main() {
+  result = ""
+  thread {
+    for (i in range(3)) {
+      if (i == 1) {
+        y = interrupt("deep")
+        result = "resumed"
+      }
+    }
+  }
+  return result
+}

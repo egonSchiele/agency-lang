@@ -1,0 +1,22 @@
+{
+  "sourceFile": "multiple-interrupts-in-loop.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Two interrupts in one loop at iterations 2 and 4, both approved",
+      "input": "",
+      "expectedOutput": "15",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "i is 2"
+        },
+        {
+          "action": "approve",
+          "expectedMessage": "i is 4"
+        }
+      ]
+    }
+  ]
+}

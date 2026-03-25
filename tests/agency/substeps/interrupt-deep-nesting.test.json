@@ -1,0 +1,18 @@
+{
+  "sourceFile": "interrupt-deep-nesting.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Interrupt inside if inside for inside thread, resumes correctly",
+      "input": "",
+      "expectedOutput": "\"resumed\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "deep"
+        }
+      ]
+    }
+  ]
+}

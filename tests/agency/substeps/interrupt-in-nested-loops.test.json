@@ -1,0 +1,18 @@
+{
+  "sourceFile": "interrupt-in-nested-loops.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Interrupt in inner while loop nested inside for loop, all 9 iterations complete",
+      "input": "",
+      "expectedOutput": "9",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "inner"
+        }
+      ]
+    }
+  ]
+}

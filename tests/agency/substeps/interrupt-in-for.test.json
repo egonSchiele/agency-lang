@@ -1,0 +1,18 @@
+{
+  "sourceFile": "interrupt-in-for.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Interrupt at iteration 3 of for-range loop resumes and completes",
+      "input": "",
+      "expectedOutput": "10",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "i is 3"
+        }
+      ]
+    }
+  ]
+}

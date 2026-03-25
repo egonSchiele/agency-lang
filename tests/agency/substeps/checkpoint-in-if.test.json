@@ -1,0 +1,12 @@
+{
+  "sourceFile": "checkpoint-in-if.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Checkpoint inside if body restores and re-executes correctly",
+      "input": "10",
+      "expectedOutput": "\"before,branch,before,branch,done,\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

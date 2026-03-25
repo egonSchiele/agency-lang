@@ -1,0 +1,21 @@
+{{{iterStore}}} = {{{iterStore}}} ?? 0;
+let {{{currentIterVar}}} = 0;
+while ({{{condition}}}) {
+  if ({{{currentIterVar}}} < {{{iterStore}}}) {
+    {{{currentIterVar}}}++;
+    continue;
+  }
+  {{{subStore}}} = {{{subStore}}} ?? 0;
+{{#bodyStatements}}
+  if ({{{this.subStore}}} <= {{{this.index}}}) {
+    {{{this.code}}}
+    {{{this.subStore}}} = {{{this.nextIndex}}};
+  }
+{{/bodyStatements}}
+  {{{subStore}}} = 0;
+  __stack.clearLocalsWithPrefix("__condbranch_{{{subKey}}}_");
+  __stack.clearLocalsWithPrefix("__substep_{{{subKey}}}_");
+  __stack.clearLocalsWithPrefix("__iteration_{{{subKey}}}_");
+  {{{iterStore}}}++;
+  {{{currentIterVar}}}++;
+}

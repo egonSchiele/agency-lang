@@ -1,0 +1,11 @@
+node main() {
+  items = ["a", "b", "c", "d"]
+  result = ""
+  for (item, idx in items) {
+    if (idx == 2) {
+      y = interrupt("at index 2")
+    }
+    result = result + item
+  }
+  return result
+}

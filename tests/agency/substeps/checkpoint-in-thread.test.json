@@ -1,0 +1,12 @@
+{
+  "sourceFile": "checkpoint-in-thread.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Checkpoint inside thread block restores and re-executes correctly",
+      "input": "",
+      "expectedOutput": "\"before,thread,before,thread,done,\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

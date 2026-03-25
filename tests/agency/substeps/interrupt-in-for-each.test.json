@@ -1,0 +1,18 @@
+{
+  "sourceFile": "interrupt-in-for-each.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Interrupt in for-each loop resumes and completes all items",
+      "input": "",
+      "expectedOutput": "\"abcd\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "found c"
+        }
+      ]
+    }
+  ]
+}

@@ -19,13 +19,78 @@ export type BranchStateJSON = {
 };
 
 // the state for each frame (a node, or a function call)
-export type State = {
+export class State {
   args: Record<string, any>;
   locals: Record<string, any>;
   threads: ThreadStoreJSON | null;
   step: number;
   branches?: Record<string, BranchState>;
-};
+
+  constructor(opts: {
+    args?: Record<string, any>;
+    locals?: Record<string, any>;
+    threads?: ThreadStoreJSON | null;
+    step?: number;
+    branches?: Record<string, BranchState>;
+  } = {}) {
+    this.args = opts.args ?? {};
+    this.locals = opts.locals ?? {};
+    this.threads = opts.threads ?? null;
+    this.step = opts.step ?? 0;
+    if (opts.branches) this.branches = opts.branches;
+  }
+
+  /** Delete all entries in locals whose key starts with the given prefix.
+   * Used by loops to reset nested tracking variables (condbranch, substep, iteration)
+   * at the end of each iteration. */
+  clearLocalsWithPrefix(prefix: string): void {
+    for (const key of Object.keys(this.locals)) {
+      if (key.startsWith(prefix)) {
+        delete this.locals[key];
+      }
+    }
+  }
+
+  toJSON(): StateJSON {
+    const json: StateJSON = {
+      args: deepClone(this.args),
+      locals: deepClone(this.locals),
+      threads: this.threads ? deepClone(this.threads) : null,
+      step: this.step,
+    };
+    if (this.branches) {
+      json.branches = {};
+      for (const [key, branch] of Object.entries(this.branches)) {
+        json.branches[key] = {
+          stack: branch.stack.toJSON(),
+          ...(branch.interruptId ? { interruptId: branch.interruptId } : {}),
+          ...(branch.interruptData ? { interruptData: branch.interruptData } : {}),
+        };
+      }
+    }
+    return json;
+  }
+
+  static fromJSON(json: StateJSON): State {
+    const state = new State({
+      args: json.args,
+      locals: json.locals,
+      threads: json.threads,
+      step: json.step,
+    });
+    if (json.branches) {
+      state.branches = {};
+      for (const [key, branch] of Object.entries(json.branches)) {
+        state.branches[key] = {
+          stack: StateStack.fromJSON(branch.stack),
+          ...(branch.interruptId ? { interruptId: branch.interruptId } : {}),
+          ...(branch.interruptData ? { interruptData: branch.interruptData } : {}),
+        };
+      }
+    }
+    return state;
+  }
+}
 
 export type StateJSON = {
   args: Record<string, any>;
@@ -69,12 +134,7 @@ export class StateStack {
       this.mode = "serialize";
     }
     if (this.mode === "serialize") {
-      const newState = {
-        args: {},
-        locals: {},
-        threads: null,
-        step: 0,
-      };
+      const newState = new State();
       this.stack.push(newState);
       return newState;
     } else if (this.mode === "deserialize") {
@@ -128,46 +188,12 @@ export class StateStack {
   }
 
   private stackToJSON(state: State): StateJSON {
-    const json: StateJSON = {
-      args: deepClone(state.args),
-      locals: deepClone(state.locals),
-      threads: state.threads ? deepClone(state.threads) : null,
-      step: state.step,
-    };
-    if (state.branches) {
-      json.branches = {} as Record<number, BranchStateJSON>;
-      for (const [key, branch] of Object.entries(state.branches)) {
-        json.branches[key as unknown as number] = this.branchToJSON(branch);
-      }
-    }
-    return json;
+    return state.toJSON();
   }
 
   static fromJSON(json: StateStackJSON): StateStack {
     const stateStack = new StateStack([], "serialize");
-    stateStack.stack = (json.stack || []).map((frame) => {
-      const restoredFrame: State = {
-        args: frame.args,
-        locals: frame.locals,
-        threads: frame.threads,
-        step: frame.step,
-      };
-      if ((frame as any).branches) {
-        restoredFrame.branches = {};
-        for (const [key, branch] of Object.entries(
-          (frame as any).branches as Record<string, BranchStateJSON>,
-        )) {
-          restoredFrame.branches[Number(key)] = {
-            stack: StateStack.fromJSON(branch.stack),
-            ...(branch.interruptId ? { interruptId: branch.interruptId } : {}),
-            ...(branch.interruptData
-              ? { interruptData: branch.interruptData }
-              : {}),
-          };
-        }
-      }
-      return restoredFrame;
-    });
+    stateStack.stack = (json.stack || []).map((frame) => State.fromJSON(frame));
     stateStack.nodesTraversed = json.nodesTraversed || [];
     stateStack.other = json.other || {};
     stateStack.mode = json.mode || "serialize";

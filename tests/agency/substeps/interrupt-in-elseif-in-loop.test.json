@@ -1,0 +1,19 @@
+{
+  "sourceFile": "interrupt-in-elseif-in-loop.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Else-if condbranch resets correctly each loop iteration",
+      "input": "",
+      "expectedOutput": "\"axRESOLVEDx\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        {
+          "action": "resolve",
+          "expectedMessage": "i is 2",
+          "resolvedValue": "RESOLVED"
+        }
+      ]
+    }
+  ]
+}

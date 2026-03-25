@@ -1,0 +1,18 @@
+shared log = ""
+shared restoreCount = 0
+
+node main() {
+  for (i in range(4)) {
+    log = log + i
+    if (i == 2) {
+      cp = checkpoint()
+    }
+    if (i == 3) {
+      if (restoreCount < 1) {
+        restoreCount = restoreCount + 1
+        restore(cp, {})
+      }
+    }
+  }
+  return log
+}

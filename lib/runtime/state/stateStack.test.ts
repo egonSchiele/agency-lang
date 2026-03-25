@@ -2,13 +2,7 @@ import { describe, it, expect } from "vitest";
 import { StateStack, State, BranchState } from "./stateStack.js";
 
 function makeFrame(overrides: Partial<State> = {}): State {
-  return {
-    args: {},
-    locals: {},
-    threads: null,
-    step: 0,
-    ...overrides,
-  };
+  return new State(overrides);
 }
 
 describe("StateStack branches serialization", () => {

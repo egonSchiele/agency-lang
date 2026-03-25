@@ -829,7 +829,6 @@ export class TypeScriptBuilder {
     const condition = this.processNode(node.condition);
 
     const bodyNodes = node.body.map((stmt, i) => {
-      this._subStepPath = [...subStepPath];
       this._subStepPath.push(i);
       const result = this.processStatement(stmt);
       this._subStepPath.pop();

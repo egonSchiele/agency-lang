@@ -151,12 +151,6 @@ msgs = __threads.active().cloneMessages();
 
 The variable receives a **deep clone** of the thread's accumulated messages (`smoltalk.Message[]` array). The thread itself is popped from the active stack and remains in the ThreadStore but is no longer active.
 
-For `result = parallel { ... }`:
-The generator creates an object mapping each parallel variable name to its thread's cloned messages:
-```typescript
-result = { res1: __threads.get(__ptid_res1).cloneMessages(), res2: __threads.get(__ptid_res2).cloneMessages() };
-```
-
 ---
 
 ## How do we handle synchronous versus asynchronous calls differently?
@@ -173,13 +167,6 @@ result = { res1: __threads.get(__ptid_res1).cloneMessages(), res2: __threads.get
 - No interrupt check (can't interrupt mid-flight)
 - The promise is stored and must be awaited later
 
-### Parallel threads (`parallel { ... }`)
-- Each prompt assignment gets a **dedicated thread** via `__threads.create()`
-- Thread IDs stored in `this.parallelThreadVars` map during codegen
-- Prompts are launched without `await` (async)
-- All promises collected and awaited together: `await Promise.all([...])`
-- After resolution, message histories cloned from each dedicated thread
-
 ### Key files
 | File | Role |
 |------|------|
@@ -187,9 +174,7 @@ result = { res1: __threads.get(__ptid_res1).cloneMessages(), res2: __threads.get
 | `lib/runtime/state/threadStore.ts` | ThreadStore class (thread registry + active stack) |
 | `lib/runtime/node.ts` | setupNode/setupFunction (ThreadStore initialization) |
 | `lib/runtime/prompt.ts` | runPrompt (uses thread for LLM calls), tool call isolation |
-| `lib/backends/typescriptGenerator.ts:939-1013` | processMessageThread, processParallelThread |
-| `lib/backends/typescriptGenerator.ts:741-748` | Thread expression selection for prompts |
-| `lib/templates/backends/typescriptGenerator/messageThread.mustache` | Thread/subthread codegen template |
+| `lib/backends/typescriptBuilder.ts` | processMessageThread |
 | `lib/templates/backends/typescriptGenerator/promptFunction.mustache` | Prompt function template |
 | `lib/templates/backends/typescriptGenerator/internalFunctionCall.mustache` | Function call with threads |
 | `lib/templates/backends/typescriptGenerator/graphNode.mustache` | Node setup (threads init) |

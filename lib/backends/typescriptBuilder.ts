@@ -111,7 +111,6 @@ export class TypeScriptBuilder {
   private isInsideGraphNode: boolean = false;
 
   // Threading & control flow
-  private parallelThreadVars: Record<string, string> = {};
   private loopVars: string[] = [];
   private insideMessageThread: boolean = false;
 
@@ -1721,9 +1720,7 @@ export class TypeScriptBuilder {
     // Thread expression
     let threadExpr: TsNode;
     const isInFunction = this.getCurrentScope().type === "function";
-    if (this.parallelThreadVars[variableName]) {
-      threadExpr = ts.threads.get(ts.id(this.parallelThreadVars[variableName]));
-    } else if (this.insideMessageThread || isInFunction) {
+    if (this.insideMessageThread || isInFunction) {
       threadExpr = ts.threads.getOrCreateActive();
     } else {
       threadExpr = ts.threads.createAndReturnThread();
@@ -1893,10 +1890,6 @@ export class TypeScriptBuilder {
     node: MessageThread,
     assignTo?: Assignment,
   ): TsNode {
-    if (node.threadType === "parallel") {
-      return this.processParallelThread(node, assignTo);
-    }
-
     const subStepPath = [...this._subStepPath];
     const createMethod =
       node.threadType === "subthread" ? "createSubthread" : "create";
@@ -1941,77 +1934,6 @@ export class TypeScriptBuilder {
     cleanup.push($(ts.runtime.threads).prop("popActive").call().done());
 
     return ts.threadSteps(subStepPath, createMethod, setup, bodyNodes, cleanup);
-  }
-
-  private processParallelThread(
-    node: MessageThread,
-    assignTo?: Assignment,
-  ): TsNode {
-    const stmts: TsNode[] = [];
-
-    const assignmentVarNames: [string, ScopeType][] = [];
-    for (const stmt of node.body) {
-      if (
-        stmt.type === "assignment" &&
-        stmt.value.type === "functionCall" &&
-        stmt.value.functionName === "llm"
-      ) {
-        assignmentVarNames.push([stmt.variableName, stmt.scope!]);
-      }
-    }
-
-    for (const [name] of assignmentVarNames) {
-      const threadVarName = `__ptid_${name}`;
-      stmts.push(ts.constDecl(threadVarName, ts.threads.create()));
-      this.parallelThreadVars[name] = threadVarName;
-    }
-
-    for (const stmt of node.body) {
-      stmts.push(this.processNode(stmt));
-    }
-
-    const scopedVarNodes = assignmentVarNames.map(([name, scope]) =>
-      ts.scopedVar(name, scope, this.moduleId),
-    );
-
-    stmts.push(
-      ts.assign(
-        ts.arr(scopedVarNodes),
-        $.id("Promise")
-          .prop("all")
-          .call([ts.arr(scopedVarNodes)])
-          .await()
-          .done(),
-      ),
-    );
-
-    if (assignTo) {
-      const entries: TsObjectEntry[] = assignmentVarNames.map(([name]) => ({
-        spread: false,
-        key: name,
-        value: ts.call(
-          ts.prop(
-            ts.threads.get(ts.id(this.parallelThreadVars[name])),
-            "cloneMessages",
-          ),
-        ),
-      }));
-      stmts.push(
-        this.scopedAssign(
-          assignTo.scope!,
-          assignTo.variableName,
-          ts.obj(entries),
-          assignTo.accessChain,
-        ),
-      );
-    }
-
-    for (const [name] of assignmentVarNames) {
-      delete this.parallelThreadVars[name];
-    }
-
-    // Bare block for scoping the const declarations
-    return ts.raw(`{\n${stmts.map((s) => this.str(s)).join("\n")}\n}`);
   }
 
   private processBodyAsParts(

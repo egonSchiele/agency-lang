@@ -339,8 +339,6 @@ export class TypescriptPreprocessor {
         .reverse()
         .find((a) => a.type === "messageThread") as MessageThread | undefined;
       const isInMessageThread = !!closestMessageThread;
-      const isInParallelThread =
-        closestMessageThread?.threadType === "parallel";
       const isInReturnStatement = ancestors.some(
         (a) => a.type === "returnStatement",
       );
@@ -362,8 +360,7 @@ export class TypescriptPreprocessor {
           }
 
           // prompts in message threads are sync to preserve message order
-          // (unless in a parallel block where they run concurrently)
-          if (isInMessageThread && !isInParallelThread) {
+          if (isInMessageThread) {
             node.async = false;
             continue;
           }
@@ -822,26 +819,6 @@ export class TypescriptPreprocessor {
           i,
         ]);
 
-        // For parallel blocks, append an awaitPending for all async vars defined within
-        if (node.threadType === "parallel") {
-          const parallelAsyncVars = node.body
-            .filter(
-              (n): n is Assignment =>
-                n.type === "assignment" &&
-                n.value.type === "functionCall" && !!n.value.async,
-            )
-            .map((n) => n.variableName);
-
-          if (parallelAsyncVars.length > 0) {
-            const keyArray = parallelAsyncVars
-              .map((v) => `__self.__pendingKey_${v}`)
-              .join(", ");
-            node.body.push({
-              type: "rawCode",
-              value: `await __ctx.pendingPromises.awaitPending([${keyArray}]);`,
-            });
-          }
-        }
       } else if (node.type === "whileLoop") {
         node.body = this._insertAwaitPendingCalls(node.body, locationToVars, [
           ...currentPath,

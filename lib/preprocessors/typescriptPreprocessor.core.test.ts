@@ -1202,44 +1202,6 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       expect(mermaid[0]).toContain("testFunc");
     });
 
-    it("should show parallel async calls", () => {
-      const program: AgencyProgram = {
-        type: "agencyProgram",
-        nodes: [
-          {
-            type: "function",
-            functionName: "asyncFunc",
-            parameters: [],
-            body: [],
-          },
-          {
-            type: "function",
-            functionName: "testFunc",
-            parameters: [],
-            body: [
-              {
-                type: "functionCall",
-                functionName: "asyncFunc",
-                arguments: [],
-              },
-              {
-                type: "functionCall",
-                functionName: "asyncFunc",
-                arguments: [],
-              },
-            ],
-          },
-        ],
-      };
-
-      const preprocessor = new TypescriptPreprocessor(program);
-      preprocessor.preprocess();
-      const mermaid = preprocessor.renderMermaid();
-
-      expect(mermaid).toBeDefined();
-      expect(mermaid.length).toBeGreaterThan(0);
-    });
-
     it("should include tool labels for llm calls", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",

@@ -219,30 +219,9 @@ export const _submessageThreadParser: Parser<MessageThread> = trace(
     ),
   ),
 );
-export const _parallelThreadParser: Parser<MessageThread> = trace(
-  "_parallelThreadParser",
-  seqC(
-    set("type", "messageThread"),
-    str("parallel"),
-    set("threadType", "parallel"),
-    optionalSpaces,
-    char("{"),
-    captureCaptures(
-      parseError(
-        "expected block body followed by `}`",
-        spaces,
-        capture(bodyParser, "body"),
-        optionalSpacesOrNewline,
-        char("}"),
-      ),
-    ),
-  ),
-);
-
 export const messageThreadParser: Parser<MessageThread> = or(
   _messageThreadParser,
   _submessageThreadParser,
-  _parallelThreadParser,
 );
 
 const elseClauseParser: Parser<AgencyNode[]> = (input: string) => {

@@ -47,6 +47,7 @@ import {
 } from "@/types/binop.js";
 import { expressionToString } from "@/utils/node.js";
 import { Keyword } from "@/types/keyword.js";
+import { HandleBlock } from "@/types/handleBlock.js";
 
 export class AgencyGenerator {
   protected typeHints: TypeHintMap = {};
@@ -230,6 +231,8 @@ export class AgencyGenerator {
         return node.value;
       case "messageThread":
         return this.processMessageThread(node);
+      case "handleBlock":
+        return this.processHandleBlock(node);
       case "skill":
         return this.processSkill(node);
       case "binOpExpression":
@@ -785,6 +788,37 @@ export class AgencyGenerator {
     const threadType = node.threadType;
     return this.indentStr(
       `${threadType} {\n${bodyCodeStr}${this.indentStr("}")}`,
+    );
+  }
+
+  protected processHandleBlock(node: HandleBlock): string {
+    this.increaseIndent();
+    const bodyCodes: string[] = [];
+    for (const stmt of node.body) {
+      bodyCodes.push(this.processNode(stmt));
+    }
+    this.decreaseIndent();
+    const bodyCodeStr = bodyCodes.join("");
+
+    let handlerStr: string;
+    if (node.handler.kind === "inline") {
+      const paramStr = node.handler.param.typeHint
+        ? `${node.handler.param.name}: ${variableTypeToString(node.handler.param.typeHint, this.typeAliases)}`
+        : node.handler.param.name;
+      this.increaseIndent();
+      const handlerBodyCodes: string[] = [];
+      for (const stmt of node.handler.body) {
+        handlerBodyCodes.push(this.processNode(stmt));
+      }
+      this.decreaseIndent();
+      const handlerBodyStr = handlerBodyCodes.join("");
+      handlerStr = `(${paramStr}) {\n${handlerBodyStr}${this.indentStr("}")}`;
+    } else {
+      handlerStr = node.handler.functionName;
+    }
+
+    return this.indentStr(
+      `handle {\n${bodyCodeStr}${this.indentStr("}")} with ${handlerStr}`,
     );
   }
 

@@ -122,6 +122,7 @@ export class TypescriptPreprocessor {
     this.filterExcludedBuiltinFunctions();
     this.validateFetchDomains();
     this.validateNoAsyncInLoops();
+    this.validateNoBareInterrupts();
     this.resolveVariableScopes();
     return this.program;
   }
@@ -1197,6 +1198,29 @@ export class TypescriptPreprocessor {
           throw new Error(
             `Async function call "${node.functionName}()" is not allowed inside a loop. ` +
               `Move the async call into a separate function, or remove the "async" keyword.`,
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Validate that interrupt() is never called as a bare statement.
+   * It must be used with `return` or assigned to a variable.
+   */
+  protected validateNoBareInterrupts(): void {
+    for (const { node, ancestors } of walkNodesArray(this.program.nodes)) {
+      if (
+        node.type === "functionCall" &&
+        node.functionName === "interrupt"
+      ) {
+        const parent = ancestors[ancestors.length - 1];
+        const isBare = parent &&
+          parent.type !== "returnStatement" &&
+          parent.type !== "assignment";
+        if (isBare) {
+          throw new Error(
+            `Bare interrupt() call is not allowed. Use "return interrupt(...)" or "x = interrupt(...)".`,
           );
         }
       }

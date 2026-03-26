@@ -155,6 +155,11 @@ export function* getAllVariablesInBody(
       yield* getAllVariablesInBody(node.body);
     } else if (node.type === "messageThread") {
       yield* getAllVariablesInBody(node.body);
+    } else if (node.type === "handleBlock") {
+      yield* getAllVariablesInBody(node.body);
+      if (node.handler.kind === "inline") {
+        yield* getAllVariablesInBody(node.handler.body);
+      }
     }
   }
 }
@@ -211,13 +216,12 @@ export function* walkNodes(
       yield* walkNodes([node.condition], [...ancestors, node], scopes);
       yield* walkNodes(node.body, [...ancestors, node], scopes);
     } else if (node.type === "messageThread") {
-      /* console.log(
-        color.green(
-          "HI IM IN A FUCKING MESSAGE THRED!",
-          JSON.stringify(node.body),
-        ),
-      ); */
       yield* walkNodes(node.body, [...ancestors, node], scopes);
+    } else if (node.type === "handleBlock") {
+      yield* walkNodes(node.body, [...ancestors, node], scopes);
+      if (node.handler.kind === "inline") {
+        yield* walkNodes(node.handler.body, [...ancestors, node], scopes);
+      }
     } else if (node.type === "returnStatement") {
       yield* walkNodes([node.value], [...ancestors, node], scopes);
     } else if (node.type === "assignment") {

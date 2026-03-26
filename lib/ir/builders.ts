@@ -43,6 +43,7 @@ import type {
   TsThreadSteps,
   TsWhileSteps,
   TsForSteps,
+  TsHandleSteps,
   TsEmpty,
   TsBreak,
   TsContinue,
@@ -401,6 +402,14 @@ export const ts = {
     itemDecl?: TsNode;
   }): TsForSteps {
     return { kind: "forSteps", ...opts };
+  },
+
+  handleSteps(
+    subStepPath: number[],
+    handler: TsNode,
+    body: TsNode[],
+  ): TsHandleSteps {
+    return { kind: "handleSteps", subStepPath, handler, body };
   },
 
   empty(): TsEmpty {

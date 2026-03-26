@@ -1,0 +1,12 @@
+{
+  "sourceFile": "handle-reject.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Handler rejects interrupt, foo returns the rejection value, calling code continues",
+      "input": "",
+      "expectedOutput": "\"not allowed\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

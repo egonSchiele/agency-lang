@@ -1,0 +1,13 @@
+def foo() {
+  return interrupt("check")
+  return "after interrupt"
+}
+
+node main() {
+  handle {
+    result = foo()
+  } with (data) {
+    return approve()
+  }
+  return result
+}

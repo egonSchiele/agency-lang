@@ -1,0 +1,74 @@
+{
+  "sourceFile": "handle-nested-inline.agency",
+  "tests": [
+    {
+      "nodeName": "testInnerApproveOuterReject",
+      "description": "Inner approves, outer rejects — rejection wins",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"rejected\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testInnerRejectOuterApprove",
+      "description": "Inner rejects, outer approves — inner rejection wins, outer never consulted",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"rejected\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testBothReject",
+      "description": "Both reject — inner rejects first",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"rejected\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testBothApprove",
+      "description": "Both approve — approved, execution continues",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"foo end\",\"foo result\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testInnerPassthroughOuterApprove",
+      "description": "Inner passes through, outer approves — approved",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"foo end\",\"foo result\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testOuterPassthroughInnerApprove",
+      "description": "Outer passes through, inner approves — approved",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"foo end\",\"foo result\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testBothPassthrough",
+      "description": "Both pass through — unhandled, interrupt propagates to TypeScript",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"foo end\",\"foo result\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "check"
+        }
+      ]
+    },
+    {
+      "nodeName": "testBothPassthroughWithAssign",
+      "description": "Both pass through with assign — TypeScript resolves with value, proving interrupt reached TS",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"foo end\",\"from-typescript\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        {
+          "action": "resolve",
+          "resolvedValue": "from-typescript",
+          "expectedMessage": "check"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+def foo() {
+  x = interrupt("what value?")
+  return x
+}
+
+node main() {
+  handle {
+    result = foo()
+  } with (data) {
+    return approve("custom value")
+  }
+  return result
+}

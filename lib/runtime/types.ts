@@ -47,6 +47,11 @@ export type TokenStats = {
   cost: CostEstimate;
 };
 
+export type Rejected = { type: "rejected"; value?: any };
+export type Approved = { type: "approved"; value?: any };
+
+export type HandlerFn = (data: any) => Promise<Approved | Rejected | undefined>;
+
 /* tokenstats
 {
       usage: {

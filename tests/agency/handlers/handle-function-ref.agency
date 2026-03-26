@@ -1,0 +1,97 @@
+def approvePolicy(data) {
+  return approve()
+}
+
+def rejectPolicy(data) {
+  return reject()
+}
+
+def approvePolicyWithValue(data) {
+  return approve("some value")
+}
+
+def rejectPolicyWithValue(data) {
+  return reject("some value")
+}
+
+log = []
+
+def foo() {
+  log.push("foo start")
+  return interrupt("check")
+  log.push("foo end")
+  return "foo result"
+}
+
+def fooWithAssign() {
+  log.push("foo start")
+  result = interrupt("check")
+  log.push("foo end")
+  return result
+}
+
+node testApprovePolicy() {
+  handle {
+    result = foo()
+    log.push(result)
+  } with approvePolicy
+  return log
+}
+
+node testRejectPolicy() {
+  handle {
+    result = foo()
+    log.push(result)
+  } with rejectPolicy
+  return log
+}
+
+// The interrupt is not assigned to anything
+// so the value is thrown away.
+node testApprovePolicyWithValue() {
+  handle {
+    result = foo()
+    log.push(result)
+  } with approvePolicyWithValue
+  return log
+}
+
+node testRejectPolicyWithValue() {
+  handle {
+    result = foo()
+    log.push(result)
+  } with rejectPolicyWithValue
+  return log
+}
+
+node testApprovePolicyWithAssign() {
+  handle {
+    result = fooWithAssign()
+    log.push(result)
+  } with approvePolicy
+  return log
+}
+
+node testRejectPolicyWithAssign() {
+  handle {
+    result = fooWithAssign()
+    log.push(result)
+  } with rejectPolicy
+  return log
+}
+
+node testApprovePolicyWithValueAndAssign() {
+  handle {
+    result = fooWithAssign()
+    log.push(result)
+  } with approvePolicyWithValue
+  return log
+}
+
+node testRejectPolicyWithValueAndAssign() {
+  handle {
+    result = fooWithAssign()
+    log.push(result)
+  } with rejectPolicyWithValue
+  return log
+}

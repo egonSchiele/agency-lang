@@ -1,0 +1,134 @@
+log = []
+
+def foo() {
+  log.push("foo start")
+  return interrupt("check")
+  log.push("foo end")
+  return "foo result"
+}
+
+def fooWithAssign() {
+  log.push("foo start")
+  val = interrupt("check")
+  log.push("foo end")
+  log.push(val)
+}
+
+// 1. inner approves, outer rejects → rejected
+node testInnerApproveOuterReject() {
+  handle {
+    handle {
+      result = foo()
+      log.push(result)
+    } with (data) {
+      return approve()
+    }
+  } with (data) {
+    return reject("rejected")
+  }
+  return log
+}
+
+// 2. inner rejects, outer approves → rejected (inner wins, outer never consulted)
+node testInnerRejectOuterApprove() {
+  handle {
+    handle {
+      result = foo()
+      log.push(result)
+    } with (data) {
+      return reject("rejected")
+    }
+  } with (data) {
+    return approve()
+  }
+  return log
+}
+
+// 3. both reject → rejected (inner rejects first)
+node testBothReject() {
+  handle {
+    handle {
+      result = foo()
+      log.push(result)
+    } with (data) {
+      return reject("rejected")
+    }
+  } with (data) {
+    return reject("rejected")
+  }
+  return log
+}
+
+// 4. both approve → approved
+node testBothApprove() {
+  handle {
+    handle {
+      result = foo()
+      log.push(result)
+    } with (data) {
+      return approve()
+    }
+  } with (data) {
+    return approve()
+  }
+  return log
+}
+
+// 5. inner passes through, outer approves → approved
+node testInnerPassthroughOuterApprove() {
+  handle {
+    handle {
+      result = foo()
+      log.push(result)
+    } with (data) {
+      // returns nothing — no opinion
+    }
+  } with (data) {
+    return approve()
+  }
+  return log
+}
+
+// 6. outer passes through, inner approves → approved
+node testOuterPassthroughInnerApprove() {
+  handle {
+    handle {
+      result = foo()
+      log.push(result)
+    } with (data) {
+      return approve()
+    }
+  } with (data) {
+    // returns nothing — no opinion
+  }
+  return log
+}
+
+// 7. both pass through → unhandled, interrupt propagates to TypeScript
+node testBothPassthrough() {
+  handle {
+    handle {
+      result = foo()
+      log.push(result)
+    } with (data) {
+      // returns nothing — no opinion
+    }
+  } with (data) {
+    // returns nothing — no opinion
+  }
+  return log
+}
+
+// 8. both pass through with assign — TypeScript resolves with a value, proving interrupt reached TS
+node testBothPassthroughWithAssign() {
+  handle {
+    handle {
+      fooWithAssign()
+    } with (data) {
+      // returns nothing — no opinion
+    }
+  } with (data) {
+    // returns nothing — no opinion
+  }
+  return log
+}

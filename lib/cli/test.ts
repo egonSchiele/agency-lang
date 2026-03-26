@@ -5,7 +5,9 @@ import fs from "fs";
 import prompts from "prompts";
 import {
   executeJudge,
+  executeJudgeAsync,
   executeNode,
+  executeNodeAsync,
   findRecursively,
   parseTarget,
   pickANode,
@@ -468,6 +470,218 @@ export async function test(
     filesFailed: failed === 0 ? 0 : 1,
     failedFiles: failed > 0 ? [testFile] : [],
   };
+}
+
+export function collectTestFiles(inputs: string[]): string[] {
+  const files: string[] = [];
+  for (const input of inputs) {
+    const stats = fs.statSync(input);
+    if (stats.isDirectory()) {
+      for (const { path: filePath } of findRecursively(input, ".test.json")) {
+        files.push(filePath);
+      }
+    } else {
+      files.push(input);
+    }
+  }
+  return files;
+}
+
+async function runSingleTestAsync(
+  config: AgencyConfig,
+  testFile: string,
+  tests: Tests,
+  testCase: TestCase,
+): Promise<{ passed: boolean; output: string }> {
+  const hasArgs = testCase.input !== "";
+  const relativeSourceFilePath = path.join(
+    path.dirname(testFile),
+    tests.sourceFile,
+  );
+
+  const lines: string[] = [];
+  const log = (msg: string) => lines.push(msg);
+
+  try {
+    const result = await executeNodeAsync({
+      config,
+      agencyFile: relativeSourceFilePath,
+      nodeName: testCase.nodeName,
+      hasArgs,
+      argsString: testCase.input,
+      interruptHandlers: testCase.interruptHandlers,
+    });
+
+    if (result.stdout) lines.push(result.stdout);
+    if (result.stderr) lines.push(result.stderr);
+
+    let testPassed = true;
+    for (const criterion of testCase.evaluationCriteria) {
+      if (criterion.type === "exact") {
+        const actual = JSON.stringify(result.data.data);
+        if (actual === testCase.expectedOutput) {
+          log(color.green("  ✓ Exact match passed"));
+        } else {
+          log(color.red("  ✗ Exact match failed"));
+          log("    Expected: " + testCase.expectedOutput);
+          log("    Actual:   " + actual);
+          testPassed = false;
+        }
+      } else if (criterion.type === "llmJudge") {
+        const actual = JSON.stringify(result.data.data);
+        try {
+          const judgeResult = await executeJudgeAsync(
+            actual,
+            testCase.expectedOutput,
+            criterion.judgePrompt,
+          );
+          if (judgeResult.stdout) lines.push(judgeResult.stdout);
+          if (judgeResult.stderr) lines.push(judgeResult.stderr);
+          const passed = judgeResult.score >= criterion.desiredAccuracy;
+          if (passed) {
+            log(
+              color.green(
+                `  ✓ LLM Judge passed (score: ${judgeResult.score}/${criterion.desiredAccuracy})`,
+              ),
+            );
+            log(`    Reasoning: ${judgeResult.reasoning}`);
+          } else {
+            log(
+              color.red(
+                `  ✗ LLM Judge failed (score: ${judgeResult.score}/${criterion.desiredAccuracy})`,
+              ),
+            );
+            log(`    Reasoning: ${judgeResult.reasoning}`);
+            log(`    Actual Output:\n${actual}`);
+            testPassed = false;
+          }
+        } catch (e) {
+          log(color.red(`  ✗ LLM Judge error: ${e}`));
+          testPassed = false;
+        }
+      }
+    }
+    return { passed: testPassed, output: lines.join("\n") };
+  } catch (e) {
+    exitIfSignal(e);
+    log(color.red(`  ✗ Test error: ${e}`));
+    return { passed: false, output: lines.join("\n") };
+  }
+}
+
+async function testFileParallel(
+  config: AgencyConfig,
+  testFile: string,
+): Promise<{ stats: TestStats; output: string }> {
+  const lines: string[] = [];
+  const log = (msg: string) => lines.push(msg);
+
+  log(color.yellow(`Running tests for ${testFile}...`));
+
+  const tests: Tests = JSON.parse(fs.readFileSync(testFile, "utf-8"));
+  let passed = 0;
+  const total = tests.tests.length;
+
+  for (let i = 0; i < total; i++) {
+    const testCase = tests.tests[i];
+    const interruptInfo = testCase.interruptHandlers
+      ? ` interrupts=${testCase.interruptHandlers.length}`
+      : "";
+    const testNum = color.cyan(`Test ${i + 1}/${total}:`);
+    log(
+      `\n${testNum} node=${testCase.nodeName} input=${testCase.input || "(none)"}${interruptInfo}`,
+    );
+    if (testCase.description) {
+      log(color.cyan("Description: " + testCase.description) + "\n");
+    }
+
+    const maxAttempts = (testCase.retry ?? 0) + 1;
+    let testPassed = false;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      if (attempt > 1) {
+        log(color.yellow(`  Retry ${attempt - 1}/${testCase.retry}...`));
+      }
+      const result = await runSingleTestAsync(config, testFile, tests, testCase);
+      if (result.output) log(result.output);
+      testPassed = result.passed;
+      if (testPassed) break;
+    }
+
+    if (testPassed) passed++;
+  }
+
+  const failed = total - passed;
+  log(`\n${passed}/${total} tests passed`);
+
+  return {
+    stats: {
+      passed,
+      failed,
+      filesPassed: failed === 0 ? 1 : 0,
+      filesFailed: failed === 0 ? 0 : 1,
+      failedFiles: failed > 0 ? [testFile] : [],
+    },
+    output: lines.join("\n"),
+  };
+}
+
+export async function testParallel(
+  config: AgencyConfig,
+  files: string[],
+  concurrency: number,
+): Promise<TestStats> {
+  if (concurrency < 1) {
+    throw new Error(`concurrency must be >= 1, got ${concurrency}`);
+  }
+  if (files.length === 0) {
+    return emptyStats();
+  }
+
+  let totals = emptyStats();
+  let activeCount = 0;
+  let fileIndex = 0;
+
+  return new Promise<TestStats>((resolve, reject) => {
+    let rejected = false;
+
+    function onComplete() {
+      if (fileIndex < files.length) {
+        startNext();
+      } else if (activeCount === 0) {
+        resolve(totals);
+      }
+    }
+
+    function startNext() {
+      while (activeCount < concurrency && fileIndex < files.length) {
+        const file = files[fileIndex++];
+        activeCount++;
+        testFileParallel(config, file)
+          .then(({ stats, output }) => {
+            console.log(output);
+            totals = mergeStats(totals, stats);
+            activeCount--;
+            onComplete();
+          })
+          .catch((error) => {
+            activeCount--;
+            if (!rejected) {
+              exitIfSignal(error);
+              console.error(color.red(`Error running ${file}: ${error}`));
+              totals = mergeStats(totals, {
+                ...emptyStats(),
+                failed: 1,
+                filesFailed: 1,
+                failedFiles: [file],
+              });
+              onComplete();
+            }
+          });
+      }
+    }
+    startNext();
+  });
 }
 
 function findTsTestDirs(_inputPath: string): string[] {

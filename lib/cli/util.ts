@@ -5,7 +5,11 @@ const onCancel = () => {
 };
 import fs, { readFileSync } from "fs";
 import path from "path";
-import { execFileSync } from "child_process";
+import { execFileSync, execFile as execFileCb } from "child_process";
+import { promisify } from "util";
+import crypto from "crypto";
+
+const execFilePromise = promisify(execFileCb);
 import {
   AgencyProgram,
   GraphNodeDefinition,
@@ -168,21 +172,76 @@ export function executeNode({
 }): { data: any; [key: string]: any } {
   const outFile = agencyFile.replace(".agency", ".js");
   compile(config, agencyFile);
+  const evalId = crypto.randomUUID().slice(0, 8);
+  const evaluateFile = `__evaluate_${evalId}.js`;
+  const resultsFile = `__evaluate_${evalId}.json`;
   const evaluateScript = renderEvaluate({
     filename: outFile,
     nodeName,
     hasArgs,
     args: argsString,
+    resultsFile,
     hasInterruptHandlers: !!interruptHandlers,
     interruptHandlersJSON: interruptHandlers
       ? JSON.stringify(interruptHandlers)
       : undefined,
   });
-  const evaluateFile = "__evaluate.js";
   fs.writeFileSync(evaluateFile, evaluateScript);
-  execFileSync("node", [evaluateFile], { stdio: "inherit" });
-  const results = readFileSync("__evaluate.json", "utf-8");
-  return JSON.parse(results);
+  try {
+    execFileSync("node", [evaluateFile], { stdio: "inherit" });
+    const results = readFileSync(resultsFile, "utf-8");
+    return JSON.parse(results);
+  } finally {
+    try { fs.unlinkSync(evaluateFile); } catch {}
+    try { fs.unlinkSync(resultsFile); } catch {}
+  }
+}
+
+export async function executeNodeAsync({
+  config,
+  agencyFile,
+  nodeName,
+  hasArgs,
+  argsString,
+  interruptHandlers,
+}: {
+  config: AgencyConfig;
+  agencyFile: string;
+  nodeName: string;
+  hasArgs: boolean;
+  argsString: string;
+  interruptHandlers?: Array<{
+    action: "approve" | "reject" | "modify" | "resolve";
+    modifiedArgs?: Record<string, any>;
+    resolvedValue?: any;
+    expectedMessage?: string;
+  }>;
+}): Promise<{ data: any; stdout: string; stderr: string }> {
+  const outFile = agencyFile.replace(".agency", ".js");
+  compile(config, agencyFile);
+  const evalId = crypto.randomUUID().slice(0, 8);
+  const evaluateFile = `__evaluate_${evalId}.js`;
+  const resultsFile = `__evaluate_${evalId}.json`;
+  const evaluateScript = renderEvaluate({
+    filename: outFile,
+    nodeName,
+    hasArgs,
+    args: argsString,
+    resultsFile,
+    hasInterruptHandlers: !!interruptHandlers,
+    interruptHandlersJSON: interruptHandlers
+      ? JSON.stringify(interruptHandlers)
+      : undefined,
+  });
+  fs.writeFileSync(evaluateFile, evaluateScript);
+  try {
+    const { stdout, stderr } = await execFilePromise("node", [evaluateFile]);
+    const results = readFileSync(resultsFile, "utf-8");
+    return { data: JSON.parse(results), stdout, stderr };
+  } finally {
+    try { fs.unlinkSync(evaluateFile); } catch {}
+    try { fs.unlinkSync(resultsFile); } catch {}
+  }
 }
 
 export function formatTypeHint(vt: VariableType): string {
@@ -230,25 +289,78 @@ export function executeJudge(
   const currentDir = path.dirname(new URL(import.meta.url).pathname);
   const judgeAgencyFile = path.resolve(currentDir, "../agents/judge.agency");
 
-  const judgeOutFile = "__judge.js";
+  const evalId = crypto.randomUUID().slice(0, 8);
+  const judgeOutFile = `__judge_${evalId}.js`;
   compile({}, judgeAgencyFile, judgeOutFile);
 
+  const judgeEvaluateFile = `__judge_evaluate_${evalId}.js`;
+  const resultsFile = `__judge_evaluate_${evalId}.json`;
   const judgeScript = renderJudgeEvaluate({
     judgeFilename: judgeOutFile,
     actualOutput: JSON.stringify(actualOutput),
     expectedOutput: JSON.stringify(expectedOutput),
     judgePrompt: JSON.stringify(judgePrompt),
+    resultsFile,
     hasInterruptHandlers: !!interruptHandlers,
     interruptHandlersJSON: interruptHandlers
       ? JSON.stringify(interruptHandlers)
       : undefined,
   });
 
-  const judgeEvaluateFile = "__judge_evaluate.js";
   fs.writeFileSync(judgeEvaluateFile, judgeScript);
-  execFileSync("node", [judgeEvaluateFile], { stdio: "inherit" });
-  const results = readFileSync("__judge_evaluate.json", "utf-8");
-  return JSON.parse(results).data;
+  try {
+    execFileSync("node", [judgeEvaluateFile], { stdio: "inherit" });
+    const results = readFileSync(resultsFile, "utf-8");
+    return JSON.parse(results).data;
+  } finally {
+    try { fs.unlinkSync(judgeOutFile); } catch {}
+    try { fs.unlinkSync(judgeEvaluateFile); } catch {}
+    try { fs.unlinkSync(resultsFile); } catch {}
+  }
+}
+
+export async function executeJudgeAsync(
+  actualOutput: string,
+  expectedOutput: string,
+  judgePrompt: string,
+  interruptHandlers?: Array<{
+    action: "approve" | "reject" | "modify" | "resolve";
+    modifiedArgs?: Record<string, any>;
+    resolvedValue?: any;
+    expectedMessage?: string;
+  }>,
+): Promise<{ score: number; reasoning: string; stdout: string; stderr: string }> {
+  const currentDir = path.dirname(new URL(import.meta.url).pathname);
+  const judgeAgencyFile = path.resolve(currentDir, "../agents/judge.agency");
+
+  const evalId = crypto.randomUUID().slice(0, 8);
+  const judgeOutFile = `__judge_${evalId}.js`;
+  compile({}, judgeAgencyFile, judgeOutFile);
+
+  const judgeEvaluateFile = `__judge_evaluate_${evalId}.js`;
+  const resultsFile = `__judge_evaluate_${evalId}.json`;
+  const judgeScript = renderJudgeEvaluate({
+    judgeFilename: judgeOutFile,
+    actualOutput: JSON.stringify(actualOutput),
+    expectedOutput: JSON.stringify(expectedOutput),
+    judgePrompt: JSON.stringify(judgePrompt),
+    resultsFile,
+    hasInterruptHandlers: !!interruptHandlers,
+    interruptHandlersJSON: interruptHandlers
+      ? JSON.stringify(interruptHandlers)
+      : undefined,
+  });
+
+  fs.writeFileSync(judgeEvaluateFile, judgeScript);
+  try {
+    const { stdout, stderr } = await execFilePromise("node", [judgeEvaluateFile]);
+    const results = readFileSync(resultsFile, "utf-8");
+    return { ...JSON.parse(results).data, stdout, stderr };
+  } finally {
+    try { fs.unlinkSync(judgeOutFile); } catch {}
+    try { fs.unlinkSync(judgeEvaluateFile); } catch {}
+    try { fs.unlinkSync(resultsFile); } catch {}
+  }
 }
 
 export function* findRecursively(

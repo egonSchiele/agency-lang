@@ -1,0 +1,19 @@
+import { barHandler, getLog } from "./bar.agency"
+
+node approveIt() {
+  handle {
+    barHandler()
+  } with (data) {
+    return approve("approved val")
+  }
+  return getLog()
+}
+
+node rejectIt() {
+  handle {
+    barHandler()
+  } with (data) {
+    return reject("rejected val")
+  }
+  return getLog()
+}

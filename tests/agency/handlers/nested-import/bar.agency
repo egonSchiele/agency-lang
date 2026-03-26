@@ -1,0 +1,22 @@
+log = []
+
+def logWithAssign() {
+  log.push("foo start")
+  val = interrupt("check")
+  log.push(val)
+  log.push("foo end")
+  return "log return"
+}
+
+def getLog() {
+  return log
+}
+
+def barHandler() {
+  handle {
+    result = logWithAssign()
+    log.push(result)
+  } with (data) {
+    return approve()
+  }
+}

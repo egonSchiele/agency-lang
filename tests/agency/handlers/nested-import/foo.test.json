@@ -1,0 +1,25 @@
+{
+  "sourceFile": "foo.agency",
+  "tests": [
+    {
+      "nodeName": "approveIt",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"approved val\",\"foo end\",\"log return\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectIt",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"rejected val\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

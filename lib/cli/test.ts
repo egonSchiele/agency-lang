@@ -563,6 +563,7 @@ async function runSingleTestAsync(
     }
     return { passed: testPassed, output: lines.join("\n") };
   } catch (e) {
+    exitIfSignal(e);
     log(color.red(`  ✗ Test error: ${e}`));
     return { passed: false, output: lines.join("\n") };
   }
@@ -630,28 +631,53 @@ export async function testParallel(
   files: string[],
   concurrency: number,
 ): Promise<TestStats> {
+  if (concurrency < 1) {
+    throw new Error(`concurrency must be >= 1, got ${concurrency}`);
+  }
+  if (files.length === 0) {
+    return emptyStats();
+  }
+
   let totals = emptyStats();
   let activeCount = 0;
   let fileIndex = 0;
 
-  return new Promise<TestStats>((resolve) => {
+  return new Promise<TestStats>((resolve, reject) => {
+    let rejected = false;
+
+    function onComplete() {
+      if (fileIndex < files.length) {
+        startNext();
+      } else if (activeCount === 0) {
+        resolve(totals);
+      }
+    }
+
     function startNext() {
       while (activeCount < concurrency && fileIndex < files.length) {
         const file = files[fileIndex++];
         activeCount++;
-        testFileParallel(config, file).then(({ stats, output }) => {
-          console.log(output);
-          totals = mergeStats(totals, stats);
-          activeCount--;
-          if (fileIndex < files.length) {
-            startNext();
-          } else if (activeCount === 0) {
-            resolve(totals);
-          }
-        });
-      }
-      if (files.length === 0) {
-        resolve(totals);
+        testFileParallel(config, file)
+          .then(({ stats, output }) => {
+            console.log(output);
+            totals = mergeStats(totals, stats);
+            activeCount--;
+            onComplete();
+          })
+          .catch((error) => {
+            activeCount--;
+            if (!rejected) {
+              exitIfSignal(error);
+              console.error(color.red(`Error running ${file}: ${error}`));
+              totals = mergeStats(totals, {
+                ...emptyStats(),
+                failed: 1,
+                filesFailed: 1,
+                failedFiles: [file],
+              });
+              onComplete();
+            }
+          });
       }
     }
     startNext();

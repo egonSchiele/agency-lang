@@ -17,7 +17,7 @@ import { _parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { collectProgramInfo } from "@/programInfo.js";
 import { formatErrors, typeCheck } from "@/typeChecker.js";
-import { Command } from "commander";
+import { Command, InvalidArgumentError } from "commander";
 import * as fs from "fs";
 import { color } from "@/utils/termcolors.js";
 import { TarsecError } from "tarsec";
@@ -194,7 +194,13 @@ program
   .description("Run tests")
   .argument("[inputs...]", "Paths to .test.json files or directories")
   .option("--js", "Run JavaScript integration tests")
-  .option("--parallel <n>", "Run test files in parallel with N concurrency", parseInt)
+  .option("--parallel <n>", "Run test files in parallel with N concurrency", (value: string) => {
+    const n = parseInt(value, 10);
+    if (!Number.isFinite(n) || !Number.isInteger(n) || n < 1) {
+      throw new InvalidArgumentError("Expected a positive integer (>= 1).");
+    }
+    return n;
+  })
   .action(
     async (
       testFile: string[],
@@ -206,7 +212,7 @@ program
       }
 
       let totals: TestStats;
-      if (opts.parallel) {
+      if (opts.parallel !== undefined) {
         const files = collectTestFiles(testFile);
         totals = await testParallel(getConfig(), files, opts.parallel);
       } else {

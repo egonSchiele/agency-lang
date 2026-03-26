@@ -1,0 +1,15 @@
+def myPolicy(data) {
+  return approve()
+}
+
+def foo() {
+  return interrupt("check")
+  return "after interrupt"
+}
+
+node main() {
+  handle {
+    result = foo()
+  } with myPolicy
+  return result
+}

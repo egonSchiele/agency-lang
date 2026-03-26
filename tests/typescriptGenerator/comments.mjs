@@ -106,6 +106,10 @@ function tool(__name: string) {
   return __builtinTool(__name, __toolRegistry);
 }
 
+// Handler result builtins
+function approve(value?: any) { return { type: "approved" as const, value }; }
+function reject(value?: any) { return { type: "rejected" as const, value }; }
+
 // Interrupt re-exports bound to this module's context
 export { interrupt, isInterrupt };
 export const respondToInterrupt = (interrupt: Interrupt, response: InterruptResponse, metadata?: Record<string, any>) => _respondToInterrupt({ ctx: __globalCtx, interrupt, interruptResponse: response, metadata });

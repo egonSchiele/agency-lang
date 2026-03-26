@@ -5,6 +5,7 @@ import * as renderIfStepsBranchDispatch from "../templates/backends/typescriptGe
 import * as renderThreadSteps from "../templates/backends/typescriptGenerator/threadSteps.js";
 import * as renderWhileSteps from "../templates/backends/typescriptGenerator/whileSteps.js";
 import * as renderForSteps from "../templates/backends/typescriptGenerator/forSteps.js";
+import * as renderHandleSteps from "../templates/backends/typescriptGenerator/handleSteps.js";
 
 const INDENT = "  ";
 
@@ -330,6 +331,28 @@ export function printTs(node: TsNode, indent = 0): string {
           nextIndex: i + 2,
         })),
         cleanup: node.cleanup.map((s) => printTs(s, indent)).join("\n") + ";\n",
+      });
+    }
+
+    case "handleSteps": {
+      const subKey = node.subStepPath.join("_");
+      const subVar = `__sub_${subKey}`;
+      const subStore = `__stack.locals.__substep_${subKey}`;
+      const handlerName = `__handler_${subKey}`;
+      const ensureNewline = (s: string) => s.endsWith("\n") ? s : s + "\n";
+
+      return renderHandleSteps.default({
+        subVar,
+        subStore,
+        handlerName,
+        handlerDecl: ensureNewline(printTs(node.handler, indent)),
+        bodyStatements: node.body.map((stmt, i) => ({
+          subVar,
+          subStore,
+          index: i,
+          code: ensureNewline(printTs(stmt, indent + 1)),
+          nextIndex: i + 1,
+        })),
       });
     }
 

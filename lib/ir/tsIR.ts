@@ -37,6 +37,7 @@ export type TsNode =
   | TsThreadSteps
   | TsWhileSteps
   | TsForSteps
+  | TsHandleSteps
   | TsEmpty
   | TsBreak
   | TsContinue
@@ -354,6 +355,17 @@ export interface TsIfSteps {
   branches: TsIfStepsBranch[];
   /** Optional else body */
   elseBranch?: TsNode[];
+}
+
+/** A handle block with handler push/pop and substep guards for each body statement. */
+export interface TsHandleSteps {
+  kind: "handleSteps";
+  /** The substep path for naming variables */
+  subStepPath: number[];
+  /** The handler arrow function declaration */
+  handler: TsNode;
+  /** The body statements (each gets a substep guard) */
+  body: TsNode[];
 }
 
 /** No-op node — produces no output. Used for AST nodes handled elsewhere (e.g. imports collected in a separate pass). */

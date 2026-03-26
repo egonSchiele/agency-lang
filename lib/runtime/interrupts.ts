@@ -98,12 +98,16 @@ export async function interruptWithHandlers<T = any>(
   for (let i = ctx.handlers.length - 1; i >= 0; i--) {
     const result = await ctx.handlers[i](data);
     if (result === undefined) {
+      await ctx.audit({ type: "handlerResult", handlerIndex: i, data, result: "passthrough" });
       continue;
     }
     if (result.type === "rejected") {
+      await ctx.audit({ type: "handlerResult", handlerIndex: i, data, result: "rejected", value: result.value });
+      await ctx.audit({ type: "handlerDecision", data, decision: "rejected", value: result.value });
       return { type: "rejected", value: result.value };
     }
     if (result.type === "approved") {
+      await ctx.audit({ type: "handlerResult", handlerIndex: i, data, result: "approved", value: result.value });
       hasApproval = true;
       approvedValue = result.value;
       continue;
@@ -113,8 +117,10 @@ export async function interruptWithHandlers<T = any>(
     );
   }
   if (hasApproval) {
+    await ctx.audit({ type: "handlerDecision", data, decision: "approved", value: approvedValue });
     return { type: "approved", value: approvedValue };
   }
+  await ctx.audit({ type: "handlerDecision", data, decision: "unhandled" });
   return interrupt(data);
 }
 

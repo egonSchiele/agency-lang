@@ -47,6 +47,7 @@ import {
   AgencyObjectKV,
 } from "../types/dataStructures.js";
 import { ForLoop } from "../types/forLoop.js";
+import { HandleBlock } from "../types/handleBlock.js";
 import {
   FunctionCall,
   FunctionDefinition,
@@ -113,6 +114,7 @@ export class TypeScriptBuilder {
   // Threading & control flow
   private loopVars: string[] = [];
   private insideMessageThread: boolean = false;
+  private insideHandlerBody: boolean = false;
 
   /*
   We break up every function and node body into steps,
@@ -520,6 +522,8 @@ export class TypeScriptBuilder {
         return ts.raw(node.value);
       case "messageThread":
         return this.processMessageThread(node);
+      case "handleBlock":
+        return this.processHandleBlockWithSteps(node);
       case "skill":
         return ts.empty();
       case "binOpExpression":
@@ -1436,6 +1440,11 @@ export class TypeScriptBuilder {
   }
 
   private processReturnStatement(node: ReturnStatement): TsNode {
+    // Handler bodies use plain returns — no node/function wrapping
+    if (this.insideHandlerBody) {
+      return ts.return(this.processNode(node.value));
+    }
+
     if (this.isInsideGraphNode) {
       if (
         node.value.type === "functionCall" &&
@@ -1536,6 +1545,7 @@ export class TypeScriptBuilder {
           ),
           assignApprove: makeAssign("true"),
           assignReject: makeAssign("false"),
+          handlerApprove: makeAssign("__handlerResult.value"),
           interruptArgs,
           nodeContext: this.getCurrentScope().type === "node",
         }),
@@ -1951,6 +1961,63 @@ export class TypeScriptBuilder {
     cleanup.push($(ts.runtime.threads).prop("popActive").call().done());
 
     return ts.threadSteps(subStepPath, createMethod, setup, bodyNodes, cleanup);
+  }
+
+  private processHandleBlockWithSteps(node: HandleBlock): TsNode {
+    const subStepPath = [...this._subStepPath];
+    const subKey = subStepPath.join("_");
+    const handlerName = `__handler_${subKey}`;
+
+    // Build handler arrow function
+    let handler: TsNode;
+    if (node.handler.kind === "inline") {
+      const prevInsideHandlerBody = this.insideHandlerBody;
+      this.insideHandlerBody = true;
+      const handlerBody = node.handler.body.map((stmt) =>
+        this.processStatement(stmt),
+      );
+      this.insideHandlerBody = prevInsideHandlerBody;
+      const paramType = node.handler.param.typeHint
+        ? formatTypeHint(node.handler.param.typeHint)
+        : "any";
+      handler = ts.constDecl(
+        handlerName,
+        ts.arrowFn(
+          [{ name: node.handler.param.name, typeAnnotation: paramType }],
+          ts.statements(handlerBody),
+          { async: true },
+        ),
+      );
+    } else {
+      // Function ref: wrap in arrow that calls the named function
+      handler = ts.constDecl(
+        handlerName,
+        ts.arrowFn(
+          [{ name: "__data", typeAnnotation: "any" }],
+          ts.await(
+            ts.call(ts.id(node.handler.functionName), [
+              ts.id("__data"),
+              ts.functionCallConfig({
+                ctx: ts.runtime.ctx,
+                threads: ts.newThreadStore(),
+                interruptData: ts.id("undefined"),
+              }),
+            ]),
+          ),
+          { async: true },
+        ),
+      );
+    }
+
+    // Body: process each statement with substep tracking
+    const bodyNodes = node.body.map((stmt, i) => {
+      this._subStepPath.push(i);
+      const result = this.processStatement(stmt);
+      this._subStepPath.pop();
+      return result;
+    });
+
+    return ts.handleSteps(subStepPath, handler, bodyNodes);
   }
 
   private processBodyAsParts(

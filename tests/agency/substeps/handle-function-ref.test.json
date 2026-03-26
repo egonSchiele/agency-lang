@@ -1,0 +1,12 @@
+{
+  "sourceFile": "handle-function-ref.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Handler function ref approves, execution continues",
+      "input": "",
+      "expectedOutput": "\"after interrupt\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

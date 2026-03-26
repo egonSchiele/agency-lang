@@ -59,6 +59,21 @@ export type RestoreAudit = AuditBase & {
   nodeName: string;
 };
 
+export type HandlerResultAudit = AuditBase & {
+  type: "handlerResult";
+  handlerIndex: number;
+  data: unknown;
+  result: "approved" | "rejected" | "passthrough";
+  value?: unknown;
+};
+
+export type HandlerDecisionAudit = AuditBase & {
+  type: "handlerDecision";
+  data: unknown;
+  decision: "approved" | "rejected" | "unhandled";
+  value?: unknown;
+};
+
 export type AuditEntry =
   | AssignmentAudit
   | FunctionCallAudit
@@ -68,7 +83,9 @@ export type AuditEntry =
   | NodeEntryAudit
   | NodeExitAudit
   | InterruptAudit
-  | RestoreAudit;
+  | RestoreAudit
+  | HandlerResultAudit
+  | HandlerDecisionAudit;
 
 // Distributive Omit so that discriminated union members are preserved
 export type AuditEntryInput = AuditEntry extends infer T

@@ -688,6 +688,8 @@ export class TypescriptPreprocessor {
             asyncVarToAssignment,
           );
         }
+      } else if (node.type === "handleBlock") {
+        this._collectAsyncVariablesInScope(node.body, asyncVarToAssignment);
       }
     }
   }
@@ -737,6 +739,14 @@ export class TypescriptPreprocessor {
           [...bodyPath, i],
         );
         if (found) return found;
+      } else if (node.type === "handleBlock") {
+        const found = this._findFirstUsageInScope(
+          node.body,
+          varName,
+          assignmentNode,
+          [...bodyPath, i],
+        );
+        if (found) return found;
       } else if (node.type === "ifElse") {
         const foundInThen = this._findFirstUsageInScope(
           node.thenBody,
@@ -772,6 +782,7 @@ export class TypescriptPreprocessor {
     if (
       node.type === "messageThread" ||
       node.type === "whileLoop" ||
+      node.type === "handleBlock" ||
       node.type === "function" ||
       node.type === "graphNode"
     ) {
@@ -818,8 +829,12 @@ export class TypescriptPreprocessor {
           ...currentPath,
           i,
         ]);
-
       } else if (node.type === "whileLoop") {
+        node.body = this._insertAwaitPendingCalls(node.body, locationToVars, [
+          ...currentPath,
+          i,
+        ]);
+      } else if (node.type === "handleBlock") {
         node.body = this._insertAwaitPendingCalls(node.body, locationToVars, [
           ...currentPath,
           i,
@@ -858,7 +873,8 @@ export class TypescriptPreprocessor {
       node.type === "graphNode" ||
       node.type === "ifElse" ||
       node.type === "whileLoop" ||
-      node.type === "messageThread"
+      node.type === "messageThread" ||
+      node.type === "handleBlock"
     );
   }
 
@@ -914,6 +930,11 @@ export class TypescriptPreprocessor {
         node.body = this.filterNodesByType(node.body, excludeSet);
       } else if (node.type === "messageThread") {
         node.body = this.filterNodesByType(node.body, excludeSet);
+      } else if (node.type === "handleBlock") {
+        node.body = this.filterNodesByType(node.body, excludeSet);
+        if (node.handler.kind === "inline") {
+          node.handler.body = this.filterNodesByType(node.handler.body, excludeSet);
+        }
       } else if (node.type === "matchBlock") {
         // Filter case bodies - Note: match block bodies are single nodes, not arrays
         // We don't filter them here as they're of a specific type
@@ -1008,6 +1029,11 @@ export class TypescriptPreprocessor {
         node.body = this.filterBuiltinFunctionCalls(node.body, excludeSet);
       } else if (node.type === "messageThread") {
         node.body = this.filterBuiltinFunctionCalls(node.body, excludeSet);
+      } else if (node.type === "handleBlock") {
+        node.body = this.filterBuiltinFunctionCalls(node.body, excludeSet);
+        if (node.handler.kind === "inline") {
+          node.handler.body = this.filterBuiltinFunctionCalls(node.handler.body, excludeSet);
+        }
       } else if (node.type === "matchBlock") {
         node.cases = node.cases.map((caseItem) => {
           if (caseItem.type === "comment") {

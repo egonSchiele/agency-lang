@@ -1,0 +1,9 @@
+def foo() {
+  return interrupt("check")
+  return "after interrupt"
+}
+
+node main() {
+  result = foo()
+  return result
+}

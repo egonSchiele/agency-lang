@@ -47,6 +47,7 @@ import {
   AgencyObjectKV,
 } from "../types/dataStructures.js";
 import { ForLoop } from "../types/forLoop.js";
+import { HandleBlock } from "../types/handleBlock.js";
 import {
   FunctionCall,
   FunctionDefinition,
@@ -113,6 +114,7 @@ export class TypeScriptBuilder {
   // Threading & control flow
   private loopVars: string[] = [];
   private insideMessageThread: boolean = false;
+  private insideHandlerBody: boolean = false;
 
   /*
   We break up every function and node body into steps,
@@ -480,7 +482,7 @@ export class TypeScriptBuilder {
       case "multiLineComment":
         return ts.empty();
       case "matchBlock":
-        return this.processMatchBlockWithSteps(node);
+        return this.insideHandlerBody ? this.processBlockPlain(node) : this.processMatchBlockWithSteps(node);
       case "number":
       case "multiLineString":
       case "string":
@@ -507,11 +509,11 @@ export class TypeScriptBuilder {
         this.importStatements.push(this.processImportToolStatement(node));
         return ts.empty();
       case "forLoop":
-        return this.processForLoopWithSteps(node);
+        return this.insideHandlerBody ? this.processBlockPlain(node) : this.processForLoopWithSteps(node);
       case "whileLoop":
-        return this.processWhileLoopWithSteps(node);
+        return this.insideHandlerBody ? this.processBlockPlain(node) : this.processWhileLoopWithSteps(node);
       case "ifElse":
-        return this.processIfElseWithSteps(node);
+        return this.insideHandlerBody ? this.processBlockPlain(node) : this.processIfElseWithSteps(node);
       case "specialVar":
         return this.processSpecialVar(node);
       case "newLine":
@@ -520,6 +522,8 @@ export class TypeScriptBuilder {
         return ts.raw(node.value);
       case "messageThread":
         return this.processMessageThread(node);
+      case "handleBlock":
+        return this.processHandleBlockWithSteps(node);
       case "skill":
         return ts.empty();
       case "binOpExpression":
@@ -1436,6 +1440,11 @@ export class TypeScriptBuilder {
   }
 
   private processReturnStatement(node: ReturnStatement): TsNode {
+    // Handler bodies use plain returns — no node/function wrapping
+    if (this.insideHandlerBody) {
+      return ts.return(this.processNode(node.value));
+    }
+
     if (this.isInsideGraphNode) {
       if (
         node.value.type === "functionCall" &&
@@ -1536,6 +1545,7 @@ export class TypeScriptBuilder {
           ),
           assignApprove: makeAssign("true"),
           assignReject: makeAssign("false"),
+          handlerApprove: makeAssign("__handlerResult.value"),
           interruptArgs,
           nodeContext: this.getCurrentScope().type === "node",
         }),
@@ -1951,6 +1961,124 @@ export class TypeScriptBuilder {
     cleanup.push($(ts.runtime.threads).prop("popActive").call().done());
 
     return ts.threadSteps(subStepPath, createMethod, setup, bodyNodes, cleanup);
+  }
+
+  private processBlockPlain(node: IfElse | WhileLoop | ForLoop | MatchBlock): TsNode {
+    const processBody = (body: AgencyNode[]): TsNode =>
+      ts.statements(body.map((s) => this.processNode(s)));
+
+    if (node.type === "ifElse") {
+      const elseBody = node.elseBody?.length
+        ? node.elseBody.length === 1 && node.elseBody[0].type === "ifElse"
+          ? this.processBlockPlain(node.elseBody[0] as IfElse)
+          : processBody(node.elseBody)
+        : undefined;
+      return ts.if(this.processNode(node.condition), processBody(node.thenBody), { elseBody });
+    }
+    if (node.type === "whileLoop") {
+      return ts.while(this.processNode(node.condition), processBody(node.body));
+    }
+    if (node.type === "matchBlock") {
+      // Match compiles to if/else chain
+      const expression = this.processNode(node.expression);
+      const filteredCases = node.cases.filter((c) => c.type !== "comment") as MatchBlockCase[];
+      let result: TsNode | undefined;
+      let elseBody: TsNode | undefined;
+      for (const caseItem of filteredCases) {
+        if (caseItem.caseValue === "_") {
+          elseBody = this.processNode(caseItem.body);
+        }
+      }
+      const nonDefault = filteredCases.filter((c) => c.caseValue !== "_");
+      if (nonDefault.length === 0) {
+        return elseBody ?? ts.empty();
+      }
+      const elseIfs = nonDefault.slice(1).map((c) => ({
+        condition: ts.binOp(expression, "===", this.processNode(c.caseValue as AgencyNode)),
+        body: this.processNode(c.body),
+      }));
+      return ts.if(
+        ts.binOp(expression, "===", this.processNode(nonDefault[0].caseValue as AgencyNode)),
+        this.processNode(nonDefault[0].body),
+        { elseIfs, elseBody },
+      );
+    }
+    // forLoop — for-of with optional index
+    if (node.indexVar) {
+      // for (item, index in iterable) → for (let index = 0; index < iterable.length; index++) { const item = iterable[index]; ... }
+      const iterableNode = this.processNode(node.iterable);
+      const iterableVar = `__iter_${node.itemVar}`;
+      return ts.statements([
+        ts.constDecl(iterableVar, iterableNode),
+        ts.forC(
+          ts.letDecl(node.indexVar, ts.num(0)),
+          ts.binOp(ts.id(node.indexVar), "<", ts.prop(ts.id(iterableVar), "length")),
+          ts.postfix(ts.id(node.indexVar), "++"),
+          ts.statements([
+            ts.constDecl(node.itemVar, ts.index(ts.id(iterableVar), ts.id(node.indexVar))),
+            ...node.body.map((s) => this.processNode(s)),
+          ]),
+        ),
+      ]);
+    }
+    return ts.forOf(node.itemVar, this.processNode(node.iterable), processBody(node.body));
+  }
+
+  private processHandleBlockWithSteps(node: HandleBlock): TsNode {
+    const subStepPath = [...this._subStepPath];
+    const subKey = subStepPath.join("_");
+    const handlerName = `__handler_${subKey}`;
+
+    // Build handler arrow function
+    let handler: TsNode;
+    if (node.handler.kind === "inline") {
+      const prevInsideHandlerBody = this.insideHandlerBody;
+      this.insideHandlerBody = true;
+      const handlerBody = node.handler.body.map((stmt) =>
+        this.processStatement(stmt),
+      );
+      this.insideHandlerBody = prevInsideHandlerBody;
+      const paramType = node.handler.param.typeHint
+        ? formatTypeHint(node.handler.param.typeHint)
+        : "any";
+      handler = ts.constDecl(
+        handlerName,
+        ts.arrowFn(
+          [{ name: node.handler.param.name, typeAnnotation: paramType }],
+          ts.statements(handlerBody),
+          { async: true },
+        ),
+      );
+    } else {
+      // Function ref: wrap in arrow that calls the named function
+      handler = ts.constDecl(
+        handlerName,
+        ts.arrowFn(
+          [{ name: "__data", typeAnnotation: "any" }],
+          ts.await(
+            ts.call(ts.id(node.handler.functionName), [
+              ts.id("__data"),
+              ts.functionCallConfig({
+                ctx: ts.runtime.ctx,
+                threads: ts.newThreadStore(),
+                interruptData: ts.id("undefined"),
+              }),
+            ]),
+          ),
+          { async: true },
+        ),
+      );
+    }
+
+    // Body: process each statement with substep tracking
+    const bodyNodes = node.body.map((stmt, i) => {
+      this._subStepPath.push(i);
+      const result = this.processStatement(stmt);
+      this._subStepPath.pop();
+      return result;
+    });
+
+    return ts.handleSteps(subStepPath, handler, bodyNodes);
   }
 
   private processBodyAsParts(

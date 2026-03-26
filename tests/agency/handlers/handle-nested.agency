@@ -1,0 +1,114 @@
+log = []
+
+def foo() {
+  log.push("foo start")
+  return interrupt("check")
+  log.push("foo end")
+  return "foo result"
+}
+
+def approveHandler(data) {
+  return approve()
+}
+
+def rejectHandler(data) {
+  return reject("rejected")
+}
+
+def passthroughHandler(data) {
+  // returns nothing — no opinion
+}
+
+def fooWithAssign() {
+  log.push("foo start")
+  val = interrupt("check")
+  log.push("foo end")
+  log.push(val)
+}
+
+// 1. inner approves, outer rejects → rejected
+node testInnerApproveOuterReject() {
+  handle {
+    handle {
+      result = foo()
+      log.push(result)
+    } with approveHandler
+  } with rejectHandler
+  return log
+}
+
+// 2. inner rejects, outer approves → rejected (inner wins, outer never consulted)
+node testInnerRejectOuterApprove() {
+  handle {
+    handle {
+      result = foo()
+      log.push(result)
+    } with rejectHandler
+  } with approveHandler
+  return log
+}
+
+// 3. both reject → rejected (inner rejects first)
+node testBothReject() {
+  handle {
+    handle {
+      result = foo()
+      log.push(result)
+    } with rejectHandler
+  } with rejectHandler
+  return log
+}
+
+// 4. both approve → approved
+node testBothApprove() {
+  handle {
+    handle {
+      result = foo()
+      log.push(result)
+    } with approveHandler
+  } with approveHandler
+  return log
+}
+
+// 5. inner passes through, outer approves → approved
+node testInnerPassthroughOuterApprove() {
+  handle {
+    handle {
+      result = foo()
+      log.push(result)
+    } with passthroughHandler
+  } with approveHandler
+  return log
+}
+
+// 6. outer passes through, inner approves → approved
+node testOuterPassthroughInnerApprove() {
+  handle {
+    handle {
+      result = foo()
+      log.push(result)
+    } with approveHandler
+  } with passthroughHandler
+  return log
+}
+
+// 7. both pass through → unhandled, interrupt propagates to TypeScript
+node testBothPassthrough() {
+  handle {
+    handle {
+      result = foo()
+      log.push(result)
+    } with passthroughHandler
+  } with passthroughHandler
+  return log
+}
+
+// 8. both pass through with assign — TypeScript resolves with a value, proving interrupt reached TS
+node testBothPassthroughWithAssign() {
+  handle {
+    handle {
+      fooWithAssign()
+    } with passthroughHandler
+  } with passthroughHandler
+  return log
+}

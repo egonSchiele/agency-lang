@@ -1,4 +1,4 @@
-export type { GraphState, InternalFunctionState } from "./types.js";
+export type { GraphState, InternalFunctionState, Rejected, Approved, HandlerFn } from "./types.js";
 export type { Interrupt, InterruptResponse } from "./interrupts.js";
 export type { AuditEntry, AuditEntryInput } from "./audit.js";
 export { RuntimeContext } from "./state/context.js";
@@ -76,6 +76,9 @@ export {
 export {
   interrupt,
   isInterrupt,
+  isRejected,
+  isApproved,
+  interruptWithHandlers,
   respondToInterrupt,
   approveInterrupt,
   rejectInterrupt,

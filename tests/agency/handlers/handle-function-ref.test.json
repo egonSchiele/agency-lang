@@ -1,0 +1,85 @@
+{
+  "sourceFile": "handle-function-ref.agency",
+  "tests": [
+    {
+      "nodeName": "testApprovePolicy",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"foo end\",\"foo result\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "testRejectPolicy",
+      "input": "",
+      "expectedOutput": "[\"foo start\",null]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "testApprovePolicyWithValue",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"foo end\",\"foo result\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "testRejectPolicyWithValue",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"some value\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "testApprovePolicyWithAssign",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"foo end\",null]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "testRejectPolicyWithAssign",
+      "input": "",
+      "expectedOutput": "[\"foo start\",null]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "testApprovePolicyWithValueAndAssign",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"foo end\",\"some value\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "testRejectPolicyWithValueAndAssign",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"some value\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

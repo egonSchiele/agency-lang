@@ -10,7 +10,7 @@ import {
   RuntimeContext, MessageThread, ThreadStore,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
-  interrupt, isInterrupt,
+  interrupt, isInterrupt, isRejected, isApproved, interruptWithHandlers,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
   rejectInterrupt as _rejectInterrupt,
@@ -105,6 +105,10 @@ export function readSkill({filepath}: {filepath: string}): string {
 function tool(__name: string) {
   return __builtinTool(__name, __toolRegistry);
 }
+
+// Handler result builtins
+function approve(value?: any) { return { type: "approved" as const, value }; }
+function reject(value?: any) { return { type: "rejected" as const, value }; }
 
 // Interrupt re-exports bound to this module's context
 export { interrupt, isInterrupt };
@@ -332,14 +336,24 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   return __resolvedValue;
   
 } else {
-  const __checkpointId = __ctx.checkpoints.create(__ctx);
-  const __interruptResult = interrupt(`Agent wants to call the greet function with name: ${__stack.args.name} and age: ${__stack.args.age}`);
-  __interruptResult.checkpointId = __checkpointId;
-  __interruptResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
-  
-  
-  return __interruptResult;
-  
+  const __handlerResult = await interruptWithHandlers(`Agent wants to call the greet function with name: ${__stack.args.name} and age: ${__stack.args.age}`, __ctx);
+  if (isRejected(__handlerResult)) {
+    
+    
+    return __handlerResult.value;
+    
+  }
+  if (!isApproved(__handlerResult)) {
+    // No handler — propagate interrupt to TypeScript caller
+    const __checkpointId = __ctx.checkpoints.create(__ctx);
+    __handlerResult.checkpointId = __checkpointId;
+    __handlerResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
+    
+    
+    return __handlerResult;
+    
+  }
+  // Approved — continue execution past interrupt
 }
 
       

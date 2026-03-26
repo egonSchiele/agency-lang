@@ -36,16 +36,28 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   return __resolvedValue;
   {{/nodeContext}}
 } else {
-  const __checkpointId = __ctx.checkpoints.create(__ctx);
-  const __interruptResult = interrupt({{{interruptArgs}}});
-  __interruptResult.checkpointId = __checkpointId;
-  __interruptResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
-  {{#nodeContext}}
-  return { messages: __threads, data: __interruptResult };
-  {{/nodeContext}}
-  {{^nodeContext}}
-  return __interruptResult;
-  {{/nodeContext}}
+  const __handlerResult = await interruptWithHandlers({{{interruptArgs}}}, __ctx);
+  if (isRejected(__handlerResult)) {
+    {{#nodeContext}}
+    return { messages: __threads, data: __handlerResult.value };
+    {{/nodeContext}}
+    {{^nodeContext}}
+    return __handlerResult.value;
+    {{/nodeContext}}
+  }
+  if (!isApproved(__handlerResult)) {
+    // No handler — propagate interrupt to TypeScript caller
+    const __checkpointId = __ctx.checkpoints.create(__ctx);
+    __handlerResult.checkpointId = __checkpointId;
+    __handlerResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
+    {{#nodeContext}}
+    return { messages: __threads, data: __handlerResult };
+    {{/nodeContext}}
+    {{^nodeContext}}
+    return __handlerResult;
+    {{/nodeContext}}
+  }
+  // Approved — continue execution past interrupt
 }
 `;
 

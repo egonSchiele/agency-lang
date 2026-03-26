@@ -23,7 +23,7 @@ import {
   RuntimeContext, MessageThread, ThreadStore,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
-  interrupt, isInterrupt,
+  interrupt, isInterrupt, isRejected, isApproved, interruptWithHandlers,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
   rejectInterrupt as _rejectInterrupt,
@@ -118,6 +118,10 @@ export function readSkill({filepath}: {filepath: string}): string {
 function tool(__name: string) {
   return __builtinTool(__name, __toolRegistry);
 }
+
+// Handler result builtins
+function approve(value?: any) { return { type: "approved" as const, value }; }
+function reject(value?: any) { return { type: "rejected" as const, value }; }
 
 // Interrupt re-exports bound to this module's context
 export { interrupt, isInterrupt };

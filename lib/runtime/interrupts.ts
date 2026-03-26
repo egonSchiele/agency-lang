@@ -1,15 +1,12 @@
-import { deepClone } from "./utils.js";
-import { createReturnObject } from "./utils.js";
-import { StateStack, StateStackJSON } from "./state/stateStack.js";
-import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
-import { RestoreSignal } from "./errors.js";
 import * as smoltalk from "smoltalk";
-import { RuntimeContext } from "./state/context.js";
+import { RestoreSignal } from "./errors.js";
 import type { Checkpoint } from "./state/checkpointStore.js";
-import { GraphState } from "./types.js";
+import { RuntimeContext } from "./state/context.js";
+import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
+import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
-import { color } from "termcolors";
-import { nanoid } from "nanoid";
+import { Approved, GraphState, Rejected } from "./types.js";
+import { createReturnObject, deepClone } from "./utils.js";
 
 export type InterruptApprove = {
   type: "approve";
@@ -76,6 +73,52 @@ export function interrupt<T = any>(data: T): Interrupt<T> {
 
 export function isInterrupt(obj: any): obj is Interrupt {
   return obj && obj.type === "interrupt";
+}
+
+export function isRejected(obj: any): obj is Rejected {
+  return obj && obj.type === "rejected";
+}
+
+export function isApproved(obj: any): obj is Approved {
+  return obj && obj.type === "approved";
+}
+
+export async function interruptWithHandlers<T = any>(
+  data: T,
+  ctx: RuntimeContext<any>,
+): Promise<Interrupt<T> | Approved | Rejected> {
+  if (ctx.handlers.length === 0) {
+    return interrupt(data);
+  }
+  let approvedValue: any = undefined;
+  let hasApproval = false;
+  for (let i = ctx.handlers.length - 1; i >= 0; i--) {
+    const result = await ctx.handlers[i](data);
+    if (result === undefined) {
+      await ctx.audit({ type: "handlerResult", handlerIndex: i, data, result: "passthrough" });
+      continue;
+    }
+    if (result.type === "rejected") {
+      await ctx.audit({ type: "handlerResult", handlerIndex: i, data, result: "rejected", value: result.value });
+      await ctx.audit({ type: "handlerDecision", data, decision: "rejected", value: result.value });
+      return { type: "rejected", value: result.value };
+    }
+    if (result.type === "approved") {
+      await ctx.audit({ type: "handlerResult", handlerIndex: i, data, result: "approved", value: result.value });
+      hasApproval = true;
+      approvedValue = result.value;
+      continue;
+    }
+    throw new Error(
+      `Handler returned invalid result type: ${JSON.stringify(result)}. Expected "approved", "rejected", or undefined.`,
+    );
+  }
+  if (hasApproval) {
+    await ctx.audit({ type: "handlerDecision", data, decision: "approved", value: approvedValue });
+    return { type: "approved", value: approvedValue };
+  }
+  await ctx.audit({ type: "handlerDecision", data, decision: "unhandled" });
+  return interrupt(data);
 }
 
 // if we ever end up supporting multiple interrupts at once

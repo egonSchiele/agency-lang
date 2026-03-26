@@ -68,6 +68,7 @@ import { skillParser } from "./skill.js";
 import { binOpParser } from "./binop.js";
 import { multiLineCommentParser } from "./multiLineComment.js";
 import { keywordParser } from "./keyword.js";
+import { HandleBlock } from "@/types/handleBlock.js";
 
 export const assignmentParser: Parser<Assignment> = (input: string) => {
   const parser = trace(
@@ -165,6 +166,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
         matchBlockParser,
         ifParser,
         messageThreadParser,
+        handleBlockParser,
         multiLineCommentParser,
         skillParser,
         functionParser,
@@ -222,6 +224,66 @@ export const _submessageThreadParser: Parser<MessageThread> = trace(
 export const messageThreadParser: Parser<MessageThread> = or(
   _messageThreadParser,
   _submessageThreadParser,
+);
+
+const inlineHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
+  const parser = seqC(
+    set("kind", "inline"),
+    char("("),
+    optionalSpaces,
+    capture(
+      or(functionParameterParserWithTypeHint, functionParameterParser),
+      "param",
+    ),
+    optionalSpaces,
+    char(")"),
+    optionalSpaces,
+    captureCaptures(
+      parseError(
+        "expected `{` to open handler body",
+        char("{"),
+        optionalSpacesOrNewline,
+        capture(bodyParser, "body"),
+        optionalSpacesOrNewline,
+        char("}"),
+      ),
+    ),
+  );
+  return parser(input);
+};
+
+const functionRefHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
+  const parser = seqC(
+    set("kind", "functionRef"),
+    capture(many1WithJoin(varNameChar), "functionName"),
+  );
+  return parser(input);
+};
+
+export const handleBlockParser: Parser<HandleBlock> = trace(
+  "handleBlockParser",
+  seqC(
+    set("type", "handleBlock"),
+    str("handle"),
+    optionalSpaces,
+    captureCaptures(
+      parseError(
+        "expected `{` to open handle block body",
+        char("{"),
+        optionalSpacesOrNewline,
+        capture(bodyParser, "body"),
+        optionalSpacesOrNewline,
+        char("}"),
+      ),
+    ),
+    optionalSpacesOrNewline,
+    str("with"),
+    optionalSpaces,
+    capture(
+      or(inlineHandlerParser, functionRefHandlerParser),
+      "handler",
+    ),
+  ),
 );
 
 const elseClauseParser: Parser<AgencyNode[]> = (input: string) => {

@@ -6,7 +6,7 @@ import { RestoreSignal } from "./errors.js";
 import * as smoltalk from "smoltalk";
 import { RuntimeContext } from "./state/context.js";
 import type { Checkpoint } from "./state/checkpointStore.js";
-import { GraphState } from "./types.js";
+import { GraphState, Rejected, Approved } from "./types.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { color } from "termcolors";
 import { nanoid } from "nanoid";
@@ -76,6 +76,46 @@ export function interrupt<T = any>(data: T): Interrupt<T> {
 
 export function isInterrupt(obj: any): obj is Interrupt {
   return obj && obj.type === "interrupt";
+}
+
+export function isRejected(obj: any): obj is Rejected {
+  return obj && obj.type === "rejected";
+}
+
+export function isApproved(obj: any): obj is Approved {
+  return obj && obj.type === "approved";
+}
+
+export async function interruptWithHandlers<T = any>(
+  data: T,
+  ctx: RuntimeContext<any>,
+): Promise<Interrupt<T> | Approved | Rejected> {
+  if (ctx.handlers.length === 0) {
+    return interrupt(data);
+  }
+  let approvedValue: any = undefined;
+  let hasApproval = false;
+  for (let i = ctx.handlers.length - 1; i >= 0; i--) {
+    const result = await ctx.handlers[i](data);
+    if (result === undefined) {
+      continue;
+    }
+    if (result.type === "rejected") {
+      return { type: "rejected", value: result.value };
+    }
+    if (result.type === "approved") {
+      hasApproval = true;
+      approvedValue = result.value;
+      continue;
+    }
+    throw new Error(
+      `Handler returned invalid result type: ${JSON.stringify(result)}. Expected "approved", "rejected", or undefined.`,
+    );
+  }
+  if (hasApproval) {
+    return { type: "approved", value: approvedValue };
+  }
+  return interrupt(data);
 }
 
 // if we ever end up supporting multiple interrupts at once

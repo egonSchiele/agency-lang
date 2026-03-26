@@ -5,6 +5,7 @@ import {
   Interrupt,
   InterruptData,
   isInterrupt,
+  isRejected,
 } from "./interrupts.js";
 import { updateTokenStats, extractResponse } from "./utils.js";
 import { callHook } from "./hooks.js";
@@ -307,6 +308,15 @@ async function executeToolCalls({
         }
         continue;
       }
+      if (isRejected(result)) {
+        const message = typeof result.value === "string"
+          ? result.value : "Tool call rejected by policy";
+        messages.push(smoltalk.toolMessage(message, {
+          tool_call_id: toolCall.id, name: toolCall.name,
+        }));
+        continue;
+      }
+
       result =
         result || `${handler.name} ran successfully but did not return a value`;
 

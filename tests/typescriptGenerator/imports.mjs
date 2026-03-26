@@ -23,7 +23,7 @@ import {
   RuntimeContext, MessageThread, ThreadStore,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
-  interrupt, isInterrupt,
+  interrupt, isInterrupt, isRejected, isApproved, interruptWithHandlers,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
   rejectInterrupt as _rejectInterrupt,

@@ -1,0 +1,8 @@
+node main() {
+handle {
+  x = 1
+  foo()
+} with (data) {
+  return approve()
+}
+}

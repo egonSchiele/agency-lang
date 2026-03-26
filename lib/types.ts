@@ -25,6 +25,7 @@ import { UsesTool } from "./types/tools.js";
 import { TypeAlias, TypeHint, VariableType } from "./types/typeHints.js";
 import { WhileLoop } from "./types/whileLoop.js";
 import { AwaitPending } from "./types/awaitPending.js";
+import { HandleBlock } from "./types/handleBlock.js";
 export * from "./types/access.js";
 export * from "./types/awaitPending.js";
 export * from "./types/dataStructures.js";
@@ -40,6 +41,7 @@ export * from "./types/tools.js";
 export * from "./types/typeHints.js";
 export * from "./types/whileLoop.js";
 export * from "./types/forLoop.js";
+export * from "./types/handleBlock.js";
 
 /**
  * Scope types for variable resolution.
@@ -201,7 +203,8 @@ export type AgencyNode =
   | BinOpExpression
   | Keyword
   | ForLoop
-  | AwaitPending;
+  | AwaitPending
+  | HandleBlock;
 
 export type AgencyProgram = {
   type: "agencyProgram";

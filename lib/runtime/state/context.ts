@@ -10,6 +10,7 @@ import { SmolPromptConfig } from "@/index.js";
 import { callHook } from "../hooks.js";
 import type { AgencyCallbacks } from "../hooks.js";
 import type { AuditEntry, AuditEntryInput } from "../audit.js";
+import type { HandlerFn } from "../types.js";
 
 /* bunch of stuff that every node/function in the runtime needs access to,
 that we don't want to pass as individual arguments everywhere */
@@ -21,6 +22,7 @@ export class RuntimeContext<T> {
   checkpoints: CheckpointStore;
   callbacks: AgencyCallbacks;
   onStreamLock: boolean;
+  handlers: HandlerFn[];
   pendingPromises: PendingPromiseStore;
   graph: SimpleMachine<T>;
 
@@ -53,6 +55,7 @@ export class RuntimeContext<T> {
     this.stateStack = new StateStack();
     this.globals = GlobalStore.withTokenStats();
     this.checkpoints = new CheckpointStore(this.maxRestores);
+    this.handlers = [];
     this.callbacks = {};
     this.onStreamLock = false;
     this.pendingPromises = new PendingPromiseStore();
@@ -82,6 +85,7 @@ export class RuntimeContext<T> {
     execCtx.globals = GlobalStore.withTokenStats();
     execCtx.maxRestores = this.maxRestores;
     execCtx.checkpoints = new CheckpointStore(this.maxRestores);
+    execCtx.handlers = [];
     execCtx.callbacks = {};
     execCtx.onStreamLock = false;
     execCtx.pendingPromises = new PendingPromiseStore();
@@ -123,6 +127,9 @@ export class RuntimeContext<T> {
   async threads. But we could just replace all calls to `forkStack`
   with `new StateStack()`.
   */
+  pushHandler(fn: HandlerFn): void { this.handlers.push(fn); }
+  popHandler(): void { this.handlers.pop(); }
+
   forkStack(): StateStack {
     return new StateStack();
   }
@@ -135,6 +142,7 @@ export class RuntimeContext<T> {
     this.checkpoints = null as any;
     this.statelogClient = null as any;
     this.callbacks = null as any;
+    this.handlers = null as any;
   }
 
   restoreState(checkpoint: Checkpoint): void {

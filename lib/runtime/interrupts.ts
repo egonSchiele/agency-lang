@@ -1,15 +1,12 @@
-import { deepClone } from "./utils.js";
-import { createReturnObject } from "./utils.js";
-import { StateStack, StateStackJSON } from "./state/stateStack.js";
-import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
-import { RestoreSignal } from "./errors.js";
 import * as smoltalk from "smoltalk";
-import { RuntimeContext } from "./state/context.js";
+import { RestoreSignal } from "./errors.js";
 import type { Checkpoint } from "./state/checkpointStore.js";
-import { GraphState, Rejected, Approved } from "./types.js";
+import { RuntimeContext } from "./state/context.js";
+import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
+import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
-import { color } from "termcolors";
-import { nanoid } from "nanoid";
+import { Approved, GraphState, Rejected } from "./types.js";
+import { createReturnObject, deepClone } from "./utils.js";
 
 export type InterruptApprove = {
   type: "approve";

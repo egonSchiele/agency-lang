@@ -1,0 +1,10 @@
+node main() {
+  total = 0
+  for (i in range(10)) {
+    if (i == 5) {
+      break
+    }
+    total = total + i
+  }
+  return total
+}

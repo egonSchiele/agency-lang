@@ -1,0 +1,12 @@
+{
+  "sourceFile": "break-in-while.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Break exits while loop at i=5, summing 0+1+2+3+4=10",
+      "input": "",
+      "expectedOutput": "10",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

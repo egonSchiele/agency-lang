@@ -42,6 +42,7 @@ export * from "./types/typeHints.js";
 export * from "./types/whileLoop.js";
 export * from "./types/forLoop.js";
 export * from "./types/handleBlock.js";
+export * from "./types/keyword.js"
 
 /**
  * Scope types for variable resolution.
@@ -139,13 +140,13 @@ export type Assignment = {
   scope?: ScopeType;
   shared?: boolean;
   value:
-    | ValueAccess
-    | Literal
-    | FunctionCall
-    | AgencyObject
-    | AgencyArray
-    | MessageThread
-    | BinOpExpression;
+  | ValueAccess
+  | Literal
+  | FunctionCall
+  | AgencyObject
+  | AgencyArray
+  | MessageThread
+  | BinOpExpression;
 };
 
 export function globalScope(): Scope {

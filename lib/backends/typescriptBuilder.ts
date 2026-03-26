@@ -3,6 +3,7 @@ import {
   AgencyNode,
   AgencyProgram,
   Assignment,
+  Keyword,
   Literal,
   PromptSegment,
   Scope,
@@ -115,6 +116,10 @@ export class TypeScriptBuilder {
   private loopVars: string[] = [];
   private insideMessageThread: boolean = false;
   private insideHandlerBody: boolean = false;
+
+  /** Stack of loop subKeys for generating break/continue cleanup code.
+   * Pushed when entering a stepped loop, popped when leaving. */
+  private _loopContextStack: string[] = [];
 
   /*
   We break up every function and node body into steps,
@@ -529,10 +534,38 @@ export class TypeScriptBuilder {
       case "binOpExpression":
         return this.processBinOpExpression(node);
       case "keyword":
-        return node.value === "break" ? ts.break() : ts.continue();
+        return this.processKeyword(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
+  }
+
+  private processKeyword(node: Keyword): TsNode {
+    const keyword = node.value === "break" ? ts.break() : ts.continue();
+
+    // Inside a handler body or not inside a stepped loop: emit bare keyword
+    const loopSubKey = this._loopContextStack[this._loopContextStack.length - 1];
+    if (this.insideHandlerBody || loopSubKey === undefined) {
+      return keyword;
+    }
+
+    // Inside a stepped loop: emit cleanup before the keyword.
+    // For continue, we also need to increment the iteration counters
+    // so the next iteration doesn't replay the current one.
+    const iterStore = `__stack.locals.__iteration_${loopSubKey}`;
+    const currentIterVar = `__currentIter_${loopSubKey}`;
+
+    const stmts: TsNode[] = [
+      ts.raw(`__stack.resetLoopIteration("${loopSubKey}")`),
+    ];
+
+    if (node.value === "continue") {
+      stmts.push(ts.raw(`${iterStore}++`));
+      stmts.push(ts.raw(`${currentIterVar}++`));
+    }
+
+    stmts.push(keyword);
+    return ts.statements(stmts);
   }
 
   // ------- Type system (side effects only) -------
@@ -733,12 +766,14 @@ export class TypeScriptBuilder {
     const subStepPath = [...this._subStepPath];
     const subKey = subStepPath.join("_");
 
+    this._loopContextStack.push(subKey);
     const bodyNodes = node.body.map((stmt, i) => {
       this._subStepPath.push(i);
       const result = this.processStatement(stmt);
       this._subStepPath.pop();
       return result;
     });
+    this._loopContextStack.pop();
 
     // Unregister loop variables
     this.loopVars = this.loopVars.filter(
@@ -794,14 +829,17 @@ export class TypeScriptBuilder {
 
   private processWhileLoopWithSteps(node: WhileLoop): TsNode {
     const subStepPath = [...this._subStepPath];
+    const subKey = subStepPath.join("_");
     const condition = this.processNode(node.condition);
 
+    this._loopContextStack.push(subKey);
     const bodyNodes = node.body.map((stmt, i) => {
       this._subStepPath.push(i);
       const result = this.processStatement(stmt);
       this._subStepPath.pop();
       return result;
     });
+    this._loopContextStack.pop();
 
     return ts.whileSteps(subStepPath, condition, bodyNodes);
   }

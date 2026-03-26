@@ -51,6 +51,17 @@ export class State {
     }
   }
 
+  /** Reset all loop tracking state for a given loop identified by its subKey.
+   * Resets the substep counter to 0 and clears all nested condbranch, substep,
+   * and iteration tracking variables. Used at the end of each loop iteration
+   * and before break/continue statements. */
+  resetLoopIteration(subKey: string): void {
+    this.locals[`__substep_${subKey}`] = 0;
+    this.clearLocalsWithPrefix(`__condbranch_${subKey}_`);
+    this.clearLocalsWithPrefix(`__substep_${subKey}_`);
+    this.clearLocalsWithPrefix(`__iteration_${subKey}_`);
+  }
+
   toJSON(): StateJSON {
     const json: StateJSON = {
       args: deepClone(this.args),

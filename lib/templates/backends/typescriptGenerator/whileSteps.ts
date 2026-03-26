@@ -17,10 +17,7 @@ while ({{{condition}}}) {
     {{{this.subStore}}} = {{{this.nextIndex}}};
   }
 {{/bodyStatements}}
-  {{{subStore}}} = 0;
-  __stack.clearLocalsWithPrefix("__condbranch_{{{subKey}}}_");
-  __stack.clearLocalsWithPrefix("__substep_{{{subKey}}}_");
-  __stack.clearLocalsWithPrefix("__iteration_{{{subKey}}}_");
+  __stack.resetLoopIteration("{{{subKey}}}");
   {{{iterStore}}}++;
   {{{currentIterVar}}}++;
 }`;

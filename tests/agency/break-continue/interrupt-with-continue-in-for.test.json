@@ -1,0 +1,18 @@
+{
+  "sourceFile": "interrupt-with-continue-in-for.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Interrupt fires at i=2, then continue skips adding i=2. Result is 0+1+3+4=8",
+      "input": "",
+      "expectedOutput": "8",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "skipping 2"
+        }
+      ]
+    }
+  ]
+}

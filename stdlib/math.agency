@@ -1,0 +1,11 @@
+def add(a: number, b: number): number {
+  return a + b
+}
+
+def subtract(a: number, b: number): number {
+  return a - b
+}
+
+def multiply(a: number, b: number): number {
+  return a * b
+}

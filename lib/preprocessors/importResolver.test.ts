@@ -54,7 +54,7 @@ describe("resolveImports", () => {
     expect(result.nodes).toHaveLength(1);
     const node = result.nodes[0] as ImportToolStatement;
     expect(node.type).toBe("importToolStatement");
-    expect(node.importedTools).toEqual(["add"]);
+    expect(node.importedTools).toEqual([{ type: "namedImport", importedNames: ["add"], safeNames: [] }]);
   });
 
   it("keeps type imports as ImportStatement", () => {
@@ -100,7 +100,7 @@ describe("resolveImports", () => {
 
     const toolImport = result.nodes[1] as ImportToolStatement;
     expect(toolImport.type).toBe("importToolStatement");
-    expect(toolImport.importedTools).toEqual(["add"]);
+    expect(toolImport.importedTools).toEqual([{ type: "namedImport", importedNames: ["add"], safeNames: [] }]);
 
     const typeImport = result.nodes[2] as ImportStatement;
     expect(typeImport.type).toBe("importStatement");
@@ -143,7 +143,7 @@ describe("resolveImports", () => {
     };
     const toolImport: ImportToolStatement = {
       type: "importToolStatement",
-      importedTools: ["add"],
+      importedTools: [{ type: "namedImport", importedNames: ["add"], safeNames: [] }],
       agencyFile: "./utils.agency",
     };
     const program: AgencyProgram = {

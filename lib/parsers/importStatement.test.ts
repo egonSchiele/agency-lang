@@ -521,7 +521,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: ["myTool"],
+          importedTools: [{ type: "namedImport", importedNames: ["myTool"], safeNames: [] }],
           agencyFile: "file.agency",
         },
       },
@@ -532,7 +532,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: ["tool1"],
+          importedTools: [{ type: "namedImport", importedNames: ["tool1"], safeNames: [] }],
           agencyFile: "./path/to/file.agency",
         },
       },
@@ -545,7 +545,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: ["myTool"],
+          importedTools: [{ type: "namedImport", importedNames: ["myTool"], safeNames: [] }],
           agencyFile: "file.agency",
         },
       },
@@ -558,7 +558,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: ["tool1", "tool2"],
+          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2"], safeNames: [] }],
           agencyFile: "file.agency",
         },
       },
@@ -569,7 +569,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: ["tool1", "tool2", "tool3"],
+          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2", "tool3"], safeNames: [] }],
           agencyFile: "multi.agency",
         },
       },
@@ -582,7 +582,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: ["myTool"],
+          importedTools: [{ type: "namedImport", importedNames: ["myTool"], safeNames: [] }],
           agencyFile: "file.agency",
         },
       },
@@ -593,7 +593,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: ["tool1", "tool2"],
+          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2"], safeNames: [] }],
           agencyFile: "../other.agency",
         },
       },
@@ -606,7 +606,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: ["myTool"],
+          importedTools: [{ type: "namedImport", importedNames: ["myTool"], safeNames: [] }],
           agencyFile: "file.agency",
         },
       },
@@ -619,7 +619,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: ["tool1"],
+          importedTools: [{ type: "namedImport", importedNames: ["tool1"], safeNames: [] }],
           agencyFile: "file.agency",
         },
       },
@@ -630,7 +630,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: ["tool1", "tool2", "tool3"],
+          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2", "tool3"], safeNames: [] }],
           agencyFile: "file.agency",
         },
       },
@@ -643,7 +643,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: ["tool1", "tool2"],
+          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2"], safeNames: [] }],
           agencyFile: "file.agency",
         },
       },
@@ -656,7 +656,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: ["tool1"],
+          importedTools: [{ type: "namedImport", importedNames: ["tool1"], safeNames: [] }],
           agencyFile: "../../../utils/tools.agency",
         },
       },
@@ -667,7 +667,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: ["tool1"],
+          importedTools: [{ type: "namedImport", importedNames: ["tool1"], safeNames: [] }],
           agencyFile: "/absolute/path/file.agency",
         },
       },
@@ -680,7 +680,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: ["tool1", "tool2abc", "test123"],
+          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2abc", "test123"], safeNames: [] }],
           agencyFile: "file.agency",
         },
       },

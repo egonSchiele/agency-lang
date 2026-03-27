@@ -100,6 +100,11 @@ export function collectProgramInfo(program: AgencyProgram): ProgramInfo {
         break;
       case "importToolStatement":
         info.importedTools.push(node);
+        for (const namedImport of node.importedTools) {
+          for (const safeName of namedImport.safeNames) {
+            info.safeFunctions[safeName] = true;
+          }
+        }
         break;
       case "importStatement":
         info.importStatements.push(node);

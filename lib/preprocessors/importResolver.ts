@@ -36,6 +36,7 @@ export function resolveImports(
 
     const nodeNames: string[] = [];
     const functionNames: string[] = [];
+    const safeFunctionNames: string[] = [];
     const typeNames: string[] = [];
 
     for (const nameType of node.importedNames) {
@@ -58,6 +59,11 @@ export function resolveImports(
             break;
           case "function":
             functionNames.push(name);
+            // Mark as safe if the function definition is safe OR if the
+            // original import explicitly marked it safe
+            if (symbol.safe || nameType.safeNames.includes(name)) {
+              safeFunctionNames.push(name);
+            }
             break;
           case "type":
             typeNames.push(name);
@@ -78,7 +84,11 @@ export function resolveImports(
     if (functionNames.length > 0) {
       const toolImport: ImportToolStatement = {
         type: "importToolStatement",
-        importedTools: functionNames,
+        importedTools: [{
+          type: "namedImport",
+          importedNames: functionNames,
+          safeNames: safeFunctionNames,
+        }],
         agencyFile: node.modulePath,
       };
       newNodes.push(toolImport);

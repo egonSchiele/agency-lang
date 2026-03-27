@@ -233,7 +233,7 @@ describe("collectProgramInfo", () => {
         {
           type: "importToolStatement",
           agencyFile: "./tools.ts",
-          importedTools: ["myTool"],
+          importedTools: [{ type: "namedImport", importedNames: ["myTool"], safeNames: [] }],
         },
         {
           type: "importStatement",

@@ -267,8 +267,8 @@ export class TypeScriptBuilder {
 
   private isImportedTool(functionName: string): boolean {
     return this.programInfo.importedTools
-      .map((node) => node.importedTools)
-      .flat()
+      .flatMap((node) => node.importedTools)
+      .flatMap((n) => n.importedNames)
       .includes(functionName);
   }
 
@@ -901,13 +901,13 @@ export class TypeScriptBuilder {
   }
 
   private processImportToolStatement(node: ImportToolStatement): TsNode {
-    const importNames = node.importedTools
-      .map((toolName) => [
+    const toolNames = node.importedTools.flatMap((n) => n.importedNames);
+    const importNames = toolNames
+      .flatMap((toolName) => [
         toolName,
         `__${toolName}Tool`,
         `__${toolName}ToolParams`,
-      ])
-      .flat();
+      ]);
     return ts.importDecl({
       importKind: "named",
       names: importNames,
@@ -1016,9 +1016,9 @@ export class TypeScriptBuilder {
     }
 
     // Add imported tools (they import __toolNameTool and __toolNameToolParams)
-    const importedToolNames = this.programInfo.importedTools.flatMap(
-      (node) => node.importedTools,
-    );
+    const importedToolNames = this.programInfo.importedTools
+      .flatMap((node) => node.importedTools)
+      .flatMap((n) => n.importedNames);
     for (const toolName of importedToolNames) {
       entries[toolName] = this.buildToolRegistryEntry(
         toolName,

@@ -272,8 +272,8 @@ export class AgencyGenerator {
 
   protected isImportedTool(functionName: string): boolean {
     return this.importedTools
-      .map((node) => node.importedTools)
-      .flat()
+      .flatMap((node) => node.importedTools)
+      .flatMap((n) => n.importedNames)
       .includes(functionName);
   }
 
@@ -716,7 +716,8 @@ export class AgencyGenerator {
   }
 
   protected processImportToolStatement(node: ImportToolStatement): string {
-    return `import tool { ${node.importedTools.join(", ")} } from "${node.agencyFile}"`;
+    const toolNames = node.importedTools.flatMap((n) => n.importedNames);
+    return `import tool { ${toolNames.join(", ")} } from "${node.agencyFile}"`;
   }
 
   protected visibilityToString(vis: Visibility): string {

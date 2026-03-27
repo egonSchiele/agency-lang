@@ -41,6 +41,14 @@ export type ImportNodeStatement = {
 
 export type ImportToolStatement = {
   type: "importToolStatement";
-  importedTools: string[];
+  importedTools: NamedImport[];
   agencyFile: string;
 };
+
+export function getImportedToolNames(node: ImportToolStatement): string[] {
+  return node.importedTools.flatMap((n) => n.importedNames);
+}
+
+export function getImportedSafeToolNames(node: ImportToolStatement): string[] {
+  return node.importedTools.flatMap((n) => n.safeNames);
+}

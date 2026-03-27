@@ -11,6 +11,7 @@ export type SymbolKind = "node" | "function" | "type";
 export type SymbolInfo = {
   kind: SymbolKind;
   name: string;
+  safe?: boolean;
 };
 
 /** Maps symbol name → info for a single file. */
@@ -35,6 +36,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
         symbols[node.functionName] = {
           kind: "function",
           name: node.functionName,
+          safe: node.safe,
         };
         break;
       case "typeAlias":

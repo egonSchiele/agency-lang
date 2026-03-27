@@ -101,8 +101,10 @@ export function* getAllVariablesInBody(
         yield { name, node };
       }
     } else if (node.type === "importToolStatement") {
-      for (const name of node.importedTools) {
-        yield { name, node };
+      for (const namedImport of node.importedTools) {
+        for (const name of namedImport.importedNames) {
+          yield { name, node };
+        }
       }
     } else if (node.type === "matchBlock") {
       for (const caseItem of node.cases) {

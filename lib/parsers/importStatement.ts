@@ -76,32 +76,6 @@ export const importNodeStatmentParser: Parser<ImportNodeStatement> = trace(
     ),
   ),
 );
-export const importToolStatmentParser: Parser<ImportToolStatement> = trace(
-  "importToolStatement",
-  seqC(
-    set("type", "importToolStatement"),
-    str("import"),
-    spaces,
-    or(str("tools"), str("tool")),
-    captureCaptures(
-      parseError(
-        "expected a statement of the form `import tools { x, y } from 'filename.agency'`",
-        spaces,
-        char("{"),
-        optionalSpaces,
-        capture(sepBy1(comma, many1WithJoin(varNameChar)), "importedTools"),
-        optionalSpaces,
-        char("}"),
-        spaces,
-        str("from"),
-        spaces,
-        capture(quotedPath, "agencyFile"),
-        optionalSemicolon,
-        optional(newline),
-      ),
-    ),
-  ),
-);
 
 const safeNameItem = or(
   map(seqC(str("safe "), capture(many1WithJoin(varNameChar), "name")), (r) => ({
@@ -112,6 +86,50 @@ const safeNameItem = or(
     name: r.name,
     isSafe: false,
   })),
+);
+
+export const importToolStatmentParser: Parser<ImportToolStatement> = trace(
+  "importToolStatement",
+  map(
+    seqC(
+      set("type", "importToolStatement"),
+      str("import"),
+      spaces,
+      or(str("tools"), str("tool")),
+      captureCaptures(
+        parseError(
+          "expected a statement of the form `import tools { x, y } from 'filename.agency'`",
+          spaces,
+          char("{"),
+          optionalSpaces,
+          capture(sepBy1(comma, safeNameItem), "items"),
+          optionalSpaces,
+          char("}"),
+          spaces,
+          str("from"),
+          spaces,
+          capture(quotedPath, "agencyFile"),
+          optionalSemicolon,
+          optional(newline),
+        ),
+      ),
+    ),
+    (result) => {
+      const importedNames: string[] = [];
+      const safeNames: string[] = [];
+      for (const item of result.items) {
+        importedNames.push(item.name);
+        if (item.isSafe) {
+          safeNames.push(item.name);
+        }
+      }
+      return {
+        type: "importToolStatement" as const,
+        importedTools: [{ type: "namedImport" as const, importedNames, safeNames }],
+        agencyFile: result.agencyFile,
+      };
+    },
+  ),
 );
 
 const namedImportParser: Parser<NamedImport> = trace(

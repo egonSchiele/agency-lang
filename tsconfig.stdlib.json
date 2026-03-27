@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "outDir": "./stdlib",
+    "rootDir": "./stdlib",
+    "module": "NodeNext",
+    "target": "ESNext",
+    "moduleResolution": "NodeNext",
+    "declaration": false,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  },
+  "include": ["stdlib/**/*.ts"],
+  "exclude": []
+}

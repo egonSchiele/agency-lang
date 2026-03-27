@@ -4,7 +4,7 @@
 
 **Goal:** Allow Agency programs to import from a standard library shipped with the agency-lang npm package using the `std::` prefix (e.g., `import {foo} from "std::math"`).
 
-**Architecture:** A new utility function `resolveAgencyImportPath` centralizes all import path resolution (relative and `std::` paths). Every place that resolves an import path — symbol table, import resolver, compile command, and builder — calls this one function. The stdlib `.agency` files ship as source in a `stdlib/` directory at the package root, included via the npm `files` field. The package root is found by walking up from the resolver's `__dirname` until `package.json` is found.
+**Architecture:** A new utility function `resolveAgencyImportPath` centralizes all import path resolution (relative and `std::` paths). Every place that resolves an import path — symbol table, import resolver, compile command, and builder — calls this one function. The stdlib `.agency` files ship as source in a `stdlib/` directory at the package root, included via the npm `files` field. The package root is found by walking up from the resolver's `__dirname` until `package.json` is found. The package root should be set as a constant at module load time for efficiency and simplicity.
 
 **Tech Stack:** Node.js `path`/`fs`, existing Agency parser and compilation pipeline, vitest for unit tests, Agency execution tests for integration.
 

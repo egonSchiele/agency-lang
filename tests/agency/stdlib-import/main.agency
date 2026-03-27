@@ -1,0 +1,9 @@
+import { add, multiply } from "std::math"
+
+node testStdlibAdd() {
+  return add(3, 4)
+}
+
+node testStdlibMultiply() {
+  return multiply(5, 6)
+}

@@ -1,0 +1,19 @@
+{
+  "sourceFile": "main.agency",
+  "tests": [
+    {
+      "nodeName": "testStdlibAdd",
+      "input": "",
+      "expectedOutput": "7",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Should add 3 + 4 using std::math"
+    },
+    {
+      "nodeName": "testStdlibMultiply",
+      "input": "",
+      "expectedOutput": "30",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Should multiply 5 * 6 using std::math"
+    }
+  ]
+}

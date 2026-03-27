@@ -35,6 +35,8 @@
   },
   "files": [
     "./dist",
+    "./stdlib/**/*.agency",
+    "./stdlib/**/*.js",
     "./scripts/hooks/postinstall.js"
   ],
   "exports": {

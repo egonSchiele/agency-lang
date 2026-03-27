@@ -8,7 +8,6 @@ import {
   NamespaceImport,
 } from "../types/importStatement.js";
 import {
-  alphanum,
   between,
   capture,
   captureCaptures,
@@ -31,7 +30,7 @@ import {
   trace,
 } from "tarsec";
 import { optionalSemicolon } from "./parserUtils.js";
-import { comma, optionalSpaces } from "./utils.js";
+import { comma, optionalSpaces, varNameChar } from "./utils.js";
 
 // Helper parser for quoted file paths - supports both single and double quotes
 const doubleQuotedPath: Parser<{ path: string }> = seqC(
@@ -64,7 +63,7 @@ export const importNodeStatmentParser: Parser<ImportNodeStatement> = trace(
         spaces,
         char("{"),
         optionalSpaces,
-        capture(sepBy1(comma, many1WithJoin(alphanum)), "importedNodes"),
+        capture(sepBy1(comma, many1WithJoin(varNameChar)), "importedNodes"),
         optionalSpaces,
         char("}"),
         spaces,
@@ -90,7 +89,7 @@ export const importToolStatmentParser: Parser<ImportToolStatement> = trace(
         spaces,
         char("{"),
         optionalSpaces,
-        capture(sepBy1(comma, many1WithJoin(alphanum)), "importedTools"),
+        capture(sepBy1(comma, many1WithJoin(varNameChar)), "importedTools"),
         optionalSpaces,
         char("}"),
         spaces,
@@ -105,11 +104,11 @@ export const importToolStatmentParser: Parser<ImportToolStatement> = trace(
 );
 
 const safeNameItem = or(
-  map(seqC(str("safe "), capture(many1WithJoin(alphanum), "name")), (r) => ({
+  map(seqC(str("safe "), capture(many1WithJoin(varNameChar), "name")), (r) => ({
     name: r.name,
     isSafe: true,
   })),
-  map(seqC(capture(many1WithJoin(alphanum), "name")), (r) => ({
+  map(seqC(capture(many1WithJoin(varNameChar), "name")), (r) => ({
     name: r.name,
     isSafe: false,
   })),
@@ -146,7 +145,7 @@ const namespaceImportParser: Parser<NamespaceImport> = trace(
     spaces,
     str("as"),
     spaces,
-    capture(many1WithJoin(alphanum), "importedNames"),
+    capture(many1WithJoin(varNameChar), "importedNames"),
     set("type", "namespaceImport"),
   ),
 );
@@ -154,7 +153,7 @@ const namespaceImportParser: Parser<NamespaceImport> = trace(
 const defaultImportParser: Parser<DefaultImport> = trace(
   "defaultImportParser",
   seqC(
-    capture(many1WithJoin(alphanum), "importedNames"),
+    capture(many1WithJoin(varNameChar), "importedNames"),
     set("type", "defaultImport"),
   ),
 );

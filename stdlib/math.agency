@@ -1,0 +1,13 @@
+import { _add, _subtract, _multiply } from "./_math.js"
+
+def add(a: number, b: number): number {
+  return _add(a, b)
+}
+
+def subtract(a: number, b: number): number {
+  return _subtract(a, b)
+}
+
+def multiply(a: number, b: number): number {
+  return _multiply(a, b)
+}

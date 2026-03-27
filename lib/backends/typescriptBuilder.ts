@@ -15,6 +15,7 @@ import {
 } from "../types.js";
 
 import { formatTypeHint } from "@/cli/util.js";
+import { toCompiledImportPath } from "../importPaths.js";
 import {
   BUILTIN_FUNCTIONS,
   BUILTIN_TOOLS,
@@ -869,7 +870,7 @@ export class TypeScriptBuilder {
   }
 
   private processImportStatement(node: ImportStatement): TsNode {
-    const from = node.modulePath.replace(/\.agency$/, ".js");
+    const from = toCompiledImportPath(node.modulePath);
     const imports = node.importedNames.map((nameType) => {
       switch (nameType.type) {
         case "namedImport":
@@ -910,7 +911,7 @@ export class TypeScriptBuilder {
     return ts.importDecl({
       importKind: "named",
       names: importNames,
-      from: node.agencyFile.replace(/\.agency$/, ".js"),
+      from: toCompiledImportPath(node.agencyFile),
     });
   }
 

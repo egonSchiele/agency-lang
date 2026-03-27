@@ -1,7 +1,10 @@
-.PHONY: all test
+.PHONY: all test stdlib
 
 all:
-	pnpm run templates && pnpm run build
+	pnpm run templates && pnpm run build && $(MAKE) stdlib
+
+stdlib:
+	tsc -p tsconfig.stdlib.json
 
 test:
 	pnpm run test

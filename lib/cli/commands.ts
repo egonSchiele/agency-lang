@@ -8,6 +8,7 @@ import { typeCheck, formatErrors } from "@/typeChecker.js";
 import { ImportStatement } from "@/types/importStatement.js";
 import { buildSymbolTable, type SymbolTable } from "@/symbolTable.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
+import { resolveAgencyImportPath, isStdlibImport } from "../importPaths.js";
 import { renderMermaidAscii } from "beautiful-mermaid";
 import { spawn } from "child_process";
 import * as fs from "fs";
@@ -180,10 +181,9 @@ export function compile(
 
   const imports = getImports(resolvedProgram);
 
-  const inputDir = path.dirname(absoluteInputFile);
   for (const importPath of imports) {
-    const absPath = path.resolve(inputDir, importPath);
-    if (config.restrictImports) {
+    const absPath = resolveAgencyImportPath(importPath, absoluteInputFile);
+    if (config.restrictImports && !isStdlibImport(importPath)) {
       const projectRoot = process.cwd();
       if (
         !absPath.startsWith(projectRoot + path.sep) &&
@@ -199,7 +199,7 @@ export function compile(
 
   // Update the import path in the AST to reference the new .ts file
   resolvedProgram.nodes.forEach((node) => {
-    if (node.type === "importStatement") {
+    if (node.type === "importStatement" && !isStdlibImport(node.modulePath)) {
       node.modulePath = node.modulePath.replace(".agency", ext);
     }
   });

@@ -2,6 +2,22 @@
   "type": "agencyProgram",
   "nodes": [
     {
+      "type": "importStatement",
+      "importedNames": [
+        {
+          "type": "namedImport",
+          "importedNames": [
+            "print"
+          ],
+          "safeNames": []
+        }
+      ],
+      "modulePath": "std::index"
+    },
+    {
+      "type": "newLine"
+    },
+    {
       "type": "function",
       "functionName": "slowTask",
       "parameters": [

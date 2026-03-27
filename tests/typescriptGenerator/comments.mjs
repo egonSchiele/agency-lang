@@ -1,3 +1,4 @@
+import { print } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -31,12 +32,9 @@ import {
   builtinSleep as sleep,
   builtinRound as round,
   printJSON,
-  print,
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
-  printTool as __printTool,
-  printToolParams as __printToolParams,
   printJSONTool as __printJSONTool,
   printJSONToolParams as __printJSONToolParams,
   inputTool as __inputTool,
@@ -147,15 +145,6 @@ const __toolRegistry = {
       isBuiltin: true
     }
   },
-  print: {
-    definition: __printTool,
-    handler: {
-      name: "print",
-      params: __printToolParams,
-      execute: print,
-      isBuiltin: true
-    }
-  },
   printJSON: {
     definition: __printJSONTool,
     handler: {
@@ -247,6 +236,8 @@ const __toolRegistry = {
     }
   }
 };
+
+
 //  This is a single line comment at the top of the file
 
 

@@ -30,7 +30,7 @@ function regenerateFixtures(dir: string, relativePath = "") {
       const mtsPath = path.join(dir, `${baseName}.mjs`);
 
       const agencyContent = fs.readFileSync(fullPath, "utf-8");
-      const parseResult = parseAgency(agencyContent, {}, false);
+      const parseResult = parseAgency(agencyContent);
 
       if (parseResult.success) {
         const tsCode = generateTypeScript(parseResult.result, undefined, undefined, entry.name);
@@ -60,7 +60,7 @@ function regeneratePreprocessorFixtures(dir: string, relativePath = "") {
       const jsonPath = path.join(dir, `${baseName}.json`);
 
       const agencyContent = fs.readFileSync(fullPath, "utf-8");
-      const parseResult = parseAgency(agencyContent, {}, false);
+      const parseResult = parseAgency(agencyContent);
 
       if (parseResult.success) {
         const info = collectProgramInfo(parseResult.result);
@@ -93,7 +93,7 @@ function regenerateBuilderFixtures(dir: string, relativePath = "") {
       const mtsPath = path.join(dir, `${baseName}.mjs`);
 
       const agencyContent = fs.readFileSync(fullPath, "utf-8");
-      const parseResult = parseAgency(agencyContent, {}, false);
+      const parseResult = parseAgency(agencyContent);
 
       if (parseResult.success) {
         const tsCode = generateTypeScript(parseResult.result, undefined, undefined, entry.name);

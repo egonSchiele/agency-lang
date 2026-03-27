@@ -268,7 +268,7 @@ export async function format(
   contents: string,
   config: AgencyConfig,
 ): Promise<string> {
-  const parsedProgram = parse(contents, config);
+  const parsedProgram = parse(contents, config, false);
   const generatedCode = generateAgency(parsedProgram);
   return generatedCode;
 }

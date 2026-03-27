@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { findPackageRoot, resolveAgencyImportPath } from "./importPaths.js";
+import {
+  findPackageRoot,
+  resolveAgencyImportPath,
+  getStdlibDir,
+} from "./importPaths.js";
+import { buildSymbolTable } from "./symbolTable.js";
+import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 
 describe("findPackageRoot", () => {
@@ -49,5 +56,31 @@ describe("resolveAgencyImportPath", () => {
       "/project/src/main.agency",
     );
     expect(result).toBe("/project/src/utils.js");
+  });
+});
+
+describe("buildSymbolTable with std:: imports", () => {
+  it("should resolve std:: imports and include their symbols", () => {
+    // Create a temp file that imports from std::math
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-test-"));
+    const tmpFile = path.join(tmpDir, "test.agency");
+    fs.writeFileSync(
+      tmpFile,
+      'import { add } from "std::math"\nnode main() {\n  return add(1, 2)\n}\n',
+    );
+
+    const table = buildSymbolTable(tmpFile);
+    const stdlibMathPath = path.join(getStdlibDir(), "math.agency");
+
+    // The symbol table should contain entries for the stdlib file
+    expect(table[stdlibMathPath]).toBeDefined();
+    expect(table[stdlibMathPath]["add"]).toEqual({
+      kind: "function",
+      name: "add",
+    });
+
+    // Clean up
+    fs.unlinkSync(tmpFile);
+    fs.rmdirSync(tmpDir);
   });
 });

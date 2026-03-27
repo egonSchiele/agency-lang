@@ -4,6 +4,7 @@ import { parseAgency } from "./parser.js";
 import type { AgencyConfig } from "./config.js";
 import type { AgencyProgram } from "./types.js";
 import { walkNodes } from "./utils/node.js";
+import { resolveAgencyImportPath, isStdlibImport } from "./importPaths.js";
 
 export type SymbolKind = "node" | "function" | "type";
 
@@ -71,17 +72,16 @@ export function buildSymbolTable(
     table[absPath] = classifySymbols(program);
 
     // Follow imports to other .agency files
-    const dir = path.dirname(absPath);
     for (const { node } of walkNodes(program.nodes)) {
       if (node.type === "importNodeStatement") {
-        visit(path.resolve(dir, node.agencyFile));
+        visit(resolveAgencyImportPath(node.agencyFile, absPath));
       } else if (node.type === "importToolStatement") {
-        visit(path.resolve(dir, node.agencyFile));
+        visit(resolveAgencyImportPath(node.agencyFile, absPath));
       } else if (
         node.type === "importStatement" &&
-        node.modulePath.endsWith(".agency")
+        (node.modulePath.endsWith(".agency") || isStdlibImport(node.modulePath))
       ) {
-        visit(path.resolve(dir, node.modulePath));
+        visit(resolveAgencyImportPath(node.modulePath, absPath));
       }
     }
   }

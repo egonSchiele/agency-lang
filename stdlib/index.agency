@@ -1,0 +1,8 @@
+import { _print } from "./_builtins.js"
+
+def print(message: string) {
+  """
+  A tool for printing a message to the console.
+  """
+  _print(message)
+}

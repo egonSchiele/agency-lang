@@ -1,7 +1,5 @@
-import * as readline from "readline";
 import fs from "fs";
 import path from "path";
-import process from "process";
 
 export type ToolRegistryEntry = {
   definition: { name: string; description: string; schema: any };
@@ -25,40 +23,6 @@ export const or = (a: any, b: any): any => a || b;
 export const head = (arr: any[]): any => arr[0];
 export const tail = (arr: any[]): any[] => arr.slice(1);
 export const empty = (arr: any[]): boolean => arr.length === 0;
-
-export async function builtinFetch(url: string, args: any = {}): Promise<string> {
-  const result = await fetch(url, args);
-  try {
-    const text = await result.text();
-    return text;
-  } catch (e) {
-    throw new Error(`Failed to get text from ${url}: ${e}`);
-  }
-}
-
-export async function builtinFetchJSON(url: string, args: any = {}): Promise<any> {
-  const result = await fetch(url, args);
-  try {
-    const json = await result.json();
-    return json;
-  } catch (e) {
-    throw new Error(`Failed to parse JSON from ${url}: ${e}`);
-  }
-}
-
-export function builtinInput(prompt: string): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  return new Promise((resolve) => {
-    rl.question(prompt, (answer) => {
-      rl.close();
-      resolve(answer);
-    });
-  });
-}
 
 export function builtinRead(args: { filename: string; dirname: string }): string {
   const filePath = path.resolve(args.dirname, args.filename);
@@ -84,15 +48,6 @@ export function builtinSleep(seconds: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, seconds * 1000);
   });
-}
-
-export function printJSON(obj: any): void {
-  console.log(JSON.stringify(obj, null, 2));
-}
-
-export function builtinRound(num: number, precision: number): number {
-  const factor = Math.pow(10, precision);
-  return Math.round(num * factor) / factor;
 }
 
 export function readSkill(args: { filepath: string; dirname: string }): string {

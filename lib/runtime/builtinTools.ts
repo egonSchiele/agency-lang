@@ -16,20 +16,6 @@ Returns:
 };
 export const readSkillToolParams = ["filepath"];
 
-export const printJSONTool = {
-  name: "printJSON",
-  description: `A tool for printing an object as formatted JSON to the console.`,
-  schema: z.object({ obj: z.any() }),
-};
-export const printJSONToolParams = ["obj"];
-
-export const inputTool = {
-  name: "input",
-  description: `A tool for prompting the user for input and returning their response.`,
-  schema: z.object({ prompt: z.string() }),
-};
-export const inputToolParams = ["prompt"];
-
 export const readTool = {
   name: "read",
   description: `A tool for reading the contents of a file and returning it as a string.`,
@@ -51,36 +37,3 @@ export const writeTool = {
 };
 export const writeToolParams = ["filename", "content"];
 
-export const fetchTool = {
-  name: "fetch",
-  description: `A tool for fetching a URL and returning the response as text.`,
-  schema: z.object({ url: z.string() }),
-};
-export const fetchToolParams = ["url"];
-
-export const fetchJSONTool = {
-  name: "fetchJSON",
-  description: `A tool for fetching a URL and returning the response as parsed JSON.`,
-  schema: z.object({ url: z.string() }),
-};
-export const fetchJSONToolParams = ["url"];
-
-export const fetchJsonTool = fetchJSONTool;
-export const fetchJsonToolParams = fetchJSONToolParams;
-
-export const sleepTool = {
-  name: "sleep",
-  description: `A tool for pausing execution for a specified number of seconds.`,
-  schema: z.object({ seconds: z.number() }),
-};
-export const sleepToolParams = ["seconds"];
-
-export const roundTool = {
-  name: "round",
-  description: `A tool for rounding a number to a specified number of decimal places.`,
-  schema: z.object({
-    num: z.number(),
-    precision: z.number().optional().default(0),
-  }),
-};
-export const roundToolParams = ["num", "precision"];

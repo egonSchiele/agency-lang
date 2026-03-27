@@ -14,14 +14,14 @@ def printJSON(obj) {
   _printJSON(obj)
 }
 
-async def input(prompt: string): string {
+def input(prompt: string): string {
   """
   A tool for prompting the user for input and returning their response.
   """
   return _input(prompt)
 }
 
-async def sleep(seconds: number) {
+def sleep(seconds: number) {
   """
   A tool for pausing execution for a specified number of seconds.
   """
@@ -35,14 +35,14 @@ def round(num: number, precision: number): number {
   return _round(num, precision)
 }
 
-async def fetch(url: string): string {
+def fetch(url: string): string {
   """
   A tool for fetching a URL and returning the response as text.
   """
   return _fetch(url)
 }
 
-async def fetchJSON(url: string) {
+def fetchJSON(url: string) {
   """
   A tool for fetching a URL and returning the response as parsed JSON.
   """

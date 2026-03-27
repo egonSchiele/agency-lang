@@ -8,7 +8,12 @@ node testStdlibMultiply() {
   return multiply(5, 6)
 }
 
-node testImplicitPrint() {
-  print("hello from stdlib")
-  return "done"
+node testImplicitRound() {
+  return round(3.14159, 2)
+}
+
+node testRoundAsTool() {
+  uses round
+  result: number = llm("Use the round tool to round the number 2.71828 to 3 decimal places. Return only the rounded number.")
+  return result
 }

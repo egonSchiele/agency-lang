@@ -12,6 +12,7 @@ import {
   ImportStatement,
   VariableType,
 } from "@/types.js";
+import { isStdlibImport, resolveAgencyImportPath } from "../importPaths.js";
 import renderEvaluate from "@/templates/cli/evaluate.js";
 import renderJudgeEvaluate from "@/templates/cli/judgeEvaluate.js";
 import { compile } from "./commands.js";
@@ -299,7 +300,7 @@ export function getImportsRecursively(
   const program = parsed.result;
   const imports = getImports(program);
   for (const imp of imports) {
-    const importedFile = path.resolve(path.dirname(filename), imp);
+    const importedFile = resolveAgencyImportPath(imp, filename);
     if (fs.existsSync(importedFile)) {
       imports.push(...getImportsRecursively(importedFile, visited));
     } else {
@@ -321,7 +322,8 @@ export function getImports(program: AgencyProgram): string[] {
   const importStatements = program.nodes
     .filter(
       (node) =>
-        node.type === "importStatement" && node.modulePath.endsWith(".agency"),
+        node.type === "importStatement" &&
+        (node.modulePath.endsWith(".agency") || isStdlibImport(node.modulePath)),
     )
     .map((node) => (node as ImportStatement).modulePath.trim());
 

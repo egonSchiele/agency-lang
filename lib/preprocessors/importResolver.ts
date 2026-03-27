@@ -1,4 +1,3 @@
-import * as path from "path";
 import type { AgencyNode, AgencyProgram } from "../types.js";
 import type {
   ImportNodeStatement,
@@ -6,6 +5,7 @@ import type {
   ImportStatement,
 } from "../types/importStatement.js";
 import type { SymbolTable } from "../symbolTable.js";
+import { resolveAgencyImportPath, isStdlibImport } from "../importPaths.js";
 
 /**
  * Resolve unified imports: rewrite `import { x, y } from "./foo.agency"`
@@ -20,19 +20,18 @@ export function resolveImports(
   symbolTable: SymbolTable,
   currentFile: string,
 ): AgencyProgram {
-  const currentDir = path.dirname(path.resolve(currentFile));
   const newNodes: AgencyNode[] = [];
 
   for (const node of program.nodes) {
     if (
       node.type !== "importStatement" ||
-      !node.modulePath.endsWith(".agency")
+      !node.modulePath.endsWith(".agency") && !isStdlibImport(node.modulePath)
     ) {
       newNodes.push(node);
       continue;
     }
 
-    const importedFilePath = path.resolve(currentDir, node.modulePath);
+    const importedFilePath = resolveAgencyImportPath(node.modulePath, currentFile);
     const fileSymbols = symbolTable[importedFilePath] ?? {};
 
     const nodeNames: string[] = [];

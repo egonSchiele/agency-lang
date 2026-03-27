@@ -38,6 +38,17 @@ export function isStdlibImport(importPath: string): boolean {
 }
 
 /**
+ * Strip the "std::" prefix from a standard library import path.
+ * If the path is not a std:: import, returns it unchanged.
+ */
+export function normalizeStdlibPath(importPath: string): string {
+  if (isStdlibImport(importPath)) {
+    return importPath.slice(5);
+  }
+  return importPath;
+}
+
+/**
  * Resolve an Agency import path to an absolute filesystem path.
  *
  * - "std::foo"       -> <package-root>/stdlib/foo.agency
@@ -50,9 +61,22 @@ export function resolveAgencyImportPath(
   fromFile: string,
 ): string {
   if (isStdlibImport(importPath)) {
-    const stdlibPath = importPath.slice(5); // strip "std::"
-    return path.join(STDLIB_DIR, stdlibPath + ".agency");
+    return path.join(STDLIB_DIR, normalizeStdlibPath(importPath) + ".agency");
   }
   // Relative or other imports: resolve against the importing file's directory
   return path.resolve(path.dirname(fromFile), importPath);
+}
+
+/**
+ * Convert an Agency import path to the path that should appear in generated
+ * TypeScript import statements.
+ *
+ * - "std::foo"      -> absolute path to <stdlib-dir>/foo.js
+ * - "./foo.agency"  -> "./foo.js" (relative, just extension swap)
+ */
+export function toCompiledImportPath(importPath: string): string {
+  if (isStdlibImport(importPath)) {
+    return path.join(STDLIB_DIR, normalizeStdlibPath(importPath) + ".js");
+  }
+  return importPath.replace(/\.agency$/, ".js");
 }

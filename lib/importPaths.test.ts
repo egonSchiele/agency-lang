@@ -3,6 +3,7 @@ import {
   findPackageRoot,
   resolveAgencyImportPath,
   getStdlibDir,
+  toCompiledImportPath,
 } from "./importPaths.js";
 import { buildSymbolTable } from "./symbolTable.js";
 import * as fs from "fs";
@@ -56,6 +57,23 @@ describe("resolveAgencyImportPath", () => {
       "/project/src/main.agency",
     );
     expect(result).toBe("/project/src/utils.js");
+  });
+});
+
+describe("toCompiledImportPath", () => {
+  it("should convert std:: paths to absolute .js paths in stdlib dir", () => {
+    const result = toCompiledImportPath("std::math");
+    expect(result).toBe(path.join(getStdlibDir(), "math.js"));
+  });
+
+  it("should convert relative .agency paths to .js", () => {
+    const result = toCompiledImportPath("./utils.agency");
+    expect(result).toBe("./utils.js");
+  });
+
+  it("should handle std:: paths with subdirectories", () => {
+    const result = toCompiledImportPath("std::collections/queue");
+    expect(result).toBe(path.join(getStdlibDir(), "collections", "queue.js"));
   });
 });
 

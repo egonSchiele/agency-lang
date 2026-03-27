@@ -199,7 +199,7 @@ export function compile(
 
   // Update the import path in the AST to reference the new .ts file
   resolvedProgram.nodes.forEach((node) => {
-    if (node.type === "importStatement") {
+    if (node.type === "importStatement" && !isStdlibImport(node.modulePath)) {
       node.modulePath = node.modulePath.replace(".agency", ext);
     }
   });

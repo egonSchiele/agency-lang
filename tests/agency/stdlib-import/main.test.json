@@ -14,6 +14,13 @@
       "expectedOutput": "30",
       "evaluationCriteria": [{ "type": "exact" }],
       "description": "Should multiply 5 * 6 using std::math"
+    },
+    {
+      "nodeName": "testImplicitPrint",
+      "input": "",
+      "expectedOutput": "\"done\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Should use print without explicit import (implicit stdlib)"
     }
   ]
 }

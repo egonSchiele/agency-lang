@@ -7,3 +7,8 @@ node testStdlibAdd() {
 node testStdlibMultiply() {
   return multiply(5, 6)
 }
+
+node testImplicitPrint() {
+  print("hello from stdlib")
+  return "done"
+}

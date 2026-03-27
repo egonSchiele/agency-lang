@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `import { print } from "std::index";
+export const template = `import { print, printJSON, input, sleep, round, fetch, fetchJSON } from "std::index";
 
 {{{body:string}}}`;
 

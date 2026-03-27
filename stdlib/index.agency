@@ -1,8 +1,50 @@
-import { _print } from "./_builtins.js"
+import { _print, _printJSON, _input, _sleep, _round, _fetch, _fetchJSON } from "./_builtins.js"
 
 def print(message: string) {
   """
   A tool for printing a message to the console.
   """
   _print(message)
+}
+
+def printJSON(obj) {
+  """
+  A tool for printing an object as formatted JSON to the console.
+  """
+  _printJSON(obj)
+}
+
+async def input(prompt: string): string {
+  """
+  A tool for prompting the user for input and returning their response.
+  """
+  return _input(prompt)
+}
+
+async def sleep(seconds: number) {
+  """
+  A tool for pausing execution for a specified number of seconds.
+  """
+  _sleep(seconds)
+}
+
+def round(num: number, precision: number): number {
+  """
+  A tool for rounding a number to a specified number of decimal places.
+  """
+  return _round(num, precision)
+}
+
+async def fetch(url: string): string {
+  """
+  A tool for fetching a URL and returning the response as text.
+  """
+  return _fetch(url)
+}
+
+async def fetchJSON(url: string) {
+  """
+  A tool for fetching a URL and returning the response as parsed JSON.
+  """
+  return _fetchJSON(url)
 }

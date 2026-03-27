@@ -1,4 +1,4 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -23,24 +23,17 @@ import {
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
-  builtinRead as _builtinReadRaw,
-  builtinWrite as _builtinWriteRaw,
-  builtinReadImage as _builtinReadImageRaw,
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
-  readTool as __readTool,
-  readToolParams as __readToolParams,
-  readImageTool as __readImageTool,
-  readImageToolParams as __readImageToolParams,
-  writeTool as __writeTool,
-  writeToolParams as __writeToolParams,
   _builtinTool as __builtinTool,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const __cwd = process.cwd();
+
+const getDirname = () => __dirname;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -66,15 +59,6 @@ const __globalCtx = new RuntimeContext({
 const graph = __globalCtx.graph;
 
 // Path-dependent builtin wrappers
-function read(filename: string): string {
-  return _builtinReadRaw({ filename, dirname: __dirname });
-}
-function write(filename: string, content: string): void {
-  _builtinWriteRaw({ filename, content, dirname: __dirname });
-}
-function readImage(filename: string): string {
-  return _builtinReadImageRaw({ filename, dirname: __dirname });
-}
 export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
@@ -172,33 +156,6 @@ const __toolRegistry = {
       name: "readSkill",
       params: __readSkillToolParams,
       execute: readSkill,
-      isBuiltin: true
-    }
-  },
-  read: {
-    definition: __readTool,
-    handler: {
-      name: "read",
-      params: __readToolParams,
-      execute: read,
-      isBuiltin: true
-    }
-  },
-  readImage: {
-    definition: __readImageTool,
-    handler: {
-      name: "readImage",
-      params: __readImageToolParams,
-      execute: readImage,
-      isBuiltin: true
-    }
-  },
-  write: {
-    definition: __writeTool,
-    handler: {
-      name: "write",
-      params: __writeToolParams,
-      execute: write,
       isBuiltin: true
     }
   }

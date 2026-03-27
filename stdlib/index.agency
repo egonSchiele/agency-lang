@@ -1,34 +1,34 @@
-import { _print, _printJSON, _input, _sleep, _round, _fetch, _fetchJSON } from "./_builtins.js"
+import { _print, _printJSON, _input, _sleep, _round, _fetch, _fetchJSON, _read, _write, _readImage } from "./_builtins.js"
 
-def print(message: string) {
+safe def print(message: string) {
   """
   A tool for printing a message to the console.
   """
   _print(message)
 }
 
-def printJSON(obj) {
+safe def printJSON(obj) {
   """
   A tool for printing an object as formatted JSON to the console.
   """
   _printJSON(obj)
 }
 
-def input(prompt: string): string {
+safe def input(prompt: string): string {
   """
   A tool for prompting the user for input and returning their response.
   """
   return _input(prompt)
 }
 
-def sleep(seconds: number) {
+safe def sleep(seconds: number) {
   """
   A tool for pausing execution for a specified number of seconds.
   """
   _sleep(seconds)
 }
 
-def round(num: number, precision: number): number {
+safe def round(num: number, precision: number): number {
   """
   A tool for rounding a number to a specified number of decimal places.
   """
@@ -39,6 +39,12 @@ def fetch(url: string): string {
   """
   A tool for fetching a URL and returning the response as text.
   """
+  return interrupt({ 
+    type: "std::fetch",
+    message: "Are you sure you want to fetch this URL?",
+    url: url
+  })
+
   return _fetch(url)
 }
 
@@ -46,5 +52,50 @@ def fetchJSON(url: string) {
   """
   A tool for fetching a URL and returning the response as parsed JSON.
   """
+  return interrupt({ 
+    type: "std::fetchJSON",
+    message: "Are you sure you want to fetch this URL and parse it as JSON?",
+    url: url
+  })
+
   return _fetchJSON(url)
+}
+
+def read(filename: string): string {
+  """
+  A tool for reading the contents of a file and returning it as a string.
+  """
+  return interrupt({ 
+    type: "std::read",
+    message: "Are you sure you want to read this file?",
+    filename: filename
+  })
+  return _read(filename)
+}
+
+def write(filename: string, content: string) {
+  """
+  A tool for writing content to a file.
+  """
+  return interrupt({ 
+    type: "std::write",
+    message: "Are you sure you want to write to this file?",
+    filename: filename,
+    content: content
+  })
+
+  _write(filename, content)
+}
+
+def readImage(filename: string): string {
+  """
+  A tool for reading an image file and returning its contents as a Base64-encoded string.
+  """
+  return interrupt({ 
+    type: "std::readImage",
+    message: "Are you sure you want to read this image file?",
+    filename: filename
+  })
+
+  return _readImage(filename)
 }

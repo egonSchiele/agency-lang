@@ -1,5 +1,7 @@
 import * as readline from "readline";
 import process from "process";
+import fs from "fs";
+import path from "path";
 
 export function _print(message: string): void {
   console.log(message);
@@ -51,4 +53,22 @@ export async function _fetchJSON(url: string): Promise<any> {
   } catch (e) {
     throw new Error(`Failed to parse JSON from ${url}: ${e}`);
   }
+}
+
+export function _read(filename: string): string {
+  const filePath = path.resolve(process.cwd(), filename);
+  const data = fs.readFileSync(filePath);
+  return data.toString("utf8");
+}
+
+export function _write(filename: string, content: string): boolean {
+  const filePath = path.resolve(process.cwd(), filename);
+  fs.writeFileSync(filePath, content, "utf8");
+  return true;
+}
+
+export function _readImage(filename: string): string {
+  const filePath = path.resolve(process.cwd(), filename);
+  const data = fs.readFileSync(filePath);
+  return data.toString("base64");
 }

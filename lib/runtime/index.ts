@@ -32,8 +32,6 @@ export {
   tail,
   empty,
   builtinRead,
-  builtinWrite,
-  builtinReadImage,
   builtinSleep,
   readSkill,
   tool as _builtinTool,
@@ -43,12 +41,6 @@ export type { ToolRegistryEntry } from "./builtins.js";
 export {
   readSkillTool,
   readSkillToolParams,
-  readTool,
-  readToolParams,
-  readImageTool,
-  readImageToolParams,
-  writeTool,
-  writeToolParams,
 } from "./builtinTools.js";
 
 export {

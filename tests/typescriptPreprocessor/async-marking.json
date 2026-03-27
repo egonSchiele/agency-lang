@@ -13,7 +13,10 @@
             "sleep",
             "round",
             "fetch",
-            "fetchJSON"
+            "fetchJSON",
+            "read",
+            "write",
+            "readImage"
           ],
           "safeNames": []
         }

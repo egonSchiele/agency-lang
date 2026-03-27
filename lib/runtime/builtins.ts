@@ -31,19 +31,6 @@ export function builtinRead(args: { filename: string; dirname: string }): string
   return contents;
 }
 
-export function builtinWrite(args: { filename: string; content: string; dirname: string }): boolean {
-  const filePath = path.resolve(args.dirname, args.filename);
-  fs.writeFileSync(filePath, args.content, "utf8");
-  return true;
-}
-
-export function builtinReadImage(args: { filename: string; dirname: string }): string {
-  const filePath = path.resolve(args.dirname, args.filename);
-  const data = fs.readFileSync(filePath);
-  const base64String = data.toString("base64");
-  return base64String;
-}
-
 export function builtinSleep(seconds: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, seconds * 1000);

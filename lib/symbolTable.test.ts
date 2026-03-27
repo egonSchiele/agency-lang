@@ -3,7 +3,7 @@ import { classifySymbols } from "./symbolTable.js";
 import { parseAgency } from "./parser.js";
 
 function parseAndClassify(source: string) {
-  const result = parseAgency(source);
+  const result = parseAgency(source, {}, false);
   if (!result.success) throw new Error("Parse failed");
   return classifySymbols(result.result);
 }

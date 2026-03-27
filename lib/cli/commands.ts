@@ -8,7 +8,7 @@ import { typeCheck, formatErrors } from "@/typeChecker.js";
 import { ImportStatement } from "@/types/importStatement.js";
 import { buildSymbolTable, type SymbolTable } from "@/symbolTable.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
-import { resolveAgencyImportPath, isStdlibImport } from "../importPaths.js";
+import { resolveAgencyImportPath, isStdlibImport, getStdlibDir } from "../importPaths.js";
 import { renderMermaidAscii } from "beautiful-mermaid";
 import { spawn } from "child_process";
 import * as fs from "fs";
@@ -67,9 +67,9 @@ export function readStdin(): Promise<string> {
   });
 }
 
-export function parse(contents: string, config: AgencyConfig): AgencyProgram {
+export function parse(contents: string, config: AgencyConfig, applyTemplate: boolean = true): AgencyProgram {
   const verbose = config.verbose ?? false;
-  const parseResult = parseAgency(contents, config);
+  const parseResult = parseAgency(contents, config, applyTemplate);
 
   // Check if parsing was successful
   if (!parseResult.success) {
@@ -153,7 +153,8 @@ export function compile(
   compiledFiles.add(absoluteInputFile);
 
   const contents = readFile(inputFile);
-  const parsedProgram = parse(contents, config);
+  const isStdlibFile = absoluteInputFile.startsWith(getStdlibDir());
+  const parsedProgram = parse(contents, config, !isStdlibFile);
 
   // Build symbol table once at the top level, reuse for recursive calls
   const symbolTable =

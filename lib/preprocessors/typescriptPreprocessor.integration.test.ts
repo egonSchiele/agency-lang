@@ -87,7 +87,7 @@ describe("TypeScript Preprocessor Integration Tests", () => {
     ({ name, agencyPath, jsonPath, agencyContent, expectedJSON }) => {
       it("should produce correct preprocessed AST", () => {
         // 1. Parse Agency
-        const parseResult = parseAgency(agencyContent);
+        const parseResult = parseAgency(agencyContent, {}, false);
 
         // 2. Assert parsing succeeded
         if (!parseResult.success) {

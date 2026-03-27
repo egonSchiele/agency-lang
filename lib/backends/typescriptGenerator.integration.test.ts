@@ -108,7 +108,7 @@ describe("TypeScript Backend Integration Tests", () => {
     ({ name, agencyPath, mtsPath, agencyContent, expectedTS }) => {
       it("should generate correct TypeScript output", () => {
         // 1. Parse Agency
-        const parseResult = parseAgency(agencyContent);
+        const parseResult = parseAgency(agencyContent, {}, false);
 
         // 2. Assert parsing succeeded
         if (!parseResult.success) {

@@ -62,7 +62,7 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
 
     testCases.forEach(({ description, input, expectedOutput }) => {
       it(`should correctly generate ${description}`, () => {
-        const parseResult = parseAgency(input);
+        const parseResult = parseAgency(input, {}, false);
         expect(parseResult.success).toBe(true);
 
         if (!parseResult.success) return;
@@ -82,7 +82,7 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
   describe("Type preservation", () => {
     it("should preserve primitive types", () => {
       const input = "def test(n: number, s: string, b: boolean) { n }";
-      const parseResult = parseAgency(input);
+      const parseResult = parseAgency(input, {}, false);
       expect(parseResult.success).toBe(true);
 
       if (!parseResult.success) return;
@@ -97,7 +97,7 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
 
     it("should preserve array types", () => {
       const input = "def test(nums: number[], strs: string[]) { nums }";
-      const parseResult = parseAgency(input);
+      const parseResult = parseAgency(input, {}, false);
       expect(parseResult.success).toBe(true);
 
       if (!parseResult.success) return;
@@ -111,7 +111,7 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
 
     it("should preserve union types", () => {
       const input = "def test(val: string | number | boolean) { val }";
-      const parseResult = parseAgency(input);
+      const parseResult = parseAgency(input, {}, false);
       expect(parseResult.success).toBe(true);
 
       if (!parseResult.success) return;
@@ -124,7 +124,7 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
 
     it("should preserve nested array types", () => {
       const input = "def test(matrix: number[][]) { matrix }";
-      const parseResult = parseAgency(input);
+      const parseResult = parseAgency(input, {}, false);
       expect(parseResult.success).toBe(true);
 
       if (!parseResult.success) return;
@@ -139,7 +139,7 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
   describe("Mixed typed and untyped parameters", () => {
     it("should handle first parameter typed, second untyped", () => {
       const input = "def test(x: number, y) { x }";
-      const parseResult = parseAgency(input);
+      const parseResult = parseAgency(input, {}, false);
       expect(parseResult.success).toBe(true);
 
       if (!parseResult.success) return;
@@ -154,7 +154,7 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
 
     it("should handle first parameter untyped, second typed", () => {
       const input = "def test(x, y: string) { x }";
-      const parseResult = parseAgency(input);
+      const parseResult = parseAgency(input, {}, false);
       expect(parseResult.success).toBe(true);
 
       if (!parseResult.success) return;
@@ -169,7 +169,7 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
 
     it("should handle alternating typed and untyped parameters", () => {
       const input = "def test(a, b: number, c, d: string) { a }";
-      const parseResult = parseAgency(input);
+      const parseResult = parseAgency(input, {}, false);
       expect(parseResult.success).toBe(true);
 
       if (!parseResult.success) return;

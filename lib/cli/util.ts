@@ -12,7 +12,7 @@ import {
   ImportStatement,
   VariableType,
 } from "@/types.js";
-import { isStdlibImport, resolveAgencyImportPath } from "../importPaths.js";
+import { isStdlibImport, resolveAgencyImportPath, getStdlibDir } from "../importPaths.js";
 import renderEvaluate from "@/templates/cli/evaluate.js";
 import renderJudgeEvaluate from "@/templates/cli/judgeEvaluate.js";
 import { compile } from "./commands.js";
@@ -292,7 +292,8 @@ export function getImportsRecursively(
   }
   visited.add(filename);
   const contents = fs.readFileSync(filename, "utf-8");
-  const parsed = parseAgency(contents, { verbose: false });
+  const isStdlibFile = filename.startsWith(getStdlibDir());
+  const parsed = parseAgency(contents, { verbose: false }, !isStdlibFile);
   if (!parsed.success) {
     console.error(`Error parsing ${filename}:`, parsed);
     return [];

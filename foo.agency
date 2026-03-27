@@ -1,35 +1,4 @@
-def greet() {
-  print("hi")
-  name = interrupt({ 
-    type: "safe",
-    message: "Who do you want to say bye to?"
-  })
-  print("bye ${name}")
-}
-
-def readStuff() {
-  return interrupt({ 
-    type: "read",
-    message: "Can I read a file?"
-  })
-  contents = read("/Users/adityabhargava/agency-lang/secret")
-  print("The contents of the file are:")
-  print(contents)
-}
-
-def foo() {
-  greet()
-  readStuff()
-}
-
 node main() {
-  handle {
-    foo()
-  } with (data) {
-    if (data.type == "safe") {
-      return approve("Alice")
-    } else if (data.type == "read") {
-      return reject("I don't want you to read files")
-    }
-  }
+  uses print
+  res = llm("What is the capital of France? Print your response")
 }

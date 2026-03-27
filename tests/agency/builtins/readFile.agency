@@ -1,4 +1,4 @@
 node main() {
-  contents = read("testdata.txt")
+  contents = read("tests/agency/builtins/testdata.txt")
   return contents
 }

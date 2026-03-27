@@ -14,6 +14,20 @@
       "expectedOutput": "30",
       "evaluationCriteria": [{ "type": "exact" }],
       "description": "Should multiply 5 * 6 using std::math"
+    },
+    {
+      "nodeName": "testImplicitRound",
+      "input": "",
+      "expectedOutput": "3.14",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Should use round without explicit import (implicit stdlib)"
+    },
+    {
+      "nodeName": "testRoundAsTool",
+      "input": "",
+      "expectedOutput": "2.718",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "round should work as a tool via uses without explicit import"
     }
   ]
 }

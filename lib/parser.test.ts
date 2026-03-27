@@ -232,7 +232,7 @@ describe("parseAgency", () => {
   testCases.forEach(({ input, expected }) => {
     if (expected.success) {
       it(`should parse "${input.replace(/\n/g, "\\n")}" successfully`, () => {
-        const result = parseAgency(input);
+        const result = parseAgency(input, {}, false);
         expect(result.success).toBe(true);
         if (result.success) {
           expect(result.result.type).toBe(expected.programType);
@@ -241,7 +241,7 @@ describe("parseAgency", () => {
       });
     } else {
       it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
-        const result = parseAgency(input);
+        const result = parseAgency(input, {}, false);
         expect(result.success).toBe(false);
       });
     }
@@ -251,7 +251,7 @@ describe("parseAgency", () => {
     const input = `bar :: number
 bar = \`the number 1\``;
 
-    const result = parseAgency(input);
+    const result = parseAgency(input, {}, false);
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result.nodes[0]).toMatchObject({
@@ -276,7 +276,7 @@ bar = \`the number 1\``;
   bar
 }`;
 
-    const result = parseAgency(input);
+    const result = parseAgency(input, {}, false);
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result.nodes.length).toBe(1);

@@ -16,44 +16,10 @@ export const TYPES_THAT_DONT_TRIGGER_NEW_PART: AgencyNode["type"][] = [
  * Most map to themselves; exceptions are names that shadow JS globals.
  */
 export const BUILTIN_FUNCTIONS: Record<string, string> = {
-  print: "print",
-  printJSON: "printJSON",
-  input: "input",
-  read: "read",
-  readImage: "readImage",
-  write: "write",
-  fetch: "_builtinFetch",
-  fetchJSON: "_builtinFetchJSON",
-  fetchJson: "_builtinFetchJSON",
-  sleep: "sleep",
-  round: "round",
-};
-
-export const BUILTIN_FUNCTIONS_TO_ASYNC: Record<string, boolean> = {
-  print: false,
-  input: false,
-  read: true,
-  readImage: true,
-  write: false,
-  fetch: true,
-  fetchJSON: true,
-  fetchJson: true,
-  sleep: false,
 };
 
 export const BUILTIN_TOOLS = [
   "readSkill",
-  "print",
-  "printJSON",
-  "input",
-  "read",
-  "readImage",
-  "write",
-  "fetch",
-  "fetchJSON",
-  "fetchJson",
-  "sleep",
-  "round",
 ];
 
 export const BUILTIN_VARIABLES = ["color"];

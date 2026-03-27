@@ -2,6 +2,31 @@
   "type": "agencyProgram",
   "nodes": [
     {
+      "type": "importStatement",
+      "importedNames": [
+        {
+          "type": "namedImport",
+          "importedNames": [
+            "print",
+            "printJSON",
+            "input",
+            "sleep",
+            "round",
+            "fetch",
+            "fetchJSON",
+            "read",
+            "write",
+            "readImage"
+          ],
+          "safeNames": []
+        }
+      ],
+      "modulePath": "std::index"
+    },
+    {
+      "type": "newLine"
+    },
+    {
       "type": "graphNode",
       "nodeName": "main",
       "parameters": [],

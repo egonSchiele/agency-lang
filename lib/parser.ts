@@ -18,6 +18,7 @@ import {
 
 import { nanoid } from "nanoid";
 import { AgencyConfig } from "./config.js";
+import render from "./templates/backends/agency/template.js";
 import { valueAccessParser } from "./parsers/access.js";
 import { binOpParser } from "./parsers/binop.js";
 import { commentParser } from "./parsers/comment.js";
@@ -126,7 +127,11 @@ export function _parseAgency(
 export function parseAgency(
   input: string,
   config: AgencyConfig = {},
+  applyTemplate: boolean = true,
 ): ParserResult<AgencyProgram> {
+  if (applyTemplate) {
+    input = render({ body: input });
+  }
   try {
     return _parseAgency(input, config);
   } catch (error) {

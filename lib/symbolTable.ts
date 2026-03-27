@@ -4,7 +4,7 @@ import { parseAgency } from "./parser.js";
 import type { AgencyConfig } from "./config.js";
 import type { AgencyProgram } from "./types.js";
 import { walkNodes } from "./utils/node.js";
-import { resolveAgencyImportPath, isStdlibImport } from "./importPaths.js";
+import { resolveAgencyImportPath, isStdlibImport, getStdlibDir } from "./importPaths.js";
 
 export type SymbolKind = "node" | "function" | "type";
 
@@ -67,7 +67,8 @@ export function buildSymbolTable(
     if (!fs.existsSync(absPath)) return;
 
     const contents = fs.readFileSync(absPath, "utf-8");
-    const parseResult = parseAgency(contents, config);
+    const isStdlibFile = absPath.startsWith(getStdlibDir());
+    const parseResult = parseAgency(contents, config, !isStdlibFile);
     if (!parseResult.success) return;
 
     const program = parseResult.result;

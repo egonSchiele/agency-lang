@@ -90,10 +90,6 @@ export function printJSON(obj: any): void {
   console.log(JSON.stringify(obj, null, 2));
 }
 
-export function print(...args: any[]): void {
-  console.log(...args);
-}
-
 export function builtinRound(num: number, precision: number): number {
   const factor = Math.pow(10, precision);
   return Math.round(num * factor) / factor;

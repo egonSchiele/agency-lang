@@ -16,7 +16,6 @@ export const TYPES_THAT_DONT_TRIGGER_NEW_PART: AgencyNode["type"][] = [
  * Most map to themselves; exceptions are names that shadow JS globals.
  */
 export const BUILTIN_FUNCTIONS: Record<string, string> = {
-  print: "print",
   printJSON: "printJSON",
   input: "input",
   read: "read",
@@ -30,7 +29,6 @@ export const BUILTIN_FUNCTIONS: Record<string, string> = {
 };
 
 export const BUILTIN_FUNCTIONS_TO_ASYNC: Record<string, boolean> = {
-  print: false,
   input: false,
   read: true,
   readImage: true,
@@ -43,7 +41,6 @@ export const BUILTIN_FUNCTIONS_TO_ASYNC: Record<string, boolean> = {
 
 export const BUILTIN_TOOLS = [
   "readSkill",
-  "print",
   "printJSON",
   "input",
   "read",

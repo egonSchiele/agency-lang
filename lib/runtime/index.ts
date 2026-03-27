@@ -40,7 +40,6 @@ export {
   builtinSleep,
   builtinRound,
   printJSON,
-  print,
   readSkill,
   tool as _builtinTool,
 } from "./builtins.js";
@@ -49,8 +48,6 @@ export type { ToolRegistryEntry } from "./builtins.js";
 export {
   readSkillTool,
   readSkillToolParams,
-  printTool,
-  printToolParams,
   printJSONTool,
   printJSONToolParams,
   inputTool,

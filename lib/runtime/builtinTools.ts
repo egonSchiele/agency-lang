@@ -16,13 +16,6 @@ Returns:
 };
 export const readSkillToolParams = ["filepath"];
 
-export const printTool = {
-  name: "print",
-  description: `A tool for printing messages to the console.`,
-  schema: z.object({ message: z.string() }),
-};
-export const printToolParams = ["message"];
-
 export const printJSONTool = {
   name: "printJSON",
   description: `A tool for printing an object as formatted JSON to the console.`,

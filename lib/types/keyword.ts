@@ -1,8 +1,10 @@
+import { BaseNode } from "./base.js";
+
 export const keywords = ["break", "continue"] as const;
 
 export type KeywordValue = (typeof keywords)[number];
 
-export type Keyword = {
+export type Keyword = BaseNode & {
   type: "keyword";
   value: KeywordValue;
 };

@@ -1,5 +1,6 @@
 import { ScopeType } from "@/types.js";
 import { ValueAccess } from "./access.js";
+import { BaseNode } from "./base.js";
 
 export type Literal =
   | NumberLiteral
@@ -8,29 +9,29 @@ export type Literal =
   | VariableNameLiteral
   | BooleanLiteral;
 
-export type NumberLiteral = {
+export type NumberLiteral = BaseNode & {
   type: "number";
   value: string;
 };
 
-export type StringLiteral = {
+export type StringLiteral = BaseNode & {
   type: "string";
   segments: PromptSegment[];
 };
 
-export type MultiLineStringLiteral = {
+export type MultiLineStringLiteral = BaseNode & {
   type: "multiLineString";
   segments: PromptSegment[];
 };
 
-export type VariableNameLiteral = {
+export type VariableNameLiteral = BaseNode & {
   type: "variableName";
   value: string;
   scope?: ScopeType;
   async?: boolean;
 };
 
-export type BooleanLiteral = {
+export type BooleanLiteral = BaseNode & {
   type: "boolean";
   value: boolean;
 };
@@ -48,7 +49,7 @@ export type InterpolationSegment = {
   expression: VariableNameLiteral | ValueAccess;
 };
 
-export type RawCode = {
+export type RawCode = BaseNode & {
   type: "rawCode";
   value: string;
 };

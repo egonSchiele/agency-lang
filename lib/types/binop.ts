@@ -1,4 +1,5 @@
 import { ValueAccess } from "./access.js";
+import { BaseNode } from "./base.js";
 import { AgencyArray, AgencyObject } from "./dataStructures.js";
 import { FunctionCall } from "./function.js";
 import { Literal } from "./literals.js";
@@ -48,7 +49,7 @@ export const PRECEDENCE: Record<string, number> = {
   "/=": 0,
 };
 
-export type BinOpExpression = {
+export type BinOpExpression = BaseNode & {
   type: "binOpExpression";
   operator: Operator;
   left: BinOpArgument;

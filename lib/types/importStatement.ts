@@ -1,4 +1,6 @@
-export type ImportStatement = {
+import { BaseNode } from "./base.js";
+
+export type ImportStatement = BaseNode & {
   type: "importStatement";
   importedNames: ImportNameType[];
   modulePath: string;
@@ -33,13 +35,13 @@ export function getImportedNames(importNameType: ImportNameType): string[] {
   }
 }
 
-export type ImportNodeStatement = {
+export type ImportNodeStatement = BaseNode & {
   type: "importNodeStatement";
   importedNodes: string[];
   agencyFile: string;
 };
 
-export type ImportToolStatement = {
+export type ImportToolStatement = BaseNode & {
   type: "importToolStatement";
   importedTools: NamedImport[];
   agencyFile: string;

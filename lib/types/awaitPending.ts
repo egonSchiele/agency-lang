@@ -1,4 +1,5 @@
 import { AccessChainElement } from "./access.js";
+import { BaseNode } from "./base.js";
 import { ScopeType } from "@/types.js";
 
 export type AwaitPendingVariable = {
@@ -7,7 +8,7 @@ export type AwaitPendingVariable = {
   scope?: ScopeType;
 };
 
-export type AwaitPending = {
+export type AwaitPending = BaseNode & {
   type: "awaitPending";
   variables: AwaitPendingVariable[];
 };

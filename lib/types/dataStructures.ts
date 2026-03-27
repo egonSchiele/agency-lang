@@ -1,5 +1,6 @@
 import { Literal } from "../types.js";
 import { ValueAccess } from "./access.js";
+import { BaseNode } from "./base.js";
 import { FunctionCall } from "./function.js";
 
 export type SplatExpression = {
@@ -7,7 +8,7 @@ export type SplatExpression = {
   value: ValueAccess | FunctionCall | Literal;
 };
 
-export type AgencyArray = {
+export type AgencyArray = BaseNode & {
   type: "agencyArray";
   items: (
     | ValueAccess
@@ -28,7 +29,7 @@ export type AgencyObjectKV = {
     | AgencyObject
     | AgencyArray;
 };
-export type AgencyObject = {
+export type AgencyObject = BaseNode & {
   type: "agencyObject";
   entries: (AgencyObjectKV | SplatExpression)[];
 };

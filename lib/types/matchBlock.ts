@@ -1,5 +1,6 @@
 import { Assignment, AgencyComment } from "../types.js";
 import { ValueAccess } from "./access.js";
+import { BaseNode } from "./base.js";
 import { Literal } from "./literals.js";
 import { FunctionCall } from "./function.js";
 import { AgencyArray, AgencyObject } from "./dataStructures.js";
@@ -21,7 +22,7 @@ export type MatchBlockCase = {
     | ReturnStatement;
 };
 
-export type MatchBlock = {
+export type MatchBlock = BaseNode & {
   type: "matchBlock";
   expression: Literal | BinOpExpression | ValueAccess | FunctionCall;
   cases: (MatchBlockCase | AgencyComment)[];

@@ -1,5 +1,6 @@
 import { AgencyNode, FunctionCall, VariableType } from "../types.js";
 import { ValueAccess } from "./access.js";
+import { BaseNode } from "./base.js";
 import { FunctionParameter } from "./function.js";
 import { Literal } from "./literals.js";
 
@@ -16,7 +17,7 @@ export type FunctionDefinition = {
 
 export type Visibility = "public" | "private" | undefined;
 
-export type GraphNodeDefinition = {
+export type GraphNodeDefinition = BaseNode & {
   type: "graphNode";
   nodeName: string;
   parameters: FunctionParameter[];

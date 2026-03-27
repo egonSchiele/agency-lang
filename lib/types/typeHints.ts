@@ -1,4 +1,6 @@
-export type TypeHint = {
+import { BaseNode } from "./base.js";
+
+export type TypeHint = BaseNode & {
   type: "typeHint";
   variableName: string;
   variableType: VariableType;
@@ -54,7 +56,7 @@ export type ObjectType = {
   properties: ObjectProperty[];
 };
 
-export type TypeAlias = {
+export type TypeAlias = BaseNode & {
   type: "typeAlias";
   aliasName: string;
   aliasedType: VariableType;

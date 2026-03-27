@@ -1,3 +1,4 @@
+import { BaseNode } from "./types/base.js";
 import { AccessChainElement, ValueAccess } from "./types/access.js";
 import { BinOpExpression } from "./types/binop.js";
 import {
@@ -42,7 +43,8 @@ export * from "./types/typeHints.js";
 export * from "./types/whileLoop.js";
 export * from "./types/forLoop.js";
 export * from "./types/handleBlock.js";
-export * from "./types/keyword.js"
+export * from "./types/keyword.js";
+export * from "./types/base.js"
 
 /**
  * Scope types for variable resolution.
@@ -132,7 +134,7 @@ export type SharedScope = {
   type: "shared";
 };
 
-export type Assignment = {
+export type Assignment = BaseNode & {
   type: "assignment";
   variableName: string;
   accessChain?: AccessChainElement[];
@@ -161,17 +163,17 @@ export function nodeScope(nodeName: string, args = false): Scope {
   return { type: "node", nodeName, args };
 }
 
-export type AgencyComment = {
+export type AgencyComment = BaseNode & {
   type: "comment";
   content: string;
 };
 
-export type AgencyMultiLineComment = {
+export type AgencyMultiLineComment = BaseNode & {
   type: "multiLineComment";
   content: string;
 };
 
-export type NewLine = {
+export type NewLine = BaseNode & {
   type: "newLine";
 };
 

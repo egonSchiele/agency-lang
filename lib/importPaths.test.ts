@@ -77,6 +77,17 @@ describe("toCompiledImportPath", () => {
   });
 });
 
+describe("std:: import code generation", () => {
+  it("generated import path should point to a .js file inside the stdlib dir", () => {
+    const result = toCompiledImportPath("std::math");
+    // Must be an absolute path ending with stdlib/math.js
+    expect(path.isAbsolute(result)).toBe(true);
+    expect(result).toMatch(/stdlib[/\\]math\.js$/);
+    // The stdlib dir should exist
+    expect(fs.existsSync(path.dirname(result))).toBe(true);
+  });
+});
+
 describe("buildSymbolTable with std:: imports", () => {
   it("should resolve std:: imports and include their symbols", () => {
     // Create a temp file that imports from std::math

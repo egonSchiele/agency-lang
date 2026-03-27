@@ -1,4 +1,4 @@
-import { print } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, round, fetch, fetchJSON } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { foo } from "./foo.js";
 import { fileURLToPath } from "url";
 import process from "process";
@@ -24,38 +24,18 @@ import {
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
-  builtinFetch as _builtinFetch,
-  builtinFetchJSON as _builtinFetchJSON,
-  builtinInput as input,
   builtinRead as _builtinReadRaw,
   builtinWrite as _builtinWriteRaw,
   builtinReadImage as _builtinReadImageRaw,
-  builtinSleep as sleep,
-  builtinRound as round,
-  printJSON,
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
-  printJSONTool as __printJSONTool,
-  printJSONToolParams as __printJSONToolParams,
-  inputTool as __inputTool,
-  inputToolParams as __inputToolParams,
   readTool as __readTool,
   readToolParams as __readToolParams,
   readImageTool as __readImageTool,
   readImageToolParams as __readImageToolParams,
   writeTool as __writeTool,
   writeToolParams as __writeToolParams,
-  fetchTool as __fetchTool,
-  fetchToolParams as __fetchToolParams,
-  fetchJSONTool as __fetchJSONTool,
-  fetchJSONToolParams as __fetchJSONToolParams,
-  fetchJsonTool as __fetchJsonTool,
-  fetchJsonToolParams as __fetchJsonToolParams,
-  sleepTool as __sleepTool,
-  sleepToolParams as __sleepToolParams,
-  roundTool as __roundTool,
-  roundToolParams as __roundToolParams,
   _builtinTool as __builtinTool,
 } from "agency-lang/runtime";
 
@@ -129,24 +109,6 @@ const __toolRegistry = {
       isBuiltin: true
     }
   },
-  printJSON: {
-    definition: __printJSONTool,
-    handler: {
-      name: "printJSON",
-      params: __printJSONToolParams,
-      execute: printJSON,
-      isBuiltin: true
-    }
-  },
-  input: {
-    definition: __inputTool,
-    handler: {
-      name: "input",
-      params: __inputToolParams,
-      execute: input,
-      isBuiltin: true
-    }
-  },
   read: {
     definition: __readTool,
     handler: {
@@ -171,51 +133,6 @@ const __toolRegistry = {
       name: "write",
       params: __writeToolParams,
       execute: write,
-      isBuiltin: true
-    }
-  },
-  fetch: {
-    definition: __fetchTool,
-    handler: {
-      name: "fetch",
-      params: __fetchToolParams,
-      execute: _builtinFetch,
-      isBuiltin: true
-    }
-  },
-  fetchJSON: {
-    definition: __fetchJSONTool,
-    handler: {
-      name: "fetchJSON",
-      params: __fetchJSONToolParams,
-      execute: _builtinFetchJSON,
-      isBuiltin: true
-    }
-  },
-  fetchJson: {
-    definition: __fetchJsonTool,
-    handler: {
-      name: "fetchJson",
-      params: __fetchJsonToolParams,
-      execute: _builtinFetchJSON,
-      isBuiltin: true
-    }
-  },
-  sleep: {
-    definition: __sleepTool,
-    handler: {
-      name: "sleep",
-      params: __sleepToolParams,
-      execute: sleep,
-      isBuiltin: true
-    }
-  },
-  round: {
-    definition: __roundTool,
-    handler: {
-      name: "round",
-      params: __roundToolParams,
-      execute: round,
       isBuiltin: true
     }
   }

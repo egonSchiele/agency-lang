@@ -687,8 +687,11 @@ export class AgencyGenerator {
     const importedNames = node.importedNames.map((name) =>
       this.processImportNameType(name),
     );
+    const modulePath = node.modulePath.startsWith("std::")
+      ? node.modulePath.replace(/\.agency$/, "")
+      : node.modulePath;
     const str = this.indentStr(
-      `import ${importedNames.join(", ")} from "${node.modulePath}"`,
+      `import ${importedNames.join(", ")} from "${modulePath}"`,
     );
     return str;
   }

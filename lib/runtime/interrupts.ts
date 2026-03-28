@@ -58,6 +58,7 @@ export type Interrupt<T = any> = {
   type: "interrupt";
   //interruptId: string; // nanoid — globally unique
   data: T;
+  debugger?: boolean;
   interruptData?: InterruptData;
   checkpointId?: number;
   checkpoint?: Checkpoint;
@@ -74,6 +75,10 @@ export function interrupt<T = any>(data: T): Interrupt<T> {
 
 export function isInterrupt(obj: any): obj is Interrupt {
   return obj && obj.type === "interrupt";
+}
+
+export function isDebugger(obj: any): obj is Interrupt {
+  return isInterrupt(obj) === true && obj.debugger === true;
 }
 
 export function isRejected(obj: any): obj is Rejected {

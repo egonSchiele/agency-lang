@@ -1503,7 +1503,6 @@ export class TypeScriptBuilder {
           renderInterruptReturn.default({
             interruptArgs,
             nodeContext: true,
-            debugger: false,
           }),
         );
       }
@@ -1543,7 +1542,6 @@ export class TypeScriptBuilder {
         renderInterruptReturn.default({
           interruptArgs,
           nodeContext: this.getCurrentScope().type === "node",
-          debugger: false,
         }),
       );
     } else if (
@@ -1916,12 +1914,20 @@ export class TypeScriptBuilder {
     const label = node.label !== undefined
       ? `\`${node.label}\``
       : "undefined";
+    const returnExpr = this.isInsideGraphNode
+      ? `return { messages: __threads, data: __debugInterrupt };`
+      : `return __debugInterrupt;`;
     return ts.raw(
-      renderInterruptReturn.default({
-        interruptArgs: label,
-        nodeContext: this.isInsideGraphNode,
-        debugger: true,
-      }),
+      `if (__state.interruptData?.interruptResponse?.type === "approve") {\n` +
+      `  __state.interruptData.interruptResponse = null;\n` +
+      `} else {\n` +
+      `  const __debugInterrupt = interrupt(${label});\n` +
+      `  __debugInterrupt.debugger = true;\n` +
+      `  const __checkpointId = __ctx.checkpoints.create(__ctx);\n` +
+      `  __debugInterrupt.checkpointId = __checkpointId;\n` +
+      `  __debugInterrupt.checkpoint = __ctx.checkpoints.get(__checkpointId);\n` +
+      `  ${returnExpr}\n` +
+      `}`,
     );
   }
 

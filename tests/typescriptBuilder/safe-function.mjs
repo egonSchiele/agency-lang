@@ -12,7 +12,7 @@ import {
   RuntimeContext, MessageThread, ThreadStore,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
-  interrupt, isInterrupt, isRejected, isApproved, interruptWithHandlers,
+  interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
   rejectInterrupt as _rejectInterrupt,
@@ -75,7 +75,7 @@ function approve(value?: any) { return { type: "approved" as const, value }; }
 function reject(value?: any) { return { type: "rejected" as const, value }; }
 
 // Interrupt and rewind re-exports bound to this module's context
-export { interrupt, isInterrupt };
+export { interrupt, isInterrupt, isDebugger };
 export const respondToInterrupt = (interrupt: Interrupt, response: InterruptResponse, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupt({ ctx: __globalCtx, interrupt, interruptResponse: response, overrides: opts?.overrides, metadata: opts?.metadata });
 export const approveInterrupt = (interrupt: Interrupt, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _approveInterrupt({ ctx: __globalCtx, interrupt, overrides: opts?.overrides, metadata: opts?.metadata });
 export const rejectInterrupt = (interrupt: Interrupt, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _rejectInterrupt({ ctx: __globalCtx, interrupt, overrides: opts?.overrides, metadata: opts?.metadata });

@@ -16,7 +16,8 @@
             "fetchJSON",
             "read",
             "write",
-            "readImage"
+            "readImage",
+            "notify"
           ],
           "safeNames": []
         }

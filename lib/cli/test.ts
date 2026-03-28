@@ -15,7 +15,7 @@ import {
 import { color } from "@/utils/termcolors.js";
 import { AgencyConfig } from "@/config.js";
 import path from "path";
-import { compile } from "./commands.js";
+import { compile, loadConfig } from "./commands.js";
 import { execFileSync } from "child_process";
 type Exact = { type: "exact" };
 type LLMJudge = {
@@ -534,10 +534,14 @@ export async function testTs(config: AgencyConfig, inputPaths: string[]) {
         continue;
       }
 
-      // Compile the .agency file
+      // Compile the .agency file, merging any local agency.json config
       const agencyPath = path.join(dir, agencyFile);
+      const localConfigPath = path.join(dir, "agency.json");
+      const effectiveConfig = fs.existsSync(localConfigPath)
+        ? { ...config, ...loadConfig(localConfigPath) }
+        : config;
       try {
-        compile(config, agencyPath);
+        compile(effectiveConfig, agencyPath);
       } catch (e) {
         console.log(color.red(`  ✗ Compilation failed: ${e}`));
         failures.push(dir);

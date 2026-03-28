@@ -36,6 +36,20 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   return __resolvedValue;
   {{/nodeContext}}
 } else {
+  {{#debugger}}
+  const __debugInterrupt = interrupt({{{interruptArgs}}});
+  __debugInterrupt.debugger = true;
+  const __checkpointId = __ctx.checkpoints.create(__ctx);
+  __debugInterrupt.checkpointId = __checkpointId;
+  __debugInterrupt.checkpoint = __ctx.checkpoints.get(__checkpointId);
+  {{#nodeContext}}
+  return { messages: __threads, data: __debugInterrupt };
+  {{/nodeContext}}
+  {{^nodeContext}}
+  return __debugInterrupt;
+  {{/nodeContext}}
+  {{/debugger}}
+  {{^debugger}}
   const __handlerResult = await interruptWithHandlers({{{interruptArgs}}}, __ctx);
   if (isRejected(__handlerResult)) {
     {{#nodeContext}}
@@ -58,11 +72,13 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
     {{/nodeContext}}
   }
   // Approved — continue execution past interrupt
+  {{/debugger}}
 }
 `;
 
 export type TemplateType = {
   nodeContext: boolean;
+  debugger: boolean;
   interruptArgs: string | boolean | number;
 };
 

@@ -6,6 +6,7 @@ describe("debuggerParser", () => {
   it("parses bare debugger statement", () => {
     const result = debuggerParser("debugger");
     expect(result.success).toBe(true);
+    if (!result.success) throw new Error("expected success");
     expect(result.result).toEqual(
       expect.objectContaining({
         type: "debuggerStatement",
@@ -17,6 +18,7 @@ describe("debuggerParser", () => {
   it("parses debugger with label", () => {
     const result = debuggerParser('debugger("checking mood")');
     expect(result.success).toBe(true);
+    if (!result.success) throw new Error("expected success");
     expect(result.result).toEqual(
       expect.objectContaining({
         type: "debuggerStatement",
@@ -28,6 +30,7 @@ describe("debuggerParser", () => {
   it("parses debugger with single-quoted label", () => {
     const result = debuggerParser("debugger('my label')");
     expect(result.success).toBe(true);
+    if (!result.success) throw new Error("expected success");
     expect(result.result).toEqual(
       expect.objectContaining({
         type: "debuggerStatement",
@@ -45,7 +48,8 @@ describe("debuggerParser", () => {
     const code = `node main() {\n  debugger\n  debugger("label")\n  return 1\n}`;
     const result = parseAgency(code, {}, false);
     expect(result.success).toBe(true);
-    const nodeBody = result.result.nodes[0].body;
+    if (!result.success) throw new Error("expected success");
+    const nodeBody = (result.result.nodes[0] as any).body;
     const debuggerNodes = nodeBody.filter(
       (n: any) => n.type === "debuggerStatement",
     );

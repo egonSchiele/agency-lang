@@ -46,6 +46,7 @@ export {
 export {
   interrupt,
   isInterrupt,
+  isDebugger,
   isRejected,
   isApproved,
   interruptWithHandlers,

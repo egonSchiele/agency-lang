@@ -23,6 +23,7 @@ import {
   TYPES_THAT_DONT_TRIGGER_NEW_PART,
 } from "@/config.js";
 import { Sentinel } from "@/types/sentinel.js";
+import { DebuggerStatement } from "@/types/debuggerStatement.js";
 import { SpecialVar } from "@/types/specialVar.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
@@ -540,6 +541,8 @@ export class TypeScriptBuilder {
         return this.processKeyword(node);
       case "sentinel":
         return this.processSentinel(node);
+      case "debuggerStatement":
+        return this.processDebuggerStatement(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
@@ -1907,6 +1910,27 @@ export class TypeScriptBuilder {
     return ts.empty();
   }
 
+  private processDebuggerStatement(node: DebuggerStatement): TsNode {
+    const label = node.label !== undefined
+      ? JSON.stringify(node.label)
+      : "undefined";
+    const returnExpr = this.isInsideGraphNode
+      ? `return { messages: __threads, data: __debugInterrupt };`
+      : `return __debugInterrupt;`;
+    return ts.raw(
+      `if (__state.interruptData?.interruptResponse?.type === "approve") {\n` +
+      `  __state.interruptData.interruptResponse = null;\n` +
+      `} else {\n` +
+      `  const __debugInterrupt = interrupt(${label});\n` +
+      `  __debugInterrupt.debugger = true;\n` +
+      `  const __checkpointId = __ctx.checkpoints.create(__ctx);\n` +
+      `  __debugInterrupt.checkpointId = __checkpointId;\n` +
+      `  __debugInterrupt.checkpoint = __ctx.checkpoints.get(__checkpointId);\n` +
+      `  ${returnExpr}\n` +
+      `}`,
+    );
+  }
+
   private buildPromptString({
     segments,
     typeHints,
@@ -2148,6 +2172,18 @@ export class TypeScriptBuilder {
     body: AgencyNode[],
     opts: { isInSafeFunction?: boolean } = {},
   ): TsStepBlock[] {
+    // Debugger mode: insert breakpoints before each step-triggering statement
+    if (this.agencyConfig?.debugger) {
+      const expanded: AgencyNode[] = [];
+      for (const stmt of body) {
+        if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type) && stmt.type !== "debuggerStatement") {
+          expanded.push({ type: "debuggerStatement" } as DebuggerStatement);
+        }
+        expanded.push(stmt);
+      }
+      body = expanded;
+    }
+
     const parts: TsNode[][] = [[]];
     // Maps step index to the branch key (subStepPath) captured at processing time
     const branchKeys: Record<number, string> = {};

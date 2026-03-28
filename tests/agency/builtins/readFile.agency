@@ -1,4 +1,8 @@
 node main() {
-  contents = read("tests/agency/builtins/testdata.txt")
+  handle {
+    contents = read("tests/agency/builtins/testdata.txt")
+  } with (data) {
+    return approve()
+  }
   return contents
 }

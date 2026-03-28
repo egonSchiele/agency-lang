@@ -1,0 +1,8 @@
+node main() {
+  handle {
+    debugger("inside handle")
+    return 42
+  } with (data) {
+    return approve()
+  }
+}

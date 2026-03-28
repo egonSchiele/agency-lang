@@ -1,0 +1,4 @@
+node main(message: string) {
+  mood: "happy" | "sad" = llm("Categorize the mood: ${message}")
+  return mood
+}

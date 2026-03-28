@@ -27,6 +27,7 @@ import { TypeAlias, TypeHint, VariableType } from "./types/typeHints.js";
 import { WhileLoop } from "./types/whileLoop.js";
 import { AwaitPending } from "./types/awaitPending.js";
 import { HandleBlock } from "./types/handleBlock.js";
+import { Sentinel } from "./types/sentinel.js";
 export * from "./types/access.js";
 export * from "./types/awaitPending.js";
 export * from "./types/dataStructures.js";
@@ -44,6 +45,7 @@ export * from "./types/whileLoop.js";
 export * from "./types/forLoop.js";
 export * from "./types/handleBlock.js";
 export * from "./types/keyword.js";
+export * from "./types/sentinel.js";
 export * from "./types/base.js"
 
 /**
@@ -207,7 +209,8 @@ export type AgencyNode =
   | Keyword
   | ForLoop
   | AwaitPending
-  | HandleBlock;
+  | HandleBlock
+  | Sentinel;
 
 export type AgencyProgram = {
   type: "agencyProgram";

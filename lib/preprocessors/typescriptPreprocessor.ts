@@ -10,6 +10,7 @@ import {
   IfElse,
   RawCode,
   ScopeType,
+  Sentinel,
   WhileLoop,
 } from "@/types.js";
 import { MessageThread } from "@/types/messageThread.js";
@@ -19,6 +20,42 @@ import {
   getAllVariablesInBodyArray,
   walkNodesArray,
 } from "@/utils/node.js";
+
+/**
+ * Recursively apply a transform function to all body arrays in a node tree.
+ * Handles ifElse (thenBody/elseBody), loops, threads, match blocks, handle blocks, etc.
+ */
+function walkBody(
+  body: AgencyNode[],
+  fn: (body: AgencyNode[]) => AgencyNode[],
+): AgencyNode[] {
+  const walked = body.map((node) => {
+    if (node.type === "ifElse") {
+      node.thenBody = walkBody(node.thenBody, fn);
+      if (node.elseBody) {
+        node.elseBody = walkBody(node.elseBody, fn);
+      }
+    } else if (
+      node.type === "forLoop" ||
+      node.type === "whileLoop" ||
+      node.type === "messageThread"
+    ) {
+      node.body = walkBody(node.body, fn);
+    } else if (node.type === "matchBlock") {
+      for (const caseItem of node.cases) {
+        if (caseItem.type === "comment") continue;
+        caseItem.body = walkBody([caseItem.body], fn)[0] as any;
+      }
+    } else if (node.type === "handleBlock") {
+      node.body = walkBody(node.body, fn);
+      if (node.handler.kind === "inline") {
+        node.handler.body = walkBody(node.handler.body, fn);
+      }
+    }
+    return node;
+  });
+  return fn(walked);
+}
 
 /** Check if a node is an llm() function call */
 function isLlmCall(node: AgencyNode): node is FunctionCall {
@@ -124,6 +161,7 @@ export class TypescriptPreprocessor {
     this.validateNoAsyncInLoops();
     this.validateNoBareInterrupts();
     this.resolveVariableScopes();
+    this.insertCheckpointSentinels();
     return this.program;
   }
 
@@ -1345,6 +1383,43 @@ export class TypescriptPreprocessor {
           const scope = lookupScope("", name);
           node.scope = scope || "imported";
         }
+      }
+    }
+  }
+
+  protected insertCheckpointSentinels(): void {
+    for (const node of this.program.nodes) {
+      if (node.type === "function" || node.type === "graphNode") {
+        node.body = walkBody(node.body, (body) => {
+          const newBody: AgencyNode[] = [];
+          for (const stmt of body) {
+            newBody.push(stmt);
+            if (
+              stmt.type === "assignment" &&
+              isLlmCall(stmt.value) &&
+              !stmt.value.async
+            ) {
+              const prompt = stmt.value.arguments[0];
+              if (!stmt.scope || !prompt) {
+                console.error(
+                  `[insertCheckpointSentinels] Skipping checkpoint for "${stmt.variableName}": missing scope or prompt`,
+                );
+                continue;
+              }
+              const sentinel: Sentinel = {
+                type: "sentinel",
+                value: "checkpoint",
+                data: {
+                  targetVariable: stmt.variableName,
+                  prompt,
+                  scope: stmt.scope,
+                },
+              };
+              newBody.push(sentinel);
+            }
+          }
+          return newBody;
+        });
       }
     }
   }

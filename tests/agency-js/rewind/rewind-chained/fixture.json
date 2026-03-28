@@ -1,0 +1,8 @@
+{
+  "checkpoints1Count": 2,
+  "checkpoints2Count": 1,
+  "finalResult": {
+    "mood": "happy",
+    "confidence": "high"
+  }
+}

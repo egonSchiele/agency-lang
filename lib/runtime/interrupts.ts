@@ -7,6 +7,7 @@ import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { Approved, GraphState, Rejected } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
+import { applyOverrides } from "./rewind.js";
 
 export type InterruptApprove = {
   type: "approve";
@@ -149,6 +150,7 @@ export async function respondToInterrupt(args: {
   ctx: RuntimeContext<GraphState>;
   interrupt: Interrupt;
   interruptResponse: InterruptResponse;
+  overrides?: Record<string, unknown>;
   metadata?: Record<string, any>;
 }): Promise<any> {
   // console.log(color.green(JSON.stringify({ args }, null, 2)));
@@ -177,6 +179,10 @@ export async function respondToInterrupt(args: {
     throw new Error(
       "No checkpoint found for interrupt. The interrupt may have been created with an older format.",
     );
+  }
+
+  if (args.overrides) {
+    applyOverrides(checkpoint, args.overrides);
   }
 
   const execCtx = ctx.createExecutionContext();
@@ -241,16 +247,19 @@ export async function respondToInterrupt(args: {
 export async function approveInterrupt({
   ctx,
   interrupt,
+  overrides,
   metadata,
 }: {
   ctx: RuntimeContext<GraphState>;
   interrupt: Interrupt;
+  overrides?: Record<string, unknown>;
   metadata?: Record<string, any>;
 }): Promise<any> {
   return await respondToInterrupt({
     ctx,
     interrupt,
     interruptResponse: { type: "approve" },
+    overrides,
     metadata,
   });
 }
@@ -259,17 +268,20 @@ export async function modifyInterrupt({
   ctx,
   interrupt,
   newArguments,
+  overrides,
   metadata,
 }: {
   ctx: RuntimeContext<GraphState>;
   interrupt: Interrupt;
   newArguments: Record<string, any>;
+  overrides?: Record<string, unknown>;
   metadata?: Record<string, any>;
 }): Promise<any> {
   return await respondToInterrupt({
     ctx,
     interrupt,
     interruptResponse: { type: "modify", newArguments },
+    overrides,
     metadata,
   });
 }
@@ -277,16 +289,19 @@ export async function modifyInterrupt({
 export async function rejectInterrupt({
   ctx,
   interrupt,
+  overrides,
   metadata,
 }: {
   ctx: RuntimeContext<GraphState>;
   interrupt: Interrupt;
+  overrides?: Record<string, unknown>;
   metadata?: Record<string, any>;
 }): Promise<any> {
   return await respondToInterrupt({
     ctx,
     interrupt,
     interruptResponse: { type: "reject" },
+    overrides,
     metadata,
   });
 }
@@ -295,17 +310,20 @@ export async function resolveInterrupt({
   ctx,
   interrupt,
   value,
+  overrides,
   metadata,
 }: {
   ctx: RuntimeContext<GraphState>;
   interrupt: Interrupt;
   value: any;
+  overrides?: Record<string, unknown>;
   metadata?: Record<string, any>;
 }): Promise<any> {
   return await respondToInterrupt({
     ctx,
     interrupt,
     interruptResponse: { type: "resolve", value },
+    overrides,
     metadata,
   });
 }

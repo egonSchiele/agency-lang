@@ -171,6 +171,14 @@ export class StateStack {
     return this.stack.pop();
   }
 
+  lastFrame(): State {
+    return this.stack[this.stack.length - 1];
+  }
+
+  static lastFrameJSON(json: StateStackJSON): StateJSON {
+    return json.stack[json.stack.length - 1];
+  }
+
   currentNodeId(): string | undefined {
     return this.nodesTraversed[this.nodesTraversed.length - 1];
   }

@@ -10,6 +10,7 @@ import type {
 } from "smoltalk";
 import type { RunNodeResult } from "./types.js";
 import type { AuditEntry } from "./audit.js";
+import type { RewindCheckpoint } from "./rewind.js";
 
 export type CallbackMap = {
   onAgentStart: {
@@ -48,6 +49,7 @@ export type CallbackMap = {
     | { type: "done"; result: PromptResult }
     | { type: "error"; error: any };
   onAuditLog: AuditEntry;
+  onCheckpoint: RewindCheckpoint;
 };
 
 export type CallbackReturn<K extends keyof CallbackMap> = K extends

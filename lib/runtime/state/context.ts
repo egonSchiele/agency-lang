@@ -25,6 +25,7 @@ export class RuntimeContext<T> {
   handlers: HandlerFn[];
   pendingPromises: PendingPromiseStore;
   graph: SimpleMachine<T>;
+  _skipNextCheckpoint: boolean;
 
   // we need a single statelog client instance that can be used across the entire execution of the graph,
   // so that all the logs share the same traceId, so they all show up in the same trace in the Statelog dashboard.
@@ -58,6 +59,10 @@ export class RuntimeContext<T> {
     this.handlers = [];
     this.callbacks = {};
     this.onStreamLock = false;
+    // When rewinding, the checkpoint lives in a sentinel step right after the LLM call.
+    // On restore, the sentinel re-runs and would emit a duplicate checkpoint.
+    // rewindFrom sets this flag so the first sentinel skips, then clears it.
+    this._skipNextCheckpoint = false;
     this.pendingPromises = new PendingPromiseStore();
     this.dirname = args.dirname;
 
@@ -88,6 +93,7 @@ export class RuntimeContext<T> {
     execCtx.handlers = [];
     execCtx.callbacks = {};
     execCtx.onStreamLock = false;
+    execCtx._skipNextCheckpoint = false;
     execCtx.pendingPromises = new PendingPromiseStore();
     execCtx.statelogClient = new StatelogClient({
       ...this.statelogConfig,

@@ -1,0 +1,66 @@
+// This tests that after we resume from a checkpoint,
+// all handlers get re-registered. The reason this works
+// is that the body of the handler is all substeps under
+// the handler. So the code looks something like this:
+//
+// ```
+//     if (__step <= 1) {
+//       const __sub_1 = __stack.locals.__substep_1 ?? 0;
+//       const __handler_1 = async (__data) => await innerHandler(__data, {
+//         ctx: __ctx,
+//         threads: new ThreadStore(),
+//         interruptData: void 0
+//       });
+//       __ctx.pushHandler(__handler_1);
+//       try {
+//         if (__sub_1 <= 0) {
+//           __self.__removedTools = __self.__removedTools || [];
+//           __stack.locals.mood = await runPrompt({
+// ```
+//
+// Notice that the handler step is __step 1, but then all the statements
+// inside the handler are __sub_1, __sub_2, etc.
+//
+// This means that if you resume inside a handler, you will always hit the step
+// that the handler is on, and the handler will always get re-registered,
+// and then you will enter a sub-step.
+
+
+log = []
+interruptResult = null
+
+def outerHandler(data) {
+  log.push("outer handler called")
+  return approve(true)
+}
+
+def innerHandler(data) {
+  log.push("inner handler called")
+  // pass through to outer
+}
+
+def bar(message: string) {
+  handle {
+    mood: "happy" | "sad" = llm("Categorize the mood: ${message}")
+    // After rewind, this interrupt should still be caught by both handlers
+    interruptResult = interrupt("safety-check")
+    log.push("after interrupt")
+    return mood
+  } with innerHandler
+}
+
+def foo(message: string) {
+  handle {
+    return bar(message)
+  } with outerHandler
+}
+
+
+node main(message: string) {
+  result = foo(message)
+  return { 
+    mood: result,
+    result: interruptResult,
+    log: log
+  }
+}

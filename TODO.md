@@ -136,3 +136,7 @@ Currently only TypeScript functions can be marked safe. We should be able to der
 
 
   Use zod schemas in statestack fromjson func.
+
+  Currently, multi-line comments seem to strip all leading whitespace from every line, which means there is no way to put a code snippet inside the comment without the formatting getting all messed up. The same thing seems to be true for multi-line strings, weirdly enough.
+
+  Update the override functionality in rewinds and interrupts to support overriding not only the values of local variables, but also the values of global variables, and arguments to functions.

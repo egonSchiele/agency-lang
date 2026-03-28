@@ -1,0 +1,16 @@
+{
+  "originalMood": "sad",
+  "originalHandled": true,
+  "originalLog": [
+    "inner handler called",
+    "outer handler called",
+    "after interrupt"
+  ],
+  "rewoundMood": "happy",
+  "rewoundHandled": true,
+  "rewoundLog": [
+    "inner handler called",
+    "outer handler called",
+    "after interrupt"
+  ]
+}

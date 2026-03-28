@@ -1,0 +1,23 @@
+if (__ctx.callbacks.onCheckpoint) {
+  if (__ctx._skipNextCheckpoint) {
+    __ctx._skipNextCheckpoint = false;
+  } else {
+    const __cpId = __ctx.checkpoints.create(__ctx);
+    const __cp = __ctx.checkpoints.get(__cpId);
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onCheckpoint",
+      data: {
+        checkpoint: __cp,
+        llmCall: {
+          step: __stack.step,
+          targetVariable: "{{{targetVariable}}}",
+          prompt: {{{prompt}}},
+          response: {{{response}}},
+          model: __ctx.getSmoltalkConfig().model || "unknown",
+        },
+      },
+    });
+    __ctx.checkpoints.delete(__cpId);
+  }
+}

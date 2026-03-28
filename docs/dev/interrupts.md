@@ -199,6 +199,68 @@ The iteration skipping, substep guards, and end-of-iteration reset all work iden
 
 The IR node is `TsForSteps`, with code generation handled by `forSteps.mustache`.
 
+## Overriding local variables when resuming from an interrupt
+
+All interrupt response functions (`approveInterrupt`, `rejectInterrupt`, `modifyInterrupt`, `resolveInterrupt`) accept an optional `overrides` parameter that lets you modify local variables in the execution state before resuming.
+
+This is useful when you want to both respond to the interrupt *and* correct a value that was computed earlier in the execution.
+
+### API
+
+Each function takes an options object as its last parameter:
+
+```ts
+approveInterrupt(interrupt, { overrides: { mood: "happy" } });
+rejectInterrupt(interrupt, { overrides: { retryCount: 0 } });
+resolveInterrupt(interrupt, resolvedValue, { overrides: { mood: "happy" } });
+modifyInterrupt(interrupt, newArgs, { overrides: { mood: "happy" } });
+```
+
+### What you can override
+
+The `overrides` parameter is `Record<string, unknown>`. It sets values in the local variables of the stack frame where the interrupt occurred. You can override any local variable that exists at that point:
+
+```ts
+// Override the result of a previous LLM call
+approveInterrupt(interrupt, {
+  overrides: { mood: "happy", confidence: "high" },
+});
+```
+
+### Example
+
+```agency
+node main(message: string) {
+  mood: "happy" | "sad" = llm("Categorize: ${message}")
+  result = interrupt("Confirm mood: ${mood}")
+  response: string = llm("Respond to ${mood} user")
+  return { mood, response }
+}
+```
+
+From TypeScript:
+
+```ts
+import { main, approveInterrupt, isInterrupt } from "./agent.js";
+
+const result = await main("I feel fine");
+
+if (isInterrupt(result.data)) {
+  // The LLM said "sad" but we want to correct it to "happy"
+  // AND approve the interrupt
+  const fixed = await approveInterrupt(result.data, {
+    overrides: { mood: "happy" },
+  });
+  console.log(fixed.data.mood); // "happy"
+}
+```
+
+The override is applied to the checkpoint state before execution resumes, so the subsequent LLM call sees `mood = "happy"`.
+
+### Implementation
+
+Overrides are applied via the shared `applyOverrides` helper in `lib/runtime/rewind.ts`. The interrupt response functions in `lib/runtime/interrupts.ts` call `applyOverrides` after getting the checkpoint but before calling `restoreState`.
+
 ## Key files
 
 | File | Role |

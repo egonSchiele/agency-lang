@@ -22,10 +22,12 @@ import {
   BUILTIN_VARIABLES,
   TYPES_THAT_DONT_TRIGGER_NEW_PART,
 } from "@/config.js";
+import { Sentinel } from "@/types/sentinel.js";
 import { SpecialVar } from "@/types/specialVar.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
 import * as renderInterruptReturn from "../templates/backends/typescriptGenerator/interruptReturn.js";
+import * as renderRewindCheckpoint from "../templates/backends/typescriptGenerator/rewindCheckpoint.js";
 
 import { AgencyConfig } from "@/config.js";
 import {
@@ -536,6 +538,8 @@ export class TypeScriptBuilder {
         return this.processBinOpExpression(node);
       case "keyword":
         return this.processKeyword(node);
+      case "sentinel":
+        return this.processSentinel(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
@@ -1878,9 +1882,29 @@ export class TypeScriptBuilder {
           ]),
         ),
       );
+
     }
 
     return ts.statements(stmts);
+  }
+
+  private processSentinel(node: Sentinel): TsNode {
+    if (node.value === "checkpoint") {
+      const promptNode = this.processNode(node.data.prompt);
+      const varRef = ts.scopedVar(
+        node.data.targetVariable,
+        node.data.scope,
+        this.moduleId,
+      );
+      return ts.raw(
+        renderRewindCheckpoint.default({
+          targetVariable: node.data.targetVariable,
+          prompt: printTs(promptNode),
+          response: printTs(varRef),
+        }),
+      );
+    }
+    return ts.empty();
   }
 
   private buildPromptString({

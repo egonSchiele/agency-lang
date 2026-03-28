@@ -1,0 +1,20 @@
+{
+  "approve": {
+    "x": 42,
+    "result": true
+  },
+  "reject": {
+    "x": 99,
+    "result": false
+  },
+  "resolve": {
+    "x": 77,
+    "result": "resolved-value"
+  },
+  "llmOverride": {
+    "mood": "happy"
+  },
+  "threadOverride": {
+    "mood": "happy"
+  }
+}

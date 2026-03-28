@@ -82,7 +82,7 @@ export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<strin
 export const resolveInterrupt = (interrupt: Interrupt, value: any, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, overrides: opts?.overrides, metadata: opts?.metadata });
 export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
 function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("assignment.agency")
+  __ctx.globals.markInitialized("rewindCheckpoint.agency")
 }
 const __toolRegistry = {
   readSkill: {
@@ -116,19 +116,21 @@ const __graph = __ctx.graph;
       nodeName: "main"
     }
   })
+  if (!__state.isResume) {
+    __stack.args["message"] = __state.data.message;
+  }
   if (__step <= 0) {
-          
-    
+      
           __stack.step++;
   }
   if (__step <= 1) {
           __self.__removedTools = __self.__removedTools || [];
-__stack.locals.bar = await runPrompt({
+__stack.locals.mood = await runPrompt({
       ctx: __ctx,
-      prompt: `the number 1`,
+      prompt: `Categorize: ${__stack.args.message}`,
       messages: __threads.createAndReturnThread(),
       responseFormat: z.object({
-        response: z.number()
+        response: z.union([z.literal("happy"), z.literal("sad")])
       }),
       clientConfig: {},
       maxToolCallRounds: 10,
@@ -136,11 +138,11 @@ __stack.locals.bar = await runPrompt({
       removedTools: __self.__removedTools
     });
 // return early from node if this is an interrupt
-if (isInterrupt(__stack.locals.bar)) {
+if (isInterrupt(__stack.locals.mood)) {
       await __ctx.pendingPromises.awaitAll()
       return {
         messages: __threads,
-        data: __stack.locals.bar
+        data: __stack.locals.mood
       };
     }
     await __ctx.audit({
@@ -164,9 +166,9 @@ if (isInterrupt(__stack.locals.bar)) {
         checkpoint: __cp,
         llmCall: {
           step: __stack.step,
-          targetVariable: "bar",
-          prompt: `the number 1`,
-          response: __stack.locals.bar,
+          targetVariable: "mood",
+          prompt: `Categorize: ${__stack.args.message}`,
+          response: __stack.locals.mood,
           model: __ctx.getSmoltalkConfig().model || "unknown",
         },
       },
@@ -175,6 +177,19 @@ if (isInterrupt(__stack.locals.bar)) {
   }
 }
 
+    
+          __stack.step++;
+  }
+  if (__step <= 3) {
+          const __auditReturnValue = {
+      messages: __threads,
+      data: __stack.locals.mood
+    };
+await __ctx.audit({
+      type: "return",
+      value: __auditReturnValue
+    })
+return __auditReturnValue;
     
           __stack.step++;
   }
@@ -191,17 +206,20 @@ if (isInterrupt(__stack.locals.bar)) {
     data: undefined
   };
 })
-export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
+
+export async function main(message: string, { messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
     ctx: __globalCtx,
     nodeName: "main",
-    data: {},
+    data: {
+      message: message
+    },
     messages: messages,
     callbacks: callbacks,
     initializeGlobals: __initializeGlobals
   });
 }
-export const __mainNodeParams = [];
+export const __mainNodeParams = ["message"];
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const initialState = {

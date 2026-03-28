@@ -259,6 +259,9 @@ The `AuditEntry` type is a discriminated union defined in `lib/runtime/audit.ts`
 
 Users can also set `audit.logFile` in `agency.json` (or use `agency run -l <file>`) to write audit entries to a JSONL file. See `docs/superpowers/specs/2026-03-20-audit-logs-design.md` for the full design.
 
+## CRITICAL: Handlers are safety infrastructure
+Handlers (`handle` blocks) are a crucial part of what makes Agency safe. They must NEVER be accidentally skipped or left unregistered. Any feature that affects execution flow (rewind, interrupts, checkpoints, state restoration) must ensure handlers are correctly registered and invoked. If there is any risk of a handler being skipped, treat it as a critical issue and flag it immediately. Handlers are registered on `__ctx.handlers` via `pushHandler()` in the generated code and are NOT serialized as part of checkpoint state — be aware of this when working on state restoration features.
+
 ## General code Guidelines
 - NEVER use dynamic imports
 - Use objects instead of maps.

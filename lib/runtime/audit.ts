@@ -74,6 +74,13 @@ export type HandlerDecisionAudit = AuditBase & {
   value?: unknown;
 };
 
+export type RewindAudit = AuditBase & {
+  type: "rewind";
+  nodeName: string;
+  step: number;
+  overrides: Record<string, unknown>;
+};
+
 export type AuditEntry =
   | AssignmentAudit
   | FunctionCallAudit
@@ -85,7 +92,8 @@ export type AuditEntry =
   | InterruptAudit
   | RestoreAudit
   | HandlerResultAudit
-  | HandlerDecisionAudit;
+  | HandlerDecisionAudit
+  | RewindAudit;
 
 // Distributive Omit so that discriminated union members are preserved
 export type AuditEntryInput = AuditEntry extends infer T

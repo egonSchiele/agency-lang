@@ -16,7 +16,8 @@
             "fetchJSON",
             "read",
             "write",
-            "readImage"
+            "readImage",
+            "notify"
           ],
           "safeNames": []
         }
@@ -98,6 +99,31 @@
             }
           },
           "scope": "local"
+        },
+        {
+          "type": "sentinel",
+          "value": "checkpoint",
+          "data": {
+            "targetVariable": "result",
+            "prompt": {
+              "type": "string",
+              "segments": [
+                {
+                  "type": "text",
+                  "value": "Respond to: "
+                },
+                {
+                  "type": "interpolation",
+                  "expression": {
+                    "type": "variableName",
+                    "value": "prompt",
+                    "scope": "args"
+                  }
+                }
+              ]
+            },
+            "scope": "local"
+          }
         },
         {
           "type": "newLine"
@@ -220,6 +246,43 @@
             }
           },
           "scope": "local"
+        },
+        {
+          "type": "sentinel",
+          "value": "checkpoint",
+          "data": {
+            "targetVariable": "result",
+            "prompt": {
+              "type": "string",
+              "segments": [
+                {
+                  "type": "text",
+                  "value": "Combine "
+                },
+                {
+                  "type": "interpolation",
+                  "expression": {
+                    "type": "variableName",
+                    "value": "a",
+                    "scope": "local"
+                  }
+                },
+                {
+                  "type": "text",
+                  "value": " and "
+                },
+                {
+                  "type": "interpolation",
+                  "expression": {
+                    "type": "variableName",
+                    "value": "b",
+                    "scope": "local"
+                  }
+                }
+              ]
+            },
+            "scope": "local"
+          }
         },
         {
           "type": "newLine"

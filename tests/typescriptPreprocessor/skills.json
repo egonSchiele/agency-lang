@@ -16,7 +16,8 @@
             "fetchJSON",
             "read",
             "write",
-            "readImage"
+            "readImage",
+            "notify"
           ],
           "safeNames": []
         }
@@ -64,6 +65,23 @@
           "scope": "local"
         },
         {
+          "type": "sentinel",
+          "value": "checkpoint",
+          "data": {
+            "targetVariable": "result",
+            "prompt": {
+              "type": "string",
+              "segments": [
+                {
+                  "type": "text",
+                  "value": "Analyze this data"
+                }
+              ]
+            },
+            "scope": "local"
+          }
+        },
+        {
           "type": "newLine"
         },
         {
@@ -96,6 +114,23 @@
             }
           },
           "scope": "local"
+        },
+        {
+          "type": "sentinel",
+          "value": "checkpoint",
+          "data": {
+            "targetVariable": "plain",
+            "prompt": {
+              "type": "string",
+              "segments": [
+                {
+                  "type": "text",
+                  "value": "No skills here"
+                }
+              ]
+            },
+            "scope": "local"
+          }
         },
         {
           "type": "newLine"

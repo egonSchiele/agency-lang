@@ -16,7 +16,8 @@
             "fetchJSON",
             "read",
             "write",
-            "readImage"
+            "readImage",
+            "notify"
           ],
           "safeNames": []
         }
@@ -195,6 +196,23 @@
             }
           },
           "scope": "local"
+        },
+        {
+          "type": "sentinel",
+          "value": "checkpoint",
+          "data": {
+            "targetVariable": "result",
+            "prompt": {
+              "type": "string",
+              "segments": [
+                {
+                  "type": "text",
+                  "value": "Do something risky and something safe"
+                }
+              ]
+            },
+            "scope": "local"
+          }
         },
         {
           "type": "newLine"

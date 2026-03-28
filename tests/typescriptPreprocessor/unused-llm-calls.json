@@ -16,7 +16,8 @@
             "fetchJSON",
             "read",
             "write",
-            "readImage"
+            "readImage",
+            "notify"
           ],
           "safeNames": []
         }
@@ -66,6 +67,23 @@
             }
           },
           "scope": "local"
+        },
+        {
+          "type": "sentinel",
+          "value": "checkpoint",
+          "data": {
+            "targetVariable": "used",
+            "prompt": {
+              "type": "string",
+              "segments": [
+                {
+                  "type": "text",
+                  "value": "Give me a greeting"
+                }
+              ]
+            },
+            "scope": "local"
+          }
         },
         {
           "type": "newLine"
@@ -121,6 +139,23 @@
             }
           },
           "scope": "local"
+        },
+        {
+          "type": "sentinel",
+          "value": "checkpoint",
+          "data": {
+            "targetVariable": "unused",
+            "prompt": {
+              "type": "string",
+              "segments": [
+                {
+                  "type": "text",
+                  "value": "Give me a farewell"
+                }
+              ]
+            },
+            "scope": "local"
+          }
         },
         {
           "type": "newLine"

@@ -3,18 +3,6 @@ import { debuggerParser } from "./debuggerStatement.js";
 import { parseAgency } from "../parser.js";
 
 describe("debuggerParser", () => {
-  it("parses bare debugger statement", () => {
-    const result = debuggerParser("debugger");
-    expect(result.success).toBe(true);
-    if (!result.success) throw new Error("expected success");
-    expect(result.result).toEqual(
-      expect.objectContaining({
-        type: "debuggerStatement",
-      }),
-    );
-    expect(result.result.label).toBeUndefined();
-  });
-
   it("parses debugger with label", () => {
     const result = debuggerParser('debugger("checking mood")');
     expect(result.success).toBe(true);
@@ -45,7 +33,7 @@ describe("debuggerParser", () => {
   });
 
   it("parses debugger in a node body", () => {
-    const code = `node main() {\n  debugger\n  debugger("label")\n  return 1\n}`;
+    const code = `node main() {\n  debugger()\n  debugger("label")\n  return 1\n}`;
     const result = parseAgency(code, {}, false);
     expect(result.success).toBe(true);
     if (!result.success) throw new Error("expected success");

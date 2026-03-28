@@ -1,0 +1,9 @@
+def addTen(x: number): number {
+  debugger("inside function")
+  return x + 10
+}
+
+node main() {
+  result = addTen(5)
+  return result
+}

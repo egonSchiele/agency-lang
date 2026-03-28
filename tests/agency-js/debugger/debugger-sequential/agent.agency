@@ -1,0 +1,8 @@
+node main() {
+  x = 1
+  debugger("first")
+  x = x + 1
+  debugger("second")
+  x = x + 1
+  return x
+}

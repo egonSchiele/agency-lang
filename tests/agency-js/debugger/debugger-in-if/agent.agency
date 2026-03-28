@@ -1,0 +1,8 @@
+node main() {
+  x = 5
+  if (x > 3) {
+    debugger("inside if")
+    x = x + 10
+  }
+  return x
+}

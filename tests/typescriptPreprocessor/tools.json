@@ -16,7 +16,8 @@
             "fetchJSON",
             "read",
             "write",
-            "readImage"
+            "readImage",
+            "notify"
           ],
           "safeNames": []
         }
@@ -174,6 +175,23 @@
           "scope": "local"
         },
         {
+          "type": "sentinel",
+          "value": "checkpoint",
+          "data": {
+            "targetVariable": "forecast",
+            "prompt": {
+              "type": "string",
+              "segments": [
+                {
+                  "type": "text",
+                  "value": "What is the weather in NYC?"
+                }
+              ]
+            },
+            "scope": "local"
+          }
+        },
+        {
           "type": "newLine"
         },
         {
@@ -206,6 +224,23 @@
             }
           },
           "scope": "local"
+        },
+        {
+          "type": "sentinel",
+          "value": "checkpoint",
+          "data": {
+            "targetVariable": "summary",
+            "prompt": {
+              "type": "string",
+              "segments": [
+                {
+                  "type": "text",
+                  "value": "Summarize the forecast"
+                }
+              ]
+            },
+            "scope": "local"
+          }
         },
         {
           "type": "newLine"

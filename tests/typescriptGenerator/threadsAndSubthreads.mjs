@@ -1,4 +1,4 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -6,18 +6,19 @@ import { z } from "zod";
 import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
 import * as smoltalk from "agency-lang";
 import path from "path";
-import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse } from "agency-lang/runtime";
+import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
-  interrupt, isInterrupt, isRejected, isApproved, interruptWithHandlers,
+  interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
   rejectInterrupt as _rejectInterrupt,
   resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
+  rewindFrom as _rewindFrom,
   ToolCallError,
   RestoreSignal,
   deepClone as __deepClone,
@@ -72,13 +73,14 @@ function tool(__name: string) {
 function approve(value?: any) { return { type: "approved" as const, value }; }
 function reject(value?: any) { return { type: "rejected" as const, value }; }
 
-// Interrupt re-exports bound to this module's context
-export { interrupt, isInterrupt };
-export const respondToInterrupt = (interrupt: Interrupt, response: InterruptResponse, metadata?: Record<string, any>) => _respondToInterrupt({ ctx: __globalCtx, interrupt, interruptResponse: response, metadata });
-export const approveInterrupt = (interrupt: Interrupt, metadata?: Record<string, any>) => _approveInterrupt({ ctx: __globalCtx, interrupt, metadata });
-export const rejectInterrupt = (interrupt: Interrupt, metadata?: Record<string, any>) => _rejectInterrupt({ ctx: __globalCtx, interrupt, metadata });
-export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, metadata?: Record<string, any>) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, metadata });
-export const resolveInterrupt = (interrupt: Interrupt, value: any, metadata?: Record<string, any>) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, metadata });
+// Interrupt and rewind re-exports bound to this module's context
+export { interrupt, isInterrupt, isDebugger };
+export const respondToInterrupt = (interrupt: Interrupt, response: InterruptResponse, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupt({ ctx: __globalCtx, interrupt, interruptResponse: response, overrides: opts?.overrides, metadata: opts?.metadata });
+export const approveInterrupt = (interrupt: Interrupt, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _approveInterrupt({ ctx: __globalCtx, interrupt, overrides: opts?.overrides, metadata: opts?.metadata });
+export const rejectInterrupt = (interrupt: Interrupt, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _rejectInterrupt({ ctx: __globalCtx, interrupt, overrides: opts?.overrides, metadata: opts?.metadata });
+export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, overrides: opts?.overrides, metadata: opts?.metadata });
+export const resolveInterrupt = (interrupt: Interrupt, value: any, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, overrides: opts?.overrides, metadata: opts?.metadata });
+export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
 function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("threadsAndSubthreads.agency")
 }
@@ -181,21 +183,49 @@ if (isInterrupt(__stack.locals.res1)) {
 }
 
 if (__sub_1 <= 2) {
-  
+  if (__ctx.callbacks.onCheckpoint) {
+  if (__ctx._skipNextCheckpoint) {
+    __ctx._skipNextCheckpoint = false;
+  } else {
+    const __cpId = __ctx.checkpoints.create(__ctx);
+    const __cp = __ctx.checkpoints.get(__cpId);
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onCheckpoint",
+      data: {
+        checkpoint: __cp,
+        llmCall: {
+          step: __stack.step,
+          targetVariable: "res1",
+          prompt: `What are the first 5 prime numbers?`,
+          response: __stack.locals.res1,
+          model: __ctx.getSmoltalkConfig().model || "unknown",
+        },
+      },
+    });
+    __ctx.checkpoints.delete(__cpId);
+  }
+}
 
   __stack.locals.__substep_1 = 3;
 }
 
 if (__sub_1 <= 3) {
-  const __sub_1_3 = __stack.locals.__substep_1_3 ?? 0;
-if (__sub_1_3 <= 0) {
+  
+
+  __stack.locals.__substep_1 = 4;
+}
+
+if (__sub_1 <= 4) {
+  const __sub_1_4 = __stack.locals.__substep_1_4 ?? 0;
+if (__sub_1_4 <= 0) {
   const __tid = __threads.createSubthread();
 __threads.pushActive(__tid)
 
-  __stack.locals.__substep_1_3 = 1;
+  __stack.locals.__substep_1_4 = 1;
 }
 
-if (__sub_1_3 <= 1) {
+if (__sub_1_4 <= 1) {
   __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res2 = await runPrompt({
             ctx: __ctx,
@@ -215,25 +245,53 @@ if (isInterrupt(__stack.locals.res2)) {
             return __stack.locals.res2;
           }
 
-  __stack.locals.__substep_1_3 = 2;
+  __stack.locals.__substep_1_4 = 2;
 }
 
-if (__sub_1_3 <= 2) {
+if (__sub_1_4 <= 2) {
+  if (__ctx.callbacks.onCheckpoint) {
+  if (__ctx._skipNextCheckpoint) {
+    __ctx._skipNextCheckpoint = false;
+  } else {
+    const __cpId = __ctx.checkpoints.create(__ctx);
+    const __cp = __ctx.checkpoints.get(__cpId);
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onCheckpoint",
+      data: {
+        checkpoint: __cp,
+        llmCall: {
+          step: __stack.step,
+          targetVariable: "res2",
+          prompt: `What are the next 2 prime numbers after those?`,
+          response: __stack.locals.res2,
+          model: __ctx.getSmoltalkConfig().model || "unknown",
+        },
+      },
+    });
+    __ctx.checkpoints.delete(__cpId);
+  }
+}
+
+  __stack.locals.__substep_1_4 = 3;
+}
+
+if (__sub_1_4 <= 3) {
   
 
-  __stack.locals.__substep_1_3 = 3;
+  __stack.locals.__substep_1_4 = 4;
 }
 
-if (__sub_1_3 <= 3) {
-  const __sub_1_3_3 = __stack.locals.__substep_1_3_3 ?? 0;
-if (__sub_1_3_3 <= 0) {
+if (__sub_1_4 <= 4) {
+  const __sub_1_4_4 = __stack.locals.__substep_1_4_4 ?? 0;
+if (__sub_1_4_4 <= 0) {
   const __tid = __threads.createSubthread();
 __threads.pushActive(__tid)
 
-  __stack.locals.__substep_1_3_3 = 1;
+  __stack.locals.__substep_1_4_4 = 1;
 }
 
-if (__sub_1_3_3 <= 1) {
+if (__sub_1_4_4 <= 1) {
   __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res3 = await runPrompt({
               ctx: __ctx,
@@ -253,37 +311,65 @@ if (isInterrupt(__stack.locals.res3)) {
               return __stack.locals.res3;
             }
 
-  __stack.locals.__substep_1_3_3 = 2;
+  __stack.locals.__substep_1_4_4 = 2;
 }
 
-if (__sub_1_3_3 <= 2) {
+if (__sub_1_4_4 <= 2) {
+  if (__ctx.callbacks.onCheckpoint) {
+  if (__ctx._skipNextCheckpoint) {
+    __ctx._skipNextCheckpoint = false;
+  } else {
+    const __cpId = __ctx.checkpoints.create(__ctx);
+    const __cp = __ctx.checkpoints.get(__cpId);
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onCheckpoint",
+      data: {
+        checkpoint: __cp,
+        llmCall: {
+          step: __stack.step,
+          targetVariable: "res3",
+          prompt: `And what is the sum of all those numbers combined?`,
+          response: __stack.locals.res3,
+          model: __ctx.getSmoltalkConfig().model || "unknown",
+        },
+      },
+    });
+    __ctx.checkpoints.delete(__cpId);
+  }
+}
+
+  __stack.locals.__substep_1_4_4 = 3;
+}
+
+if (__sub_1_4_4 <= 3) {
   
 
-  __stack.locals.__substep_1_3_3 = 3;
+  __stack.locals.__substep_1_4_4 = 4;
 }
 
 __threads.popActive();
 
 
-  __stack.locals.__substep_1_3 = 4;
+  __stack.locals.__substep_1_4 = 5;
 }
 
-if (__sub_1_3 <= 4) {
+if (__sub_1_4 <= 5) {
   
 
-  __stack.locals.__substep_1_3 = 5;
+  __stack.locals.__substep_1_4 = 6;
 }
 
-if (__sub_1_3 <= 5) {
-  const __sub_1_3_5 = __stack.locals.__substep_1_3_5 ?? 0;
-if (__sub_1_3_5 <= 0) {
+if (__sub_1_4 <= 6) {
+  const __sub_1_4_6 = __stack.locals.__substep_1_4_6 ?? 0;
+if (__sub_1_4_6 <= 0) {
   const __tid = __threads.create();
 __threads.pushActive(__tid)
 
-  __stack.locals.__substep_1_3_5 = 1;
+  __stack.locals.__substep_1_4_6 = 1;
 }
 
-if (__sub_1_3_5 <= 1) {
+if (__sub_1_4_6 <= 1) {
   __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res5 = await runPrompt({
               ctx: __ctx,
@@ -303,49 +389,77 @@ if (isInterrupt(__stack.locals.res5)) {
               return __stack.locals.res5;
             }
 
-  __stack.locals.__substep_1_3_5 = 2;
+  __stack.locals.__substep_1_4_6 = 2;
 }
 
-if (__sub_1_3_5 <= 2) {
+if (__sub_1_4_6 <= 2) {
+  if (__ctx.callbacks.onCheckpoint) {
+  if (__ctx._skipNextCheckpoint) {
+    __ctx._skipNextCheckpoint = false;
+  } else {
+    const __cpId = __ctx.checkpoints.create(__ctx);
+    const __cp = __ctx.checkpoints.get(__cpId);
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onCheckpoint",
+      data: {
+        checkpoint: __cp,
+        llmCall: {
+          step: __stack.step,
+          targetVariable: "res5",
+          prompt: `And what is the sum of all those numbers combined?`,
+          response: __stack.locals.res5,
+          model: __ctx.getSmoltalkConfig().model || "unknown",
+        },
+      },
+    });
+    __ctx.checkpoints.delete(__cpId);
+  }
+}
+
+  __stack.locals.__substep_1_4_6 = 3;
+}
+
+if (__sub_1_4_6 <= 3) {
   
 
-  __stack.locals.__substep_1_3_5 = 3;
+  __stack.locals.__substep_1_4_6 = 4;
 }
 
 __threads.popActive();
 
 
-  __stack.locals.__substep_1_3 = 6;
+  __stack.locals.__substep_1_4 = 7;
 }
 
-if (__sub_1_3 <= 6) {
+if (__sub_1_4 <= 7) {
   
 
-  __stack.locals.__substep_1_3 = 7;
+  __stack.locals.__substep_1_4 = 8;
 }
 
 __threads.popActive();
 
-
-  __stack.locals.__substep_1 = 4;
-}
-
-if (__sub_1 <= 4) {
-  
 
   __stack.locals.__substep_1 = 5;
 }
 
 if (__sub_1 <= 5) {
-  const __sub_1_5 = __stack.locals.__substep_1_5 ?? 0;
-if (__sub_1_5 <= 0) {
+  
+
+  __stack.locals.__substep_1 = 6;
+}
+
+if (__sub_1 <= 6) {
+  const __sub_1_6 = __stack.locals.__substep_1_6 ?? 0;
+if (__sub_1_6 <= 0) {
   const __tid = __threads.createSubthread();
 __threads.pushActive(__tid)
 
-  __stack.locals.__substep_1_5 = 1;
+  __stack.locals.__substep_1_6 = 1;
 }
 
-if (__sub_1_5 <= 1) {
+if (__sub_1_6 <= 1) {
   __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res4 = await runPrompt({
             ctx: __ctx,
@@ -365,25 +479,53 @@ if (isInterrupt(__stack.locals.res4)) {
             return __stack.locals.res4;
           }
 
-  __stack.locals.__substep_1_5 = 2;
+  __stack.locals.__substep_1_6 = 2;
 }
 
-if (__sub_1_5 <= 2) {
+if (__sub_1_6 <= 2) {
+  if (__ctx.callbacks.onCheckpoint) {
+  if (__ctx._skipNextCheckpoint) {
+    __ctx._skipNextCheckpoint = false;
+  } else {
+    const __cpId = __ctx.checkpoints.create(__ctx);
+    const __cp = __ctx.checkpoints.get(__cpId);
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onCheckpoint",
+      data: {
+        checkpoint: __cp,
+        llmCall: {
+          step: __stack.step,
+          targetVariable: "res4",
+          prompt: `And what is the sum of all those numbers combined?`,
+          response: __stack.locals.res4,
+          model: __ctx.getSmoltalkConfig().model || "unknown",
+        },
+      },
+    });
+    __ctx.checkpoints.delete(__cpId);
+  }
+}
+
+  __stack.locals.__substep_1_6 = 3;
+}
+
+if (__sub_1_6 <= 3) {
   
 
-  __stack.locals.__substep_1_5 = 3;
+  __stack.locals.__substep_1_6 = 4;
 }
 
 __threads.popActive();
 
 
-  __stack.locals.__substep_1 = 6;
+  __stack.locals.__substep_1 = 7;
 }
 
-if (__sub_1 <= 6) {
+if (__sub_1 <= 7) {
   
 
-  __stack.locals.__substep_1 = 7;
+  __stack.locals.__substep_1 = 8;
 }
 
 __threads.popActive();
@@ -504,21 +646,49 @@ if (isInterrupt(__stack.locals.res1)) {
 }
 
 if (__sub_1 <= 2) {
-  
+  if (__ctx.callbacks.onCheckpoint) {
+  if (__ctx._skipNextCheckpoint) {
+    __ctx._skipNextCheckpoint = false;
+  } else {
+    const __cpId = __ctx.checkpoints.create(__ctx);
+    const __cp = __ctx.checkpoints.get(__cpId);
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onCheckpoint",
+      data: {
+        checkpoint: __cp,
+        llmCall: {
+          step: __stack.step,
+          targetVariable: "res1",
+          prompt: `What are the first 5 prime numbers?`,
+          response: __stack.locals.res1,
+          model: __ctx.getSmoltalkConfig().model || "unknown",
+        },
+      },
+    });
+    __ctx.checkpoints.delete(__cpId);
+  }
+}
 
   __stack.locals.__substep_1 = 3;
 }
 
 if (__sub_1 <= 3) {
-  const __sub_1_3 = __stack.locals.__substep_1_3 ?? 0;
-if (__sub_1_3 <= 0) {
+  
+
+  __stack.locals.__substep_1 = 4;
+}
+
+if (__sub_1 <= 4) {
+  const __sub_1_4 = __stack.locals.__substep_1_4 ?? 0;
+if (__sub_1_4 <= 0) {
   const __tid = __threads.createSubthread();
 __threads.pushActive(__tid)
 
-  __stack.locals.__substep_1_3 = 1;
+  __stack.locals.__substep_1_4 = 1;
 }
 
-if (__sub_1_3 <= 1) {
+if (__sub_1_4 <= 1) {
   __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res2 = await runPrompt({
           ctx: __ctx,
@@ -541,25 +711,53 @@ if (isInterrupt(__stack.locals.res2)) {
           };
         }
 
-  __stack.locals.__substep_1_3 = 2;
+  __stack.locals.__substep_1_4 = 2;
 }
 
-if (__sub_1_3 <= 2) {
+if (__sub_1_4 <= 2) {
+  if (__ctx.callbacks.onCheckpoint) {
+  if (__ctx._skipNextCheckpoint) {
+    __ctx._skipNextCheckpoint = false;
+  } else {
+    const __cpId = __ctx.checkpoints.create(__ctx);
+    const __cp = __ctx.checkpoints.get(__cpId);
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onCheckpoint",
+      data: {
+        checkpoint: __cp,
+        llmCall: {
+          step: __stack.step,
+          targetVariable: "res2",
+          prompt: `What are the next 2 prime numbers after those?`,
+          response: __stack.locals.res2,
+          model: __ctx.getSmoltalkConfig().model || "unknown",
+        },
+      },
+    });
+    __ctx.checkpoints.delete(__cpId);
+  }
+}
+
+  __stack.locals.__substep_1_4 = 3;
+}
+
+if (__sub_1_4 <= 3) {
   
 
-  __stack.locals.__substep_1_3 = 3;
+  __stack.locals.__substep_1_4 = 4;
 }
 
-if (__sub_1_3 <= 3) {
-  const __sub_1_3_3 = __stack.locals.__substep_1_3_3 ?? 0;
-if (__sub_1_3_3 <= 0) {
+if (__sub_1_4 <= 4) {
+  const __sub_1_4_4 = __stack.locals.__substep_1_4_4 ?? 0;
+if (__sub_1_4_4 <= 0) {
   const __tid = __threads.createSubthread();
 __threads.pushActive(__tid)
 
-  __stack.locals.__substep_1_3_3 = 1;
+  __stack.locals.__substep_1_4_4 = 1;
 }
 
-if (__sub_1_3_3 <= 1) {
+if (__sub_1_4_4 <= 1) {
   __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res3 = await runPrompt({
             ctx: __ctx,
@@ -582,37 +780,65 @@ if (isInterrupt(__stack.locals.res3)) {
             };
           }
 
-  __stack.locals.__substep_1_3_3 = 2;
+  __stack.locals.__substep_1_4_4 = 2;
 }
 
-if (__sub_1_3_3 <= 2) {
+if (__sub_1_4_4 <= 2) {
+  if (__ctx.callbacks.onCheckpoint) {
+  if (__ctx._skipNextCheckpoint) {
+    __ctx._skipNextCheckpoint = false;
+  } else {
+    const __cpId = __ctx.checkpoints.create(__ctx);
+    const __cp = __ctx.checkpoints.get(__cpId);
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onCheckpoint",
+      data: {
+        checkpoint: __cp,
+        llmCall: {
+          step: __stack.step,
+          targetVariable: "res3",
+          prompt: `And what is the sum of all those numbers combined?`,
+          response: __stack.locals.res3,
+          model: __ctx.getSmoltalkConfig().model || "unknown",
+        },
+      },
+    });
+    __ctx.checkpoints.delete(__cpId);
+  }
+}
+
+  __stack.locals.__substep_1_4_4 = 3;
+}
+
+if (__sub_1_4_4 <= 3) {
   
 
-  __stack.locals.__substep_1_3_3 = 3;
+  __stack.locals.__substep_1_4_4 = 4;
 }
 
 __threads.popActive();
 
 
-  __stack.locals.__substep_1_3 = 4;
+  __stack.locals.__substep_1_4 = 5;
 }
 
-if (__sub_1_3 <= 4) {
+if (__sub_1_4 <= 5) {
   
 
-  __stack.locals.__substep_1_3 = 5;
+  __stack.locals.__substep_1_4 = 6;
 }
 
-if (__sub_1_3 <= 5) {
-  const __sub_1_3_5 = __stack.locals.__substep_1_3_5 ?? 0;
-if (__sub_1_3_5 <= 0) {
+if (__sub_1_4 <= 6) {
+  const __sub_1_4_6 = __stack.locals.__substep_1_4_6 ?? 0;
+if (__sub_1_4_6 <= 0) {
   const __tid = __threads.create();
 __threads.pushActive(__tid)
 
-  __stack.locals.__substep_1_3_5 = 1;
+  __stack.locals.__substep_1_4_6 = 1;
 }
 
-if (__sub_1_3_5 <= 1) {
+if (__sub_1_4_6 <= 1) {
   __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res5 = await runPrompt({
             ctx: __ctx,
@@ -635,49 +861,77 @@ if (isInterrupt(__stack.locals.res5)) {
             };
           }
 
-  __stack.locals.__substep_1_3_5 = 2;
+  __stack.locals.__substep_1_4_6 = 2;
 }
 
-if (__sub_1_3_5 <= 2) {
+if (__sub_1_4_6 <= 2) {
+  if (__ctx.callbacks.onCheckpoint) {
+  if (__ctx._skipNextCheckpoint) {
+    __ctx._skipNextCheckpoint = false;
+  } else {
+    const __cpId = __ctx.checkpoints.create(__ctx);
+    const __cp = __ctx.checkpoints.get(__cpId);
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onCheckpoint",
+      data: {
+        checkpoint: __cp,
+        llmCall: {
+          step: __stack.step,
+          targetVariable: "res5",
+          prompt: `And what is the sum of all those numbers combined?`,
+          response: __stack.locals.res5,
+          model: __ctx.getSmoltalkConfig().model || "unknown",
+        },
+      },
+    });
+    __ctx.checkpoints.delete(__cpId);
+  }
+}
+
+  __stack.locals.__substep_1_4_6 = 3;
+}
+
+if (__sub_1_4_6 <= 3) {
   
 
-  __stack.locals.__substep_1_3_5 = 3;
+  __stack.locals.__substep_1_4_6 = 4;
 }
 
 __threads.popActive();
 
 
-  __stack.locals.__substep_1_3 = 6;
+  __stack.locals.__substep_1_4 = 7;
 }
 
-if (__sub_1_3 <= 6) {
+if (__sub_1_4 <= 7) {
   
 
-  __stack.locals.__substep_1_3 = 7;
+  __stack.locals.__substep_1_4 = 8;
 }
 
 __threads.popActive();
 
-
-  __stack.locals.__substep_1 = 4;
-}
-
-if (__sub_1 <= 4) {
-  
 
   __stack.locals.__substep_1 = 5;
 }
 
 if (__sub_1 <= 5) {
-  const __sub_1_5 = __stack.locals.__substep_1_5 ?? 0;
-if (__sub_1_5 <= 0) {
+  
+
+  __stack.locals.__substep_1 = 6;
+}
+
+if (__sub_1 <= 6) {
+  const __sub_1_6 = __stack.locals.__substep_1_6 ?? 0;
+if (__sub_1_6 <= 0) {
   const __tid = __threads.createSubthread();
 __threads.pushActive(__tid)
 
-  __stack.locals.__substep_1_5 = 1;
+  __stack.locals.__substep_1_6 = 1;
 }
 
-if (__sub_1_5 <= 1) {
+if (__sub_1_6 <= 1) {
   __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res4 = await runPrompt({
           ctx: __ctx,
@@ -700,25 +954,53 @@ if (isInterrupt(__stack.locals.res4)) {
           };
         }
 
-  __stack.locals.__substep_1_5 = 2;
+  __stack.locals.__substep_1_6 = 2;
 }
 
-if (__sub_1_5 <= 2) {
+if (__sub_1_6 <= 2) {
+  if (__ctx.callbacks.onCheckpoint) {
+  if (__ctx._skipNextCheckpoint) {
+    __ctx._skipNextCheckpoint = false;
+  } else {
+    const __cpId = __ctx.checkpoints.create(__ctx);
+    const __cp = __ctx.checkpoints.get(__cpId);
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onCheckpoint",
+      data: {
+        checkpoint: __cp,
+        llmCall: {
+          step: __stack.step,
+          targetVariable: "res4",
+          prompt: `And what is the sum of all those numbers combined?`,
+          response: __stack.locals.res4,
+          model: __ctx.getSmoltalkConfig().model || "unknown",
+        },
+      },
+    });
+    __ctx.checkpoints.delete(__cpId);
+  }
+}
+
+  __stack.locals.__substep_1_6 = 3;
+}
+
+if (__sub_1_6 <= 3) {
   
 
-  __stack.locals.__substep_1_5 = 3;
+  __stack.locals.__substep_1_6 = 4;
 }
 
 __threads.popActive();
 
 
-  __stack.locals.__substep_1 = 6;
+  __stack.locals.__substep_1 = 7;
 }
 
-if (__sub_1 <= 6) {
+if (__sub_1 <= 7) {
   
 
-  __stack.locals.__substep_1 = 7;
+  __stack.locals.__substep_1 = 8;
 }
 
 __threads.popActive();

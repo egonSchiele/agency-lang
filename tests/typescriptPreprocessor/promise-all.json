@@ -16,7 +16,8 @@
             "fetchJSON",
             "read",
             "write",
-            "readImage"
+            "readImage",
+            "notify"
           ],
           "safeNames": []
         }
@@ -77,6 +78,31 @@
           "scope": "local"
         },
         {
+          "type": "sentinel",
+          "value": "checkpoint",
+          "data": {
+            "targetVariable": "result",
+            "prompt": {
+              "type": "string",
+              "segments": [
+                {
+                  "type": "text",
+                  "value": "Process: "
+                },
+                {
+                  "type": "interpolation",
+                  "expression": {
+                    "type": "variableName",
+                    "value": "label",
+                    "scope": "args"
+                  }
+                }
+              ]
+            },
+            "scope": "local"
+          }
+        },
+        {
           "type": "newLine"
         },
         {
@@ -133,6 +159,23 @@
           "scope": "local"
         },
         {
+          "type": "sentinel",
+          "value": "checkpoint",
+          "data": {
+            "targetVariable": "a",
+            "prompt": {
+              "type": "string",
+              "segments": [
+                {
+                  "type": "text",
+                  "value": "First async task"
+                }
+              ]
+            },
+            "scope": "local"
+          }
+        },
+        {
           "type": "newLine"
         },
         {
@@ -162,6 +205,23 @@
             }
           },
           "scope": "local"
+        },
+        {
+          "type": "sentinel",
+          "value": "checkpoint",
+          "data": {
+            "targetVariable": "b",
+            "prompt": {
+              "type": "string",
+              "segments": [
+                {
+                  "type": "text",
+                  "value": "Second async task"
+                }
+              ]
+            },
+            "scope": "local"
+          }
         },
         {
           "type": "newLine"

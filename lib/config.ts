@@ -115,6 +115,9 @@ export interface AgencyConfig {
    */
   restrictImports?: boolean;
 
+  /** Enable debugger mode — auto-inserts breakpoints before every step */
+  debugger?: boolean;
+
   /** Audit logging config */
   audit?: {
     logFile?: string;

@@ -1,6 +1,6 @@
 node main() {
   x = 1
-  debugger
+  debugger()
   y = x + 10
   return y
 }

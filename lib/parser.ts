@@ -44,6 +44,7 @@ import { matchBlockParser } from "./parsers/matchBlock.js";
 import { multiLineCommentParser } from "./parsers/multiLineComment.js";
 import { newLineParser } from "./parsers/newline.js";
 import { returnStatementParser } from "./parsers/returnStatement.js";
+import { debuggerParser } from "./parsers/debuggerStatement.js";
 import { skillParser } from "./parsers/skill.js";
 import { specialVarParser } from "./parsers/specialVar.js";
 import { usesToolParser } from "./parsers/tools.js";
@@ -69,6 +70,7 @@ export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
         matchBlockParser,
         messageThreadParser,
         handleBlockParser,
+        debuggerParser,
         skillParser,
         functionParser,
         returnStatementParser,

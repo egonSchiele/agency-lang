@@ -1,0 +1,6 @@
+node main() {
+  x = 1
+  debugger("before increment")
+  x = x + 1
+  return x
+}

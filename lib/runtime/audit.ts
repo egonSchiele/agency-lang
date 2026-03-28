@@ -81,6 +81,12 @@ export type RewindAudit = AuditBase & {
   overrides: Record<string, unknown>;
 };
 
+export type OverrideAudit = AuditBase & {
+  type: "override";
+  overrides: Record<string, unknown>;
+  source: "interrupt" | "rewind";
+};
+
 export type AuditEntry =
   | AssignmentAudit
   | FunctionCallAudit
@@ -93,7 +99,8 @@ export type AuditEntry =
   | RestoreAudit
   | HandlerResultAudit
   | HandlerDecisionAudit
-  | RewindAudit;
+  | RewindAudit
+  | OverrideAudit;
 
 // Distributive Omit so that discriminated union members are preserved
 export type AuditEntryInput = AuditEntry extends infer T

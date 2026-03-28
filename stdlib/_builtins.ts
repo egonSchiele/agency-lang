@@ -2,6 +2,8 @@ import * as readline from "readline";
 import process from "process";
 import fs from "fs";
 import path from "path";
+import { execFileSync } from "child_process";
+import { detectPlatform } from "./_utils.js";
 
 export function _print(message: string): void {
   console.log(message);
@@ -71,4 +73,36 @@ export function _readImage(filename: string): string {
   const filePath = path.resolve(process.cwd(), filename);
   const data = fs.readFileSync(filePath);
   return data.toString("base64");
+}
+
+export function _notify(title: string, message: string): boolean {
+  const platform = detectPlatform();
+  if (platform === "macos") {
+    // Escape for AppleScript string literals (backslashes and double quotes).
+    // We use execFileSync with an args array to bypass the shell entirely,
+    // which eliminates all shell injection concerns.
+    const escapeAS = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    const script = `display notification "${escapeAS(message)}" with title "${escapeAS(title)}"`;
+    execFileSync("osascript", ["-e", script]);
+  } else if (platform === "linux") {
+    execFileSync("notify-send", [title, message]);
+  } else if (platform === "wsl") {
+    console.error(
+      `notify is not yet supported in WSL. ` +
+      `WSL does not have reliable notification support.\n` +
+      `Title: ${title}\nMessage: ${message}`
+    );
+  } else if (platform === "windows") {
+    console.error(
+      `notify is not yet supported on Windows. ` +
+      `Supported platforms: macOS, Linux.\n` +
+      `Title: ${title}\nMessage: ${message}`
+    );
+  } else {
+    console.error(
+      `notify is not supported on platform: ${platform}\n` +
+      `Title: ${title}\nMessage: ${message}`
+    );
+  }
+  return true;
 }

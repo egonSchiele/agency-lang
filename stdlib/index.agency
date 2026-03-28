@@ -1,4 +1,4 @@
-import { _print, _printJSON, _input, _sleep, _round, _fetch, _fetchJSON, _read, _write, _readImage } from "./_builtins.js"
+import { _print, _printJSON, _input, _sleep, _round, _fetch, _fetchJSON, _read, _write, _readImage, _notify } from "./_builtins.js"
 
 safe def print(message: string) {
   """
@@ -98,4 +98,18 @@ def readImage(filename: string): string {
   })
 
   return _readImage(filename)
+}
+
+def notify(title: string, message: string): boolean {
+  """
+  A tool for showing a native OS notification with a title and message. Returns true if the notification was sent.
+  """
+  return interrupt({
+    type: "std::notify",
+    message: "Are you sure you want to show this notification?",
+    title: title,
+    body: message
+  })
+
+  return _notify(title, message)
 }

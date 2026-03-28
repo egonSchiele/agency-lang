@@ -1,4 +1,14 @@
 node main() {
-  uses print
-  res = llm("What is the capital of France? Print your response")
+  title = "Hello"
+  message = "This is a notification."
+  handle {
+    result = notify(title, message)
+  } with (data) {
+    printJSON(data)
+    return approve()
+  }
+  if (result == null) {
+    print("notification blocked")
+  }
+  print("notification sent")
 }

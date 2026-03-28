@@ -1,0 +1,37 @@
+{
+  "sourceFile": "notify.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "\"Test Title\", \"Hello from Agency\"",
+      "expectedOutput": "\"notification sent\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve"
+        }
+      ],
+      "description": "notify sends a system notification when approved"
+    },
+    {
+      "nodeName": "main",
+      "input": "\"Test Title\", \"Hello from Agency\"",
+      "expectedOutput": "\"notification blocked\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "reject"
+        }
+      ],
+      "description": "notify is blocked when rejected"
+    }
+  ]
+}

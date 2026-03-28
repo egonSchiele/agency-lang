@@ -679,7 +679,7 @@ export class AgencyGenerator {
     node: import("../types/debuggerStatement.js").DebuggerStatement,
   ): string {
     return this.indentStr(
-      node.label ? `debugger("${node.label}")` : "debugger",
+      node.label ? `debugger(${JSON.stringify(node.label)})` : "debugger",
     );
   }
 

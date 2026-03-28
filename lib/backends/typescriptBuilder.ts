@@ -1912,7 +1912,7 @@ export class TypeScriptBuilder {
 
   private processDebuggerStatement(node: DebuggerStatement): TsNode {
     const label = node.label !== undefined
-      ? `\`${node.label}\``
+      ? JSON.stringify(node.label)
       : "undefined";
     const returnExpr = this.isInsideGraphNode
       ? `return { messages: __threads, data: __debugInterrupt };`
@@ -2176,7 +2176,7 @@ export class TypeScriptBuilder {
     if (this.agencyConfig?.debugger) {
       const expanded: AgencyNode[] = [];
       for (const stmt of body) {
-        if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type)) {
+        if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type) && stmt.type !== "debuggerStatement") {
           expanded.push({ type: "debuggerStatement" } as DebuggerStatement);
         }
         expanded.push(stmt);

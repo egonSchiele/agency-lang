@@ -52,6 +52,16 @@ export function debuggerParser(input: string): ParserResult<DebuggerStatement> {
   if (labelResult.success) {
     label = labelResult.result.label;
     rest = labelResult.rest;
+  } else {
+    // If we see "(" but label parsing failed (e.g. debugger(x)),
+    // fail so other parsers can handle it or produce a clear error
+    const trimmed = optionalSpaces(rest);
+    if (trimmed.success && trimmed.rest.startsWith("(")) {
+      return failure(
+        "expected quoted string label inside parentheses after 'debugger'",
+        rest,
+      );
+    }
   }
 
   // Consume optional semicolon

@@ -199,7 +199,7 @@ Expected: FAIL — module not found
 - [ ] **Step 3: Write the parser implementation**
 
 Create `lib/parsers/debuggerStatement.ts`. The parser must:
-- Match the literal string `debugger`
+- Match the literal string `debugger` or the function `debugger()`
 - Ensure it's not followed by a word character (so `debuggerFoo` doesn't match)
 - Optionally match `("label string")` after it
 
@@ -241,6 +241,8 @@ export const debuggerParser: Parser<DebuggerStatement> = (input: string) => {
 ```
 
 Note: This uses a hand-written parser rather than tarsec combinators because `debugger` is a bare keyword (no leading keyword like `return`), and we need negative lookahead to avoid matching `debuggerFoo`. Check the existing parsers for similar patterns — if there's a `notFollowedBy` or `wordBoundary` combinator available in tarsec, use that instead. Look at how `keyword.ts` parser handles similar cases.
+
+Use tarsec combinators where possible, but it's okay to write custom regex logic for the initial keyword match if it simplifies the negative lookahead.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -388,6 +390,8 @@ In `lib/templates/backends/typescriptGenerator/interruptReturn.mustache`, modify
   {{/debugger}}
 }
 ```
+
+This diff should be as simple and easy to read as possible.
 
 After modifying the `.mustache` file, run `pnpm run templates` to recompile it to TypeScript.
 

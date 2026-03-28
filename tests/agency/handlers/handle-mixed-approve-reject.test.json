@@ -3,17 +3,6 @@
   "tests": [
     {
       "nodeName": "main",
-      "description": "Handler approves greet (with value) and rejects readStuff, rejected function halts but caller continues",
-      "input": "",
-      "expectedOutput": "\"done\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
-    },
-    {
-      "nodeName": "main",
       "input": "",
       "expectedOutput": "[\"greet-before\",\"greet-after-Alice\",\"read-before\",\"greet result\",\"not allowed\",\"foo-done\",\"foo returned foo result\"]",
       "evaluationCriteria": [

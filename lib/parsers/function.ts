@@ -69,6 +69,7 @@ import { binOpParser } from "./binop.js";
 import { multiLineCommentParser } from "./multiLineComment.js";
 import { keywordParser } from "./keyword.js";
 import { HandleBlock } from "@/types/handleBlock.js";
+import { debuggerParser } from "./debuggerStatement.js";
 
 export const assignmentParser: Parser<Assignment> = (input: string) => {
   const parser = trace(
@@ -167,6 +168,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
         ifParser,
         messageThreadParser,
         handleBlockParser,
+        debuggerParser,
         multiLineCommentParser,
         skillParser,
         functionParser,

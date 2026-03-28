@@ -37,6 +37,11 @@ export async function rewindFrom(args: {
   const checkpoint = deepClone(args.checkpoint);
 
   applyOverrides(checkpoint.checkpoint, overrides);
+  await ctx.audit({
+    type: "override",
+    overrides,
+    source: "rewind",
+  });
 
   const execCtx = ctx.createExecutionContext();
   execCtx.restoreState(checkpoint.checkpoint);

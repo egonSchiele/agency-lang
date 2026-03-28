@@ -188,6 +188,11 @@ export async function respondToInterrupt(args: {
 
   if (args.overrides) {
     applyOverrides(checkpoint, args.overrides);
+    await ctx.audit({
+      type: "override",
+      overrides: args.overrides,
+      source: "interrupt",
+    });
   }
 
   const execCtx = ctx.createExecutionContext();

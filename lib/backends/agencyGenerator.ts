@@ -5,6 +5,7 @@ import {
   AgencyNode,
   AgencyProgram,
   Assignment,
+  DebuggerStatement,
   Literal,
   MultiLineStringLiteral,
   NewLine,
@@ -19,7 +20,7 @@ import {
 } from "../types.js";
 
 import { AccessChainElement, ValueAccess } from "../types/access.js";
-import { AgencyArray, AgencyObject } from "../types/dataStructures.js";
+import { AgencyArray, AgencyObject, AgencyObjectKV } from "../types/dataStructures.js";
 import { FunctionCall, FunctionDefinition } from "../types/function.js";
 import { GraphNodeDefinition, Visibility } from "../types/graphNode.js";
 import { IfElse } from "../types/ifElse.js";
@@ -148,7 +149,7 @@ export class AgencyGenerator {
     }
   }
 
-  protected preprocessAST(): void {}
+  protected preprocessAST(): void { }
 
   protected generateBuiltins(): string {
     return "";
@@ -170,7 +171,7 @@ export class AgencyGenerator {
     this.functionDefinitions[node.functionName] = node;
   }
 
-  protected processGraphNodeName(node: GraphNodeDefinition): void {}
+  protected processGraphNodeName(node: GraphNodeDefinition): void { }
 
   protected processNode(node: AgencyNode): string {
     switch (node.type) {
@@ -536,7 +537,7 @@ export class AgencyGenerator {
       if ("type" in entry && entry.type === "splat") {
         return this.indentStr(`...${this.processNode(entry.value).trim()}`);
       }
-      const kv = entry as import("../types/dataStructures.js").AgencyObjectKV;
+      const kv = entry as AgencyObjectKV;
       const valueCode = this.processNode(kv.value).trim();
       return this.indentStr(`${kv.key}: ${valueCode}`);
     });
@@ -676,7 +677,7 @@ export class AgencyGenerator {
   }
 
   protected processDebuggerStatement(
-    node: import("../types/debuggerStatement.js").DebuggerStatement,
+    node: DebuggerStatement,
   ): string {
     return this.indentStr(
       node.label ? `debugger(${JSON.stringify(node.label)})` : "debugger",

@@ -29,6 +29,7 @@ import * as renderImports from "../templates/backends/typescriptGenerator/import
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
 import * as renderInterruptReturn from "../templates/backends/typescriptGenerator/interruptReturn.js";
 import * as renderRewindCheckpoint from "../templates/backends/typescriptGenerator/rewindCheckpoint.js";
+import * as renderDebugger from "../templates/backends/typescriptGenerator/debugger.js";
 
 import { AgencyConfig } from "@/config.js";
 import {
@@ -88,6 +89,7 @@ import type {
   TsObjectEntry,
   TsParam,
   TsStepBlock,
+  TsTemplatePart,
 } from "../ir/tsIR.js";
 import type { ProgramInfo } from "../programInfo.js";
 import { getVisibleTypes, lookupType, scopeKey } from "../programInfo.js";
@@ -640,7 +642,7 @@ export class TypeScriptBuilder {
   }
 
   private generateStringLiteralNode(segments: PromptSegment[]): TsNode {
-    const parts: import("../ir/tsIR.js").TsTemplatePart[] = [];
+    const parts: TsTemplatePart[] = [];
 
     for (const segment of segments) {
       if (segment.type === "text") {
@@ -1911,24 +1913,11 @@ export class TypeScriptBuilder {
   }
 
   private processDebuggerStatement(node: DebuggerStatement): TsNode {
-    const label = node.label !== undefined
-      ? JSON.stringify(node.label)
-      : "undefined";
-    const returnExpr = this.isInsideGraphNode
-      ? `return { messages: __threads, data: __debugInterrupt };`
-      : `return __debugInterrupt;`;
-    return ts.raw(
-      `if (__state.interruptData?.interruptResponse?.type === "approve") {\n` +
-      `  __state.interruptData.interruptResponse = null;\n` +
-      `} else {\n` +
-      `  const __debugInterrupt = interrupt(${label});\n` +
-      `  __debugInterrupt.debugger = true;\n` +
-      `  const __checkpointId = __ctx.checkpoints.create(__ctx);\n` +
-      `  __debugInterrupt.checkpointId = __checkpointId;\n` +
-      `  __debugInterrupt.checkpoint = __ctx.checkpoints.get(__checkpointId);\n` +
-      `  ${returnExpr}\n` +
-      `}`,
-    );
+    const code = renderDebugger.default({
+      label: node.label !== undefined ? JSON.stringify(node.label) : "undefined",
+      nodeContext: this.isInsideGraphNode,
+    });
+    return ts.raw(code);
   }
 
   private buildPromptString({

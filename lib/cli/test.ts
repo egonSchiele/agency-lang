@@ -537,11 +537,12 @@ export async function testTs(config: AgencyConfig, inputPaths: string[]) {
       // Compile the .agency file, merging any local agency.json config
       const agencyPath = path.join(dir, agencyFile);
       const localConfigPath = path.join(dir, "agency.json");
-      const effectiveConfig = fs.existsSync(localConfigPath)
-        ? { ...config, ...loadConfig(localConfigPath) }
-        : config;
+      let mergedConfig = config;
+      if (fs.existsSync(localConfigPath)) {
+        mergedConfig = { ...config, ...loadConfig(localConfigPath) };
+      }
       try {
-        compile(effectiveConfig, agencyPath);
+        compile(mergedConfig, agencyPath);
       } catch (e) {
         console.log(color.red(`  ✗ Compilation failed: ${e}`));
         failures.push(dir);

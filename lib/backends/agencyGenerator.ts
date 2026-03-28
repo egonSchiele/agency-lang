@@ -200,6 +200,8 @@ export class AgencyGenerator {
         return this.generateLiteral(node);
       case "returnStatement":
         return this.processReturnStatement(node);
+      case "debuggerStatement":
+        return this.processDebuggerStatement(node);
       case "agencyArray":
         return this.processAgencyArray(node);
       case "agencyObject":
@@ -671,6 +673,14 @@ export class AgencyGenerator {
   protected processReturnStatement(node: ReturnStatement): string {
     const valueCode = this.processNode(node.value).trim();
     return this.indentStr(`return ${valueCode}`);
+  }
+
+  protected processDebuggerStatement(
+    node: import("../types/debuggerStatement.js").DebuggerStatement,
+  ): string {
+    return this.indentStr(
+      node.label ? `debugger("${node.label}")` : "debugger",
+    );
   }
 
   // Utility methods

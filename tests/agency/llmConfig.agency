@@ -1,4 +1,6 @@
 node main() {
-  result: number = llm("What is 2 + 2? Return just the number.", { maxTokens: 50 })
+  result: number = llm("What is 2 + 2? Return just the number.", { 
+    maxTokens: 50
+  })
   return result
 }

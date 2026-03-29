@@ -1,7 +1,14 @@
-def double(val: number): number {
-  sleep(0.05)  return val * 2
-}node main(x: number) {
-  if (x > 5) {
-    a = async double(x)    b = async double(x + 1)    result = [a, b]
-  }  return result
+type Category = "reminder" | "todo" | "general" | "quit"
+
+node categorize(message: string) {
+  category: Category = llm("${prompt}. Here's the user message: '${message}'")
+  return category
+}
+
+
+
+
+node main() {
+  userMessage = "Remind me to buy milk tomorrow"
+  return categorize(userMessage)
 }

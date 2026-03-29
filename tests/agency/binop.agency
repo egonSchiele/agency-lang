@@ -1,6 +1,9 @@
 /* This is a multi-line comment
-that should be ignored by the parser */node main() {
-  x = 0  if (x == 5) {
+that should be ignored by the parser */
+
+node main() {
+  x = 0
+  if (x == 5) {
     return "x is 5"
   }
 }

@@ -123,10 +123,35 @@ export class AgencyGenerator {
 
     this.preprocessAST();
 
+    // Types that should have a blank line before/after them at the top level
+    const BLOCK_TYPES = new Set([
+      "graphNode", "function", "typeAlias",
+    ]);
+    const NO_SPACE_TYPES = new Set([
+      "comment", "multiLineComment"
+    ]);
+
     // Pass 7: Process all nodes and generate code
+    const stmtPairs: { type: string; code: string }[] = [];
     for (const node of program.nodes) {
       const result = this.processNode(node);
-      this.generatedStatements.push(result);
+      if (result !== "") {
+        stmtPairs.push({ type: node.type, code: result });
+      }
+    }
+
+    // Join top-level statements: blank line between block declarations,
+    // single newline between simple statements
+    const stmtLines: string[] = [];
+    for (let i = 0; i < stmtPairs.length; i++) {
+      if (i > 0) {
+        const prev = stmtPairs[i - 1];
+        const curr = stmtPairs[i];
+        if (BLOCK_TYPES.has(prev.type) || (BLOCK_TYPES.has(curr.type) && !NO_SPACE_TYPES.has(prev.type))) {
+          stmtLines.push(""); // blank line
+        }
+      }
+      stmtLines.push(stmtPairs[i].code);
     }
 
     const output: string[] = [];
@@ -136,7 +161,7 @@ export class AgencyGenerator {
     this.addIfNonEmpty(this.generateImports(), output);
     this.addIfNonEmpty(this.generateBuiltins(), output);
     output.push(...this.generatedTypeAliases);
-    output.push(this.generatedStatements.join(""));
+    output.push(stmtLines.join("\n"));
     this.addIfNonEmpty(this.postprocess(), output);
     return {
       output: output.join("\n"),
@@ -481,7 +506,7 @@ export class AgencyGenerator {
     for (const stmt of body) {
       lines.push(this.processNode(stmt));
     }
-    const bodyCode = lines.join("").trimEnd() + "\n";
+    const bodyCode = lines.filter(s => s !== "").join("\n").trimEnd() + "\n";
     result += bodyCode;
 
     this.decreaseIndent();
@@ -608,11 +633,11 @@ export class AgencyGenerator {
     let result = this.indentStr(`for (${vars} in ${iterableCode}) {\n`);
 
     this.increaseIndent();
-
+    const lines: string[] = [];
     for (const stmt of node.body) {
-      result += this.processNode(stmt);
+      lines.push(this.processNode(stmt));
     }
-
+    result += lines.filter(s => s !== "").join("\n").trimEnd() + "\n";
     this.decreaseIndent();
 
     result += this.indentStr(`}`);
@@ -625,11 +650,11 @@ export class AgencyGenerator {
     let result = this.indentStr(`while (${conditionCode}) {\n`);
 
     this.increaseIndent();
-
+    const lines: string[] = [];
     for (const stmt of node.body) {
-      result += this.processNode(stmt);
+      lines.push(this.processNode(stmt));
     }
-
+    result += lines.filter(s => s !== "").join("\n").trimEnd() + "\n";
     this.decreaseIndent();
 
     result += this.indentStr(`}`);
@@ -648,7 +673,7 @@ export class AgencyGenerator {
       bodyLines.push(this.processNode(stmt));
     }
     this.decreaseIndent();
-    lines.push(bodyLines.join("").trimEnd() + "\n");
+    lines.push(bodyLines.filter(s => s !== "").join("\n").trimEnd() + "\n");
 
     if (node.elseBody && node.elseBody.length > 0) {
       if (node.elseBody.length === 1 && node.elseBody[0].type === "ifElse") {
@@ -663,7 +688,7 @@ export class AgencyGenerator {
           elseBodyLines.push(this.processNode(stmt));
         }
         this.decreaseIndent();
-        lines.push(elseBodyLines.join("").trimEnd() + "\n");
+        lines.push(elseBodyLines.filter(s => s !== "").join("\n").trimEnd() + "\n");
       }
     }
 
@@ -765,7 +790,7 @@ export class AgencyGenerator {
     for (const stmt of body) {
       lines.push(this.processNode(stmt));
     }
-    const bodyCode = lines.join("").trimEnd() + "\n";
+    const bodyCode = lines.filter(s => s !== "").join("\n").trimEnd() + "\n";
     result += bodyCode;
 
     this.decreaseIndent();
@@ -789,7 +814,7 @@ export class AgencyGenerator {
   }
 
   protected processNewLine(_node: NewLine): string {
-    return "\n";
+    return "";
   }
 
   protected processMessageThread(node: MessageThread): string {
@@ -799,7 +824,7 @@ export class AgencyGenerator {
       bodyCodes.push(this.processNode(stmt));
     }
     this.decreaseIndent();
-    const bodyCodeStr = bodyCodes.join("");
+    const bodyCodeStr = bodyCodes.filter(s => s !== "").join("\n").trimEnd() + "\n";
     const threadType = node.threadType;
     return this.indentStr(
       `${threadType} {\n${bodyCodeStr}${this.indentStr("}")}`,
@@ -813,7 +838,7 @@ export class AgencyGenerator {
       bodyCodes.push(this.processNode(stmt));
     }
     this.decreaseIndent();
-    const bodyCodeStr = bodyCodes.join("");
+    const bodyCodeStr = bodyCodes.filter(s => s !== "").join("\n").trimEnd() + "\n";
 
     let handlerStr: string;
     if (node.handler.kind === "inline") {
@@ -826,7 +851,7 @@ export class AgencyGenerator {
         handlerBodyCodes.push(this.processNode(stmt));
       }
       this.decreaseIndent();
-      const handlerBodyStr = handlerBodyCodes.join("");
+      const handlerBodyStr = handlerBodyCodes.filter(s => s !== "").join("\n").trimEnd() + "\n";
       handlerStr = `(${paramStr}) {\n${handlerBodyStr}${this.indentStr("}")}`;
     } else {
       handlerStr = node.handler.functionName;

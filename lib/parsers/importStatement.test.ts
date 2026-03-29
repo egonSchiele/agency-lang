@@ -11,7 +11,7 @@ describe("importStatmentParser", () => {
     const result = importStatmentParser('import foo from "./foo.ts"');
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result).toEqual({
+      expect(result.result).toEqualWithoutLoc({
         type: "importStatement",
         importedNames: [{ type: "defaultImport", importedNames: "foo" }],
         modulePath: "./foo.ts",
@@ -24,7 +24,7 @@ describe("importStatmentParser", () => {
     const result = importStatmentParser('import { foo } from "./foo.ts"');
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result).toEqual({
+      expect(result.result).toEqualWithoutLoc({
         type: "importStatement",
         importedNames: [
           { type: "namedImport", importedNames: ["foo"], safeNames: [] },
@@ -39,7 +39,7 @@ describe("importStatmentParser", () => {
     const result = importStatmentParser('import foo, { bar } from "./foo.ts"');
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result).toEqual({
+      expect(result.result).toEqualWithoutLoc({
         type: "importStatement",
         importedNames: [
           { type: "defaultImport", importedNames: "foo" },
@@ -55,7 +55,7 @@ describe("importStatmentParser", () => {
     const result = importStatmentParser('import * as foo from "./foo.ts"');
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result).toEqual({
+      expect(result.result).toEqualWithoutLoc({
         type: "importStatement",
         importedNames: [{ type: "namespaceImport", importedNames: "foo" }],
         modulePath: "./foo.ts",
@@ -70,7 +70,7 @@ describe("importStatmentParser", () => {
     );
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result).toEqual({
+      expect(result.result).toEqualWithoutLoc({
         type: "importStatement",
         importedNames: [
           { type: "defaultImport", importedNames: "foo" },
@@ -86,7 +86,7 @@ describe("importStatmentParser", () => {
     const result = importStatmentParser('import foo from "./foo.agency"');
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result).toEqual({
+      expect(result.result).toEqualWithoutLoc({
         type: "importStatement",
         importedNames: [{ type: "defaultImport", importedNames: "foo" }],
         modulePath: "./foo.agency",
@@ -98,7 +98,7 @@ describe("importStatmentParser", () => {
     const result = importStatmentParser('import { foo } from "./foo.agency"');
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result).toEqual({
+      expect(result.result).toEqualWithoutLoc({
         type: "importStatement",
         importedNames: [
           { type: "namedImport", importedNames: ["foo"], safeNames: [] },
@@ -128,7 +128,7 @@ describe("importStatmentParser", () => {
     );
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result).toEqual({
+      expect(result.result).toEqualWithoutLoc({
         type: "importStatement",
         importedNames: [
           {
@@ -149,7 +149,7 @@ describe("importStatmentParser", () => {
     );
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result).toEqual({
+      expect(result.result).toEqualWithoutLoc({
         type: "importStatement",
         importedNames: [
           {
@@ -169,7 +169,7 @@ describe("importStatmentParser", () => {
     );
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result).toEqual({
+      expect(result.result).toEqualWithoutLoc({
         type: "importStatement",
         importedNames: [
           {
@@ -189,7 +189,7 @@ describe("importStatmentParser", () => {
     );
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result).toEqual({
+      expect(result.result).toEqualWithoutLoc({
         type: "importStatement",
         importedNames: [
           {
@@ -496,7 +496,7 @@ describe("importNodeStatmentParser", () => {
         const result = importNodeStatmentParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else if (throws) {
@@ -767,7 +767,7 @@ describe("importToolStatmentParser", () => {
         const result = importToolStatmentParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else if (throws) {

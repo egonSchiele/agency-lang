@@ -57,7 +57,7 @@ describe("multiLineCommentParser", () => {
         const result = multiLineCommentParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else {

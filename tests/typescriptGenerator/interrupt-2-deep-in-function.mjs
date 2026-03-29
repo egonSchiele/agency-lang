@@ -126,7 +126,6 @@ const __toolRegistry = {
   }
 };
 
-
 export async function greet(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -223,7 +222,6 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   // Approved — continue execution past interrupt
 }
 
-      
             __stack.step++;
     }
     if (__step <= 2) {
@@ -233,7 +231,6 @@ await __ctx.audit({
         value: __auditReturnValue
       })
 return __auditReturnValue
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -257,8 +254,6 @@ return __auditReturnValue
     }
   })
 }
-
-
 export async function foo2(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -307,8 +302,7 @@ const __graph = __ctx.graph;
     }
     if (__step <= 1) {
             __self.__retryable = false;
-      await print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`)
-      
+      await print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`) + greet
       
             __stack.step++;
     }
@@ -318,10 +312,7 @@ __stack.locals.response = await runPrompt({
         ctx: __ctx,
         prompt: `Greet the user with their name: ${__stack.args.name} and age ${__stack.args.age} using the greet function.`,
         messages: __threads.getOrCreateActive(),
-        clientConfig: {
-          tools: [tool("greet")],
-          ...{}
-        },
+        clientConfig: {},
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
@@ -363,13 +354,11 @@ if (isInterrupt(__stack.locals.response)) {
   }
 }
 
-      
             __stack.step++;
     }
     if (__step <= 4) {
             __self.__retryable = false;
       await print(`Greeted, age is still ${__stack.args.age}...`)
-      
             __stack.step++;
     }
     if (__step <= 5) {
@@ -379,7 +368,6 @@ await __ctx.audit({
         value: __auditReturnValue
       })
 return __auditReturnValue
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -403,8 +391,6 @@ return __auditReturnValue
     }
   })
 }
-
-
 graph.node("sayHi", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -434,7 +420,6 @@ const __graph = __ctx.graph;
   if (__step <= 1) {
           __self.__retryable = false;
     await print(`Saying hi to ${__stack.args.name}...`)
-    
           __stack.step++;
   }
   if (__step <= 2) {
@@ -444,7 +429,6 @@ const __graph = __ctx.graph;
       variable: "__stack.locals.age",
       value: __stack.locals.age
     })
-    
           __stack.step++;
   }
   if (__step <= 3) {
@@ -465,19 +449,16 @@ if (isInterrupt(__stack.locals.response)) {
       variable: "__stack.locals.response",
       value: __stack.locals.response
     })
-    
           __stack.step++;
   }
   if (__step <= 4) {
           __self.__retryable = false;
     await print(__stack.locals.response)
-    
           __stack.step++;
   }
   if (__step <= 5) {
           __self.__retryable = false;
     await print(`Greeting sent.`)
-    
           __stack.step++;
   }
   if (__step <= 6) {
@@ -490,7 +471,6 @@ await __ctx.audit({
       value: __auditReturnValue
     })
 return __auditReturnValue;
-    
           __stack.step++;
   }
   await callHook({

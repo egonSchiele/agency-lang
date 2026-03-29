@@ -96,7 +96,6 @@ const __toolRegistry = {
   }
 };
 
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -158,7 +157,6 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
   }
 }
 
-    
           __stack.step++;
   }
   if (__step <= 2) {
@@ -212,7 +210,6 @@ if (isInterrupt(__stack.locals.greeting)) {
   }
 }
 
-    
           __stack.step++;
   }
   if (__step <= 4) {
@@ -225,7 +222,6 @@ await __ctx.audit({
       value: __auditReturnValue
     })
 return __auditReturnValue;
-    
           __stack.step++;
   }
   await callHook({
@@ -241,7 +237,6 @@ return __auditReturnValue;
     data: undefined
   };
 })
-
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
     ctx: __globalCtx,

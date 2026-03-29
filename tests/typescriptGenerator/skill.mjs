@@ -96,7 +96,6 @@ const __toolRegistry = {
   }
 };
 
-
 graph.node("analyzeData", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -174,7 +173,6 @@ if (isInterrupt(__stack.locals.result)) {
   }
 }
 
-    
           __stack.step++;
   }
   await callHook({

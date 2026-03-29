@@ -111,7 +111,6 @@ const __toolRegistry = {
   }
 };
 
-
 export async function compute(val: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -158,7 +157,6 @@ const __graph = __ctx.graph;
     if (__step <= 1) {
             __self.__retryable = false;
       await sleep(0.1)
-      
             __stack.step++;
     }
     if (__step <= 2) {
@@ -168,7 +166,6 @@ await __ctx.audit({
         value: __auditReturnValue
       })
 return __auditReturnValue
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -192,8 +189,6 @@ return __auditReturnValue
     }
   })
 }
-
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -241,7 +236,6 @@ __self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { _
       variable: "__stack.branches",
       value: __stack.branches
     })
-    
           __stack.step++;
   }
   if (__step <= 2 || (__stack.branches && __stack.branches["2"])) {
@@ -268,7 +262,6 @@ __self.__pendingKey_y = __ctx.pendingPromises.add(__stack.locals.y, (val) => { _
       variable: "__stack.branches",
       value: __stack.branches
     })
-    
           __stack.step++;
   }
   if (__step <= 3) {
@@ -285,7 +278,6 @@ await __ctx.audit({
       value: __auditReturnValue
     })
 return __auditReturnValue;
-    
           __stack.step++;
   }
   await callHook({
@@ -301,7 +293,6 @@ return __auditReturnValue;
     data: undefined
   };
 })
-
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
     ctx: __globalCtx,

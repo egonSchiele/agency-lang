@@ -256,6 +256,7 @@ export const objectTypeParser: Parser<ObjectType> = trace(
         "Expected `}`. Did you forget to add a comma between object properties?",
         char("}"),
       ),
+      optionalSpacesOrNewline,
     );
     const result = parser(input);
     if (!result.success) {
@@ -364,6 +365,7 @@ export const typeAliasParser: Parser<TypeAlias> = trace(
         optionalSpaces,
         capture(variableTypeParser, "aliasedType"),
         optionalSemicolon,
+        optionalSpacesOrNewline,
       ),
     ),
   ),

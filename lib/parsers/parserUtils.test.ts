@@ -38,9 +38,9 @@ describe("parserUtils", () => {
         const result = optionalSemicolon(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
           if (expected.rest !== undefined) {
-            expect(result.rest).toEqual(expected.rest);
+            expect(result.rest).toEqualWithoutLoc(expected.rest);
           }
         }
       });

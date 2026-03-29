@@ -8,7 +8,11 @@ import { typeCheck, formatErrors } from "@/typeChecker.js";
 import { ImportStatement } from "@/types/importStatement.js";
 import { buildSymbolTable, type SymbolTable } from "@/symbolTable.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
-import { resolveAgencyImportPath, isStdlibImport, getStdlibDir } from "../importPaths.js";
+import {
+  resolveAgencyImportPath,
+  isStdlibImport,
+  getStdlibDir,
+} from "../importPaths.js";
 import { renderMermaidAscii } from "beautiful-mermaid";
 import { spawn } from "child_process";
 import * as fs from "fs";
@@ -67,7 +71,11 @@ export function readStdin(): Promise<string> {
   });
 }
 
-export function parse(contents: string, config: AgencyConfig, applyTemplate: boolean = true): AgencyProgram {
+export function parse(
+  contents: string,
+  config: AgencyConfig,
+  applyTemplate: boolean = true,
+): AgencyProgram {
   const verbose = config.verbose ?? false;
   const parseResult = parseAgency(contents, config, applyTemplate);
 
@@ -75,7 +83,7 @@ export function parse(contents: string, config: AgencyConfig, applyTemplate: boo
   if (!parseResult.success) {
     console.error("Parse error:");
     console.error(parseResult);
-    process.exit(1);
+    throw new Error("Failed to parse Agency program");
   }
 
   return parseResult.result;
@@ -206,7 +214,12 @@ export function compile(
   });
 
   const moduleId = path.relative(process.cwd(), absoluteInputFile);
-  const generatedCode = generateTypeScript(resolvedProgram, config, info, moduleId);
+  const generatedCode = generateTypeScript(
+    resolvedProgram,
+    config,
+    info,
+    moduleId,
+  );
   if (options?.ts) {
     // TypeScript output — add @ts-nocheck so type errors don't block compilation
     fs.writeFileSync(outputFile, "// @ts-nocheck\n" + generatedCode, "utf-8");
@@ -218,7 +231,6 @@ export function compile(
     });
     fs.writeFileSync(outputFile, result.code, "utf-8");
   }
-
 
   console.log(`${inputFile} → ${outputFile}`);
 

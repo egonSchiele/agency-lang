@@ -87,7 +87,7 @@ function __initializeGlobals(__ctx) {
 export const __addTool = {
   name: "add",
   description: `Add two numbers together.
-This is a simple addition function.`,
+  This is a simple addition function.`,
   schema: z.object({"a": z.string(), "b": z.string(), })
 };
 export const __addToolParams = ["a", "b"];
@@ -101,11 +101,11 @@ export const __calculateAreaTool = {
   name: "calculateArea",
   description: `Calculate the area of a rectangle.
 
-Parameters:
-- width: the width of the rectangle
-- height: the height of the rectangle
+  Parameters:
+  - width: the width of the rectangle
+  - height: the height of the rectangle
 
-Returns: the area as a number`,
+  Returns: the area as a number`,
   schema: z.object({"width": z.string(), "height": z.string(), })
 };
 export const __calculateAreaToolParams = ["width", "height"];
@@ -163,10 +163,7 @@ const __toolRegistry = {
   }
 };
 
-
 //  Test docstrings in functions
-
-
 export async function add(a: any, b: any, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -234,8 +231,6 @@ const __graph = __ctx.graph;
     }
   })
 }
-
-
 export async function greet(name: any, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -300,8 +295,6 @@ const __graph = __ctx.graph;
     }
   })
 }
-
-
 export async function calculateArea(width: any, height: any, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -369,8 +362,6 @@ const __graph = __ctx.graph;
     }
   })
 }
-
-
 export async function processData(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -430,6 +421,4 @@ const __graph = __ctx.graph;
     }
   })
 }
-
-
 export default graph

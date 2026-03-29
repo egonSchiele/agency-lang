@@ -96,7 +96,6 @@ const __toolRegistry = {
   }
 };
 
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -123,7 +122,6 @@ const __graph = __ctx.graph;
   if (__step <= 1) {
           __self.__retryable = false;
     await print(`lets race!`)
-    
           __stack.step++;
   }
   if (__step <= 2) {
@@ -141,8 +139,6 @@ if (isInterrupt(__stack.locals.msg)) {
       variable: "__stack.locals.msg",
       value: __stack.locals.msg
     })
-    
-    
           __stack.step++;
   }
   if (__step <= 3) {
@@ -196,14 +192,11 @@ if (isInterrupt(__stack.locals.response1)) {
   }
 }
 
-    
-    
           __stack.step++;
   }
   if (__step <= 5) {
           __self.__retryable = false;
     await print(__stack.locals.response1)
-    
           __stack.step++;
   }
   if (__step <= 6) {
@@ -269,14 +262,11 @@ if (isInterrupt(__stack.locals.response2)) {
   }
 }
 
-    
-    
           __stack.step++;
   }
   if (__step <= 9) {
           __self.__retryable = false;
     await print(__stack.locals.response2)
-    
           __stack.step++;
   }
   if (__step <= 10) {
@@ -289,7 +279,6 @@ await __ctx.audit({
       value: __auditReturnValue
     })
 return __auditReturnValue;
-    
           __stack.step++;
   }
   await callHook({

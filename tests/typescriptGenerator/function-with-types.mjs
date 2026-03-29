@@ -171,7 +171,6 @@ const __toolRegistry = {
   }
 };
 
-
 export async function add(x: number, y: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -266,7 +265,6 @@ if (isInterrupt(__stack.locals.result)) {
   }
 }
 
-      
             __stack.step++;
     }
     if (__step <= 3) {
@@ -276,7 +274,6 @@ await __ctx.audit({
         value: __auditReturnValue
       })
 return __auditReturnValue
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -300,8 +297,6 @@ return __auditReturnValue
     }
   })
 }
-
-
 export async function greet(name: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -393,7 +388,6 @@ if (isInterrupt(__stack.locals.message)) {
   }
 }
 
-      
             __stack.step++;
     }
     if (__step <= 3) {
@@ -403,7 +397,6 @@ await __ctx.audit({
         value: __auditReturnValue
       })
 return __auditReturnValue
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -427,8 +420,6 @@ return __auditReturnValue
     }
   })
 }
-
-
 export async function mixed(count: number, label: any, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -523,7 +514,6 @@ if (isInterrupt(__stack.locals.output)) {
   }
 }
 
-      
             __stack.step++;
     }
     if (__step <= 3) {
@@ -533,7 +523,6 @@ await __ctx.audit({
         value: __auditReturnValue
       })
 return __auditReturnValue
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -557,8 +546,6 @@ return __auditReturnValue
     }
   })
 }
-
-
 export async function processArray(items: number[], __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -650,7 +637,6 @@ if (isInterrupt(__stack.locals.result)) {
   }
 }
 
-      
             __stack.step++;
     }
     if (__step <= 3) {
@@ -660,7 +646,6 @@ await __ctx.audit({
         value: __auditReturnValue
       })
 return __auditReturnValue
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -684,8 +669,6 @@ return __auditReturnValue
     }
   })
 }
-
-
 export async function flexible(value: string | number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -777,7 +760,6 @@ if (isInterrupt(__stack.locals.result)) {
   }
 }
 
-      
             __stack.step++;
     }
     if (__step <= 3) {
@@ -787,7 +769,6 @@ await __ctx.audit({
         value: __auditReturnValue
       })
 return __auditReturnValue
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -811,8 +792,6 @@ return __auditReturnValue
     }
   })
 }
-
-
 graph.node("foo", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -839,7 +818,6 @@ const __graph = __ctx.graph;
   if (__step <= 1) {
           __self.__retryable = false;
     await print(`This is a node with a return type`)
-    
           __stack.step++;
   }
   if (__step <= 2) {
@@ -852,7 +830,6 @@ await __ctx.audit({
       value: __auditReturnValue
     })
 return __auditReturnValue;
-    
           __stack.step++;
   }
   await callHook({
@@ -868,8 +845,6 @@ return __auditReturnValue;
     data: undefined
   };
 })
-
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -891,7 +866,6 @@ const __graph = __ctx.graph;
   })
   if (__step <= 0) {
           //  Call the functions
-    
           __stack.step++;
   }
   if (__step <= 1) {
@@ -912,7 +886,6 @@ if (isInterrupt(__stack.locals.sum)) {
       variable: "__stack.locals.sum",
       value: __stack.locals.sum
     })
-    
           __stack.step++;
   }
   if (__step <= 2) {
@@ -933,7 +906,6 @@ if (isInterrupt(__stack.locals.greeting)) {
       variable: "__stack.locals.greeting",
       value: __stack.locals.greeting
     })
-    
           __stack.step++;
   }
   if (__step <= 3) {
@@ -954,7 +926,6 @@ if (isInterrupt(__stack.locals.labeled)) {
       variable: "__stack.locals.labeled",
       value: __stack.locals.labeled
     })
-    
           __stack.step++;
   }
   if (__step <= 4) {
@@ -975,7 +946,6 @@ if (isInterrupt(__stack.locals.processed)) {
       variable: "__stack.locals.processed",
       value: __stack.locals.processed
     })
-    
           __stack.step++;
   }
   if (__step <= 5) {
@@ -996,7 +966,6 @@ if (isInterrupt(__stack.locals.flexResult)) {
       variable: "__stack.locals.flexResult",
       value: __stack.locals.flexResult
     })
-    
           __stack.step++;
   }
   await callHook({

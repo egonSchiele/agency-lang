@@ -141,7 +141,6 @@ const __toolRegistry = {
   }
 };
 
-
 export async function openai(msg: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -233,7 +232,6 @@ if (isInterrupt(__stack.locals.response)) {
   }
 }
 
-      
             __stack.step++;
     }
     if (__step <= 3) {
@@ -243,7 +241,6 @@ await __ctx.audit({
         value: __auditReturnValue
       })
 return __auditReturnValue
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -267,8 +264,6 @@ return __auditReturnValue
     }
   })
 }
-
-
 export async function google(msg: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -367,7 +362,6 @@ if (isInterrupt(__stack.locals.response)) {
   }
 }
 
-      
             __stack.step++;
     }
     if (__step <= 4) {
@@ -377,7 +371,6 @@ await __ctx.audit({
         value: __auditReturnValue
       })
 return __auditReturnValue
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -401,8 +394,6 @@ return __auditReturnValue
     }
   })
 }
-
-
 export async function fibs(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -466,7 +457,6 @@ return __self.__promptVar
         variable: "__self.__removedTools",
         value: __self.__removedTools
       })
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -490,8 +480,6 @@ return __self.__promptVar
     }
   })
 }
-
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -530,7 +518,6 @@ if (isInterrupt(__stack.locals.msg)) {
       variable: "__stack.locals.msg",
       value: __stack.locals.msg
     })
-    
           __stack.step++;
   }
   if (__step <= 2 || (__stack.branches && __stack.branches["2"])) {
@@ -557,7 +544,6 @@ __self.__pendingKey_res2 = __ctx.pendingPromises.add(__stack.locals.res2, (val) 
       variable: "__stack.branches",
       value: __stack.branches
     })
-    
           __stack.step++;
   }
   if (__step <= 3 || (__stack.branches && __stack.branches["3"])) {
@@ -584,7 +570,6 @@ __self.__pendingKey_res1 = __ctx.pendingPromises.add(__stack.locals.res1, (val) 
       variable: "__stack.branches",
       value: __stack.branches
     })
-    
           __stack.step++;
   }
   if (__step <= 4) {
@@ -598,13 +583,11 @@ __self.__pendingKey_res1 = __ctx.pendingPromises.add(__stack.locals.res1, (val) 
       variable: "__stack.locals.results",
       value: __stack.locals.results
     })
-    
           __stack.step++;
   }
   if (__step <= 6) {
           __self.__retryable = false;
     await printJSON(__stack.locals.results)
-    
           __stack.step++;
   }
   await callHook({

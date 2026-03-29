@@ -25,9 +25,6 @@
       "modulePath": "std::index"
     },
     {
-      "type": "newLine"
-    },
-    {
       "type": "graphNode",
       "nodeName": "main",
       "parameters": [],
@@ -62,6 +59,12 @@
               "toolNames": []
             }
           },
+          "loc": {
+            "line": 4,
+            "col": 0,
+            "start": 170,
+            "end": 217
+          },
           "scope": "local"
         },
         {
@@ -80,12 +83,6 @@
             },
             "scope": "local"
           }
-        },
-        {
-          "type": "newLine"
-        },
-        {
-          "type": "newLine"
         },
         {
           "type": "assignment",
@@ -113,6 +110,12 @@
               "toolNames": []
             }
           },
+          "loc": {
+            "line": 6,
+            "col": 2,
+            "start": 217,
+            "end": 255
+          },
           "scope": "local"
         },
         {
@@ -131,14 +134,14 @@
             },
             "scope": "local"
           }
-        },
-        {
-          "type": "newLine"
         }
-      ]
-    },
-    {
-      "type": "newLine"
+      ],
+      "loc": {
+        "line": 2,
+        "col": 0,
+        "start": 119,
+        "end": 256
+      }
     }
   ]
 }

@@ -56,7 +56,7 @@ describe("primitiveTypeParser", () => {
         const result = primitiveTypeParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else {
@@ -153,7 +153,7 @@ describe("arrayTypeParser", () => {
         const result = arrayTypeParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else {
@@ -210,7 +210,7 @@ describe("angleBracketsArrayTypeParser", () => {
         const result = angleBracketsArrayTypeParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else if (throws) {
@@ -266,7 +266,7 @@ describe("stringLiteralTypeParser", () => {
         const result = stringLiteralTypeParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else {
@@ -332,7 +332,7 @@ describe("numberLiteralTypeParser", () => {
         const result = numberLiteralTypeParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else {
@@ -384,7 +384,7 @@ describe("booleanLiteralTypeParser", () => {
         const result = booleanLiteralTypeParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else {
@@ -782,7 +782,7 @@ describe("typeAliasParser", () => {
         const result = typeAliasParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else if (throws) {
@@ -885,7 +885,7 @@ describe("typeAliasVariableParser", () => {
         const result = typeAliasVariableParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else {
@@ -1006,7 +1006,7 @@ describe("objectPropertyParser", () => {
         const result = objectPropertyParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else {
@@ -1113,7 +1113,7 @@ describe("objectPropertyDescriptionParser", () => {
         const result = objectPropertyDescriptionParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else {
@@ -1225,7 +1225,7 @@ describe("objectPropertyWithDescriptionParser", () => {
         const result = objectPropertyWithDescriptionParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else {
@@ -1764,7 +1764,7 @@ describe("objectTypeParser", () => {
         const result = objectTypeParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else if (throws) {
@@ -2320,7 +2320,7 @@ describe("unionTypeParser", () => {
         const result = unionTypeParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else {
@@ -2439,7 +2439,7 @@ describe("variableTypeParser", () => {
         const result = variableTypeParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else {
@@ -2809,7 +2809,7 @@ describe("typeHintParser", () => {
         const result = typeHintParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else {

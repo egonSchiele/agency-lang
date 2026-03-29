@@ -347,14 +347,21 @@ function runSingleTest(
     path.dirname(testFile),
     tests.sourceFile,
   );
-  const result = executeNode({
-    config,
-    agencyFile: relativeSourceFilePath,
-    nodeName: testCase.nodeName,
-    hasArgs,
-    argsString: testCase.input,
-    interruptHandlers: testCase.interruptHandlers,
-  });
+  let result: { data: any; [key: string]: any };
+  try {
+    result = executeNode({
+      config,
+      agencyFile: relativeSourceFilePath,
+      nodeName: testCase.nodeName,
+      hasArgs,
+      argsString: testCase.input,
+      interruptHandlers: testCase.interruptHandlers,
+    });
+  } catch (e) {
+    exitIfSignal(e);
+    console.log(color.red(`  ✗ Test execution error: ${e}`));
+    return false;
+  }
 
   let testPassed = true;
   for (const criterion of testCase.evaluationCriteria) {

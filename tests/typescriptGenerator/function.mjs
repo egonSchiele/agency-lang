@@ -111,7 +111,6 @@ const __toolRegistry = {
   }
 };
 
-
 export async function test(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -157,7 +156,6 @@ const __graph = __ctx.graph;
         variable: "__stack.locals.foo",
         value: __stack.locals.foo
       })
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -181,8 +179,6 @@ const __graph = __ctx.graph;
     }
   })
 }
-
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -213,8 +209,6 @@ const __graph = __ctx.graph;
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
     }))
-    
-    
           __stack.step++;
   }
   if (__step <= 2) {
@@ -262,7 +256,6 @@ const __graph = __ctx.graph;
       try {
         if (__step <= 0) {
                 //  multi-param function
-          
                 __stack.step++;
         }
       } catch (__error) {

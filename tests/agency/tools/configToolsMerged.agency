@@ -8,6 +8,8 @@ def farewell(name: string): string {
 
 node main() {
   uses greet
-  result: string = llm("First, use the greet function to greet Adit. Then, use the farewell function to say goodbye to Adit. Return ONLY the two results separated by a space, nothing else.", { tools: [farewell] })
+  result: string = llm("First, use the greet function to greet Adit. Then, use the farewell function to say goodbye to Adit. Return ONLY the two results separated by a space, nothing else.", { 
+    tools: [farewell]
+  })
   return result
 }

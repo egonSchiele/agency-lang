@@ -25,9 +25,6 @@
       "modulePath": "std::index"
     },
     {
-      "type": "newLine"
-    },
-    {
       "type": "function",
       "functionName": "getWeather",
       "parameters": [
@@ -69,18 +66,21 @@
                 ]
               }
             ]
+          },
+          "loc": {
+            "line": 3,
+            "col": 2,
+            "start": 160,
+            "end": 212
           }
-        },
-        {
-          "type": "newLine"
         }
-      ]
-    },
-    {
-      "type": "newLine"
-    },
-    {
-      "type": "newLine"
+      ],
+      "loc": {
+        "line": 2,
+        "col": 0,
+        "start": 119,
+        "end": 213
+      }
     },
     {
       "type": "function",
@@ -118,18 +118,21 @@
                 "value": " degrees"
               }
             ]
+          },
+          "loc": {
+            "line": 7,
+            "col": 2,
+            "start": 256,
+            "end": 281
           }
-        },
-        {
-          "type": "newLine"
         }
-      ]
-    },
-    {
-      "type": "newLine"
-    },
-    {
-      "type": "newLine"
+      ],
+      "loc": {
+        "line": 6,
+        "col": 0,
+        "start": 215,
+        "end": 282
+      }
     },
     {
       "type": "graphNode",
@@ -137,9 +140,6 @@
       "parameters": [],
       "returnType": null,
       "body": [
-        {
-          "type": "newLine"
-        },
         {
           "type": "newLine"
         },
@@ -172,6 +172,12 @@
               ]
             }
           },
+          "loc": {
+            "line": 12,
+            "col": 0,
+            "start": 328,
+            "end": 385
+          },
           "scope": "local"
         },
         {
@@ -190,12 +196,6 @@
             },
             "scope": "local"
           }
-        },
-        {
-          "type": "newLine"
-        },
-        {
-          "type": "newLine"
         },
         {
           "type": "assignment",
@@ -223,6 +223,12 @@
               "toolNames": []
             }
           },
+          "loc": {
+            "line": 12,
+            "col": 57,
+            "start": 385,
+            "end": 433
+          },
           "scope": "local"
         },
         {
@@ -241,14 +247,14 @@
             },
             "scope": "local"
           }
-        },
-        {
-          "type": "newLine"
         }
-      ]
-    },
-    {
-      "type": "newLine"
+      ],
+      "loc": {
+        "line": 10,
+        "col": 0,
+        "start": 284,
+        "end": 434
+      }
     }
   ]
 }

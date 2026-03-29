@@ -25,9 +25,6 @@
       "modulePath": "std::index"
     },
     {
-      "type": "newLine"
-    },
-    {
       "type": "assignment",
       "variableName": "globalVar",
       "value": {
@@ -39,13 +36,13 @@
           }
         ]
       },
+      "loc": {
+        "line": 2,
+        "col": 0,
+        "start": 119,
+        "end": 140
+      },
       "scope": "global"
-    },
-    {
-      "type": "newLine"
-    },
-    {
-      "type": "newLine"
     },
     {
       "type": "function",
@@ -70,10 +67,13 @@
               }
             ]
           },
+          "loc": {
+            "line": 5,
+            "col": 2,
+            "start": 162,
+            "end": 183
+          },
           "scope": "local"
-        },
-        {
-          "type": "newLine"
         },
         {
           "type": "assignment",
@@ -115,10 +115,13 @@
               }
             ]
           },
+          "loc": {
+            "line": 6,
+            "col": 2,
+            "start": 183,
+            "end": 230
+          },
           "scope": "local"
-        },
-        {
-          "type": "newLine"
         },
         {
           "type": "returnStatement",
@@ -126,18 +129,21 @@
             "type": "variableName",
             "value": "result",
             "scope": "local"
+          },
+          "loc": {
+            "line": 7,
+            "col": 2,
+            "start": 230,
+            "end": 244
           }
-        },
-        {
-          "type": "newLine"
         }
-      ]
-    },
-    {
-      "type": "newLine"
-    },
-    {
-      "type": "newLine"
+      ],
+      "loc": {
+        "line": 4,
+        "col": 0,
+        "start": 140,
+        "end": 245
+      }
     },
     {
       "type": "graphNode",
@@ -157,10 +163,13 @@
               }
             ]
           },
+          "loc": {
+            "line": 11,
+            "col": 2,
+            "start": 263,
+            "end": 284
+          },
           "scope": "local"
-        },
-        {
-          "type": "newLine"
         },
         {
           "type": "assignment",
@@ -176,10 +185,13 @@
               }
             ]
           },
+          "loc": {
+            "line": 12,
+            "col": 2,
+            "start": 284,
+            "end": 313
+          },
           "scope": "local"
-        },
-        {
-          "type": "newLine"
         },
         {
           "type": "functionCall",
@@ -191,14 +203,14 @@
               "scope": "local"
             }
           ]
-        },
-        {
-          "type": "newLine"
         }
-      ]
-    },
-    {
-      "type": "newLine"
+      ],
+      "loc": {
+        "line": 10,
+        "col": 0,
+        "start": 247,
+        "end": 328
+      }
     }
   ]
 }

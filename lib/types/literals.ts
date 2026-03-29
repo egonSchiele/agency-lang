@@ -1,5 +1,4 @@
-import { ScopeType } from "@/types.js";
-import { ValueAccess } from "./access.js";
+import { Expression, ScopeType } from "@/types.js";
 import { BaseNode } from "./base.js";
 
 export type Literal =
@@ -46,7 +45,7 @@ export type TextSegment = {
 
 export type InterpolationSegment = {
   type: "interpolation";
-  expression: VariableNameLiteral | ValueAccess;
+  expression: Expression;
 };
 
 export type RawCode = BaseNode & {

@@ -262,7 +262,7 @@ describe("dataStructures parsers", () => {
           const result = agencyArrayParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
-            expect(result.result).toEqual(expected.result);
+            expect(result.result).toEqualWithoutLoc(expected.result);
           }
         });
       } else {
@@ -415,7 +415,7 @@ describe("dataStructures parsers", () => {
           const result = agencyObjectKVParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
-            expect(result.result).toEqual(expected.result);
+            expect(result.result).toEqualWithoutLoc(expected.result);
           }
         });
       } else {
@@ -788,7 +788,7 @@ describe("dataStructures parsers", () => {
           const result = agencyObjectParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
-            expect(result.result).toEqual(expected.result);
+            expect(result.result).toEqualWithoutLoc(expected.result);
           }
         });
       } else {

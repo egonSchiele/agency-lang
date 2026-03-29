@@ -41,9 +41,7 @@ import { WhileLoop } from "../types/whileLoop.js";
 import { IfElse } from "../types/ifElse.js";
 import { _valueAccessParser, valueAccessParser } from "./access.js";
 import { commentParser } from "./comment.js";
-import {
-  functionCallParser,
-} from "./functionCall.js";
+import { functionCallParser } from "./functionCall.js";
 import { booleanParser, literalParser } from "./literals.js";
 import { matchBlockParser } from "./matchBlock.js";
 import { optionalSemicolon } from "./parserUtils.js";
@@ -70,8 +68,10 @@ import { multiLineCommentParser } from "./multiLineComment.js";
 import { keywordParser } from "./keyword.js";
 import { HandleBlock } from "@/types/handleBlock.js";
 import { debuggerParser } from "./debuggerStatement.js";
+import { exprParser } from "./expression.js";
+import { withLoc } from "./loc.js";
 
-export const assignmentParser: Parser<Assignment> = (input: string) => {
+const _assignmentParserInner: Parser<Assignment> = (input: string) => {
   const parser = trace(
     "assignmentParser",
     seqC(
@@ -91,19 +91,9 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
       optionalSpaces,
       char("="),
       optionalSpaces,
-      capture(
-        or(
-          binOpParser,
-          messageThreadParser,
-          booleanParser,
-          valueAccessParser,
-          agencyArrayParser,
-          agencyObjectParser,
-          literalParser,
-        ),
-        "value",
-      ),
+      capture(or(messageThreadParser, exprParser), "value"),
       optionalSemicolon,
+      optionalSpacesOrNewline,
       //optional(newline),
     ),
   );
@@ -134,6 +124,7 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
   const out: Assignment = { ...rest, variableName, value, accessChain };
   return success(out, result.rest);
 };
+export const assignmentParser: Parser<Assignment> = withLoc(_assignmentParserInner);
 
 export const sharedAssignmentParser: Parser<Assignment> = (input: string) => {
   const parser = seqC(str("shared"), spaces, captureCaptures(assignmentParser));
@@ -200,6 +191,7 @@ export const _messageThreadParser: Parser<MessageThread> = trace(
         capture(bodyParser, "body"),
         optionalSpacesOrNewline,
         char("}"),
+        optionalSpacesOrNewline,
       ),
     ),
   ),
@@ -219,6 +211,7 @@ export const _submessageThreadParser: Parser<MessageThread> = trace(
         capture(bodyParser, "body"),
         optionalSpacesOrNewline,
         char("}"),
+        optionalSpacesOrNewline,
       ),
     ),
   ),
@@ -248,6 +241,7 @@ const inlineHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
         capture(bodyParser, "body"),
         optionalSpacesOrNewline,
         char("}"),
+        optionalSpacesOrNewline,
       ),
     ),
   );
@@ -258,6 +252,7 @@ const functionRefHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
   const parser = seqC(
     set("kind", "functionRef"),
     capture(many1WithJoin(varNameChar), "functionName"),
+    optionalSpacesOrNewline,
   );
   return parser(input);
 };
@@ -281,19 +276,12 @@ export const handleBlockParser: Parser<HandleBlock> = trace(
     optionalSpacesOrNewline,
     str("with"),
     optionalSpaces,
-    capture(
-      or(inlineHandlerParser, functionRefHandlerParser),
-      "handler",
-    ),
+    capture(or(inlineHandlerParser, functionRefHandlerParser), "handler"),
   ),
 );
 
 const elseClauseParser: Parser<AgencyNode[]> = (input: string) => {
-  const parser = seqC(
-    optionalSpaces,
-    str("else"),
-    optionalSpaces,
-  );
+  const parser = seqC(optionalSpaces, str("else"), optionalSpaces);
   const prefixResult = parser(input);
   if (!prefixResult.success) return prefixResult;
 
@@ -306,17 +294,18 @@ const elseClauseParser: Parser<AgencyNode[]> = (input: string) => {
   // Otherwise parse "else { body }"
   const elseBlockParser = seqC(
     char("{"),
-    spaces,
+    optionalSpacesOrNewline,
     capture(bodyParser, "body"),
-    optionalSpaces,
+    optionalSpacesOrNewline,
     char("}"),
+    optionalSpacesOrNewline,
   );
   const blockResult = elseBlockParser(prefixResult.rest);
   if (!blockResult.success) return blockResult;
   return success(blockResult.result.body, blockResult.rest);
 };
 
-export const ifParser: Parser<IfElse> = (input: string) => {
+const _ifParserInner: Parser<IfElse> = (input: string) => {
   const parser = trace(
     "ifParser",
     seqC(
@@ -325,10 +314,7 @@ export const ifParser: Parser<IfElse> = (input: string) => {
       optionalSpaces,
       char("("),
       optionalSpaces,
-      capture(
-        or(binOpParser, booleanParser, valueAccessParser, literalParser),
-        "condition",
-      ),
+      capture(exprParser, "condition"),
       optionalSpaces,
       char(")"),
       optionalSpaces,
@@ -336,10 +322,11 @@ export const ifParser: Parser<IfElse> = (input: string) => {
         parseError(
           "expected `{` to open if block body",
           char("{"),
-          spaces,
+          optionalSpacesOrNewline,
           capture(bodyParser, "thenBody"),
-          optionalSpaces,
+          optionalSpacesOrNewline,
           char("}"),
+          optionalSpacesOrNewline,
         ),
       ),
     ),
@@ -350,13 +337,17 @@ export const ifParser: Parser<IfElse> = (input: string) => {
   // Try to parse an optional else clause
   const elseResult = elseClauseParser(result.rest);
   if (elseResult.success) {
-    return success({ ...result.result, elseBody: elseResult.result }, elseResult.rest);
+    return success(
+      { ...result.result, elseBody: elseResult.result },
+      elseResult.rest,
+    );
   }
 
   return result;
 };
+export const ifParser: Parser<IfElse> = withLoc(_ifParserInner);
 
-export const whileLoopParser: Parser<WhileLoop> = trace(
+export const whileLoopParser: Parser<WhileLoop> = withLoc(trace(
   "whileLoopParser",
   seqC(
     set("type", "whileLoop"),
@@ -364,10 +355,7 @@ export const whileLoopParser: Parser<WhileLoop> = trace(
     optionalSpaces,
     char("("),
     optionalSpaces,
-    capture(
-      or(binOpParser, booleanParser, valueAccessParser, literalParser),
-      "condition",
-    ),
+    capture(exprParser, "condition"),
     optionalSpaces,
     char(")"),
     optionalSpaces,
@@ -375,16 +363,17 @@ export const whileLoopParser: Parser<WhileLoop> = trace(
       parseError(
         "expected `{` to open while loop body",
         char("{"),
-        spaces,
+        optionalSpacesOrNewline,
         capture(bodyParser, "body"),
-        optionalSpaces,
+        optionalSpacesOrNewline,
         char("}"),
+        optionalSpacesOrNewline,
       ),
     ),
   ),
-);
+));
 
-export const forLoopParser: Parser<ForLoop> = trace(
+export const forLoopParser: Parser<ForLoop> = withLoc(trace(
   "forLoopParser",
   seqC(
     set("type", "forLoop"),
@@ -406,10 +395,7 @@ export const forLoopParser: Parser<ForLoop> = trace(
     optionalSpaces,
     str("in"),
     spaces,
-    capture(
-      or(functionCallParser, valueAccessParser, literalParser),
-      "iterable",
-    ),
+    capture(exprParser, "iterable"),
     optionalSpaces,
     char(")"),
     optionalSpaces,
@@ -417,14 +403,15 @@ export const forLoopParser: Parser<ForLoop> = trace(
       parseError(
         "expected `{` to open for loop body",
         char("{"),
-        spaces,
+        optionalSpacesOrNewline,
         capture(bodyParser, "body"),
         optionalSpacesOrNewline,
         char("}"),
+        optionalSpacesOrNewline,
       ),
     ),
   ),
-);
+));
 
 export const functionParameterParserWithTypeHint: Parser<FunctionParameter> =
   trace(
@@ -481,13 +468,13 @@ const _baseFunctionParser: Parser<FunctionDefinition> = trace(
     captureCaptures(
       parseError(
         "Expected function body",
-        optionalSpaces,
+        optionalSpacesOrNewline,
         char("{"),
         optionalSpacesOrNewline,
         capture(or(docStringParser, succeed(undefined)), "docString"),
         optionalSpacesOrNewline,
         capture(bodyParser, "body"),
-        optionalSpaces,
+        optionalSpacesOrNewline,
         char("}"),
         optionalSemicolon,
       ),
@@ -506,7 +493,7 @@ const asyncSyncKeywordParser: Parser<boolean | undefined> = or(
   succeed(undefined),
 );
 
-export const functionParser: Parser<FunctionDefinition> = (input: string) => {
+const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   const safeResult = safeKeywordParser(input);
   if (!safeResult.success) return safeResult;
   const isSafe = safeResult.result;
@@ -524,6 +511,7 @@ export const functionParser: Parser<FunctionDefinition> = (input: string) => {
 
   return { ...baseResult, result };
 };
+export const functionParser: Parser<FunctionDefinition> = withLoc(_functionParserInner);
 
 const visibilityParser: Parser<Visibility> = or(
   str("public" as const),
@@ -531,7 +519,7 @@ const visibilityParser: Parser<Visibility> = or(
   succeed(undefined),
 );
 
-export const graphNodeParser: Parser<GraphNodeDefinition> = trace(
+export const graphNodeParser: Parser<GraphNodeDefinition> = withLoc(trace(
   "graphNodeParser",
   seqC(
     set("type", "graphNode"),
@@ -556,14 +544,14 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = trace(
     captureCaptures(
       parseError(
         "expected node body",
-        optionalSpaces,
+        optionalSpacesOrNewline,
         char("{"),
         optionalSpacesOrNewline,
         capture(bodyParser, "body"),
-        optionalSpaces,
+        optionalSpacesOrNewline,
         char("}"),
         optionalSemicolon,
       ),
     ),
   ),
-);
+));

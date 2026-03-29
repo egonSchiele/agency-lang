@@ -114,13 +114,6 @@ const __toolRegistry = {
 
 
 
-
-
-
-
-
-
-
 export async function greet(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -166,7 +159,6 @@ await __ctx.audit({
         value: __auditReturnValue
       })
 return __auditReturnValue
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -190,5 +182,4 @@ return __auditReturnValue
     }
   })
 }
-
 export default graph

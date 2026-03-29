@@ -13,6 +13,8 @@ import {
   capture,
   captureCaptures,
   char,
+  many,
+  many1,
   newline,
   or,
   parseError,
@@ -24,15 +26,12 @@ import {
   str,
 } from "tarsec";
 import { DefaultCase, MatchBlockCase } from "../types/matchBlock.js";
-import { valueAccessParser } from "./access.js";
 import { commentParser } from "./comment.js";
-import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
+import { exprParser } from "./expression.js";
 import { assignmentParser } from "./function.js";
-import { booleanParser, literalParser } from "./literals.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { returnStatementParser } from "./returnStatement.js";
 import { optionalSpaces, optionalSpacesOrNewline } from "./utils.js";
-import { binOpParser } from "./binop.js";
 
 export const defaultCaseParser: Parser<DefaultCase> = char("_");
 
@@ -42,30 +41,13 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
   const parser = seqC(
     set("type", "matchBlockCase"),
     optionalSpaces,
-    capture(
-      or(
-        defaultCaseParser,
-        booleanParser,
-        valueAccessParser,
-        literalParser,
-      ),
-      "caseValue",
-    ),
+    capture(or(defaultCaseParser, exprParser), "caseValue"),
     optionalSpaces,
     str("=>"),
     optionalSpaces,
-    capture(
-      or(
-        returnStatementParser,
-        agencyArrayParser,
-        agencyObjectParser,
-        assignmentParser,
-        booleanParser,
-        valueAccessParser,
-        literalParser,
-      ),
-      "body",
-    ),
+    capture(or(returnStatementParser, assignmentParser, exprParser), "body"),
+    optionalSemicolon,
+    optionalSpacesOrNewline,
   );
   return parser(input);
 };
@@ -77,7 +59,7 @@ export const matchBlockParser = seqC(
   str("match"),
   optionalSpaces,
   char("("),
-  capture(or(binOpParser, valueAccessParser, literalParser), "expression"),
+  capture(exprParser, "expression"),
   char(")"),
   optionalSpaces,
   char("{"),
@@ -85,13 +67,11 @@ export const matchBlockParser = seqC(
     parseError(
       "expected match cases of the form `value => expression` separated by `;` or newlines, followed by `}`",
       optionalSpacesOrNewline,
-      capture(
-        sepBy(or(semicolon, newline), or(commentParser, matchBlockParserCase)),
-        "cases",
-      ),
+      capture(many(or(commentParser, matchBlockParserCase)), "cases"),
       optionalSpaces,
       char("}"),
     ),
   ),
   optionalSemicolon,
+  optionalSpacesOrNewline,
 );

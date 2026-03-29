@@ -25,9 +25,6 @@
       "modulePath": "std::index"
     },
     {
-      "type": "newLine"
-    },
-    {
       "type": "function",
       "functionName": "greet",
       "parameters": [
@@ -60,6 +57,12 @@
               "toolNames": []
             }
           },
+          "loc": {
+            "line": 3,
+            "col": 2,
+            "start": 139,
+            "end": 172
+          },
           "scope": "local"
         },
         {
@@ -80,23 +83,26 @@
           }
         },
         {
-          "type": "newLine"
-        },
-        {
           "type": "returnStatement",
           "value": {
             "type": "variableName",
             "value": "result",
             "scope": "local"
+          },
+          "loc": {
+            "line": 4,
+            "col": 2,
+            "start": 172,
+            "end": 186
           }
-        },
-        {
-          "type": "newLine"
         }
-      ]
-    },
-    {
-      "type": "newLine"
+      ],
+      "loc": {
+        "line": 2,
+        "col": 0,
+        "start": 119,
+        "end": 187
+      }
     }
   ]
 }

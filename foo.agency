@@ -1,14 +1,11 @@
+type Category = "reminder" | "todo" | "general" | "quit"
+
+node categorize(message: string) {
+  category: Category = llm("${prompt}. Here's the user message: '${message}'")
+  return category
+}
+
 node main() {
-  title = "Hello"
-  message = "This is a notification."
-  handle {
-    result = notify(title, message)
-  } with (data) {
-    printJSON(data)
-    return approve()
-  }
-  if (result == null) {
-    print("notification blocked")
-  }
-  print("notification sent")
+  userMessage = "Remind me to buy milk tomorrow"
+  return categorize(userMessage)
 }

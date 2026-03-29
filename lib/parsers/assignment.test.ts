@@ -481,7 +481,7 @@ describe("assignmentParser", () => {
         const result = assignmentParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else {
@@ -501,7 +501,7 @@ describe("sharedAssignmentParser", () => {
       expect(result.result.type).toBe("assignment");
       expect(result.result.variableName).toBe("x");
       expect(result.result.shared).toBe(true);
-      expect(result.result.value).toEqual({ type: "number", value: "42" });
+      expect(result.result.value).toEqualWithoutLoc({ type: "number", value: "42" });
     }
   });
 

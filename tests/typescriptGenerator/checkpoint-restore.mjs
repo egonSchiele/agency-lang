@@ -96,7 +96,6 @@ const __toolRegistry = {
   }
 };
 
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -138,7 +137,6 @@ if (isInterrupt(__stack.locals.cp)) {
       variable: "__stack.locals.cp",
       value: __stack.locals.cp
     })
-    
           __stack.step++;
   }
   if (__step <= 2) {
@@ -148,7 +146,6 @@ if (isInterrupt(__stack.locals.cp)) {
       variable: "__stack.locals.x",
       value: __stack.locals.x
     })
-    
           __stack.step++;
   }
   if (__step <= 3) {
@@ -169,7 +166,6 @@ if (isInterrupt(__funcResult)) {
       variable: "__funcResult",
       value: __funcResult
     })
-    
           __stack.step++;
   }
   if (__step <= 4) {
@@ -182,7 +178,6 @@ await __ctx.audit({
       value: __auditReturnValue
     })
 return __auditReturnValue;
-    
           __stack.step++;
   }
   await callHook({
@@ -198,7 +193,6 @@ return __auditReturnValue;
     data: undefined
   };
 })
-
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
     ctx: __globalCtx,

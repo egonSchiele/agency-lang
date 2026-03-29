@@ -25,9 +25,6 @@
       "modulePath": "std::index"
     },
     {
-      "type": "newLine"
-    },
-    {
       "type": "graphNode",
       "nodeName": "main",
       "parameters": [],
@@ -36,9 +33,6 @@
         {
           "type": "comment",
           "content": " This prompt is assigned and used - should be kept"
-        },
-        {
-          "type": "newLine"
         },
         {
           "type": "assignment",
@@ -66,6 +60,12 @@
               "toolNames": []
             }
           },
+          "loc": {
+            "line": 4,
+            "col": 2,
+            "start": 190,
+            "end": 233
+          },
           "scope": "local"
         },
         {
@@ -86,9 +86,6 @@
           }
         },
         {
-          "type": "newLine"
-        },
-        {
           "type": "functionCall",
           "functionName": "print",
           "arguments": [
@@ -100,17 +97,8 @@
           ]
         },
         {
-          "type": "newLine"
-        },
-        {
-          "type": "newLine"
-        },
-        {
           "type": "comment",
           "content": " This prompt is assigned but never used - should be removed"
-        },
-        {
-          "type": "newLine"
         },
         {
           "type": "assignment",
@@ -138,6 +126,12 @@
               "toolNames": []
             }
           },
+          "loc": {
+            "line": 8,
+            "col": 2,
+            "start": 312,
+            "end": 358
+          },
           "scope": "local"
         },
         {
@@ -158,17 +152,8 @@
           }
         },
         {
-          "type": "newLine"
-        },
-        {
-          "type": "newLine"
-        },
-        {
           "type": "comment",
           "content": " This prompt is returned - should be kept"
-        },
-        {
-          "type": "newLine"
         },
         {
           "type": "returnStatement",
@@ -190,15 +175,21 @@
               "type": "usesTool",
               "toolNames": []
             }
+          },
+          "loc": {
+            "line": 11,
+            "col": 2,
+            "start": 404,
+            "end": 431
           }
-        },
-        {
-          "type": "newLine"
         }
-      ]
-    },
-    {
-      "type": "newLine"
+      ],
+      "loc": {
+        "line": 2,
+        "col": 0,
+        "start": 119,
+        "end": 432
+      }
     }
   ]
 }

@@ -60,7 +60,7 @@ describe("binOpParser", () => {
         const result = binOpParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     });
@@ -148,7 +148,7 @@ describe("binOpParser", () => {
         const result = binOpParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     });
@@ -200,7 +200,7 @@ describe("binOpParser", () => {
         const result = binOpParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     });
@@ -240,7 +240,7 @@ describe("binOpParser", () => {
         const result = binOpParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     });
@@ -280,7 +280,7 @@ describe("binOpParser", () => {
         const result = binOpParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     });
@@ -292,7 +292,7 @@ describe("binOpParser", () => {
       const result = binOpParser("1 + 2;");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "binOpExpression",
           operator: "+",
           left: { type: "number", value: "1" },
@@ -305,7 +305,7 @@ describe("binOpParser", () => {
       const result = binOpParser("x == y;");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "binOpExpression",
           operator: "==",
           left: { type: "variableName", value: "x" },
@@ -321,7 +321,7 @@ describe("binOpParser", () => {
       const result = binOpParser("obj.count + 1");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "binOpExpression",
           operator: "+",
           left: {
@@ -338,7 +338,7 @@ describe("binOpParser", () => {
       const result = binOpParser('arr[0] == "done"');
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "binOpExpression",
           operator: "==",
           left: {
@@ -355,7 +355,7 @@ describe("binOpParser", () => {
       const result = binOpParser("response.status >= 400");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "binOpExpression",
           operator: ">=",
           left: {
@@ -375,7 +375,7 @@ describe("binOpParser", () => {
       const result = binOpParser("x && y");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "binOpExpression",
           operator: "&&",
           left: { type: "variableName", value: "x" },
@@ -388,7 +388,7 @@ describe("binOpParser", () => {
       const result = binOpParser("a || b");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "binOpExpression",
           operator: "||",
           left: { type: "variableName", value: "a" },
@@ -404,7 +404,7 @@ describe("binOpParser", () => {
       const result = binOpParser("1 + 2 + 3");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "binOpExpression",
           operator: "+",
           left: {
@@ -425,7 +425,7 @@ describe("binOpParser", () => {
       const result = binOpParser("1 + 2 * 3");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "binOpExpression",
           operator: "+",
           left: { type: "number", value: "1" },
@@ -443,7 +443,7 @@ describe("binOpParser", () => {
       const result = binOpParser("1 * 2 + 3 * 4");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "binOpExpression",
           operator: "+",
           left: {
@@ -469,7 +469,7 @@ describe("binOpParser", () => {
       const result = binOpParser("x += 5");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "binOpExpression",
           operator: "+=",
           left: { type: "variableName", value: "x" },
@@ -482,7 +482,7 @@ describe("binOpParser", () => {
       const result = binOpParser("count -= 1");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "binOpExpression",
           operator: "-=",
           left: { type: "variableName", value: "count" },
@@ -495,7 +495,7 @@ describe("binOpParser", () => {
       const result = binOpParser("x *= 2");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "binOpExpression",
           operator: "*=",
           left: { type: "variableName", value: "x" },
@@ -508,7 +508,7 @@ describe("binOpParser", () => {
       const result = binOpParser("x /= 3");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "binOpExpression",
           operator: "/=",
           left: { type: "variableName", value: "x" },
@@ -525,7 +525,7 @@ describe("binOpParser", () => {
       expect(result.success).toBe(true);
       if (result.success) {
         // Should parse as (1 + (2 * 3)) - (4 / 5)
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "binOpExpression",
           operator: "-",
           left: {

@@ -96,7 +96,6 @@ const __toolRegistry = {
   }
 };
 
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -118,7 +117,6 @@ const __graph = __ctx.graph;
   })
   if (__step <= 0) {
           //  Basic for-of loop
-    
           __stack.step++;
   }
   if (__step <= 1) {
@@ -128,7 +126,6 @@ const __graph = __ctx.graph;
       variable: "__stack.locals.items",
       value: __stack.locals.items
     })
-    
           __stack.step++;
   }
   if (__step <= 2) {
@@ -151,20 +148,11 @@ for (let __i_2 = 0; __i_2 < __stack.locals.items.length; __i_2++) {
     __stack.locals.__substep_2 = 1;
   }
 
-  if (__stack.locals.__substep_2 <= 1) {
-    
-
-    __stack.locals.__substep_2 = 2;
-  }
-
   __stack.resetLoopIteration("2");
   __stack.locals.__iteration_2++;
   __currentIter_2++;
 }
-    
-    
     //  Range-based for loop
-    
           __stack.step++;
   }
   if (__step <= 3) {
@@ -185,20 +173,11 @@ for (let i = 0; i < 5; i++) {
     __stack.locals.__substep_3 = 1;
   }
 
-  if (__stack.locals.__substep_3 <= 1) {
-    
-
-    __stack.locals.__substep_3 = 2;
-  }
-
   __stack.resetLoopIteration("3");
   __stack.locals.__iteration_3++;
   __currentIter_3++;
 }
-    
-    
     //  Indexed for loop
-    
           __stack.step++;
   }
   if (__step <= 4) {
@@ -208,7 +187,6 @@ for (let i = 0; i < 5; i++) {
       variable: "__stack.locals.names",
       value: __stack.locals.names
     })
-    
           __stack.step++;
   }
   if (__step <= 5) {
@@ -232,28 +210,15 @@ for (let index = 0; index < __stack.locals.names.length; index++) {
   }
 
   if (__stack.locals.__substep_5 <= 1) {
-    
-
-    __stack.locals.__substep_5 = 2;
-  }
-
-  if (__stack.locals.__substep_5 <= 2) {
     await print(index)
 
-    __stack.locals.__substep_5 = 3;
-  }
-
-  if (__stack.locals.__substep_5 <= 3) {
-    
-
-    __stack.locals.__substep_5 = 4;
+    __stack.locals.__substep_5 = 2;
   }
 
   __stack.resetLoopIteration("5");
   __stack.locals.__iteration_5++;
   __currentIter_5++;
 }
-    
           __stack.step++;
   }
   await callHook({
@@ -269,7 +234,6 @@ for (let index = 0; index < __stack.locals.names.length; index++) {
     data: undefined
   };
 })
-
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
     ctx: __globalCtx,

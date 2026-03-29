@@ -12,7 +12,7 @@ describe("valueAccessParser", () => {
       const result = valueAccessParser("obj");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({ type: "variableName", value: "obj" });
+        expect(result.result).toEqualWithoutLoc({ type: "variableName", value: "obj" });
       }
     });
   });
@@ -22,7 +22,7 @@ describe("valueAccessParser", () => {
       const result = valueAccessParser("func()");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "functionCall",
           functionName: "func",
           arguments: [],
@@ -154,7 +154,7 @@ describe("valueAccessParser", () => {
         const result = valueAccessParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     });
@@ -166,7 +166,7 @@ describe("valueAccessParser", () => {
       expect(result.success).toBe(true);
       if (result.success) {
         // Parses "arr" as variableName, leaves "[]" as rest
-        expect(result.result).toEqual({ type: "variableName", value: "arr" });
+        expect(result.result).toEqualWithoutLoc({ type: "variableName", value: "arr" });
         expect(result.rest).toBe("[]");
       }
     });
@@ -215,7 +215,7 @@ describe("valueAccessParser", () => {
         const result = valueAccessParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected);
+          expect(result.result).toEqualWithoutLoc(expected);
         }
       });
     });
@@ -281,7 +281,7 @@ describe("valueAccessParser", () => {
         const result = valueAccessParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected);
+          expect(result.result).toEqualWithoutLoc(expected);
         }
       });
     });
@@ -292,7 +292,7 @@ describe("valueAccessParser", () => {
       const result = valueAccessParser("fetch().json()");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: {
             type: "functionCall",
@@ -317,7 +317,7 @@ describe("valueAccessParser", () => {
       const result = valueAccessParser("foo.bar().baz()[3].a1");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: { type: "variableName", value: "foo" },
           chain: [
@@ -348,7 +348,7 @@ describe("valueAccessParser", () => {
       const result = valueAccessParser("response.data.items");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: { type: "variableName", value: "response" },
           chain: [
@@ -374,7 +374,7 @@ describe("valueAccessParser", () => {
       const result = syncValueAccessParser("sync obj.foo");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: { type: "variableName", value: "obj" },
           chain: [{ kind: "property", name: "foo" }],
@@ -387,7 +387,7 @@ describe("valueAccessParser", () => {
       const result = syncValueAccessParser("await obj.foo");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: { type: "variableName", value: "obj" },
           chain: [{ kind: "property", name: "foo" }],
@@ -400,7 +400,7 @@ describe("valueAccessParser", () => {
       const result = syncValueAccessParser("sync Promise.resolve()");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: { type: "variableName", value: "Promise" },
           chain: [
@@ -422,7 +422,7 @@ describe("valueAccessParser", () => {
       const result = syncValueAccessParser("await Promise.race(res1, res2)");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: { type: "variableName", value: "Promise" },
           chain: [
@@ -447,7 +447,7 @@ describe("valueAccessParser", () => {
       const result = syncValueAccessParser("sync response.data.items");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: { type: "variableName", value: "response" },
           chain: [
@@ -464,7 +464,7 @@ describe("valueAccessParser", () => {
       const result = syncValueAccessParser("sync fetch()");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "functionCall",
           functionName: "fetch",
           arguments: [],
@@ -490,7 +490,7 @@ describe("valueAccessParser", () => {
       const result = asyncValueAccessParser("async obj.foo");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: { type: "variableName", value: "obj" },
           chain: [{ kind: "property", name: "foo" }],
@@ -503,7 +503,7 @@ describe("valueAccessParser", () => {
       const result = asyncValueAccessParser("async Promise.sayHi()");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: { type: "variableName", value: "Promise" },
           chain: [
@@ -525,7 +525,7 @@ describe("valueAccessParser", () => {
       const result = asyncValueAccessParser("async obj.method(42)");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: { type: "variableName", value: "obj" },
           chain: [
@@ -547,7 +547,7 @@ describe("valueAccessParser", () => {
       const result = asyncValueAccessParser("async fetch().json()");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: {
             type: "functionCall",
@@ -574,7 +574,7 @@ describe("valueAccessParser", () => {
       const result = asyncValueAccessParser("async fetch()");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "functionCall",
           functionName: "fetch",
           arguments: [],
@@ -603,7 +603,7 @@ describe("valueAccessParser", () => {
       const result = valueAccessParser("await Promise.bar()");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: { type: "variableName", value: "Promise" },
           chain: [
@@ -625,7 +625,7 @@ describe("valueAccessParser", () => {
       const result = valueAccessParser("async Promise.sayHi()");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: { type: "variableName", value: "Promise" },
           chain: [
@@ -647,7 +647,7 @@ describe("valueAccessParser", () => {
       const result = valueAccessParser("sync Promise.sayHi()");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: { type: "variableName", value: "Promise" },
           chain: [
@@ -669,7 +669,7 @@ describe("valueAccessParser", () => {
       const result = valueAccessParser("Promise.sayHi()");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: { type: "variableName", value: "Promise" },
           chain: [

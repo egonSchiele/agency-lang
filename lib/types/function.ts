@@ -1,13 +1,9 @@
 import {
-  AgencyArray,
   AgencyNode,
-  AgencyObject,
+  Expression,
   VariableType,
 } from "../types.js";
-import { ValueAccess } from "./access.js";
 import { BaseNode } from "./base.js";
-import { BinOpExpression } from "./binop.js";
-import { Literal } from "./literals.js";
 import { UsesTool } from "./tools.js";
 
 export type FunctionParameter = {
@@ -30,14 +26,7 @@ export type FunctionDefinition = BaseNode & {
 export type FunctionCall = BaseNode & {
   type: "functionCall";
   functionName: string;
-  arguments: (
-    | AgencyArray
-    | AgencyObject
-    | ValueAccess
-    | BinOpExpression
-    | Literal
-    | FunctionCall
-  )[];
+  arguments: Expression[];
   async?: boolean;
   tools?: UsesTool;
 };

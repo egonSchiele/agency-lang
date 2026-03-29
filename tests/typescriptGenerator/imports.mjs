@@ -127,6 +127,5 @@ const __toolRegistry = {
 
 
 
-
 graph.merge(__graph___foo)
 export default graph

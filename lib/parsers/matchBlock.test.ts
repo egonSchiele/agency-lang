@@ -30,7 +30,7 @@ describe("defaultCaseParser", () => {
         const result = defaultCaseParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else {
@@ -149,7 +149,7 @@ describe("matchBlockParserCase", () => {
         const result = matchBlockParserCase(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else {
@@ -607,7 +607,7 @@ describe("matchBlockParser", () => {
         const result = matchBlockParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else if (throws) {

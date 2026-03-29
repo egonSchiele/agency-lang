@@ -96,7 +96,6 @@ const __toolRegistry = {
   }
 };
 
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -118,7 +117,6 @@ const __graph = __ctx.graph;
   })
   if (__step <= 0) {
           //  Basic if statement with boolean variable
-    
           __stack.step++;
   }
   if (__step <= 1) {
@@ -128,7 +126,6 @@ const __graph = __ctx.graph;
       variable: "__stack.locals.flag",
       value: __stack.locals.flag
     })
-    
           __stack.step++;
   }
   if (__step <= 2) {
@@ -154,15 +151,8 @@ if (__condbranch_2 === 0) {
     __stack.locals.__substep_2 = 1;
   }
 
-  if (__sub_2 <= 1) {
-    
-    __stack.locals.__substep_2 = 2;
-  }
-
 
 }
-    
-    
           __stack.step++;
   }
   if (__step <= 3) {
@@ -188,17 +178,9 @@ if (__condbranch_3 === 0) {
     __stack.locals.__substep_3 = 1;
   }
 
-  if (__sub_3 <= 1) {
-    
-    __stack.locals.__substep_3 = 2;
-  }
-
 
 }
-    
-    
     //  If statement with property access
-    
           __stack.step++;
   }
   if (__step <= 4) {
@@ -210,7 +192,6 @@ if (__condbranch_3 === 0) {
       variable: "__stack.locals.obj",
       value: __stack.locals.obj
     })
-    
           __stack.step++;
   }
   if (__step <= 5) {
@@ -236,17 +217,9 @@ if (__condbranch_5 === 0) {
     __stack.locals.__substep_5 = 1;
   }
 
-  if (__sub_5 <= 1) {
-    
-    __stack.locals.__substep_5 = 2;
-  }
-
 
 }
-    
-    
     //  Nested if statements
-    
           __stack.step++;
   }
   if (__step <= 6) {
@@ -256,7 +229,6 @@ if (__condbranch_5 === 0) {
       variable: "__stack.locals.outer",
       value: __stack.locals.outer
     })
-    
           __stack.step++;
   }
   if (__step <= 7) {
@@ -283,66 +255,42 @@ if (__condbranch_7 === 0) {
   }
 
   if (__sub_7 <= 1) {
-    
-    __stack.locals.__substep_7 = 2;
-  }
-
-  if (__sub_7 <= 2) {
-    if (__stack.locals.__condbranch_7_2 === undefined) {
+    if (__stack.locals.__condbranch_7_1 === undefined) {
 
   if (__stack.locals.inner) {
-    __stack.locals.__condbranch_7_2 = 0;
+    __stack.locals.__condbranch_7_1 = 0;
 
 
 
   } else {
-    __stack.locals.__condbranch_7_2 = -1;
+    __stack.locals.__condbranch_7_1 = -1;
   }
 
 }
-const __condbranch_7_2 = __stack.locals.__condbranch_7_2;
-const __sub_7_2 = __stack.locals.__substep_7_2 ?? 0;
+const __condbranch_7_1 = __stack.locals.__condbranch_7_1;
+const __sub_7_1 = __stack.locals.__substep_7_1 ?? 0;
 
-if (__condbranch_7_2 === 0) {
+if (__condbranch_7_1 === 0) {
 
-  if (__sub_7_2 <= 0) {
+  if (__sub_7_1 <= 0) {
     __stack.locals.nested = `both true`;
-    __stack.locals.__substep_7_2 = 1;
-  }
-
-  if (__sub_7_2 <= 1) {
-    
-    __stack.locals.__substep_7_2 = 2;
+    __stack.locals.__substep_7_1 = 1;
   }
 
 
 }
-    __stack.locals.__substep_7 = 3;
-  }
-
-  if (__sub_7 <= 3) {
-    
-    __stack.locals.__substep_7 = 4;
+    __stack.locals.__substep_7 = 2;
   }
 
 
 }
-    
-    
     //  TODO fix
-    
     //  If with index access
-    
     //  arr = [1, 2, 3]
-    
     //  if (arr[0]) {
-    
     //    firstElement = "exists"
-    
     //  }
-    
     //  Multiple statements in then body
-    
           __stack.step++;
   }
   if (__step <= 8) {
@@ -352,7 +300,6 @@ if (__condbranch_7_2 === 0) {
       variable: "__stack.locals.condition",
       value: __stack.locals.condition
     })
-    
           __stack.step++;
   }
   if (__step <= 9) {
@@ -379,36 +326,18 @@ if (__condbranch_9 === 0) {
   }
 
   if (__sub_9 <= 1) {
-    
+    __stack.locals.b = 2;
     __stack.locals.__substep_9 = 2;
   }
 
   if (__sub_9 <= 2) {
-    __stack.locals.b = 2;
-    __stack.locals.__substep_9 = 3;
-  }
-
-  if (__sub_9 <= 3) {
-    
-    __stack.locals.__substep_9 = 4;
-  }
-
-  if (__sub_9 <= 4) {
     __stack.locals.c = 3;
-    __stack.locals.__substep_9 = 5;
-  }
-
-  if (__sub_9 <= 5) {
-    
-    __stack.locals.__substep_9 = 6;
+    __stack.locals.__substep_9 = 3;
   }
 
 
 }
-    
-    
     //  Multiple statements in both then and else bodies
-    
           __stack.step++;
   }
   if (__step <= 10) {
@@ -418,7 +347,6 @@ if (__condbranch_9 === 0) {
       variable: "__stack.locals.value",
       value: __stack.locals.value
     })
-    
           __stack.step++;
   }
   if (__step <= 11) {
@@ -445,26 +373,13 @@ if (__condbranch_11 === 0) {
   }
 
   if (__sub_11 <= 1) {
-    
-    __stack.locals.__substep_11 = 2;
-  }
-
-  if (__sub_11 <= 2) {
     __stack.locals.y = 20;
-    __stack.locals.__substep_11 = 3;
-  }
-
-  if (__sub_11 <= 3) {
-    
-    __stack.locals.__substep_11 = 4;
+    __stack.locals.__substep_11 = 2;
   }
 
 
 }
-    
-    
     //  Basic else
-    
           __stack.step++;
   }
   if (__step <= 12) {
@@ -490,11 +405,6 @@ if (__condbranch_12 === 0) {
     __stack.locals.__substep_12 = 1;
   }
 
-  if (__sub_12 <= 1) {
-    
-    __stack.locals.__substep_12 = 2;
-  }
-
 
 } else if (__condbranch_12 === 1) {
 
@@ -503,17 +413,9 @@ if (__condbranch_12 === 0) {
     __stack.locals.__substep_12 = 1;
   }
 
-  if (__sub_12 <= 1) {
-    
-    __stack.locals.__substep_12 = 2;
-  }
-
 
 }
-    
-    
     //  else if chain
-    
           __stack.step++;
   }
   if (__step <= 13) {
@@ -542,22 +444,12 @@ if (__condbranch_13 === 0) {
     __stack.locals.__substep_13 = 1;
   }
 
-  if (__sub_13 <= 1) {
-    
-    __stack.locals.__substep_13 = 2;
-  }
-
 
 } else if (__condbranch_13 === 1) {
 
   if (__sub_13 <= 0) {
     __stack.locals.result = `two`;
     __stack.locals.__substep_13 = 1;
-  }
-
-  if (__sub_13 <= 1) {
-    
-    __stack.locals.__substep_13 = 2;
   }
 
 
@@ -568,14 +460,8 @@ if (__condbranch_13 === 0) {
     __stack.locals.__substep_13 = 1;
   }
 
-  if (__sub_13 <= 1) {
-    
-    __stack.locals.__substep_13 = 2;
-  }
-
 
 }
-    
           __stack.step++;
   }
   await callHook({

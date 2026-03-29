@@ -111,7 +111,6 @@ const __toolRegistry = {
   }
 };
 
-
 export async function greet(name: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -162,7 +161,6 @@ await __ctx.audit({
         value: __auditReturnValue
       })
 return __auditReturnValue
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -186,8 +184,6 @@ return __auditReturnValue
     }
   })
 }
-
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -218,7 +214,6 @@ const __graph = __ctx.graph;
       variable: "__stack.locals.x",
       value: __stack.locals.x
     })
-    
           __stack.step++;
   }
   if (__step <= 2) {
@@ -239,13 +234,11 @@ if (isInterrupt(__stack.locals.greeting)) {
       variable: "__stack.locals.greeting",
       value: __stack.locals.greeting
     })
-    
           __stack.step++;
   }
   if (__step <= 3) {
           __self.__retryable = false;
     await print(__stack.locals.greeting)
-    
           __stack.step++;
   }
   await callHook({
@@ -261,7 +254,6 @@ if (isInterrupt(__stack.locals.greeting)) {
     data: undefined
   };
 })
-
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
     ctx: __globalCtx,

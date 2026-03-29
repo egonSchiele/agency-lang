@@ -92,6 +92,61 @@ describe("literals parsers", () => {
         },
       },
 
+      // Function calls in interpolation (now allowed)
+      {
+        input: "${foo()}",
+        expected: {
+          success: true,
+          result: {
+            type: "interpolation",
+            expression: {
+              type: "functionCall",
+              functionName: "foo",
+              arguments: [],
+            },
+          },
+        },
+      },
+      // Binary expressions in interpolation
+      {
+        input: "${a + b}",
+        expected: {
+          success: true,
+          result: {
+            type: "interpolation",
+            expression: {
+              type: "binOpExpression",
+              operator: "+",
+              left: { type: "variableName", value: "a" },
+              right: { type: "variableName", value: "b" },
+            },
+          },
+        },
+      },
+      // Method calls in interpolation
+      {
+        input: "${obj.method()}",
+        expected: {
+          success: true,
+          result: {
+            type: "interpolation",
+            expression: {
+              type: "valueAccess",
+              base: { type: "variableName", value: "obj" },
+              chain: [
+                {
+                  kind: "methodCall",
+                  functionCall: {
+                    type: "functionCall",
+                    functionName: "method",
+                    arguments: [],
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
       // Failure cases
       { input: "${", expected: { success: false } },
       { input: "${foo", expected: { success: false } },
@@ -108,7 +163,7 @@ describe("literals parsers", () => {
           const result = interpolationSegmentParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
-            expect(result.result).toEqual(expected.result);
+            expect(result.result).toEqualWithoutLoc(expected.result);
           }
         });
       } else {
@@ -203,7 +258,7 @@ describe("literals parsers", () => {
           const result = numberParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
-            expect(result.result).toEqual(expected.result);
+            expect(result.result).toEqualWithoutLoc(expected.result);
           }
         });
       } else {
@@ -381,7 +436,7 @@ describe("literals parsers", () => {
           const result = stringParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
-            expect(result.result).toEqual(expected.result);
+            expect(result.result).toEqualWithoutLoc(expected.result);
           }
         });
       } else {
@@ -845,7 +900,7 @@ describe("literals parsers", () => {
           const result = stringParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
-            expect(result.result).toEqual(expected.result);
+            expect(result.result).toEqualWithoutLoc(expected.result);
           }
         });
       } else {
@@ -1120,7 +1175,7 @@ describe("literals parsers", () => {
           const result = multiLineStringParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
-            expect(result.result).toEqual(expected.result);
+            expect(result.result).toEqualWithoutLoc(expected.result);
           }
         });
       } else {
@@ -1227,7 +1282,7 @@ describe("literals parsers", () => {
           const result = variableNameParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
-            expect(result.result).toEqual(expected.result);
+            expect(result.result).toEqualWithoutLoc(expected.result);
           }
         });
       } else {
@@ -1267,7 +1322,7 @@ describe("literals parsers", () => {
           const result = booleanParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
-            expect(result.result).toEqual(expected.result);
+            expect(result.result).toEqualWithoutLoc(expected.result);
           }
         });
       } else {
@@ -1393,7 +1448,7 @@ describe("literals parsers", () => {
           const result = literalParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
-            expect(result.result).toEqual(expected.result);
+            expect(result.result).toEqualWithoutLoc(expected.result);
           }
         });
       } else {

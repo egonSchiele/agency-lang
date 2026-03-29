@@ -1,5 +1,6 @@
 import {
   AgencyNode,
+  Expression,
   InterpolationSegment,
   ValueAccess,
   VariableNameLiteral,
@@ -13,49 +14,74 @@ import { color } from "@/utils/termcolors.js";
 
 /**
  * Extract the base variable name from an interpolation segment's expression.
+ * Returns the variable name if the expression is a simple variable or the base
+ * of a value access chain. For other expression types, returns an empty string.
  */
 export function getBaseVarName(seg: InterpolationSegment): string {
   if (seg.expression.type === "variableName") {
     return seg.expression.value;
   }
-  // ValueAccess — the base should be a VariableNameLiteral
-  return (seg.expression.base as VariableNameLiteral).value;
+  if (seg.expression.type === "valueAccess") {
+    return (seg.expression.base as VariableNameLiteral).value;
+  }
+  return "";
 }
 
 /**
- * Render an expression (VariableNameLiteral or ValueAccess) as a string
- * WITHOUT scope prefix. Used for prompt function bodies (where variables
- * are function parameters) and for re-emitting agency source code.
+ * Render an expression as a string WITHOUT scope prefix.
+ * Used for prompt function bodies (where variables are function parameters)
+ * and for re-emitting agency source code.
  */
-export function expressionToString(
-  expr: VariableNameLiteral | ValueAccess,
-): string {
-  if (expr.type === "variableName") {
-    return expr.value;
-  }
-  // ValueAccess
-  let code = expressionToString(expr.base as VariableNameLiteral | ValueAccess);
-  for (const element of expr.chain) {
-    switch (element.kind) {
-      case "property":
-        code += `.${element.name}`;
-        break;
-      case "index":
-        code += `[${expressionToString(element.index as VariableNameLiteral | ValueAccess)}]`;
-        break;
-      case "methodCall": {
-        const fc = element.functionCall;
-        const args = fc.arguments
-          .map((a) =>
-            expressionToString(a as VariableNameLiteral | ValueAccess),
-          )
-          .join(", ");
-        code += `.${fc.functionName}(${args})`;
-        break;
-      }
+export function expressionToString(expr: Expression): string {
+  switch (expr.type) {
+    case "variableName":
+      return expr.value;
+    case "number":
+      return expr.value;
+    case "boolean":
+      return String(expr.value);
+    case "string":
+    case "multiLineString":
+      return expr.segments.map(seg =>
+        seg.type === "text" ? seg.value : `\${${expressionToString(seg.expression)}}`
+      ).join("");
+    case "functionCall": {
+      const args = expr.arguments.map(a => expressionToString(a)).join(", ");
+      return `${expr.functionName}(${args})`;
     }
+    case "valueAccess": {
+      let code = expressionToString(expr.base as Expression);
+      for (const element of expr.chain) {
+        switch (element.kind) {
+          case "property":
+            code += `.${element.name}`;
+            break;
+          case "index":
+            code += `[${expressionToString(element.index as Expression)}]`;
+            break;
+          case "methodCall": {
+            const fc = element.functionCall;
+            const args = fc.arguments.map(a => expressionToString(a)).join(", ");
+            code += `.${fc.functionName}(${args})`;
+            break;
+          }
+        }
+      }
+      return code;
+    }
+    case "binOpExpression":
+      return `${expressionToString(expr.left)} ${expr.operator} ${expressionToString(expr.right)}`;
+    case "agencyArray":
+      return `[${expr.items.map(item =>
+        item.type === "splat" ? `...${expressionToString(item.value)}` : expressionToString(item)
+      ).join(", ")}]`;
+    case "agencyObject":
+      return `{${expr.entries.map(entry =>
+        "type" in entry && entry.type === "splat"
+          ? `...${expressionToString(entry.value)}`
+          : `${(entry as any).key}: ${expressionToString((entry as any).value)}`
+      ).join(", ")}}`;
   }
-  return code;
 }
 
 export function* getAllVariablesInBody(

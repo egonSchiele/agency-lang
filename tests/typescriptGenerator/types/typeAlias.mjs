@@ -96,9 +96,7 @@ const __toolRegistry = {
   }
 };
 
-
 type Coords = { x: number, y: number };
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -176,13 +174,11 @@ if (isInterrupt(__stack.locals.foo)) {
   }
 }
 
-    
           __stack.step++;
   }
   if (__step <= 3) {
           __self.__retryable = false;
     await print(__stack.locals.foo)
-    
           __stack.step++;
   }
   await callHook({

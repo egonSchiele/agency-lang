@@ -96,7 +96,6 @@ const __toolRegistry = {
   }
 };
 
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -130,7 +129,6 @@ const __graph = __ctx.graph;
       variable: "__stack.locals.user",
       value: __stack.locals.user
     })
-    
           __stack.step++;
   }
   if (__step <= 2) {
@@ -140,7 +138,6 @@ const __graph = __ctx.graph;
       variable: "__stack.locals.greeting",
       value: __stack.locals.greeting
     })
-    
           __stack.step++;
   }
   if (__step <= 3) {
@@ -194,13 +191,11 @@ if (isInterrupt(__stack.locals.result)) {
   }
 }
 
-    
           __stack.step++;
   }
   if (__step <= 5) {
           __self.__retryable = false;
     await print(__stack.locals.result)
-    
           __stack.step++;
   }
   await callHook({
@@ -216,7 +211,6 @@ if (isInterrupt(__stack.locals.result)) {
     data: undefined
   };
 })
-
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
     ctx: __globalCtx,

@@ -117,7 +117,7 @@ describe("docStringParser", () => {
         const result = docStringParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else {
@@ -426,7 +426,7 @@ describe("functionParser", () => {
           returnType: null,
           docString: {
             type: "docString",
-            value: "This is a multi-line\ndocstring",
+            value: "This is a multi-line\n  docstring",
           },
           body: [
             {
@@ -1670,7 +1670,7 @@ describe("functionParser", () => {
         const result = functionParser(normalizeCode(input));
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else if (throws) {
@@ -1790,7 +1790,7 @@ describe("functionParser with safe keyword", () => {
       const result = functionParser(input);
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual(expected.result);
+        expect(result.result).toEqualWithoutLoc(expected.result);
       }
     });
   });
@@ -1933,7 +1933,7 @@ describe("functionParser with async/sync keywords", () => {
         const result = functionParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else {
@@ -1944,7 +1944,6 @@ describe("functionParser with async/sync keywords", () => {
     }
   });
 });
-
 
 describe("graphNodeParser", () => {
   const testCases = [
@@ -2367,7 +2366,7 @@ describe("graphNodeParser", () => {
         const result = graphNodeParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else if (throws) {
@@ -2970,7 +2969,7 @@ describe("messageThreadParser", () => {
         );
         expect(nestedSubthread).toBeDefined();
         if (nestedSubthread) {
-          expect((nestedSubthread as any).body).toEqual([]);
+          expect((nestedSubthread as any).body).toEqualWithoutLoc([]);
         }
       }
     });
@@ -2994,7 +2993,7 @@ describe("messageThreadParser", () => {
         );
         expect(nestedThread).toBeDefined();
         if (nestedThread) {
-          expect((nestedThread as any).body).toEqual([]);
+          expect((nestedThread as any).body).toEqualWithoutLoc([]);
         }
       }
     });

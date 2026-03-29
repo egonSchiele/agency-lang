@@ -96,10 +96,7 @@ const __toolRegistry = {
   }
 };
 
-
 //  Test graph nodes with typed parameters
-
-
 graph.node("greet", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -177,13 +174,11 @@ if (isInterrupt(__stack.locals.greeting)) {
   }
 }
 
-    
           __stack.step++;
   }
   if (__step <= 3) {
           __self.__retryable = false;
     await print(__stack.locals.greeting)
-    
           __stack.step++;
   }
   await callHook({

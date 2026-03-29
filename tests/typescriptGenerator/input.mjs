@@ -96,7 +96,6 @@ const __toolRegistry = {
   }
 };
 
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -135,8 +134,6 @@ if (isInterrupt(__stack.locals.message)) {
       variable: "__stack.locals.message",
       value: __stack.locals.message
     })
-    
-    
           __stack.step++;
   }
   if (__step <= 2) {
@@ -193,13 +190,11 @@ if (isInterrupt(__stack.locals.sentiment)) {
   }
 }
 
-    
           __stack.step++;
   }
   if (__step <= 4) {
           __self.__retryable = false;
     await print(__stack.locals.sentiment)
-    
           __stack.step++;
   }
   await callHook({

@@ -25,9 +25,6 @@
       "modulePath": "std::index"
     },
     {
-      "type": "newLine"
-    },
-    {
       "type": "function",
       "functionName": "riskyAction",
       "parameters": [
@@ -69,10 +66,13 @@
                 ]
               }
             ]
+          },
+          "loc": {
+            "line": 3,
+            "col": 2,
+            "start": 163,
+            "end": 219
           }
-        },
-        {
-          "type": "newLine"
         },
         {
           "type": "returnStatement",
@@ -92,18 +92,21 @@
                 }
               }
             ]
+          },
+          "loc": {
+            "line": 4,
+            "col": 2,
+            "start": 219,
+            "end": 249
           }
-        },
-        {
-          "type": "newLine"
         }
-      ]
-    },
-    {
-      "type": "newLine"
-    },
-    {
-      "type": "newLine"
+      ],
+      "loc": {
+        "line": 2,
+        "col": 0,
+        "start": 119,
+        "end": 250
+      }
     },
     {
       "type": "function",
@@ -141,18 +144,21 @@
                 "value": " done"
               }
             ]
+          },
+          "loc": {
+            "line": 8,
+            "col": 2,
+            "start": 290,
+            "end": 309
           }
-        },
-        {
-          "type": "newLine"
         }
-      ]
-    },
-    {
-      "type": "newLine"
-    },
-    {
-      "type": "newLine"
+      ],
+      "loc": {
+        "line": 7,
+        "col": 0,
+        "start": 252,
+        "end": 310
+      }
     },
     {
       "type": "graphNode",
@@ -160,9 +166,6 @@
       "parameters": [],
       "returnType": null,
       "body": [
-        {
-          "type": "newLine"
-        },
         {
           "type": "newLine"
         },
@@ -195,6 +198,12 @@
               ]
             }
           },
+          "loc": {
+            "line": 13,
+            "col": 0,
+            "start": 357,
+            "end": 423
+          },
           "scope": "local"
         },
         {
@@ -215,9 +224,6 @@
           }
         },
         {
-          "type": "newLine"
-        },
-        {
           "type": "functionCall",
           "functionName": "print",
           "arguments": [
@@ -227,14 +233,14 @@
               "scope": "local"
             }
           ]
-        },
-        {
-          "type": "newLine"
         }
-      ]
-    },
-    {
-      "type": "newLine"
+      ],
+      "loc": {
+        "line": 11,
+        "col": 0,
+        "start": 312,
+        "end": 438
+      }
     }
   ]
 }

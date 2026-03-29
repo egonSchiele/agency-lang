@@ -96,7 +96,6 @@ const __toolRegistry = {
   }
 };
 
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -177,8 +176,6 @@ if (isInterrupt(__stack.locals.foo)) {
 
     
     
-    
-    
           __stack.step++;
   }
   if (__step <= 3) {
@@ -237,8 +234,6 @@ if (isInterrupt(__stack.locals.bar)) {
 
     
     
-    
-    
           __stack.step++;
   }
   if (__step <= 5) {
@@ -295,7 +290,6 @@ if (isInterrupt(__stack.locals.baz)) {
   }
 }
 
-    
           __stack.step++;
   }
   await callHook({

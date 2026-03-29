@@ -87,7 +87,7 @@ function __initializeGlobals(__ctx) {
 export const __addTool = {
   name: "add",
   description: `Add two numbers together.
-This is a simple addition function.`,
+  This is a simple addition function.`,
   schema: z.object({"a": z.string(), "b": z.string(), })
 };
 export const __addToolParams = ["a", "b"];
@@ -101,11 +101,11 @@ export const __calculateAreaTool = {
   name: "calculateArea",
   description: `Calculate the area of a rectangle.
 
-Parameters:
-- width: the width of the rectangle
-- height: the height of the rectangle
+  Parameters:
+  - width: the width of the rectangle
+  - height: the height of the rectangle
 
-Returns: the area as a number`,
+  Returns: the area as a number`,
   schema: z.object({"width": z.string(), "height": z.string(), })
 };
 export const __calculateAreaToolParams = ["width", "height"];

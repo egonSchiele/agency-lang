@@ -157,7 +157,6 @@ const __graph = __ctx.graph;
         variable: "__stack.locals.foo",
         value: __stack.locals.foo
       })
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -213,8 +212,6 @@ const __graph = __ctx.graph;
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
     }))
-    
-    
           __stack.step++;
   }
   if (__step <= 2) {

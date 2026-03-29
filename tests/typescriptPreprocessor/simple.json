@@ -80,9 +80,6 @@
           }
         },
         {
-          "type": "newLine"
-        },
-        {
           "type": "returnStatement",
           "value": {
             "type": "variableName",

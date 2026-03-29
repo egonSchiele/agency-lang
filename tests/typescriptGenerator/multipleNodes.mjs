@@ -172,7 +172,6 @@ if (isInterrupt(__stack.locals.greeting)) {
   }
 }
 
-    
           __stack.step++;
   }
   if (__step <= 3) {
@@ -188,7 +187,6 @@ await __ctx.audit({
       value: __auditReturnValue
     })
 return __auditReturnValue
-    
           __stack.step++;
   }
   await callHook({
@@ -284,13 +282,11 @@ if (isInterrupt(__stack.locals.result)) {
   }
 }
 
-    
           __stack.step++;
   }
   if (__step <= 3) {
           __self.__retryable = false;
     await print(__stack.locals.result)
-    
           __stack.step++;
   }
   await callHook({
@@ -342,7 +338,6 @@ await __ctx.audit({
       value: __auditReturnValue
     })
 return __auditReturnValue
-    
           __stack.step++;
   }
   await callHook({

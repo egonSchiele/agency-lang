@@ -158,7 +158,6 @@ const __graph = __ctx.graph;
     if (__step <= 1) {
             __self.__retryable = false;
       await sleep(0.1)
-      
             __stack.step++;
     }
     if (__step <= 2) {
@@ -241,7 +240,6 @@ __self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { _
       variable: "__stack.branches",
       value: __stack.branches
     })
-    
           __stack.step++;
   }
   if (__step <= 2 || (__stack.branches && __stack.branches["2"])) {
@@ -268,7 +266,6 @@ __self.__pendingKey_y = __ctx.pendingPromises.add(__stack.locals.y, (val) => { _
       variable: "__stack.branches",
       value: __stack.branches
     })
-    
           __stack.step++;
   }
   if (__step <= 3) {

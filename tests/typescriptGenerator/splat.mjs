@@ -115,13 +115,4 @@ const __toolRegistry = {
 };
 
 
-
-
-
-
-
-
-
-
-
 export default graph

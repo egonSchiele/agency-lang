@@ -161,7 +161,6 @@ const __graph = __ctx.graph;
     if (__step <= 1) {
             __self.__retryable = false;
       await sleep(__stack.args.sleepTime)
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -233,7 +232,6 @@ __ctx.pendingPromises.add(append(1, `hello`, {
       variable: "__stack.branches",
       value: __stack.branches
     })
-    
           __stack.step++;
   }
   if (__step <= 2 || (__stack.branches && __stack.branches["2"])) {
@@ -259,7 +257,6 @@ __ctx.pendingPromises.add(append(0.5, `world`, {
       variable: "__stack.branches",
       value: __stack.branches
     })
-    
           __stack.step++;
   }
   if (__step <= 3) {

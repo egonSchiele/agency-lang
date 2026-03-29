@@ -158,7 +158,6 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
   }
 }
 
-    
           __stack.step++;
   }
   if (__step <= 2) {
@@ -212,7 +211,6 @@ if (isInterrupt(__stack.locals.greeting)) {
   }
 }
 
-    
           __stack.step++;
   }
   if (__step <= 4) {

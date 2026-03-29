@@ -1,14 +1,8 @@
 node main() {
-  title = "Hello"
-  message = "This is a notification."
   handle {
-    result = notify(title, message)
-  } with (data) {
-    printJSON(data)
-    return approve()
-  }
-  if (result == null) {
-    print("notification blocked")
-  }
-  print("notification sent")
+  x = 1
+  foo()
+} with (data) {
+  return approve()
+}
 }

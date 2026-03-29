@@ -82,12 +82,6 @@
           }
         },
         {
-          "type": "newLine"
-        },
-        {
-          "type": "newLine"
-        },
-        {
           "type": "assignment",
           "typeHint": {
             "type": "primitiveType",
@@ -131,9 +125,6 @@
             },
             "scope": "local"
           }
-        },
-        {
-          "type": "newLine"
         }
       ]
     },

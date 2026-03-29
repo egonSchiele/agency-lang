@@ -233,7 +233,6 @@ if (isInterrupt(__stack.locals.response)) {
   }
 }
 
-      
             __stack.step++;
     }
     if (__step <= 3) {
@@ -367,7 +366,6 @@ if (isInterrupt(__stack.locals.response)) {
   }
 }
 
-      
             __stack.step++;
     }
     if (__step <= 4) {
@@ -466,7 +464,6 @@ return __self.__promptVar
         variable: "__self.__removedTools",
         value: __self.__removedTools
       })
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -530,7 +527,6 @@ if (isInterrupt(__stack.locals.msg)) {
       variable: "__stack.locals.msg",
       value: __stack.locals.msg
     })
-    
           __stack.step++;
   }
   if (__step <= 2 || (__stack.branches && __stack.branches["2"])) {
@@ -557,7 +553,6 @@ __self.__pendingKey_res2 = __ctx.pendingPromises.add(__stack.locals.res2, (val) 
       variable: "__stack.branches",
       value: __stack.branches
     })
-    
           __stack.step++;
   }
   if (__step <= 3 || (__stack.branches && __stack.branches["3"])) {
@@ -584,7 +579,6 @@ __self.__pendingKey_res1 = __ctx.pendingPromises.add(__stack.locals.res1, (val) 
       variable: "__stack.branches",
       value: __stack.branches
     })
-    
           __stack.step++;
   }
   if (__step <= 4) {
@@ -598,13 +592,11 @@ __self.__pendingKey_res1 = __ctx.pendingPromises.add(__stack.locals.res1, (val) 
       variable: "__stack.locals.results",
       value: __stack.locals.results
     })
-    
           __stack.step++;
   }
   if (__step <= 6) {
           __self.__retryable = false;
     await printJSON(__stack.locals.results)
-    
           __stack.step++;
   }
   await callHook({

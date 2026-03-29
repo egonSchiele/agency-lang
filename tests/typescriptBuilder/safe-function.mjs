@@ -180,7 +180,6 @@ await __ctx.audit({
         value: __auditReturnValue
       })
 return __auditReturnValue
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -252,7 +251,6 @@ const __graph = __ctx.graph;
     if (__step <= 1) {
             __self.__retryable = false;
       await saveItem(__stack.args.id)
-      
             __stack.step++;
     }
     if (__step <= 2) {
@@ -262,7 +260,6 @@ await __ctx.audit({
         value: __auditReturnValue
       })
 return __auditReturnValue
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -365,7 +362,6 @@ if (isInterrupt(__stack.locals.result)) {
   }
 }
 
-    
           __stack.step++;
   }
   if (__step <= 3) {

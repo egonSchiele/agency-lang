@@ -218,7 +218,6 @@ const __graph = __ctx.graph;
       variable: "__stack.locals.x",
       value: __stack.locals.x
     })
-    
           __stack.step++;
   }
   if (__step <= 2) {
@@ -239,13 +238,11 @@ if (isInterrupt(__stack.locals.greeting)) {
       variable: "__stack.locals.greeting",
       value: __stack.locals.greeting
     })
-    
           __stack.step++;
   }
   if (__step <= 3) {
           __self.__retryable = false;
     await print(__stack.locals.greeting)
-    
           __stack.step++;
   }
   await callHook({

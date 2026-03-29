@@ -177,7 +177,6 @@ if (isInterrupt(__stack.locals.mood)) {
   }
 }
 
-    
           __stack.step++;
   }
   if (__step <= 3) {

@@ -137,7 +137,6 @@ __self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { _
       variable: "__self.__removedTools",
       value: __self.__removedTools
     })
-    
           __stack.step++;
   }
   if (__step <= 2) {
@@ -157,7 +156,6 @@ __self.__pendingKey_y = __ctx.pendingPromises.add(__stack.locals.y, (val) => { _
       variable: "__self.__removedTools",
       value: __self.__removedTools
     })
-    
           __stack.step++;
   }
   if (__step <= 3) {

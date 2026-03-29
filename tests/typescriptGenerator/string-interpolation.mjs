@@ -127,7 +127,6 @@ const __graph = __ctx.graph;
       variable: "__stack.locals.greeting",
       value: __stack.locals.greeting
     })
-    
           __stack.step++;
   }
   await callHook({

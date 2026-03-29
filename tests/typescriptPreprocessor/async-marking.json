@@ -126,9 +126,6 @@
           }
         },
         {
-          "type": "newLine"
-        },
-        {
           "type": "returnStatement",
           "value": {
             "type": "variableName",
@@ -174,9 +171,6 @@
           "scope": "local"
         },
         {
-          "type": "newLine"
-        },
-        {
           "type": "assignment",
           "variableName": "b",
           "value": {
@@ -195,9 +189,6 @@
             ]
           },
           "scope": "local"
-        },
-        {
-          "type": "newLine"
         },
         {
           "type": "assignment",
@@ -285,9 +276,6 @@
           }
         },
         {
-          "type": "newLine"
-        },
-        {
           "type": "functionCall",
           "functionName": "print",
           "arguments": [
@@ -297,9 +285,6 @@
               "scope": "local"
             }
           ]
-        },
-        {
-          "type": "newLine"
         }
       ]
     },

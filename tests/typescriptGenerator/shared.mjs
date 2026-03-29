@@ -99,7 +99,6 @@ const __toolRegistry = {
 
 
 foo = 1;
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -130,7 +129,6 @@ const __graph = __ctx.graph;
       variable: "foo",
       value: foo
     })
-    
           __stack.step++;
   }
   await callHook({

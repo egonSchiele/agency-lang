@@ -175,7 +175,6 @@ if (isInterrupt(__stack.locals.bar)) {
   }
 }
 
-    
           __stack.step++;
   }
   await callHook({

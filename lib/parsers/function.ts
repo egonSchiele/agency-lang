@@ -100,6 +100,7 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
         "value",
       ),
       optionalSemicolon,
+      optionalSpacesOrNewline
       //optional(newline),
     ),
   );
@@ -244,6 +245,7 @@ const inlineHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
         capture(bodyParser, "body"),
         optionalSpacesOrNewline,
         char("}"),
+        optionalSpacesOrNewline,
       ),
     ),
   );
@@ -302,9 +304,9 @@ const elseClauseParser: Parser<AgencyNode[]> = (input: string) => {
   // Otherwise parse "else { body }"
   const elseBlockParser = seqC(
     char("{"),
-    spaces,
+    optionalSpacesOrNewline,
     capture(bodyParser, "body"),
-    optionalSpaces,
+    optionalSpacesOrNewline,
     char("}"),
   );
   const blockResult = elseBlockParser(prefixResult.rest);
@@ -332,10 +334,11 @@ export const ifParser: Parser<IfElse> = (input: string) => {
         parseError(
           "expected `{` to open if block body",
           char("{"),
-          spaces,
+          optionalSpacesOrNewline,
           capture(bodyParser, "thenBody"),
-          optionalSpaces,
+          optionalSpacesOrNewline,
           char("}"),
+          optionalSpacesOrNewline,
         ),
       ),
     ),
@@ -371,9 +374,9 @@ export const whileLoopParser: Parser<WhileLoop> = trace(
       parseError(
         "expected `{` to open while loop body",
         char("{"),
-        spaces,
+        optionalSpacesOrNewline,
         capture(bodyParser, "body"),
-        optionalSpaces,
+        optionalSpacesOrNewline,
         char("}"),
       ),
     ),
@@ -477,13 +480,13 @@ const _baseFunctionParser: Parser<FunctionDefinition> = trace(
     captureCaptures(
       parseError(
         "Expected function body",
-        optionalSpaces,
+        optionalSpacesOrNewline,
         char("{"),
         optionalSpacesOrNewline,
         capture(or(docStringParser, succeed(undefined)), "docString"),
         optionalSpacesOrNewline,
         capture(bodyParser, "body"),
-        optionalSpaces,
+        optionalSpacesOrNewline,
         char("}"),
         optionalSemicolon,
       ),
@@ -552,11 +555,11 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = trace(
     captureCaptures(
       parseError(
         "expected node body",
-        optionalSpaces,
+        optionalSpacesOrNewline,
         char("{"),
         optionalSpacesOrNewline,
         capture(bodyParser, "body"),
-        optionalSpaces,
+        optionalSpacesOrNewline,
         char("}"),
         optionalSemicolon,
       ),

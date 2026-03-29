@@ -175,14 +175,11 @@ if (isInterrupt(__stack.locals.numbers)) {
   }
 }
 
-    
           __stack.step++;
   }
   if (__step <= 3) {
           __self.__retryable = false;
     await print(__stack.locals.numbers)
-    
-    
     
     
           __stack.step++;
@@ -241,13 +238,11 @@ if (isInterrupt(__stack.locals.greetings)) {
   }
 }
 
-    
           __stack.step++;
   }
   if (__step <= 6) {
           __self.__retryable = false;
     await print(__stack.locals.greetings)
-    
           __stack.step++;
   }
   await callHook({

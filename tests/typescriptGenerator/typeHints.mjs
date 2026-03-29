@@ -177,8 +177,6 @@ if (isInterrupt(__stack.locals.count)) {
 
     
     
-    
-    
           __stack.step++;
   }
   if (__step <= 3) {
@@ -232,20 +230,16 @@ if (isInterrupt(__stack.locals.message)) {
   }
 }
 
-    
-    
           __stack.step++;
   }
   if (__step <= 5) {
           __self.__retryable = false;
     await print(__stack.locals.count)
-    
           __stack.step++;
   }
   if (__step <= 6) {
           __self.__retryable = false;
     await print(__stack.locals.message)
-    
           __stack.step++;
   }
   await callHook({

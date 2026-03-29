@@ -136,75 +136,46 @@ const __toolRegistry = {
 
 
 
-
 await print(__ctx.globals.get("arrayAndObject.agency", "nums"))
-
-
 //  Array with strings
 
 
 
-
 await print(__ctx.globals.get("arrayAndObject.agency", "names"))
-
-
 //  Nested arrays
 
 
 
-
 await print(__ctx.globals.get("arrayAndObject.agency", "matrix"))
-
-
 //  Simple object
 
 
 
-
 await print(__ctx.globals.get("arrayAndObject.agency", "person"))
-
-
 //  Object with nested structure
 
 
 
-
 await print(__ctx.globals.get("arrayAndObject.agency", "address"))
-
-
 //  Object with array property
 
 
 
-
 await print(__ctx.globals.get("arrayAndObject.agency", "user"))
-
-
 //  Array of objects
 
 
 
-
 await print(__ctx.globals.get("arrayAndObject.agency", "users"))
-
-
 //  Nested object
 
 
 
-
 await print(__ctx.globals.get("arrayAndObject.agency", "config"))
-
-
 //  Array access
 
-
 await print(__ctx.globals.get("arrayAndObject.agency", "firstNum"))
-
-
 //  Object property access
 
-
 await print(__ctx.globals.get("arrayAndObject.agency", "personName"))
-
 export default graph

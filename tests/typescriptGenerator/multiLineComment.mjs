@@ -119,8 +119,6 @@ const __toolRegistry = {
 
 
 
-
-
 export async function greet(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state

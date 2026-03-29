@@ -171,13 +171,11 @@ if (isInterrupt(__stack.locals.response1)) {
   }
 }
 
-    
           __stack.step++;
   }
   if (__step <= 3) {
           __self.__retryable = false;
     await print(__stack.locals.response1)
-    
           __stack.step++;
   }
   await callHook({

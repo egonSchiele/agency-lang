@@ -127,7 +127,6 @@ const __graph = __ctx.graph;
       variable: "__stack.locals.x",
       value: __stack.locals.x
     })
-    
           __stack.step++;
   }
   if (__step <= 2) {

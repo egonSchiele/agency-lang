@@ -11,7 +11,7 @@ import {
 } from "tarsec";
 import { exprParser } from "./expression.js";
 import { optionalSemicolon } from "./parserUtils.js";
-import { comma, optionalSpaces, varNameChar } from "./utils.js";
+import { comma, optionalSpaces, optionalSpacesOrNewline, varNameChar } from "./utils.js";
 
 export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
   const parser = seqC(
@@ -29,6 +29,7 @@ export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
     optionalSpaces,
     char(")"),
     optionalSemicolon,
+    optionalSpacesOrNewline
   );
   return parser(input);
 };

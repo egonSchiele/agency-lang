@@ -138,7 +138,6 @@ if (isInterrupt(__stack.locals.cp)) {
       variable: "__stack.locals.cp",
       value: __stack.locals.cp
     })
-    
           __stack.step++;
   }
   if (__step <= 2) {
@@ -148,7 +147,6 @@ if (isInterrupt(__stack.locals.cp)) {
       variable: "__stack.locals.x",
       value: __stack.locals.x
     })
-    
           __stack.step++;
   }
   if (__step <= 3) {
@@ -169,7 +167,6 @@ if (isInterrupt(__funcResult)) {
       variable: "__funcResult",
       value: __funcResult
     })
-    
           __stack.step++;
   }
   if (__step <= 4) {

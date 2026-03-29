@@ -99,7 +99,6 @@ const __toolRegistry = {
   }
 };
 
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state

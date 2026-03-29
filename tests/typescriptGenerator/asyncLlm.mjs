@@ -96,7 +96,6 @@ const __toolRegistry = {
   }
 };
 
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -187,7 +186,6 @@ return __auditReturnValue;
     data: undefined
   };
 })
-
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
     ctx: __globalCtx,

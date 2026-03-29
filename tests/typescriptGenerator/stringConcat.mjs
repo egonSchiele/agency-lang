@@ -96,7 +96,6 @@ const __toolRegistry = {
   }
 };
 
-
 graph.node("foo", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -160,7 +159,6 @@ if (isInterrupt(__stack.locals.name)) {
     data: undefined
   };
 })
-
 export async function foo({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
     ctx: __globalCtx,

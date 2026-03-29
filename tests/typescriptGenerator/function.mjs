@@ -111,7 +111,6 @@ const __toolRegistry = {
   }
 };
 
-
 export async function test(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -180,8 +179,6 @@ const __graph = __ctx.graph;
     }
   })
 }
-
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state

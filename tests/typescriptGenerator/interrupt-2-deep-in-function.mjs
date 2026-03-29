@@ -126,7 +126,6 @@ const __toolRegistry = {
   }
 };
 
-
 export async function greet(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -255,8 +254,6 @@ return __auditReturnValue
     }
   })
 }
-
-
 export async function foo2(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -394,8 +391,6 @@ return __auditReturnValue
     }
   })
 }
-
-
 graph.node("sayHi", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state

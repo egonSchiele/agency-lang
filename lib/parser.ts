@@ -3,6 +3,7 @@ import {
   eof,
   failure,
   many,
+  map,
   or,
   Parser,
   ParserResult,
@@ -50,39 +51,45 @@ import { specialVarParser } from "./parsers/specialVar.js";
 import { usesToolParser } from "./parsers/tools.js";
 import { typeAliasParser, typeHintParser } from "./parsers/typeHints.js";
 import { AgencyNode, AgencyProgram } from "./types.js";
+import { optionalSpacesOrNewline } from "./parsers/utils.js";
+
+const nodeParser = or(
+  keywordParser,
+  usesToolParser,
+  importNodeStatmentParser,
+  importToolStatmentParser,
+  importStatmentParser,
+  graphNodeParser,
+  typeAliasParser,
+  ifParser,
+  forLoopParser,
+  whileLoopParser,
+  typeHintParser,
+  matchBlockParser,
+  messageThreadParser,
+  handleBlockParser,
+  debuggerParser,
+  skillParser,
+  functionParser,
+  returnStatementParser,
+  specialVarParser,
+  sharedAssignmentParser,
+  assignmentParser,
+  binOpParser,
+  booleanParser,
+  valueAccessParser,
+  multiLineCommentParser,
+  commentParser,
+  newLineParser,
+);
 
 export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
   const parser = many(
     trace(
       "agencyParser",
-      or(
-        keywordParser,
-        usesToolParser,
-        importNodeStatmentParser,
-        importToolStatmentParser,
-        importStatmentParser,
-        graphNodeParser,
-        typeAliasParser,
-        ifParser,
-        forLoopParser,
-        whileLoopParser,
-        typeHintParser,
-        matchBlockParser,
-        messageThreadParser,
-        handleBlockParser,
-        debuggerParser,
-        skillParser,
-        functionParser,
-        returnStatementParser,
-        specialVarParser,
-        sharedAssignmentParser,
-        assignmentParser,
-        binOpParser,
-        booleanParser,
-        valueAccessParser,
-        multiLineCommentParser,
-        commentParser,
-        newLineParser,
+      map(
+        seqC(capture(nodeParser, "node"), optionalSpacesOrNewline),
+        (result) => result.node,
       ),
     ),
   );

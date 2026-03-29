@@ -113,7 +113,6 @@ const __toolRegistry = {
   }
 };
 
-
 //  This is a single line comment at the top of the file
 //  Variable assignment with comment above
 //  Multiple comments
@@ -198,8 +197,6 @@ return __auditReturnValue
     }
   })
 }
-
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state

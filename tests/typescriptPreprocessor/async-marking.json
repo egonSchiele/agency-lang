@@ -25,9 +25,6 @@
       "modulePath": "std::index"
     },
     {
-      "type": "newLine"
-    },
-    {
       "type": "function",
       "functionName": "pureFunction",
       "parameters": [
@@ -47,12 +44,6 @@
           }
         }
       ]
-    },
-    {
-      "type": "newLine"
-    },
-    {
-      "type": "newLine"
     },
     {
       "type": "function",
@@ -131,12 +122,6 @@
           }
         }
       ]
-    },
-    {
-      "type": "newLine"
-    },
-    {
-      "type": "newLine"
     },
     {
       "type": "graphNode",
@@ -281,9 +266,6 @@
           ]
         }
       ]
-    },
-    {
-      "type": "newLine"
     }
   ]
 }

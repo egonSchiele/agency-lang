@@ -111,7 +111,6 @@ const __toolRegistry = {
   }
 };
 
-
 export async function greet(name: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -185,8 +184,6 @@ return __auditReturnValue
     }
   })
 }
-
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -257,7 +254,6 @@ if (isInterrupt(__stack.locals.greeting)) {
     data: undefined
   };
 })
-
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
     ctx: __globalCtx,

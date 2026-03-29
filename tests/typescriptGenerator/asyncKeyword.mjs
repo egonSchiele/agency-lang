@@ -141,7 +141,6 @@ const __toolRegistry = {
   }
 };
 
-
 export async function openai(msg: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -265,8 +264,6 @@ return __auditReturnValue
     }
   })
 }
-
-
 export async function google(msg: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -397,8 +394,6 @@ return __auditReturnValue
     }
   })
 }
-
-
 export async function fibs(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -485,8 +480,6 @@ return __self.__promptVar
     }
   })
 }
-
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state

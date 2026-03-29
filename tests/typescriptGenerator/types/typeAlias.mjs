@@ -96,7 +96,6 @@ const __toolRegistry = {
   }
 };
 
-
 type Coords = { x: number, y: number };
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

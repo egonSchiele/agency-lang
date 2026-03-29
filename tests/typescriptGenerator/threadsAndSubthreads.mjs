@@ -111,7 +111,6 @@ const __toolRegistry = {
   }
 };
 
-
 export async function foo(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -525,8 +524,6 @@ __threads.popActive();
     }
   })
 }
-
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state

@@ -25,9 +25,6 @@
       "modulePath": "std::index"
     },
     {
-      "type": "newLine"
-    },
-    {
       "type": "assignment",
       "variableName": "globalVar",
       "value": {
@@ -119,12 +116,6 @@
       ]
     },
     {
-      "type": "newLine"
-    },
-    {
-      "type": "newLine"
-    },
-    {
       "type": "graphNode",
       "nodeName": "main",
       "parameters": [],
@@ -172,9 +163,6 @@
           ]
         }
       ]
-    },
-    {
-      "type": "newLine"
     }
   ]
 }

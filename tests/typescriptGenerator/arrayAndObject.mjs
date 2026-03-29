@@ -128,18 +128,14 @@ const __toolRegistry = {
   }
 };
 
-
 //  Test arrays and objects
 //  Simple array
-
 
 await print(__ctx.globals.get("arrayAndObject.agency", "nums"))
 //  Array with strings
 
-
 await print(__ctx.globals.get("arrayAndObject.agency", "names"))
 //  Nested arrays
-
 
 await print(__ctx.globals.get("arrayAndObject.agency", "matrix"))
 //  Simple object
@@ -152,7 +148,6 @@ await print(__ctx.globals.get("arrayAndObject.agency", "address"))
 
 await print(__ctx.globals.get("arrayAndObject.agency", "user"))
 //  Array of objects
-
 
 await print(__ctx.globals.get("arrayAndObject.agency", "users"))
 //  Nested object

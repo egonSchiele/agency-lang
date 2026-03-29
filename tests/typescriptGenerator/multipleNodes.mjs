@@ -96,7 +96,6 @@ const __toolRegistry = {
   }
 };
 
-
 graph.node("greet", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -202,8 +201,6 @@ return __auditReturnValue
     data: undefined
   };
 })
-
-
 graph.node("processGreeting", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -302,8 +299,6 @@ if (isInterrupt(__stack.locals.result)) {
     data: undefined
   };
 })
-
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -353,7 +348,6 @@ return __auditReturnValue
     data: undefined
   };
 })
-
 graph.conditionalEdge("greet", ["processGreeting"])
 graph.conditionalEdge("main", ["greet"])
 export async function greet({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {

@@ -25,9 +25,6 @@
       "modulePath": "std::index"
     },
     {
-      "type": "newLine"
-    },
-    {
       "type": "function",
       "functionName": "slowTask",
       "parameters": [
@@ -111,12 +108,6 @@
           }
         }
       ]
-    },
-    {
-      "type": "newLine"
-    },
-    {
-      "type": "newLine"
     },
     {
       "type": "graphNode",
@@ -256,9 +247,6 @@
           ]
         }
       ]
-    },
-    {
-      "type": "newLine"
     }
   ]
 }

@@ -96,7 +96,6 @@ const __toolRegistry = {
   }
 };
 
-
 //  Test graph nodes with typed parameters
 graph.node("greet", async (__state: GraphState) => {
   const __setupData = setupNode({

@@ -97,7 +97,6 @@ const __toolRegistry = {
   }
 };
 
-
 foo = 1;
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

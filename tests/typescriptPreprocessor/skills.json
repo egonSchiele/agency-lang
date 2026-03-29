@@ -25,9 +25,6 @@
       "modulePath": "std::index"
     },
     {
-      "type": "newLine"
-    },
-    {
       "type": "graphNode",
       "nodeName": "main",
       "parameters": [],
@@ -127,9 +124,6 @@
           }
         }
       ]
-    },
-    {
-      "type": "newLine"
     }
   ]
 }

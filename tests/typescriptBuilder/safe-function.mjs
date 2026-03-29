@@ -128,8 +128,6 @@ const __toolRegistry = {
 };
 
 
-
-
 export async function safeLookup(id: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -203,8 +201,6 @@ return __auditReturnValue
     }
   })
 }
-
-
 export async function unsafeSave(id: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -283,8 +279,6 @@ return __auditReturnValue
     }
   })
 }
-
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -389,7 +383,6 @@ return __auditReturnValue;
     data: undefined
   };
 })
-
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
     ctx: __globalCtx,

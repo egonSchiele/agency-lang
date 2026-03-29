@@ -250,6 +250,7 @@ const functionRefHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
   const parser = seqC(
     set("kind", "functionRef"),
     capture(many1WithJoin(varNameChar), "functionName"),
+    optionalSpacesOrNewline,
   );
   return parser(input);
 };
@@ -295,6 +296,7 @@ const elseClauseParser: Parser<AgencyNode[]> = (input: string) => {
     capture(bodyParser, "body"),
     optionalSpacesOrNewline,
     char("}"),
+    optionalSpacesOrNewline,
   );
   const blockResult = elseBlockParser(prefixResult.rest);
   if (!blockResult.success) return blockResult;
@@ -362,6 +364,7 @@ export const whileLoopParser: Parser<WhileLoop> = trace(
         capture(bodyParser, "body"),
         optionalSpacesOrNewline,
         char("}"),
+        optionalSpacesOrNewline,
       ),
     ),
   ),
@@ -397,10 +400,11 @@ export const forLoopParser: Parser<ForLoop> = trace(
       parseError(
         "expected `{` to open for loop body",
         char("{"),
-        spaces,
+        optionalSpacesOrNewline,
         capture(bodyParser, "body"),
         optionalSpacesOrNewline,
         char("}"),
+        optionalSpacesOrNewline,
       ),
     ),
   ),

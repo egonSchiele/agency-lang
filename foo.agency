@@ -1,4 +1,7 @@
-def myFunc() {
-  type Inner = number
-  return 1
+def double(val: number): number {
+  sleep(0.05)  return val * 2
+}node main(x: number) {
+  if (x > 5) {
+    a = async double(x)    b = async double(x + 1)    result = [a, b]
+  }  return result
 }

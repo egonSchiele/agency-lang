@@ -73,4 +73,5 @@ export const matchBlockParser = seqC(
     ),
   ),
   optionalSemicolon,
+  optionalSpacesOrNewline,
 );

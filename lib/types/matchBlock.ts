@@ -1,17 +1,16 @@
-import { Assignment, AgencyComment } from "../types.js";
-import { ValueAccess } from "./access.js";
+import { Assignment, AgencyComment, Expression } from "../types.js";
 import { BaseNode } from "./base.js";
 import { Literal } from "./literals.js";
 import { FunctionCall } from "./function.js";
+import { ValueAccess } from "./access.js";
 import { AgencyArray, AgencyObject } from "./dataStructures.js";
 import { ReturnStatement } from "./returnStatement.js";
-import { BinOpExpression } from "./binop.js";
 
 export type DefaultCase = "_";
 
 export type MatchBlockCase = {
   type: "matchBlockCase";
-  caseValue: ValueAccess | FunctionCall | Literal | DefaultCase;
+  caseValue: Expression | DefaultCase;
   body:
     | Assignment
     | Literal
@@ -24,6 +23,6 @@ export type MatchBlockCase = {
 
 export type MatchBlock = BaseNode & {
   type: "matchBlock";
-  expression: Literal | BinOpExpression | ValueAccess | FunctionCall;
+  expression: Expression;
   cases: (MatchBlockCase | AgencyComment)[];
 };

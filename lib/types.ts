@@ -50,6 +50,14 @@ export * from "./types/sentinel.js";
 export * from "./types/debuggerStatement.js";
 export * from "./types/base.js"
 
+export type Expression =
+  | ValueAccess
+  | Literal
+  | FunctionCall
+  | BinOpExpression
+  | AgencyArray
+  | AgencyObject;
+
 /**
  * Scope types for variable resolution.
  * Before discussing scope, here's an important fact to know.
@@ -145,14 +153,7 @@ export type Assignment = BaseNode & {
   typeHint?: VariableType;
   scope?: ScopeType;
   shared?: boolean;
-  value:
-  | ValueAccess
-  | Literal
-  | FunctionCall
-  | AgencyObject
-  | AgencyArray
-  | MessageThread
-  | BinOpExpression;
+  value: Expression | MessageThread;
 };
 
 export function globalScope(): Scope {

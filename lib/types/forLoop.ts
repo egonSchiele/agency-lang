@@ -1,5 +1,4 @@
-import { AgencyNode, FunctionCall, Literal } from "../types.js";
-import { ValueAccess } from "./access.js";
+import { AgencyNode, Expression } from "../types.js";
 import { BaseNode } from "./base.js";
 
 /*
@@ -23,6 +22,6 @@ export type ForLoop = BaseNode & {
   type: "forLoop";
   itemVar: string;
   indexVar?: string;
-  iterable: ValueAccess | FunctionCall | Literal;
+  iterable: Expression;
   body: AgencyNode[];
 };

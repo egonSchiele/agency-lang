@@ -1,4 +1,4 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adit/agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -152,8 +152,6 @@ for (let __i_2 = 0; __i_2 < __stack.locals.items.length; __i_2++) {
   __stack.locals.__iteration_2++;
   __currentIter_2++;
 }
-    
-    
     //  Range-based for loop
           __stack.step++;
   }
@@ -179,8 +177,6 @@ for (let i = 0; i < 5; i++) {
   __stack.locals.__iteration_3++;
   __currentIter_3++;
 }
-    
-    
     //  Indexed for loop
           __stack.step++;
   }
@@ -223,7 +219,6 @@ for (let index = 0; index < __stack.locals.names.length; index++) {
   __stack.locals.__iteration_5++;
   __currentIter_5++;
 }
-    
           __stack.step++;
   }
   await callHook({

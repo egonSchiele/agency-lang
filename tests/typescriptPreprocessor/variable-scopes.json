@@ -36,6 +36,12 @@
           }
         ]
       },
+      "loc": {
+        "line": 2,
+        "col": 0,
+        "start": 119,
+        "end": 140
+      },
       "scope": "global"
     },
     {
@@ -60,6 +66,12 @@
                 "value": "world"
               }
             ]
+          },
+          "loc": {
+            "line": 5,
+            "col": 2,
+            "start": 162,
+            "end": 183
           },
           "scope": "local"
         },
@@ -103,6 +115,12 @@
               }
             ]
           },
+          "loc": {
+            "line": 6,
+            "col": 2,
+            "start": 183,
+            "end": 230
+          },
           "scope": "local"
         },
         {
@@ -111,9 +129,21 @@
             "type": "variableName",
             "value": "result",
             "scope": "local"
+          },
+          "loc": {
+            "line": 7,
+            "col": 2,
+            "start": 230,
+            "end": 244
           }
         }
-      ]
+      ],
+      "loc": {
+        "line": 4,
+        "col": 0,
+        "start": 140,
+        "end": 245
+      }
     },
     {
       "type": "graphNode",
@@ -133,6 +163,12 @@
               }
             ]
           },
+          "loc": {
+            "line": 11,
+            "col": 2,
+            "start": 263,
+            "end": 284
+          },
           "scope": "local"
         },
         {
@@ -149,6 +185,12 @@
               }
             ]
           },
+          "loc": {
+            "line": 12,
+            "col": 2,
+            "start": 284,
+            "end": 313
+          },
           "scope": "local"
         },
         {
@@ -162,7 +204,13 @@
             }
           ]
         }
-      ]
+      ],
+      "loc": {
+        "line": 10,
+        "col": 0,
+        "start": 247,
+        "end": 328
+      }
     }
   ]
 }

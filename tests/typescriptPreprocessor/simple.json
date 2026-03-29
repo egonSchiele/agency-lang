@@ -57,6 +57,12 @@
               "toolNames": []
             }
           },
+          "loc": {
+            "line": 3,
+            "col": 2,
+            "start": 139,
+            "end": 172
+          },
           "scope": "local"
         },
         {
@@ -82,9 +88,21 @@
             "type": "variableName",
             "value": "result",
             "scope": "local"
+          },
+          "loc": {
+            "line": 4,
+            "col": 2,
+            "start": 172,
+            "end": 186
           }
         }
-      ]
+      ],
+      "loc": {
+        "line": 2,
+        "col": 0,
+        "start": 119,
+        "end": 187
+      }
     }
   ]
 }

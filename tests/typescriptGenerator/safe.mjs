@@ -1,4 +1,4 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adit/agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { foo } from "./foo.js";
 import { fileURLToPath } from "url";
 import process from "process";

@@ -9,10 +9,11 @@ import {
 } from "tarsec";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { exprParser } from "./expression.js";
+import { withLoc } from "./loc.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { optionalSpaces, optionalSpacesOrNewline } from "./utils.js";
 
-export const returnStatementParser: Parser<ReturnStatement> = seqC(
+export const returnStatementParser: Parser<ReturnStatement> = withLoc(seqC(
   set("type", "returnStatement"),
   str("return"),
   captureCaptures(
@@ -24,4 +25,4 @@ export const returnStatementParser: Parser<ReturnStatement> = seqC(
       optionalSpacesOrNewline,
     ),
   ),
-);
+));

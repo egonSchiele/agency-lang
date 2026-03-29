@@ -66,9 +66,21 @@
                 ]
               }
             ]
+          },
+          "loc": {
+            "line": 3,
+            "col": 2,
+            "start": 160,
+            "end": 212
           }
         }
-      ]
+      ],
+      "loc": {
+        "line": 2,
+        "col": 0,
+        "start": 119,
+        "end": 213
+      }
     },
     {
       "type": "function",
@@ -106,9 +118,21 @@
                 "value": " degrees"
               }
             ]
+          },
+          "loc": {
+            "line": 7,
+            "col": 2,
+            "start": 256,
+            "end": 281
           }
         }
-      ]
+      ],
+      "loc": {
+        "line": 6,
+        "col": 0,
+        "start": 215,
+        "end": 282
+      }
     },
     {
       "type": "graphNode",
@@ -147,6 +171,12 @@
                 "formatTemp"
               ]
             }
+          },
+          "loc": {
+            "line": 12,
+            "col": 0,
+            "start": 328,
+            "end": 385
           },
           "scope": "local"
         },
@@ -193,6 +223,12 @@
               "toolNames": []
             }
           },
+          "loc": {
+            "line": 12,
+            "col": 57,
+            "start": 385,
+            "end": 433
+          },
           "scope": "local"
         },
         {
@@ -212,7 +248,13 @@
             "scope": "local"
           }
         }
-      ]
+      ],
+      "loc": {
+        "line": 10,
+        "col": 0,
+        "start": 284,
+        "end": 434
+      }
     }
   ]
 }

@@ -41,9 +41,21 @@
             "type": "variableName",
             "value": "x",
             "scope": "args"
+          },
+          "loc": {
+            "line": 3,
+            "col": 2,
+            "start": 143,
+            "end": 152
           }
         }
-      ]
+      ],
+      "loc": {
+        "line": 2,
+        "col": 0,
+        "start": 119,
+        "end": 153
+      }
     },
     {
       "type": "function",
@@ -86,6 +98,12 @@
               "toolNames": []
             }
           },
+          "loc": {
+            "line": 7,
+            "col": 2,
+            "start": 183,
+            "end": 223
+          },
           "scope": "local"
         },
         {
@@ -119,9 +137,21 @@
             "type": "variableName",
             "value": "result",
             "scope": "local"
+          },
+          "loc": {
+            "line": 8,
+            "col": 2,
+            "start": 223,
+            "end": 237
           }
         }
-      ]
+      ],
+      "loc": {
+        "line": 6,
+        "col": 0,
+        "start": 155,
+        "end": 238
+      }
     },
     {
       "type": "graphNode",
@@ -147,6 +177,12 @@
               }
             ]
           },
+          "loc": {
+            "line": 12,
+            "col": 2,
+            "start": 256,
+            "end": 284
+          },
           "scope": "local"
         },
         {
@@ -166,6 +202,12 @@
                 ]
               }
             ]
+          },
+          "loc": {
+            "line": 13,
+            "col": 2,
+            "start": 284,
+            "end": 311
           },
           "scope": "local"
         },
@@ -214,6 +256,12 @@
               "type": "usesTool",
               "toolNames": []
             }
+          },
+          "loc": {
+            "line": 14,
+            "col": 2,
+            "start": 311,
+            "end": 359
           },
           "scope": "local"
         },
@@ -265,7 +313,13 @@
             }
           ]
         }
-      ]
+      ],
+      "loc": {
+        "line": 11,
+        "col": 0,
+        "start": 240,
+        "end": 374
+      }
     }
   ]
 }

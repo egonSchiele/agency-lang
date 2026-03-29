@@ -1,6 +1,6 @@
 import __graph___foo from "./foo.js";
 import { __fooNodeParams } from "./foo.js";
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adit/agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import foo from "./foo.ts";
 import { foo } from "./foo.ts";
 import foo from "./foo.ts";

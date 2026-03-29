@@ -69,8 +69,9 @@ import { keywordParser } from "./keyword.js";
 import { HandleBlock } from "@/types/handleBlock.js";
 import { debuggerParser } from "./debuggerStatement.js";
 import { exprParser } from "./expression.js";
+import { withLoc } from "./loc.js";
 
-export const assignmentParser: Parser<Assignment> = (input: string) => {
+const _assignmentParserInner: Parser<Assignment> = (input: string) => {
   const parser = trace(
     "assignmentParser",
     seqC(
@@ -123,6 +124,7 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
   const out: Assignment = { ...rest, variableName, value, accessChain };
   return success(out, result.rest);
 };
+export const assignmentParser: Parser<Assignment> = withLoc(_assignmentParserInner);
 
 export const sharedAssignmentParser: Parser<Assignment> = (input: string) => {
   const parser = seqC(str("shared"), spaces, captureCaptures(assignmentParser));
@@ -303,7 +305,7 @@ const elseClauseParser: Parser<AgencyNode[]> = (input: string) => {
   return success(blockResult.result.body, blockResult.rest);
 };
 
-export const ifParser: Parser<IfElse> = (input: string) => {
+const _ifParserInner: Parser<IfElse> = (input: string) => {
   const parser = trace(
     "ifParser",
     seqC(
@@ -343,8 +345,9 @@ export const ifParser: Parser<IfElse> = (input: string) => {
 
   return result;
 };
+export const ifParser: Parser<IfElse> = withLoc(_ifParserInner);
 
-export const whileLoopParser: Parser<WhileLoop> = trace(
+export const whileLoopParser: Parser<WhileLoop> = withLoc(trace(
   "whileLoopParser",
   seqC(
     set("type", "whileLoop"),
@@ -368,9 +371,9 @@ export const whileLoopParser: Parser<WhileLoop> = trace(
       ),
     ),
   ),
-);
+));
 
-export const forLoopParser: Parser<ForLoop> = trace(
+export const forLoopParser: Parser<ForLoop> = withLoc(trace(
   "forLoopParser",
   seqC(
     set("type", "forLoop"),
@@ -408,7 +411,7 @@ export const forLoopParser: Parser<ForLoop> = trace(
       ),
     ),
   ),
-);
+));
 
 export const functionParameterParserWithTypeHint: Parser<FunctionParameter> =
   trace(
@@ -490,7 +493,7 @@ const asyncSyncKeywordParser: Parser<boolean | undefined> = or(
   succeed(undefined),
 );
 
-export const functionParser: Parser<FunctionDefinition> = (input: string) => {
+const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   const safeResult = safeKeywordParser(input);
   if (!safeResult.success) return safeResult;
   const isSafe = safeResult.result;
@@ -508,6 +511,7 @@ export const functionParser: Parser<FunctionDefinition> = (input: string) => {
 
   return { ...baseResult, result };
 };
+export const functionParser: Parser<FunctionDefinition> = withLoc(_functionParserInner);
 
 const visibilityParser: Parser<Visibility> = or(
   str("public" as const),
@@ -515,7 +519,7 @@ const visibilityParser: Parser<Visibility> = or(
   succeed(undefined),
 );
 
-export const graphNodeParser: Parser<GraphNodeDefinition> = trace(
+export const graphNodeParser: Parser<GraphNodeDefinition> = withLoc(trace(
   "graphNodeParser",
   seqC(
     set("type", "graphNode"),
@@ -550,4 +554,4 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = trace(
       ),
     ),
   ),
-);
+));

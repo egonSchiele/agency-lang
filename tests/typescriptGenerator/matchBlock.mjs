@@ -1,4 +1,4 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adit/agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -185,8 +185,6 @@ if (__condbranch_2 === 0) {
 
 
 }
-    
-    
     //  Match with number literals
           __stack.step++;
   }
@@ -255,8 +253,6 @@ if (__condbranch_4 === 0) {
 
 
 }
-    
-    
     //  Match with variable assignment in body
           __stack.step++;
   }
@@ -344,8 +340,6 @@ if (__condbranch_7 === 0) {
 
 
 }
-    
-    
     //  Match with function calls in body
           __stack.step++;
   }
@@ -417,8 +411,6 @@ if (__condbranch_9 === 0) {
 
 
 }
-    
-    
     //  Match with array results
           __stack.step++;
   }
@@ -478,8 +470,6 @@ if (__condbranch_11 === 0) {
 
 
 }
-    
-    
     //  Match with object results
           __stack.step++;
   }
@@ -559,7 +549,6 @@ if (__condbranch_13 === 0) {
 
 
 }
-    
           __stack.step++;
   }
   await callHook({

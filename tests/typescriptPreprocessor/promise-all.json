@@ -72,6 +72,12 @@
               "toolNames": []
             }
           },
+          "loc": {
+            "line": 3,
+            "col": 2,
+            "start": 159,
+            "end": 195
+          },
           "scope": "local"
         },
         {
@@ -105,9 +111,21 @@
             "type": "variableName",
             "value": "result",
             "scope": "local"
+          },
+          "loc": {
+            "line": 4,
+            "col": 2,
+            "start": 195,
+            "end": 209
           }
         }
-      ]
+      ],
+      "loc": {
+        "line": 2,
+        "col": 0,
+        "start": 119,
+        "end": 210
+      }
     },
     {
       "type": "graphNode",
@@ -140,6 +158,12 @@
               "type": "usesTool",
               "toolNames": []
             }
+          },
+          "loc": {
+            "line": 8,
+            "col": 2,
+            "start": 228,
+            "end": 266
           },
           "scope": "local"
         },
@@ -185,6 +209,12 @@
               "type": "usesTool",
               "toolNames": []
             }
+          },
+          "loc": {
+            "line": 9,
+            "col": 2,
+            "start": 266,
+            "end": 305
           },
           "scope": "local"
         },
@@ -233,6 +263,12 @@
               }
             ]
           },
+          "loc": {
+            "line": 10,
+            "col": 2,
+            "start": 305,
+            "end": 334
+          },
           "scope": "local"
         },
         {
@@ -246,7 +282,13 @@
             }
           ]
         }
-      ]
+      ],
+      "loc": {
+        "line": 7,
+        "col": 0,
+        "start": 212,
+        "end": 351
+      }
     }
   ]
 }

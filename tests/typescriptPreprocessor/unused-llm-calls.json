@@ -60,6 +60,12 @@
               "toolNames": []
             }
           },
+          "loc": {
+            "line": 4,
+            "col": 2,
+            "start": 190,
+            "end": 233
+          },
           "scope": "local"
         },
         {
@@ -120,6 +126,12 @@
               "toolNames": []
             }
           },
+          "loc": {
+            "line": 8,
+            "col": 2,
+            "start": 312,
+            "end": 358
+          },
           "scope": "local"
         },
         {
@@ -163,9 +175,21 @@
               "type": "usesTool",
               "toolNames": []
             }
+          },
+          "loc": {
+            "line": 11,
+            "col": 2,
+            "start": 404,
+            "end": 431
           }
         }
-      ]
+      ],
+      "loc": {
+        "line": 2,
+        "col": 0,
+        "start": 119,
+        "end": 432
+      }
     }
   ]
 }

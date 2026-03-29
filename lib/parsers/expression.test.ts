@@ -264,5 +264,66 @@ describe("exprParser", () => {
         expect(result.result.type).toBe("binOpExpression");
       }
     });
+
+    it("should parse method chain in binary op", () => {
+      const result = exprParser("a.b() + c.d");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("binOpExpression");
+      }
+    });
+  });
+
+  describe("complex expressions", () => {
+    it("should parse nested binary operations", () => {
+      const result = exprParser("a + b * c - d");
+      expect(result.success).toBe(true);
+    });
+
+    it("should parse comparison with arithmetic", () => {
+      const result = exprParser("a + 1 == b * 2");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("binOpExpression");
+        if (result.result.type === "binOpExpression") {
+          expect(result.result.operator).toBe("==");
+        }
+      }
+    });
+
+    it("should parse logical expression with comparisons", () => {
+      const result = exprParser("a > 0 && b < 10");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("binOpExpression");
+        if (result.result.type === "binOpExpression") {
+          expect(result.result.operator).toBe("&&");
+        }
+      }
+    });
+
+    it("should parse parenthesized subexpression in binary op", () => {
+      const result = exprParser("(a + b) * (c + d)");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("binOpExpression");
+        if (result.result.type === "binOpExpression") {
+          expect(result.result.operator).toBe("*");
+          expect(result.result.left.type).toBe("binOpExpression");
+          expect(result.result.right.type).toBe("binOpExpression");
+        }
+      }
+    });
+
+    it("should parse !condition in logical expression", () => {
+      const result = exprParser("!done && count > 0");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("binOpExpression");
+        if (result.result.type === "binOpExpression") {
+          expect(result.result.operator).toBe("&&");
+        }
+      }
+    });
   });
 });

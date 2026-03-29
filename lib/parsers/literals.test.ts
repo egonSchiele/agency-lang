@@ -92,6 +92,61 @@ describe("literals parsers", () => {
         },
       },
 
+      // Function calls in interpolation (now allowed)
+      {
+        input: "${foo()}",
+        expected: {
+          success: true,
+          result: {
+            type: "interpolation",
+            expression: {
+              type: "functionCall",
+              functionName: "foo",
+              arguments: [],
+            },
+          },
+        },
+      },
+      // Binary expressions in interpolation
+      {
+        input: "${a + b}",
+        expected: {
+          success: true,
+          result: {
+            type: "interpolation",
+            expression: {
+              type: "binOpExpression",
+              operator: "+",
+              left: { type: "variableName", value: "a" },
+              right: { type: "variableName", value: "b" },
+            },
+          },
+        },
+      },
+      // Method calls in interpolation
+      {
+        input: "${obj.method()}",
+        expected: {
+          success: true,
+          result: {
+            type: "interpolation",
+            expression: {
+              type: "valueAccess",
+              base: { type: "variableName", value: "obj" },
+              chain: [
+                {
+                  kind: "methodCall",
+                  functionCall: {
+                    type: "functionCall",
+                    functionName: "method",
+                    arguments: [],
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
       // Failure cases
       { input: "${", expected: { success: false } },
       { input: "${foo", expected: { success: false } },

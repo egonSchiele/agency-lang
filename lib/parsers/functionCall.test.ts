@@ -379,5 +379,44 @@ describe("async/sync function calls via valueAccessParser", () => {
   });
 });
 
+describe("arbitrary expressions as arguments", () => {
+  it("should allow binary operation as argument", () => {
+    const result = functionCallParser("foo(a + b)");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.arguments.length).toBe(1);
+      expect(result.result.arguments[0].type).toBe("binOpExpression");
+    }
+  });
+
+  it("should allow nested function call as argument", () => {
+    const result = functionCallParser("foo(bar(baz()))");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.arguments.length).toBe(1);
+      expect(result.result.arguments[0].type).toBe("functionCall");
+    }
+  });
+
+  it("should allow parenthesized expression as argument", () => {
+    const result = functionCallParser("foo((a + b) * c)");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.arguments.length).toBe(1);
+      expect(result.result.arguments[0].type).toBe("binOpExpression");
+    }
+  });
+
+  it("should allow multiple expression arguments", () => {
+    const result = functionCallParser("foo(a + b, c * d)");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.arguments.length).toBe(2);
+      expect(result.result.arguments[0].type).toBe("binOpExpression");
+      expect(result.result.arguments[1].type).toBe("binOpExpression");
+    }
+  });
+});
+
 // TODO: streamingPromptLiteralParser tests removed — streaming now handled via config object.
 // Streaming will be passed as { stream: true } in the llm() config argument.

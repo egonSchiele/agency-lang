@@ -317,3 +317,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
+export const __sourceMap = {"asyncAssigned.agency:compute":{"2":{"line":4,"col":2}},"asyncAssigned.agency:main":{"1":{"line":8,"col":2},"2":{"line":9,"col":2},"4":{"line":10,"col":2}}};

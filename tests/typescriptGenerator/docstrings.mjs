@@ -422,3 +422,4 @@ const __graph = __ctx.graph;
   })
 }
 export default graph
+export const __sourceMap = {"docstrings.agency:add":{},"docstrings.agency:greet":{},"docstrings.agency:calculateArea":{},"docstrings.agency:processData":{}};

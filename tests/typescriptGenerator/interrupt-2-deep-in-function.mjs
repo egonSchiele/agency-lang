@@ -500,3 +500,4 @@ export async function sayHi(name: any, { messages, callbacks }: { messages?: any
 }
 export const __sayHiNodeParams = ["name"];
 export default graph
+export const __sourceMap = {"interrupt-2-deep-in-function.agency:greet":{"1":{"line":3,"col":2},"2":{"line":4,"col":2}},"interrupt-2-deep-in-function.agency:foo2":{"2":{"line":10,"col":0},"5":{"line":12,"col":2}},"interrupt-2-deep-in-function.agency:sayHi":{"2":{"line":17,"col":2},"3":{"line":18,"col":2},"6":{"line":21,"col":2}}};

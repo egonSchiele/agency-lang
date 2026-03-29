@@ -158,3 +158,4 @@ await print(__ctx.globals.get("arrayAndObject.agency", "firstNum"))
 //  Object property access
 await print(__ctx.globals.get("arrayAndObject.agency", "personName"))
 export default graph
+export const __sourceMap = {};

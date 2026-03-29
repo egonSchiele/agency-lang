@@ -115,3 +115,4 @@ const __toolRegistry = {
 };
 
 export default graph
+export const __sourceMap = {};

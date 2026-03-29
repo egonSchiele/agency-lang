@@ -16,6 +16,7 @@ import {
 import { DebuggerStatement } from "../types/debuggerStatement.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { optionalSpaces, optionalSpacesOrNewline } from "./utils.js";
+import { withLoc } from "./loc.js";
 
 function removeQuotes(s: string): string {
   if (
@@ -27,7 +28,7 @@ function removeQuotes(s: string): string {
   return s;
 }
 
-export const debuggerParser: Parser<DebuggerStatement> = seqC(
+export const debuggerParser: Parser<DebuggerStatement> = withLoc(seqC(
   set("type", "debuggerStatement"),
   str("debugger"),
   char("("),
@@ -35,4 +36,4 @@ export const debuggerParser: Parser<DebuggerStatement> = seqC(
   char(")"),
   optionalSemicolon,
   optionalSpacesOrNewline,
-);
+));

@@ -407,3 +407,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
+export const __sourceMap = {"safe-function.agency:safeLookup":{"1":{"line":5,"col":2}},"safe-function.agency:unsafeSave":{"2":{"line":10,"col":2}},"safe-function.agency:main":{"1":{"line":15,"col":0},"3":{"line":16,"col":2}}};

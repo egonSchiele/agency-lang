@@ -1016,3 +1016,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
+export const __sourceMap = {"function-with-types.agency:add":{"1":{"line":6,"col":2},"3":{"line":7,"col":2}},"function-with-types.agency:greet":{"1":{"line":14,"col":2},"3":{"line":15,"col":2}},"function-with-types.agency:mixed":{"1":{"line":22,"col":2},"3":{"line":23,"col":2}},"function-with-types.agency:processArray":{"1":{"line":30,"col":2},"3":{"line":31,"col":2}},"function-with-types.agency:flexible":{"1":{"line":38,"col":2},"3":{"line":39,"col":2}},"function-with-types.agency:foo":{"2":{"line":44,"col":2}},"function-with-types.agency:main":{"1":{"line":49,"col":2},"2":{"line":50,"col":2},"3":{"line":51,"col":2},"4":{"line":52,"col":2},"5":{"line":53,"col":2}}};

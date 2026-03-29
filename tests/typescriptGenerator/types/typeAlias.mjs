@@ -218,3 +218,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
+export const __sourceMap = {"typeAlias.agency:main":{"1":{"line":7,"col":2}}};

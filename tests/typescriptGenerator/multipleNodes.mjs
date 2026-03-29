@@ -398,3 +398,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
+export const __sourceMap = {"multipleNodes.agency:greet":{"1":{"line":4,"col":0},"3":{"line":5,"col":2}},"multipleNodes.agency:processGreeting":{"1":{"line":10,"col":0}},"multipleNodes.agency:main":{"1":{"line":15,"col":2}}};

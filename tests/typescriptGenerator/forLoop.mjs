@@ -258,3 +258,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
+export const __sourceMap = {"forLoop.agency:main":{"1":{"line":4,"col":2},"2":{"line":5,"col":2},"3":{"line":10,"col":2},"4":{"line":15,"col":2},"5":{"line":16,"col":2}}};

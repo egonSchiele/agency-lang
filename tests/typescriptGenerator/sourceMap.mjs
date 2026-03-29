@@ -82,9 +82,24 @@ export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<strin
 export const resolveInterrupt = (interrupt: Interrupt, value: any, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, overrides: opts?.overrides, metadata: opts?.metadata });
 export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
 function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("asyncLlm.agency")
+  __ctx.globals.markInitialized("sourceMap.agency")
 }
+export const __greetTool = {
+  name: "greet",
+  description: `No description provided.`,
+  schema: z.object({"name": z.string(), })
+};
+export const __greetToolParams = ["name"];
 const __toolRegistry = {
+  greet: {
+    definition: __greetTool,
+    handler: {
+      name: "greet",
+      params: __greetToolParams,
+      execute: greet,
+      isBuiltin: false
+    }
+  },
   readSkill: {
     definition: __readSkillTool,
     handler: {
@@ -96,6 +111,129 @@ const __toolRegistry = {
   }
 };
 
+export async function greet(name: string, __state: InternalFunctionState | undefined = undefined) {
+  const __setupData = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+  let __forked;
+  if (!__ctx.globals.isInitialized("sourceMap.agency")) {
+    __initializeGlobals(__ctx)
+  }
+  let __funcStartTime: number = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "greet",
+      args: {
+        name: name
+      },
+      isBuiltin: false
+    }
+  })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "greet",
+    args: {
+      name: name
+    },
+    result: undefined
+  })
+  __stack.args["name"] = name;
+  __self.__retryable = __self.__retryable ?? true;
+  try {
+    if (__step <= 0) {
+      
+            __stack.step++;
+    }
+    if (__step <= 1) {
+            __self.__removedTools = __self.__removedTools || [];
+__stack.locals.result = await runPrompt({
+        ctx: __ctx,
+        prompt: `Hello ${__stack.args.name}`,
+        messages: __threads.getOrCreateActive(),
+        clientConfig: {},
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
+      });
+// return early from node if this is an interrupt
+if (isInterrupt(__stack.locals.result)) {
+        await __ctx.pendingPromises.awaitAll()
+        return __stack.locals.result;
+      }
+      await __ctx.audit({
+        type: "assignment",
+        variable: "__self.__removedTools",
+        value: __self.__removedTools
+      })
+            __stack.step++;
+    }
+    if (__step <= 2) {
+            if (__ctx.callbacks.onCheckpoint) {
+  if (__ctx._skipNextCheckpoint) {
+    __ctx._skipNextCheckpoint = false;
+  } else {
+    const __cpId = __ctx.checkpoints.create(__ctx);
+    const __cp = __ctx.checkpoints.get(__cpId);
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onCheckpoint",
+      data: {
+        checkpoint: __cp,
+        llmCall: {
+          step: __stack.step,
+          targetVariable: "result",
+          prompt: `Hello ${__stack.args.name}`,
+          response: __stack.locals.result,
+          model: __ctx.getSmoltalkConfig().model || "unknown",
+        },
+      },
+    });
+    __ctx.checkpoints.delete(__cpId);
+  }
+}
+
+            __stack.step++;
+    }
+    if (__step <= 3) {
+            const __auditReturnValue = __stack.locals.result;
+await __ctx.audit({
+        type: "return",
+        value: __auditReturnValue
+      })
+return __auditReturnValue
+            __stack.step++;
+    }
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
+    }
+    if (__error instanceof ToolCallError) {
+      __error.retryable = __error.retryable && __self.__retryable
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
+  }
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionEnd",
+    data: {
+      functionName: "greet",
+      timeTaken: performance.now() - __funcStartTime
+    }
+  })
+}
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -120,57 +258,72 @@ const __graph = __ctx.graph;
           __stack.step++;
   }
   if (__step <= 1) {
-          __self.__removedTools = __self.__removedTools || [];
-__stack.locals.x = runPrompt({
-      ctx: __ctx,
-      prompt: `What is 2+2?`,
-      messages: __threads.createAndReturnThread(),
-      clientConfig: {},
-      maxToolCallRounds: 10,
-      interruptData: __state?.interruptData,
-      removedTools: __self.__removedTools
-    });
-__self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
+          __stack.locals.x = 1;
     await __ctx.audit({
       type: "assignment",
-      variable: "__self.__removedTools",
-      value: __self.__removedTools
+      variable: "__stack.locals.x",
+      value: __stack.locals.x
     })
           __stack.step++;
   }
   if (__step <= 2) {
-          __self.__removedTools = __self.__removedTools || [];
-__stack.locals.y = runPrompt({
-      ctx: __ctx,
-      prompt: `What is 3+3?`,
-      messages: __threads.createAndReturnThread(),
-      clientConfig: {},
-      maxToolCallRounds: 10,
-      interruptData: __state?.interruptData,
-      removedTools: __self.__removedTools
-    });
-__self.__pendingKey_y = __ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });
-    await __ctx.audit({
-      type: "assignment",
-      variable: "__self.__removedTools",
-      value: __self.__removedTools
-    })
+          if (__stack.locals.__condbranch_2 === undefined) {
+
+  if (__stack.locals.x == 1) {
+    __stack.locals.__condbranch_2 = 0;
+
+
+  } else {
+    __stack.locals.__condbranch_2 = 1;
+  }
+
+
+}
+const __condbranch_2 = __stack.locals.__condbranch_2;
+const __sub_2 = __stack.locals.__substep_2 ?? 0;
+
+if (__condbranch_2 === 0) {
+
+  if (__sub_2 <= 0) {
+    __stack.locals.y = 2;
+    __stack.locals.__substep_2 = 1;
+  }
+
+
+} else if (__condbranch_2 === 1) {
+
+  if (__sub_2 <= 0) {
+    __stack.locals.y = 3;
+    __stack.locals.__substep_2 = 1;
+  }
+
+
+}
           __stack.step++;
   }
   if (__step <= 3) {
-          await __ctx.pendingPromises.awaitPending([__self.__pendingKey_x, __self.__pendingKey_y]);
-          __stack.step++;
+          __stack.locals.__iteration_3 = __stack.locals.__iteration_3 ?? 0;
+let __currentIter_3 = 0;
+for (let __i_3 = 0; __i_3 < [`a`, `b`].length; __i_3++) {
+  if (__currentIter_3 < __stack.locals.__iteration_3) {
+    __currentIter_3++;
+    continue;
   }
-  if (__step <= 4) {
-          const __auditReturnValue = {
-      messages: __threads,
-      data: [__stack.locals.x, __stack.locals.y]
-    };
-await __ctx.audit({
-      type: "return",
-      value: __auditReturnValue
-    })
-return __auditReturnValue;
+
+  const item = [`a`, `b`][__i_3];
+
+  __stack.locals.__substep_3 = __stack.locals.__substep_3 ?? 0;
+
+  if (__stack.locals.__substep_3 <= 0) {
+    __stack.locals.z = item;
+
+    __stack.locals.__substep_3 = 1;
+  }
+
+  __stack.resetLoopIteration("3");
+  __stack.locals.__iteration_3++;
+  __currentIter_3++;
+}
           __stack.step++;
   }
   await callHook({
@@ -210,4 +363,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"asyncLlm.agency:main":{"1":{"line":3,"col":2},"2":{"line":4,"col":2},"4":{"line":5,"col":2}}};
+export const __sourceMap = {"sourceMap.agency:greet":{"1":{"line":3,"col":2},"3":{"line":4,"col":2}},"sourceMap.agency:main":{"1":{"line":8,"col":2},"2":{"line":9,"col":2},"3":{"line":14,"col":2},"2.0":{"line":12,"col":4},"3.0":{"line":15,"col":4}}};

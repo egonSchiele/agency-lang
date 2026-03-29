@@ -953,3 +953,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
+export const __sourceMap = {"threadsAndSubthreads.agency:foo":{"1.1":{"line":4,"col":4},"1.3.1":{"line":6,"col":6},"1.3.3.1":{"line":8,"col":8},"1.3.4.1":{"line":11,"col":8},"1.4.1":{"line":15,"col":6}},"threadsAndSubthreads.agency:main":{"1.1":{"line":27,"col":4},"1.3.1":{"line":29,"col":6},"1.3.3.1":{"line":31,"col":8},"1.3.4.1":{"line":34,"col":8},"1.4.1":{"line":38,"col":6}}};

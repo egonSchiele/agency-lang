@@ -81,6 +81,7 @@ import {
 } from "./typescriptGenerator/typeToZodSchema.js";
 
 import { auditNode, makeAuditCall } from "../ir/audit.js";
+import { SourceMapBuilder } from "./sourceMap.js";
 import { $, ts } from "../ir/builders.js";
 import { printTs } from "../ir/prettyPrint.js";
 import type {
@@ -144,6 +145,7 @@ export class TypeScriptBuilder {
    * has been broken into substeps. Used to generate unique variable names
    * like __substep_3_1 for nested blocks. */
   private _subStepPath: number[] = [];
+  private _sourceMapBuilder: SourceMapBuilder = new SourceMapBuilder();
 
   private programInfo: ProgramInfo;
   private moduleId: string;
@@ -469,6 +471,8 @@ export class TypeScriptBuilder {
       sections.push(ts.statements(postprocessNodes));
     }
 
+    sections.push(ts.raw(`export const __sourceMap = ${JSON.stringify(this._sourceMapBuilder.build())};`));
+
     return ts.statements(sections);
   }
 
@@ -722,6 +726,7 @@ export class TypeScriptBuilder {
     const processBranchBody = (body: AgencyNode[]): TsNode[] => {
       return body.map((stmt, i) => {
         this._subStepPath.push(i);
+        this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
         const result = this.processStatement(stmt);
         this._subStepPath.pop();
         return result;
@@ -779,6 +784,7 @@ export class TypeScriptBuilder {
     this._loopContextStack.push(subKey);
     const bodyNodes = node.body.map((stmt, i) => {
       this._subStepPath.push(i);
+      this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
       const result = this.processStatement(stmt);
       this._subStepPath.pop();
       return result;
@@ -845,6 +851,7 @@ export class TypeScriptBuilder {
     this._loopContextStack.push(subKey);
     const bodyNodes = node.body.map((stmt, i) => {
       this._subStepPath.push(i);
+      this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
       const result = this.processStatement(stmt);
       this._subStepPath.pop();
       return result;
@@ -1050,6 +1057,7 @@ export class TypeScriptBuilder {
 
   private processFunctionDefinition(node: FunctionDefinition): TsNode {
     this.startScope({ type: "function", functionName: node.functionName });
+    this._sourceMapBuilder.enterScope(this.moduleId, node.functionName);
     const { functionName, body, parameters } = node;
     const args = parameters.map((p) => p.name);
 
@@ -1403,6 +1411,7 @@ export class TypeScriptBuilder {
 
   private processGraphNode(node: GraphNodeDefinition): TsNode {
     this.startScope({ type: "node", nodeName: node.nodeName });
+    this._sourceMapBuilder.enterScope(this.moduleId, node.nodeName);
     const { nodeName, body, parameters } = node;
     this.adjacentNodes[nodeName] = [];
     this.currentAdjacentNodes = [];
@@ -2016,6 +2025,7 @@ export class TypeScriptBuilder {
     const bodyNodes = node.body.map((stmt, i) => {
       this._subStepPath = [...subStepPath];
       this._subStepPath.push(i + 1); // +1 because setup is substep 0
+      this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
       const result = this.processStatement(stmt);
       this._subStepPath.pop();
       return result;
@@ -2149,6 +2159,7 @@ export class TypeScriptBuilder {
     // Body: process each statement with substep tracking
     const bodyNodes = node.body.map((stmt, i) => {
       this._subStepPath.push(i);
+      this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
       const result = this.processStatement(stmt);
       this._subStepPath.pop();
       return result;
@@ -2183,6 +2194,7 @@ export class TypeScriptBuilder {
 
       const stepIndex = parts.length - 1;
       this._subStepPath.push(stepIndex);
+      this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
       if (!opts.isInSafeFunction && this.containsImpureCall(stmt)) {
         parts[parts.length - 1].push(
           ts.assign(ts.self("__retryable"), ts.bool(false)),

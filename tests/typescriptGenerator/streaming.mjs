@@ -265,3 +265,4 @@ export async function foo({ messages, callbacks }: { messages?: any; callbacks?:
 }
 export const __fooNodeParams = [];
 export default graph
+export const __sourceMap = {"streaming.agency:foo":{"1":{"line":3,"col":2},"4":{"line":8,"col":2}}};

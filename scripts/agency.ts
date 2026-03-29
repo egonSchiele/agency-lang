@@ -246,6 +246,24 @@ program
   );
 
 program
+  .command("definition")
+  .description("Find the definition of the symbol at the given cursor position")
+  .requiredOption("--line <line>", "0-indexed line number of the cursor")
+  .requiredOption("--column <column>", "0-indexed column number of the cursor")
+  .option("--file <file>", "Filename to report in output", "")
+  .action(async (opts: { line: string; column: string; file: string }) => {
+    const { findDefinition } = await import("@/cli/definition.js");
+    const contents = await readStdin();
+    const result = findDefinition(
+      contents,
+      parseInt(opts.line, 10),
+      parseInt(opts.column, 10),
+      opts.file,
+    );
+    console.log(JSON.stringify(result));
+  });
+
+program
   .command("diagnostics")
   .description("Run diagnostics for VSCode")
   .argument("[inputs...]", "Paths to .agency input files")

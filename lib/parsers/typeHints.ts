@@ -42,6 +42,7 @@ import {
   success,
   trace,
 } from "tarsec";
+import { withLoc } from "./loc.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { commentParser } from "./comment.js";
 import { multiLineCommentParser } from "./multiLineComment.js";
@@ -350,7 +351,7 @@ export const typeHintParser: Parser<TypeHint> = trace(
   ),
 );
 
-export const typeAliasParser: Parser<TypeAlias> = trace(
+export const typeAliasParser: Parser<TypeAlias> = withLoc(trace(
   "typeAliasParser",
   seqC(
     set("type", "typeAlias"),
@@ -369,4 +370,4 @@ export const typeAliasParser: Parser<TypeAlias> = trace(
       ),
     ),
   ),
-);
+));

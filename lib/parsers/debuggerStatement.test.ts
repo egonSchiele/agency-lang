@@ -7,7 +7,7 @@ describe("debuggerParser", () => {
     const result = debuggerParser('debugger("checking mood")');
     expect(result.success).toBe(true);
     if (!result.success) throw new Error("expected success");
-    expect(result.result).toEqual(
+    expect(result.result).toEqualWithoutLoc(
       expect.objectContaining({
         type: "debuggerStatement",
         label: "checking mood",
@@ -19,7 +19,7 @@ describe("debuggerParser", () => {
     const result = debuggerParser("debugger('my label')");
     expect(result.success).toBe(true);
     if (!result.success) throw new Error("expected success");
-    expect(result.result).toEqual(
+    expect(result.result).toEqualWithoutLoc(
       expect.objectContaining({
         type: "debuggerStatement",
         label: "my label",

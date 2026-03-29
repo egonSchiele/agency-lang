@@ -163,7 +163,7 @@ describe("literals parsers", () => {
           const result = interpolationSegmentParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
-            expect(result.result).toEqual(expected.result);
+            expect(result.result).toEqualWithoutLoc(expected.result);
           }
         });
       } else {
@@ -258,7 +258,7 @@ describe("literals parsers", () => {
           const result = numberParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
-            expect(result.result).toEqual(expected.result);
+            expect(result.result).toEqualWithoutLoc(expected.result);
           }
         });
       } else {
@@ -436,7 +436,7 @@ describe("literals parsers", () => {
           const result = stringParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
-            expect(result.result).toEqual(expected.result);
+            expect(result.result).toEqualWithoutLoc(expected.result);
           }
         });
       } else {
@@ -900,7 +900,7 @@ describe("literals parsers", () => {
           const result = stringParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
-            expect(result.result).toEqual(expected.result);
+            expect(result.result).toEqualWithoutLoc(expected.result);
           }
         });
       } else {
@@ -1175,7 +1175,7 @@ describe("literals parsers", () => {
           const result = multiLineStringParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
-            expect(result.result).toEqual(expected.result);
+            expect(result.result).toEqualWithoutLoc(expected.result);
           }
         });
       } else {
@@ -1282,7 +1282,7 @@ describe("literals parsers", () => {
           const result = variableNameParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
-            expect(result.result).toEqual(expected.result);
+            expect(result.result).toEqualWithoutLoc(expected.result);
           }
         });
       } else {
@@ -1322,7 +1322,7 @@ describe("literals parsers", () => {
           const result = booleanParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
-            expect(result.result).toEqual(expected.result);
+            expect(result.result).toEqualWithoutLoc(expected.result);
           }
         });
       } else {
@@ -1448,7 +1448,7 @@ describe("literals parsers", () => {
           const result = literalParser(input);
           expect(result.success).toBe(true);
           if (result.success) {
-            expect(result.result).toEqual(expected.result);
+            expect(result.result).toEqualWithoutLoc(expected.result);
           }
         });
       } else {

@@ -97,10 +97,7 @@ export const agencyParser: Parser<AgencyProgram> = seqC(
 );
 
 export const normalizeCode = (code: string) => {
-  return code
-    .split("\n")
-    .map((line) => line.trim())
-    .join("\n");
+  return code;
 };
 
 export function _parseAgency(

@@ -336,7 +336,7 @@ describe("skillParser", () => {
         const result = skillParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else if (throws) {

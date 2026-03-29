@@ -285,7 +285,7 @@ describe("functionCallParser", () => {
         const result = functionCallParser(input);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.result).toEqual(expected.result);
+          expect(result.result).toEqualWithoutLoc(expected.result);
         }
       });
     } else {
@@ -302,7 +302,7 @@ describe("async/sync function calls via valueAccessParser", () => {
     const result = valueAccessParser("async bar()");
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result).toEqual({
+      expect(result.result).toEqualWithoutLoc({
         type: "functionCall",
         functionName: "bar",
         arguments: [],
@@ -315,7 +315,7 @@ describe("async/sync function calls via valueAccessParser", () => {
     const result = valueAccessParser("sync bar()");
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result).toEqual({
+      expect(result.result).toEqualWithoutLoc({
         type: "functionCall",
         functionName: "bar",
         arguments: [],
@@ -328,7 +328,7 @@ describe("async/sync function calls via valueAccessParser", () => {
     const result = valueAccessParser("await bar()");
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result).toEqual({
+      expect(result.result).toEqualWithoutLoc({
         type: "functionCall",
         functionName: "bar",
         arguments: [],
@@ -341,7 +341,7 @@ describe("async/sync function calls via valueAccessParser", () => {
     const result = valueAccessParser("bar()");
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result).toEqual({
+      expect(result.result).toEqualWithoutLoc({
         type: "functionCall",
         functionName: "bar",
         arguments: [],
@@ -353,7 +353,7 @@ describe("async/sync function calls via valueAccessParser", () => {
     const result = valueAccessParser("await sayHi(name, age)");
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result).toEqual({
+      expect(result.result).toEqualWithoutLoc({
         type: "functionCall",
         functionName: "sayHi",
         arguments: [
@@ -369,7 +369,7 @@ describe("async/sync function calls via valueAccessParser", () => {
     const result = valueAccessParser("async sayHi(name)");
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result).toEqual({
+      expect(result.result).toEqualWithoutLoc({
         type: "functionCall",
         functionName: "sayHi",
         arguments: [{ type: "variableName", value: "name" }],

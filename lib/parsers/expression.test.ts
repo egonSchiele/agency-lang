@@ -7,7 +7,7 @@ describe("exprParser", () => {
       const result = exprParser("42");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({ type: "number", value: "42" });
+        expect(result.result).toEqualWithoutLoc({ type: "number", value: "42" });
       }
     });
 
@@ -15,7 +15,7 @@ describe("exprParser", () => {
       const result = exprParser("-42");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({ type: "number", value: "-42" });
+        expect(result.result).toEqualWithoutLoc({ type: "number", value: "-42" });
       }
     });
 
@@ -23,7 +23,7 @@ describe("exprParser", () => {
       const result = exprParser("foo");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({ type: "variableName", value: "foo" });
+        expect(result.result).toEqualWithoutLoc({ type: "variableName", value: "foo" });
       }
     });
 
@@ -39,7 +39,7 @@ describe("exprParser", () => {
       const result = exprParser("true");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({ type: "boolean", value: true });
+        expect(result.result).toEqualWithoutLoc({ type: "boolean", value: true });
       }
     });
 
@@ -65,7 +65,7 @@ describe("exprParser", () => {
       const result = exprParser("1 + 2");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "binOpExpression",
           operator: "+",
           left: { type: "number", value: "1" },
@@ -78,7 +78,7 @@ describe("exprParser", () => {
       const result = exprParser("1 + 2 * 3");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "binOpExpression",
           operator: "+",
           left: { type: "number", value: "1" },
@@ -96,7 +96,7 @@ describe("exprParser", () => {
       const result = exprParser("1 - 2 - 3");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "binOpExpression",
           operator: "-",
           left: {
@@ -148,7 +148,7 @@ describe("exprParser", () => {
       const result = exprParser("foo + bar");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "binOpExpression",
           operator: "+",
           left: { type: "variableName", value: "foo" },
@@ -163,7 +163,7 @@ describe("exprParser", () => {
       const result = exprParser("(42)");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({ type: "number", value: "42" });
+        expect(result.result).toEqualWithoutLoc({ type: "number", value: "42" });
       }
     });
 
@@ -171,7 +171,7 @@ describe("exprParser", () => {
       const result = exprParser("(1 + 2) * 3");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "binOpExpression",
           operator: "*",
           left: {
@@ -207,7 +207,7 @@ describe("exprParser", () => {
       const result = exprParser("!x");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqual({
+        expect(result.result).toEqualWithoutLoc({
           type: "binOpExpression",
           operator: "!",
           left: { type: "boolean", value: true },

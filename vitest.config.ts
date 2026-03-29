@@ -7,6 +7,7 @@ export default defineConfig({
     environment: 'node',
     include: ['**/*.test.ts'],
     exclude: ['node_modules', 'dist', 'tests'],
+    setupFiles: ['./lib/parsers/vitest.setup.ts'],
   },
   resolve: {
     alias: {

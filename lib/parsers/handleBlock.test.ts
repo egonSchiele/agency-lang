@@ -24,7 +24,7 @@ describe("handleBlockParser", () => {
       expect(result.result.handler.kind).toBe("inline");
       if (result.result.handler.kind === "inline") {
         expect(result.result.handler.param.name).toBe("data");
-        expect(result.result.handler.param.typeHint).toEqual({
+        expect(result.result.handler.param.typeHint).toEqualWithoutLoc({
           type: "primitiveType",
           value: "string",
         });

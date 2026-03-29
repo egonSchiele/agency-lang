@@ -8,8 +8,8 @@ def safeAction(x: string): string {
 }
 
 node main() {
-  +riskyAction
-  +safeAction
+  uses riskyAction, safeAction
   result: string = llm("Do something risky and something safe")
   print(result)
 }
+

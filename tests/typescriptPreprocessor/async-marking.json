@@ -45,9 +45,6 @@
             "value": "x",
             "scope": "args"
           }
-        },
-        {
-          "type": "newLine"
         }
       ]
     },
@@ -132,9 +129,6 @@
             "value": "result",
             "scope": "local"
           }
-        },
-        {
-          "type": "newLine"
         }
       ]
     },

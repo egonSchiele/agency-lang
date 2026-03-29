@@ -1,4 +1,4 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adit/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -232,7 +232,6 @@ await __ctx.audit({
         value: __auditReturnValue
       })
 return __auditReturnValue
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -372,7 +371,6 @@ await __ctx.audit({
         value: __auditReturnValue
       })
 return __auditReturnValue
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -478,7 +476,6 @@ await __ctx.audit({
       value: __auditReturnValue
     })
 return __auditReturnValue;
-    
           __stack.step++;
   }
   await callHook({

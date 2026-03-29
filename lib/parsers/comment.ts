@@ -9,13 +9,14 @@ import {
   newline,
   manyTill,
 } from "tarsec";
-import { optionalSpaces } from "./utils.js";
+import { optionalSpaces, optionalSpacesOrNewline } from "./utils.js";
 export const commentParser: Parser<AgencyComment> = (input: string) => {
   const parser = seqC(
     set("type", "comment"),
     optionalSpaces,
     str("//"),
     capture(manyTill(newline), "content"),
+    optionalSpacesOrNewline,
   );
   return parser(input);
 };

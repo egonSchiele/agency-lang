@@ -38,9 +38,6 @@
           "content": " This prompt is assigned and used - should be kept"
         },
         {
-          "type": "newLine"
-        },
-        {
           "type": "assignment",
           "typeHint": {
             "type": "primitiveType",
@@ -86,9 +83,6 @@
           }
         },
         {
-          "type": "newLine"
-        },
-        {
           "type": "functionCall",
           "functionName": "print",
           "arguments": [
@@ -100,17 +94,8 @@
           ]
         },
         {
-          "type": "newLine"
-        },
-        {
-          "type": "newLine"
-        },
-        {
           "type": "comment",
           "content": " This prompt is assigned but never used - should be removed"
-        },
-        {
-          "type": "newLine"
         },
         {
           "type": "assignment",
@@ -158,17 +143,8 @@
           }
         },
         {
-          "type": "newLine"
-        },
-        {
-          "type": "newLine"
-        },
-        {
           "type": "comment",
           "content": " This prompt is returned - should be kept"
-        },
-        {
-          "type": "newLine"
         },
         {
           "type": "returnStatement",
@@ -191,9 +167,6 @@
               "toolNames": []
             }
           }
-        },
-        {
-          "type": "newLine"
         }
       ]
     },

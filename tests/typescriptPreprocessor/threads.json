@@ -130,12 +130,6 @@
           ]
         },
         {
-          "type": "newLine"
-        },
-        {
-          "type": "newLine"
-        },
-        {
           "type": "assignment",
           "typeHint": {
             "type": "primitiveType",

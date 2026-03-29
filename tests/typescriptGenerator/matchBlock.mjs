@@ -1,4 +1,4 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adit/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -118,10 +118,7 @@ const __graph = __ctx.graph;
   })
   if (__step <= 0) {
           //  Test match blocks (pattern matching)
-    
-    
     //  Simple match with string literals
-    
           __stack.step++;
   }
   if (__step <= 1) {
@@ -131,7 +128,6 @@ const __graph = __ctx.graph;
       variable: "__stack.locals.action",
       value: __stack.locals.action
     })
-    
           __stack.step++;
   }
   if (__step <= 2) {
@@ -193,7 +189,6 @@ if (__condbranch_2 === 0) {
     
     
     //  Match with number literals
-    
           __stack.step++;
   }
   if (__step <= 3) {
@@ -203,7 +198,6 @@ if (__condbranch_2 === 0) {
       variable: "__stack.locals.statusCode",
       value: __stack.locals.statusCode
     })
-    
           __stack.step++;
   }
   if (__step <= 4) {
@@ -265,7 +259,6 @@ if (__condbranch_4 === 0) {
     
     
     //  Match with variable assignment in body
-    
           __stack.step++;
   }
   if (__step <= 5) {
@@ -275,7 +268,6 @@ if (__condbranch_4 === 0) {
       variable: "__stack.locals.grade",
       value: __stack.locals.grade
     })
-    
           __stack.step++;
   }
   if (__step <= 6) {
@@ -285,7 +277,6 @@ if (__condbranch_4 === 0) {
       variable: "__stack.locals.points",
       value: __stack.locals.points
     })
-    
           __stack.step++;
   }
   if (__step <= 7) {
@@ -357,7 +348,6 @@ if (__condbranch_7 === 0) {
     
     
     //  Match with function calls in body
-    
           __stack.step++;
   }
   if (__step <= 8) {
@@ -367,7 +357,6 @@ if (__condbranch_7 === 0) {
       variable: "__stack.locals.level",
       value: __stack.locals.level
     })
-    
           __stack.step++;
   }
   if (__step <= 9) {
@@ -432,7 +421,6 @@ if (__condbranch_9 === 0) {
     
     
     //  Match with array results
-    
           __stack.step++;
   }
   if (__step <= 10) {
@@ -442,7 +430,6 @@ if (__condbranch_9 === 0) {
       variable: "__stack.locals.resultType",
       value: __stack.locals.resultType
     })
-    
           __stack.step++;
   }
   if (__step <= 11) {
@@ -495,7 +482,6 @@ if (__condbranch_11 === 0) {
     
     
     //  Match with object results
-    
           __stack.step++;
   }
   if (__step <= 12) {
@@ -505,7 +491,6 @@ if (__condbranch_11 === 0) {
       variable: "__stack.locals.format",
       value: __stack.locals.format
     })
-    
           __stack.step++;
   }
   if (__step <= 13) {

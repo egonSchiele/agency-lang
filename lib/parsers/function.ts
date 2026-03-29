@@ -41,9 +41,7 @@ import { WhileLoop } from "../types/whileLoop.js";
 import { IfElse } from "../types/ifElse.js";
 import { _valueAccessParser, valueAccessParser } from "./access.js";
 import { commentParser } from "./comment.js";
-import {
-  functionCallParser,
-} from "./functionCall.js";
+import { functionCallParser } from "./functionCall.js";
 import { booleanParser, literalParser } from "./literals.js";
 import { matchBlockParser } from "./matchBlock.js";
 import { optionalSemicolon } from "./parserUtils.js";
@@ -92,15 +90,9 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
       optionalSpaces,
       char("="),
       optionalSpaces,
-      capture(
-        or(
-          messageThreadParser,
-          exprParser,
-        ),
-        "value",
-      ),
+      capture(or(messageThreadParser, exprParser), "value"),
       optionalSemicolon,
-      optionalSpacesOrNewline
+      optionalSpacesOrNewline,
       //optional(newline),
     ),
   );
@@ -197,6 +189,7 @@ export const _messageThreadParser: Parser<MessageThread> = trace(
         capture(bodyParser, "body"),
         optionalSpacesOrNewline,
         char("}"),
+        optionalSpacesOrNewline,
       ),
     ),
   ),
@@ -216,6 +209,7 @@ export const _submessageThreadParser: Parser<MessageThread> = trace(
         capture(bodyParser, "body"),
         optionalSpacesOrNewline,
         char("}"),
+        optionalSpacesOrNewline,
       ),
     ),
   ),
@@ -279,19 +273,12 @@ export const handleBlockParser: Parser<HandleBlock> = trace(
     optionalSpacesOrNewline,
     str("with"),
     optionalSpaces,
-    capture(
-      or(inlineHandlerParser, functionRefHandlerParser),
-      "handler",
-    ),
+    capture(or(inlineHandlerParser, functionRefHandlerParser), "handler"),
   ),
 );
 
 const elseClauseParser: Parser<AgencyNode[]> = (input: string) => {
-  const parser = seqC(
-    optionalSpaces,
-    str("else"),
-    optionalSpaces,
-  );
+  const parser = seqC(optionalSpaces, str("else"), optionalSpaces);
   const prefixResult = parser(input);
   if (!prefixResult.success) return prefixResult;
 
@@ -323,10 +310,7 @@ export const ifParser: Parser<IfElse> = (input: string) => {
       optionalSpaces,
       char("("),
       optionalSpaces,
-      capture(
-        exprParser,
-        "condition",
-      ),
+      capture(exprParser, "condition"),
       optionalSpaces,
       char(")"),
       optionalSpaces,
@@ -349,7 +333,10 @@ export const ifParser: Parser<IfElse> = (input: string) => {
   // Try to parse an optional else clause
   const elseResult = elseClauseParser(result.rest);
   if (elseResult.success) {
-    return success({ ...result.result, elseBody: elseResult.result }, elseResult.rest);
+    return success(
+      { ...result.result, elseBody: elseResult.result },
+      elseResult.rest,
+    );
   }
 
   return result;
@@ -363,10 +350,7 @@ export const whileLoopParser: Parser<WhileLoop> = trace(
     optionalSpaces,
     char("("),
     optionalSpaces,
-    capture(
-      exprParser,
-      "condition",
-    ),
+    capture(exprParser, "condition"),
     optionalSpaces,
     char(")"),
     optionalSpaces,
@@ -405,10 +389,7 @@ export const forLoopParser: Parser<ForLoop> = trace(
     optionalSpaces,
     str("in"),
     spaces,
-    capture(
-      exprParser,
-      "iterable",
-    ),
+    capture(exprParser, "iterable"),
     optionalSpaces,
     char(")"),
     optionalSpaces,

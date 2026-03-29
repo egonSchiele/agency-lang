@@ -1,8 +1,4 @@
-node main() {
-  handle {
-  x = 1
-  foo()
-} with (data) {
-  return approve()
-}
+def myFunc() {
+  type Inner = number
+  return 1
 }

@@ -15,7 +15,7 @@ import {
 } from "tarsec";
 import { DebuggerStatement } from "../types/debuggerStatement.js";
 import { optionalSemicolon } from "./parserUtils.js";
-import { optionalSpaces } from "./utils.js";
+import { optionalSpaces, optionalSpacesOrNewline } from "./utils.js";
 
 function removeQuotes(s: string): string {
   if (
@@ -31,9 +31,8 @@ export const debuggerParser: Parser<DebuggerStatement> = seqC(
   set("type", "debuggerStatement"),
   str("debugger"),
   char("("),
-  optional(
-    capture(map(quotedString, removeQuotes), "label")
-  ),
+  optional(capture(map(quotedString, removeQuotes), "label")),
   char(")"),
   optionalSemicolon,
-)
+  optionalSpacesOrNewline,
+);

@@ -117,7 +117,7 @@ describe("agencyParser", () => {
       input: "x = 5\ny = 10\nz = 15",
       expected: {
         success: true,
-        nodeCount: 5,
+        nodeCount: 3,
       },
     },
     {
@@ -208,7 +208,7 @@ describe("parseAgency", () => {
       expected: {
         success: true,
         programType: "agencyProgram",
-        nodeCount: 5,
+        nodeCount: 4,
       },
     },
     {

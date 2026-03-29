@@ -72,9 +72,6 @@
           }
         },
         {
-          "type": "newLine"
-        },
-        {
           "type": "returnStatement",
           "value": {
             "type": "string",
@@ -93,9 +90,6 @@
               }
             ]
           }
-        },
-        {
-          "type": "newLine"
         }
       ]
     },
@@ -142,9 +136,6 @@
               }
             ]
           }
-        },
-        {
-          "type": "newLine"
         }
       ]
     },
@@ -160,9 +151,6 @@
       "parameters": [],
       "returnType": null,
       "body": [
-        {
-          "type": "newLine"
-        },
         {
           "type": "newLine"
         },
@@ -215,9 +203,6 @@
           }
         },
         {
-          "type": "newLine"
-        },
-        {
           "type": "functionCall",
           "functionName": "print",
           "arguments": [
@@ -227,11 +212,11 @@
               "scope": "local"
             }
           ]
-        },
-        {
-          "type": "newLine"
         }
       ]
+    },
+    {
+      "type": "newLine"
     },
     {
       "type": "newLine"

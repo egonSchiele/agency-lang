@@ -13,6 +13,8 @@ import {
   capture,
   captureCaptures,
   char,
+  many,
+  many1,
   newline,
   or,
   parseError,
@@ -39,24 +41,13 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
   const parser = seqC(
     set("type", "matchBlockCase"),
     optionalSpaces,
-    capture(
-      or(
-        defaultCaseParser,
-        exprParser,
-      ),
-      "caseValue",
-    ),
+    capture(or(defaultCaseParser, exprParser), "caseValue"),
     optionalSpaces,
     str("=>"),
     optionalSpaces,
-    capture(
-      or(
-        returnStatementParser,
-        assignmentParser,
-        exprParser,
-      ),
-      "body",
-    ),
+    capture(or(returnStatementParser, assignmentParser, exprParser), "body"),
+    optionalSemicolon,
+    optionalSpacesOrNewline,
   );
   return parser(input);
 };
@@ -76,10 +67,7 @@ export const matchBlockParser = seqC(
     parseError(
       "expected match cases of the form `value => expression` separated by `;` or newlines, followed by `}`",
       optionalSpacesOrNewline,
-      capture(
-        sepBy(or(semicolon, newline), or(commentParser, matchBlockParserCase)),
-        "cases",
-      ),
+      capture(many(or(commentParser, matchBlockParserCase)), "cases"),
       optionalSpaces,
       char("}"),
     ),

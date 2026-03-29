@@ -70,9 +70,6 @@
               }
             ]
           }
-        },
-        {
-          "type": "newLine"
         }
       ]
     },
@@ -119,9 +116,6 @@
               }
             ]
           }
-        },
-        {
-          "type": "newLine"
         }
       ]
     },
@@ -137,9 +131,6 @@
       "parameters": [],
       "returnType": null,
       "body": [
-        {
-          "type": "newLine"
-        },
         {
           "type": "newLine"
         },
@@ -192,12 +183,6 @@
           }
         },
         {
-          "type": "newLine"
-        },
-        {
-          "type": "newLine"
-        },
-        {
           "type": "assignment",
           "typeHint": {
             "type": "primitiveType",
@@ -241,14 +226,8 @@
             },
             "scope": "local"
           }
-        },
-        {
-          "type": "newLine"
         }
       ]
-    },
-    {
-      "type": "newLine"
     }
   ]
 }

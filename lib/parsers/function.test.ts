@@ -426,7 +426,7 @@ describe("functionParser", () => {
           returnType: null,
           docString: {
             type: "docString",
-            value: "This is a multi-line\ndocstring",
+            value: "This is a multi-line\n  docstring",
           },
           body: [
             {
@@ -1944,7 +1944,6 @@ describe("functionParser with async/sync keywords", () => {
     }
   });
 });
-
 
 describe("graphNodeParser", () => {
   const testCases = [

@@ -1,4 +1,4 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adit/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -211,21 +211,15 @@ if (__sub_1 <= 2) {
 }
 
 if (__sub_1 <= 3) {
-  
-
-  __stack.locals.__substep_1 = 4;
-}
-
-if (__sub_1 <= 4) {
-  const __sub_1_4 = __stack.locals.__substep_1_4 ?? 0;
-if (__sub_1_4 <= 0) {
+  const __sub_1_3 = __stack.locals.__substep_1_3 ?? 0;
+if (__sub_1_3 <= 0) {
   const __tid = __threads.createSubthread();
 __threads.pushActive(__tid)
 
-  __stack.locals.__substep_1_4 = 1;
+  __stack.locals.__substep_1_3 = 1;
 }
 
-if (__sub_1_4 <= 1) {
+if (__sub_1_3 <= 1) {
   __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res2 = await runPrompt({
             ctx: __ctx,
@@ -245,10 +239,10 @@ if (isInterrupt(__stack.locals.res2)) {
             return __stack.locals.res2;
           }
 
-  __stack.locals.__substep_1_4 = 2;
+  __stack.locals.__substep_1_3 = 2;
 }
 
-if (__sub_1_4 <= 2) {
+if (__sub_1_3 <= 2) {
   if (__ctx.callbacks.onCheckpoint) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
@@ -273,25 +267,19 @@ if (__sub_1_4 <= 2) {
   }
 }
 
-  __stack.locals.__substep_1_4 = 3;
+  __stack.locals.__substep_1_3 = 3;
 }
 
-if (__sub_1_4 <= 3) {
-  
-
-  __stack.locals.__substep_1_4 = 4;
-}
-
-if (__sub_1_4 <= 4) {
-  const __sub_1_4_4 = __stack.locals.__substep_1_4_4 ?? 0;
-if (__sub_1_4_4 <= 0) {
+if (__sub_1_3 <= 3) {
+  const __sub_1_3_3 = __stack.locals.__substep_1_3_3 ?? 0;
+if (__sub_1_3_3 <= 0) {
   const __tid = __threads.createSubthread();
 __threads.pushActive(__tid)
 
-  __stack.locals.__substep_1_4_4 = 1;
+  __stack.locals.__substep_1_3_3 = 1;
 }
 
-if (__sub_1_4_4 <= 1) {
+if (__sub_1_3_3 <= 1) {
   __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res3 = await runPrompt({
               ctx: __ctx,
@@ -311,10 +299,10 @@ if (isInterrupt(__stack.locals.res3)) {
               return __stack.locals.res3;
             }
 
-  __stack.locals.__substep_1_4_4 = 2;
+  __stack.locals.__substep_1_3_3 = 2;
 }
 
-if (__sub_1_4_4 <= 2) {
+if (__sub_1_3_3 <= 2) {
   if (__ctx.callbacks.onCheckpoint) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
@@ -339,37 +327,25 @@ if (__sub_1_4_4 <= 2) {
   }
 }
 
-  __stack.locals.__substep_1_4_4 = 3;
-}
-
-if (__sub_1_4_4 <= 3) {
-  
-
-  __stack.locals.__substep_1_4_4 = 4;
+  __stack.locals.__substep_1_3_3 = 3;
 }
 
 __threads.popActive();
 
 
-  __stack.locals.__substep_1_4 = 5;
+  __stack.locals.__substep_1_3 = 4;
 }
 
-if (__sub_1_4 <= 5) {
-  
-
-  __stack.locals.__substep_1_4 = 6;
-}
-
-if (__sub_1_4 <= 6) {
-  const __sub_1_4_6 = __stack.locals.__substep_1_4_6 ?? 0;
-if (__sub_1_4_6 <= 0) {
+if (__sub_1_3 <= 4) {
+  const __sub_1_3_4 = __stack.locals.__substep_1_3_4 ?? 0;
+if (__sub_1_3_4 <= 0) {
   const __tid = __threads.create();
 __threads.pushActive(__tid)
 
-  __stack.locals.__substep_1_4_6 = 1;
+  __stack.locals.__substep_1_3_4 = 1;
 }
 
-if (__sub_1_4_6 <= 1) {
+if (__sub_1_3_4 <= 1) {
   __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res5 = await runPrompt({
               ctx: __ctx,
@@ -389,10 +365,10 @@ if (isInterrupt(__stack.locals.res5)) {
               return __stack.locals.res5;
             }
 
-  __stack.locals.__substep_1_4_6 = 2;
+  __stack.locals.__substep_1_3_4 = 2;
 }
 
-if (__sub_1_4_6 <= 2) {
+if (__sub_1_3_4 <= 2) {
   if (__ctx.callbacks.onCheckpoint) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
@@ -417,49 +393,31 @@ if (__sub_1_4_6 <= 2) {
   }
 }
 
-  __stack.locals.__substep_1_4_6 = 3;
-}
-
-if (__sub_1_4_6 <= 3) {
-  
-
-  __stack.locals.__substep_1_4_6 = 4;
+  __stack.locals.__substep_1_3_4 = 3;
 }
 
 __threads.popActive();
 
 
-  __stack.locals.__substep_1_4 = 7;
-}
-
-if (__sub_1_4 <= 7) {
-  
-
-  __stack.locals.__substep_1_4 = 8;
+  __stack.locals.__substep_1_3 = 5;
 }
 
 __threads.popActive();
 
 
-  __stack.locals.__substep_1 = 5;
+  __stack.locals.__substep_1 = 4;
 }
 
-if (__sub_1 <= 5) {
-  
-
-  __stack.locals.__substep_1 = 6;
-}
-
-if (__sub_1 <= 6) {
-  const __sub_1_6 = __stack.locals.__substep_1_6 ?? 0;
-if (__sub_1_6 <= 0) {
+if (__sub_1 <= 4) {
+  const __sub_1_4 = __stack.locals.__substep_1_4 ?? 0;
+if (__sub_1_4 <= 0) {
   const __tid = __threads.createSubthread();
 __threads.pushActive(__tid)
 
-  __stack.locals.__substep_1_6 = 1;
+  __stack.locals.__substep_1_4 = 1;
 }
 
-if (__sub_1_6 <= 1) {
+if (__sub_1_4 <= 1) {
   __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res4 = await runPrompt({
             ctx: __ctx,
@@ -479,10 +437,10 @@ if (isInterrupt(__stack.locals.res4)) {
             return __stack.locals.res4;
           }
 
-  __stack.locals.__substep_1_6 = 2;
+  __stack.locals.__substep_1_4 = 2;
 }
 
-if (__sub_1_6 <= 2) {
+if (__sub_1_4 <= 2) {
   if (__ctx.callbacks.onCheckpoint) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
@@ -507,61 +465,43 @@ if (__sub_1_6 <= 2) {
   }
 }
 
-  __stack.locals.__substep_1_6 = 3;
-}
-
-if (__sub_1_6 <= 3) {
-  
-
-  __stack.locals.__substep_1_6 = 4;
+  __stack.locals.__substep_1_4 = 3;
 }
 
 __threads.popActive();
 
 
-  __stack.locals.__substep_1 = 7;
-}
-
-if (__sub_1 <= 7) {
-  
-
-  __stack.locals.__substep_1 = 8;
+  __stack.locals.__substep_1 = 5;
 }
 
 __threads.popActive();
 
 
-      
             __stack.step++;
     }
     if (__step <= 2) {
             __self.__retryable = false;
       await print(`res1`, __stack.locals.res1)
-      
             __stack.step++;
     }
     if (__step <= 3) {
             __self.__retryable = false;
       await print(`res2`, __stack.locals.res2)
-      
             __stack.step++;
     }
     if (__step <= 4) {
             __self.__retryable = false;
       await print(`res3`, __stack.locals.res3)
-      
             __stack.step++;
     }
     if (__step <= 5) {
             __self.__retryable = false;
       await print(`res4`, __stack.locals.res4)
-      
             __stack.step++;
     }
     if (__step <= 6) {
             __self.__retryable = false;
       await print(`res5`, __stack.locals.res5)
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -674,21 +614,15 @@ if (__sub_1 <= 2) {
 }
 
 if (__sub_1 <= 3) {
-  
-
-  __stack.locals.__substep_1 = 4;
-}
-
-if (__sub_1 <= 4) {
-  const __sub_1_4 = __stack.locals.__substep_1_4 ?? 0;
-if (__sub_1_4 <= 0) {
+  const __sub_1_3 = __stack.locals.__substep_1_3 ?? 0;
+if (__sub_1_3 <= 0) {
   const __tid = __threads.createSubthread();
 __threads.pushActive(__tid)
 
-  __stack.locals.__substep_1_4 = 1;
+  __stack.locals.__substep_1_3 = 1;
 }
 
-if (__sub_1_4 <= 1) {
+if (__sub_1_3 <= 1) {
   __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res2 = await runPrompt({
           ctx: __ctx,
@@ -711,10 +645,10 @@ if (isInterrupt(__stack.locals.res2)) {
           };
         }
 
-  __stack.locals.__substep_1_4 = 2;
+  __stack.locals.__substep_1_3 = 2;
 }
 
-if (__sub_1_4 <= 2) {
+if (__sub_1_3 <= 2) {
   if (__ctx.callbacks.onCheckpoint) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
@@ -739,25 +673,19 @@ if (__sub_1_4 <= 2) {
   }
 }
 
-  __stack.locals.__substep_1_4 = 3;
+  __stack.locals.__substep_1_3 = 3;
 }
 
-if (__sub_1_4 <= 3) {
-  
-
-  __stack.locals.__substep_1_4 = 4;
-}
-
-if (__sub_1_4 <= 4) {
-  const __sub_1_4_4 = __stack.locals.__substep_1_4_4 ?? 0;
-if (__sub_1_4_4 <= 0) {
+if (__sub_1_3 <= 3) {
+  const __sub_1_3_3 = __stack.locals.__substep_1_3_3 ?? 0;
+if (__sub_1_3_3 <= 0) {
   const __tid = __threads.createSubthread();
 __threads.pushActive(__tid)
 
-  __stack.locals.__substep_1_4_4 = 1;
+  __stack.locals.__substep_1_3_3 = 1;
 }
 
-if (__sub_1_4_4 <= 1) {
+if (__sub_1_3_3 <= 1) {
   __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res3 = await runPrompt({
             ctx: __ctx,
@@ -780,10 +708,10 @@ if (isInterrupt(__stack.locals.res3)) {
             };
           }
 
-  __stack.locals.__substep_1_4_4 = 2;
+  __stack.locals.__substep_1_3_3 = 2;
 }
 
-if (__sub_1_4_4 <= 2) {
+if (__sub_1_3_3 <= 2) {
   if (__ctx.callbacks.onCheckpoint) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
@@ -808,37 +736,25 @@ if (__sub_1_4_4 <= 2) {
   }
 }
 
-  __stack.locals.__substep_1_4_4 = 3;
-}
-
-if (__sub_1_4_4 <= 3) {
-  
-
-  __stack.locals.__substep_1_4_4 = 4;
+  __stack.locals.__substep_1_3_3 = 3;
 }
 
 __threads.popActive();
 
 
-  __stack.locals.__substep_1_4 = 5;
+  __stack.locals.__substep_1_3 = 4;
 }
 
-if (__sub_1_4 <= 5) {
-  
-
-  __stack.locals.__substep_1_4 = 6;
-}
-
-if (__sub_1_4 <= 6) {
-  const __sub_1_4_6 = __stack.locals.__substep_1_4_6 ?? 0;
-if (__sub_1_4_6 <= 0) {
+if (__sub_1_3 <= 4) {
+  const __sub_1_3_4 = __stack.locals.__substep_1_3_4 ?? 0;
+if (__sub_1_3_4 <= 0) {
   const __tid = __threads.create();
 __threads.pushActive(__tid)
 
-  __stack.locals.__substep_1_4_6 = 1;
+  __stack.locals.__substep_1_3_4 = 1;
 }
 
-if (__sub_1_4_6 <= 1) {
+if (__sub_1_3_4 <= 1) {
   __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res5 = await runPrompt({
             ctx: __ctx,
@@ -861,10 +777,10 @@ if (isInterrupt(__stack.locals.res5)) {
             };
           }
 
-  __stack.locals.__substep_1_4_6 = 2;
+  __stack.locals.__substep_1_3_4 = 2;
 }
 
-if (__sub_1_4_6 <= 2) {
+if (__sub_1_3_4 <= 2) {
   if (__ctx.callbacks.onCheckpoint) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
@@ -889,49 +805,31 @@ if (__sub_1_4_6 <= 2) {
   }
 }
 
-  __stack.locals.__substep_1_4_6 = 3;
-}
-
-if (__sub_1_4_6 <= 3) {
-  
-
-  __stack.locals.__substep_1_4_6 = 4;
+  __stack.locals.__substep_1_3_4 = 3;
 }
 
 __threads.popActive();
 
 
-  __stack.locals.__substep_1_4 = 7;
-}
-
-if (__sub_1_4 <= 7) {
-  
-
-  __stack.locals.__substep_1_4 = 8;
+  __stack.locals.__substep_1_3 = 5;
 }
 
 __threads.popActive();
 
 
-  __stack.locals.__substep_1 = 5;
+  __stack.locals.__substep_1 = 4;
 }
 
-if (__sub_1 <= 5) {
-  
-
-  __stack.locals.__substep_1 = 6;
-}
-
-if (__sub_1 <= 6) {
-  const __sub_1_6 = __stack.locals.__substep_1_6 ?? 0;
-if (__sub_1_6 <= 0) {
+if (__sub_1 <= 4) {
+  const __sub_1_4 = __stack.locals.__substep_1_4 ?? 0;
+if (__sub_1_4 <= 0) {
   const __tid = __threads.createSubthread();
 __threads.pushActive(__tid)
 
-  __stack.locals.__substep_1_6 = 1;
+  __stack.locals.__substep_1_4 = 1;
 }
 
-if (__sub_1_6 <= 1) {
+if (__sub_1_4 <= 1) {
   __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res4 = await runPrompt({
           ctx: __ctx,
@@ -954,10 +852,10 @@ if (isInterrupt(__stack.locals.res4)) {
           };
         }
 
-  __stack.locals.__substep_1_6 = 2;
+  __stack.locals.__substep_1_4 = 2;
 }
 
-if (__sub_1_6 <= 2) {
+if (__sub_1_4 <= 2) {
   if (__ctx.callbacks.onCheckpoint) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
@@ -982,61 +880,43 @@ if (__sub_1_6 <= 2) {
   }
 }
 
-  __stack.locals.__substep_1_6 = 3;
-}
-
-if (__sub_1_6 <= 3) {
-  
-
-  __stack.locals.__substep_1_6 = 4;
+  __stack.locals.__substep_1_4 = 3;
 }
 
 __threads.popActive();
 
 
-  __stack.locals.__substep_1 = 7;
-}
-
-if (__sub_1 <= 7) {
-  
-
-  __stack.locals.__substep_1 = 8;
+  __stack.locals.__substep_1 = 5;
 }
 
 __threads.popActive();
 
 
-    
           __stack.step++;
   }
   if (__step <= 2) {
           __self.__retryable = false;
     await print(`res1`, __stack.locals.res1)
-    
           __stack.step++;
   }
   if (__step <= 3) {
           __self.__retryable = false;
     await print(`res2`, __stack.locals.res2)
-    
           __stack.step++;
   }
   if (__step <= 4) {
           __self.__retryable = false;
     await print(`res3`, __stack.locals.res3)
-    
           __stack.step++;
   }
   if (__step <= 5) {
           __self.__retryable = false;
     await print(`res4`, __stack.locals.res4)
-    
           __stack.step++;
   }
   if (__step <= 6) {
           __self.__retryable = false;
     await print(`res5`, __stack.locals.res5)
-    
           __stack.step++;
   }
   await callHook({

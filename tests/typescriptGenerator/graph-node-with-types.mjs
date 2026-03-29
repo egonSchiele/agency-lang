@@ -1,4 +1,4 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adit/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -98,8 +98,6 @@ const __toolRegistry = {
 
 
 //  Test graph nodes with typed parameters
-
-
 graph.node("greet", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state

@@ -1,8 +1,16 @@
-import { capture, captureCaptures, parseError, Parser, seqC, set, str } from "tarsec";
+import {
+  capture,
+  captureCaptures,
+  parseError,
+  Parser,
+  seqC,
+  set,
+  str,
+} from "tarsec";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { exprParser } from "./expression.js";
 import { optionalSemicolon } from "./parserUtils.js";
-import { optionalSpaces } from "./utils.js";
+import { optionalSpaces, optionalSpacesOrNewline } from "./utils.js";
 
 export const returnStatementParser: Parser<ReturnStatement> = seqC(
   set("type", "returnStatement"),
@@ -11,11 +19,9 @@ export const returnStatementParser: Parser<ReturnStatement> = seqC(
     parseError(
       "expected a return value (expression, prompt, or literal)",
       optionalSpaces,
-      capture(
-        exprParser,
-        "value",
-      ),
+      capture(exprParser, "value"),
       optionalSemicolon,
+      optionalSpacesOrNewline,
     ),
   ),
 );

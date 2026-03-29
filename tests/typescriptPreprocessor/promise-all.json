@@ -109,9 +109,6 @@
             "value": "result",
             "scope": "local"
           }
-        },
-        {
-          "type": "newLine"
         }
       ]
     },

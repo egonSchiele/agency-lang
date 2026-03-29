@@ -1,4 +1,4 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adit/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -115,22 +115,11 @@ const __toolRegistry = {
 
 
 //  This is a single line comment at the top of the file
-
-
 //  Variable assignment with comment above
-
-
-
 //  Multiple comments
-
 //  can be placed
-
 //  on consecutive lines
-
-
-
 //  Comment before function definition
-
 export async function greet(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -167,7 +156,6 @@ const __graph = __ctx.graph;
   try {
     if (__step <= 0) {
             //  Comment inside function
-      
             __stack.step++;
     }
     if (__step <= 1) {
@@ -177,9 +165,7 @@ const __graph = __ctx.graph;
         variable: "__stack.locals.message",
         value: __stack.locals.message
       })
-      
       //  Another comment
-      
             __stack.step++;
     }
     if (__step <= 2) {
@@ -189,7 +175,6 @@ await __ctx.audit({
         value: __auditReturnValue
       })
 return __auditReturnValue
-      
             __stack.step++;
     }
   } catch (__error) {
@@ -236,7 +221,6 @@ const __graph = __ctx.graph;
   })
   if (__step <= 0) {
           //  Comment before function call
-    
           __stack.step++;
   }
   if (__step <= 1) {
@@ -257,18 +241,13 @@ if (isInterrupt(__stack.locals.result)) {
       variable: "__stack.locals.result",
       value: __stack.locals.result
     })
-    
           __stack.step++;
   }
   if (__step <= 2) {
           __self.__retryable = false;
     await print(__stack.locals.result)
-    
-    
     //  Testing comments in different contexts
-    
     //  1. Before type hints
-    
     
     
           __stack.step++;
@@ -280,10 +259,7 @@ if (isInterrupt(__stack.locals.result)) {
       variable: "__stack.locals.age",
       value: __stack.locals.age
     })
-    
-    
     //  2. Before conditionals
-    
           __stack.step++;
   }
   if (__step <= 4) {
@@ -293,7 +269,6 @@ if (isInterrupt(__stack.locals.result)) {
       variable: "__stack.locals.status",
       value: __stack.locals.status
     })
-    
           __stack.step++;
   }
   if (__step <= 5) {
@@ -325,7 +300,6 @@ if (__condbranch_5 === 0) {
     
     
     //  Final comment at end of file
-    
           __stack.step++;
   }
   await callHook({

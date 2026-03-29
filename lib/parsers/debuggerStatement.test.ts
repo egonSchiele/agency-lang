@@ -7,24 +7,20 @@ describe("debuggerParser", () => {
     const result = debuggerParser('debugger("checking mood")');
     expect(result.success).toBe(true);
     if (!result.success) throw new Error("expected success");
-    expect(result.result).toEqualWithoutLoc(
-      expect.objectContaining({
-        type: "debuggerStatement",
-        label: "checking mood",
-      }),
-    );
+    expect(result.result).toEqualWithoutLoc({
+      type: "debuggerStatement",
+      label: "checking mood",
+    });
   });
 
   it("parses debugger with single-quoted label", () => {
     const result = debuggerParser("debugger('my label')");
     expect(result.success).toBe(true);
     if (!result.success) throw new Error("expected success");
-    expect(result.result).toEqualWithoutLoc(
-      expect.objectContaining({
-        type: "debuggerStatement",
-        label: "my label",
-      }),
-    );
+    expect(result.result).toEqualWithoutLoc({
+      type: "debuggerStatement",
+      label: "my label",
+    });
   });
 
   it("does not parse debuggerFoo as debugger", () => {

@@ -7,6 +7,7 @@ import {
 import {
   capture,
   char,
+  lazy,
   manyWithJoin,
   noneOf,
   optional,
@@ -20,8 +21,7 @@ import {
   succeed,
   trace,
 } from "tarsec";
-import { valueAccessParser } from "./access.js";
-import { booleanParser, literalParser } from "./literals.js";
+import { exprParser } from "./expression.js";
 import {
   comma,
   commaWithNewline,
@@ -32,7 +32,7 @@ import {
 export const splatParser: Parser<SplatExpression> = seqC(
   set("type", "splat"),
   str("..."),
-  capture(valueAccessParser, "value"),
+  capture(lazy(() => exprParser), "value"),
 );
 
 export const agencyArrayParser: Parser<AgencyArray> = (
@@ -49,11 +49,7 @@ export const agencyArrayParser: Parser<AgencyArray> = (
           commaWithNewline,
           or(
             splatParser,
-            booleanParser,
-            valueAccessParser,
-            literalParser,
-            agencyObjectParser,
-            agencyArrayParser,
+            lazy(() => exprParser),
           ),
         ),
         "items",
@@ -80,13 +76,7 @@ export const agencyObjectKVParser: Parser<AgencyObjectKV> = (
       char(":"),
       optionalSpaces,
       capture(
-        or(
-          booleanParser,
-          valueAccessParser,
-          literalParser,
-          agencyObjectParser,
-          agencyArrayParser,
-        ),
+        lazy(() => exprParser),
         "value",
       ),
     ),

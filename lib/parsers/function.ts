@@ -70,6 +70,7 @@ import { multiLineCommentParser } from "./multiLineComment.js";
 import { keywordParser } from "./keyword.js";
 import { HandleBlock } from "@/types/handleBlock.js";
 import { debuggerParser } from "./debuggerStatement.js";
+import { exprParser } from "./expression.js";
 
 export const assignmentParser: Parser<Assignment> = (input: string) => {
   const parser = trace(
@@ -93,13 +94,8 @@ export const assignmentParser: Parser<Assignment> = (input: string) => {
       optionalSpaces,
       capture(
         or(
-          binOpParser,
           messageThreadParser,
-          booleanParser,
-          valueAccessParser,
-          agencyArrayParser,
-          agencyObjectParser,
-          literalParser,
+          exprParser,
         ),
         "value",
       ),
@@ -326,7 +322,7 @@ export const ifParser: Parser<IfElse> = (input: string) => {
       char("("),
       optionalSpaces,
       capture(
-        or(binOpParser, booleanParser, valueAccessParser, literalParser),
+        exprParser,
         "condition",
       ),
       optionalSpaces,
@@ -365,7 +361,7 @@ export const whileLoopParser: Parser<WhileLoop> = trace(
     char("("),
     optionalSpaces,
     capture(
-      or(binOpParser, booleanParser, valueAccessParser, literalParser),
+      exprParser,
       "condition",
     ),
     optionalSpaces,
@@ -407,7 +403,7 @@ export const forLoopParser: Parser<ForLoop> = trace(
     str("in"),
     spaces,
     capture(
-      or(functionCallParser, valueAccessParser, literalParser),
+      exprParser,
       "iterable",
     ),
     optionalSpaces,

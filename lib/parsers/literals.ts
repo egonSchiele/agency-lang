@@ -36,7 +36,7 @@ import {
   TextSegment,
   VariableNameLiteral,
 } from "../types.js";
-import { _valueAccessParser } from "./access.js";
+import { exprParser } from "./expression.js";
 import {
   commaWithNewline,
   optionalSpaces,
@@ -67,7 +67,7 @@ export const interpolationSegmentParser: Parser<InterpolationSegment> = (
   const parser = seqC(
     char("$"),
     char("{"),
-    capture(_valueAccessParser, "expression"),
+    capture(exprParser, "expression"),
     char("}"),
   );
 
@@ -76,17 +76,10 @@ export const interpolationSegmentParser: Parser<InterpolationSegment> = (
     return result;
   }
 
-  const exprResult = result.result.expression;
-
-  // Reject bare function calls — only variable names and value access allowed
-  if (exprResult.type === "functionCall") {
-    return failure("function calls not allowed in interpolation", input);
-  }
-
   return success(
     {
       type: "interpolation" as const,
-      expression: exprResult,
+      expression: result.result.expression,
     },
     result.rest,
   );

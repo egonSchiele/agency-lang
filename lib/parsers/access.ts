@@ -3,6 +3,7 @@ import {
   capture,
   char,
   failure,
+  lazy,
   many,
   or,
   Parser,
@@ -14,6 +15,7 @@ import {
   success,
 } from "tarsec";
 import { AccessChainElement, ValueAccess } from "../types/access.js";
+import { exprParser } from "./expression.js";
 import { _functionCallParser } from "./functionCall.js";
 import { literalParser, variableNameParser } from "./literals.js";
 import { optionalSpaces } from "./utils.js";
@@ -53,7 +55,7 @@ const indexChainParser = (input: string): ParserResult<AccessChainElement> => {
     char("["),
     optionalSpaces,
     capture(
-      or(_functionCallParser, variableNameParser, literalParser),
+      lazy(() => exprParser),
       "index",
     ),
     optionalSpaces,

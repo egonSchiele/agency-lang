@@ -1,11 +1,8 @@
-import { capture, captureCaptures, or, parseError, Parser, seqC, set, str } from "tarsec";
+import { capture, captureCaptures, parseError, Parser, seqC, set, str } from "tarsec";
 import { ReturnStatement } from "../types/returnStatement.js";
-import { valueAccessParser } from "./access.js";
-import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
-import { booleanParser, literalParser } from "./literals.js";
+import { exprParser } from "./expression.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { optionalSpaces } from "./utils.js";
-import { binOpParser } from "./binop.js";
 
 export const returnStatementParser: Parser<ReturnStatement> = seqC(
   set("type", "returnStatement"),
@@ -15,14 +12,7 @@ export const returnStatementParser: Parser<ReturnStatement> = seqC(
       "expected a return value (expression, prompt, or literal)",
       optionalSpaces,
       capture(
-        or(
-          binOpParser,
-          booleanParser,
-          valueAccessParser,
-          literalParser,
-          agencyObjectParser,
-          agencyArrayParser,
-        ),
+        exprParser,
         "value",
       ),
       optionalSemicolon,

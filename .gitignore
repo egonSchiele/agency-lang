@@ -9,3 +9,4 @@ __judge*
 skills/*
 *__result.json
 docs/local/
+docs-new/node_modules/*

@@ -233,7 +233,7 @@ export async function respondToInterrupt(args: {
   }
 
   if (metadata.debugger) {
-    execCtx.debugger = metadata.debugger;
+    execCtx.debuggerState = metadata.debugger;
   }
 
   let interruptData: InterruptData | undefined = interrupt.interruptData || {};
@@ -394,7 +394,7 @@ export async function resumeFromState(args: {
   }
 
   if (metadata.debugger) {
-    execCtx.debugger = metadata.debugger;
+    execCtx.debuggerState = metadata.debugger;
   }
 
   const nodesTraversed = execCtx.stateStack.nodesTraversed || [];

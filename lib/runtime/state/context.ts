@@ -27,7 +27,7 @@ export class RuntimeContext<T> {
   pendingPromises: PendingPromiseStore;
   graph: SimpleMachine<T>;
   _skipNextCheckpoint: boolean;
-  debugger: DebuggerState | null;
+  debuggerState: DebuggerState | null;
 
   // we need a single statelog client instance that can be used across the entire execution of the graph,
   // so that all the logs share the same traceId, so they all show up in the same trace in the Statelog dashboard.
@@ -66,7 +66,7 @@ export class RuntimeContext<T> {
     // rewindFrom sets this flag so the first sentinel skips, then clears it.
     this._skipNextCheckpoint = false;
     this.pendingPromises = new PendingPromiseStore();
-    this.debugger = null;
+    this.debuggerState = null;
     this.dirname = args.dirname;
 
     const graphConfig = {
@@ -97,7 +97,7 @@ export class RuntimeContext<T> {
     execCtx.callbacks = {};
     execCtx.onStreamLock = false;
     execCtx._skipNextCheckpoint = false;
-    execCtx.debugger = this.debugger;
+    execCtx.debuggerState = this.debuggerState;
     execCtx.pendingPromises = new PendingPromiseStore();
     execCtx.statelogClient = new StatelogClient({
       ...this.statelogConfig,

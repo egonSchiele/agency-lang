@@ -17,6 +17,6 @@ function makeMockCtx() {
 describe("RuntimeContext", () => {
   it("should initialize debugger field as null", () => {
     const ctx = makeMockCtx();
-    expect(ctx.debugger).toBeNull();
+    expect(ctx.debuggerState).toBeNull();
   });
 });

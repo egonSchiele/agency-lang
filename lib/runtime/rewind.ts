@@ -52,7 +52,7 @@ export async function rewindFrom(args: {
   }
 
   if (metadata.debugger) {
-    execCtx.debugger = metadata.debugger;
+    execCtx.debuggerState = metadata.debugger;
   }
 
   let nodeName = checkpoint.checkpoint.nodeId;
@@ -76,8 +76,7 @@ export async function rewindFrom(args: {
             isResume: true,
           },
           {
-            onNodeEnter: (id) =>
-              execCtx.stateStack.nodesTraversed.push(id),
+            onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
           },
         );
         await execCtx.pendingPromises.awaitAll();

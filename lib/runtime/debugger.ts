@@ -24,7 +24,7 @@ export async function debugStep(
     state.interruptData.interruptResponse = undefined;
   }
 
-  const dbg = ctx.debugger;
+  const dbg = ctx.debuggerState;
   if (!dbg) return undefined;
 
   // Decide whether to pause

@@ -139,6 +139,31 @@ One is new TypeScript code written for the program. This comes from the builder,
 The other is TypeScript libraries and functions that get run by the generated TypeScript code. Much of this is in the runtime directory (`lib/runtime`) or imported from other libraries such as Zod.
 As you can imagine, it's much better to have functionality in these shared libraries because then it is easily testable and refactorable, and we get type safety etc. The code for generating new TypeScript code on the other hand is much harder to work with. It's harder to read and reason about, and it doesn't have the same type safety. The TypeScript IR ameliorates some of this pain, but in general, when you are thinking of adding new features or modifying existing features, you should try to push as much of the functionality as you can into the runtime TypeScript libraries. Anything that can't be pushed to this should go in the builder if possible, especially if it is TypeScript code that may need to be manipulated later. For anything that's too complex and can't be put in the runtime libs, consider putting it in a Mustache file instead, so it's easy to read.
 
+## How to debug parser errors
+If you're having a hard time debugging a parser error, you can always use Tarsec's built-in debugger functionality. For an agency file, try running 
+
+```
+DEBUG=1 pnpm run ast foo.agency
+```
+
+The "DEBUG=1" will tell Tarsec to print debug information as the parser runs. This output will be very large, so you'll want to redirect it to a file.
+
+```
+DEBUG=1 pnpm run ast foo.agency > foo.debuglog
+```
+
+Then, you can search through the contents of the file.
+
+The file will have this format:
+
+lines that start with a `🔍` tell you what parser it's going to try.
+Lines that start with a tick mark ( ✅) mean the parser succeeded.
+Lines with a star (⭐) mean a variable was either captured with "capture" or set with "set."
+Lines that start with a cross ( ❌) mean that the parser failed.
+You can see that the lines have different levels of indentation. The indentation indicates parsers that were nested within other parsers.
+
+Each line will also contain the name of the parser as well as the full input string being tried. You can use this to narrow down the relevant sections where the parser is trying to parse the input that is failing. Then, look at lines with a cross to figure out which parser is failing.
+
 ## Core features of Agency
 
 ### Message threads

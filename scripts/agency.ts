@@ -26,6 +26,7 @@ import { agent } from "@/cli/agent.js";
 import { upload } from "@/cli/upload.js";
 import { loadEnv } from "@/utils/envfile.js";
 import { remoteRun } from "@/cli/remoteRun.js";
+import { debug } from "@/cli/debug.js";
 
 loadEnv();
 const program = new Command();
@@ -148,7 +149,11 @@ program
     const process = (contents: string) => {
       const parsedProgram = parse(contents, config);
       const info = collectProgramInfo(parsedProgram);
-      const preprocessor = new TypescriptPreprocessor(parsedProgram, config, info);
+      const preprocessor = new TypescriptPreprocessor(
+        parsedProgram,
+        config,
+        info,
+      );
       preprocessor.preprocess();
       console.log(JSON.stringify(preprocessor.program, null, 2));
     };
@@ -351,6 +356,28 @@ program
     console.log("Running files on Statelog remotely");
     await remoteRun(getConfig(), filename);
   });
+
+program
+  .command("debug")
+  .description("Debug an Agency file interactively")
+  .argument("<file>", "Agency file to debug")
+  .option("--node <name>", "Node to execute")
+  .option("--rewind-size <n>", "Rolling checkpoint window size", "30")
+  .action(
+    async (
+      file: string,
+      options: {
+        node?: string;
+        rewindSize: string;
+      },
+    ) => {
+      const config = getConfig();
+      await debug(config, file, {
+        node: options.node,
+        rewindSize: parseInt(options.rewindSize, 10),
+      });
+    },
+  );
 
 program
   .command("agent")

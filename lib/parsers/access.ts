@@ -20,6 +20,7 @@ import { _functionCallParser } from "./functionCall.js";
 import { literalParser, variableNameParser } from "./literals.js";
 import { optionalSpaces } from "./utils.js";
 import { oneOfStr } from "./parserUtils.js";
+import { withLoc } from "./loc.js";
 
 // Parse a single chain element: .method(), .property, or [index]
 const dotMethodCallParser = (
@@ -132,10 +133,8 @@ export const syncValueAccessParser = (
 export function valueAccessParser(
   input: string,
 ): ParserResult<VariableNameLiteral | FunctionCall | ValueAccess> {
-  const parser = or(
-    asyncValueAccessParser,
-    syncValueAccessParser,
-    _valueAccessParser,
+  const parser = withLoc(
+    or(asyncValueAccessParser, syncValueAccessParser, _valueAccessParser),
   );
   return parser(input);
 }

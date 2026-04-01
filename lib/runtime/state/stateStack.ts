@@ -26,13 +26,15 @@ export class State {
   step: number;
   branches?: Record<string, BranchState>;
 
-  constructor(opts: {
-    args?: Record<string, any>;
-    locals?: Record<string, any>;
-    threads?: ThreadStoreJSON | null;
-    step?: number;
-    branches?: Record<string, BranchState>;
-  } = {}) {
+  constructor(
+    opts: {
+      args?: Record<string, any>;
+      locals?: Record<string, any>;
+      threads?: ThreadStoreJSON | null;
+      step?: number;
+      branches?: Record<string, BranchState>;
+    } = {},
+  ) {
     this.args = opts.args ?? {};
     this.locals = opts.locals ?? {};
     this.threads = opts.threads ?? null;
@@ -75,7 +77,9 @@ export class State {
         json.branches[key] = {
           stack: branch.stack.toJSON(),
           ...(branch.interruptId ? { interruptId: branch.interruptId } : {}),
-          ...(branch.interruptData ? { interruptData: branch.interruptData } : {}),
+          ...(branch.interruptData
+            ? { interruptData: branch.interruptData }
+            : {}),
         };
       }
     }
@@ -95,7 +99,9 @@ export class State {
         state.branches[key] = {
           stack: StateStack.fromJSON(branch.stack),
           ...(branch.interruptId ? { interruptId: branch.interruptId } : {}),
-          ...(branch.interruptData ? { interruptData: branch.interruptData } : {}),
+          ...(branch.interruptData
+            ? { interruptData: branch.interruptData }
+            : {}),
         };
       }
     }
@@ -141,7 +147,7 @@ export class StateStack {
 
   getNewState(): State {
     if (this.mode === "deserialize" && this.deserializeStackLength <= 0) {
-      console.log("Forcing mode to serialize, nothing left to deserialize");
+      // console.log("Forcing mode to serialize, nothing left to deserialize");
       this.mode = "serialize";
     }
     if (this.mode === "serialize") {
@@ -181,6 +187,35 @@ export class StateStack {
 
   currentNodeId(): string | undefined {
     return this.nodesTraversed[this.nodesTraversed.length - 1];
+  }
+
+  /**
+   * Advance the step or substep counter for a given step path so that on
+   * interrupt resume we skip past the current debug step block.
+   *
+   * - stepPath "3"     → top-level step → increment stack.step
+   * - stepPath "4.0"   → substep inside step 4 → set __substep_4 = 0 + 1
+   * - stepPath "4.0.2" → sub-substep → set __substep_4_0 = 2 + 1
+   *
+   * The naming convention matches the builder's generated code:
+   * all segments except the last form the substep variable name (__substep_X_Y),
+   * and the value is set to lastSegment + 1 to advance past it.
+   */
+  advanceDebugStep(stepPath: string): void {
+    const frame = this.lastFrame();
+    if (!frame) return;
+
+    const segments = stepPath.split(".").map(Number);
+    if (segments.length === 1) {
+      // Top-level step
+      frame.step++;
+    } else {
+      // Substep: variable name is __substep_ + all segments except last, joined by _
+      const parentSegments = segments.slice(0, -1);
+      const varName = `__substep_${parentSegments.join("_")}`;
+      const lastSegment = segments[segments.length - 1];
+      frame.locals[varName] = lastSegment + 1;
+    }
   }
 
   toJSON(): StateStackJSON {

@@ -51,6 +51,10 @@ export async function rewindFrom(args: {
     execCtx.callbacks = metadata.callbacks;
   }
 
+  if (metadata.debugger) {
+    execCtx.debugger = metadata.debugger;
+  }
+
   let nodeName = checkpoint.checkpoint.nodeId;
 
   await execCtx.audit({

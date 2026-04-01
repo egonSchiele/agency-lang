@@ -47,7 +47,7 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   }
   if (!isApproved(__handlerResult)) {
     // No handler — propagate interrupt to TypeScript caller
-    const __checkpointId = __ctx.checkpoints.create(__ctx);
+    const __checkpointId = __ctx.checkpoints.create(__ctx, { moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}}, stepPath: {{{stepPath}}} });
     __handlerResult.checkpointId = __checkpointId;
     __handlerResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
     {{#nodeContext}}
@@ -64,6 +64,9 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
 export type TemplateType = {
   nodeContext: boolean;
   interruptArgs: string | boolean | number;
+  moduleId: string | boolean | number;
+  scopeName: string | boolean | number;
+  stepPath: string | boolean | number;
 };
 
 const render = (args: TemplateType) => {

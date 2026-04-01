@@ -227,6 +227,29 @@ export class TypeScriptBuilder {
     return scopeKey(this.getCurrentScope());
   }
 
+  /** Returns the name of the current scope (function or node name, or empty string for global). */
+  private currentScopeName(): string {
+    const scope = this.getCurrentScope();
+    if (scope.type === "function") return scope.functionName;
+    if (scope.type === "node") return scope.nodeName;
+    return "";
+  }
+
+  /** Returns the template opts for checkpoint creation (moduleId, scopeName, stepPath as JSON-quoted strings). */
+  private checkpointOpts(): {
+    moduleId: string;
+    scopeName: string;
+    stepPath: string;
+  } {
+    const path = [...this._subStepPath];
+    //path[path.length - 1] = path[path.length - 1] + 1;
+    return {
+      moduleId: JSON.stringify(this.moduleId),
+      scopeName: JSON.stringify(this.currentScopeName()),
+      stepPath: JSON.stringify(path.join(".")),
+    };
+  }
+
   private getTypeHint(varName: string): VariableType | undefined {
     return lookupType(
       this.programInfo.typeHints,
@@ -471,7 +494,11 @@ export class TypeScriptBuilder {
       sections.push(ts.statements(postprocessNodes));
     }
 
-    sections.push(ts.raw(`export const __sourceMap = ${JSON.stringify(this._sourceMapBuilder.build())};`));
+    sections.push(
+      ts.raw(
+        `export const __sourceMap = ${JSON.stringify(this._sourceMapBuilder.build())};`,
+      ),
+    );
 
     return ts.statements(sections);
   }
@@ -497,7 +524,9 @@ export class TypeScriptBuilder {
       case "multiLineComment":
         return ts.empty();
       case "matchBlock":
-        return this.insideHandlerBody ? this.processBlockPlain(node) : this.processMatchBlockWithSteps(node);
+        return this.insideHandlerBody
+          ? this.processBlockPlain(node)
+          : this.processMatchBlockWithSteps(node);
       case "number":
       case "multiLineString":
       case "string":
@@ -524,11 +553,17 @@ export class TypeScriptBuilder {
         this.importStatements.push(this.processImportToolStatement(node));
         return ts.empty();
       case "forLoop":
-        return this.insideHandlerBody ? this.processBlockPlain(node) : this.processForLoopWithSteps(node);
+        return this.insideHandlerBody
+          ? this.processBlockPlain(node)
+          : this.processForLoopWithSteps(node);
       case "whileLoop":
-        return this.insideHandlerBody ? this.processBlockPlain(node) : this.processWhileLoopWithSteps(node);
+        return this.insideHandlerBody
+          ? this.processBlockPlain(node)
+          : this.processWhileLoopWithSteps(node);
       case "ifElse":
-        return this.insideHandlerBody ? this.processBlockPlain(node) : this.processIfElseWithSteps(node);
+        return this.insideHandlerBody
+          ? this.processBlockPlain(node)
+          : this.processIfElseWithSteps(node);
       case "specialVar":
         return this.processSpecialVar(node);
       case "newLine":
@@ -558,7 +593,8 @@ export class TypeScriptBuilder {
     const keyword = node.value === "break" ? ts.break() : ts.continue();
 
     // Inside a handler body or not inside a stepped loop: emit bare keyword
-    const loopSubKey = this._loopContextStack[this._loopContextStack.length - 1];
+    const loopSubKey =
+      this._loopContextStack[this._loopContextStack.length - 1];
     if (this.insideHandlerBody || loopSubKey === undefined) {
       return keyword;
     }
@@ -724,7 +760,8 @@ export class TypeScriptBuilder {
 
     // Process a branch body, pushing/popping each statement's index onto _subStepPath
     const processBranchBody = (body: AgencyNode[]): TsNode[] => {
-      return body.map((stmt, i) => {
+      const expanded = this.insertDebugSteps(body);
+      return expanded.map((stmt, i) => {
         this._subStepPath.push(i);
         this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
         const result = this.processStatement(stmt);
@@ -782,7 +819,8 @@ export class TypeScriptBuilder {
     const subKey = subStepPath.join("_");
 
     this._loopContextStack.push(subKey);
-    const bodyNodes = node.body.map((stmt, i) => {
+    const expandedBody = this.insertDebugSteps(node.body);
+    const bodyNodes = expandedBody.map((stmt, i) => {
       this._subStepPath.push(i);
       this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
       const result = this.processStatement(stmt);
@@ -824,10 +862,18 @@ export class TypeScriptBuilder {
       return ts.forSteps({
         subStepPath,
         init: ts.letDecl(node.indexVar, ts.num(0)),
-        condition: ts.binOp(ts.id(node.indexVar), "<", ts.prop(iterableNode, "length")),
+        condition: ts.binOp(
+          ts.id(node.indexVar),
+          "<",
+          ts.prop(iterableNode, "length"),
+        ),
         update: ts.postfix(ts.id(node.indexVar), "++"),
         body: bodyNodes,
-        itemDecl: ts.varDecl("const", node.itemVar, ts.index(iterableNode, ts.id(node.indexVar))),
+        itemDecl: ts.varDecl(
+          "const",
+          node.itemVar,
+          ts.index(iterableNode, ts.id(node.indexVar)),
+        ),
       });
     }
 
@@ -836,10 +882,18 @@ export class TypeScriptBuilder {
     return ts.forSteps({
       subStepPath,
       init: ts.letDecl(indexVar, ts.num(0)),
-      condition: ts.binOp(ts.id(indexVar), "<", ts.prop(iterableNode, "length")),
+      condition: ts.binOp(
+        ts.id(indexVar),
+        "<",
+        ts.prop(iterableNode, "length"),
+      ),
       update: ts.postfix(ts.id(indexVar), "++"),
       body: bodyNodes,
-      itemDecl: ts.varDecl("const", node.itemVar, ts.index(iterableNode, ts.id(indexVar))),
+      itemDecl: ts.varDecl(
+        "const",
+        node.itemVar,
+        ts.index(iterableNode, ts.id(indexVar)),
+      ),
     });
   }
 
@@ -849,7 +903,8 @@ export class TypeScriptBuilder {
     const condition = this.processNode(node.condition);
 
     this._loopContextStack.push(subKey);
-    const bodyNodes = node.body.map((stmt, i) => {
+    const expandedBody = this.insertDebugSteps(node.body);
+    const bodyNodes = expandedBody.map((stmt, i) => {
       this._subStepPath.push(i);
       this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
       const result = this.processStatement(stmt);
@@ -865,8 +920,9 @@ export class TypeScriptBuilder {
     const subStepPath = [...this._subStepPath];
     const expression = this.processNode(node.expression);
 
-    const filteredCases = node.cases
-      .filter((c) => c.type !== "comment") as MatchBlockCase[];
+    const filteredCases = node.cases.filter(
+      (c) => c.type !== "comment",
+    ) as MatchBlockCase[];
 
     const branches: { condition: TsNode; body: TsNode[] }[] = [];
     let elseBranch: TsNode[] | undefined;
@@ -876,7 +932,11 @@ export class TypeScriptBuilder {
         elseBranch = [this.processNode(caseItem.body)];
       } else {
         branches.push({
-          condition: ts.binOp(expression, "===", this.processNode(caseItem.caseValue)),
+          condition: ts.binOp(
+            expression,
+            "===",
+            this.processNode(caseItem.caseValue),
+          ),
           body: [this.processNode(caseItem.body)],
         });
       }
@@ -918,12 +978,11 @@ export class TypeScriptBuilder {
 
   private processImportToolStatement(node: ImportToolStatement): TsNode {
     const toolNames = node.importedTools.flatMap((n) => n.importedNames);
-    const importNames = toolNames
-      .flatMap((toolName) => [
-        toolName,
-        `__${toolName}Tool`,
-        `__${toolName}ToolParams`,
-      ]);
+    const importNames = toolNames.flatMap((toolName) => [
+      toolName,
+      `__${toolName}Tool`,
+      `__${toolName}ToolParams`,
+    ]);
     return ts.importDecl({
       importKind: "named",
       names: importNames,
@@ -1245,9 +1304,9 @@ export class TypeScriptBuilder {
       const nodeContext = scope.type === "node";
       const returnBody = nodeContext
         ? ts.obj([
-          ts.setSpread(ts.runtime.state),
-          ts.set("data", ts.id(tempVar)),
-        ])
+            ts.setSpread(ts.runtime.state),
+            ts.set("data", ts.id(tempVar)),
+          ])
         : ts.obj({ data: ts.id(tempVar) });
       return ts.statements([
         ts.constDecl(tempVar, callNode),
@@ -1514,6 +1573,7 @@ export class TypeScriptBuilder {
           renderInterruptReturn.default({
             interruptArgs,
             nodeContext: true,
+            ...this.checkpointOpts(),
           }),
         );
       }
@@ -1553,6 +1613,7 @@ export class TypeScriptBuilder {
         renderInterruptReturn.default({
           interruptArgs,
           nodeContext: this.getCurrentScope().type === "node",
+          ...this.checkpointOpts(),
         }),
       );
     } else if (
@@ -1605,6 +1666,7 @@ export class TypeScriptBuilder {
           handlerApprove: makeAssign("__handlerResult.value"),
           interruptArgs,
           nodeContext: this.getCurrentScope().type === "node",
+          ...this.checkpointOpts(),
         }),
       );
     } else if (value.type === "functionCall") {
@@ -1738,9 +1800,9 @@ export class TypeScriptBuilder {
   ): TsNode {
     const _variableType = variableType ||
       this.getTypeHint(variableName) || {
-      type: "primitiveType" as const,
-      value: "string",
-    };
+        type: "primitiveType" as const,
+        value: "string",
+      };
 
     const zodSchema = mapTypeToZodSchema(
       _variableType,
@@ -1883,9 +1945,9 @@ export class TypeScriptBuilder {
       const isNodeContext = this.getCurrentScope().type === "node";
       const returnExpr = isNodeContext
         ? ts.nodeReturn({
-          messages: ts.runtime.threads,
-          data: varRef,
-        })
+            messages: ts.runtime.threads,
+            data: varRef,
+          })
         : ts.return(varRef);
       stmts.push(
         ts.if(
@@ -1896,7 +1958,6 @@ export class TypeScriptBuilder {
           ]),
         ),
       );
-
     }
 
     return ts.statements(stmts);
@@ -1915,6 +1976,7 @@ export class TypeScriptBuilder {
           targetVariable: node.data.targetVariable,
           prompt: printTs(promptNode),
           response: printTs(varRef),
+          ...this.checkpointOpts(),
         }),
       );
     }
@@ -1922,9 +1984,16 @@ export class TypeScriptBuilder {
   }
 
   private processDebuggerStatement(node: DebuggerStatement): TsNode {
+    if (!this.agencyConfig?.debugger) {
+      // Debug mode off: debugger keyword is a no-op
+      return ts.empty();
+    }
+
+    // Debug mode on: emit debugStep() call
     const code = renderDebugger.default({
-      label: node.label !== undefined ? JSON.stringify(node.label) : "undefined",
+      label: node.label !== undefined ? JSON.stringify(node.label) : "null",
       nodeContext: this.isInsideGraphNode,
+      ...this.checkpointOpts(),
     });
     return ts.raw(code);
   }
@@ -2022,7 +2091,8 @@ export class TypeScriptBuilder {
     // Body: process each statement with substep tracking
     const prevInsideMessageThread = this.insideMessageThread;
     this.insideMessageThread = true;
-    const bodyNodes = node.body.map((stmt, i) => {
+    const expandedBody = this.insertDebugSteps(node.body);
+    const bodyNodes = expandedBody.map((stmt, i) => {
       this._subStepPath = [...subStepPath];
       this._subStepPath.push(i + 1); // +1 because setup is substep 0
       this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
@@ -2049,7 +2119,9 @@ export class TypeScriptBuilder {
     return ts.threadSteps(subStepPath, createMethod, setup, bodyNodes, cleanup);
   }
 
-  private processBlockPlain(node: IfElse | WhileLoop | ForLoop | MatchBlock): TsNode {
+  private processBlockPlain(
+    node: IfElse | WhileLoop | ForLoop | MatchBlock,
+  ): TsNode {
     const processBody = (body: AgencyNode[]): TsNode =>
       ts.statements(body.map((s) => this.processNode(s)));
 
@@ -2059,7 +2131,11 @@ export class TypeScriptBuilder {
           ? this.processBlockPlain(node.elseBody[0] as IfElse)
           : processBody(node.elseBody)
         : undefined;
-      return ts.if(this.processNode(node.condition), processBody(node.thenBody), { elseBody });
+      return ts.if(
+        this.processNode(node.condition),
+        processBody(node.thenBody),
+        { elseBody },
+      );
     }
     if (node.type === "whileLoop") {
       return ts.while(this.processNode(node.condition), processBody(node.body));
@@ -2067,7 +2143,9 @@ export class TypeScriptBuilder {
     if (node.type === "matchBlock") {
       // Match compiles to if/else chain
       const expression = this.processNode(node.expression);
-      const filteredCases = node.cases.filter((c) => c.type !== "comment") as MatchBlockCase[];
+      const filteredCases = node.cases.filter(
+        (c) => c.type !== "comment",
+      ) as MatchBlockCase[];
       let result: TsNode | undefined;
       let elseBody: TsNode | undefined;
       for (const caseItem of filteredCases) {
@@ -2080,11 +2158,19 @@ export class TypeScriptBuilder {
         return elseBody ?? ts.empty();
       }
       const elseIfs = nonDefault.slice(1).map((c) => ({
-        condition: ts.binOp(expression, "===", this.processNode(c.caseValue as AgencyNode)),
+        condition: ts.binOp(
+          expression,
+          "===",
+          this.processNode(c.caseValue as AgencyNode),
+        ),
         body: this.processNode(c.body),
       }));
       return ts.if(
-        ts.binOp(expression, "===", this.processNode(nonDefault[0].caseValue as AgencyNode)),
+        ts.binOp(
+          expression,
+          "===",
+          this.processNode(nonDefault[0].caseValue as AgencyNode),
+        ),
         this.processNode(nonDefault[0].body),
         { elseIfs, elseBody },
       );
@@ -2098,16 +2184,27 @@ export class TypeScriptBuilder {
         ts.constDecl(iterableVar, iterableNode),
         ts.forC(
           ts.letDecl(node.indexVar, ts.num(0)),
-          ts.binOp(ts.id(node.indexVar), "<", ts.prop(ts.id(iterableVar), "length")),
+          ts.binOp(
+            ts.id(node.indexVar),
+            "<",
+            ts.prop(ts.id(iterableVar), "length"),
+          ),
           ts.postfix(ts.id(node.indexVar), "++"),
           ts.statements([
-            ts.constDecl(node.itemVar, ts.index(ts.id(iterableVar), ts.id(node.indexVar))),
+            ts.constDecl(
+              node.itemVar,
+              ts.index(ts.id(iterableVar), ts.id(node.indexVar)),
+            ),
             ...node.body.map((s) => this.processNode(s)),
           ]),
         ),
       ]);
     }
-    return ts.forOf(node.itemVar, this.processNode(node.iterable), processBody(node.body));
+    return ts.forOf(
+      node.itemVar,
+      this.processNode(node.iterable),
+      processBody(node.body),
+    );
   }
 
   private processHandleBlockWithSteps(node: HandleBlock): TsNode {
@@ -2157,7 +2254,8 @@ export class TypeScriptBuilder {
     }
 
     // Body: process each statement with substep tracking
-    const bodyNodes = node.body.map((stmt, i) => {
+    const expandedBody = this.insertDebugSteps(node.body);
+    const bodyNodes = expandedBody.map((stmt, i) => {
       this._subStepPath.push(i);
       this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
       const result = this.processStatement(stmt);
@@ -2168,21 +2266,33 @@ export class TypeScriptBuilder {
     return ts.handleSteps(subStepPath, handler, bodyNodes);
   }
 
+  /** In debugger mode, insert debuggerStatement nodes before each
+   *  step-triggering statement so that debugStep() is called at every
+   *  substep boundary, not just top-level steps. */
+  private insertDebugSteps(body: AgencyNode[]): AgencyNode[] {
+    if (!this.agencyConfig?.debugger) return body;
+    const expanded: AgencyNode[] = [];
+    for (const stmt of body) {
+      if (
+        !TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type) &&
+        stmt.type !== "debuggerStatement"
+      ) {
+        // Borrow the loc of the statement about to execute (see spec note on this)
+        expanded.push({
+          type: "debuggerStatement",
+          loc: stmt.loc,
+        } as DebuggerStatement);
+      }
+      expanded.push(stmt);
+    }
+    return expanded;
+  }
+
   private processBodyAsParts(
     body: AgencyNode[],
     opts: { isInSafeFunction?: boolean } = {},
   ): TsStepBlock[] {
-    // Debugger mode: insert breakpoints before each step-triggering statement
-    if (this.agencyConfig?.debugger) {
-      const expanded: AgencyNode[] = [];
-      for (const stmt of body) {
-        if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type) && stmt.type !== "debuggerStatement") {
-          expanded.push({ type: "debuggerStatement" } as DebuggerStatement);
-        }
-        expanded.push(stmt);
-      }
-      body = expanded;
-    }
+    body = this.insertDebugSteps(body);
 
     const parts: TsNode[][] = [[]];
     // Maps step index to the branch key (subStepPath) captured at processing time
@@ -2383,8 +2493,8 @@ export class TypeScriptBuilder {
                   messages: ts.id("messages"),
                   callbacks: this.agencyConfig.audit?.logFile
                     ? ts.raw(
-                      "{ onAuditLog: __defaultonAuditLog, ...callbacks }",
-                    )
+                        "{ onAuditLog: __defaultonAuditLog, ...callbacks }",
+                      )
                     : ts.id("callbacks"),
                   initializeGlobals: ts.id("__initializeGlobals"),
                 }),

@@ -14,6 +14,12 @@ export function _printJSON(obj: any): void {
 }
 
 export function _input(prompt: string): Promise<string> {
+  const override = (globalThis as any).__agencyInputOverride as
+    | ((prompt: string) => Promise<string>)
+    | undefined;
+  if (override) {
+    return override(prompt);
+  }
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,

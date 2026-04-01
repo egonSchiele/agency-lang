@@ -1,6 +1,6 @@
 import * as smoltalk from "smoltalk";
 import { RestoreSignal } from "./errors.js";
-import type { Checkpoint } from "./state/checkpointStore.js";
+import { Checkpoint } from "./state/checkpointStore.js";
 import { RuntimeContext } from "./state/context.js";
 import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
@@ -73,6 +73,20 @@ export function interrupt<T = any>(data: T): Interrupt<T> {
   };
 }
 
+export function createDebugInterrupt<T = any>(
+  data: T,
+  checkpointId: number,
+  checkpoint: Checkpoint,
+): Interrupt<T> {
+  return {
+    type: "interrupt",
+    data,
+    debugger: true,
+    checkpointId,
+    checkpoint,
+  };
+}
+
 export function isInterrupt(obj: any): obj is Interrupt {
   return obj && obj.type === "interrupt";
 }
@@ -101,16 +115,38 @@ export async function interruptWithHandlers<T = any>(
   for (let i = ctx.handlers.length - 1; i >= 0; i--) {
     const result = await ctx.handlers[i](data);
     if (result === undefined) {
-      await ctx.audit({ type: "handlerResult", handlerIndex: i, data, result: "passthrough" });
+      await ctx.audit({
+        type: "handlerResult",
+        handlerIndex: i,
+        data,
+        result: "passthrough",
+      });
       continue;
     }
     if (result.type === "rejected") {
-      await ctx.audit({ type: "handlerResult", handlerIndex: i, data, result: "rejected", value: result.value });
-      await ctx.audit({ type: "handlerDecision", data, decision: "rejected", value: result.value });
+      await ctx.audit({
+        type: "handlerResult",
+        handlerIndex: i,
+        data,
+        result: "rejected",
+        value: result.value,
+      });
+      await ctx.audit({
+        type: "handlerDecision",
+        data,
+        decision: "rejected",
+        value: result.value,
+      });
       return { type: "rejected", value: result.value };
     }
     if (result.type === "approved") {
-      await ctx.audit({ type: "handlerResult", handlerIndex: i, data, result: "approved", value: result.value });
+      await ctx.audit({
+        type: "handlerResult",
+        handlerIndex: i,
+        data,
+        result: "approved",
+        value: result.value,
+      });
       hasApproval = true;
       approvedValue = result.value;
       continue;
@@ -120,7 +156,12 @@ export async function interruptWithHandlers<T = any>(
     );
   }
   if (hasApproval) {
-    await ctx.audit({ type: "handlerDecision", data, decision: "approved", value: approvedValue });
+    await ctx.audit({
+      type: "handlerDecision",
+      data,
+      decision: "approved",
+      value: approvedValue,
+    });
     return { type: "approved", value: approvedValue };
   }
   await ctx.audit({ type: "handlerDecision", data, decision: "unhandled" });
@@ -142,7 +183,7 @@ function interruptBatch(
   interrupts: Interrupt[],
   execCtx: RuntimeContext<any>,
 ): InterruptBatch {
-  const cpId = execCtx.checkpoints.create(execCtx);
+  const cpId = execCtx.checkpoints.create(execCtx, { moduleId: "", scopeName: "", stepPath: "" });
   const cp = execCtx.checkpoints.get(cpId);
   return {
     type: "interrupt_batch",
@@ -163,17 +204,6 @@ export async function respondToInterrupt(args: {
   const interrupt = deepClone(args.interrupt);
   const interruptResponse = deepClone(args.interruptResponse);
   const { ctx, metadata = {} } = args;
-
-  // Migration shim for old-format interrupts
-  if (interrupt.state && !interrupt.checkpoint) {
-    const nodesTraversed = interrupt.state.stack.nodesTraversed || [];
-    interrupt.checkpoint = {
-      id: -1,
-      stack: interrupt.state.stack,
-      globals: interrupt.state.globals,
-      nodeId: nodesTraversed[nodesTraversed.length - 1],
-    };
-  }
 
   const checkpoint =
     interrupt.checkpoint ??
@@ -202,15 +232,24 @@ export async function respondToInterrupt(args: {
     execCtx.callbacks = metadata.callbacks;
   }
 
-  const interruptData = interrupt.interruptData || {};
+  if (metadata.debugger) {
+    execCtx.debugger = metadata.debugger;
+  }
 
-  interruptData.interruptResponse = interruptResponse;
+  let interruptData: InterruptData | undefined = interrupt.interruptData || {};
 
-  if (interruptResponse.type === "modify") {
-    interruptData.toolCall!.arguments = {
-      ...interruptData.toolCall!.arguments,
-      ...interruptResponse.newArguments,
-    };
+  if (interrupt.debugger) {
+    // Debugger-generated interrupts don't carry tool-call data
+    interruptData = undefined;
+  } else {
+    interruptData.interruptResponse = interruptResponse;
+
+    if (interruptResponse.type === "modify") {
+      interruptData.toolCall!.arguments = {
+        ...interruptData.toolCall!.arguments,
+        ...interruptResponse.newArguments,
+      };
+    }
   }
 
   let nodeName = checkpoint.nodeId;
@@ -349,6 +388,14 @@ export async function resumeFromState(args: {
   execCtx.stateStack = StateStack.fromJSON(args.state.stack);
   execCtx.stateStack.deserializeMode();
   execCtx.globals = GlobalStore.fromJSON(args.state.globals);
+
+  if (metadata.callbacks) {
+    execCtx.callbacks = metadata.callbacks;
+  }
+
+  if (metadata.debugger) {
+    execCtx.debugger = metadata.debugger;
+  }
 
   const nodesTraversed = execCtx.stateStack.nodesTraversed || [];
   let nodeName = nodesTraversed[nodesTraversed.length - 1];

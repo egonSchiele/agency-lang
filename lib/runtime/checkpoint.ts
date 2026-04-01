@@ -8,7 +8,11 @@ export async function checkpoint(
 ): Promise<number> {
   const ctx = __state.ctx;
   await ctx.pendingPromises.awaitAll();
-  return ctx.checkpoints.create(ctx);
+  return ctx.checkpoints.create(ctx, {
+    moduleId: "",
+    scopeName: "",
+    stepPath: "",
+  });
 }
 
 export function getCheckpoint(
@@ -42,7 +46,7 @@ export function restore(
     cp = checkpointIdOrCheckpoint;
   }
   ctx.checkpoints.trackRestore(cp.id);
-  ctx.checkpoints.invalidateAfter(cp.id);
+  ctx.checkpoints.deleteAfterCheckpoint(cp.id);
   ctx.pendingPromises.clear();
   throw new RestoreSignal(cp, options);
 }

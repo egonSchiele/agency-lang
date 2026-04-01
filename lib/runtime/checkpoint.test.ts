@@ -73,6 +73,18 @@ describe("checkpoint()", () => {
     expect(cp!.id).toBe(id);
     expect(cp!.nodeId).toBe("process");
   });
+
+  it("should set moduleId, scopeName, stepPath, label, and pinned to default values", async () => {
+    const ctx = makeMockCtx();
+    const id = await checkpoint(makeState(ctx));
+    const cp = ctx.checkpoints.get(id);
+    expect(cp).toBeDefined();
+    expect(cp!.moduleId).toBe("");
+    expect(cp!.scopeName).toBe("");
+    expect(cp!.stepPath).toBe("");
+    expect(cp!.label).toBeNull();
+    expect(cp!.pinned).toBe(false);
+  });
 });
 
 describe("getCheckpoint()", () => {
@@ -195,7 +207,7 @@ describe("restore()", () => {
   it("should track restores (infinite loop protection)", async () => {
     const ctx = makeMockCtx();
     ctx.checkpoints = new CheckpointStore(2); // max 2 restores
-    const id = ctx.checkpoints.create(ctx);
+    const id = ctx.checkpoints.create(ctx, { moduleId: "", scopeName: "", stepPath: "" });
     const state = makeState(ctx);
 
     try {

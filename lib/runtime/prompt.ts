@@ -309,11 +309,16 @@ async function executeToolCalls({
         continue;
       }
       if (isRejected(result)) {
-        const message = typeof result.value === "string"
-          ? result.value : "Tool call rejected by policy";
-        messages.push(smoltalk.toolMessage(message, {
-          tool_call_id: toolCall.id, name: toolCall.name,
-        }));
+        const message =
+          typeof result.value === "string"
+            ? result.value
+            : "Tool call rejected by policy";
+        messages.push(
+          smoltalk.toolMessage(message, {
+            tool_call_id: toolCall.id,
+            name: toolCall.name,
+          }),
+        );
         continue;
       }
 
@@ -393,8 +398,9 @@ export async function runPrompt(args: {
 
   // Extract tool registry entries from clientConfig.tools and split into
   // definitions (for smoltalk) and handlers (for execution).
-  const toolEntries: { definition: Tool; handler: ToolHandler }[] =
-    (args.clientConfig?.tools || []).map((entry: any) => entry);
+  const toolEntries: { definition: Tool; handler: ToolHandler }[] = (
+    args.clientConfig?.tools || []
+  ).map((entry: any) => entry);
   let tools = toolEntries
     .map((e) => e.definition)
     .filter((t) => !removedTools.includes(t.name));
@@ -403,7 +409,8 @@ export async function runPrompt(args: {
     .filter((h) => !removedTools.includes(h.name));
 
   // Remove tools key from clientConfig before passing to smoltalk
-  const { tools: _extractedTools, ...restClientConfig } = args.clientConfig || {};
+  const { tools: _extractedTools, ...restClientConfig } =
+    args.clientConfig || {};
   const clientConfig = ctx.getSmoltalkConfig(restClientConfig);
   /* in order, either:
   1. restore messages from interruptData if present (resuming after an interrupt)
@@ -482,7 +489,11 @@ export async function runPrompt(args: {
         model: clientConfig.model,
       });
 
-      const checkpointId = ctx.checkpoints.create(ctx);
+      const checkpointId = ctx.checkpoints.create(ctx, {
+        moduleId: "",
+        scopeName: "",
+        stepPath: "",
+      });
       interrupt.checkpointId = checkpointId;
       interrupt.checkpoint = ctx.checkpoints.get(checkpointId);
       return interrupt;

@@ -189,3 +189,34 @@ describe("StateStack branches serialization", () => {
     expect(branch.interruptData).toBeUndefined();
   });
 });
+
+describe("advanceDebugStep", () => {
+  it("increments stack.step for a top-level stepPath", () => {
+    const stack = new StateStack([makeFrame({ step: 3 })]);
+    stack.advanceDebugStep("3");
+    expect(stack.lastFrame().step).toBe(4);
+  });
+
+  it("sets substep counter for a two-segment stepPath", () => {
+    const stack = new StateStack([makeFrame({ step: 4, locals: {} })]);
+    stack.advanceDebugStep("4.0");
+    // Should set __substep_4 = 0 + 1 = 1
+    expect(stack.lastFrame().locals.__substep_4).toBe(1);
+    // step should NOT be incremented
+    expect(stack.lastFrame().step).toBe(4);
+  });
+
+  it("sets substep counter for a three-segment stepPath", () => {
+    const stack = new StateStack([makeFrame({ step: 4, locals: {} })]);
+    stack.advanceDebugStep("4.0.2");
+    // Should set __substep_4_0 = 2 + 1 = 3
+    expect(stack.lastFrame().locals.__substep_4_0).toBe(3);
+    expect(stack.lastFrame().step).toBe(4);
+  });
+
+  it("does nothing if no frame exists", () => {
+    const stack = new StateStack([]);
+    // Should not throw
+    stack.advanceDebugStep("0");
+  });
+});

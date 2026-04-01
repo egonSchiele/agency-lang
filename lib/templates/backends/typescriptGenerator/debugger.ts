@@ -3,25 +3,27 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `if (__state.interruptData?.interruptResponse?.type === "approve") {
-  __state.interruptData.interruptResponse = null;
-} else {
-  const __debugInterrupt = interrupt({{{label:string}}});
-  __debugInterrupt.debugger = true;
-  const __checkpointId = __ctx.checkpoints.create(__ctx);
-  __debugInterrupt.checkpointId = __checkpointId;
-  __debugInterrupt.checkpoint = __ctx.checkpoints.get(__checkpointId);
-
+export const template = `const __dbg = await debugStep(__ctx, __state, {
+  moduleId: {{{moduleId:string}}},
+  scopeName: {{{scopeName:string}}},
+  stepPath: {{{stepPath:string}}},
+  label: {{{label:string}}},
+  nodeContext: {{{nodeContext:boolean}}},
+});
+if (__dbg) {
   {{#nodeContext}}
-  return { messages: __threads, data: __debugInterrupt };
+  return { messages: __threads, data: __dbg };
   {{/nodeContext}}
-
   {{^nodeContext}}
-  return __debugInterrupt;
+  return __dbg;
   {{/nodeContext}}
-}`;
+}
+`;
 
 export type TemplateType = {
+  moduleId: string;
+  scopeName: string;
+  stepPath: string;
   label: string;
   nodeContext: boolean;
 };

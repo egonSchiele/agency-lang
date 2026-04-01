@@ -1,4 +1,4 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adit/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -11,7 +11,7 @@ import {
   RuntimeContext, MessageThread, ThreadStore,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
-  interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers,
+  interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
   rejectInterrupt as _rejectInterrupt,
@@ -81,6 +81,9 @@ export const rejectInterrupt = (interrupt: Interrupt, opts?: { overrides?: Recor
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, overrides: opts?.overrides, metadata: opts?.metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, overrides: opts?.overrides, metadata: opts?.metadata });
 export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
+
+export const __setDebugger = (dbg: any) => { __globalCtx.debugger = dbg; };
+export const __getCheckpoints = () => __globalCtx.checkpoints;
 function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("interrupt-2-deep-in-function.agency")
 }
@@ -211,7 +214,7 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   }
   if (!isApproved(__handlerResult)) {
     // No handler — propagate interrupt to TypeScript caller
-    const __checkpointId = __ctx.checkpoints.create(__ctx);
+    const __checkpointId = __ctx.checkpoints.create(__ctx, { moduleId: "interrupt-2-deep-in-function.agency", scopeName: "greet", stepPath: "1" });
     __handlerResult.checkpointId = __checkpointId;
     __handlerResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
     
@@ -334,7 +337,7 @@ if (isInterrupt(__stack.locals.response)) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
   } else {
-    const __cpId = __ctx.checkpoints.create(__ctx);
+    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "interrupt-2-deep-in-function.agency", scopeName: "foo2", stepPath: "3" });
     const __cp = __ctx.checkpoints.get(__cpId);
     await callHook({
       callbacks: __ctx.callbacks,
@@ -500,4 +503,4 @@ export async function sayHi(name: any, { messages, callbacks }: { messages?: any
 }
 export const __sayHiNodeParams = ["name"];
 export default graph
-export const __sourceMap = {"interrupt-2-deep-in-function.agency:greet":{"1":{"line":3,"col":2},"2":{"line":4,"col":2}},"interrupt-2-deep-in-function.agency:foo2":{"2":{"line":10,"col":0},"5":{"line":12,"col":2}},"interrupt-2-deep-in-function.agency:sayHi":{"2":{"line":17,"col":2},"3":{"line":18,"col":2},"6":{"line":21,"col":2}}};
+export const __sourceMap = {"interrupt-2-deep-in-function.agency:greet":{"1":{"line":1,"col":2},"2":{"line":2,"col":2}},"interrupt-2-deep-in-function.agency:foo2":{"2":{"line":8,"col":0},"4":{"line":9,"col":2},"5":{"line":10,"col":2}},"interrupt-2-deep-in-function.agency:sayHi":{"1":{"line":14,"col":2},"2":{"line":15,"col":2},"3":{"line":16,"col":2},"4":{"line":17,"col":2},"5":{"line":18,"col":2},"6":{"line":19,"col":2}}};

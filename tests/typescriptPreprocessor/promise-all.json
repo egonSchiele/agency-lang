@@ -61,19 +61,31 @@
                     "expression": {
                       "type": "variableName",
                       "value": "label",
+                      "loc": {
+                        "line": 1,
+                        "col": 27,
+                        "start": 184,
+                        "end": 189
+                      },
                       "scope": "args"
                     }
                   }
                 ]
               }
             ],
+            "loc": {
+              "line": 1,
+              "col": 11,
+              "start": 168,
+              "end": 195
+            },
             "tools": {
               "type": "usesTool",
               "toolNames": []
             }
           },
           "loc": {
-            "line": 3,
+            "line": 1,
             "col": 2,
             "start": 159,
             "end": 195
@@ -97,6 +109,12 @@
                   "expression": {
                     "type": "variableName",
                     "value": "label",
+                    "loc": {
+                      "line": 1,
+                      "col": 27,
+                      "start": 184,
+                      "end": 189
+                    },
                     "scope": "args"
                   }
                 }
@@ -110,10 +128,16 @@
           "value": {
             "type": "variableName",
             "value": "result",
+            "loc": {
+              "line": 2,
+              "col": 9,
+              "start": 202,
+              "end": 208
+            },
             "scope": "local"
           },
           "loc": {
-            "line": 4,
+            "line": 2,
             "col": 2,
             "start": 195,
             "end": 209
@@ -121,7 +145,7 @@
         }
       ],
       "loc": {
-        "line": 2,
+        "line": 0,
         "col": 0,
         "start": 119,
         "end": 210
@@ -154,13 +178,19 @@
                 ]
               }
             ],
+            "loc": {
+              "line": 6,
+              "col": 14,
+              "start": 240,
+              "end": 266
+            },
             "tools": {
               "type": "usesTool",
               "toolNames": []
             }
           },
           "loc": {
-            "line": 8,
+            "line": 6,
             "col": 2,
             "start": 228,
             "end": 266
@@ -205,13 +235,19 @@
                 ]
               }
             ],
+            "loc": {
+              "line": 7,
+              "col": 14,
+              "start": 278,
+              "end": 305
+            },
             "tools": {
               "type": "usesTool",
               "toolNames": []
             }
           },
           "loc": {
-            "line": 9,
+            "line": 7,
             "col": 2,
             "start": 266,
             "end": 305
@@ -246,6 +282,12 @@
                 "expression": {
                   "type": "variableName",
                   "value": "a",
+                  "loc": {
+                    "line": 8,
+                    "col": 16,
+                    "start": 319,
+                    "end": 320
+                  },
                   "scope": "local"
                 }
               },
@@ -258,13 +300,19 @@
                 "expression": {
                   "type": "variableName",
                   "value": "b",
+                  "loc": {
+                    "line": 8,
+                    "col": 25,
+                    "start": 328,
+                    "end": 329
+                  },
                   "scope": "local"
                 }
               }
             ]
           },
           "loc": {
-            "line": 10,
+            "line": 8,
             "col": 2,
             "start": 305,
             "end": 334
@@ -278,13 +326,25 @@
             {
               "type": "variableName",
               "value": "combined",
+              "loc": {
+                "line": 9,
+                "col": 8,
+                "start": 340,
+                "end": 348
+              },
               "scope": "local"
             }
-          ]
+          ],
+          "loc": {
+            "line": 9,
+            "col": 2,
+            "start": 334,
+            "end": 350
+          }
         }
       ],
       "loc": {
-        "line": 7,
+        "line": 5,
         "col": 0,
         "start": 212,
         "end": 351

@@ -1,4 +1,4 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adit/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -11,7 +11,7 @@ import {
   RuntimeContext, MessageThread, ThreadStore,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
-  interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers,
+  interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
   rejectInterrupt as _rejectInterrupt,
@@ -81,6 +81,9 @@ export const rejectInterrupt = (interrupt: Interrupt, opts?: { overrides?: Recor
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, overrides: opts?.overrides, metadata: opts?.metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, overrides: opts?.overrides, metadata: opts?.metadata });
 export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
+
+export const __setDebugger = (dbg: any) => { __globalCtx.debugger = dbg; };
+export const __getCheckpoints = () => __globalCtx.checkpoints;
 function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("ifElse.agency")
 }
@@ -501,4 +504,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"ifElse.agency:main":{"1":{"line":4,"col":2},"2":{"line":5,"col":2},"3":{"line":9,"col":2},"4":{"line":14,"col":2},"5":{"line":17,"col":2},"6":{"line":22,"col":2},"7":{"line":23,"col":2},"8":{"line":37,"col":2},"9":{"line":38,"col":2},"10":{"line":45,"col":2},"11":{"line":46,"col":2},"12":{"line":52,"col":2},"13":{"line":59,"col":2},"2.0":{"line":6,"col":4},"3.0":{"line":10,"col":4},"5.0":{"line":18,"col":4},"7.0":{"line":24,"col":4},"7.1":{"line":25,"col":4},"7.1.0":{"line":26,"col":6},"9.0":{"line":39,"col":4},"9.1":{"line":40,"col":4},"9.2":{"line":41,"col":4},"11.0":{"line":47,"col":4},"11.1":{"line":48,"col":4},"12.0":{"line":55,"col":4},"13.0":{"line":64,"col":4}}};
+export const __sourceMap = {"ifElse.agency:main":{"1":{"line":2,"col":2},"2":{"line":3,"col":2},"3":{"line":7,"col":2},"4":{"line":12,"col":2},"5":{"line":15,"col":2},"6":{"line":20,"col":2},"7":{"line":21,"col":2},"8":{"line":35,"col":2},"9":{"line":36,"col":2},"10":{"line":43,"col":2},"11":{"line":44,"col":2},"12":{"line":50,"col":2},"13":{"line":57,"col":2},"2.0":{"line":4,"col":4},"3.0":{"line":8,"col":4},"5.0":{"line":16,"col":4},"7.0":{"line":22,"col":4},"7.1":{"line":23,"col":4},"7.1.0":{"line":24,"col":6},"9.0":{"line":37,"col":4},"9.1":{"line":38,"col":4},"9.2":{"line":39,"col":4},"11.0":{"line":45,"col":4},"11.1":{"line":46,"col":4},"12.0":{"line":53,"col":4},"13.0":{"line":62,"col":4}}};

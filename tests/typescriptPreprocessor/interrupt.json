@@ -60,15 +60,27 @@
                     "expression": {
                       "type": "variableName",
                       "value": "action",
+                      "loc": {
+                        "line": 1,
+                        "col": 46,
+                        "start": 207,
+                        "end": 213
+                      },
                       "scope": "args"
                     }
                   }
                 ]
               }
-            ]
+            ],
+            "loc": {
+              "line": 1,
+              "col": 9,
+              "start": 170,
+              "end": 219
+            }
           },
           "loc": {
-            "line": 3,
+            "line": 1,
             "col": 2,
             "start": 163,
             "end": 219
@@ -88,13 +100,19 @@
                 "expression": {
                   "type": "variableName",
                   "value": "action",
+                  "loc": {
+                    "line": 2,
+                    "col": 23,
+                    "start": 240,
+                    "end": 246
+                  },
                   "scope": "args"
                 }
               }
             ]
           },
           "loc": {
-            "line": 4,
+            "line": 2,
             "col": 2,
             "start": 219,
             "end": 249
@@ -102,7 +120,7 @@
         }
       ],
       "loc": {
-        "line": 2,
+        "line": 0,
         "col": 0,
         "start": 119,
         "end": 250
@@ -136,6 +154,12 @@
                 "expression": {
                   "type": "variableName",
                   "value": "x",
+                  "loc": {
+                    "line": 6,
+                    "col": 12,
+                    "start": 300,
+                    "end": 301
+                  },
                   "scope": "args"
                 }
               },
@@ -146,7 +170,7 @@
             ]
           },
           "loc": {
-            "line": 8,
+            "line": 6,
             "col": 2,
             "start": 290,
             "end": 309
@@ -154,7 +178,7 @@
         }
       ],
       "loc": {
-        "line": 7,
+        "line": 5,
         "col": 0,
         "start": 252,
         "end": 310
@@ -190,6 +214,12 @@
                 ]
               }
             ],
+            "loc": {
+              "line": 11,
+              "col": 19,
+              "start": 376,
+              "end": 423
+            },
             "tools": {
               "type": "usesTool",
               "toolNames": [
@@ -199,7 +229,7 @@
             }
           },
           "loc": {
-            "line": 13,
+            "line": 11,
             "col": 0,
             "start": 357,
             "end": 423
@@ -230,13 +260,25 @@
             {
               "type": "variableName",
               "value": "result",
+              "loc": {
+                "line": 12,
+                "col": 8,
+                "start": 429,
+                "end": 435
+              },
               "scope": "local"
             }
-          ]
+          ],
+          "loc": {
+            "line": 12,
+            "col": 2,
+            "start": 423,
+            "end": 437
+          }
         }
       ],
       "loc": {
-        "line": 11,
+        "line": 9,
         "col": 0,
         "start": 312,
         "end": 438

@@ -60,15 +60,27 @@
                     "expression": {
                       "type": "variableName",
                       "value": "city",
+                      "loc": {
+                        "line": 1,
+                        "col": 46,
+                        "start": 204,
+                        "end": 208
+                      },
                       "scope": "args"
                     }
                   }
                 ]
               }
-            ]
+            ],
+            "loc": {
+              "line": 1,
+              "col": 9,
+              "start": 167,
+              "end": 212
+            }
           },
           "loc": {
-            "line": 3,
+            "line": 1,
             "col": 2,
             "start": 160,
             "end": 212
@@ -76,7 +88,7 @@
         }
       ],
       "loc": {
-        "line": 2,
+        "line": 0,
         "col": 0,
         "start": 119,
         "end": 213
@@ -110,6 +122,12 @@
                 "expression": {
                   "type": "variableName",
                   "value": "temp",
+                  "loc": {
+                    "line": 5,
+                    "col": 12,
+                    "start": 266,
+                    "end": 270
+                  },
                   "scope": "args"
                 }
               },
@@ -120,7 +138,7 @@
             ]
           },
           "loc": {
-            "line": 7,
+            "line": 5,
             "col": 2,
             "start": 256,
             "end": 281
@@ -128,7 +146,7 @@
         }
       ],
       "loc": {
-        "line": 6,
+        "line": 4,
         "col": 0,
         "start": 215,
         "end": 282
@@ -164,6 +182,12 @@
                 ]
               }
             ],
+            "loc": {
+              "line": 10,
+              "col": 21,
+              "start": 349,
+              "end": 385
+            },
             "tools": {
               "type": "usesTool",
               "toolNames": [
@@ -173,7 +197,7 @@
             }
           },
           "loc": {
-            "line": 12,
+            "line": 10,
             "col": 0,
             "start": 328,
             "end": 385
@@ -218,13 +242,19 @@
                 ]
               }
             ],
+            "loc": {
+              "line": 10,
+              "col": 75,
+              "start": 403,
+              "end": 433
+            },
             "tools": {
               "type": "usesTool",
               "toolNames": []
             }
           },
           "loc": {
-            "line": 12,
+            "line": 10,
             "col": 57,
             "start": 385,
             "end": 433
@@ -250,7 +280,7 @@
         }
       ],
       "loc": {
-        "line": 10,
+        "line": 8,
         "col": 0,
         "start": 284,
         "end": 434

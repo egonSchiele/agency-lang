@@ -1,4 +1,4 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adit/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -11,7 +11,7 @@ import {
   RuntimeContext, MessageThread, ThreadStore,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
-  interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers,
+  interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
   rejectInterrupt as _rejectInterrupt,
@@ -81,6 +81,9 @@ export const rejectInterrupt = (interrupt: Interrupt, opts?: { overrides?: Recor
 export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, overrides: opts?.overrides, metadata: opts?.metadata });
 export const resolveInterrupt = (interrupt: Interrupt, value: any, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, overrides: opts?.overrides, metadata: opts?.metadata });
 export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
+
+export const __setDebugger = (dbg: any) => { __globalCtx.debugger = dbg; };
+export const __getCheckpoints = () => __globalCtx.checkpoints;
 function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("function-with-types.agency")
 }
@@ -245,7 +248,7 @@ if (isInterrupt(__stack.locals.result)) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
   } else {
-    const __cpId = __ctx.checkpoints.create(__ctx);
+    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "add", stepPath: "2" });
     const __cp = __ctx.checkpoints.get(__cpId);
     await callHook({
       callbacks: __ctx.callbacks,
@@ -368,7 +371,7 @@ if (isInterrupt(__stack.locals.message)) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
   } else {
-    const __cpId = __ctx.checkpoints.create(__ctx);
+    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "greet", stepPath: "2" });
     const __cp = __ctx.checkpoints.get(__cpId);
     await callHook({
       callbacks: __ctx.callbacks,
@@ -494,7 +497,7 @@ if (isInterrupt(__stack.locals.output)) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
   } else {
-    const __cpId = __ctx.checkpoints.create(__ctx);
+    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "mixed", stepPath: "2" });
     const __cp = __ctx.checkpoints.get(__cpId);
     await callHook({
       callbacks: __ctx.callbacks,
@@ -617,7 +620,7 @@ if (isInterrupt(__stack.locals.result)) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
   } else {
-    const __cpId = __ctx.checkpoints.create(__ctx);
+    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "processArray", stepPath: "2" });
     const __cp = __ctx.checkpoints.get(__cpId);
     await callHook({
       callbacks: __ctx.callbacks,
@@ -740,7 +743,7 @@ if (isInterrupt(__stack.locals.result)) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
   } else {
-    const __cpId = __ctx.checkpoints.create(__ctx);
+    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "flexible", stepPath: "2" });
     const __cp = __ctx.checkpoints.get(__cpId);
     await callHook({
       callbacks: __ctx.callbacks,
@@ -1016,4 +1019,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"function-with-types.agency:add":{"1":{"line":6,"col":2},"3":{"line":7,"col":2}},"function-with-types.agency:greet":{"1":{"line":14,"col":2},"3":{"line":15,"col":2}},"function-with-types.agency:mixed":{"1":{"line":22,"col":2},"3":{"line":23,"col":2}},"function-with-types.agency:processArray":{"1":{"line":30,"col":2},"3":{"line":31,"col":2}},"function-with-types.agency:flexible":{"1":{"line":38,"col":2},"3":{"line":39,"col":2}},"function-with-types.agency:foo":{"2":{"line":44,"col":2}},"function-with-types.agency:main":{"1":{"line":49,"col":2},"2":{"line":50,"col":2},"3":{"line":51,"col":2},"4":{"line":52,"col":2},"5":{"line":53,"col":2}}};
+export const __sourceMap = {"function-with-types.agency:add":{"1":{"line":4,"col":2},"3":{"line":5,"col":2}},"function-with-types.agency:greet":{"1":{"line":12,"col":2},"3":{"line":13,"col":2}},"function-with-types.agency:mixed":{"1":{"line":20,"col":2},"3":{"line":21,"col":2}},"function-with-types.agency:processArray":{"1":{"line":28,"col":2},"3":{"line":29,"col":2}},"function-with-types.agency:flexible":{"1":{"line":36,"col":2},"3":{"line":37,"col":2}},"function-with-types.agency:foo":{"1":{"line":41,"col":2},"2":{"line":42,"col":2}},"function-with-types.agency:main":{"1":{"line":47,"col":2},"2":{"line":48,"col":2},"3":{"line":49,"col":2},"4":{"line":50,"col":2},"5":{"line":51,"col":2}}};

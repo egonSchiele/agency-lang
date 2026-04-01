@@ -52,13 +52,19 @@
                 ]
               }
             ],
+            "loc": {
+              "line": 1,
+              "col": 11,
+              "start": 148,
+              "end": 172
+            },
             "tools": {
               "type": "usesTool",
               "toolNames": []
             }
           },
           "loc": {
-            "line": 3,
+            "line": 1,
             "col": 2,
             "start": 139,
             "end": 172
@@ -87,10 +93,16 @@
           "value": {
             "type": "variableName",
             "value": "result",
+            "loc": {
+              "line": 2,
+              "col": 9,
+              "start": 179,
+              "end": 185
+            },
             "scope": "local"
           },
           "loc": {
-            "line": 4,
+            "line": 2,
             "col": 2,
             "start": 172,
             "end": 186
@@ -98,7 +110,7 @@
         }
       ],
       "loc": {
-        "line": 2,
+        "line": 0,
         "col": 0,
         "start": 119,
         "end": 187

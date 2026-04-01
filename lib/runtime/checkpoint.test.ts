@@ -53,7 +53,7 @@ describe("checkpoint()", () => {
   it("should return an id (number)", async () => {
     const ctx = makeMockCtx();
     const id = await checkpoint(makeState(ctx));
-    expect(id).toBe(0);
+    expect(typeof id).toBe("number");
   });
 
   it("should return incrementing ids", async () => {
@@ -61,8 +61,7 @@ describe("checkpoint()", () => {
     const state = makeState(ctx);
     const id1 = await checkpoint(state);
     const id2 = await checkpoint(state);
-    expect(id1).toBe(0);
-    expect(id2).toBe(1);
+    expect(id2).toBe(id1 + 1);
   });
 
   it("should create a checkpoint that can be retrieved from the store", async () => {

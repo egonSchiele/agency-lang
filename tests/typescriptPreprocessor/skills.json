@@ -31,9 +31,6 @@
       "returnType": null,
       "body": [
         {
-          "type": "newLine"
-        },
-        {
           "type": "assignment",
           "typeHint": {
             "type": "primitiveType",
@@ -67,8 +64,8 @@
           },
           "loc": {
             "line": 2,
-            "col": 0,
-            "start": 170,
+            "col": 2,
+            "start": 172,
             "end": 217
           },
           "scope": "local"

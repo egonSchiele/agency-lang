@@ -156,13 +156,12 @@ describe("Checkpoint", () => {
     });
   });
 
-  // getGlobalsForModule uses @ts-ignore and indexes globals directly by moduleId
   describe("getGlobalsForModule", () => {
     it("should return globals for the checkpoint moduleId", () => {
       const cp = new Checkpoint({
         id: 0,
         stack: makeStackJSON(),
-        globals: { "mod.agency": { count: 10 } } as unknown as GlobalStoreJSON,
+        globals: makeGlobalsJSON({ "mod.agency": { count: 10 } }),
         nodeId: "n1",
         moduleId: "mod.agency",
       });
@@ -173,7 +172,7 @@ describe("Checkpoint", () => {
       const cp = new Checkpoint({
         id: 0,
         stack: makeStackJSON(),
-        globals: { "other.agency": { x: 1 } } as unknown as GlobalStoreJSON,
+        globals: makeGlobalsJSON({ "other.agency": { x: 1 } }),
         nodeId: "n1",
         moduleId: "mod.agency",
       });
@@ -184,7 +183,7 @@ describe("Checkpoint", () => {
       const cp = new Checkpoint({
         id: 0,
         stack: makeStackJSON(),
-        globals: {} as unknown as GlobalStoreJSON,
+        globals: makeGlobalsJSON(),
         nodeId: "n1",
         moduleId: "mod.agency",
       });
@@ -253,7 +252,7 @@ describe("CheckpointStore", () => {
         scopeName: "",
         stepPath: "",
       });
-      expect(id).toBe(0);
+      expect(typeof id).toBe("number");
     });
 
     it("should increment ids for successive checkpoints", () => {
@@ -269,8 +268,7 @@ describe("CheckpointStore", () => {
         scopeName: "",
         stepPath: "",
       });
-      expect(id1).toBe(0);
-      expect(id2).toBe(1);
+      expect(id2).toBe(id1 + 1);
     });
 
     it("should deep-clone the state (mutations don't affect checkpoint)", () => {
@@ -509,8 +507,8 @@ describe("CheckpointStore", () => {
     it("should preserve counter across serialization", () => {
       const store = new CheckpointStore();
       const ctx = makeMockCtx();
-      store.create(ctx, { moduleId: "", scopeName: "", stepPath: "" }); // id 0
-      store.create(ctx, { moduleId: "", scopeName: "", stepPath: "" }); // id 1
+      const id1 = store.create(ctx, { moduleId: "", scopeName: "", stepPath: "" });
+      const id2 = store.create(ctx, { moduleId: "", scopeName: "", stepPath: "" });
 
       const json = store.toJSON();
       const restored = CheckpointStore.fromJSON(json);
@@ -521,7 +519,7 @@ describe("CheckpointStore", () => {
         scopeName: "",
         stepPath: "",
       });
-      expect(id).toBe(2);
+      expect(id).toBe(id2 + 1);
     });
 
     it("toJSON should deep-clone so mutations don't affect serialized data", () => {

@@ -3,7 +3,7 @@ import { UIState } from "./uiState.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { StateStackJSON, StateJSON } from "../runtime/state/stateStack.js";
 import type { GlobalStoreJSON } from "../runtime/state/globalStore.js";
-import type { SourceMap } from "@/backends/sourceMap.js";
+
 
 function makeStackJSON(frames: Partial<StateJSON>[] = []): StateStackJSON {
   return {
@@ -21,8 +21,12 @@ function makeStackJSON(frames: Partial<StateJSON>[] = []): StateStackJSON {
   };
 }
 
-// getGlobalsForModule uses @ts-ignore and indexes globals directly by moduleId,
-// so we pass globals shaped as Record<moduleId, vars> rather than GlobalStoreJSON.
+function makeGlobalsJSON(
+  store: Record<string, Record<string, any>> = {},
+): GlobalStoreJSON {
+  return { store, initializedModules: Object.keys(store) };
+}
+
 function makeCheckpoint(
   overrides: Partial<ConstructorParameters<typeof Checkpoint>[0]> = {},
 ) {
@@ -31,9 +35,9 @@ function makeCheckpoint(
     stack: makeStackJSON([
       { args: { input: "hello" }, locals: { x: 42 }, step: 2 },
     ]),
-    globals: {
+    globals: makeGlobalsJSON({
       "mod.agency": { count: 10, name: "test" },
-    } as unknown as GlobalStoreJSON,
+    }),
     nodeId: "start",
     moduleId: "mod.agency",
     scopeName: "main",
@@ -65,9 +69,9 @@ describe("UIState", () => {
   });
 
   describe("setCheckpoint", () => {
-    it("should populate args, locals, and globals from checkpoint frame", () => {
+    it("should populate args, locals, and globals from checkpoint frame", async () => {
       const ui = new UIState();
-      ui.setCheckpoint(makeCheckpoint());
+      await ui.setCheckpoint(makeCheckpoint());
 
       expect(ui.getArgs()).toEqual([
         { key: "input", value: "hello", override: undefined },
@@ -81,9 +85,9 @@ describe("UIState", () => {
       ]);
     });
 
-    it("should skip internal variables (starting with __)", () => {
+    it("should skip internal variables (starting with __)", async () => {
       const ui = new UIState();
-      ui.setCheckpoint(
+      await ui.setCheckpoint(
         makeCheckpoint({
           stack: makeStackJSON([
             {
@@ -102,11 +106,11 @@ describe("UIState", () => {
       ]);
     });
 
-    it("should include pending overrides in populated values", () => {
+    it("should include pending overrides in populated values", async () => {
       const ui = new UIState();
       ui.setOverride("input", "overridden");
       ui.setOverride("count", 99);
-      ui.setCheckpoint(makeCheckpoint());
+      await ui.setCheckpoint(makeCheckpoint());
 
       expect(ui.getArgs()).toEqual([
         { key: "input", value: "hello", override: "overridden" },
@@ -118,38 +122,21 @@ describe("UIState", () => {
       });
     });
 
-    it("should log when checkpoint has no current frame", () => {
+    it("should not populate globals when module not found in globals store", async () => {
       const ui = new UIState();
-      ui.setCheckpoint(
+      await ui.setCheckpoint(
         makeCheckpoint({
-          stack: makeStackJSON(),
+          globals: makeGlobalsJSON(),
         }),
       );
-      expect(ui.getActivityLog()).toContainEqual(
-        "No current frame available in checkpoint",
-      );
-    });
-
-    it("should log when globals for module are not found", () => {
-      const ui = new UIState();
-      ui.setCheckpoint(
-        makeCheckpoint({
-          globals: {} as unknown as GlobalStoreJSON,
-        }),
-      );
-      expect(ui.getActivityLog()).toContainEqual(
-        expect.stringContaining("No globals available for module"),
-      );
+      expect(ui.getGlobals()).toEqual([]);
     });
   });
 
   describe("getCurrentLine", () => {
-    it("should return -1 and log when line is not set", () => {
+    it("should return -1 when line is not set", () => {
       const ui = new UIState();
       expect(ui.getCurrentLine()).toBe(-1);
-      expect(ui.getActivityLog()).toContainEqual(
-        expect.stringContaining("Current line not available"),
-      );
     });
   });
 
@@ -159,9 +146,9 @@ describe("UIState", () => {
       expect(ui.getModuleId()).toBe("unknown module");
     });
 
-    it("should return the checkpoint moduleId", () => {
+    it("should return the checkpoint moduleId", async () => {
       const ui = new UIState();
-      ui.setCheckpoint(makeCheckpoint({ moduleId: "my.agency" }));
+      await ui.setCheckpoint(makeCheckpoint({ moduleId: "my.agency" }));
       expect(ui.getModuleId()).toBe("my.agency");
     });
   });

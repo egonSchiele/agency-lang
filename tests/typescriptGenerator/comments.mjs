@@ -249,7 +249,6 @@ if (isInterrupt(__stack.locals.result)) {
     //  Testing comments in different contexts
     //  1. Before type hints
     
-    
           __stack.step++;
   }
   if (__step <= 3) {
@@ -337,4 +336,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"comments.agency:greet":{"1":{"line":13,"col":2},"2":{"line":15,"col":2}},"comments.agency:main":{"1":{"line":20,"col":2},"2":{"line":21,"col":2},"3":{"line":26,"col":0},"4":{"line":29,"col":2}}};
+export const __sourceMap = {"comments.agency:greet":{"1":{"line":13,"col":2},"2":{"line":15,"col":2}},"comments.agency:main":{"1":{"line":20,"col":2},"2":{"line":21,"col":2},"3":{"line":26,"col":2},"4":{"line":29,"col":2}}};

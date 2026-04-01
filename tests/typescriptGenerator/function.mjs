@@ -282,7 +282,6 @@ const __graph = __ctx.graph;
         }
       })
     }
-    
           __stack.step++;
   }
   await callHook({

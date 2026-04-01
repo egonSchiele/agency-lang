@@ -122,7 +122,7 @@ const __graph = __ctx.graph;
     __stack.args["input"] = __state.data.input;
   }
   if (__step <= 0) {
-          
+      
           __stack.step++;
   }
   if (__step <= 1) {
@@ -205,4 +205,4 @@ export async function analyzeData(input: string, { messages, callbacks }: { mess
 }
 export const __analyzeDataNodeParams = ["input"];
 export default graph
-export const __sourceMap = {"skill.agency:analyzeData":{"1":{"line":2,"col":0}}};
+export const __sourceMap = {"skill.agency:analyzeData":{"1":{"line":2,"col":2}}};

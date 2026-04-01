@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { debugStep } from "./debugger.js";
 import { StateStack } from "./state/stateStack.js";
 import { GlobalStore } from "./state/globalStore.js";
+import { CheckpointStore } from "./state/checkpointStore.js";
 import { DebuggerState } from "../debugger/debuggerState.js";
 
 function makeMockCtx(debuggerState: DebuggerState | null = null) {
@@ -18,6 +19,7 @@ function makeMockCtx(debuggerState: DebuggerState | null = null) {
   return {
     stateStack,
     globals,
+    checkpoints: new CheckpointStore(),
     debugger: debuggerState,
   } as any;
 }
@@ -82,10 +84,12 @@ describe("debugStep()", () => {
     await debugStep(ctx, makeState(ctx), { ...baseInfo, label: null });
     expect(dbg.getCheckpoints().length).toBe(1);
 
-    // call again with a label — will pause and create an additional pinned checkpoint
+    // call again with a label — will pause and replace the rolling checkpoint
+    // (createRolling deduplicates by location, and both calls share the same stepPath)
     await debugStep(ctx, makeState(ctx), { ...baseInfo, label: "bp" });
-    // rolling (1 more) + pinned (1) = 3 total
-    expect(dbg.getCheckpoints().length).toBe(3);
+    // Only 1 rolling checkpoint remains (deduplicated); the interrupt checkpoint
+    // goes to ctx.checkpoints, not the debugger state
+    expect(dbg.getCheckpoints().length).toBe(1);
   });
 
   it("respects stepTarget: does NOT pause when callDepth > targetDepth", async () => {
@@ -140,7 +144,7 @@ describe("debugStep()", () => {
     expect(result).toBeDefined();
     expect(typeof result!.checkpointId).toBe("number");
     expect(result!.checkpoint).toBeDefined();
-    expect(result!.checkpoint!.pinned).toBe(true);
+    expect(result!.checkpoint!.pinned).toBe(false);
   });
 
   it("the interrupt data is the label when label is set", async () => {

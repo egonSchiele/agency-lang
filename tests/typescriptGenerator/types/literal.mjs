@@ -120,7 +120,6 @@ const __graph = __ctx.graph;
   })
   if (__step <= 0) {
           
-    
           __stack.step++;
   }
   if (__step <= 1) {
@@ -178,7 +177,6 @@ if (isInterrupt(__stack.locals.foo)) {
 }
 
     
-    
           __stack.step++;
   }
   if (__step <= 3) {
@@ -235,7 +233,6 @@ if (isInterrupt(__stack.locals.bar)) {
   }
 }
 
-    
     
           __stack.step++;
   }
@@ -332,4 +329,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"literal.agency:main":{"1":{"line":2,"col":0},"3":{"line":5,"col":0},"5":{"line":8,"col":0}}};
+export const __sourceMap = {"literal.agency:main":{"1":{"line":2,"col":2},"3":{"line":5,"col":2},"5":{"line":8,"col":2}}};

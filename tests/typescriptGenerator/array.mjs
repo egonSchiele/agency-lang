@@ -120,7 +120,6 @@ const __graph = __ctx.graph;
   })
   if (__step <= 0) {
           
-    
           __stack.step++;
   }
   if (__step <= 1) {
@@ -182,7 +181,6 @@ if (isInterrupt(__stack.locals.numbers)) {
   if (__step <= 3) {
           __self.__retryable = false;
     await print(__stack.locals.numbers)
-    
     
           __stack.step++;
   }
@@ -284,4 +282,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"array.agency:main":{"1":{"line":2,"col":0},"3":{"line":3,"col":2},"4":{"line":6,"col":0},"6":{"line":7,"col":2}}};
+export const __sourceMap = {"array.agency:main":{"1":{"line":2,"col":2},"3":{"line":3,"col":2},"4":{"line":6,"col":2},"6":{"line":7,"col":2}}};

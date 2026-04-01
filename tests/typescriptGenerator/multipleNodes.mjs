@@ -120,7 +120,6 @@ const __graph = __ctx.graph;
   })
   if (__step <= 0) {
           
-    
           __stack.step++;
   }
   if (__step <= 1) {
@@ -228,7 +227,6 @@ const __graph = __ctx.graph;
   }
   if (__step <= 0) {
           
-    
           __stack.step++;
   }
   if (__step <= 1) {
@@ -401,4 +399,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"multipleNodes.agency:greet":{"1":{"line":2,"col":0},"3":{"line":3,"col":2}},"multipleNodes.agency:processGreeting":{"1":{"line":8,"col":0},"3":{"line":9,"col":2}},"multipleNodes.agency:main":{"1":{"line":13,"col":2}}};
+export const __sourceMap = {"multipleNodes.agency:greet":{"1":{"line":2,"col":2},"3":{"line":3,"col":2}},"multipleNodes.agency:processGreeting":{"1":{"line":8,"col":2},"3":{"line":9,"col":2}},"multipleNodes.agency:main":{"1":{"line":13,"col":2}}};

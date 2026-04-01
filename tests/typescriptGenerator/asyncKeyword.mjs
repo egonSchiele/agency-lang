@@ -312,7 +312,6 @@ const __graph = __ctx.graph;
     }
     if (__step <= 1) {
             __threads.active().setMessages([])
-      
             __stack.step++;
     }
     if (__step <= 2) {
@@ -630,4 +629,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"asyncKeyword.agency:openai":{"1":{"line":1,"col":2},"3":{"line":2,"col":2}},"asyncKeyword.agency:google":{"2":{"line":7,"col":0},"4":{"line":10,"col":2}},"asyncKeyword.agency:fibs":{"1":{"line":14,"col":2}},"asyncKeyword.agency:main":{"1":{"line":18,"col":2},"2":{"line":19,"col":2},"3":{"line":20,"col":2},"5":{"line":21,"col":2},"6":{"line":22,"col":2}}};
+export const __sourceMap = {"asyncKeyword.agency:openai":{"1":{"line":1,"col":2},"3":{"line":2,"col":2}},"asyncKeyword.agency:google":{"2":{"line":7,"col":2},"4":{"line":10,"col":2}},"asyncKeyword.agency:fibs":{"1":{"line":14,"col":2}},"asyncKeyword.agency:main":{"1":{"line":18,"col":2},"2":{"line":19,"col":2},"3":{"line":20,"col":2},"5":{"line":21,"col":2},"6":{"line":22,"col":2}}};

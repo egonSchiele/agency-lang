@@ -11,6 +11,7 @@ import { resolveImports } from "@/preprocessors/importResolver.js";
 import {
   resolveAgencyImportPath,
   isStdlibImport,
+  isPkgImport,
   getStdlibDir,
 } from "../importPaths.js";
 import { renderMermaidAscii } from "beautiful-mermaid";
@@ -192,7 +193,7 @@ export function compile(
 
   for (const importPath of imports) {
     const absPath = resolveAgencyImportPath(importPath, absoluteInputFile);
-    if (config.restrictImports && !isStdlibImport(importPath)) {
+    if (config.restrictImports && !isStdlibImport(importPath) && !isPkgImport(importPath)) {
       const projectRoot = process.cwd();
       if (
         !absPath.startsWith(projectRoot + path.sep) &&
@@ -208,7 +209,7 @@ export function compile(
 
   // Update the import path in the AST to reference the new .ts file
   resolvedProgram.nodes.forEach((node) => {
-    if (node.type === "importStatement" && !isStdlibImport(node.modulePath)) {
+    if (node.type === "importStatement" && !isStdlibImport(node.modulePath) && !isPkgImport(node.modulePath)) {
       node.modulePath = node.modulePath.replace(".agency", ext);
     }
   });

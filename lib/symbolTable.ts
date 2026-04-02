@@ -4,7 +4,7 @@ import { parseAgency } from "./parser.js";
 import type { AgencyConfig } from "./config.js";
 import type { AgencyProgram } from "./types.js";
 import { walkNodes } from "./utils/node.js";
-import { resolveAgencyImportPath, isStdlibImport, getStdlibDir } from "./importPaths.js";
+import { resolveAgencyImportPath, isAgencyImport, getStdlibDir } from "./importPaths.js";
 
 export type SymbolKind = "node" | "function" | "type";
 
@@ -82,7 +82,7 @@ export function buildSymbolTable(
         visit(resolveAgencyImportPath(node.agencyFile, absPath));
       } else if (
         node.type === "importStatement" &&
-        (node.modulePath.endsWith(".agency") || isStdlibImport(node.modulePath))
+        isAgencyImport(node.modulePath)
       ) {
         visit(resolveAgencyImportPath(node.modulePath, absPath));
       }

@@ -5,15 +5,16 @@ import type {
   ImportStatement,
 } from "../types/importStatement.js";
 import type { SymbolTable } from "../symbolTable.js";
-import { resolveAgencyImportPath, isStdlibImport } from "../importPaths.js";
+import { resolveAgencyImportPath, isAgencyImport } from "../importPaths.js";
 
 /**
  * Resolve unified imports: rewrite `import { x, y } from "./foo.agency"`
  * into the appropriate specialized AST nodes (ImportNodeStatement,
  * ImportToolStatement) based on what each symbol actually is.
  *
- * Only touches ImportStatement nodes whose modulePath ends with ".agency".
- * Leaves import node / import tool statements and non-.agency imports untouched.
+ * Only touches ImportStatement nodes whose modulePath is an Agency import
+ * (.agency files, std:: imports, or pkg:: imports).
+ * Leaves import node / import tool statements and non-Agency imports untouched.
  */
 export function resolveImports(
   program: AgencyProgram,
@@ -25,7 +26,7 @@ export function resolveImports(
   for (const node of program.nodes) {
     if (
       node.type !== "importStatement" ||
-      !node.modulePath.endsWith(".agency") && !isStdlibImport(node.modulePath)
+      !isAgencyImport(node.modulePath)
     ) {
       newNodes.push(node);
       continue;

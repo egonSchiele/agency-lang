@@ -12,7 +12,7 @@ import {
   ImportStatement,
   VariableType,
 } from "@/types.js";
-import { isStdlibImport, resolveAgencyImportPath, getStdlibDir } from "../importPaths.js";
+import { isAgencyImport, resolveAgencyImportPath, getStdlibDir } from "../importPaths.js";
 import renderEvaluate from "@/templates/cli/evaluate.js";
 import renderJudgeEvaluate from "@/templates/cli/judgeEvaluate.js";
 import { compile } from "./commands.js";
@@ -324,7 +324,7 @@ export function getImports(program: AgencyProgram): string[] {
     .filter(
       (node) =>
         node.type === "importStatement" &&
-        (node.modulePath.endsWith(".agency") || isStdlibImport(node.modulePath)),
+        isAgencyImport(node.modulePath),
     )
     .map((node) => (node as ImportStatement).modulePath.trim());
 

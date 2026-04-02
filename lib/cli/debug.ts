@@ -6,6 +6,9 @@ import { getNodesOfType } from "@/utils/node.js";
 import { GraphNodeDefinition } from "@/types.js";
 import { DebuggerDriver } from "@/debugger/driver.js";
 import { DebuggerUI } from "@/debugger/ui.js";
+import { TraceReader } from "@/runtime/trace/traceReader.js";
+import { Checkpoint } from "@/runtime/state/checkpointStore.js";
+import { createDebugInterrupt } from "@/runtime/interrupts.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -15,8 +18,33 @@ export async function debug(
   options: {
     node?: string;
     rewindSize?: number;
+    trace?: string;
+    checkpoint?: string;
   } = {},
 ): Promise<void> {
+  let traceCheckpoints: Checkpoint[] | undefined;
+  if (options.trace) {
+    if (!fs.existsSync(options.trace)) {
+      console.error(`Error: Trace file not found: ${options.trace}`);
+      process.exit(1);
+    }
+    const reader = TraceReader.fromFile(options.trace);
+    if (reader.checkpoints.length === 0) {
+      console.error("Error: Trace file has no checkpoints.");
+      process.exit(1);
+    }
+    traceCheckpoints = reader.checkpoints;
+  }
+
+  if (options.checkpoint) {
+    if (!fs.existsSync(options.checkpoint)) {
+      console.error(`Error: Checkpoint file not found: ${options.checkpoint}`);
+      process.exit(1);
+    }
+    // TODO: Load checkpoint, deserialize, start live debugging from that point
+    console.log(`Loaded checkpoint from: ${options.checkpoint}`);
+    return;
+  }
   // Force debugger mode so the builder emits debugStep() calls
   const debugConfig: AgencyConfig = { ...config, debugger: true };
 
@@ -67,7 +95,10 @@ export async function debug(
   }
 
   // Create the DebuggerDriver using the module's exported wrapper functions
-  const rewindSize = options.rewindSize ?? 30;
+  const defaultRewindSize = options.rewindSize ?? 30;
+  const rewindSize = traceCheckpoints
+    ? Math.max(defaultRewindSize, traceCheckpoints.length)
+    : defaultRewindSize;
   const driver = new DebuggerDriver({
     mod: {
       approveInterrupt: mod.approveInterrupt,
@@ -79,6 +110,7 @@ export async function debug(
     sourceMap,
     rewindSize,
     ui: new DebuggerUI(),
+    checkpoints: traceCheckpoints,
   });
 
   // Set the debugger state on the RuntimeContext via the module wrapper
@@ -98,10 +130,14 @@ export async function debug(
     args = await driver.promptForNodeArgs(selectedNode.parameters);
   }
 
-  // Run the node — with debugger mode enabled, it will pause at the first
-  // debugStep() and return an interrupt immediately
-  const initialResult = await nodeFunction(...args, { callbacks });
-
-  // Hand off to the debugger loop
-  await driver.run(initialResult);
+  if (traceCheckpoints) {
+    // Trace mode: start at the last checkpoint as if the program just finished
+    const lastCp = traceCheckpoints[traceCheckpoints.length - 1];
+    const interrupt = createDebugInterrupt(undefined, lastCp.id, lastCp);
+    await driver.run({ data: interrupt });
+  } else {
+    // Normal mode: run the node, it will pause at the first debugStep()
+    const initialResult = await nodeFunction(...args, { callbacks });
+    await driver.run(initialResult);
+  }
 }

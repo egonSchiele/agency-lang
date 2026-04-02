@@ -63,13 +63,20 @@ program
 program
   .command("run")
   .description("Compile and run .agency file(s)")
-  .argument("[input]", "Paths to .agency input file")
+  .argument("<input>", "Path to .agency input file")
   .option("--resume <statefile>", "Resume execution from a saved state file")
   .option("-l, --log <file>", "Write audit log entries to a JSONL file")
-  .action((input: string, options: { resume?: string; log?: string }) => {
+  .option("--trace [file]", "Write execution trace to file (default: <input>.agencytrace)")
+  .action((input: string, options: { resume?: string; log?: string; trace?: string | true }) => {
     const config = getConfig();
     if (options.log) {
       config.audit = { ...config.audit, logFile: options.log };
+    }
+    if (options.trace) {
+      config.trace = true;
+      config.traceFile = typeof options.trace === "string"
+        ? options.trace
+        : input.replace(/\.agency$/, ".agencytrace");
     }
     run(config, input, undefined, options.resume);
   });
@@ -363,18 +370,24 @@ program
   .argument("<file>", "Agency file to debug")
   .option("--node <name>", "Node to execute")
   .option("--rewind-size <n>", "Rolling checkpoint window size", "30")
+  .option("--trace <file>", "Load and inspect a trace file (replay coming soon)")
+  .option("--checkpoint <file>", "Load and inspect a checkpoint file (replay coming soon)")
   .action(
     async (
       file: string,
       options: {
         node?: string;
         rewindSize: string;
+        trace?: string;
+        checkpoint?: string;
       },
     ) => {
       const config = getConfig();
       await debug(config, file, {
         node: options.node,
         rewindSize: parseInt(options.rewindSize, 10),
+        trace: options.trace,
+        checkpoint: options.checkpoint,
       });
     },
   );

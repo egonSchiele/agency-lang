@@ -12,6 +12,7 @@ import type { AgencyCallbacks } from "../hooks.js";
 import type { AuditEntry, AuditEntryInput } from "../audit.js";
 import type { HandlerFn } from "../types.js";
 import type { DebuggerState } from "../../debugger/debuggerState.js";
+import type { TraceWriter } from "../trace/traceWriter.js";
 
 /* bunch of stuff that every node/function in the runtime needs access to,
 that we don't want to pass as individual arguments everywhere */
@@ -28,6 +29,7 @@ export class RuntimeContext<T> {
   graph: SimpleMachine<T>;
   _skipNextCheckpoint: boolean;
   debuggerState: DebuggerState | null;
+  traceWriter: TraceWriter | null;
 
   // we need a single statelog client instance that can be used across the entire execution of the graph,
   // so that all the logs share the same traceId, so they all show up in the same trace in the Statelog dashboard.
@@ -67,6 +69,7 @@ export class RuntimeContext<T> {
     this._skipNextCheckpoint = false;
     this.pendingPromises = new PendingPromiseStore();
     this.debuggerState = null;
+    this.traceWriter = null;
     this.dirname = args.dirname;
 
     const graphConfig = {
@@ -98,6 +101,7 @@ export class RuntimeContext<T> {
     execCtx.onStreamLock = false;
     execCtx._skipNextCheckpoint = false;
     execCtx.debuggerState = this.debuggerState;
+    execCtx.traceWriter = this.traceWriter;
     execCtx.pendingPromises = new PendingPromiseStore();
     execCtx.statelogClient = new StatelogClient({
       ...this.statelogConfig,
@@ -157,6 +161,7 @@ export class RuntimeContext<T> {
     this.statelogClient = null as any;
     this.callbacks = null as any;
     this.handlers = null as any;
+    this.traceWriter = null;
   }
 
   restoreState(checkpoint: Checkpoint): void {

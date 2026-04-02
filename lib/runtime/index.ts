@@ -7,6 +7,8 @@ export { GlobalStore } from "./state/globalStore.js";
 export { MessageThread } from "./state/messageThread.js";
 export { ThreadStore } from "./state/threadStore.js";
 export { PendingPromiseStore } from "./state/pendingPromiseStore.js";
+export { TraceWriter } from "./trace/traceWriter.js";
+export { TraceReader } from "./trace/traceReader.js";
 
 export {
   deepClone,

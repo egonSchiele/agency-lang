@@ -1,6 +1,6 @@
 // lib/debugger/types.ts
 import { Checkpoint, CheckpointStore, RuntimeContext } from "@/index.js";
-import { CheckpointArgs } from "@/runtime/state/checkpointStore.js";
+import { CheckpointArgs, SourceLocationOpts } from "@/runtime/state/checkpointStore.js";
 
 export class DebuggerState {
   private mode: "stepping" | "running" = "stepping";
@@ -85,6 +85,12 @@ export class DebuggerState {
     };
   }
 
+  loadCheckpoints(checkpoints: Checkpoint[]) {
+    for (const cp of checkpoints) {
+      this.checkpoints.cloneCheckpoint(cp);
+    }
+  }
+
   pinCheckpoint(checkpointId: number, label?: string) {
     this.checkpoints.pin(checkpointId, label);
   }
@@ -98,23 +104,14 @@ export class DebuggerState {
 
   createRollingCheckpoint(
     ctx: RuntimeContext<any>,
-    opts: {
-      moduleId: string;
-      scopeName: string;
-      stepPath: string;
-    },
+    opts: SourceLocationOpts,
   ): number {
     return this.checkpoints.createRolling(ctx, opts);
   }
 
   createPinnedCheckpoint(
     ctx: RuntimeContext<any>,
-    opts: {
-      moduleId: string;
-      scopeName: string;
-      stepPath: string;
-      label: string | null;
-    },
+    opts: SourceLocationOpts & { label: string | null },
   ): number {
     return this.checkpoints.createPinned(ctx, opts);
   }
@@ -127,11 +124,7 @@ export class DebuggerState {
     return this.checkpoints.getSorted();
   }
 
-  findCheckpoint(location: {
-    moduleId: string;
-    scopeName: string;
-    stepPath: string;
-  }) {
+  findCheckpoint(location: SourceLocationOpts) {
     return this.checkpoints.findCheckpoint(location);
   }
 

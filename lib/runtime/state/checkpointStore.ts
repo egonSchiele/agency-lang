@@ -3,10 +3,12 @@ import { deepClone } from "../utils.js";
 import type { RuntimeContext } from "./context.js";
 import type { GlobalStoreJSON } from "./globalStore.js";
 import { checkpointSchema } from "./schemas.js";
+import type { SourceLocation } from "./sourceLocation.js";
 import type { StateStackJSON } from "./stateStack.js";
 
 let globalCheckpointCounter = 0;
 
+export type SourceLocationOpts = Omit<SourceLocation, "nodeId">;
 /** Reset the global checkpoint ID counter. For use in tests only. */
 export function resetGlobalCheckpointCounter(): void {
   globalCheckpointCounter = 0;
@@ -24,7 +26,7 @@ export type CheckpointArgs = {
   pinned?: boolean;
 };
 
-export class Checkpoint {
+export class Checkpoint implements SourceLocation {
   public id: number;
   public stack: StateStackJSON;
   public globals: GlobalStoreJSON;
@@ -51,6 +53,15 @@ export class Checkpoint {
     return `${this.moduleId}:${this.scopeName}`;
   }
 
+  get location(): SourceLocation {
+    return {
+      nodeId: this.nodeId,
+      moduleId: this.moduleId,
+      scopeName: this.scopeName,
+      stepPath: this.stepPath,
+    };
+  }
+
   getCurrentFrame() {
     return this.stack.stack?.at(-1);
   }
@@ -71,7 +82,7 @@ export class Checkpoint {
     );
   }
 
-  toJSON(): any {
+  toJSON() {
     return {
       id: this.id,
       stack: this.stack,
@@ -87,6 +98,24 @@ export class Checkpoint {
 
   clone(opts: Partial<CheckpointArgs> = {}): Checkpoint {
     return Checkpoint.fromJSON({ ...this.toJSON(), ...opts })!;
+  }
+
+  static fromContext(
+    ctx: RuntimeContext<any>,
+    opts: SourceLocationOpts & { label?: string | null; pinned?: boolean },
+  ): Checkpoint {
+    const nodeId = ctx.stateStack.currentNodeId();
+    if (!nodeId) {
+      throw new CheckpointError(
+        "Cannot create checkpoint: no current node id in state stack.",
+      );
+    }
+    return new Checkpoint({
+      stack: ctx.stateStack.toJSON(),
+      globals: ctx.globals.toJSON(),
+      nodeId,
+      ...opts,
+    });
   }
 
   static fromJSON(json: any): Checkpoint | null {
@@ -119,38 +148,19 @@ export class CheckpointStore {
 
   create(
     ctx: RuntimeContext<any>,
-    opts: {
-      moduleId: string;
-      scopeName: string;
-      stepPath: string;
+    opts: SourceLocationOpts & {
       label?: string | null;
       pinned?: boolean;
       removeDuplicate?: boolean;
     },
   ): number {
-    const nodeId = ctx.stateStack.currentNodeId();
-    if (!nodeId) {
-      throw new CheckpointError(
-        "Cannot create checkpoint: no current node id in state stack.",
-      );
-    }
     if (opts.removeDuplicate) {
-      this.removeDuplicate(opts.moduleId, opts.scopeName, opts.stepPath);
+      this.removeDuplicate(opts);
     }
 
-    const id = globalCheckpointCounter++;
-    this.checkpoints[id] = new Checkpoint({
-      id,
-      stack: ctx.stateStack.toJSON(),
-      globals: ctx.globals.toJSON(),
-      nodeId,
-      moduleId: opts.moduleId,
-      scopeName: opts.scopeName,
-      stepPath: opts.stepPath,
-      label: opts.label ?? null,
-      pinned: opts.pinned ?? false,
-    });
-    return id;
+    const checkpoint = Checkpoint.fromContext(ctx, opts);
+    this.checkpoints[checkpoint.id] = checkpoint;
+    return checkpoint.id;
   }
 
   cloneCheckpoint(
@@ -167,11 +177,7 @@ export class CheckpointStore {
     return id;
   }
 
-  findCheckpoint(location: {
-    moduleId: string;
-    scopeName: string;
-    stepPath: string;
-  }): Checkpoint | null {
+  findCheckpoint(location: SourceLocationOpts): Checkpoint | null {
     const sorted = this.getSorted(); // sorted by id ascending
     const currentIdx = sorted.findIndex(
       (cp) =>
@@ -197,11 +203,7 @@ export class CheckpointStore {
 
   createRolling(
     ctx: RuntimeContext<any>,
-    opts: {
-      moduleId: string;
-      scopeName: string;
-      stepPath: string;
-    },
+    opts: SourceLocationOpts,
   ): number {
     // Remove existing unpinned checkpoint at the same location to avoid duplicates
     const id = this.create(ctx, {
@@ -214,17 +216,13 @@ export class CheckpointStore {
     return id;
   }
 
-  private removeDuplicate(
-    moduleId: string,
-    scopeName: string,
-    stepPath: string,
-  ): void {
+  private removeDuplicate(location: SourceLocationOpts): void {
     for (const [id, cp] of Object.entries(this.checkpoints)) {
       if (
         !cp.pinned &&
-        cp.moduleId === moduleId &&
-        cp.scopeName === scopeName &&
-        cp.stepPath === stepPath
+        cp.moduleId === location.moduleId &&
+        cp.scopeName === location.scopeName &&
+        cp.stepPath === location.stepPath
       ) {
         delete this.checkpoints[Number(id)];
         return;
@@ -234,10 +232,7 @@ export class CheckpointStore {
 
   createPinned(
     ctx: RuntimeContext<any>,
-    opts: {
-      moduleId: string;
-      scopeName: string;
-      stepPath: string;
+    opts: SourceLocationOpts & {
       label: string | null;
     },
   ): number {

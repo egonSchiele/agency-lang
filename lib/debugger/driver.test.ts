@@ -215,7 +215,9 @@ describe("DebuggerDriver stepping", () => {
     expect(returnValue).toBe(3);
 
     // Only the initial pause, then program runs to completion with no more pauses.
-    expect(testUI.renderCalls.length).toBe(1);
+    // One more pause at the end, because once the program finishes, we restore
+    // the last interrupt, and render it again
+    expect(testUI.renderCalls.length).toBe(2);
   });
 });
 
@@ -654,8 +656,9 @@ describe("DebuggerDriver with loops", () => {
     const returnValue = result?.data !== undefined ? result.data : result;
     expect(returnValue).toBe(3);
 
-    // Only 1 render — the initial pause, then continue runs to completion
-    expect(testUI.renderCalls.length).toBe(1);
+    // 2 renders: the initial pause, then continue runs to completion,
+    // then the last interrupt is restored so the user can still interact
+    expect(testUI.renderCalls.length).toBe(2);
   });
 });
 

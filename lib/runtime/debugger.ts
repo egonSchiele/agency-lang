@@ -1,15 +1,14 @@
 import type { Interrupt } from "./interrupts.js";
 import { createDebugInterrupt } from "./interrupts.js";
+import { Checkpoint } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
+import type { SourceLocation } from "./state/sourceLocation.js";
 import type { InternalFunctionState } from "./types.js";
 
 export async function debugStep(
   ctx: RuntimeContext<any>,
   state: InternalFunctionState,
-  info: {
-    moduleId: string;
-    scopeName: string;
-    stepPath: string;
+  info: Omit<SourceLocation, "nodeId"> & {
     label: string | null;
     nodeContext: boolean;
   },
@@ -17,11 +16,14 @@ export async function debugStep(
   // If resuming from a previous debug pause, the interrupt system sets
   // interruptData.interruptResponse on the state. Clear it so downstream
   // code (e.g., runPrompt) doesn't mistake it for a tool call response.
-  // When resuming from a debug interrupt, respondToInterrupt sets
-  // interruptData.interruptResponse on the state. Clear it so downstream
-  // code (e.g., runPrompt) doesn't mistake it for a tool call response.
   if (state.interruptData?.interruptResponse) {
     state.interruptData.interruptResponse = undefined;
+  }
+
+  // Trace write path — independent of debugger
+  if (ctx.traceWriter && !ctx._skipNextCheckpoint && ctx.stateStack.currentNodeId()) {
+    const cp = Checkpoint.fromContext(ctx, info);
+    ctx.traceWriter.writeCheckpoint(cp);
   }
 
   const dbg = ctx.debuggerState;

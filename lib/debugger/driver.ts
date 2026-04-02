@@ -45,6 +45,7 @@ type DriverOpts = {
   sourceMap: SourceMap;
   rewindSize: number;
   ui: DebuggerIO;
+  checkpoints?: Checkpoint[];
 };
 
 type DriverRunOpts = Partial<{
@@ -58,6 +59,7 @@ export class DebuggerDriver {
   debuggerState: DebuggerState;
   private originalConsoleLog: typeof console.log;
   private originalConsoleError: typeof console.error;
+  private programFinished = false;
 
   constructor(opts: DriverOpts) {
     this.mod = opts.mod;
@@ -66,6 +68,11 @@ export class DebuggerDriver {
     this.debuggerState = new DebuggerState(opts.rewindSize);
     this.originalConsoleLog = console.log;
     this.originalConsoleError = console.error;
+
+    if (opts.checkpoints?.length) {
+      this.debuggerState.loadCheckpoints(opts.checkpoints);
+      this.programFinished = true;
+    }
   }
 
   async promptForNodeArgs(parameters: FunctionParameter[]): Promise<unknown[]> {
@@ -151,8 +158,25 @@ export class DebuggerDriver {
     try {
       // runNode returns { messages, data, tokens } — interrupts are in .data
       let lastCommand: DebuggerCommand | null = null;
-      while (result?.data && isInterrupt(result.data)) {
+      let lastInterrupt: Interrupt | null = null;
+      let finalResult: any = undefined;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        // we should only get here if the program has finished.
+        if (!isInterrupt(result?.data)) {
+          if (!lastInterrupt) {
+            throw new Error("Program finished without any interrupts. This shouldn't happen with the debugger enabled.");
+          }
+          this.ui.state.log(`Program finished. Return value: ${JSON.stringify(result?.data ?? result)}`);
+          this.programFinished = true;
+          finalResult = result;
+
+          // When the program finishes, restore the last interrupt so the user
+          // can keep interacting (step back, rewind, print, etc.)
+          result = { data: lastInterrupt };
+        }
         const interrupt = result.data as Interrupt;
+        lastInterrupt = interrupt;
         if (isDebugger(interrupt)) {
           // Debug pause — show state and accept stepping commands
           this.ui.state.setMode(this.debuggerState.getMode());
@@ -171,7 +195,7 @@ export class DebuggerDriver {
             continue;
           }
           if (result && result.__debuggerQuit) {
-            return undefined;
+            return finalResult;
           }
         } else {
           // User code interrupt — show it and let the user respond
@@ -192,26 +216,10 @@ export class DebuggerDriver {
             continue;
           }
           if (result && result.__debuggerQuit) {
-            return undefined;
+            return finalResult;
           }
         }
       }
-      // Program finished — show result in activity log and keep UI open
-      const returnValue = result?.data !== undefined ? result.data : result;
-      this.ui.state.log(
-        `Program finished. Return value: ${JSON.stringify(returnValue)}`,
-      );
-      this.ui.state.setMode("stepping");
-      this.ui.renderActivityOnly();
-
-      // Keep accepting commands (rewind, print, quit)
-      while (true) {
-        const command = await this.ui.waitForCommand();
-        if (command.type === "quit") {
-          break;
-        }
-      }
-      return result;
     } finally {
       this.restoreConsole();
       this.ui.destroy();
@@ -222,6 +230,12 @@ export class DebuggerDriver {
     command: DebuggerCommand,
     interrupt: Interrupt,
   ): Promise<any> {
+    const forwardCommands = ["step", "stepIn", "next", "stepOut", "continue"];
+    if (this.programFinished && forwardCommands.includes(command.type)) {
+      this.ui.state.log("Already at end of execution.");
+      return { data: interrupt };
+    }
+
     switch (command.type) {
       case "step": {
         this.debuggerState.stepping();
@@ -440,6 +454,7 @@ export class DebuggerDriver {
     opts: { preserveOverrides?: boolean } = {},
   ): Promise<any> {
     // Reset state for replay
+    this.programFinished = false;
     this.debuggerState.reset();
     this.ui.state.resetCallStack();
     this.ui.state.log(`Rewinding to checkpoint #${checkpoint.id}`);

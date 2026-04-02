@@ -23,6 +23,7 @@ import {
   TYPES_THAT_DONT_TRIGGER_NEW_PART,
 } from "@/config.js";
 import { Sentinel } from "@/types/sentinel.js";
+import type { SourceLocationOpts } from "@/runtime/state/checkpointStore.js";
 import { DebuggerStatement } from "@/types/debuggerStatement.js";
 import { SpecialVar } from "@/types/specialVar.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
@@ -30,6 +31,7 @@ import * as renderInterruptAssignment from "../templates/backends/typescriptGene
 import * as renderInterruptReturn from "../templates/backends/typescriptGenerator/interruptReturn.js";
 import * as renderRewindCheckpoint from "../templates/backends/typescriptGenerator/rewindCheckpoint.js";
 import * as renderDebugger from "../templates/backends/typescriptGenerator/debugger.js";
+import * as renderTraceSetup from "../templates/backends/typescriptGenerator/traceSetup.js";
 
 import { AgencyConfig } from "@/config.js";
 import {
@@ -236,11 +238,7 @@ export class TypeScriptBuilder {
   }
 
   /** Returns the template opts for checkpoint creation (moduleId, scopeName, stepPath as JSON-quoted strings). */
-  private checkpointOpts(): {
-    moduleId: string;
-    scopeName: string;
-    stepPath: string;
-  } {
+  private checkpointOpts(): Record<keyof SourceLocationOpts, string> {
     const path = [...this._subStepPath];
     //path[path.length - 1] = path[path.length - 1] + 1;
     return {
@@ -1993,8 +1991,8 @@ export class TypeScriptBuilder {
   }
 
   private processDebuggerStatement(node: DebuggerStatement): TsNode {
-    if (!this.agencyConfig?.debugger) {
-      // Debug mode off: debugger keyword is a no-op
+    if (!this.agencyConfig?.debugger && !this.agencyConfig?.trace) {
+      // Debug/trace mode off: debugger keyword is a no-op
       return ts.empty();
     }
 
@@ -2292,7 +2290,7 @@ export class TypeScriptBuilder {
    *  step-triggering statement so that debugStep() is called at every
    *  substep boundary, not just top-level steps. */
   private insertDebugSteps(body: AgencyNode[]): AgencyNode[] {
-    if (!this.agencyConfig?.debugger) return body;
+    if (!this.agencyConfig?.debugger && !this.agencyConfig?.trace) return body;
     const expanded: AgencyNode[] = [];
     for (const stmt of body) {
       if (
@@ -2416,6 +2414,18 @@ export class TypeScriptBuilder {
         ts.raw(
           `const __defaultonAuditLog = (entry) => { appendFileSync(__auditLogFile, JSON.stringify(entry) + "\\n"); };`,
         ),
+      ]);
+    }
+
+    if (this.agencyConfig.trace) {
+      const traceFile = this.agencyConfig.traceFile
+        || this.moduleId.replace(/\.agency$/, ".agencytrace");
+      runtimeCtx = ts.statements([
+        runtimeCtx,
+        ts.raw(renderTraceSetup.default({
+          traceFile: JSON.stringify(traceFile),
+          programId: JSON.stringify(this.moduleId),
+        })),
       ]);
     }
 

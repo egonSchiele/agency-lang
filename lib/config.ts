@@ -129,4 +129,10 @@ export interface AgencyConfig {
      * Prevents infinite restore loops. Default: 100. */
     maxRestores?: number;
   };
+
+  /** Enable execution tracing — writes checkpoints to a .agencytrace file */
+  trace?: boolean;
+
+  /** Custom path for the trace file (default: <program>.agencytrace) */
+  traceFile?: string;
 }

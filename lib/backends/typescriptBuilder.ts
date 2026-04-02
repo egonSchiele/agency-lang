@@ -2233,24 +2233,37 @@ export class TypeScriptBuilder {
         ),
       );
     } else {
-      // Function ref: wrap in arrow that calls the named function
-      handler = ts.constDecl(
-        handlerName,
-        ts.arrowFn(
-          [{ name: "__data", typeAnnotation: "any" }],
-          ts.await(
-            ts.call(ts.id(node.handler.functionName), [
-              ts.id("__data"),
-              ts.functionCallConfig({
-                ctx: ts.runtime.ctx,
-                threads: ts.newThreadStore(),
-                interruptData: ts.id("undefined"),
-              }),
-            ]),
+      const fnName = node.handler.functionName;
+      if (fnName === "approve" || fnName === "reject") {
+        // Built-in handler: wrap the built-in factory function directly
+        handler = ts.constDecl(
+          handlerName,
+          ts.arrowFn(
+            [{ name: "__data", typeAnnotation: "any" }],
+            ts.call(ts.id(fnName), [ts.id("__data")]),
+            { async: true },
           ),
-          { async: true },
-        ),
-      );
+        );
+      } else {
+        // Function ref: wrap in arrow that calls the named function
+        handler = ts.constDecl(
+          handlerName,
+          ts.arrowFn(
+            [{ name: "__data", typeAnnotation: "any" }],
+            ts.await(
+              ts.call(ts.id(node.handler.functionName), [
+                ts.id("__data"),
+                ts.functionCallConfig({
+                  ctx: ts.runtime.ctx,
+                  threads: ts.newThreadStore(),
+                  interruptData: ts.id("undefined"),
+                }),
+              ]),
+            ),
+            { async: true },
+          ),
+        );
+      }
     }
 
     // Body: process each statement with substep tracking

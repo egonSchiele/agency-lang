@@ -1,0 +1,47 @@
+log = []
+
+def foo() {
+  log.push("foo start")
+  return interrupt("check")
+  log.push("foo end")
+  return "foo result"
+}
+
+def fooWithAssign() {
+  log.push("foo start")
+  result = interrupt("check")
+  log.push("foo end")
+  return result
+}
+
+node testWithApprove() {
+  handle {
+    result = foo()
+    log.push(result)
+  } with approve
+  return log
+}
+
+node testWithReject() {
+  handle {
+    result = foo()
+    log.push(result)
+  } with reject
+  return log
+}
+
+node testWithApproveAssigned() {
+  handle {
+    result = fooWithAssign()
+    log.push(result)
+  } with approve
+  return log
+}
+
+node testWithRejectAssigned() {
+  handle {
+    result = fooWithAssign()
+    log.push(result)
+  } with reject
+  return log
+}

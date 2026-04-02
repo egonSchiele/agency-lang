@@ -1,0 +1,15 @@
+def double(n: number): number {
+  result = n * 2
+  return result
+}
+
+def addAndDouble(a, b: number): number {
+  sum = a + b
+  result = double(sum)
+  return result
+}
+
+node main() {
+  x = addAndDouble(1, 2)
+  return x
+}

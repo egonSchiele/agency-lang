@@ -74,6 +74,15 @@ const fnCallCompiled = path.join(fixtureDir, "function-call-test.ts");
 const interruptAgency = path.join(fixtureDir, "interrupt-test.agency");
 const interruptCompiled = path.join(fixtureDir, "interrupt-test.ts");
 
+const loopAgency = path.join(fixtureDir, "loop-test.agency");
+const loopCompiled = path.join(fixtureDir, "loop-test.ts");
+
+const ifElseAgency = path.join(fixtureDir, "if-else-test.agency");
+const ifElseCompiled = path.join(fixtureDir, "if-else-test.ts");
+
+const nestedAgency = path.join(fixtureDir, "nested-calls-test.agency");
+const nestedCompiled = path.join(fixtureDir, "nested-calls-test.ts");
+
 // Fresh import with cache-busting to get clean module state per test.
 // Also resets the global checkpoint ID counter so IDs from different
 // checkpoint stores (debugger vs context) remain comparable.
@@ -84,14 +93,22 @@ async function freshImport(compiledFile: string): Promise<any> {
 }
 
 // Compile all fixtures once, clean up after all tests
+const allCompiled = [
+  stepTestCompiled, fnCallCompiled, interruptCompiled,
+  loopCompiled, ifElseCompiled, nestedCompiled,
+];
+
 beforeAll(() => {
   compile({ debugger: true }, stepTestAgency, stepTestCompiled, { ts: true });
   compile({ debugger: true }, fnCallAgency, fnCallCompiled, { ts: true });
   compile({ debugger: true }, interruptAgency, interruptCompiled, { ts: true });
+  compile({ debugger: true }, loopAgency, loopCompiled, { ts: true });
+  compile({ debugger: true }, ifElseAgency, ifElseCompiled, { ts: true });
+  compile({ debugger: true }, nestedAgency, nestedCompiled, { ts: true });
 });
 
 afterAll(() => {
-  for (const f of [stepTestCompiled, fnCallCompiled, interruptCompiled]) {
+  for (const f of allCompiled) {
     try { fs.unlinkSync(f); } catch { /* ignore */ }
   }
 });
@@ -113,9 +130,9 @@ function makeDriver(mod: any, ui: DebuggerIO) {
   return driver;
 }
 
-async function getInitialResult(mod: any, driver: DebuggerDriver) {
+async function getInitialResult(mod: any, driver: DebuggerDriver, ...args: any[]) {
   const callbacks = driver.getCallbacks();
-  const initialResult = await mod.main({ callbacks });
+  const initialResult = await mod.main(...args, { callbacks });
 
   // The initial call should have hit a debugStep and returned an interrupt
   expect(initialResult?.data).toBeDefined();
@@ -604,5 +621,149 @@ describe("DebuggerDriver save and load", () => {
 
     const returnValue = result?.data !== undefined ? result.data : result;
     expect(returnValue).toBe(12);
+  });
+});
+
+describe("DebuggerDriver with loops", () => {
+  it("steps through a for loop, pausing on each iteration", async () => {
+    // loop-test: sum = 0, for i in range(3) { sum = sum + i }, return sum
+    // Expected result: 0 + 1 + 2 = 3
+    const mod = await freshImport(loopCompiled);
+    const commands: DebuggerCommand[] = Array(30).fill({ type: "step" });
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    const result = await driver.run(initialResult, { interceptConsole: false });
+
+    const returnValue = result?.data !== undefined ? result.data : result;
+    expect(returnValue).toBe(3);
+
+    // We should have multiple renders — the loop body executes 3 times,
+    // so there should be repeated step paths from inside the loop.
+    expect(testUI.renderCalls.length).toBeGreaterThan(3);
+  });
+
+  it("continue runs through the entire loop without pausing", async () => {
+    const mod = await freshImport(loopCompiled);
+    const commands: DebuggerCommand[] = [{ type: "continue" }];
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    const result = await driver.run(initialResult, { interceptConsole: false });
+
+    const returnValue = result?.data !== undefined ? result.data : result;
+    expect(returnValue).toBe(3);
+
+    // Only 1 render — the initial pause, then continue runs to completion
+    expect(testUI.renderCalls.length).toBe(1);
+  });
+});
+
+describe("DebuggerDriver with if/else", () => {
+  it("steps through the then branch when condition is true", async () => {
+    // if-else-test: if (x > 0) { result = "positive" } else { result = "non-positive" }
+    const mod = await freshImport(ifElseCompiled);
+    const commands: DebuggerCommand[] = Array(20).fill({ type: "step" });
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver, 5);
+    const result = await driver.run(initialResult, { interceptConsole: false });
+
+    const returnValue = result?.data !== undefined ? result.data : result;
+    expect(returnValue).toBe("positive");
+  });
+
+  it("steps through the else branch when condition is false", async () => {
+    const mod = await freshImport(ifElseCompiled);
+    const commands: DebuggerCommand[] = Array(20).fill({ type: "step" });
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver, -1);
+    const result = await driver.run(initialResult, { interceptConsole: false });
+
+    const returnValue = result?.data !== undefined ? result.data : result;
+    expect(returnValue).toBe("non-positive");
+  });
+});
+
+describe("DebuggerDriver with nested function calls", () => {
+  // nested-calls-test:
+  //   def double(n) { result = n * 2; return result }
+  //   def addAndDouble(a, b) { sum = a + b; result = double(sum); return result }
+  //   node main() { x = addAndDouble(1, 2); return x }
+  // Expected: double(1 + 2) = double(3) = 6
+
+  it("stepIn reaches the innermost function", async () => {
+    const mod = await freshImport(nestedCompiled);
+    const commands: DebuggerCommand[] = [
+      { type: "stepIn" },  // main → enter addAndDouble (addAndDouble:1)
+      { type: "step" },    // addAndDouble: sum = a + b (addAndDouble:3)
+      { type: "step" },    // past sum = a + b (addAndDouble:5)
+      { type: "stepIn" },  // addAndDouble: result = double(sum) → enter double
+      ...Array(20).fill({ type: "step" }),
+    ];
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    const result = await driver.run(initialResult, { interceptConsole: false });
+
+    const returnValue = result?.data !== undefined ? result.data : result;
+    expect(returnValue).toBe(6);
+
+    const scopeNames = testUI.renderCalls.map((cp) => cp.scopeName);
+    // Should visit all three scopes
+    expect(scopeNames).toContain("main");
+    expect(scopeNames).toContain("addAndDouble");
+    expect(scopeNames).toContain("double");
+  });
+
+  it("next at top level skips all nested calls", async () => {
+    const mod = await freshImport(nestedCompiled);
+    const commands: DebuggerCommand[] = [
+      { type: "next" },  // main: x = addAndDouble(1, 2) → step OVER
+      ...Array(10).fill({ type: "step" }),
+    ];
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    const result = await driver.run(initialResult, { interceptConsole: false });
+
+    const returnValue = result?.data !== undefined ? result.data : result;
+    expect(returnValue).toBe(6);
+
+    const scopeNames = testUI.renderCalls.map((cp) => cp.scopeName);
+    // Should only visit main — both addAndDouble and double are skipped
+    expect(scopeNames).not.toContain("addAndDouble");
+    expect(scopeNames).not.toContain("double");
+  });
+
+  it("stepOut from innermost function returns to middle function", async () => {
+    const mod = await freshImport(nestedCompiled);
+    const commands: DebuggerCommand[] = [
+      { type: "stepIn" },  // main → enter addAndDouble (addAndDouble:1)
+      { type: "step" },    // addAndDouble:3 (before sum = a + b)
+      { type: "stepIn" },  // addAndDouble:5 (before result = double(sum)) → enter double
+      { type: "step" },    // inside double: result = n * 2
+      { type: "stepOut" }, // exit double → back in addAndDouble
+      ...Array(20).fill({ type: "step" }),
+    ];
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    const result = await driver.run(initialResult, { interceptConsole: false });
+
+    const returnValue = result?.data !== undefined ? result.data : result;
+    expect(returnValue).toBe(6);
+
+    const scopeNames = testUI.renderCalls.map((cp) => cp.scopeName);
+    expect(scopeNames).toContain("double");
+
+    // After stepOut from double, we should be back in addAndDouble
+    const lastDoubleIdx = scopeNames.lastIndexOf("double");
+    const afterStepOut = scopeNames.slice(lastDoubleIdx + 1);
+    expect(afterStepOut.length).toBeGreaterThan(0);
+    // Should see addAndDouble (and eventually main) but NOT double again
+    expect(afterStepOut).not.toContain("double");
+    expect(afterStepOut).toContain("addAndDouble");
   });
 });

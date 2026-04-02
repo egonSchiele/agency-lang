@@ -477,6 +477,11 @@ export const ts = {
       ts.constDeclId(ts.runtime.ctx, ctx),
       ts.constDeclId(ts.runtime.statelogClient, statelogClient),
       ts.constDeclId(ts.runtime.graph, graph),
+      ts.letDecl("__forked"),
+
+      // Track whether the function completed normally (vs pausing for a debug interrupt).
+      // Used in the finally block to decide whether to fire onFunctionEnd.
+      ts.letDecl("__functionCompleted", ts.bool(false)),
     ]);
   },
 

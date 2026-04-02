@@ -32,6 +32,7 @@ export async function debugStep(
   const isStepping = dbg.isStepping();
   const shouldPause = isStepping ? dbg.isAtTargetDepth() : isUserBreakpoint;
 
+
   dbg.createRollingCheckpoint(ctx, {
     moduleId: info.moduleId,
     scopeName: info.scopeName,

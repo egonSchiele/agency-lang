@@ -1,0 +1,8 @@
+node main(x: number) {
+  if (x > 0) {
+    result = "positive"
+  } else {
+    result = "non-positive"
+  }
+  return result
+}

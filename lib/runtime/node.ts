@@ -64,6 +64,7 @@ export function setupFunction(args: { state?: InternalFunctionState }): {
   const step = stack.step;
   const self = stack.locals;
 
+
   // if being called from a node, we'll pass in threads.
   // if being called as a tool, we won't have threads, but we'll create an empty ThreadStore here.
   const threads = state.threads || new ThreadStore();

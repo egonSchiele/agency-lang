@@ -1164,8 +1164,6 @@ export class TypeScriptBuilder {
         graph: ts.ctx("graph"),
       }),
 
-      ts.raw(`let __forked;`),
-
       // Ensure this module's globals are initialized on the current ctx.
       // The isInitialized flag lives on the GlobalStore and is serialized,
       // so on interrupt resume the restored store already has it set.
@@ -1211,9 +1209,6 @@ export class TypeScriptBuilder {
       ),
     );
 
-    // Track whether the function completed normally (vs pausing for a debug interrupt).
-    // Used in the finally block to decide whether to fire onFunctionEnd.
-    setupStmts.push(ts.raw("let __functionCompleted = false"));
 
     // Try/catch wrapping the body, with finally to always pop the state stack
     setupStmts.push(
@@ -1311,12 +1306,16 @@ export class TypeScriptBuilder {
       // Sync calls: check for interrupt result
       const tempVar = "__funcResult";
       const nodeContext = scope.type === "node";
+      // In node context, wrap with state for the driver.
+      // In function context, return the interrupt directly so the caller's
+      // isInterrupt check can detect it (wrapping in { data: ... } would
+      // hide the interrupt type from the next isInterrupt check).
       const returnBody = nodeContext
         ? ts.obj([
-            ts.setSpread(ts.runtime.state),
-            ts.set("data", ts.id(tempVar)),
-          ])
-        : ts.obj({ data: ts.id(tempVar) });
+          ts.setSpread(ts.runtime.state),
+          ts.set("data", ts.id(tempVar)),
+        ])
+        : ts.id(tempVar);
       return ts.statements([
         ts.constDecl(tempVar, callNode),
         ts.if(
@@ -1516,7 +1515,6 @@ export class TypeScriptBuilder {
         statelogClient: ts.ctx("statelogClient"),
         graph: ts.ctx("graph"),
       }),
-      ts.raw(`let __forked;`),
 
       ts.callHook("onNodeStart", { nodeName: ts.str(nodeName) }),
     ];
@@ -1723,11 +1721,13 @@ export class TypeScriptBuilder {
           ),
         );
       } else if (this.getCurrentScope().type !== "global") {
-        // Sync: interrupt check with awaitAll before return
+        // Sync: interrupt check with awaitAll before return.
+        // In function context, return the interrupt directly so the caller's
+        // isInterrupt check can detect it.
         const returnObj =
           this.getCurrentScope().type === "node"
             ? ts.obj([ts.setSpread(ts.runtime.state), ts.set("data", varRef)])
-            : ts.obj({ data: varRef });
+            : varRef;
         stmts.push(
           ts.if(
             $(ts.id("isInterrupt")).call([varRef]).done(),
@@ -1809,9 +1809,9 @@ export class TypeScriptBuilder {
   ): TsNode {
     const _variableType = variableType ||
       this.getTypeHint(variableName) || {
-        type: "primitiveType" as const,
-        value: "string",
-      };
+      type: "primitiveType" as const,
+      value: "string",
+    };
 
     const zodSchema = mapTypeToZodSchema(
       _variableType,
@@ -1954,9 +1954,9 @@ export class TypeScriptBuilder {
       const isNodeContext = this.getCurrentScope().type === "node";
       const returnExpr = isNodeContext
         ? ts.nodeReturn({
-            messages: ts.runtime.threads,
-            data: varRef,
-          })
+          messages: ts.runtime.threads,
+          data: varRef,
+        })
         : ts.return(varRef);
       stmts.push(
         ts.if(
@@ -2515,8 +2515,8 @@ export class TypeScriptBuilder {
                   messages: ts.id("messages"),
                   callbacks: this.agencyConfig.audit?.logFile
                     ? ts.raw(
-                        "{ onAuditLog: __defaultonAuditLog, ...callbacks }",
-                      )
+                      "{ onAuditLog: __defaultonAuditLog, ...callbacks }",
+                    )
                     : ts.id("callbacks"),
                   initializeGlobals: ts.id("__initializeGlobals"),
                 }),

@@ -1,0 +1,6 @@
+node main() {
+  x = 1
+  y = interrupt("check value")
+  z = x + y
+  return z
+}

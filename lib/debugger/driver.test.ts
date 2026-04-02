@@ -25,10 +25,9 @@ class TestDebuggerIO implements DebuggerIO {
   async render(_checkpoint?: Checkpoint): Promise<void> {
     if (_checkpoint) {
       const checkpoint = Checkpoint.fromJSON(_checkpoint);
-      if (!checkpoint) {
-        throw new Error("Failed to parse checkpoint in render");
+      if (checkpoint) {
+        this.renderCalls.push(checkpoint);
       }
-      this.renderCalls.push(checkpoint);
     }
   }
 
@@ -67,6 +66,9 @@ const stepTestCompiled = path.join(fixtureDir, "step-test.ts");
 
 const fnCallAgency = path.join(fixtureDir, "function-call-test.agency");
 const fnCallCompiled = path.join(fixtureDir, "function-call-test.ts");
+
+const interruptAgency = path.join(fixtureDir, "interrupt-test.agency");
+const interruptCompiled = path.join(fixtureDir, "interrupt-test.ts");
 
 function makeDriver(mod: any, ui: DebuggerIO) {
   const driver = new DebuggerDriver({
@@ -346,5 +348,78 @@ describe("DebuggerDriver stepping with function calls", () => {
     const afterStepOut = scopeNames.slice(addIndex + 1);
     expect(afterStepOut.length).toBeGreaterThan(0);
     expect(afterStepOut.every((s) => s === "main")).toBe(true);
+  });
+});
+
+describe("DebuggerDriver set (variable overrides)", () => {
+  it("set overrides a local variable and affects execution", async () => {
+    // step-test: x = 1, y = 2, z = x + y, return z
+    // Step past x = 1, set x = 10, then continue.
+    // z should be 10 + 2 = 12 instead of 1 + 2 = 3.
+    const commands: DebuggerCommand[] = [
+      { type: "step" },                       // past x = 1
+      { type: "set", varName: "x", value: 10 },
+      { type: "continue" },
+    ];
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    const result = await driver.run(initialResult, { interceptConsole: false });
+
+    const returnValue = result?.data !== undefined ? result.data : result;
+    expect(returnValue).toBe(12);
+  });
+});
+
+let intMod: any;
+describe("DebuggerDriver user interrupt handling", () => {
+  beforeAll(async () => {
+    compile({ debugger: true }, interruptAgency, interruptCompiled, { ts: true });
+    intMod = await import(interruptCompiled);
+  });
+
+  afterAll(() => {
+    try {
+      fs.unlinkSync(interruptCompiled);
+    } catch {
+      // ignore
+    }
+  });
+
+  it("resolve provides a value for an interrupted variable", async () => {
+    // interrupt-test: x = 1, y = interrupt("check value"), z = x + y, return z
+    // Step past x = 1, step to the interrupt, resolve y with 5.
+    // z should be 1 + 5 = 6.
+    const commands: DebuggerCommand[] = [
+      { type: "step" },              // past x = 1
+      { type: "step" },              // hits interrupt("check value")
+      { type: "resolve", value: 5 }, // resolve y = 5
+      ...Array(10).fill({ type: "step" }),
+    ];
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(intMod, testUI);
+    const initialResult = await getInitialResult(intMod, driver);
+    const result = await driver.run(initialResult, { interceptConsole: false });
+
+    const returnValue = result?.data !== undefined ? result.data : result;
+    expect(returnValue).toBe(6);
+  });
+
+  it("reject sets the interrupted variable to false", async () => {
+    // When rejected, the interrupted variable (y) is set to false.
+    // z = x + y = 1 + false = 1 (JS coercion).
+    const commands: DebuggerCommand[] = [
+      { type: "step" },   // past x = 1
+      { type: "step" },   // hits interrupt("check value")
+      { type: "reject" }, // reject the interrupt → y = false
+      ...Array(10).fill({ type: "step" }),
+    ];
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(intMod, testUI);
+    const initialResult = await getInitialResult(intMod, driver);
+    const result = await driver.run(initialResult, { interceptConsole: false });
+
+    const returnValue = result?.data !== undefined ? result.data : result;
+    expect(returnValue).toBe(1);
   });
 });

@@ -185,6 +185,75 @@ describe("DebuggerDriver stepping", () => {
   });
 });
 
+describe("DebuggerDriver print and checkpoint", () => {
+  it("print looks up a local variable", async () => {
+    // Step past x = 1, then print x
+    const commands: DebuggerCommand[] = [
+      { type: "step" },                    // past x = 1
+      { type: "print", varName: "x" },     // should find x = 1
+      { type: "continue" },
+    ];
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    await driver.run(initialResult, { interceptConsole: false });
+
+    const log = testUI.state.getActivityLog();
+    expect(log).toContainEqual("x = 1");
+  });
+
+  it("print reports not found for nonexistent variable", async () => {
+    const commands: DebuggerCommand[] = [
+      { type: "print", varName: "doesNotExist" },
+      { type: "continue" },
+    ];
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    await driver.run(initialResult, { interceptConsole: false });
+
+    const log = testUI.state.getActivityLog();
+    expect(log).toContainEqual("doesNotExist = (not found)");
+  });
+
+  it("checkpoint pins a checkpoint with a label", async () => {
+    const commands: DebuggerCommand[] = [
+      { type: "step" },
+      { type: "checkpoint", label: "my-label" },
+      { type: "continue" },
+    ];
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    await driver.run(initialResult, { interceptConsole: false });
+
+    const log = testUI.state.getActivityLog();
+    expect(log.some((l) => l.includes("Pinned checkpoint") && l.includes('"my-label"'))).toBe(true);
+
+    // The pinned checkpoint should exist in the debugger state
+    const checkpoints = driver.debuggerState.getCheckpoints();
+    const pinned = checkpoints.filter((cp) => cp.pinned);
+    expect(pinned.length).toBeGreaterThan(0);
+    expect(pinned.some((cp) => cp.label === "my-label")).toBe(true);
+  });
+
+  it("checkpoint pins without a label", async () => {
+    const commands: DebuggerCommand[] = [
+      { type: "step" },
+      { type: "checkpoint" },
+      { type: "continue" },
+    ];
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    await driver.run(initialResult, { interceptConsole: false });
+
+    const checkpoints = driver.debuggerState.getCheckpoints();
+    const pinned = checkpoints.filter((cp) => cp.pinned);
+    expect(pinned.length).toBeGreaterThan(0);
+  });
+});
+
 let fnMod: any;
 describe("DebuggerDriver stepping with function calls", () => {
   beforeAll(async () => {

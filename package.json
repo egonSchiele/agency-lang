@@ -73,7 +73,7 @@
     "ora": "^9.3.0",
     "prompts": "^2.4.2",
     "smoltalk": "^0.0.64",
-    "tarsec": "^0.1.9",
+    "tarsec": "^0.2.0",
     "termcolors": "github:egonSchiele/termcolors",
     "typestache": "^0.5.0",
     "zod": "^4.3.5"

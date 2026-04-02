@@ -1211,6 +1211,10 @@ export class TypeScriptBuilder {
       ),
     );
 
+    // Track whether the function completed normally (vs pausing for a debug interrupt).
+    // Used in the finally block to decide whether to fire onFunctionEnd.
+    setupStmts.push(ts.raw("let __functionCompleted = false"));
+
     // Try/catch wrapping the body, with finally to always pop the state stack
     setupStmts.push(
       ts.tryCatch(
@@ -1234,22 +1238,27 @@ export class TypeScriptBuilder {
           ),
         ]),
         "__error",
-        // we pop the state stack in the finally block, but only if:
-        // - this stack wasn't forked
-        ts.raw("if (!__state?.isForked) { __ctx.stateStack.pop() }"),
+        // finally block: pop state stack and conditionally fire onFunctionEnd.
+        // onFunctionEnd must live here (not after the try/catch) because
+        // every code path inside the try block returns, making any code
+        // after try/catch/finally unreachable.
+        // The __functionCompleted flag ensures onFunctionEnd only fires on
+        // normal completion, not when a debug interrupt pauses the function.
+        ts.statements([
+          ts.raw("if (!__state?.isForked) { __ctx.stateStack.pop() }"),
+          ts.if(
+            ts.id("__functionCompleted"),
+            ts.callHook("onFunctionEnd", {
+              functionName: ts.str(functionName),
+              timeTaken: $(ts.id("performance"))
+                .prop("now")
+                .call()
+                .minus(ts.id("__funcStartTime"))
+                .done(),
+            }),
+          ),
+        ]),
       ),
-    );
-
-    // onFunctionEnd hook
-    setupStmts.push(
-      ts.callHook("onFunctionEnd", {
-        functionName: ts.str(functionName),
-        timeTaken: $(ts.id("performance"))
-          .prop("now")
-          .call()
-          .minus(ts.id("__funcStartTime"))
-          .done(),
-      }),
     );
 
     return ts.functionDecl(functionName, fnParams, ts.statements(setupStmts), {

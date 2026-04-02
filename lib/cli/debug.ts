@@ -5,6 +5,7 @@ import { parseAgency } from "@/parser.js";
 import { getNodesOfType } from "@/utils/node.js";
 import { GraphNodeDefinition } from "@/types.js";
 import { DebuggerDriver } from "@/debugger/driver.js";
+import { DebuggerUI } from "@/debugger/ui.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -77,6 +78,7 @@ export async function debug(
     },
     sourceMap,
     rewindSize,
+    ui: new DebuggerUI(),
   });
 
   // Set the debugger state on the RuntimeContext via the module wrapper

@@ -4,25 +4,9 @@ import { readFileSync } from "fs";
 import { formatTypeHint } from "../cli/util.js";
 import type { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { FunctionParameter } from "../types.js";
+import type { DebuggerCommand, DebuggerIO } from "./types.js";
 import { UIState } from "./uiState.js";
-
-export type DebuggerCommand =
-  | { type: "step" }
-  | { type: "next" }
-  | { type: "stepIn" }
-  | { type: "stepOut" }
-  | { type: "continue" }
-  | { type: "rewind" }
-  | { type: "checkpoint"; label?: string }
-  | { type: "set"; varName: string; value: unknown }
-  | { type: "print"; varName: string }
-  | { type: "reject"; value?: unknown }
-  | { type: "resolve"; value: unknown }
-  | { type: "modify"; overrides: Record<string, unknown> }
-  | { type: "stepBack"; preserveOverrides: boolean }
-  | { type: "save"; path: string }
-  | { type: "load"; path: string }
-  | { type: "quit" };
+import { coerceArg, formatValue, parseCommandInput } from "./util.js";
 
 // Cache for file contents so we don't re-read on every render
 const fileCache: Record<string, string> = {};
@@ -40,50 +24,6 @@ function readSourceFile(filePath: string): string {
   }
 }
 
-function formatValue(value: unknown): string {
-  if (value === undefined) return "undefined";
-  if (value === null) return "null";
-  if (typeof value === "string") return JSON.stringify(value);
-  if (typeof value === "object") {
-    try {
-      const s = JSON.stringify(value);
-      if (s.length > 60) return s.slice(0, 57) + "...";
-      return s;
-    } catch {
-      return "[object]";
-    }
-  }
-  return String(value);
-}
-
-function getPrimitiveType(param: FunctionParameter): string | null {
-  if (!param.typeHint) return null;
-  if (param.typeHint.type === "primitiveType") return param.typeHint.value;
-  return null;
-}
-
-function coerceArg(raw: string, param: FunctionParameter): unknown {
-  const prim = getPrimitiveType(param);
-  if (prim === "number") {
-    const num = Number(raw);
-    if (!isNaN(num)) return num;
-  }
-  if (prim === "boolean") {
-    if (raw === "true") return true;
-    if (raw === "false") return false;
-  }
-  // Try JSON parse for objects/arrays
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return raw;
-  }
-}
-
-function isInternalVar(key: string): boolean {
-  return key.startsWith("__");
-}
-
 const baseStyle = {
   border: { type: "line" as any },
   scrollable: true,
@@ -97,7 +37,7 @@ const baseStyle = {
   },
 };
 
-export class DebuggerUI {
+export class DebuggerUI implements DebuggerIO {
   private screen: blessed.Widgets.Screen;
   private sourceBox: blessed.Widgets.BoxElement;
   private localsBox: blessed.Widgets.BoxElement;
@@ -555,7 +495,7 @@ export class DebuggerUI {
             if (key.full === ":") {
               cleanup();
               this.enterTextInput(":").then((input) => {
-                const cmd = this.parseCommandInput(input || "");
+                const cmd = parseCommandInput(input || "");
                 if (cmd) {
                   resolve(cmd);
                 } else {
@@ -623,96 +563,6 @@ export class DebuggerUI {
 
       this.commandInput.on("keypress", onEscape);
     });
-  }
-
-  private parseCommandInput(input: string): DebuggerCommand | null {
-    const trimmed = input.trim();
-    if (!trimmed) return null;
-
-    // set x = 42
-    const setMatch = trimmed.match(/^set\s+(\w+)\s*=\s*(.+)$/);
-    if (setMatch) {
-      const varName = setMatch[1];
-      let value: unknown;
-      try {
-        value = JSON.parse(setMatch[2]);
-      } catch {
-        value = setMatch[2]; // Treat as string if not valid JSON
-      }
-      return { type: "set", varName, value };
-    }
-
-    // checkpoint "label"
-    const cpMatch = trimmed.match(/^checkpoint(?:\s+"([^"]*)")?$/);
-    if (cpMatch) {
-      return { type: "checkpoint", label: cpMatch[1] || undefined };
-    }
-
-    // print varname
-    const printMatch = trimmed.match(/^print\s+(\w+)$/);
-    if (printMatch) {
-      return { type: "print", varName: printMatch[1] };
-    }
-
-    // reject [value]
-    const rejectMatch = trimmed.match(/^reject(?:\s+(.+))?$/);
-    if (rejectMatch) {
-      let value: unknown;
-      if (rejectMatch[1]) {
-        try {
-          value = JSON.parse(rejectMatch[1]);
-        } catch {
-          value = rejectMatch[1];
-        }
-      }
-      return { type: "reject", value };
-    }
-
-    // resolve <value>
-    const resolveMatch = trimmed.match(/^resolve\s+(.+)$/);
-    if (resolveMatch) {
-      let value: unknown;
-      try {
-        value = JSON.parse(resolveMatch[1]);
-      } catch {
-        value = resolveMatch[1];
-      }
-      return { type: "resolve", value };
-    }
-
-    // modify key=value [key=value ...]
-    const modifyMatch = trimmed.match(/^modify\s+(.+)$/);
-    if (modifyMatch) {
-      const overrides: Record<string, unknown> = {};
-      const pairs = modifyMatch[1].split(/\s+/);
-      for (const pair of pairs) {
-        const eqIdx = pair.indexOf("=");
-        if (eqIdx > 0) {
-          const key = pair.slice(0, eqIdx);
-          const raw = pair.slice(eqIdx + 1);
-          try {
-            overrides[key] = JSON.parse(raw);
-          } catch {
-            overrides[key] = raw;
-          }
-        }
-      }
-      return { type: "modify", overrides };
-    }
-
-    // save <path>
-    const saveMatch = trimmed.match(/^save\s+(.+)$/);
-    if (saveMatch) {
-      return { type: "save", path: saveMatch[1].trim() };
-    }
-
-    // load <path>
-    const loadMatch = trimmed.match(/^load\s+(.+)$/);
-    if (loadMatch) {
-      return { type: "load", path: loadMatch[1].trim() };
-    }
-
-    return null;
   }
 
   private cycleFocus(): void {

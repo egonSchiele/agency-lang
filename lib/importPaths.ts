@@ -22,12 +22,20 @@ export function findPackageRoot(startDir: string): string {
 
 const PACKAGE_ROOT = findPackageRoot(__dirname);
 const STDLIB_DIR = path.join(PACKAGE_ROOT, "stdlib");
+const TEST_DIR = path.join(PACKAGE_ROOT, "tests");
 
 /**
  * Returns the absolute path to the stdlib directory.
  */
 export function getStdlibDir(): string {
   return STDLIB_DIR;
+}
+
+/**
+ * Returns the absolute path to the tests directory.
+ */
+export function getTestDir(): string {
+  return TEST_DIR;
 }
 
 /**

@@ -1,0 +1,13 @@
+def add(a, b: number): number {
+  result = a + b
+  doubled = result * 2
+  return doubled
+}
+
+node main() {
+  x = 1
+  y = add(x, 2)
+  z = y + 10
+  w = z + 1
+  return w
+}

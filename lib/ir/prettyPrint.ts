@@ -244,7 +244,7 @@ export function printTs(node: TsNode, indent = 0): string {
     }
 
     case "functionReturn":
-      return `return ${printTs(node.value, indent)}`;
+      return `__functionCompleted = true;\nreturn ${printTs(node.value, indent)}`;
 
     case "stepBlock": {
       const stepBody = printBody(node.body, indent);

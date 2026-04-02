@@ -9,8 +9,7 @@ import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { CheckpointStore } from "../runtime/state/checkpointStore.js";
 import { isDebugger, isInterrupt } from "../runtime/interrupts.js";
 import { StateStack } from "../runtime/state/stateStack.js";
-import { DebuggerUI } from "./ui.js";
-import type { DebuggerCommand } from "./ui.js";
+import type { DebuggerCommand, DebuggerIO } from "./types.js";
 import type { FunctionParameter } from "../types.js";
 
 import type { InterruptResponse } from "../runtime/interrupts.js";
@@ -45,12 +44,17 @@ type DriverOpts = {
   mod: ModuleFunctions;
   sourceMap: SourceMap;
   rewindSize: number;
+  ui: DebuggerIO;
 };
+
+type DriverRunOpts = Partial<{
+  interceptConsole: boolean;
+}>;
 
 export class DebuggerDriver {
   private mod: ModuleFunctions;
   private sourceMap: SourceMap;
-  private ui: DebuggerUI;
+  private ui: DebuggerIO;
   debuggerState: DebuggerState;
   private originalConsoleLog: typeof console.log;
   private originalConsoleError: typeof console.error;
@@ -58,7 +62,7 @@ export class DebuggerDriver {
   constructor(opts: DriverOpts) {
     this.mod = opts.mod;
     this.sourceMap = opts.sourceMap;
-    this.ui = new DebuggerUI();
+    this.ui = opts.ui;
     this.debuggerState = new DebuggerState(opts.rewindSize);
     this.originalConsoleLog = console.log;
     this.originalConsoleError = console.error;
@@ -137,9 +141,13 @@ export class DebuggerDriver {
     };
   }
 
-  async run(initialResult: any): Promise<any> {
+  async run(initialResult: any, _opts: DriverRunOpts = {}): Promise<any> {
     let result = initialResult;
-    this.interceptConsole();
+    const defaultOpts = { interceptConsole: true };
+    const opts = { ...defaultOpts, ..._opts };
+    if (opts.interceptConsole) {
+      this.interceptConsole();
+    }
     try {
       // runNode returns { messages, data, tokens } — interrupts are in .data
       while (result?.data && isInterrupt(result.data)) {

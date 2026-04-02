@@ -492,6 +492,60 @@ describe("DebuggerDriver stepBack and rewind", () => {
     expect(steps[3]).toBe("1"); // after rewind to earliest
   });
 
+  it("stepBack with preserveOverrides keeps pending overrides", async () => {
+    const mod = await freshImport(stepTestCompiled);
+    // step-test: x = 1, y = 2, z = x + y, return z
+    // Step past x=1 and y=2, override x=10, then stepBack with preserveOverrides.
+    // StepBack goes to step 3 (after x=1, before y=2). The override x=10 is
+    // preserved as a pending override. On the next step forward, it gets applied.
+    // Since x=1 already executed, x stays overridden to 10. z = 10 + 2 = 12.
+    const commands: DebuggerCommand[] = [
+      { type: "step" },                               // past x = 1 → at step 3
+      { type: "step" },                               // past y = 2 → at step 5
+      { type: "set", varName: "x", value: 10 },       // override x = 10
+      { type: "stepBack", preserveOverrides: true },   // back to step 3, keep override
+      ...Array(10).fill({ type: "step" }),             // step forward — x override applied
+    ];
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    const result = await driver.run(initialResult, { interceptConsole: false });
+
+    const returnValue = result?.data !== undefined ? result.data : result;
+    // x was overridden to 10, so z = 10 + 2 = 12
+    expect(returnValue).toBe(12);
+  });
+
+  it("rewind to a pinned checkpoint", async () => {
+    const mod = await freshImport(stepTestCompiled);
+    // Step forward, pin a checkpoint, step more, then rewind to the pinned one.
+    const commands: DebuggerCommand[] = [
+      { type: "step" },                          // past x = 1
+      { type: "checkpoint", label: "saved" },     // pin at step 3
+      { type: "step" },                          // past y = 2
+      { type: "rewind" },                        // rewind selector picks pinned checkpoint
+      ...Array(10).fill({ type: "step" }),
+    ];
+    const testUI = new TestDebuggerIO(commands);
+    testUI.rewindSelector = (checkpoints) => {
+      const pinned = checkpoints.find((cp) => cp.pinned && cp.label === "saved");
+      return pinned ? pinned.id : null;
+    };
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    const result = await driver.run(initialResult, { interceptConsole: false });
+
+    const returnValue = result?.data !== undefined ? result.data : result;
+    expect(returnValue).toBe(3);
+
+    const steps = testUI.renderCalls.map((cp) => cp.stepPath);
+    // initial:1, step:3 (pinned here), step:5, rewind to pinned:3
+    expect(steps[0]).toBe("1");
+    expect(steps[1]).toBe("3");
+    expect(steps[2]).toBe("5");
+    expect(steps[3]).toBe("3"); // after rewind to pinned
+  });
+
   it("rewind cancelled by selector returns null and stays put", async () => {
     const mod = await freshImport(stepTestCompiled);
     const commands: DebuggerCommand[] = [
@@ -509,5 +563,46 @@ describe("DebuggerDriver stepBack and rewind", () => {
     // Program should still complete normally
     const returnValue = result?.data !== undefined ? result.data : result;
     expect(returnValue).toBe(3);
+  });
+});
+
+describe("DebuggerDriver save and load", () => {
+  const saveFile = path.join(fixtureDir, "__test-checkpoint.json");
+
+  afterAll(() => {
+    try { fs.unlinkSync(saveFile); } catch { /* ignore */ }
+  });
+
+  it("save and load preserves overridden variable state", async () => {
+    // First run: step forward, override x, save checkpoint, then quit.
+    // step-test: x = 1, y = 2, z = x + y, return z
+    const mod1 = await freshImport(stepTestCompiled);
+    const saveCommands: DebuggerCommand[] = [
+      { type: "step" },                       // past x = 1
+      { type: "set", varName: "x", value: 10 }, // override x = 10
+      { type: "step" },                       // resume with override applied
+      { type: "save", path: saveFile },        // save checkpoint (x = 10 in state)
+    ];
+    const saveUI = new TestDebuggerIO(saveCommands);
+    const driver1 = makeDriver(mod1, saveUI);
+    const initialResult1 = await getInitialResult(mod1, driver1);
+    await driver1.run(initialResult1, { interceptConsole: false });
+
+    expect(fs.existsSync(saveFile)).toBe(true);
+
+    // Second run: load the saved checkpoint and continue.
+    // The loaded state should have x = 10, so z = 10 + 2 = 12.
+    const mod2 = await freshImport(stepTestCompiled);
+    const loadCommands: DebuggerCommand[] = [
+      { type: "load", path: saveFile },
+      ...Array(10).fill({ type: "step" }),
+    ];
+    const loadUI = new TestDebuggerIO(loadCommands);
+    const driver2 = makeDriver(mod2, loadUI);
+    const initialResult2 = await getInitialResult(mod2, driver2);
+    const result = await driver2.run(initialResult2, { interceptConsole: false });
+
+    const returnValue = result?.data !== undefined ? result.data : result;
+    expect(returnValue).toBe(12);
   });
 });

@@ -150,13 +150,20 @@ export class DebuggerDriver {
     }
     try {
       // runNode returns { messages, data, tokens } — interrupts are in .data
+      let lastCommand: DebuggerCommand | null = null;
       while (result?.data && isInterrupt(result.data)) {
         const interrupt = result.data as Interrupt;
         if (isDebugger(interrupt)) {
           // Debug pause — show state and accept stepping commands
           this.ui.state.setMode(this.debuggerState.getMode());
-          await this.ui.render(interrupt.checkpoint);
+          // Only pass checkpoint when execution has moved to a new position.
+          // Non-stepping commands (set, print, checkpoint) stay at the same
+          // position, so we re-render without a new checkpoint.
+          const nonSteppingCommands = ["set", "print", "checkpoint"];
+          const skipCheckpoint = lastCommand && nonSteppingCommands.includes(lastCommand.type);
+          await this.ui.render(skipCheckpoint ? undefined : interrupt.checkpoint);
           const command = await this.ui.waitForCommand();
+          lastCommand = command;
           try {
             result = await this.handleCommand(command, interrupt);
           } catch (e) {

@@ -4,9 +4,9 @@ import * as path from "path";
 import { DebuggerDriver } from "./driver.js";
 import { UIState } from "./uiState.js";
 import type { DebuggerCommand, DebuggerIO } from "./types.js";
-import { Checkpoint } from "../runtime/state/checkpointStore.js";
+import { Checkpoint, resetGlobalCheckpointCounter } from "../runtime/state/checkpointStore.js";
 import type { FunctionParameter } from "../types.js";
-import { compile } from "../cli/commands.js";
+import { compile, resetCompilationCache } from "../cli/commands.js";
 import { getTestDir } from "../importPaths.js";
 import { isInterrupt } from "@/runtime/interrupts.js";
 
@@ -17,6 +17,7 @@ class TestDebuggerIO implements DebuggerIO {
   private commands: DebuggerCommand[];
   private commandIndex = 0;
   renderCalls: Checkpoint[] = [];
+  rewindSelector: ((checkpoints: Checkpoint[]) => number | null) | null = null;
 
   constructor(commands: DebuggerCommand[]) {
     this.commands = commands;
@@ -40,7 +41,10 @@ class TestDebuggerIO implements DebuggerIO {
     return cmd;
   }
 
-  async showRewindSelector(_checkpoints: Checkpoint[]): Promise<number | null> {
+  async showRewindSelector(checkpoints: Checkpoint[]): Promise<number | null> {
+    if (this.rewindSelector) {
+      return this.rewindSelector(checkpoints);
+    }
     return null;
   }
 
@@ -70,6 +74,28 @@ const fnCallCompiled = path.join(fixtureDir, "function-call-test.ts");
 const interruptAgency = path.join(fixtureDir, "interrupt-test.agency");
 const interruptCompiled = path.join(fixtureDir, "interrupt-test.ts");
 
+// Fresh import with cache-busting to get clean module state per test.
+// Also resets the global checkpoint ID counter so IDs from different
+// checkpoint stores (debugger vs context) remain comparable.
+let importCounter = 0;
+async function freshImport(compiledFile: string): Promise<any> {
+  resetGlobalCheckpointCounter();
+  return await import(compiledFile + `?t=${importCounter++}`);
+}
+
+// Compile all fixtures once, clean up after all tests
+beforeAll(() => {
+  compile({ debugger: true }, stepTestAgency, stepTestCompiled, { ts: true });
+  compile({ debugger: true }, fnCallAgency, fnCallCompiled, { ts: true });
+  compile({ debugger: true }, interruptAgency, interruptCompiled, { ts: true });
+});
+
+afterAll(() => {
+  for (const f of [stepTestCompiled, fnCallCompiled, interruptCompiled]) {
+    try { fs.unlinkSync(f); } catch { /* ignore */ }
+  }
+});
+
 function makeDriver(mod: any, ui: DebuggerIO) {
   const driver = new DebuggerDriver({
     mod: {
@@ -96,22 +122,9 @@ async function getInitialResult(mod: any, driver: DebuggerDriver) {
   expect(isInterrupt(initialResult.data)).toBe(true);
   return initialResult;
 }
-let mod: any;
 describe("DebuggerDriver stepping", () => {
-  beforeAll(async () => {
-    compile({ debugger: true }, stepTestAgency, stepTestCompiled, { ts: true });
-    mod = await import(stepTestCompiled);
-  });
-
-  afterAll(() => {
-    try {
-      fs.unlinkSync(stepTestCompiled);
-    } catch {
-      // ignore
-    }
-  });
-
   it("takes a single step", async () => {
+    const mod = await freshImport(stepTestCompiled);
     // Feed enough step commands to walk through every debug pause,
     // then continue to let the program finish.
     const commands: DebuggerCommand[] = [{ type: "step" }];
@@ -142,6 +155,7 @@ describe("DebuggerDriver stepping", () => {
   });
 
   it("steps through each statement and returns the correct result", async () => {
+    const mod = await freshImport(stepTestCompiled);
     // Feed enough step commands to walk through every debug pause,
     // then continue to let the program finish.
     const commands: DebuggerCommand[] = Array(10).fill({ type: "step" });
@@ -169,6 +183,7 @@ describe("DebuggerDriver stepping", () => {
   });
 
   it("continue runs to completion without further pauses", async () => {
+    const mod = await freshImport(stepTestCompiled);
     const commands: DebuggerCommand[] = [
       { type: "continue" },
     ];
@@ -189,6 +204,7 @@ describe("DebuggerDriver stepping", () => {
 
 describe("DebuggerDriver print and checkpoint", () => {
   it("print looks up a local variable", async () => {
+    const mod = await freshImport(stepTestCompiled);
     // Step past x = 1, then print x
     const commands: DebuggerCommand[] = [
       { type: "step" },                    // past x = 1
@@ -205,6 +221,7 @@ describe("DebuggerDriver print and checkpoint", () => {
   });
 
   it("print reports not found for nonexistent variable", async () => {
+    const mod = await freshImport(stepTestCompiled);
     const commands: DebuggerCommand[] = [
       { type: "print", varName: "doesNotExist" },
       { type: "continue" },
@@ -219,6 +236,7 @@ describe("DebuggerDriver print and checkpoint", () => {
   });
 
   it("checkpoint pins a checkpoint with a label", async () => {
+    const mod = await freshImport(stepTestCompiled);
     const commands: DebuggerCommand[] = [
       { type: "step" },
       { type: "checkpoint", label: "my-label" },
@@ -240,6 +258,7 @@ describe("DebuggerDriver print and checkpoint", () => {
   });
 
   it("checkpoint pins without a label", async () => {
+    const mod = await freshImport(stepTestCompiled);
     const commands: DebuggerCommand[] = [
       { type: "step" },
       { type: "checkpoint" },
@@ -256,22 +275,9 @@ describe("DebuggerDriver print and checkpoint", () => {
   });
 });
 
-let fnMod: any;
 describe("DebuggerDriver stepping with function calls", () => {
-  beforeAll(async () => {
-    compile({ debugger: true }, fnCallAgency, fnCallCompiled, { ts: true });
-    fnMod = await import(fnCallCompiled);
-  });
-
-  afterAll(() => {
-    try {
-      fs.unlinkSync(fnCallCompiled);
-    } catch {
-      // ignore
-    }
-  });
-
   it("stepIn enters a function call", async () => {
+    const fnMod = await freshImport(fnCallCompiled);
     // Step until we reach the add() call line, then stepIn.
     // We need to step through: x = 1, then y = add(x, 2).
     // The debug steps are interleaved, so we step a few times
@@ -297,6 +303,7 @@ describe("DebuggerDriver stepping with function calls", () => {
   });
 
   it("next steps over a function call", async () => {
+    const fnMod = await freshImport(fnCallCompiled);
     // Step until we reach the add() call line, then next (step over).
     const commands: DebuggerCommand[] = [
       { type: "step" }, // x = 1
@@ -318,6 +325,7 @@ describe("DebuggerDriver stepping with function calls", () => {
   });
 
   it("stepOut exits a function back to caller", async () => {
+    const fnMod = await freshImport(fnCallCompiled);
     // Step into add(), step once inside it, then stepOut to return to main
     const commands: DebuggerCommand[] = [
       { type: "step" },    // x = 1
@@ -353,6 +361,7 @@ describe("DebuggerDriver stepping with function calls", () => {
 
 describe("DebuggerDriver set (variable overrides)", () => {
   it("set overrides a local variable and affects execution", async () => {
+    const mod = await freshImport(stepTestCompiled);
     // step-test: x = 1, y = 2, z = x + y, return z
     // Step past x = 1, set x = 10, then continue.
     // z should be 10 + 2 = 12 instead of 1 + 2 = 3.
@@ -371,22 +380,9 @@ describe("DebuggerDriver set (variable overrides)", () => {
   });
 });
 
-let intMod: any;
 describe("DebuggerDriver user interrupt handling", () => {
-  beforeAll(async () => {
-    compile({ debugger: true }, interruptAgency, interruptCompiled, { ts: true });
-    intMod = await import(interruptCompiled);
-  });
-
-  afterAll(() => {
-    try {
-      fs.unlinkSync(interruptCompiled);
-    } catch {
-      // ignore
-    }
-  });
-
   it("resolve provides a value for an interrupted variable", async () => {
+    const intMod = await freshImport(interruptCompiled);
     // interrupt-test: x = 1, y = interrupt("check value"), z = x + y, return z
     // Step past x = 1, step to the interrupt, resolve y with 5.
     // z should be 1 + 5 = 6.
@@ -406,6 +402,7 @@ describe("DebuggerDriver user interrupt handling", () => {
   });
 
   it("reject sets the interrupted variable to false", async () => {
+    const intMod = await freshImport(interruptCompiled);
     // When rejected, the interrupted variable (y) is set to false.
     // z = x + y = 1 + false = 1 (JS coercion).
     const commands: DebuggerCommand[] = [
@@ -421,5 +418,96 @@ describe("DebuggerDriver user interrupt handling", () => {
 
     const returnValue = result?.data !== undefined ? result.data : result;
     expect(returnValue).toBe(1);
+  });
+});
+
+describe("DebuggerDriver stepBack and rewind", () => {
+  it("stepBack returns to the previous debug pause", async () => {
+    const mod = await freshImport(stepTestCompiled);
+    // step-test: x = 1, y = 2, z = x + y, return z
+    // Step forward once (to y = 2), then stepBack to x = 1.
+    const commands: DebuggerCommand[] = [
+      { type: "step" },                                // past x = 1 → at y = 2
+      { type: "stepBack", preserveOverrides: false },  // back to x = 1
+      ...Array(10).fill({ type: "step" }),             // step through rest
+    ];
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    const result = await driver.run(initialResult, { interceptConsole: false });
+
+    const returnValue = result?.data !== undefined ? result.data : result;
+    expect(returnValue).toBe(3);
+
+    const steps = testUI.renderCalls.map((cp) => cp.stepPath);
+    expect(steps[0]).toBe("1"); // initial
+    expect(steps[1]).toBe("3"); // after step
+    expect(steps[2]).toBe("1"); // after stepBack — back to step 1
+  });
+
+  it("stepBack at earliest checkpoint does not move", async () => {
+    const mod = await freshImport(stepTestCompiled);
+    const commands: DebuggerCommand[] = [
+      { type: "stepBack", preserveOverrides: false },
+      { type: "continue" },
+    ];
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    const result = await driver.run(initialResult, { interceptConsole: false });
+
+    const returnValue = result?.data !== undefined ? result.data : result;
+    expect(returnValue).toBe(3);
+
+    const log = testUI.state.getActivityLog();
+    expect(log).toContainEqual("Already at earliest checkpoint");
+  });
+
+  it("rewind to a specific checkpoint re-executes from that point", async () => {
+    const mod = await freshImport(stepTestCompiled);
+    const commands: DebuggerCommand[] = [
+      { type: "step" },   // past x = 1
+      { type: "step" },   // past y = 2
+      { type: "rewind" }, // rewind selector picks first checkpoint
+      ...Array(10).fill({ type: "step" }),
+    ];
+    const testUI = new TestDebuggerIO(commands);
+    // Pick the first (earliest) checkpoint from the list
+    testUI.rewindSelector = (checkpoints) => {
+      return checkpoints.length > 0 ? checkpoints[0].id : null;
+    };
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    const result = await driver.run(initialResult, { interceptConsole: false });
+
+    const returnValue = result?.data !== undefined ? result.data : result;
+    expect(returnValue).toBe(3);
+
+    const steps = testUI.renderCalls.map((cp) => cp.stepPath);
+    // After stepping to 3, 5, then rewinding to earliest, we should
+    // re-visit step 1 (the earliest checkpoint).
+    expect(steps[0]).toBe("1"); // initial
+    expect(steps[1]).toBe("3"); // after first step
+    expect(steps[2]).toBe("5"); // after second step
+    expect(steps[3]).toBe("1"); // after rewind to earliest
+  });
+
+  it("rewind cancelled by selector returns null and stays put", async () => {
+    const mod = await freshImport(stepTestCompiled);
+    const commands: DebuggerCommand[] = [
+      { type: "step" },
+      { type: "rewind" }, // selector returns null (cancelled)
+      { type: "continue" },
+    ];
+    const testUI = new TestDebuggerIO(commands);
+    // Return null = user cancelled
+    testUI.rewindSelector = () => null;
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    const result = await driver.run(initialResult, { interceptConsole: false });
+
+    // Program should still complete normally
+    const returnValue = result?.data !== undefined ? result.data : result;
+    expect(returnValue).toBe(3);
   });
 });

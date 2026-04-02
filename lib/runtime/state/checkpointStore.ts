@@ -7,6 +7,11 @@ import type { StateStackJSON } from "./stateStack.js";
 
 let globalCheckpointCounter = 0;
 
+/** Reset the global checkpoint ID counter. For use in tests only. */
+export function resetGlobalCheckpointCounter(): void {
+  globalCheckpointCounter = 0;
+}
+
 export type CheckpointArgs = {
   id?: number;
   stack: StateStackJSON;

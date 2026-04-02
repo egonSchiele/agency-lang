@@ -13,6 +13,7 @@ import {
   capture,
   captureCaptures,
   char,
+  label,
   many,
   many1,
   newline,
@@ -54,7 +55,7 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
 
 const semicolon = seqC(optionalSpaces, char(";"), optionalSpaces);
 
-export const matchBlockParser = seqC(
+export const matchBlockParser = label("a match block", seqC(
   set("type", "matchBlock"),
   str("match"),
   optionalSpaces,
@@ -74,4 +75,4 @@ export const matchBlockParser = seqC(
   ),
   optionalSemicolon,
   optionalSpacesOrNewline,
-);
+));

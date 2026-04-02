@@ -2,6 +2,7 @@ import { FunctionCall } from "../types.js";
 import {
   capture,
   char,
+  label,
   lazy,
   many1WithJoin,
   Parser,
@@ -35,4 +36,4 @@ export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
 };
 
 // functionCallParser is now just _functionCallParser (no async/sync wrappers - handled by valueAccessParser)
-export const functionCallParser: Parser<FunctionCall> = _functionCallParser;
+export const functionCallParser: Parser<FunctionCall> = label("a function call", _functionCallParser);

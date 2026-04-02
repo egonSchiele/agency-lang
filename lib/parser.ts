@@ -2,6 +2,7 @@ import {
   capture,
   eof,
   failure,
+  getErrorMessage,
   many,
   map,
   or,
@@ -127,6 +128,12 @@ export function _parseAgency(
     setTraceId(nanoid());
   }
   const result = agencyParser(normalized);
+  if (!result.success) {
+    const betterMessage = getErrorMessage();
+    if (betterMessage) {
+      return failure(betterMessage, normalized);
+    }
+  }
   return result;
 }
 

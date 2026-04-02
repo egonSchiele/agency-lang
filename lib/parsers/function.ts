@@ -70,6 +70,7 @@ import { HandleBlock } from "@/types/handleBlock.js";
 import { debuggerParser } from "./debuggerStatement.js";
 import { exprParser } from "./expression.js";
 import { withLoc } from "./loc.js";
+import { label } from "tarsec";
 
 const _assignmentParserInner: Parser<Assignment> = (input: string) => {
   const parser = trace(
@@ -124,7 +125,7 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
   const out: Assignment = { ...rest, variableName, value, accessChain };
   return success(out, result.rest);
 };
-export const assignmentParser: Parser<Assignment> = withLoc(_assignmentParserInner);
+export const assignmentParser: Parser<Assignment> = label("an assignment", withLoc(_assignmentParserInner));
 
 export const sharedAssignmentParser: Parser<Assignment> = (input: string) => {
   const parser = seqC(str("shared"), spaces, captureCaptures(assignmentParser));
@@ -349,9 +350,9 @@ const _ifParserInner: Parser<IfElse> = (input: string) => {
 
   return result;
 };
-export const ifParser: Parser<IfElse> = withLoc(_ifParserInner);
+export const ifParser: Parser<IfElse> = label("an if statement", withLoc(_ifParserInner));
 
-export const whileLoopParser: Parser<WhileLoop> = withLoc(trace(
+export const whileLoopParser: Parser<WhileLoop> = label("a while loop", withLoc(trace(
   "whileLoopParser",
   seqC(
     set("type", "whileLoop"),
@@ -375,9 +376,9 @@ export const whileLoopParser: Parser<WhileLoop> = withLoc(trace(
       ),
     ),
   ),
-));
+)));
 
-export const forLoopParser: Parser<ForLoop> = withLoc(trace(
+export const forLoopParser: Parser<ForLoop> = label("a for loop", withLoc(trace(
   "forLoopParser",
   seqC(
     set("type", "forLoop"),
@@ -415,7 +416,7 @@ export const forLoopParser: Parser<ForLoop> = withLoc(trace(
       ),
     ),
   ),
-));
+)));
 
 export const functionParameterParserWithTypeHint: Parser<FunctionParameter> =
   trace(
@@ -515,7 +516,7 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
 
   return { ...baseResult, result };
 };
-export const functionParser: Parser<FunctionDefinition> = withLoc(_functionParserInner);
+export const functionParser: Parser<FunctionDefinition> = label("a function definition", withLoc(_functionParserInner));
 
 const visibilityParser: Parser<Visibility> = or(
   str("public" as const),
@@ -523,7 +524,7 @@ const visibilityParser: Parser<Visibility> = or(
   succeed(undefined),
 );
 
-export const graphNodeParser: Parser<GraphNodeDefinition> = withLoc(trace(
+export const graphNodeParser: Parser<GraphNodeDefinition> = label("a node definition", withLoc(trace(
   "graphNodeParser",
   seqC(
     set("type", "graphNode"),
@@ -558,4 +559,4 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = withLoc(trace(
       ),
     ),
   ),
-));
+)));

@@ -24,6 +24,7 @@ import {
   str,
   success,
   trace,
+  label,
 } from "tarsec";
 import {
   BooleanLiteral,
@@ -128,13 +129,13 @@ const objectParser = (input: string): ParserResult<Record<string, any>> => {
   return parser(input);
 };
 
-export function numberParser(input: string): ParserResult<NumberLiteral> {
+export const numberParser: Parser<NumberLiteral> = label("a number", (input: string): ParserResult<NumberLiteral> => {
   const parser = seqC(
     set("type", "number"),
     capture(many1WithJoin(or(char("-"), char("."), digit)), "value"),
   );
   return parser(input);
-}
+});
 
 export const simpleStringParser: Parser<StringLiteral> = seqC(
   set("type", "string"),
@@ -156,7 +157,7 @@ export const _stringParser: Parser<StringLiteral> = seqC(
   oneOf('"`'),
 );
 
-export const stringParser: Parser<StringLiteral> = (input: string) => {
+export const stringParser: Parser<StringLiteral> = label("a string", (input: string) => {
   const parser = sepBy1(plusSign, or(_stringParser, variableNameParser));
   const result = parser(input);
   if (!result.success) {
@@ -186,7 +187,7 @@ export const stringParser: Parser<StringLiteral> = (input: string) => {
     },
     result.rest,
   );
-};
+});
 
 export const multiLineStringParser: Parser<MultiLineStringLiteral> = seqC(
   set("type", "multiLineString"),
@@ -198,7 +199,7 @@ export const multiLineStringParser: Parser<MultiLineStringLiteral> = seqC(
   str('"""'),
 );
 
-export const variableNameParser: Parser<VariableNameLiteral> = (
+export const variableNameParser: Parser<VariableNameLiteral> = label("an identifier", (
   input: string,
 ) => {
   const parser = seq(
@@ -216,9 +217,9 @@ export const variableNameParser: Parser<VariableNameLiteral> = (
   );
 
   return parser(input);
-};
+});
 
-export function booleanParser(input: string): ParserResult<BooleanLiteral> {
+export const booleanParser: Parser<BooleanLiteral> = label("a boolean", (input: string): ParserResult<BooleanLiteral> => {
   const parser = seqC(
     set("type", "boolean"),
     capture(
@@ -230,7 +231,7 @@ export function booleanParser(input: string): ParserResult<BooleanLiteral> {
     ),
   );
   return parser(input);
-}
+});
 
 export const literalParser: Parser<Literal> = or(
   booleanParser,

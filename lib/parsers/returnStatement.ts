@@ -1,6 +1,7 @@
 import {
   capture,
   captureCaptures,
+  label,
   parseError,
   Parser,
   seqC,
@@ -13,7 +14,7 @@ import { withLoc } from "./loc.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { optionalSpaces, optionalSpacesOrNewline } from "./utils.js";
 
-export const returnStatementParser: Parser<ReturnStatement> = withLoc(seqC(
+export const returnStatementParser: Parser<ReturnStatement> = label("a return statement", withLoc(seqC(
   set("type", "returnStatement"),
   str("return"),
   captureCaptures(
@@ -25,4 +26,4 @@ export const returnStatementParser: Parser<ReturnStatement> = withLoc(seqC(
       optionalSpacesOrNewline,
     ),
   ),
-));
+)));

@@ -2,6 +2,7 @@ import {
   buildExpressionParser,
   char,
   failure,
+  label,
   lazy,
   or,
   Parser,
@@ -98,7 +99,7 @@ const parenParser: Parser<Expression> = (input: string) => {
 // Operator table: highest precedence first.
 // Multi-char operators must come before their single-char prefixes
 // (e.g., *= before *, <= before <).
-export const exprParser: Parser<Expression> = buildExpressionParser<Expression>(
+export const exprParser: Parser<Expression> = label("an expression", buildExpressionParser<Expression>(
   atom,
   [
     // Precedence 6: multiplicative (and *=, /=)
@@ -137,7 +138,7 @@ export const exprParser: Parser<Expression> = buildExpressionParser<Expression>(
     ],
   ],
   parenParser,
-);
+));
 
 // Wire up the circular reference for parenParser
 _exprParser = exprParser;

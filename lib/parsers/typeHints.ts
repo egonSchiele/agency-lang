@@ -41,6 +41,7 @@ import {
   str,
   success,
   trace,
+  label,
 } from "tarsec";
 import { withLoc } from "./loc.js";
 import { optionalSemicolon } from "./parserUtils.js";
@@ -351,7 +352,7 @@ export const typeHintParser: Parser<TypeHint> = trace(
   ),
 );
 
-export const typeAliasParser: Parser<TypeAlias> = withLoc(trace(
+export const typeAliasParser: Parser<TypeAlias> = label("a type alias", withLoc(trace(
   "typeAliasParser",
   seqC(
     set("type", "typeAlias"),
@@ -370,4 +371,4 @@ export const typeAliasParser: Parser<TypeAlias> = withLoc(trace(
       ),
     ),
   ),
-));
+)));

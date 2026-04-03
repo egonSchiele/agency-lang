@@ -301,3 +301,27 @@ Handlers (`handle` blocks) are a crucial part of what makes Agency safe. They mu
 - `docs/stateStack.md` — documentation on how the state stack works, including serialization and deserialization for interrupts.
 - `docs/TESTING.md` — documentation on how to write and run tests in the Agency repo, including unit tests, integration tests, and fixtures.
 - `docs/typeChecker.md` — documentation on the type checker, how it works, and how to use it.
+
+## docs/dev/ reference
+There are plenty of files that dive into implementation details on specific features:
+
+- `docs/dev/async-info-for-claude.md` — edge cases and test cases for async function behavior
+- `docs/dev/async.md` — how async function calls work, problems encountered, and solutions
+- `docs/dev/binop-parser.md` — binary expression parser using precedence climbing
+- `docs/dev/checkpointing.md` — snapshotting execution state for retry loops and rollback
+- `docs/dev/concurrent-interrupts.md` — supporting multiple concurrent threads that interrupt simultaneously
+- `docs/dev/config.md` — AgencyConfig options for compiler and runtime configuration
+- `docs/dev/debugger.md` — interactive debugger for stepping through and rewinding execution
+- `docs/dev/globalstore.md` — global variable management with module isolation and serialization
+- `docs/dev/init.md` — issues with global variable initialization outside graph node context
+- `docs/dev/interrupts.md` — how interrupts resume inside blocks using step counters (substeps)
+- `docs/dev/message-thread-tests.md` — test cases for message threads and thread behavior
+- `docs/dev/pkg-imports.md` — importing Agency code from npm packages using `pkg::` prefix
+- `docs/dev/rewind.md` — overriding LLM call results and replaying execution from checkpoints
+- `docs/dev/simplemachine.md` — graph execution engine that runs compiled Agency programs
+- `docs/dev/smoltalk.md` — external LLM client library for structured output requests
+- `docs/dev/statelog.md` — observability and tracing system for execution events
+- `docs/dev/threads.md` — ThreadStore and MessageThread system for LLM conversation history
+- `docs/dev/trace.md` — execution traces capturing checkpoints at every step
+- `docs/dev/typechecker.md` — bidirectional type checking to catch errors before compilation
+- `docs/dev/typescript-ir.md` — structured TsNode tree representation of generated TypeScript

@@ -220,6 +220,69 @@ describe("DebuggerDriver stepping", () => {
     // the last interrupt, and render it again
     expect(testUI.renderCalls.length).toBe(2);
   });
+
+  it("after program finishes, blocks forward stepping", async () => {
+    const mod = await freshImport(stepTestCompiled);
+    const commands: DebuggerCommand[] = [
+      { type: "continue" },  // run to completion
+      { type: "step" },      // should be blocked
+    ];
+    const testUI = new TestDebuggerIO(commands);
+
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    await driver.run(initialResult, { interceptConsole: false });
+
+    // 3 renders: initial pause, restored interrupt after finish, blocked step re-render
+    expect(testUI.renderCalls.length).toBe(3);
+
+    // The last two renders should be identical — the blocked step didn't advance
+    const beforeStep = testUI.renderCalls[1].getCurrentFrame();
+    const afterStep = testUI.renderCalls[2].getCurrentFrame();
+    expect(beforeStep?.locals).toEqual(afterStep?.locals);
+    expect(beforeStep?.step).toBe(afterStep?.step);
+  });
+
+  it("after program finishes, can step back to an earlier state", async () => {
+    const mod = await freshImport(stepTestCompiled);
+    const commands: DebuggerCommand[] = [
+      { type: "continue" },                              // run to completion
+      { type: "stepBack", preserveOverrides: false },     // step back
+    ];
+    const testUI = new TestDebuggerIO(commands);
+
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    await driver.run(initialResult, { interceptConsole: false });
+
+    // After continue: initial render + restored-last-interrupt render = 2
+    // After stepBack: rewind re-executes, producing at least 1 more render
+    expect(testUI.renderCalls.length).toBeGreaterThanOrEqual(3);
+
+    // The last render should have z=3 (re-execution from nearby checkpoint
+    // lands at the same final state), but the stepBack should have succeeded
+    // (no "Already at earliest checkpoint" message)
+    const log = testUI.state.getActivityLog();
+    expect(log).not.toContainEqual("Already at earliest checkpoint");
+  });
+
+  it("after program finishes and stepping back, can step forward again", async () => {
+    const mod = await freshImport(stepTestCompiled);
+    const commands: DebuggerCommand[] = [
+      { type: "continue" },                              // run to completion
+      { type: "stepBack", preserveOverrides: false },     // step back (clears programFinished)
+      { type: "step" },                                   // should work now
+    ];
+    const testUI = new TestDebuggerIO(commands);
+
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    await driver.run(initialResult, { interceptConsole: false });
+
+    // Step forward should NOT be blocked after stepping back
+    const log = testUI.state.getActivityLog();
+    expect(log).not.toContainEqual("Already at end of execution.");
+  });
 });
 
 describe("DebuggerDriver print and checkpoint", () => {

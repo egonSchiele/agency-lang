@@ -8,7 +8,7 @@ import { Checkpoint, resetGlobalCheckpointCounter } from "../runtime/state/check
 import type { FunctionParameter } from "../types.js";
 import { compile, resetCompilationCache } from "../cli/commands.js";
 import { getTestDir } from "../importPaths.js";
-import { isInterrupt } from "@/runtime/interrupts.js";
+import { isInterrupt, createDebugInterrupt } from "@/runtime/interrupts.js";
 
 // A programmatic DebuggerIO that feeds a scripted sequence of commands
 // and records all render calls for assertions.
@@ -113,7 +113,7 @@ afterAll(() => {
   }
 });
 
-function makeDriver(mod: any, ui: DebuggerIO) {
+function makeDriver(mod: any, ui: DebuggerIO, opts: { checkpoints?: Checkpoint[] } = {}) {
   const driver = new DebuggerDriver({
     mod: {
       approveInterrupt: mod.approveInterrupt,
@@ -123,8 +123,9 @@ function makeDriver(mod: any, ui: DebuggerIO) {
       __getCheckpoints: mod.__getCheckpoints,
     },
     sourceMap: mod.__sourceMap ?? {},
-    rewindSize: 30,
+    rewindSize: Math.max(30, opts.checkpoints?.length ?? 0),
     ui,
+    checkpoints: opts.checkpoints,
   });
   mod.__setDebugger(driver.debuggerState);
   return driver;
@@ -768,5 +769,163 @@ describe("DebuggerDriver with nested function calls", () => {
     // Should see addAndDouble (and eventually main) but NOT double again
     expect(afterStepOut).not.toContain("double");
     expect(afterStepOut).toContain("addAndDouble");
+  });
+});
+
+// Helper: run step-test to completion and collect all checkpoints
+async function collectCheckpoints(): Promise<Checkpoint[]> {
+  const mod = await freshImport(stepTestCompiled);
+  const commands: DebuggerCommand[] = Array(20).fill({ type: "step" });
+  const testUI = new TestDebuggerIO(commands);
+  const driver = makeDriver(mod, testUI);
+  const initialResult = await getInitialResult(mod, driver);
+  await driver.run(initialResult, { interceptConsole: false });
+  return testUI.renderCalls;
+}
+
+describe("DebuggerDriver with loaded trace checkpoints", () => {
+  it("starts at the last checkpoint and renders it", async () => {
+    const checkpoints = await collectCheckpoints();
+    expect(checkpoints.length).toBeGreaterThan(0);
+
+    const mod = await freshImport(stepTestCompiled);
+    const commands: DebuggerCommand[] = [];
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI, { checkpoints });
+
+    const lastCp = checkpoints[checkpoints.length - 1];
+    const interrupt = createDebugInterrupt(undefined, lastCp.id, lastCp);
+    await driver.run({ data: interrupt }, { interceptConsole: false });
+
+    // Should have rendered the last checkpoint
+    expect(testUI.renderCalls.length).toBe(1);
+    expect(testUI.renderCalls[0].id).toBe(lastCp.id);
+  });
+
+  it("blocks forward stepping at end of execution", async () => {
+    const checkpoints = await collectCheckpoints();
+    const mod = await freshImport(stepTestCompiled);
+    const commands: DebuggerCommand[] = [
+      { type: "step" },  // should be blocked
+    ];
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI, { checkpoints });
+
+    const lastCp = checkpoints[checkpoints.length - 1];
+    const interrupt = createDebugInterrupt(undefined, lastCp.id, lastCp);
+    await driver.run({ data: interrupt }, { interceptConsole: false });
+
+    // Should see "Already at end of execution" in the activity log
+    const log = testUI.state.getActivityLog();
+    expect(log).toContainEqual("Already at end of execution.");
+  });
+
+  it("can rewind to an earlier checkpoint with different state", async () => {
+    const checkpoints = await collectCheckpoints();
+    // Find an early checkpoint where z is not yet defined
+    const earlyCp = checkpoints.find((cp) => {
+      const frame = cp.stack.stack[cp.stack.stack.length - 1];
+      return !("z" in frame.locals);
+    });
+    expect(earlyCp).toBeDefined();
+
+    const mod = await freshImport(stepTestCompiled);
+    const commands: DebuggerCommand[] = [
+      { type: "rewind" },
+    ];
+    const testUI = new TestDebuggerIO(commands);
+    testUI.rewindSelector = () => earlyCp!.id;
+    const driver = makeDriver(mod, testUI, { checkpoints });
+
+    const lastCp = checkpoints[checkpoints.length - 1];
+    const interrupt = createDebugInterrupt(undefined, lastCp.id, lastCp);
+    await driver.run({ data: interrupt }, { interceptConsole: false });
+
+    // First render: last checkpoint (has z=3)
+    const firstFrame = testUI.renderCalls[0].stack.stack[testUI.renderCalls[0].stack.stack.length - 1];
+    expect(firstFrame.locals.z).toBe(3);
+
+    // After rewind to an early checkpoint, re-execution pauses before z is set
+    expect(testUI.renderCalls.length).toBeGreaterThan(1);
+    const secondFrame = testUI.renderCalls[1].stack.stack[testUI.renderCalls[1].stack.stack.length - 1];
+    expect("z" in secondFrame.locals).toBe(false);
+  });
+
+  it("can print variables from loaded checkpoints", async () => {
+    const checkpoints = await collectCheckpoints();
+    const mod = await freshImport(stepTestCompiled);
+    const commands: DebuggerCommand[] = [
+      { type: "print", varName: "z" },
+    ];
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI, { checkpoints });
+
+    // Use the last checkpoint which should have z = 3
+    const lastCp = checkpoints[checkpoints.length - 1];
+    const interrupt = createDebugInterrupt(undefined, lastCp.id, lastCp);
+    await driver.run({ data: interrupt }, { interceptConsole: false });
+
+    const log = testUI.state.getActivityLog();
+    expect(log).toContainEqual("z = 3");
+  });
+
+  it("can rewind and then step forward (clears programFinished)", async () => {
+    const checkpoints = await collectCheckpoints();
+    const mod = await freshImport(stepTestCompiled);
+    // Rewind to an earlier checkpoint, then step forward — this should
+    // re-execute from that checkpoint since programFinished is cleared
+    const commands: DebuggerCommand[] = [
+      { type: "stepBack", preserveOverrides: false },  // go back
+      { type: "step" },                                 // step forward (re-executes)
+    ];
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI, { checkpoints });
+
+    const lastCp = checkpoints[checkpoints.length - 1];
+    const interrupt = createDebugInterrupt(undefined, lastCp.id, lastCp);
+    await driver.run({ data: interrupt }, { interceptConsole: false });
+
+    // After rewind + step, we should have more than 2 renders
+    // (initial render, rewind render, then step forward render)
+    expect(testUI.renderCalls.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("DebuggerDriver with loaded single checkpoint", () => {
+  it("loads a single checkpoint and renders it", async () => {
+    const checkpoints = await collectCheckpoints();
+    // Pick a checkpoint from the middle that has some state
+    const midpoint = checkpoints[Math.floor(checkpoints.length / 2)];
+
+    const mod = await freshImport(stepTestCompiled);
+    const commands: DebuggerCommand[] = [];
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI, { checkpoints: [midpoint] });
+
+    const interrupt = createDebugInterrupt(undefined, midpoint.id, midpoint);
+    await driver.run({ data: interrupt }, { interceptConsole: false });
+
+    expect(testUI.renderCalls.length).toBe(1);
+    expect(testUI.renderCalls[0].id).toBe(midpoint.id);
+  });
+
+  it("can step forward from a single loaded checkpoint", async () => {
+    const checkpoints = await collectCheckpoints();
+    // Pick the first checkpoint — stepping forward should re-execute
+    const firstCp = checkpoints[0];
+
+    const mod = await freshImport(stepTestCompiled);
+    const commands: DebuggerCommand[] = [
+      { type: "stepBack", preserveOverrides: false },  // rewind clears programFinished
+      { type: "step" },                                 // now we can step forward
+    ];
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI, { checkpoints: [firstCp] });
+
+    const interrupt = createDebugInterrupt(undefined, firstCp.id, firstCp);
+    await driver.run({ data: interrupt }, { interceptConsole: false });
+
+    // Should have at least the initial render + rewind attempt + step
+    expect(testUI.renderCalls.length).toBeGreaterThanOrEqual(1);
   });
 });

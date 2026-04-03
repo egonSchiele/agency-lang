@@ -82,6 +82,10 @@ export class Checkpoint implements SourceLocation {
     );
   }
 
+  equals(other: Checkpoint): boolean {
+    return JSON.stringify(this.toJSON()) === JSON.stringify(other.toJSON());
+  }
+
   toJSON() {
     return {
       id: this.id,
@@ -161,6 +165,13 @@ export class CheckpointStore {
     const checkpoint = Checkpoint.fromContext(ctx, opts);
     this.checkpoints[checkpoint.id] = checkpoint;
     return checkpoint.id;
+  }
+
+  add(checkpoint: Checkpoint): void {
+    this.checkpoints[checkpoint.id] = checkpoint;
+    if (checkpoint.id >= globalCheckpointCounter) {
+      globalCheckpointCounter = checkpoint.id + 1;
+    }
   }
 
   cloneCheckpoint(

@@ -87,7 +87,7 @@ export class DebuggerState {
 
   loadCheckpoints(checkpoints: Checkpoint[]) {
     for (const cp of checkpoints) {
-      this.checkpoints.cloneCheckpoint(cp);
+      this.checkpoints.add(cp);
     }
   }
 

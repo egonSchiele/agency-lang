@@ -5,7 +5,10 @@ const onCancel = () => {
 };
 import fs, { readFileSync } from "fs";
 import path from "path";
-import { execFileSync } from "child_process";
+import { execFile, execFileSync } from "child_process";
+import { promisify } from "util";
+
+export const execFileAsync = promisify(execFile);
 import {
   AgencyProgram,
   GraphNodeDefinition,
@@ -147,30 +150,36 @@ export async function promptForArgs(
   return { hasArgs, argsString };
 }
 
-export function executeNode({
+export type InterruptHandler = {
+  action: "approve" | "reject" | "modify" | "resolve";
+  modifiedArgs?: Record<string, any>;
+  resolvedValue?: any;
+  expectedMessage?: string;
+};
+
+type ExecuteNodeArgs = {
+  config: AgencyConfig;
+  agencyFile: string;
+  nodeName: string;
+  hasArgs: boolean;
+  argsString: string;
+  interruptHandlers?: InterruptHandler[];
+};
+
+export async function executeNodeAsync({
   config,
   agencyFile,
   nodeName,
   hasArgs,
   argsString,
   interruptHandlers,
-}: {
-  config: AgencyConfig;
-  agencyFile: string;
-  nodeName: string;
-  hasArgs: boolean;
-  argsString: string;
-  interruptHandlers?: Array<{
-    action: "approve" | "reject" | "modify" | "resolve";
-    modifiedArgs?: Record<string, any>;
-    resolvedValue?: any;
-    expectedMessage?: string;
-  }>;
-}): { data: any; [key: string]: any } {
-  const outFile = agencyFile.replace(".agency", ".js");
+}: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
   compile(config, agencyFile);
+  const baseName = agencyFile.replace(".agency", "");
+  const evaluateFile = `${baseName}.evaluate.js`;
+  const resultsFile = `${baseName}.evaluate.json`;
   const evaluateScript = renderEvaluate({
-    filename: outFile,
+    filename: path.basename(agencyFile).replace(".agency", ".js"),
     nodeName,
     hasArgs,
     args: argsString,
@@ -178,6 +187,32 @@ export function executeNode({
     interruptHandlersJSON: interruptHandlers
       ? JSON.stringify(interruptHandlers)
       : undefined,
+    resultsFilename: resultsFile,
+  });
+  fs.writeFileSync(evaluateFile, evaluateScript);
+  try {
+    const { stdout, stderr } = await execFileAsync("node", [evaluateFile], { maxBuffer: 10 * 1024 * 1024 });
+    const results = readFileSync(resultsFile, "utf-8");
+    return { data: JSON.parse(results).data, stdout, stderr };
+  } finally {
+    try { fs.unlinkSync(evaluateFile); } catch {}
+    try { fs.unlinkSync(resultsFile); } catch {}
+  }
+}
+
+export function executeNode(args: ExecuteNodeArgs): { data: any; [key: string]: any } {
+  const outFile = args.agencyFile.replace(".agency", ".js");
+  compile(args.config, args.agencyFile);
+  const evaluateScript = renderEvaluate({
+    filename: outFile,
+    nodeName: args.nodeName,
+    hasArgs: args.hasArgs,
+    args: args.argsString,
+    hasInterruptHandlers: !!args.interruptHandlers,
+    interruptHandlersJSON: args.interruptHandlers
+      ? JSON.stringify(args.interruptHandlers)
+      : undefined,
+    resultsFilename: "__evaluate.json",
   });
   const evaluateFile = "__evaluate.js";
   fs.writeFileSync(evaluateFile, evaluateScript);
@@ -216,26 +251,32 @@ function serializeArgValue(value: string): string {
   return JSON.stringify(value);
 }
 
-export function executeJudge(
-  actualOutput: string,
-  expectedOutput: string,
-  judgePrompt: string,
-  interruptHandlers?: Array<{
-    action: "approve" | "reject" | "modify" | "resolve";
-    modifiedArgs?: Record<string, any>;
-    resolvedValue?: any;
-    expectedMessage?: string;
-  }>,
-): { score: number; reasoning: string } {
-  // Resolve the judge.agency file bundled in dist/lib/agents/
+type ExecuteJudgeArgs = {
+  actualOutput: string;
+  expectedOutput: string;
+  judgePrompt: string;
+  interruptHandlers?: InterruptHandler[];
+};
+
+export async function executeJudgeAsync(
+  agencyFileBaseName: string,
+  { actualOutput, expectedOutput, judgePrompt, interruptHandlers }: ExecuteJudgeArgs,
+): Promise<{ score: number; reasoning: string; stdout: string; stderr: string }> {
   const currentDir = path.dirname(new URL(import.meta.url).pathname);
   const judgeAgencyFile = path.resolve(currentDir, "../agents/judge.agency");
 
-  const judgeOutFile = "__judge.js";
-  compile({}, judgeAgencyFile, judgeOutFile);
+  // Compile judge to its default location (next to judge.agency).
+  // Don't use a custom output path because compile() caches by source file
+  // and would skip writing a second output for a different test.
+  compile({}, judgeAgencyFile);
+  const judgeCompiledFile = judgeAgencyFile.replace(".agency", ".js");
 
+  const judgeEvaluateFile = `${agencyFileBaseName}.judge_evaluate.js`;
+  const judgeResultsFile = `${agencyFileBaseName}.judge_evaluate.json`;
+  const judgeEvaluateDir = path.dirname(path.resolve(judgeEvaluateFile));
+  const judgeRelativePath = path.relative(judgeEvaluateDir, judgeCompiledFile).split(path.sep).join("/");
   const judgeScript = renderJudgeEvaluate({
-    judgeFilename: judgeOutFile,
+    judgeFilename: judgeRelativePath,
     actualOutput: JSON.stringify(actualOutput),
     expectedOutput: JSON.stringify(expectedOutput),
     judgePrompt: JSON.stringify(judgePrompt),
@@ -243,13 +284,19 @@ export function executeJudge(
     interruptHandlersJSON: interruptHandlers
       ? JSON.stringify(interruptHandlers)
       : undefined,
+    resultsFilename: judgeResultsFile,
   });
 
-  const judgeEvaluateFile = "__judge_evaluate.js";
   fs.writeFileSync(judgeEvaluateFile, judgeScript);
-  execFileSync("node", [judgeEvaluateFile], { stdio: "inherit" });
-  const results = readFileSync("__judge_evaluate.json", "utf-8");
-  return JSON.parse(results).data;
+  try {
+    const { stdout, stderr } = await execFileAsync("node", [judgeEvaluateFile], { maxBuffer: 10 * 1024 * 1024 });
+    const results = readFileSync(judgeResultsFile, "utf-8");
+    const parsed = JSON.parse(results).data;
+    return { score: parsed.score, reasoning: parsed.reasoning, stdout, stderr };
+  } finally {
+    try { fs.unlinkSync(judgeEvaluateFile); } catch {}
+    try { fs.unlinkSync(judgeResultsFile); } catch {}
+  }
 }
 
 export function* findRecursively(

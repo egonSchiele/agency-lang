@@ -56,7 +56,7 @@ async function runJudge() {
   }
   {{/hasInterruptHandlers}}
 
-  writeFileSync("__judge_evaluate.json", JSON.stringify(result, null, 2));
+  writeFileSync("{{{resultsFilename:string}}}", JSON.stringify(result, null, 2));
 }
 
 runJudge();
@@ -69,6 +69,7 @@ export type TemplateType = {
   judgePrompt: string;
   hasInterruptHandlers: boolean;
   interruptHandlersJSON?: string;
+  resultsFilename: string;
 };
 
 const render = (args: TemplateType) => {

@@ -11,7 +11,7 @@ import {
   run,
 } from "@/cli/commands.js";
 import { evaluate } from "@/cli/evaluate.js";
-import { fixtures, test, testTs, TestStats, mergeStats } from "@/cli/test.js";
+import { fixtures, test, testTs } from "@/cli/test.js";
 import { AgencyConfig } from "@/config.js";
 import { _parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
@@ -206,25 +206,18 @@ program
   .description("Run tests")
   .argument("[inputs...]", "Paths to .test.json files or directories")
   .option("--js", "Run JavaScript integration tests")
+  .option("-p, --parallel <number>", "Number of test files to run in parallel", parseInt)
   .action(
     async (
       testFile: string[],
-      opts: { js?: boolean; genFixtures?: boolean },
+      opts: { js?: boolean; parallel?: number },
     ) => {
       if (opts.js) {
         await testTs(getConfig(), testFile);
       } else {
-        let totals: TestStats = {
-          passed: 0,
-          failed: 0,
-          filesPassed: 0,
-          filesFailed: 0,
-          failedFiles: [],
-        };
-        for (const file of testFile) {
-          const stats = await test(getConfig(), file);
-          totals = mergeStats(totals, stats);
-        }
+        const config = getConfig();
+        const parallel = opts.parallel ?? config.test?.parallel ?? 1;
+        const totals = await test(config, testFile, parallel);
         const totalFiles = totals.filesPassed + totals.filesFailed;
         const totalTests = totals.passed + totals.failed;
         if (totalFiles > 0) {

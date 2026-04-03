@@ -4,9 +4,12 @@ import { getNodesOfType } from "@/utils/node.js";
 import fs from "fs";
 import prompts from "prompts";
 import {
-  executeJudge,
+  execFileAsync,
+  executeJudgeAsync,
   executeNode,
+  executeNodeAsync,
   findRecursively,
+  InterruptHandler,
   parseTarget,
   pickANode,
   promptForArgs,
@@ -16,7 +19,6 @@ import { color } from "@/utils/termcolors.js";
 import { AgencyConfig } from "@/config.js";
 import path from "path";
 import { compile, loadConfig } from "./commands.js";
-import { execFileSync } from "child_process";
 type Exact = { type: "exact" };
 type LLMJudge = {
   type: "llmJudge";
@@ -24,12 +26,6 @@ type LLMJudge = {
   desiredAccuracy: number;
 };
 type Criteria = Exact | LLMJudge;
-type InterruptHandler = {
-  action: "approve" | "reject" | "modify" | "resolve";
-  modifiedArgs?: Record<string, any>;
-  resolvedValue?: any;
-  expectedMessage?: string;
-};
 type TestCase = {
   nodeName: string;
   input: string;
@@ -336,20 +332,70 @@ export function mergeStats(a: TestStats, b: TestStats): TestStats {
   };
 }
 
-function runSingleTest(
+type Logger = (msg: string, stream?: "stdout" | "stderr") => void;
+
+function createBufferedLogger(): { log: Logger; flush: () => void } {
+  const lines: { msg: string; stream: "stdout" | "stderr" }[] = [];
+  return {
+    log: (msg: string, stream: "stdout" | "stderr" = "stdout") =>
+      lines.push({ msg, stream }),
+    flush: () => {
+      for (const line of lines) {
+        if (line.stream === "stderr") {
+          console.error(line.msg);
+        } else {
+          console.log(line.msg);
+        }
+      }
+    },
+  };
+}
+
+async function runWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>,
+  onError: (item: T, error: unknown) => R,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      // Safe: nextIndex++ is synchronous and JS is single-threaded,
+      // so no two workers can read the same value before the increment.
+      const index = nextIndex++;
+      try {
+        results[index] = await fn(items[index]);
+      } catch (e) {
+        results[index] = onError(items[index], e);
+      }
+    }
+  }
+
+  const workers = Array.from(
+    { length: Math.min(concurrency, items.length) },
+    () => worker(),
+  );
+  await Promise.all(workers);
+  return results;
+}
+
+async function runSingleTest(
   config: AgencyConfig,
   testFile: string,
   tests: Tests,
   testCase: TestCase,
-): boolean {
+  log: Logger,
+): Promise<boolean> {
   const hasArgs = testCase.input !== "";
   const relativeSourceFilePath = path.join(
     path.dirname(testFile),
     tests.sourceFile,
   );
-  let result: { data: any; [key: string]: any };
+  let result: { data: any; stdout: string; stderr: string };
   try {
-    result = executeNode({
+    result = await executeNodeAsync({
       config,
       agencyFile: relativeSourceFilePath,
       nodeName: testCase.nodeName,
@@ -357,52 +403,57 @@ function runSingleTest(
       argsString: testCase.input,
       interruptHandlers: testCase.interruptHandlers,
     });
+    if (result.stdout) log(result.stdout.trimEnd());
+    if (result.stderr) log(result.stderr.trimEnd(), "stderr");
   } catch (e) {
     exitIfSignal(e);
-    console.log(color.red(`  ✗ Test execution error: ${e}`));
+    log(color.red(`  ✗ Test execution error: ${e}`));
     return false;
   }
 
   let testPassed = true;
+  const baseName = relativeSourceFilePath.replace(".agency", "");
   for (const criterion of testCase.evaluationCriteria) {
     if (criterion.type === "exact") {
       const actual = JSON.stringify(result.data);
       if (actual === testCase.expectedOutput) {
-        console.log(color.green("  ✓ Exact match passed"));
+        log(color.green("  ✓ Exact match passed"));
       } else {
-        console.log(color.red("  ✗ Exact match failed"));
-        console.log("    Expected:", testCase.expectedOutput);
-        console.log("    Actual:  ", actual);
+        log(color.red("  ✗ Exact match failed"));
+        log("    Expected: " + testCase.expectedOutput);
+        log("    Actual:   " + actual);
         testPassed = false;
       }
     } else if (criterion.type === "llmJudge") {
       const actual = JSON.stringify(result.data);
       try {
-        const judgeResult = executeJudge(
-          actual,
-          testCase.expectedOutput,
-          criterion.judgePrompt,
-        );
+        const judgeResult = await executeJudgeAsync(baseName, {
+          actualOutput: actual,
+          expectedOutput: testCase.expectedOutput,
+          judgePrompt: criterion.judgePrompt,
+        });
+        if (judgeResult.stdout) log(judgeResult.stdout.trimEnd());
+        if (judgeResult.stderr) log(judgeResult.stderr.trimEnd(), "stderr");
         const passed = judgeResult.score >= criterion.desiredAccuracy;
         if (passed) {
-          console.log(
+          log(
             color.green(
               `  ✓ LLM Judge passed (score: ${judgeResult.score}/${criterion.desiredAccuracy})`,
             ),
           );
-          console.log(`    Reasoning: ${judgeResult.reasoning}`);
+          log(`    Reasoning: ${judgeResult.reasoning}`);
         } else {
-          console.log(
+          log(
             color.red(
               `  ✗ LLM Judge failed (score: ${judgeResult.score}/${criterion.desiredAccuracy})`,
             ),
           );
-          console.log(`    Reasoning: ${judgeResult.reasoning}`);
-          console.log(`    Actual Output:\n${actual}`);
+          log(`    Reasoning: ${judgeResult.reasoning}`);
+          log(`    Actual Output:\n${actual}`);
           testPassed = false;
         }
       } catch (e) {
-        console.log(color.red(`  ✗ LLM Judge error: ${e}`));
+        log(color.red(`  ✗ LLM Judge error: ${e}`));
         testPassed = false;
       }
     }
@@ -410,71 +461,116 @@ function runSingleTest(
   return testPassed;
 }
 
-export async function test(
+function collectTestFiles(inputPath: string): string[] {
+  const fileStats = fs.statSync(inputPath);
+  if (!fileStats.isDirectory()) {
+    return [inputPath];
+  }
+  const files: string[] = [];
+  for (const { path: filePath } of findRecursively(inputPath, ".test.json")) {
+    files.push(filePath);
+  }
+  return files;
+}
+
+async function runTestFile(
   config: AgencyConfig,
   testFile: string,
 ): Promise<TestStats> {
-  const fileStats = fs.statSync(testFile);
-  if (fileStats.isDirectory()) {
-    let stats = emptyStats();
-    for (const { path } of findRecursively(testFile, ".test.json")) {
-      const childStats = await test(config, path);
-      stats = mergeStats(stats, childStats);
+  const logger = createBufferedLogger();
+  const log = logger.log;
+
+  try {
+    log(color.yellow(`Running tests for ${testFile}...`));
+
+    const tests: Tests = JSON.parse(fs.readFileSync(testFile, "utf-8"));
+    let passed = 0;
+    const total = tests.tests.length;
+
+    for (let i = 0; i < total; i++) {
+      const testCase = tests.tests[i];
+      const interruptInfo = testCase.interruptHandlers
+        ? ` interrupts=${testCase.interruptHandlers.length}`
+        : "";
+      const testNum = color.cyan(`Test ${i + 1}/${total}:`);
+      log(
+        `\n${testNum} node=${testCase.nodeName} input=${testCase.input || "(none)"}${interruptInfo}`,
+      );
+      if (testCase.description) {
+        log(color.cyan("Description:", testCase.description) + "\n");
+      }
+
+      const maxAttempts = (testCase.retry ?? 0) + 1;
+      let testPassed = false;
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        if (attempt > 1) {
+          log(color.yellow(`  Retry ${attempt - 1}/${testCase.retry}...`));
+        }
+        try {
+          testPassed = await runSingleTest(config, testFile, tests, testCase, log);
+          if (testPassed) break;
+        } catch (e) {
+          exitIfSignal(e);
+          log(color.red(`  ✗ Test error: ${e}`));
+          testPassed = false;
+        }
+      }
+
+      if (testPassed) passed++;
     }
-    return stats;
+
+    const failed = total - passed;
+    log(`\n${passed}/${total} tests passed`);
+
+    return {
+      passed,
+      failed,
+      filesPassed: failed === 0 ? 1 : 0,
+      filesFailed: failed === 0 ? 0 : 1,
+      failedFiles: failed > 0 ? [testFile] : [],
+    };
+  } finally {
+    logger.flush();
+  }
+}
+
+export async function test(
+  config: AgencyConfig,
+  inputPaths: string[],
+  parallel: number = 1,
+): Promise<TestStats> {
+  const testFiles: string[] = [];
+  for (const inputPath of inputPaths) {
+    testFiles.push(...collectTestFiles(inputPath));
   }
 
-  console.log(color.yellow(`Running tests for ${testFile}...`));
+  const safeParallel =
+    Number.isFinite(parallel) && Number.isInteger(parallel) && parallel > 0
+      ? parallel
+      : 1;
 
-  const tests: Tests = JSON.parse(fs.readFileSync(testFile, "utf-8"));
-  let passed = 0;
-  const total = tests.tests.length;
+  const results = await runWithConcurrency(
+    testFiles,
+    safeParallel,
+    (testFile) => runTestFile(config, testFile),
+    (testFile, error) => {
+      console.error(color.red(`  ✗ Test file error: ${testFile}: ${error}`));
+      return {
+        passed: 0,
+        failed: 1,
+        filesPassed: 0,
+        filesFailed: 1,
+        failedFiles: [testFile],
+      };
+    },
+  );
 
-  for (let i = 0; i < total; i++) {
-    const testCase = tests.tests[i];
-    const interruptInfo = testCase.interruptHandlers
-      ? ` interrupts=${testCase.interruptHandlers.length}`
-      : "";
-    const testNum = color.cyan(`Test ${i + 1}/${total}:`);
-    console.log(
-      `\n${testNum} node=${testCase.nodeName} input=${testCase.input || "(none)"}${interruptInfo}`,
-    );
-    if (testCase.description) {
-      console.log(color.cyan("Description:", testCase.description), "\n");
-    }
-
-    const maxAttempts = (testCase.retry ?? 0) + 1;
-    let testPassed = false;
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      if (attempt > 1) {
-        console.log(
-          color.yellow(`  Retry ${attempt - 1}/${testCase.retry}...`),
-        );
-      }
-      try {
-        testPassed = runSingleTest(config, testFile, tests, testCase);
-        if (testPassed) break;
-      } catch (e) {
-        exitIfSignal(e);
-        console.log(color.red(`  ✗ Test error: ${e}`));
-        testPassed = false;
-      }
-    }
-
-    if (testPassed) passed++;
+  let stats = emptyStats();
+  for (const result of results) {
+    stats = mergeStats(stats, result);
   }
-
-  const failed = total - passed;
-  console.log(`\n${passed}/${total} tests passed`);
-
-  return {
-    passed,
-    failed,
-    filesPassed: failed === 0 ? 1 : 0,
-    filesFailed: failed === 0 ? 0 : 1,
-    failedFiles: failed > 0 ? [testFile] : [],
-  };
+  return stats;
 }
 
 function findTsTestDirs(_inputPath: string): string[] {
@@ -559,10 +655,12 @@ export async function testTs(config: AgencyConfig, inputPaths: string[]) {
       // Execute test.js
       const testFile = "test.js";
       try {
-        execFileSync("node", [testFile], {
+        const { stdout, stderr } = await execFileAsync("node", [testFile], {
           cwd: dir,
-          stdio: "inherit",
+          maxBuffer: 10 * 1024 * 1024,
         });
+        if (stdout) console.log(stdout.trimEnd());
+        if (stderr) console.error(stderr.trimEnd());
       } catch (e) {
         exitIfSignal(e);
         console.log(color.red(`  ✗ Test script execution failed: ${e}`));

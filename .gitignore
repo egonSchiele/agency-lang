@@ -5,6 +5,11 @@ index.mts
 index.adl
 __evaluate.*
 __judge*
+tests/**/*.evaluate.js
+tests/**/*.evaluate.json
+tests/**/*.judge.js
+tests/**/*.judge_evaluate.js
+tests/**/*.judge_evaluate.json
 *.js
 skills/*
 *__result.json

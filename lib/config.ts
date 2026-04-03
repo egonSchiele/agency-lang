@@ -135,4 +135,10 @@ export interface AgencyConfig {
 
   /** Custom path for the trace file (default: <program>.agencytrace) */
   traceFile?: string;
+
+  /** Test runner configuration */
+  test?: {
+    /** Number of test files to run in parallel. Default: 1 (sequential). */
+    parallel?: number;
+  };
 }

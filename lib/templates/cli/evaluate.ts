@@ -59,7 +59,7 @@ export async function runEvaluation() {
   }
   {{/hasInterruptHandlers}}
 
-  writeFileSync("__evaluate.json", JSON.stringify(result, null, 2));
+  writeFileSync("{{{resultsFilename:string}}}", JSON.stringify(result, null, 2));
   return result;
 }
 
@@ -72,6 +72,7 @@ export type TemplateType = {
   args?: string;
   hasInterruptHandlers: boolean;
   interruptHandlersJSON?: string;
+  resultsFilename: string;
 };
 
 const render = (args: TemplateType) => {

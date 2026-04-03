@@ -37,3 +37,9 @@ jobs:
     - run: pnpm install
     - run: pnpm run build
     - run: pnpm test:run
+    - run: pnpm run test:agency
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    - run: pnpm run test:agency-js
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

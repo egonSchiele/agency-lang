@@ -53,7 +53,11 @@ export class StatelogClient {
     }
 
     if (!this.apiKey) {
-      throw new Error("API key is required for StatelogClient");
+      if (this.debugMode)
+        console.warn(
+          "API key is required for StatelogClient to send logs to a remote server. Logs will not be sent.",
+        );
+      // throw new Error("API key is required for StatelogClient");
     }
   }
 

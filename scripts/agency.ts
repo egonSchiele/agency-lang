@@ -60,26 +60,37 @@ program
     }
   });
 
-program
-  .command("run")
-  .description("Compile and run .agency file(s)")
-  .argument("<input>", "Path to .agency input file")
-  .option("--resume <statefile>", "Resume execution from a saved state file")
-  .option("-l, --log <file>", "Write audit log entries to a JSONL file")
-  .option("--trace [file]", "Write execution trace to file (default: <input>.trace)")
-  .action((input: string, options: { resume?: string; log?: string; trace?: string | true }) => {
-    const config = getConfig();
-    if (options.log) {
-      config.audit = { ...config.audit, logFile: options.log };
-    }
-    if (options.trace) {
-      config.trace = true;
-      config.traceFile = typeof options.trace === "string"
-        ? options.trace
-        : input.replace(/\.agency$/, ".trace");
-    }
-    run(config, input, undefined, options.resume);
-  });
+type RunOptions = { resume?: string; log?: string; trace?: string | true };
+
+function runWithOptions(input: string, options: RunOptions) {
+  const config = getConfig();
+  if (options.log) {
+    config.audit = { ...config.audit, logFile: options.log };
+  }
+  if (options.trace) {
+    config.trace = true;
+    config.traceFile = typeof options.trace === "string"
+      ? options.trace
+      : input.replace(/\.agency$/, ".trace");
+  }
+  run(config, input, undefined, options.resume);
+}
+
+function addRunOptions(cmd: Command) {
+  return cmd
+    .option("--resume <statefile>", "Resume execution from a saved state file")
+    .option("-l, --log <file>", "Write audit log entries to a JSONL file")
+    .option("--trace [file]", "Write execution trace to file (default: <input>.trace)");
+}
+
+addRunOptions(
+  program
+    .command("run")
+    .description("Compile and run .agency file(s)")
+    .argument("<input>", "Path to .agency input file")
+).action((input: string, options: RunOptions) => {
+  runWithOptions(input, options);
+});
 
 program
   .command("format")
@@ -394,20 +405,19 @@ program
   });
 
 // Default: treat unknown args as a file to run
-program.arguments("[file]").action((file: string | undefined) => {
-  if (!file) {
-    program.help();
-    return;
-  }
-  if (file.endsWith(".agency") || fs.existsSync(file)) {
-    const args = program.args;
-    const output = args.length > 1 ? args[1] : undefined;
-    run(getConfig(), file, output);
-  } else {
-    console.error(`Error: Unknown command '${file}'`);
-    console.error("Run 'agency help' for usage information");
-    process.exit(1);
-  }
-});
+addRunOptions(program.arguments("[file]"))
+  .action((file: string | undefined, options: RunOptions) => {
+    if (!file) {
+      program.help();
+      return;
+    }
+    if (file.endsWith(".agency") || fs.existsSync(file)) {
+      runWithOptions(file, options);
+    } else {
+      console.error(`Error: Unknown command '${file}'`);
+      console.error("Run 'agency help' for usage information");
+      process.exit(1);
+    }
+  });
 
 program.parse();

@@ -17,89 +17,37 @@ const preprocessorFixturesDir = path.join(
 );
 const builderFixturesDir = path.join(__dirname, "../../tests/typescriptBuilder");
 
-function regenerateFixtures(dir: string, relativePath = "") {
+type Transform = (ast: any, fileName: string) => { content: string; ext: string };
+
+const generatorTransform: Transform = (ast, fileName) => ({
+  content: generateTypeScript(ast, undefined, undefined, fileName),
+  ext: ".mjs",
+});
+
+const preprocessorTransform: Transform = (ast) => {
+  const info = collectProgramInfo(ast);
+  const preprocessor = new TypescriptPreprocessor(ast, {}, info);
+  return { content: JSON.stringify(preprocessor.preprocess(), null, 2), ext: ".json" };
+};
+
+function regenerate(dir: string, transform: Transform, relativePath = "") {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
 
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
 
     if (entry.isDirectory()) {
-      regenerateFixtures(fullPath, path.join(relativePath, entry.name));
+      regenerate(fullPath, transform, path.join(relativePath, entry.name));
     } else if (entry.isFile() && entry.name.endsWith(".agency")) {
       const baseName = entry.name.replace(".agency", "");
-      const mtsPath = path.join(dir, `${baseName}.mjs`);
-
       const agencyContent = fs.readFileSync(fullPath, "utf-8");
       const parseResult = parseAgency(agencyContent, {}, false);
 
       if (parseResult.success) {
-        const tsCode = generateTypeScript(parseResult.result, undefined, undefined, entry.name);
-        fs.writeFileSync(mtsPath, tsCode, "utf-8");
+        const { content, ext } = transform(parseResult.result, entry.name);
+        fs.writeFileSync(path.join(dir, `${baseName}${ext}`), content, "utf-8");
         const fixtureRelPath = path.join(relativePath, baseName) || baseName;
-        console.log(`✓ Updated ${fixtureRelPath}.mjs`);
-      } else {
-        console.error(`✗ Failed to parse ${fullPath}: ${parseResult.message}`);
-      }
-    }
-  }
-}
-
-function regeneratePreprocessorFixtures(dir: string, relativePath = "") {
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-  for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name);
-
-    if (entry.isDirectory()) {
-      regeneratePreprocessorFixtures(
-        fullPath,
-        path.join(relativePath, entry.name)
-      );
-    } else if (entry.isFile() && entry.name.endsWith(".agency")) {
-      const baseName = entry.name.replace(".agency", "");
-      const jsonPath = path.join(dir, `${baseName}.json`);
-
-      const agencyContent = fs.readFileSync(fullPath, "utf-8");
-      const parseResult = parseAgency(agencyContent, {}, false);
-
-      if (parseResult.success) {
-        const info = collectProgramInfo(parseResult.result);
-        const preprocessor = new TypescriptPreprocessor(parseResult.result, {}, info);
-        const preprocessed = preprocessor.preprocess();
-        fs.writeFileSync(
-          jsonPath,
-          JSON.stringify(preprocessed, null, 2),
-          "utf-8"
-        );
-        const fixtureRelPath = path.join(relativePath, baseName) || baseName;
-        console.log(`✓ Updated ${fixtureRelPath}.json`);
-      } else {
-        console.error(`✗ Failed to parse ${fullPath}: ${parseResult.message}`);
-      }
-    }
-  }
-}
-
-function regenerateBuilderFixtures(dir: string, relativePath = "") {
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-  for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name);
-
-    if (entry.isDirectory()) {
-      regenerateBuilderFixtures(fullPath, path.join(relativePath, entry.name));
-    } else if (entry.isFile() && entry.name.endsWith(".agency")) {
-      const baseName = entry.name.replace(".agency", "");
-      const mtsPath = path.join(dir, `${baseName}.mjs`);
-
-      const agencyContent = fs.readFileSync(fullPath, "utf-8");
-      const parseResult = parseAgency(agencyContent, {}, false);
-
-      if (parseResult.success) {
-        const tsCode = generateTypeScript(parseResult.result, undefined, undefined, entry.name);
-        fs.writeFileSync(mtsPath, tsCode, "utf-8");
-        const fixtureRelPath = path.join(relativePath, baseName) || baseName;
-        console.log(`✓ Updated ${fixtureRelPath}.mjs`);
+        console.log(`✓ Updated ${fixtureRelPath}${ext}`);
       } else {
         console.error(`✗ Failed to parse ${fullPath}: ${parseResult.message}`);
       }
@@ -110,12 +58,12 @@ function regenerateBuilderFixtures(dir: string, relativePath = "") {
 console.log("Regenerating fixture files...\n");
 
 console.log("--- TypeScript Generator Fixtures ---");
-regenerateFixtures(fixturesDir);
+regenerate(fixturesDir, generatorTransform);
 
 console.log("\n--- TypeScript Preprocessor Fixtures ---");
-regeneratePreprocessorFixtures(preprocessorFixturesDir);
+regenerate(preprocessorFixturesDir, preprocessorTransform);
 
 console.log("\n--- TypeScript Builder Fixtures ---");
-regenerateBuilderFixtures(builderFixturesDir);
+regenerate(builderFixturesDir, generatorTransform);
 
 console.log("\nDone!");

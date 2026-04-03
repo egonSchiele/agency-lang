@@ -11,7 +11,7 @@ def getGlobal() {
 def funcThrowsInterrupt(val: number) {
   foo = val
   bar = 10
-  interrupt("Interrupting from funcThrowsInterrupt")
+  return interrupt("Interrupting from funcThrowsInterrupt")
   return { 
     foo: foo,
     bar: bar

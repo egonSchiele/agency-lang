@@ -351,6 +351,12 @@ function createBufferedLogger(): { log: Logger; flush: () => void } {
   };
 }
 
+function sanitizeParallel(parallel: number): number {
+  return Number.isFinite(parallel) && Number.isInteger(parallel) && parallel > 0
+    ? parallel
+    : 1;
+}
+
 async function runWithConcurrency<T, R>(
   items: T[],
   concurrency: number,
@@ -545,14 +551,9 @@ export async function test(
     testFiles.push(...collectTestFiles(inputPath));
   }
 
-  const safeParallel =
-    Number.isFinite(parallel) && Number.isInteger(parallel) && parallel > 0
-      ? parallel
-      : 1;
-
   const results = await runWithConcurrency(
     testFiles,
-    safeParallel,
+    sanitizeParallel(parallel),
     (testFile) => runTestFile(config, testFile),
     (testFile, error) => {
       console.error(color.red(`  ✗ Test file error: ${testFile}: ${error}`));
@@ -606,122 +607,127 @@ function findAgencyFile(dir: string): string | null {
   return files.length > 0 ? files[0] : null;
 }
 
-export async function testTs(config: AgencyConfig, inputPaths: string[]) {
-  const successes: string[] = [];
-  const failures: string[] = [];
+async function runTsTestDir(
+  config: AgencyConfig,
+  dir: string,
+): Promise<{ success: boolean; dir: string }> {
+  const logger = createBufferedLogger();
+  const log = logger.log;
 
+  try {
+    const dirName = path.basename(dir);
+
+    if (fs.existsSync(path.join(dir, "skip"))) {
+      log(color.yellow(`\nSkipping JS test: ${dirName}`));
+      return { success: true, dir };
+    }
+
+    log(color.yellow(`\nRunning JS test: ${dirName}`));
+
+    const agencyFile = findAgencyFile(dir);
+    if (!agencyFile) {
+      log(color.red(`  ✗ No .agency file found in ${dir}`));
+      return { success: false, dir };
+    }
+
+    const agencyPath = path.join(dir, agencyFile);
+    const localConfigPath = path.join(dir, "agency.json");
+    let mergedConfig = config;
+    if (fs.existsSync(localConfigPath)) {
+      mergedConfig = { ...config, ...loadConfig(localConfigPath) };
+    }
+    try {
+      compile(mergedConfig, agencyPath);
+    } catch (e) {
+      log(color.red(`  ✗ Compilation failed: ${e}`));
+      return { success: false, dir };
+    }
+
+    // Remove stale result file from previous runs
+    const resultFile = path.join(dir, "__result.json");
+    try { fs.unlinkSync(resultFile); } catch {}
+
+    const testFile = "test.js";
+    try {
+      const { stdout, stderr } = await execFileAsync("node", [testFile], {
+        cwd: dir,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+      if (stdout) log(stdout.trimEnd());
+      if (stderr) log(stderr.trimEnd(), "stderr");
+    } catch (e) {
+      exitIfSignal(e);
+      log(color.red(`  ✗ Test script execution failed: ${e}`));
+      return { success: false, dir };
+    }
+
+    if (!fs.existsSync(resultFile)) {
+      log(color.red(`  ✗ Test script did not produce __result.json`));
+      return { success: false, dir };
+    }
+
+    const result = fs.readFileSync(resultFile, "utf-8");
+    const fixtureFile = path.join(dir, "fixture.json");
+
+    if (!fs.existsSync(fixtureFile)) {
+      log(color.yellow(`  No fixture.json found. Result:`));
+      log(result);
+      log(color.red(`  ✗ No fixture to compare against`));
+      return { success: false, dir };
+    }
+
+    const expected = fs.readFileSync(fixtureFile, "utf-8");
+    const resultParsed = JSON.parse(result);
+    const expectedParsed = JSON.parse(expected);
+
+    if (JSON.stringify(resultParsed) === JSON.stringify(expectedParsed)) {
+      log(color.green(`  ✓ Fixture match passed`));
+      return { success: true, dir };
+    } else {
+      log(color.red(`  ✗ Fixture match failed`));
+      log("    Expected: " + JSON.stringify(expectedParsed, null, 2));
+      log("    Actual:   " + JSON.stringify(resultParsed, null, 2));
+      return { success: false, dir };
+    }
+  } finally {
+    logger.flush();
+  }
+}
+
+export async function testTs(config: AgencyConfig, inputPaths: string[], parallel: number = 1) {
+  const allDirs: string[] = [];
   for (const inputPath of inputPaths) {
     const testDirs = findTsTestDirs(inputPath);
-
     if (testDirs.length === 0) {
       console.log(
         color.yellow(`No TypeScript test directories found in ${inputPath}`),
       );
-      continue;
-    }
-
-    for (const dir of testDirs) {
-      const dirName = path.basename(dir);
-
-      if (fs.existsSync(path.join(dir, "skip"))) {
-        console.log(color.yellow(`\nSkipping JS test: ${dirName}`));
-        continue;
-      }
-
-      console.log(color.yellow(`\nRunning JS test: ${dirName}`));
-
-      const agencyFile = findAgencyFile(dir);
-      if (!agencyFile) {
-        console.log(color.red(`  ✗ No .agency file found in ${dir}`));
-        failures.push(dir);
-        continue;
-      }
-
-      // Compile the .agency file, merging any local agency.json config
-      const agencyPath = path.join(dir, agencyFile);
-      const localConfigPath = path.join(dir, "agency.json");
-      let mergedConfig = config;
-      if (fs.existsSync(localConfigPath)) {
-        mergedConfig = { ...config, ...loadConfig(localConfigPath) };
-      }
-      try {
-        compile(mergedConfig, agencyPath);
-      } catch (e) {
-        console.log(color.red(`  ✗ Compilation failed: ${e}`));
-        failures.push(dir);
-        continue;
-      }
-
-      // Execute test.js
-      const testFile = "test.js";
-      try {
-        const { stdout, stderr } = await execFileAsync("node", [testFile], {
-          cwd: dir,
-          maxBuffer: 10 * 1024 * 1024,
-        });
-        if (stdout) console.log(stdout.trimEnd());
-        if (stderr) console.error(stderr.trimEnd());
-      } catch (e) {
-        exitIfSignal(e);
-        console.log(color.red(`  ✗ Test script execution failed: ${e}`));
-        failures.push(dir);
-        continue;
-      }
-
-      // Read __result.json
-      const resultFile = path.join(dir, "__result.json");
-      if (!fs.existsSync(resultFile)) {
-        console.log(color.red(`  ✗ Test script did not produce __result.json`));
-        failures.push(dir);
-        continue;
-      }
-
-      const result = fs.readFileSync(resultFile, "utf-8");
-
-      // Compare against fixture.json
-      const fixtureFile = path.join(dir, "fixture.json");
-      if (!fs.existsSync(fixtureFile)) {
-        console.log(color.yellow(`  No fixture.json found. Result:`));
-        console.log(result);
-        const response = await prompts({
-          type: "confirm",
-          name: "save",
-          message: "Save this as the fixture?",
-          initial: true,
-        });
-        if (response.save) {
-          fs.writeFileSync(fixtureFile, result);
-          console.log(color.green(`  Fixture saved to ${fixtureFile}`));
-          successes.push(dir);
-        } else {
-          failures.push(dir);
-        }
-      } else {
-        const expected = fs.readFileSync(fixtureFile, "utf-8");
-        const resultParsed = JSON.parse(result);
-        const expectedParsed = JSON.parse(expected);
-
-        if (JSON.stringify(resultParsed) === JSON.stringify(expectedParsed)) {
-          console.log(color.green(`  ✓ Fixture match passed`));
-          successes.push(dir);
-        } else {
-          console.log(color.red(`  ✗ Fixture match failed`));
-          console.log("    Expected:", JSON.stringify(expectedParsed, null, 2));
-          console.log("    Actual:  ", JSON.stringify(resultParsed, null, 2));
-          failures.push(dir);
-        }
-      }
+    } else {
+      allDirs.push(...testDirs);
     }
   }
 
+  const results = await runWithConcurrency(
+    allDirs,
+    sanitizeParallel(parallel),
+    (dir) => runTsTestDir(config, dir),
+    (dir, error) => {
+      console.error(color.red(`  ✗ JS test error: ${dir}: ${error}`));
+      return { success: false, dir };
+    },
+  );
+
+  const successes = results.filter((r) => r.success);
+  const failures = results.filter((r) => !r.success);
+
   if (failures.length > 0) {
     console.log("");
-    for (const dir of failures) {
+    for (const { dir } of failures) {
       console.log(color.red(` FAIL  ${dir}`));
     }
   }
   console.log(
-    `\n${successes.length}/${successes.length + failures.length} TS tests passed`,
+    `\n${successes.length}/${results.length} TS tests passed`,
   );
   if (failures.length > 0) {
     process.exit(1);

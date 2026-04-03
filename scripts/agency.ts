@@ -212,11 +212,11 @@ program
       testFile: string[],
       opts: { js?: boolean; parallel?: number },
     ) => {
+      const config = getConfig();
+      const parallel = opts.parallel ?? config.test?.parallel ?? 1;
       if (opts.js) {
-        await testTs(getConfig(), testFile);
+        await testTs(config, testFile, parallel);
       } else {
-        const config = getConfig();
-        const parallel = opts.parallel ?? config.test?.parallel ?? 1;
         const totals = await test(config, testFile, parallel);
         const totalFiles = totals.filesPassed + totals.filesFailed;
         const totalTests = totals.passed + totals.failed;

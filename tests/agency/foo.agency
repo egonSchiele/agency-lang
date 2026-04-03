@@ -1,20 +1,7 @@
-def goFoo() {
-  return foo();
-}
-
 node foo() {
-  return "foo";
-}
-
-def goBar() {
-  return bar();
+  return 4 + 5
 }
 
 node bar() {
-  return "bar";
-}
-
-node main() {
-  async goFoo();
-  async goBar();
+  return "bar"
 }

@@ -147,7 +147,6 @@ expand stdlib
 propagate and die keywords for handlers
 interrupt tests (assign interrupt reject)
 bundles
---checkpoint flag on debug command — still a stub
 write docs
 write post
 evals
@@ -156,7 +155,6 @@ variadic args
 better typechecker / better typing
 llm func general interface
 agency script default should support all flags
-dont ask for which node when resuming trace
 llm statement doesn't work correctly in debugger
   - rewind seems to break too
   - what about other interrupts?

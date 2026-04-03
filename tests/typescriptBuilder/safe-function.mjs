@@ -1,4 +1,4 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adit/agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { lookupItem, saveItem } from "./tools.js";
 import { fileURLToPath } from "url";
 import process from "process";
@@ -83,7 +83,7 @@ export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<strin
 export const resolveInterrupt = (interrupt: Interrupt, value: any, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, overrides: opts?.overrides, metadata: opts?.metadata });
 export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
 
-export const __setDebugger = (dbg: any) => { __globalCtx.debugger = dbg; };
+export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
 function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("safe-function.agency")
@@ -143,7 +143,8 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
-  let __forked;
+let __forked;
+let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("safe-function.agency")) {
     __initializeGlobals(__ctx)
   }
@@ -180,6 +181,7 @@ await __ctx.audit({
         type: "return",
         value: __auditReturnValue
       })
+__functionCompleted = true;
 return __auditReturnValue
             __stack.step++;
     }
@@ -194,15 +196,17 @@ return __auditReturnValue
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
-  }
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onFunctionEnd",
-    data: {
-      functionName: "safeLookup",
-      timeTaken: performance.now() - __funcStartTime
+    if (__functionCompleted) {
+      await callHook({
+        callbacks: __ctx.callbacks,
+        name: "onFunctionEnd",
+        data: {
+          functionName: "safeLookup",
+          timeTaken: performance.now() - __funcStartTime
+        }
+      })
     }
-  })
+  }
 }
 export async function unsafeSave(id: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
@@ -216,7 +220,8 @@ const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
-  let __forked;
+let __forked;
+let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("safe-function.agency")) {
     __initializeGlobals(__ctx)
   }
@@ -258,6 +263,7 @@ await __ctx.audit({
         type: "return",
         value: __auditReturnValue
       })
+__functionCompleted = true;
 return __auditReturnValue
             __stack.step++;
     }
@@ -272,15 +278,17 @@ return __auditReturnValue
     throw new ToolCallError(__error, { retryable: __self.__retryable })
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
-  }
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onFunctionEnd",
-    data: {
-      functionName: "unsafeSave",
-      timeTaken: performance.now() - __funcStartTime
+    if (__functionCompleted) {
+      await callHook({
+        callbacks: __ctx.callbacks,
+        name: "onFunctionEnd",
+        data: {
+          functionName: "unsafeSave",
+          timeTaken: performance.now() - __funcStartTime
+        }
+      })
     }
-  })
+  }
 }
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
@@ -293,7 +301,8 @@ const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
-  let __forked;
+let __forked;
+let __functionCompleted = false;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeStart",

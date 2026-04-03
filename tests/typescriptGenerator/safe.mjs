@@ -1,4 +1,4 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adit/agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { foo } from "./foo.js";
 import { fileURLToPath } from "url";
 import process from "process";
@@ -83,7 +83,7 @@ export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<strin
 export const resolveInterrupt = (interrupt: Interrupt, value: any, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, overrides: opts?.overrides, metadata: opts?.metadata });
 export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
 
-export const __setDebugger = (dbg: any) => { __globalCtx.debugger = dbg; };
+export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
 function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("safe.agency")

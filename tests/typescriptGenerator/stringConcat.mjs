@@ -1,4 +1,3 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -98,7 +97,6 @@ const __toolRegistry = {
     }
   }
 };
-
 graph.node("foo", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -124,13 +122,11 @@ let __functionCompleted = false;
           __stack.step++;
   }
   if (__step <= 1) {
-          __self.__retryable = false;
-    await print(`What is your name?`)
+          await print(`What is your name?`)
           __stack.step++;
   }
   if (__step <= 2) {
-          __self.__retryable = false;
-    __stack.locals.name = await input(`> `);
+          __stack.locals.name = await input(`> `);
 if (isInterrupt(__stack.locals.name)) {
       await __ctx.pendingPromises.awaitAll()
       return {
@@ -146,8 +142,7 @@ if (isInterrupt(__stack.locals.name)) {
           __stack.step++;
   }
   if (__step <= 3) {
-          __self.__retryable = false;
-    await print(`Hello, ${__stack.locals.name}!`)
+          await print(`Hello, ${__stack.locals.name}!`)
           __stack.step++;
   }
   await callHook({
@@ -175,4 +170,4 @@ export async function foo({ messages, callbacks }: { messages?: any; callbacks?:
 }
 export const __fooNodeParams = [];
 export default graph
-export const __sourceMap = {"stringConcat.agency:foo":{"1":{"line":1,"col":2},"2":{"line":2,"col":2},"3":{"line":3,"col":2}}};
+export const __sourceMap = {"stringConcat.agency:foo":{"1":{"line":-1,"col":2},"2":{"line":0,"col":2},"3":{"line":1,"col":2}}};

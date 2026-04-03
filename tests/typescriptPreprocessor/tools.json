@@ -2,29 +2,6 @@
   "type": "agencyProgram",
   "nodes": [
     {
-      "type": "importStatement",
-      "importedNames": [
-        {
-          "type": "namedImport",
-          "importedNames": [
-            "print",
-            "printJSON",
-            "input",
-            "sleep",
-            "round",
-            "fetch",
-            "fetchJSON",
-            "read",
-            "write",
-            "readImage",
-            "notify"
-          ],
-          "safeNames": []
-        }
-      ],
-      "modulePath": "std::index"
-    },
-    {
       "type": "function",
       "functionName": "getWeather",
       "parameters": [
@@ -61,10 +38,10 @@
                       "type": "variableName",
                       "value": "city",
                       "loc": {
-                        "line": 1,
+                        "line": -1,
                         "col": 46,
-                        "start": 204,
-                        "end": 208
+                        "start": 85,
+                        "end": 89
                       },
                       "scope": "args"
                     }
@@ -73,25 +50,25 @@
               }
             ],
             "loc": {
-              "line": 1,
+              "line": -1,
               "col": 9,
-              "start": 167,
-              "end": 212
+              "start": 48,
+              "end": 93
             }
           },
           "loc": {
-            "line": 1,
+            "line": -1,
             "col": 2,
-            "start": 160,
-            "end": 212
+            "start": 41,
+            "end": 93
           }
         }
       ],
       "loc": {
-        "line": 0,
+        "line": -2,
         "col": 0,
-        "start": 119,
-        "end": 213
+        "start": 0,
+        "end": 94
       }
     },
     {
@@ -123,10 +100,10 @@
                   "type": "variableName",
                   "value": "temp",
                   "loc": {
-                    "line": 5,
+                    "line": 3,
                     "col": 12,
-                    "start": 266,
-                    "end": 270
+                    "start": 147,
+                    "end": 151
                   },
                   "scope": "args"
                 }
@@ -138,18 +115,18 @@
             ]
           },
           "loc": {
-            "line": 5,
+            "line": 3,
             "col": 2,
-            "start": 256,
-            "end": 281
+            "start": 137,
+            "end": 162
           }
         }
       ],
       "loc": {
-        "line": 4,
+        "line": 2,
         "col": 0,
-        "start": 215,
-        "end": 282
+        "start": 96,
+        "end": 163
       }
     },
     {
@@ -180,10 +157,10 @@
               }
             ],
             "loc": {
-              "line": 10,
+              "line": 8,
               "col": 21,
-              "start": 349,
-              "end": 385
+              "start": 230,
+              "end": 266
             },
             "tools": {
               "type": "usesTool",
@@ -194,10 +171,10 @@
             }
           },
           "loc": {
-            "line": 10,
+            "line": 8,
             "col": 2,
-            "start": 330,
-            "end": 385
+            "start": 211,
+            "end": 266
           },
           "scope": "local"
         },
@@ -240,10 +217,10 @@
               }
             ],
             "loc": {
-              "line": 10,
+              "line": 8,
               "col": 75,
-              "start": 403,
-              "end": 433
+              "start": 284,
+              "end": 314
             },
             "tools": {
               "type": "usesTool",
@@ -251,10 +228,10 @@
             }
           },
           "loc": {
-            "line": 10,
+            "line": 8,
             "col": 57,
-            "start": 385,
-            "end": 433
+            "start": 266,
+            "end": 314
           },
           "scope": "local"
         },
@@ -277,10 +254,10 @@
         }
       ],
       "loc": {
-        "line": 8,
+        "line": 6,
         "col": 0,
-        "start": 284,
-        "end": 434
+        "start": 165,
+        "end": 315
       }
     }
   ]

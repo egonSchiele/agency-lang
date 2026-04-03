@@ -1,4 +1,3 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -98,7 +97,6 @@ const __toolRegistry = {
     }
   }
 };
-
 //  Test graph nodes with typed parameters
 graph.node("greet", async (__state: GraphState) => {
   const __setupData = setupNode({
@@ -181,8 +179,7 @@ if (isInterrupt(__stack.locals.greeting)) {
           __stack.step++;
   }
   if (__step <= 3) {
-          __self.__retryable = false;
-    await print(__stack.locals.greeting)
+          await print(__stack.locals.greeting)
           __stack.step++;
   }
   await callHook({
@@ -212,4 +209,4 @@ export async function greet(name: string, { messages, callbacks }: { messages?: 
 }
 export const __greetNodeParams = ["name"];
 export default graph
-export const __sourceMap = {"graph-node-with-types.agency:greet":{"1":{"line":3,"col":2},"3":{"line":4,"col":2}}};
+export const __sourceMap = {"graph-node-with-types.agency:greet":{"1":{"line":1,"col":2},"3":{"line":2,"col":2}}};

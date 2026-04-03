@@ -2,29 +2,6 @@
   "type": "agencyProgram",
   "nodes": [
     {
-      "type": "importStatement",
-      "importedNames": [
-        {
-          "type": "namedImport",
-          "importedNames": [
-            "print",
-            "printJSON",
-            "input",
-            "sleep",
-            "round",
-            "fetch",
-            "fetchJSON",
-            "read",
-            "write",
-            "readImage",
-            "notify"
-          ],
-          "safeNames": []
-        }
-      ],
-      "modulePath": "std::index"
-    },
-    {
       "type": "function",
       "functionName": "riskyAction",
       "parameters": [
@@ -61,10 +38,10 @@
                       "type": "variableName",
                       "value": "action",
                       "loc": {
-                        "line": 1,
+                        "line": -1,
                         "col": 46,
-                        "start": 207,
-                        "end": 213
+                        "start": 88,
+                        "end": 94
                       },
                       "scope": "args"
                     }
@@ -73,17 +50,17 @@
               }
             ],
             "loc": {
-              "line": 1,
+              "line": -1,
               "col": 9,
-              "start": 170,
-              "end": 219
+              "start": 51,
+              "end": 100
             }
           },
           "loc": {
-            "line": 1,
+            "line": -1,
             "col": 2,
-            "start": 163,
-            "end": 219
+            "start": 44,
+            "end": 100
           }
         },
         {
@@ -101,10 +78,10 @@
                   "type": "variableName",
                   "value": "action",
                   "loc": {
-                    "line": 2,
+                    "line": 0,
                     "col": 23,
-                    "start": 240,
-                    "end": 246
+                    "start": 121,
+                    "end": 127
                   },
                   "scope": "args"
                 }
@@ -112,18 +89,18 @@
             ]
           },
           "loc": {
-            "line": 2,
+            "line": 0,
             "col": 2,
-            "start": 219,
-            "end": 249
+            "start": 100,
+            "end": 130
           }
         }
       ],
       "loc": {
-        "line": 0,
+        "line": -2,
         "col": 0,
-        "start": 119,
-        "end": 250
+        "start": 0,
+        "end": 131
       }
     },
     {
@@ -155,10 +132,10 @@
                   "type": "variableName",
                   "value": "x",
                   "loc": {
-                    "line": 6,
+                    "line": 4,
                     "col": 12,
-                    "start": 300,
-                    "end": 301
+                    "start": 181,
+                    "end": 182
                   },
                   "scope": "args"
                 }
@@ -170,18 +147,18 @@
             ]
           },
           "loc": {
-            "line": 6,
+            "line": 4,
             "col": 2,
-            "start": 290,
-            "end": 309
+            "start": 171,
+            "end": 190
           }
         }
       ],
       "loc": {
-        "line": 5,
+        "line": 3,
         "col": 0,
-        "start": 252,
-        "end": 310
+        "start": 133,
+        "end": 191
       }
     },
     {
@@ -212,10 +189,10 @@
               }
             ],
             "loc": {
-              "line": 11,
+              "line": 9,
               "col": 19,
-              "start": 376,
-              "end": 423
+              "start": 257,
+              "end": 304
             },
             "tools": {
               "type": "usesTool",
@@ -226,10 +203,10 @@
             }
           },
           "loc": {
-            "line": 11,
+            "line": 9,
             "col": 2,
-            "start": 359,
-            "end": 423
+            "start": 240,
+            "end": 304
           },
           "scope": "local"
         },
@@ -258,27 +235,27 @@
               "type": "variableName",
               "value": "result",
               "loc": {
-                "line": 12,
+                "line": 10,
                 "col": 8,
-                "start": 429,
-                "end": 435
+                "start": 310,
+                "end": 316
               },
               "scope": "local"
             }
           ],
           "loc": {
-            "line": 12,
+            "line": 10,
             "col": 2,
-            "start": 423,
-            "end": 437
+            "start": 304,
+            "end": 318
           }
         }
       ],
       "loc": {
-        "line": 9,
+        "line": 7,
         "col": 0,
-        "start": 312,
-        "end": 438
+        "start": 193,
+        "end": 319
       }
     }
   ]

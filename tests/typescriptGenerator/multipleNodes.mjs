@@ -1,4 +1,3 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -98,7 +97,6 @@ const __toolRegistry = {
     }
   }
 };
-
 graph.node("greet", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -286,8 +284,7 @@ if (isInterrupt(__stack.locals.result)) {
           __stack.step++;
   }
   if (__step <= 3) {
-          __self.__retryable = false;
-    await print(__stack.locals.result)
+          await print(__stack.locals.result)
           __stack.step++;
   }
   await callHook({
@@ -404,4 +401,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"multipleNodes.agency:greet":{"1":{"line":2,"col":2},"3":{"line":3,"col":2}},"multipleNodes.agency:processGreeting":{"1":{"line":8,"col":2},"3":{"line":9,"col":2}},"multipleNodes.agency:main":{"1":{"line":13,"col":2}}};
+export const __sourceMap = {"multipleNodes.agency:greet":{"1":{"line":0,"col":2},"3":{"line":1,"col":2}},"multipleNodes.agency:processGreeting":{"1":{"line":6,"col":2},"3":{"line":7,"col":2}},"multipleNodes.agency:main":{"1":{"line":11,"col":2}}};

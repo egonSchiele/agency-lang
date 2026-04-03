@@ -1,4 +1,3 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -173,7 +172,6 @@ const __toolRegistry = {
     }
   }
 };
-
 export async function add(x: number, y: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -840,8 +838,7 @@ let __functionCompleted = false;
           __stack.step++;
   }
   if (__step <= 1) {
-          __self.__retryable = false;
-    await print(`This is a node with a return type`)
+          await print(`This is a node with a return type`)
           __stack.step++;
   }
   if (__step <= 2) {
@@ -1041,4 +1038,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"function-with-types.agency:add":{"1":{"line":4,"col":2},"3":{"line":5,"col":2}},"function-with-types.agency:greet":{"1":{"line":12,"col":2},"3":{"line":13,"col":2}},"function-with-types.agency:mixed":{"1":{"line":20,"col":2},"3":{"line":21,"col":2}},"function-with-types.agency:processArray":{"1":{"line":28,"col":2},"3":{"line":29,"col":2}},"function-with-types.agency:flexible":{"1":{"line":36,"col":2},"3":{"line":37,"col":2}},"function-with-types.agency:foo":{"1":{"line":41,"col":2},"2":{"line":42,"col":2}},"function-with-types.agency:main":{"1":{"line":47,"col":2},"2":{"line":48,"col":2},"3":{"line":49,"col":2},"4":{"line":50,"col":2},"5":{"line":51,"col":2}}};
+export const __sourceMap = {"function-with-types.agency:add":{"1":{"line":2,"col":2},"3":{"line":3,"col":2}},"function-with-types.agency:greet":{"1":{"line":10,"col":2},"3":{"line":11,"col":2}},"function-with-types.agency:mixed":{"1":{"line":18,"col":2},"3":{"line":19,"col":2}},"function-with-types.agency:processArray":{"1":{"line":26,"col":2},"3":{"line":27,"col":2}},"function-with-types.agency:flexible":{"1":{"line":34,"col":2},"3":{"line":35,"col":2}},"function-with-types.agency:foo":{"1":{"line":39,"col":2},"2":{"line":40,"col":2}},"function-with-types.agency:main":{"1":{"line":45,"col":2},"2":{"line":46,"col":2},"3":{"line":47,"col":2},"4":{"line":48,"col":2},"5":{"line":49,"col":2}}};

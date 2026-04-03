@@ -1,4 +1,3 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -98,7 +97,6 @@ const __toolRegistry = {
     }
   }
 };
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -124,8 +122,7 @@ let __functionCompleted = false;
           __stack.step++;
   }
   if (__step <= 1) {
-          __self.__retryable = false;
-    __stack.locals.message = await input(`Please enter a message: `);
+          __stack.locals.message = await input(`Please enter a message: `);
 if (isInterrupt(__stack.locals.message)) {
       await __ctx.pendingPromises.awaitAll()
       return {
@@ -197,8 +194,7 @@ if (isInterrupt(__stack.locals.sentiment)) {
           __stack.step++;
   }
   if (__step <= 4) {
-          __self.__retryable = false;
-    await print(__stack.locals.sentiment)
+          await print(__stack.locals.sentiment)
           __stack.step++;
   }
   await callHook({
@@ -238,4 +234,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"input.agency:main":{"1":{"line":1,"col":2},"2":{"line":3,"col":2},"4":{"line":4,"col":2}}};
+export const __sourceMap = {"input.agency:main":{"1":{"line":-1,"col":2},"2":{"line":1,"col":2},"4":{"line":2,"col":2}}};

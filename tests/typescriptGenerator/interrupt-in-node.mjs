@@ -1,4 +1,3 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -113,7 +112,6 @@ const __toolRegistry = {
     }
   }
 };
-
 export async function greet(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -275,8 +273,7 @@ let __functionCompleted = false;
           __stack.step++;
   }
   if (__step <= 1) {
-          __self.__retryable = false;
-    await print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`) + greet
+          await print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`) + greet
           __stack.step++;
   }
   if (__step <= 2) {
@@ -333,8 +330,7 @@ if (isInterrupt(__stack.locals.response)) {
           __stack.step++;
   }
   if (__step <= 4) {
-          __self.__retryable = false;
-    await print(`Greeted, age is still ${__stack.args.age}...`)
+          await print(`Greeted, age is still ${__stack.args.age}...`)
           __stack.step++;
   }
   if (__step <= 5) {
@@ -390,8 +386,7 @@ let __functionCompleted = false;
           __stack.step++;
   }
   if (__step <= 1) {
-          __self.__retryable = false;
-    await print(`Saying hi to ${__stack.args.name}...`)
+          await print(`Saying hi to ${__stack.args.name}...`)
           __stack.step++;
   }
   if (__step <= 2) {
@@ -462,4 +457,4 @@ export async function sayHi(name: any, { messages, callbacks }: { messages?: any
 }
 export const __sayHiNodeParams = ["name"];
 export default graph
-export const __sourceMap = {"interrupt-in-node.agency:greet":{"1":{"line":1,"col":2},"2":{"line":2,"col":2}},"interrupt-in-node.agency:foo2":{"2":{"line":8,"col":2},"4":{"line":9,"col":2},"5":{"line":10,"col":2}},"interrupt-in-node.agency:sayHi":{"1":{"line":14,"col":2},"2":{"line":15,"col":2},"3":{"line":16,"col":2}}};
+export const __sourceMap = {"interrupt-in-node.agency:greet":{"1":{"line":-1,"col":2},"2":{"line":0,"col":2}},"interrupt-in-node.agency:foo2":{"2":{"line":6,"col":2},"4":{"line":7,"col":2},"5":{"line":8,"col":2}},"interrupt-in-node.agency:sayHi":{"1":{"line":12,"col":2},"2":{"line":13,"col":2},"3":{"line":14,"col":2}}};

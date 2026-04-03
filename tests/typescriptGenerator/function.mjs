@@ -1,4 +1,3 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -113,7 +112,6 @@ const __toolRegistry = {
     }
   }
 };
-
 export async function test(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -210,8 +208,7 @@ let __functionCompleted = false;
           __stack.step++;
   }
   if (__step <= 1) {
-          __self.__retryable = false;
-    await print(await test({
+          await print(await test({
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
@@ -328,4 +325,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"function.agency:test":{"1":{"line":1,"col":2}},"function.agency:main":{"1":{"line":5,"col":2},"2":{"line":7,"col":2}},"function.agency:add":{}};
+export const __sourceMap = {"function.agency:test":{"1":{"line":-1,"col":2}},"function.agency:main":{"1":{"line":3,"col":2},"2":{"line":5,"col":2}},"function.agency:add":{}};

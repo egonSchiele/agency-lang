@@ -1,4 +1,3 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -98,7 +97,6 @@ const __toolRegistry = {
     }
   }
 };
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -133,8 +131,7 @@ let __functionCompleted = false;
           __stack.step++;
   }
   if (__step <= 2) {
-          __self.__retryable = false;
-    __stack.locals.__iteration_2 = __stack.locals.__iteration_2 ?? 0;
+          __stack.locals.__iteration_2 = __stack.locals.__iteration_2 ?? 0;
 let __currentIter_2 = 0;
 for (let __i_2 = 0; __i_2 < __stack.locals.items.length; __i_2++) {
   if (__currentIter_2 < __stack.locals.__iteration_2) {
@@ -160,8 +157,7 @@ for (let __i_2 = 0; __i_2 < __stack.locals.items.length; __i_2++) {
           __stack.step++;
   }
   if (__step <= 3) {
-          __self.__retryable = false;
-    __stack.locals.__iteration_3 = __stack.locals.__iteration_3 ?? 0;
+          __stack.locals.__iteration_3 = __stack.locals.__iteration_3 ?? 0;
 let __currentIter_3 = 0;
 for (let i = 0; i < 5; i++) {
   if (__currentIter_3 < __stack.locals.__iteration_3) {
@@ -194,8 +190,7 @@ for (let i = 0; i < 5; i++) {
           __stack.step++;
   }
   if (__step <= 5) {
-          __self.__retryable = false;
-    __stack.locals.__iteration_5 = __stack.locals.__iteration_5 ?? 0;
+          __stack.locals.__iteration_5 = __stack.locals.__iteration_5 ?? 0;
 let __currentIter_5 = 0;
 for (let index = 0; index < __stack.locals.names.length; index++) {
   if (__currentIter_5 < __stack.locals.__iteration_5) {
@@ -262,4 +257,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"forLoop.agency:main":{"1":{"line":2,"col":2},"2":{"line":3,"col":2},"3":{"line":8,"col":2},"4":{"line":13,"col":2},"5":{"line":14,"col":2},"2.0":{"line":4,"col":4},"3.0":{"line":9,"col":4},"5.0":{"line":15,"col":4},"5.1":{"line":16,"col":4}}};
+export const __sourceMap = {"forLoop.agency:main":{"1":{"line":0,"col":2},"2":{"line":1,"col":2},"3":{"line":6,"col":2},"4":{"line":11,"col":2},"5":{"line":12,"col":2},"2.0":{"line":2,"col":4},"3.0":{"line":7,"col":4},"5.0":{"line":13,"col":4},"5.1":{"line":14,"col":4}}};

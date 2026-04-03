@@ -1,4 +1,3 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -143,7 +142,6 @@ const __toolRegistry = {
     }
   }
 };
-
 export async function openai(msg: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -519,8 +517,7 @@ let __functionCompleted = false;
           __stack.step++;
   }
   if (__step <= 1) {
-          __self.__retryable = false;
-    __stack.locals.msg = await input(`> `);
+          __stack.locals.msg = await input(`> `);
 if (isInterrupt(__stack.locals.msg)) {
       await __ctx.pendingPromises.awaitAll()
       return {
@@ -601,8 +598,7 @@ __self.__pendingKey_res1 = __ctx.pendingPromises.add(__stack.locals.res1, (val) 
           __stack.step++;
   }
   if (__step <= 6) {
-          __self.__retryable = false;
-    await printJSON(__stack.locals.results)
+          await printJSON(__stack.locals.results)
           __stack.step++;
   }
   await callHook({
@@ -642,4 +638,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"asyncKeyword.agency:openai":{"1":{"line":1,"col":2},"3":{"line":2,"col":2}},"asyncKeyword.agency:google":{"2":{"line":7,"col":2},"4":{"line":10,"col":2}},"asyncKeyword.agency:fibs":{"1":{"line":14,"col":2}},"asyncKeyword.agency:main":{"1":{"line":18,"col":2},"2":{"line":19,"col":2},"3":{"line":20,"col":2},"5":{"line":21,"col":2},"6":{"line":22,"col":2}}};
+export const __sourceMap = {"asyncKeyword.agency:openai":{"1":{"line":-1,"col":2},"3":{"line":0,"col":2}},"asyncKeyword.agency:google":{"2":{"line":5,"col":2},"4":{"line":8,"col":2}},"asyncKeyword.agency:fibs":{"1":{"line":12,"col":2}},"asyncKeyword.agency:main":{"1":{"line":16,"col":2},"2":{"line":17,"col":2},"3":{"line":18,"col":2},"5":{"line":19,"col":2},"6":{"line":20,"col":2}}};

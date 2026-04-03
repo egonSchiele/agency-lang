@@ -2,29 +2,6 @@
   "type": "agencyProgram",
   "nodes": [
     {
-      "type": "importStatement",
-      "importedNames": [
-        {
-          "type": "namedImport",
-          "importedNames": [
-            "print",
-            "printJSON",
-            "input",
-            "sleep",
-            "round",
-            "fetch",
-            "fetchJSON",
-            "read",
-            "write",
-            "readImage",
-            "notify"
-          ],
-          "safeNames": []
-        }
-      ],
-      "modulePath": "std::index"
-    },
-    {
       "type": "function",
       "functionName": "slowTask",
       "parameters": [
@@ -62,10 +39,10 @@
                       "type": "variableName",
                       "value": "label",
                       "loc": {
-                        "line": 1,
+                        "line": -1,
                         "col": 27,
-                        "start": 184,
-                        "end": 189
+                        "start": 65,
+                        "end": 70
                       },
                       "scope": "args"
                     }
@@ -74,10 +51,10 @@
               }
             ],
             "loc": {
-              "line": 1,
+              "line": -1,
               "col": 11,
-              "start": 168,
-              "end": 195
+              "start": 49,
+              "end": 76
             },
             "tools": {
               "type": "usesTool",
@@ -85,10 +62,10 @@
             }
           },
           "loc": {
-            "line": 1,
+            "line": -1,
             "col": 2,
-            "start": 159,
-            "end": 195
+            "start": 40,
+            "end": 76
           },
           "scope": "local"
         },
@@ -110,10 +87,10 @@
                     "type": "variableName",
                     "value": "label",
                     "loc": {
-                      "line": 1,
+                      "line": -1,
                       "col": 27,
-                      "start": 184,
-                      "end": 189
+                      "start": 65,
+                      "end": 70
                     },
                     "scope": "args"
                   }
@@ -129,26 +106,26 @@
             "type": "variableName",
             "value": "result",
             "loc": {
-              "line": 2,
+              "line": 0,
               "col": 9,
-              "start": 202,
-              "end": 208
+              "start": 83,
+              "end": 89
             },
             "scope": "local"
           },
           "loc": {
-            "line": 2,
+            "line": 0,
             "col": 2,
-            "start": 195,
-            "end": 209
+            "start": 76,
+            "end": 90
           }
         }
       ],
       "loc": {
-        "line": 0,
+        "line": -2,
         "col": 0,
-        "start": 119,
-        "end": 210
+        "start": 0,
+        "end": 91
       }
     },
     {
@@ -179,10 +156,10 @@
               }
             ],
             "loc": {
-              "line": 6,
+              "line": 4,
               "col": 14,
-              "start": 240,
-              "end": 266
+              "start": 121,
+              "end": 147
             },
             "tools": {
               "type": "usesTool",
@@ -190,10 +167,10 @@
             }
           },
           "loc": {
-            "line": 6,
+            "line": 4,
             "col": 2,
-            "start": 228,
-            "end": 266
+            "start": 109,
+            "end": 147
           },
           "scope": "local"
         },
@@ -236,10 +213,10 @@
               }
             ],
             "loc": {
-              "line": 7,
+              "line": 5,
               "col": 14,
-              "start": 278,
-              "end": 305
+              "start": 159,
+              "end": 186
             },
             "tools": {
               "type": "usesTool",
@@ -247,10 +224,10 @@
             }
           },
           "loc": {
-            "line": 7,
+            "line": 5,
             "col": 2,
-            "start": 266,
-            "end": 305
+            "start": 147,
+            "end": 186
           },
           "scope": "local"
         },
@@ -283,10 +260,10 @@
                   "type": "variableName",
                   "value": "a",
                   "loc": {
-                    "line": 8,
+                    "line": 6,
                     "col": 16,
-                    "start": 319,
-                    "end": 320
+                    "start": 200,
+                    "end": 201
                   },
                   "scope": "local"
                 }
@@ -301,10 +278,10 @@
                   "type": "variableName",
                   "value": "b",
                   "loc": {
-                    "line": 8,
+                    "line": 6,
                     "col": 25,
-                    "start": 328,
-                    "end": 329
+                    "start": 209,
+                    "end": 210
                   },
                   "scope": "local"
                 }
@@ -312,10 +289,10 @@
             ]
           },
           "loc": {
-            "line": 8,
+            "line": 6,
             "col": 2,
-            "start": 305,
-            "end": 334
+            "start": 186,
+            "end": 215
           },
           "scope": "local"
         },
@@ -327,27 +304,27 @@
               "type": "variableName",
               "value": "combined",
               "loc": {
-                "line": 9,
+                "line": 7,
                 "col": 8,
-                "start": 340,
-                "end": 348
+                "start": 221,
+                "end": 229
               },
               "scope": "local"
             }
           ],
           "loc": {
-            "line": 9,
+            "line": 7,
             "col": 2,
-            "start": 334,
-            "end": 350
+            "start": 215,
+            "end": 231
           }
         }
       ],
       "loc": {
-        "line": 5,
+        "line": 3,
         "col": 0,
-        "start": 212,
-        "end": 351
+        "start": 93,
+        "end": 232
       }
     }
   ]

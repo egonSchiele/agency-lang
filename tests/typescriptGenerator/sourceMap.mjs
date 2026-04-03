@@ -1,4 +1,3 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -113,7 +112,6 @@ const __toolRegistry = {
     }
   }
 };
-
 export async function greet(name: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -371,4 +369,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"sourceMap.agency:greet":{"1":{"line":1,"col":2},"3":{"line":2,"col":2}},"sourceMap.agency:main":{"1":{"line":6,"col":2},"2":{"line":7,"col":2},"3":{"line":12,"col":2},"2.0":{"line":10,"col":4},"3.0":{"line":13,"col":4}}};
+export const __sourceMap = {"sourceMap.agency:greet":{"1":{"line":-1,"col":2},"3":{"line":0,"col":2}},"sourceMap.agency:main":{"1":{"line":4,"col":2},"2":{"line":5,"col":2},"3":{"line":10,"col":2},"2.0":{"line":8,"col":4},"3.0":{"line":11,"col":4}}};

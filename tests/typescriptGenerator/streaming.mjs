@@ -1,4 +1,3 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -98,7 +97,6 @@ const __toolRegistry = {
     }
   }
 };
-
 graph.node("foo", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -179,8 +177,7 @@ if (isInterrupt(__stack.locals.response)) {
           __stack.step++;
   }
   if (__step <= 3) {
-          __self.__retryable = false;
-    await print(__stack.locals.response)
+          await print(__stack.locals.response)
           __stack.step++;
   }
   if (__step <= 4) {
@@ -240,8 +237,7 @@ if (isInterrupt(__stack.locals.response2)) {
           __stack.step++;
   }
   if (__step <= 6) {
-          __self.__retryable = false;
-    await print(__stack.locals.response2)
+          await print(__stack.locals.response2)
           __stack.step++;
   }
   await callHook({
@@ -269,4 +265,4 @@ export async function foo({ messages, callbacks }: { messages?: any; callbacks?:
 }
 export const __fooNodeParams = [];
 export default graph
-export const __sourceMap = {"streaming.agency:foo":{"1":{"line":1,"col":2},"3":{"line":4,"col":2},"4":{"line":6,"col":2},"6":{"line":10,"col":2}}};
+export const __sourceMap = {"streaming.agency:foo":{"1":{"line":-1,"col":2},"3":{"line":2,"col":2},"4":{"line":4,"col":2},"6":{"line":8,"col":2}}};

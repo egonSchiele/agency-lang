@@ -2,29 +2,6 @@
   "type": "agencyProgram",
   "nodes": [
     {
-      "type": "importStatement",
-      "importedNames": [
-        {
-          "type": "namedImport",
-          "importedNames": [
-            "print",
-            "printJSON",
-            "input",
-            "sleep",
-            "round",
-            "fetch",
-            "fetchJSON",
-            "read",
-            "write",
-            "readImage",
-            "notify"
-          ],
-          "safeNames": []
-        }
-      ],
-      "modulePath": "std::index"
-    },
-    {
       "type": "function",
       "functionName": "pureFunction",
       "parameters": [
@@ -41,26 +18,26 @@
             "type": "variableName",
             "value": "x",
             "loc": {
-              "line": 1,
+              "line": -1,
               "col": 9,
-              "start": 150,
-              "end": 151
+              "start": 31,
+              "end": 32
             },
             "scope": "args"
           },
           "loc": {
-            "line": 1,
+            "line": -1,
             "col": 2,
-            "start": 143,
-            "end": 152
+            "start": 24,
+            "end": 33
           }
         }
       ],
       "loc": {
-        "line": 0,
+        "line": -2,
         "col": 0,
-        "start": 119,
-        "end": 153
+        "start": 0,
+        "end": 34
       }
     },
     {
@@ -94,10 +71,10 @@
                       "type": "variableName",
                       "value": "prompt",
                       "loc": {
-                        "line": 5,
+                        "line": 3,
                         "col": 30,
-                        "start": 211,
-                        "end": 217
+                        "start": 92,
+                        "end": 98
                       },
                       "scope": "args"
                     }
@@ -106,10 +83,10 @@
               }
             ],
             "loc": {
-              "line": 5,
+              "line": 3,
               "col": 11,
-              "start": 192,
-              "end": 223
+              "start": 73,
+              "end": 104
             },
             "tools": {
               "type": "usesTool",
@@ -117,10 +94,10 @@
             }
           },
           "loc": {
-            "line": 5,
+            "line": 3,
             "col": 2,
-            "start": 183,
-            "end": 223
+            "start": 64,
+            "end": 104
           },
           "scope": "local"
         },
@@ -142,10 +119,10 @@
                     "type": "variableName",
                     "value": "prompt",
                     "loc": {
-                      "line": 5,
+                      "line": 3,
                       "col": 30,
-                      "start": 211,
-                      "end": 217
+                      "start": 92,
+                      "end": 98
                     },
                     "scope": "args"
                   }
@@ -161,26 +138,26 @@
             "type": "variableName",
             "value": "result",
             "loc": {
-              "line": 6,
+              "line": 4,
               "col": 9,
-              "start": 230,
-              "end": 236
+              "start": 111,
+              "end": 117
             },
             "scope": "local"
           },
           "loc": {
-            "line": 6,
+            "line": 4,
             "col": 2,
-            "start": 223,
-            "end": 237
+            "start": 104,
+            "end": 118
           }
         }
       ],
       "loc": {
-        "line": 4,
+        "line": 2,
         "col": 0,
-        "start": 155,
-        "end": 238
+        "start": 36,
+        "end": 119
       }
     },
     {
@@ -207,17 +184,17 @@
               }
             ],
             "loc": {
-              "line": 10,
+              "line": 8,
               "col": 6,
-              "start": 260,
-              "end": 284
+              "start": 141,
+              "end": 165
             }
           },
           "loc": {
-            "line": 10,
+            "line": 8,
             "col": 2,
-            "start": 256,
-            "end": 284
+            "start": 137,
+            "end": 165
           },
           "scope": "local"
         },
@@ -239,17 +216,17 @@
               }
             ],
             "loc": {
-              "line": 11,
+              "line": 9,
               "col": 6,
-              "start": 288,
-              "end": 311
+              "start": 169,
+              "end": 192
             }
           },
           "loc": {
-            "line": 11,
+            "line": 9,
             "col": 2,
-            "start": 284,
-            "end": 311
+            "start": 165,
+            "end": 192
           },
           "scope": "local"
         },
@@ -277,10 +254,10 @@
                       "type": "variableName",
                       "value": "a",
                       "loc": {
-                        "line": 12,
+                        "line": 10,
                         "col": 34,
-                        "start": 343,
-                        "end": 344
+                        "start": 224,
+                        "end": 225
                       },
                       "scope": "local"
                     }
@@ -295,10 +272,10 @@
                       "type": "variableName",
                       "value": "b",
                       "loc": {
-                        "line": 12,
+                        "line": 10,
                         "col": 43,
-                        "start": 352,
-                        "end": 353
+                        "start": 233,
+                        "end": 234
                       },
                       "scope": "local"
                     }
@@ -307,10 +284,10 @@
               }
             ],
             "loc": {
-              "line": 12,
+              "line": 10,
               "col": 19,
-              "start": 328,
-              "end": 359
+              "start": 209,
+              "end": 240
             },
             "tools": {
               "type": "usesTool",
@@ -318,10 +295,10 @@
             }
           },
           "loc": {
-            "line": 12,
+            "line": 10,
             "col": 2,
-            "start": 311,
-            "end": 359
+            "start": 192,
+            "end": 240
           },
           "scope": "local"
         },
@@ -343,10 +320,10 @@
                     "type": "variableName",
                     "value": "a",
                     "loc": {
-                      "line": 12,
+                      "line": 10,
                       "col": 34,
-                      "start": 343,
-                      "end": 344
+                      "start": 224,
+                      "end": 225
                     },
                     "scope": "local"
                   }
@@ -361,10 +338,10 @@
                     "type": "variableName",
                     "value": "b",
                     "loc": {
-                      "line": 12,
+                      "line": 10,
                       "col": 43,
-                      "start": 352,
-                      "end": 353
+                      "start": 233,
+                      "end": 234
                     },
                     "scope": "local"
                   }
@@ -382,27 +359,27 @@
               "type": "variableName",
               "value": "result",
               "loc": {
-                "line": 13,
+                "line": 11,
                 "col": 8,
-                "start": 365,
-                "end": 371
+                "start": 246,
+                "end": 252
               },
               "scope": "local"
             }
           ],
           "loc": {
-            "line": 13,
+            "line": 11,
             "col": 2,
-            "start": 359,
-            "end": 373
+            "start": 240,
+            "end": 254
           }
         }
       ],
       "loc": {
-        "line": 9,
+        "line": 7,
         "col": 0,
-        "start": 240,
-        "end": 374
+        "start": 121,
+        "end": 255
       }
     }
   ]

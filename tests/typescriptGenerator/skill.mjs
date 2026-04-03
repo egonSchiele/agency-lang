@@ -1,4 +1,3 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -98,7 +97,6 @@ const __toolRegistry = {
     }
   }
 };
-
 graph.node("analyzeData", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -130,7 +128,7 @@ let __functionCompleted = false;
           __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
       ctx: __ctx,
-      prompt: `Analyzing: ${input}`,
+      prompt: `Analyzing: ${__stack.args.input}`,
       messages: __threads.createAndReturnThread(),
       clientConfig: {},
       maxToolCallRounds: 10,
@@ -167,7 +165,7 @@ if (isInterrupt(__stack.locals.result)) {
         llmCall: {
           step: __stack.step,
           targetVariable: "result",
-          prompt: `Analyzing: ${input}`,
+          prompt: `Analyzing: ${__stack.args.input}`,
           response: __stack.locals.result,
           model: __ctx.getSmoltalkConfig().model || "unknown",
         },
@@ -206,4 +204,4 @@ export async function analyzeData(input: string, { messages, callbacks }: { mess
 }
 export const __analyzeDataNodeParams = ["input"];
 export default graph
-export const __sourceMap = {"skill.agency:analyzeData":{"1":{"line":2,"col":2}}};
+export const __sourceMap = {"skill.agency:analyzeData":{"1":{"line":0,"col":2}}};

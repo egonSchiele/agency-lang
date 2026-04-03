@@ -1,4 +1,3 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -113,7 +112,6 @@ const __toolRegistry = {
     }
   }
 };
-
 export async function append(sleepTime: number, value: any, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -162,8 +160,7 @@ let __functionCompleted = false;
             __stack.step++;
     }
     if (__step <= 1) {
-            __self.__retryable = false;
-      await sleep(__stack.args.sleepTime)
+            await sleep(__stack.args.sleepTime)
             __stack.step++;
     }
   } catch (__error) {
@@ -312,4 +309,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"asyncUnassigned.agency:append":{"1":{"line":1,"col":2}},"asyncUnassigned.agency:main":{"1":{"line":5,"col":2},"2":{"line":6,"col":2},"3":{"line":7,"col":2}}};
+export const __sourceMap = {"asyncUnassigned.agency:append":{"1":{"line":-1,"col":2}},"asyncUnassigned.agency:main":{"1":{"line":3,"col":2},"2":{"line":4,"col":2},"3":{"line":5,"col":2}}};

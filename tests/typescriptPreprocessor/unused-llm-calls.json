@@ -2,29 +2,6 @@
   "type": "agencyProgram",
   "nodes": [
     {
-      "type": "importStatement",
-      "importedNames": [
-        {
-          "type": "namedImport",
-          "importedNames": [
-            "print",
-            "printJSON",
-            "input",
-            "sleep",
-            "round",
-            "fetch",
-            "fetchJSON",
-            "read",
-            "write",
-            "readImage",
-            "notify"
-          ],
-          "safeNames": []
-        }
-      ],
-      "modulePath": "std::index"
-    },
-    {
       "type": "graphNode",
       "nodeName": "main",
       "parameters": [],
@@ -56,10 +33,10 @@
               }
             ],
             "loc": {
-              "line": 2,
+              "line": 0,
               "col": 17,
-              "start": 205,
-              "end": 233
+              "start": 86,
+              "end": 114
             },
             "tools": {
               "type": "usesTool",
@@ -67,10 +44,10 @@
             }
           },
           "loc": {
-            "line": 2,
+            "line": 0,
             "col": 2,
-            "start": 190,
-            "end": 233
+            "start": 71,
+            "end": 114
           },
           "scope": "local"
         },
@@ -99,19 +76,19 @@
               "type": "variableName",
               "value": "used",
               "loc": {
-                "line": 3,
+                "line": 1,
                 "col": 8,
-                "start": 239,
-                "end": 243
+                "start": 120,
+                "end": 124
               },
               "scope": "local"
             }
           ],
           "loc": {
-            "line": 3,
+            "line": 1,
             "col": 2,
-            "start": 233,
-            "end": 248
+            "start": 114,
+            "end": 129
           }
         },
         {
@@ -140,10 +117,10 @@
               }
             ],
             "loc": {
-              "line": 6,
+              "line": 4,
               "col": 19,
-              "start": 329,
-              "end": 358
+              "start": 210,
+              "end": 239
             },
             "tools": {
               "type": "usesTool",
@@ -151,10 +128,10 @@
             }
           },
           "loc": {
-            "line": 6,
+            "line": 4,
             "col": 2,
-            "start": 312,
-            "end": 358
+            "start": 193,
+            "end": 239
           },
           "scope": "local"
         },
@@ -196,10 +173,10 @@
               }
             ],
             "loc": {
-              "line": 9,
+              "line": 7,
               "col": 9,
-              "start": 411,
-              "end": 431
+              "start": 292,
+              "end": 312
             },
             "tools": {
               "type": "usesTool",
@@ -207,18 +184,18 @@
             }
           },
           "loc": {
-            "line": 9,
+            "line": 7,
             "col": 2,
-            "start": 404,
-            "end": 431
+            "start": 285,
+            "end": 312
           }
         }
       ],
       "loc": {
-        "line": 0,
+        "line": -2,
         "col": 0,
-        "start": 119,
-        "end": 432
+        "start": 0,
+        "end": 313
       }
     }
   ]

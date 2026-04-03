@@ -1,4 +1,3 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -113,7 +112,6 @@ const __toolRegistry = {
     }
   }
 };
-
 export async function foo(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -483,28 +481,23 @@ __threads.popActive();
             __stack.step++;
     }
     if (__step <= 2) {
-            __self.__retryable = false;
-      await print(`res1`, __stack.locals.res1)
+            await print(`res1`, __stack.locals.res1)
             __stack.step++;
     }
     if (__step <= 3) {
-            __self.__retryable = false;
-      await print(`res2`, __stack.locals.res2)
+            await print(`res2`, __stack.locals.res2)
             __stack.step++;
     }
     if (__step <= 4) {
-            __self.__retryable = false;
-      await print(`res3`, __stack.locals.res3)
+            await print(`res3`, __stack.locals.res3)
             __stack.step++;
     }
     if (__step <= 5) {
-            __self.__retryable = false;
-      await print(`res4`, __stack.locals.res4)
+            await print(`res4`, __stack.locals.res4)
             __stack.step++;
     }
     if (__step <= 6) {
-            __self.__retryable = false;
-      await print(`res5`, __stack.locals.res5)
+            await print(`res5`, __stack.locals.res5)
             __stack.step++;
     }
   } catch (__error) {
@@ -899,28 +892,23 @@ __threads.popActive();
           __stack.step++;
   }
   if (__step <= 2) {
-          __self.__retryable = false;
-    await print(`res1`, __stack.locals.res1)
+          await print(`res1`, __stack.locals.res1)
           __stack.step++;
   }
   if (__step <= 3) {
-          __self.__retryable = false;
-    await print(`res2`, __stack.locals.res2)
+          await print(`res2`, __stack.locals.res2)
           __stack.step++;
   }
   if (__step <= 4) {
-          __self.__retryable = false;
-    await print(`res3`, __stack.locals.res3)
+          await print(`res3`, __stack.locals.res3)
           __stack.step++;
   }
   if (__step <= 5) {
-          __self.__retryable = false;
-    await print(`res4`, __stack.locals.res4)
+          await print(`res4`, __stack.locals.res4)
           __stack.step++;
   }
   if (__step <= 6) {
-          __self.__retryable = false;
-    await print(`res5`, __stack.locals.res5)
+          await print(`res5`, __stack.locals.res5)
           __stack.step++;
   }
   await callHook({
@@ -960,4 +948,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"threadsAndSubthreads.agency:foo":{"2":{"line":16,"col":2},"3":{"line":17,"col":2},"4":{"line":18,"col":2},"5":{"line":19,"col":2},"6":{"line":20,"col":2},"1.1":{"line":2,"col":4},"1.3.1":{"line":4,"col":6},"1.3.3.1":{"line":6,"col":8},"1.3.4.1":{"line":9,"col":8},"1.4.1":{"line":13,"col":6}},"threadsAndSubthreads.agency:main":{"2":{"line":39,"col":2},"3":{"line":40,"col":2},"4":{"line":41,"col":2},"5":{"line":42,"col":2},"6":{"line":43,"col":2},"1.1":{"line":25,"col":4},"1.3.1":{"line":27,"col":6},"1.3.3.1":{"line":29,"col":8},"1.3.4.1":{"line":32,"col":8},"1.4.1":{"line":36,"col":6}}};
+export const __sourceMap = {"threadsAndSubthreads.agency:foo":{"2":{"line":14,"col":2},"3":{"line":15,"col":2},"4":{"line":16,"col":2},"5":{"line":17,"col":2},"6":{"line":18,"col":2},"1.1":{"line":0,"col":4},"1.3.1":{"line":2,"col":6},"1.3.3.1":{"line":4,"col":8},"1.3.4.1":{"line":7,"col":8},"1.4.1":{"line":11,"col":6}},"threadsAndSubthreads.agency:main":{"2":{"line":37,"col":2},"3":{"line":38,"col":2},"4":{"line":39,"col":2},"5":{"line":40,"col":2},"6":{"line":41,"col":2},"1.1":{"line":23,"col":4},"1.3.1":{"line":25,"col":6},"1.3.3.1":{"line":27,"col":8},"1.3.4.1":{"line":30,"col":8},"1.4.1":{"line":34,"col":6}}};

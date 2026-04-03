@@ -1,4 +1,3 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -98,7 +97,6 @@ const __toolRegistry = {
     }
   }
 };
-
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -124,13 +122,11 @@ let __functionCompleted = false;
           __stack.step++;
   }
   if (__step <= 1) {
-          __self.__retryable = false;
-    await print(`lets race!`)
+          await print(`lets race!`)
           __stack.step++;
   }
   if (__step <= 2) {
-          __self.__retryable = false;
-    __stack.locals.msg = await input(`> `);
+          __stack.locals.msg = await input(`> `);
 if (isInterrupt(__stack.locals.msg)) {
       await __ctx.pendingPromises.awaitAll()
       return {
@@ -199,8 +195,7 @@ if (isInterrupt(__stack.locals.response1)) {
           __stack.step++;
   }
   if (__step <= 5) {
-          __self.__retryable = false;
-    await print(__stack.locals.response1)
+          await print(__stack.locals.response1)
           __stack.step++;
   }
   if (__step <= 6) {
@@ -268,8 +263,7 @@ if (isInterrupt(__stack.locals.response2)) {
           __stack.step++;
   }
   if (__step <= 9) {
-          __self.__retryable = false;
-    await print(__stack.locals.response2)
+          await print(__stack.locals.response2)
           __stack.step++;
   }
   if (__step <= 10) {
@@ -321,4 +315,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"specialVar.agency:main":{"1":{"line":1,"col":2},"2":{"line":2,"col":2},"3":{"line":4,"col":2},"5":{"line":6,"col":2},"7":{"line":8,"col":2},"9":{"line":10,"col":2},"10":{"line":11,"col":2}}};
+export const __sourceMap = {"specialVar.agency:main":{"1":{"line":-1,"col":2},"2":{"line":0,"col":2},"3":{"line":2,"col":2},"5":{"line":4,"col":2},"7":{"line":6,"col":2},"9":{"line":8,"col":2},"10":{"line":9,"col":2}}};

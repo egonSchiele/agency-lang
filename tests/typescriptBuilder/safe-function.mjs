@@ -1,4 +1,3 @@
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify } from "/Users/adityabhargava/agency-lang/stdlib/index.js";
 import { lookupItem, saveItem } from "./tools.js";
 import { fileURLToPath } from "url";
 import process from "process";
@@ -129,7 +128,6 @@ const __toolRegistry = {
     }
   }
 };
-
 
 export async function safeLookup(id: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
@@ -419,4 +417,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"safe-function.agency:safeLookup":{"1":{"line":3,"col":2}},"safe-function.agency:unsafeSave":{"1":{"line":7,"col":2},"2":{"line":8,"col":2}},"safe-function.agency:main":{"1":{"line":13,"col":2},"3":{"line":14,"col":2}}};
+export const __sourceMap = {"safe-function.agency:safeLookup":{"1":{"line":1,"col":2}},"safe-function.agency:unsafeSave":{"1":{"line":5,"col":2},"2":{"line":6,"col":2}},"safe-function.agency:main":{"1":{"line":11,"col":2},"3":{"line":12,"col":2}}};

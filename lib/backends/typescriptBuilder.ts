@@ -2420,7 +2420,7 @@ export class TypeScriptBuilder {
 
     if (this.agencyConfig.trace) {
       const traceFile = this.agencyConfig.traceFile
-        || this.moduleId.replace(/\.agency$/, ".agencytrace");
+        || this.moduleId.replace(/\.agency$/, ".trace");
       runtimeCtx = ts.statements([
         runtimeCtx,
         ts.raw(renderTraceSetup.default({

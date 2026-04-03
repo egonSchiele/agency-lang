@@ -130,10 +130,10 @@ export interface AgencyConfig {
     maxRestores?: number;
   };
 
-  /** Enable execution tracing — writes checkpoints to a .agencytrace file */
+  /** Enable execution tracing — writes checkpoints to a .trace file */
   trace?: boolean;
 
-  /** Custom path for the trace file (default: <program>.agencytrace) */
+  /** Custom path for the trace file (default: <program>.trace) */
   traceFile?: string;
 
   /** Test runner configuration */

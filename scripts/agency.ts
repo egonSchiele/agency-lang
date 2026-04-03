@@ -66,7 +66,7 @@ program
   .argument("<input>", "Path to .agency input file")
   .option("--resume <statefile>", "Resume execution from a saved state file")
   .option("-l, --log <file>", "Write audit log entries to a JSONL file")
-  .option("--trace [file]", "Write execution trace to file (default: <input>.agencytrace)")
+  .option("--trace [file]", "Write execution trace to file (default: <input>.trace)")
   .action((input: string, options: { resume?: string; log?: string; trace?: string | true }) => {
     const config = getConfig();
     if (options.log) {
@@ -76,7 +76,7 @@ program
       config.trace = true;
       config.traceFile = typeof options.trace === "string"
         ? options.trace
-        : input.replace(/\.agency$/, ".agencytrace");
+        : input.replace(/\.agency$/, ".trace");
     }
     run(config, input, undefined, options.resume);
   });

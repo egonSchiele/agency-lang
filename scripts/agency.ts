@@ -374,8 +374,8 @@ program
   .argument("<file>", "Agency file to debug")
   .option("--node <name>", "Node to execute")
   .option("--rewind-size <n>", "Rolling checkpoint window size", "30")
-  .option("--trace <file>", "Load and inspect a trace file (replay coming soon)")
-  .option("--checkpoint <file>", "Load and inspect a checkpoint file (replay coming soon)")
+  .option("--trace <file>", "Load and inspect a trace file")
+  .option("--checkpoint <file>", "Load and inspect a checkpoint file")
   .action(
     async (
       file: string,
@@ -404,20 +404,25 @@ program
     agent(config);
   });
 
-// Default: treat unknown args as a file to run
-addRunOptions(program.arguments("[file]"))
-  .action((file: string | undefined, options: RunOptions) => {
-    if (!file) {
-      program.help();
-      return;
-    }
-    if (file.endsWith(".agency") || fs.existsSync(file)) {
-      runWithOptions(file, options);
-    } else {
-      console.error(`Error: Unknown command '${file}'`);
-      console.error("Run 'agency help' for usage information");
-      process.exit(1);
-    }
-  });
+// Default: treat unknown args as a file to run.
+// Use a hidden default subcommand so its options (--trace, --resume, --log)
+// don't get added to the root program and shadow subcommand options.
+addRunOptions(
+  program
+    .command("default", { isDefault: true, hidden: true })
+    .argument("[file]"),
+).action((file: string | undefined, options: RunOptions) => {
+  if (!file) {
+    program.help();
+    return;
+  }
+  if (file.endsWith(".agency") || fs.existsSync(file)) {
+    runWithOptions(file, options);
+  } else {
+    console.error(`Error: Unknown command '${file}'`);
+    console.error("Run 'agency help' for usage information");
+    process.exit(1);
+  }
+});
 
 program.parse();

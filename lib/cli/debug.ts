@@ -85,8 +85,14 @@ export async function debug(
 
   // Determine which node to debug
   let nodeName = options.node;
+  console.log({ traceCheckpoints });
   if (!nodeName) {
-    nodeName = await pickANode(nodes);
+    if (traceCheckpoints) {
+      // Use the node from the trace's first checkpoint
+      nodeName = traceCheckpoints[0].nodeId;
+    } else {
+      nodeName = await pickANode(nodes);
+    }
   }
 
   // Look up the exported node function from the compiled module

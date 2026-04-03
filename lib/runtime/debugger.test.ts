@@ -20,7 +20,7 @@ function makeMockCtx(debuggerState: DebuggerState | null = null) {
     stateStack,
     globals,
     checkpoints: new CheckpointStore(),
-    debugger: debuggerState,
+    debuggerState: debuggerState,
   } as any;
 }
 

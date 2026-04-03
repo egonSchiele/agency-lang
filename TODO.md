@@ -140,3 +140,30 @@ Currently only TypeScript functions can be marked safe. We should be able to der
   Currently, multi-line comments seem to strip all leading whitespace from every line, which means there is no way to put a code snippet inside the comment without the formatting getting all messed up. The same thing seems to be true for multi-line strings, weirdly enough.
 
   Update the override functionality in rewinds and interrupts to support overriding not only the values of local variables, but also the values of global variables, and arguments to functions.
+
+-----
+
+expand stdlib
+propagate and die keywords for handlers
+interrupt tests (assign interrupt reject)
+bundles
+--checkpoint flag on debug command — still a stub
+write docs
+write post
+evals
+probabilistic exec
+variadic args
+better typechecker / better typing
+llm func general interface
+agency script default should support all flags
+dont ask for which node when resuming trace
+llm statement doesn't work correctly in debugger
+  - rewind seems to break too
+  - what about other interrupts?
+  - how are interrupt responses collected in debugger?
+
+  make selected pane bigger?
+  print tokens/cost in debugger?
+  - also capture in trace?
+
+  cant seem to step after tabbing around

@@ -41,9 +41,13 @@ export async function debug(
       console.error(`Error: Checkpoint file not found: ${options.checkpoint}`);
       process.exit(1);
     }
-    // TODO: Load checkpoint, deserialize, start live debugging from that point
-    console.log(`Loaded checkpoint from: ${options.checkpoint}`);
-    return;
+    const json = JSON.parse(fs.readFileSync(options.checkpoint, "utf-8"));
+    const cp = Checkpoint.fromJSON(json);
+    if (!cp) {
+      console.error("Error: Invalid checkpoint file.");
+      process.exit(1);
+    }
+    traceCheckpoints = [cp];
   }
   // Force debugger mode so the builder emits debugStep() calls
   const debugConfig: AgencyConfig = { ...config, debugger: true };

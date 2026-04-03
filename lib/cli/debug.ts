@@ -7,6 +7,7 @@ import { GraphNodeDefinition } from "@/types.js";
 import { DebuggerDriver } from "@/debugger/driver.js";
 import { DebuggerUI } from "@/debugger/ui.js";
 import { TraceReader } from "@/runtime/trace/traceReader.js";
+import type { TraceHeader } from "@/runtime/trace/types.js";
 import { Checkpoint } from "@/runtime/state/checkpointStore.js";
 import { createDebugInterrupt } from "@/runtime/interrupts.js";
 import * as fs from "fs";
@@ -23,6 +24,7 @@ export async function debug(
   } = {},
 ): Promise<void> {
   let traceCheckpoints: Checkpoint[] | undefined;
+  let traceHeader: TraceHeader | undefined;
   if (options.trace) {
     if (!fs.existsSync(options.trace)) {
       console.error(`Error: Trace file not found: ${options.trace}`);
@@ -34,6 +36,7 @@ export async function debug(
       process.exit(1);
     }
     traceCheckpoints = reader.checkpoints;
+    traceHeader = reader.header;
   }
 
   if (options.checkpoint) {
@@ -121,6 +124,7 @@ export async function debug(
     rewindSize,
     ui: new DebuggerUI(),
     checkpoints: traceCheckpoints,
+    traceHeader,
   });
 
   // Set the debugger state on the RuntimeContext via the module wrapper

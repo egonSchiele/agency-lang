@@ -3,6 +3,7 @@ import { ContentAddressableStore } from "./contentAddressableStore.js";
 import type { TraceManifest } from "./types.js";
 import { CHECKPOINT_SCHEMA } from "./types.js";
 import type { Checkpoint } from "../state/checkpointStore.js";
+import { VERSION } from "../../version.js";
 
 export class TraceWriter {
   private fd: number;
@@ -15,6 +16,7 @@ export class TraceWriter {
     this.writeLine({
       type: "header",
       version: 1,
+      agencyVersion: VERSION,
       program,
       timestamp: new Date().toISOString(),
       config: { hashAlgorithm: "sha256" },

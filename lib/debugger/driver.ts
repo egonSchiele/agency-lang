@@ -11,6 +11,7 @@ import { isDebugger, isInterrupt } from "../runtime/interrupts.js";
 import { StateStack } from "../runtime/state/stateStack.js";
 import type { DebuggerCommand, DebuggerIO } from "./types.js";
 import type { FunctionParameter } from "../types.js";
+import type { TraceHeader } from "../runtime/trace/types.js";
 
 import type { InterruptResponse } from "../runtime/interrupts.js";
 
@@ -46,6 +47,7 @@ type DriverOpts = {
   rewindSize: number;
   ui: DebuggerIO;
   checkpoints?: Checkpoint[];
+  traceHeader?: TraceHeader;
 };
 
 type DriverRunOpts = Partial<{
@@ -72,6 +74,13 @@ export class DebuggerDriver {
     if (opts.checkpoints?.length) {
       this.debuggerState.loadCheckpoints(opts.checkpoints);
       this.programFinished = true;
+    }
+
+    if (opts.traceHeader) {
+      const h = opts.traceHeader;
+      const date = new Date(h.timestamp);
+      const formattedDate = date.toLocaleString();
+      this.ui.state.log(`Trace: ${h.program} | ${formattedDate} | Agency v${h.agencyVersion} | ${opts.checkpoints?.length ?? 0} checkpoints`);
     }
   }
 

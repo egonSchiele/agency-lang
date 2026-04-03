@@ -11,6 +11,7 @@ export const CHECKPOINT_SCHEMA = {
 export type TraceHeader = {
   type: "header";
   version: number;
+  agencyVersion: string;
   program: string;
   timestamp: string;
   config: { hashAlgorithm: string };

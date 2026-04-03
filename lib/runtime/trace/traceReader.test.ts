@@ -106,7 +106,8 @@ describe("TraceReader", () => {
   it("reads a trace with no checkpoints", () => {
     const fd = fs.openSync(tracePath, "w");
     fs.writeSync(fd, JSON.stringify({
-      type: "header", version: 1, program: "test.agency",
+      type: "header", version: 1, agencyVersion: "0.0.0",
+      program: "test.agency",
       timestamp: new Date().toISOString(), config: { hashAlgorithm: "sha256" },
     }) + "\n");
     fs.closeSync(fd);

@@ -57,6 +57,8 @@ describe("TraceWriter", () => {
     expect(lines[0].type).toBe("header");
     expect(lines[0].program).toBe("test.agency");
     expect(lines[0].version).toBe(1);
+    expect(typeof lines[0].agencyVersion).toBe("string");
+    expect(lines[0].agencyVersion).toMatch(/^\d+\.\d+\.\d+/);
   });
 
   it("writes chunks before their manifest", () => {

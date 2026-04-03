@@ -198,19 +198,14 @@ export class DebuggerDriver {
             return finalResult;
           }
         } else {
-          // User code interrupt — show it and let the user respond
-          // (step/continue approves, or use :reject, :resolve, :modify)
+          // User code interrupt — show it and collect input from the user
           this.ui.state.log(
             `Interrupt: ${JSON.stringify((interrupt as Interrupt).data)}`,
           );
-          this.ui.state.log(
-            `(s/c to approve, or :reject, :resolve <val>, :modify k=v)`,
-          );
           this.ui.state.setMode(this.debuggerState.getMode());
           await this.ui.render(interrupt);
-          const command = await this.ui.waitForCommand();
           try {
-            result = await this.handleCommand(command, interrupt);
+            result = await this.handleInterrupt(interrupt);
           } catch (e) {
             this.ui.state.log(`Error: ${e}`);
             continue;
@@ -224,6 +219,98 @@ export class DebuggerDriver {
       this.restoreConsole();
       this.ui.destroy();
     }
+  }
+
+  private async handleInterrupt(interrupt: Interrupt): Promise<any> {
+    const input = await this.ui.promptForInput(
+      "approve / reject / resolve <value> / modify key=value",
+    );
+    const trimmed = input.trim();
+
+    if (trimmed === "approve" || trimmed === "a" || trimmed === "") {
+      this.ui.state.log("Approved interrupt");
+      this.debuggerState.resetCallDepth();
+      this.ui.state.resetCallStack();
+      return await this.mod.approveInterrupt(interrupt, {
+        metadata: {
+          callbacks: this.getCallbacks(),
+          debugger: this.debuggerState,
+        },
+      });
+    }
+
+    if (trimmed === "reject" || trimmed === "r") {
+      this.ui.state.log("Rejected interrupt");
+      this.debuggerState.resetCallDepth();
+      this.ui.state.resetCallStack();
+      return await this.mod.respondToInterrupt(
+        interrupt,
+        { type: "reject" },
+        {
+          metadata: {
+            callbacks: this.getCallbacks(),
+            debugger: this.debuggerState,
+          },
+        },
+      );
+    }
+
+    if (trimmed.startsWith("resolve ")) {
+      const valueStr = trimmed.slice("resolve ".length).trim();
+      let value: unknown;
+      try {
+        value = JSON.parse(valueStr);
+      } catch {
+        value = valueStr;
+      }
+      this.ui.state.log(`Resolved interrupt with: ${JSON.stringify(value)}`);
+      this.debuggerState.resetCallDepth();
+      this.ui.state.resetCallStack();
+      return await this.mod.respondToInterrupt(
+        interrupt,
+        { type: "resolve", value },
+        {
+          metadata: {
+            callbacks: this.getCallbacks(),
+            debugger: this.debuggerState,
+          },
+        },
+      );
+    }
+
+    if (trimmed.startsWith("modify ")) {
+      const rest = trimmed.slice("modify ".length).trim();
+      const overrides: Record<string, unknown> = {};
+      for (const pair of rest.split(/\s+/)) {
+        const eqIdx = pair.indexOf("=");
+        if (eqIdx === -1) continue;
+        const key = pair.slice(0, eqIdx);
+        const valStr = pair.slice(eqIdx + 1);
+        try {
+          overrides[key] = JSON.parse(valStr);
+        } catch {
+          overrides[key] = valStr;
+        }
+      }
+      this.ui.state.log(
+        `Modified interrupt args: ${JSON.stringify(overrides)}`,
+      );
+      this.debuggerState.resetCallDepth();
+      this.ui.state.resetCallStack();
+      return await this.mod.respondToInterrupt(
+        interrupt,
+        { type: "modify", newArguments: overrides },
+        {
+          metadata: {
+            callbacks: this.getCallbacks(),
+            debugger: this.debuggerState,
+          },
+        },
+      );
+    }
+
+    this.ui.state.log(`Unknown response: "${trimmed}". Try: approve, reject, resolve <value>, modify key=value`);
+    return { data: interrupt };
   }
 
   private async handleCommand(

@@ -30,6 +30,7 @@ function removeQuotes(s: string): string {
 
 export const debuggerParser: Parser<DebuggerStatement> = withLoc(seqC(
   set("type", "debuggerStatement"),
+  set("isUserAdded", true),
   str("debugger"),
   char("("),
   optional(capture(map(quotedString, removeQuotes), "label")),

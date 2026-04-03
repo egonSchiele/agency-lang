@@ -11,6 +11,7 @@ export async function debugStep(
   info: Omit<SourceLocation, "nodeId"> & {
     label: string | null;
     nodeContext: boolean;
+    isUserAdded: boolean;
   },
 ): Promise<Interrupt | undefined> {
   // If resuming from a previous debug pause, the interrupt system sets
@@ -30,7 +31,7 @@ export async function debugStep(
   if (!dbg) return undefined;
 
   // Decide whether to pause
-  const isUserBreakpoint = info.label !== null;
+  const isUserBreakpoint = info.isUserAdded;
   const isStepping = dbg.isStepping();
   const shouldPause = isStepping ? dbg.isAtTargetDepth() : isUserBreakpoint;
 

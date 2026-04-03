@@ -34,6 +34,7 @@ const baseInfo = {
   stepPath: "1",
   label: null,
   nodeContext: true,
+  isUserAdded: false,
 };
 
 describe("debugStep()", () => {
@@ -70,6 +71,7 @@ describe("debugStep()", () => {
     const result = await debugStep(ctx, makeState(ctx), {
       ...baseInfo,
       label: "my-breakpoint",
+      isUserAdded: true,
     });
     expect(result).toBeDefined();
     expect(result!.type).toBe("interrupt");
@@ -86,7 +88,7 @@ describe("debugStep()", () => {
 
     // call again with a label — will pause and replace the rolling checkpoint
     // (createRolling deduplicates by location, and both calls share the same stepPath)
-    await debugStep(ctx, makeState(ctx), { ...baseInfo, label: "bp" });
+    await debugStep(ctx, makeState(ctx), { ...baseInfo, label: "bp", isUserAdded: true });
     // Only 1 rolling checkpoint remains (deduplicated); the interrupt checkpoint
     // goes to ctx.checkpoints, not the debugger state
     expect(dbg.getCheckpoints().length).toBe(1);
@@ -154,6 +156,7 @@ describe("debugStep()", () => {
     const result = await debugStep(ctx, makeState(ctx), {
       ...baseInfo,
       label: "my-label",
+      isUserAdded: true,
     });
     expect(result).toBeDefined();
     expect(result!.data).toBe("my-label");

@@ -9,6 +9,7 @@ export const template = `const __dbg = await debugStep(__ctx, __state, {
   stepPath: {{{stepPath:string}}},
   label: {{{label:string}}},
   nodeContext: {{{nodeContext:boolean}}},
+  isUserAdded: {{{isUserAdded:boolean}}},
 });
 if (__dbg) {
   {{#nodeContext}}
@@ -26,6 +27,7 @@ export type TemplateType = {
   stepPath: string;
   label: string;
   nodeContext: boolean;
+  isUserAdded: boolean;
 };
 
 const render = (args: TemplateType) => {

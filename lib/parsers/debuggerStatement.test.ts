@@ -9,6 +9,7 @@ describe("debuggerParser", () => {
     if (!result.success) throw new Error("expected success");
     expect(result.result).toEqualWithoutLoc({
       type: "debuggerStatement",
+      isUserAdded: true,
       label: "checking mood",
     });
   });
@@ -19,6 +20,7 @@ describe("debuggerParser", () => {
     if (!result.success) throw new Error("expected success");
     expect(result.result).toEqualWithoutLoc({
       type: "debuggerStatement",
+      isUserAdded: true,
       label: "my label",
     });
   });

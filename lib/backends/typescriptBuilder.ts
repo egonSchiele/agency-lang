@@ -2000,6 +2000,7 @@ export class TypeScriptBuilder {
     const code = renderDebugger.default({
       label: node.label !== undefined ? JSON.stringify(node.label) : "null",
       nodeContext: this.isInsideGraphNode,
+      isUserAdded: !!node.isUserAdded,
       ...this.checkpointOpts(),
     });
     return ts.raw(code);

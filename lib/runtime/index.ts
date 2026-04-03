@@ -84,3 +84,4 @@ export { rewindFrom, applyOverrides } from "./rewind.js";
 export type { RewindCheckpoint } from "./rewind.js";
 
 export { debugStep } from "./debugger.js";
+export { DebuggerState } from "../debugger/debuggerState.js";

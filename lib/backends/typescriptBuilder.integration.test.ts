@@ -78,7 +78,7 @@ function normalizeWhitespace(code: string): string {
 }
 
 export function generateWithBuilder(agencySource: string, moduleId: string = "test.agency"): string {
-  const parseResult = parseAgency(agencySource);
+  const parseResult = parseAgency(agencySource, {}, false);
   if (!parseResult.success) {
     throw new Error(`Failed to parse: ${parseResult.message}`);
   }

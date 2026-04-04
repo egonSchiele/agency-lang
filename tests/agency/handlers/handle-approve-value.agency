@@ -1,11 +1,11 @@
 def foo() {
-  x = interrupt("what value?")
+  const x = interrupt("what value?")
   return x
 }
 
 node main() {
   handle {
-    result = foo()
+    const result = foo()
   } with (data) {
     return approve("custom value")
   }

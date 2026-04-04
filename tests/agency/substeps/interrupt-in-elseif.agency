@@ -1,6 +1,6 @@
 node main(x: number) {
   if (x > 10) {
-    result = "very big"
+    let result = "very big"
   } else if (x > 5) {
     result = "big"
     return interrupt("check")

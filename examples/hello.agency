@@ -6,6 +6,6 @@ def sayHello(name) {
 
 node main() {
   uses sayHello
-  greeting = llm("Greet John")
+  const greeting = llm("Greet John")
   print(greeting)
 }

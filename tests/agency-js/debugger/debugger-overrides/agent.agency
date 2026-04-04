@@ -1,6 +1,6 @@
 node main() {
-  x = 1
+  const x = 1
   debugger()
-  y = x + 10
+  const y = x + 10
   return y
 }

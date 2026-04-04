@@ -1,5 +1,5 @@
 node main(x: number) {
-  result = "start"
+  let result = "start"
   if (x > 5) {
     result = "big"
   } else {

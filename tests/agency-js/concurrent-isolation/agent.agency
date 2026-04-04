@@ -1,4 +1,4 @@
-globalVar = "unchanged"
+let globalVar = "unchanged"
 
 node foo(sec: number, newGlobalVar: string | null) {
   sleep(sec)

@@ -1,5 +1,5 @@
 node main() {
   greeting :: string
-  greeting = llm("say hello")
+  const greeting = llm("say hello")
   print(greeting)
 }

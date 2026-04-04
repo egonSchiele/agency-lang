@@ -1,8 +1,8 @@
-shared sharedCounter = 0
-counter = 0
+shared let sharedCounter = 0
+let counter = 0
 
 node main() {
-  cp = checkpoint()
+  const cp = checkpoint()
   sharedCounter = sharedCounter + 1
   counter = counter + 1
   if (sharedCounter < 3) {

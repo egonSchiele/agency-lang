@@ -1,5 +1,5 @@
 node main() {
-  name = "Alice"
-  greeting = llm("say hi to ${name}")
+  const name = "Alice"
+  const greeting = llm("say hi to ${name}")
   print(greeting)
 }

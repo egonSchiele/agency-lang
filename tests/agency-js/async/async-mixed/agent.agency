@@ -1,4 +1,4 @@
-log = []
+const log = []
 
 def sideEffect(val: string) {
   sleep(0.05)
@@ -11,7 +11,7 @@ def compute(val: number): number {
 }
 
 node main() {
-  x = async compute(5)
+  const x = async compute(5)
   async sideEffect("side")
   return { x: x, log: log }
 }

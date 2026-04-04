@@ -5,7 +5,7 @@ def foo() {
 
 node main() {
   handle {
-    result = foo()
+    const result = foo()
   } with (data) {
     return reject("not allowed")
   }

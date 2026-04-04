@@ -137,6 +137,7 @@
       "body": [
         {
           "type": "assignment",
+          "declKind": "const",
           "typeHint": {
             "type": "primitiveType",
             "value": "string"
@@ -158,9 +159,9 @@
             ],
             "loc": {
               "line": 8,
-              "col": 21,
-              "start": 230,
-              "end": 266
+              "col": 27,
+              "start": 236,
+              "end": 272
             },
             "tools": {
               "type": "usesTool",
@@ -174,7 +175,7 @@
             "line": 8,
             "col": 2,
             "start": 211,
-            "end": 266
+            "end": 272
           },
           "scope": "local"
         },
@@ -197,6 +198,7 @@
         },
         {
           "type": "assignment",
+          "declKind": "const",
           "typeHint": {
             "type": "primitiveType",
             "value": "string"
@@ -218,9 +220,9 @@
             ],
             "loc": {
               "line": 8,
-              "col": 75,
-              "start": 284,
-              "end": 314
+              "col": 87,
+              "start": 296,
+              "end": 326
             },
             "tools": {
               "type": "usesTool",
@@ -229,9 +231,9 @@
           },
           "loc": {
             "line": 8,
-            "col": 57,
-            "start": 266,
-            "end": 314
+            "col": 63,
+            "start": 272,
+            "end": 326
           },
           "scope": "local"
         },
@@ -257,7 +259,7 @@
         "line": 6,
         "col": 0,
         "start": 165,
-        "end": 315
+        "end": 327
       }
     }
   ]

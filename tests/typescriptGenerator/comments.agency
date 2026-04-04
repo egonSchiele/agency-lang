@@ -1,33 +1,33 @@
 // This is a single line comment at the top of the file
 
 // Variable assignment with comment above
-x = 42
+const x = 42
 
 // Multiple comments
 // can be placed
 // on consecutive lines
-y = "hello"
+const y = "hello"
 
 // Comment before function definition
 def greet() {
   // Comment inside function
-  message = "Hello, World!"
+  const message = "Hello, World!"
   // Another comment
   return message
 }
 
 node main() {
   // Comment before function call
-  result = greet()
+  let result = greet()
   print(result)
 
   // Testing comments in different contexts
   // 1. Before type hints
   age :: number
-  age = 25
+  const age = 25
 
   // 2. Before conditionals
-  status = "active"
+  const status = "active"
   match(status) {
     // Comment in match block    "active" => print("Running")
     "inactive" => print("Stopped")

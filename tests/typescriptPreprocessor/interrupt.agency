@@ -9,7 +9,7 @@ def safeAction(x: string): string {
 
 node main() {
   uses riskyAction, safeAction
-  result: string = llm("Do something risky and something safe")
+  const result: string = llm("Do something risky and something safe")
   print(result)
 }
 

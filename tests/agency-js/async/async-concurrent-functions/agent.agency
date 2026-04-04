@@ -4,12 +4,12 @@ def transform(val: string): string {
 }
 
 def helper(val: string): string {
-  x = async transform(val)
+  const x = async transform(val)
   return x
 }
 
 node main() {
-  a = async helper("first")
-  b = async helper("second")
+  const a = async helper("first")
+  const b = async helper("second")
   return [a, b]
 }

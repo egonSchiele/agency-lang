@@ -5,9 +5,9 @@ def double(val: number): number {
 
 node main(x: number) {
   if (x > 5) {
-    a = async double(x)
-    b = async double(x + 1)
-    result = [a, b]
+    const a = async double(x)
+    const b = async double(x + 1)
+    let result = [a, b]
   } else {
     result = [0, 0]
   }

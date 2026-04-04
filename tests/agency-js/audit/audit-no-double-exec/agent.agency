@@ -18,13 +18,13 @@ node testBareFunctionCall(): number {
 
 // Test 2: function call assigned to a variable
 node testFunctionAssigned(): number {
-  result = double(5)
+  const result = double(5)
   return result
 }
 
 // Test 3: function call passed as parameter to a function
 node testFunctionAsParam(): number {
-  result = double(add(1, 2))
+  const result = double(add(1, 2))
   return result
 }
 
@@ -42,18 +42,18 @@ node testBuiltinCall() {
 
 // Test 6: built-in function call assigned to a variable
 node testBuiltinAssigned(): number {
-  result = add(3, 4)
+  const result = add(3, 4)
   return result
 }
 
 // Test 7: async function call
 node testAsyncCall(): number {
-  result = async double(5)
+  const result = async double(5)
   return result
 }
 
 // Test 8: shared variable assignment
-shared sharedResult = add(10, 20)
+shared const sharedResult = add(10, 20)
 
 node testSharedVar(): number {
   return sharedResult

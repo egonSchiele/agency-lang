@@ -1,4 +1,4 @@
-globalVar = 0
+let globalVar = 0
 
 def increment() {
   globalVar = globalVar + 1
@@ -9,10 +9,10 @@ def getGlobal() {
 }
 
 def funcThrowsInterrupt(val: number) {
-  foo = val
-  bar = 10
+  const foo = val
+  const bar = 10
   return interrupt("Interrupting from funcThrowsInterrupt")
-  return { 
+  return {
     foo: foo,
     bar: bar
   }

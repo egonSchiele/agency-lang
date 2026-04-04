@@ -1,7 +1,7 @@
 /* This is a multi-line comment
 that should be ignored by the parser */
 node main() {
-  x = 0
+  let x = 0
   x += 5
   if (x == 5) {
     return "x is 5"

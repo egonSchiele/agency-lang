@@ -1,5 +1,5 @@
 node main(message: string) {
-  mood: "happy" | "sad" = llm("Categorize the mood: ${message}")
-  confidence: "high" | "low" = llm("How confident are you? ${mood}")
+  const mood: "happy" | "sad" = llm("Categorize the mood: ${message}")
+  const confidence: "high" | "low" = llm("How confident are you? ${mood}")
   return { mood: mood, confidence: confidence }
 }

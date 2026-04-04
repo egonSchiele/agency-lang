@@ -1,10 +1,10 @@
-globalVar = "unchanged"
+let globalVar = "unchanged"
 
 node foo(sec: number, newGlobalVar: string | null) {
   if (newGlobalVar) {
     globalVar = newGlobalVar
   }
-  confirmation = interrupt("confirm")
+  const confirmation = interrupt("confirm")
   sleep(sec)
   return globalVar
 }

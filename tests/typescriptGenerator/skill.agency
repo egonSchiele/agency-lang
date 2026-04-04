@@ -1,4 +1,4 @@
 node analyzeData(input: string) {
   skill "./skills/data-processor.ts"
-  result = llm("Analyzing: ${input}")
+  const result = llm("Analyzing: ${input}")
 }

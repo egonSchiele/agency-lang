@@ -98,14 +98,14 @@ each call will get its own copy of `globalVar`.
  * 
  * ```agency
  * // this will be called on every invocation of the agent
- * globalVar = fetch("https://example.com/api/data");
+ * let globalVar = fetch("https://example.com/api/data");
  * ```
- * 
+ *
  * You can instead use a shared variable, and the variable will only be initialized once and used for all requests:
- * 
+ *
  * ```agency
  * // this will only be called once, and the result will be shared across all invocations of the agent
- * shared foo = fetch("https://example.com/api/data");
+ * shared const foo = fetch("https://example.com/api/data");
  * ```
  */
 export type Scope =
@@ -153,6 +153,7 @@ export type Assignment = BaseNode & {
   typeHint?: VariableType;
   scope?: ScopeType;
   shared?: boolean;
+  declKind?: "let" | "const";
   value: Expression | MessageThread;
 };
 

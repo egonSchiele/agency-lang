@@ -26,8 +26,8 @@
 // and then you will enter a sub-step.
 
 
-log = []
-interruptResult = null
+const log = []
+let interruptResult = null
 
 def outerHandler(data) {
   log.push("outer handler called")
@@ -41,7 +41,7 @@ def innerHandler(data) {
 
 def bar(message: string) {
   handle {
-    mood: "happy" | "sad" = llm("Categorize the mood: ${message}")
+    const mood: "happy" | "sad" = llm("Categorize the mood: ${message}")
     // After rewind, this interrupt should still be caught by both handlers
     interruptResult = interrupt("safety-check")
     log.push("after interrupt")
@@ -57,7 +57,7 @@ def foo(message: string) {
 
 
 node main(message: string) {
-  result = foo(message)
+  const result = foo(message)
   return { 
     mood: result,
     result: interruptResult,

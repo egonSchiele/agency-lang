@@ -78,6 +78,14 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
     seqC(
       set("type", "assignment"),
       optionalSpaces,
+      optional(
+        captureCaptures(
+          seqC(
+            capture(or(str("let"), str("const")), "declKind"),
+            spaces,
+          ),
+        ),
+      ),
       capture(_valueAccessParser, "target"),
       optionalSpaces,
       optional(
@@ -95,7 +103,6 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
       capture(or(messageThreadParser, exprParser), "value"),
       optionalSemicolon,
       optionalSpacesOrNewline,
-      //optional(newline),
     ),
   );
   const result = parser(input);
@@ -120,7 +127,16 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
     return failure("invalid assignment target", input);
   }
 
-  const parsed = result.result;
+  const parsed = result.result as any;
+
+  // Reject let/const with access chains (e.g., "let obj.x = 1")
+  if (parsed.declKind && accessChain) {
+    return failure(
+      "cannot use 'let' or 'const' with property/index assignment",
+      input,
+    );
+  }
+
   const { target: _target, value, ...rest } = parsed;
   const out: Assignment = { ...rest, variableName, value, accessChain };
   return success(out, result.rest);
@@ -129,7 +145,12 @@ export const assignmentParser: Parser<Assignment> = label("an assignment", withL
 
 export const sharedAssignmentParser: Parser<Assignment> = (input: string) => {
   const parser = seqC(str("shared"), spaces, captureCaptures(assignmentParser));
-  return map(parser, (result) => ({ ...result, shared: true }))(input);
+  const result = parser(input);
+  if (!result.success) return result;
+  if (!result.result.declKind) {
+    return failure("shared requires 'let' or 'const' (e.g., 'shared let x = 1')", input);
+  }
+  return success({ ...result.result, shared: true }, result.rest);
 };
 
 const trim = (s: string) => s.trim();

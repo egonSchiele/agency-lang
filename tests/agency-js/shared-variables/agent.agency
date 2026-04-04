@@ -1,4 +1,4 @@
-shared sharedVar = "shared-value"
+shared let sharedVar = "shared-value"
 
 node foo(sleepTime: number, newSharedVar: string | null) {
   sleep(sleepTime)

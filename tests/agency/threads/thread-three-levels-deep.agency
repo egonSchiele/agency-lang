@@ -1,29 +1,29 @@
 node main() {
-  msgs = thread {
-    res1: number[] = llm("What is the first prime number > 100?")
-    msgs2 = thread {
-      res2: number[] = llm("What are the next 2 prime numbers after that?")
-      msgs3 = subthread {
-        res3: number[] = llm("What are the next 2 prime numbers after that?")
+  const msgs = thread {
+    const res1: number[] = llm("What is the first prime number > 100?")
+    const msgs2 = thread {
+      const res2: number[] = llm("What are the next 2 prime numbers after that?")
+      const msgs3 = subthread {
+        const res3: number[] = llm("What are the next 2 prime numbers after that?")
       }
-      msgs4 = thread {
-        res4: number[] = llm("What are the next 2 prime numbers after that?")
+      const msgs4 = thread {
+        const res4: number[] = llm("What are the next 2 prime numbers after that?")
       }
 
     }
-    msgs5 = subthread {
-      res5: number[] = llm("What are the next 2 prime numbers after that?")
-      msgs6 = subthread {
-        res6: number[] = llm("What are the next 2 prime numbers after that?")
+    const msgs5 = subthread {
+      const res5: number[] = llm("What are the next 2 prime numbers after that?")
+      const msgs6 = subthread {
+        const res6: number[] = llm("What are the next 2 prime numbers after that?")
       }
-      msgs7 = thread {
-        res7: number[] = llm("What are the next 2 prime numbers after that?")
+      const msgs7 = thread {
+        const res7: number[] = llm("What are the next 2 prime numbers after that?")
       }
 
     }
   }
 
-  return { 
+  return {
     msgs: msgs,
     msgs2: msgs2,
     msgs3: msgs3,

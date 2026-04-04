@@ -1,9 +1,9 @@
 node main(x: number) {
-  total = 0
+  let total = 0
   if (x > 5) {
     for (i in range(4)) {
       if (i == 2) {
-        y = interrupt("loop interrupt")
+        const y = interrupt("loop interrupt")
       }
       total = total + i
     }

@@ -4,7 +4,7 @@ def double(val: number): number {
 }
 
 node main() {
-  x = async double(5)
-  y = async double(10)
+  const x = async double(5)
+  const y = async double(10)
   return [x, y]
 }

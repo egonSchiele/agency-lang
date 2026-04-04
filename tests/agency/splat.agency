@@ -1,17 +1,17 @@
-user1 = { 
+const user1 = {
   name: "John Doe",
   age: 50
 }
 
 node main() {
-  user2 = { 
+  const user2 = {
     ...user1,
     name: "Frodo"
   }
-  arr1 = [1, 2, 3]
-  arr2 = [4, 5, 6]
-  arr3 = [...arr1, ...arr2]
-  return { 
+  const arr1 = [1, 2, 3]
+  const arr2 = [4, 5, 6]
+  const arr3 = [...arr1, ...arr2]
+  return {
     user2: user2,
     arr3: arr3
   }

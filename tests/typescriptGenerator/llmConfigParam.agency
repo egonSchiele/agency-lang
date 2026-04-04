@@ -1,9 +1,9 @@
-config = { 
+const config = {
   model: "gemini-2.5-flash-lite"
 }
 node main() {
-  foo: number[] = llm("What are 5 numbers?", config)
-  foo2: number[] = llm("What are 5 numbers?", { 
+  const foo: number[] = llm("What are 5 numbers?", config)
+  const foo2: number[] = llm("What are 5 numbers?", {
     maxTokens: 100
   })
   print(foo, foo2)

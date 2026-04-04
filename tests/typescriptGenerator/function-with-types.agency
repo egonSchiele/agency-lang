@@ -2,7 +2,7 @@ def add(x: number, y: number): number {
   """
   Adds two numbers together
   """
-  result = llm("add ${x} and ${y}")
+  const result = llm("add ${x} and ${y}")
   return result
 }
 
@@ -10,7 +10,7 @@ def greet(name: string) {
   """
   Greets a person by name
   """
-  message = llm("Hello ${name}!")
+  const message = llm("Hello ${name}!")
   return message
 }
 
@@ -18,7 +18,7 @@ def mixed(count: number, label) {
   """
   Mixed typed and untyped parameters
   """
-  output = llm("${label}: ${count}")
+  const output = llm("${label}: ${count}")
   return output
 }
 
@@ -26,7 +26,7 @@ def processArray(items: number[]) {
   """
   Processes an array of numbers
   """
-  result = llm("Processing array with ${items} items")
+  const result = llm("Processing array with ${items} items")
   return result
 }
 
@@ -34,7 +34,7 @@ def flexible(value: string | number) {
   """
   Handles either a string or number
   """
-  result = llm("Received value: ${value}")
+  const result = llm("Received value: ${value}")
   return result
 }
 
@@ -45,9 +45,9 @@ node foo(): string {
 
 node main() {
   // Call the functions
-  sum = add(5, 10)
-  greeting = greet("Alice")
-  labeled = mixed(42, "Answer")
-  processed = processArray([1, 2, 3, 4, 5])
-  flexResult = flexible("test")
+  const sum = add(5, 10)
+  const greeting = greet("Alice")
+  const labeled = mixed(42, "Answer")
+  const processed = processArray([1, 2, 3, 4, 5])
+  const flexResult = flexible("test")
 }

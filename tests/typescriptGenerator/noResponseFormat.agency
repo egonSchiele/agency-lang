@@ -1,4 +1,4 @@
 node main() {
-  response1 = llm("say hello")
+  const response1 = llm("say hello")
   print(response1)
 }

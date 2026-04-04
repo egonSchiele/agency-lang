@@ -4,7 +4,7 @@ def greet(name: string): string {
 }
 
 node foo() {
-  greeting = greet("AI World")
+  const greeting = greet("AI World")
   return { 
     greeting: greeting
   }

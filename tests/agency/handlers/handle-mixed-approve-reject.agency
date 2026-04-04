@@ -1,8 +1,8 @@
-log = []
+const log = []
 
 def greet() {
   log.push("greet-before")
-  name = interrupt({ 
+  const name = interrupt({
     type: "safe",
     message: "Who do you want to say bye to?"
   })
@@ -12,7 +12,7 @@ def greet() {
 
 def readStuff() {
   log.push("read-before")
-  return interrupt({ 
+  return interrupt({
     type: "read",
     message: "Can I read a file?"
   })
@@ -21,8 +21,8 @@ def readStuff() {
 }
 
 def foo() {
-  res1 = greet()
-  res2 = readStuff()
+  const res1 = greet()
+  const res2 = readStuff()
   log.push(res1)
   log.push(res2)
   log.push("foo-done")
@@ -31,7 +31,7 @@ def foo() {
 
 node main() {
   handle {
-    res1 = foo()
+    const res1 = foo()
     log.push("foo returned ${res1}")
   } with (data) {
     if (data.type == "safe") {
@@ -45,7 +45,7 @@ node main() {
 
 node bothRejected() {
   handle {
-    res1 = foo()
+    const res1 = foo()
     log.push("foo returned ${res1}")
   } with (data) {
     if (data.type == "safe") {

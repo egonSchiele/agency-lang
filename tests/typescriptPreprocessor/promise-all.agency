@@ -1,11 +1,11 @@
 def slowTask(label: string): string {
-  result = llm("Process: ${label}")
+  const result = llm("Process: ${label}")
   return result
 }
 
 node main() {
-  a: string = llm("First async task")
-  b: string = llm("Second async task")
-  combined = "${a} and ${b}"
+  const a: string = llm("First async task")
+  const b: string = llm("Second async task")
+  const combined = "${a} and ${b}"
   print(combined)
 }

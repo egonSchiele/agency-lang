@@ -1,12 +1,12 @@
 node main() {
   print("lets race!")
-  msg = input("> ")
+  const msg = input("> ")
 
-  response1 = llm("${msg}")
+  const response1 = llm("${msg}")
 
   print(response1)
   @model = "gemini-2.5-flash-lite"
-  response2 = llm("${msg}")
+  const response2 = llm("${msg}")
 
   print(response2)
   return [response1, response2]

@@ -1,7 +1,7 @@
-shared attempts = 0
+shared let attempts = 0
 
 def retryUntil(maxAttempts: number) {
-  cp = checkpoint()
+  const cp = checkpoint()
   attempts = attempts + 1
   if (attempts < maxAttempts) {
     restore(cp, {})
@@ -10,6 +10,6 @@ def retryUntil(maxAttempts: number) {
 }
 
 node main() {
-  result = retryUntil(4)
+  const result = retryUntil(4)
   return result
 }

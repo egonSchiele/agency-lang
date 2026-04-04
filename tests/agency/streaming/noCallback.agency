@@ -1,5 +1,5 @@
 node main() {
-  res = llm("Return the integers from 1 to 10", { 
+  const res = llm("Return the integers from 1 to 10", { 
     stream: true
   })
   return res

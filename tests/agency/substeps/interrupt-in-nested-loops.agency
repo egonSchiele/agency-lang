@@ -1,11 +1,11 @@
 node main() {
-  total = 0
+  let total = 0
   for (i in range(3)) {
-    j = 0
+    let j = 0
     while (j < 3) {
       if (i == 1) {
         if (j == 1) {
-          y = interrupt("inner")
+          const y = interrupt("inner")
         }
       }
       total = total + 1

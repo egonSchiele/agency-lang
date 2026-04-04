@@ -1,6 +1,6 @@
 node main() {
   url :: { hostname: string; port: number }
-  url = llm("extract the hostname and port from 'https://example.com:8080'")
+  const url = llm("extract the hostname and port from 'https://example.com:8080'")
 
   print(url)
 }

@@ -1,4 +1,4 @@
-log = []
+const log = []
 
 def foo() {
   log.push("foo start")
@@ -9,14 +9,14 @@ def foo() {
 
 def fooWithAssign() {
   log.push("foo start")
-  result = interrupt("check")
+  const result = interrupt("check")
   log.push("foo end")
   return result
 }
 
 node testWithApprove() {
   handle {
-    result = foo()
+    const result = foo()
     log.push(result)
   } with approve
   return log
@@ -24,7 +24,7 @@ node testWithApprove() {
 
 node testWithReject() {
   handle {
-    result = foo()
+    const result = foo()
     log.push(result)
   } with reject
   return log
@@ -32,7 +32,7 @@ node testWithReject() {
 
 node testWithApproveAssigned() {
   handle {
-    result = fooWithAssign()
+    const result = fooWithAssign()
     log.push(result)
   } with approve
   return log
@@ -40,7 +40,7 @@ node testWithApproveAssigned() {
 
 node testWithRejectAssigned() {
   handle {
-    result = fooWithAssign()
+    const result = fooWithAssign()
     log.push(result)
   } with reject
   return log

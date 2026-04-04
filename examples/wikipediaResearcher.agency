@@ -24,7 +24,7 @@ def shouldExit(msg: string): boolean {
 node research(msg) {
   uses wikipediaSummary
   uses wikipediaFull
-  answer = llm("Help the user research the topic: ${msg}")
+  const answer = llm("Help the user research the topic: ${msg}")
   print(answer)
   return ask("> ")
 }
@@ -35,8 +35,8 @@ node exitProgram() {
 }
 
 node ask(question) {
-  msg = input(question)
-  exitDecision = shouldExit(msg)
+  const msg = input(question)
+  const exitDecision = shouldExit(msg)
   match(exitDecision) {
     true => return exitProgram()
     false => return research(msg)

@@ -4,6 +4,6 @@ def add(a: number, b: number): number {
 
 node main(): number {
   uses add
-  result: number = llm("Use the add tool to add 3 and 4. Return ONLY the number.")
+  const result: number = llm("Use the add tool to add 3 and 4. Return ONLY the number.")
   return result
 }

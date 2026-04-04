@@ -2,14 +2,14 @@
 // The first call establishes context, and the second call within the same thread
 // should be able to recall what was said earlier.
 node main() {
-  msgs = thread {
-    res1: string = llm("My favorite number is 3435.")
+  const msgs = thread {
+    const res1: string = llm("My favorite number is 3435.")
   }
-  res2: number = llm("What is my favorite number? Reply with just the single word, nothing else.", { 
+  const res2: number = llm("What is my favorite number? Reply with just the single word, nothing else.", {
     messages: msgs
   })
   print(res2)
-  return { 
+  return {
     secret: res2
   }
 }

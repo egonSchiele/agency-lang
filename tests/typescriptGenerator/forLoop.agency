@@ -1,6 +1,6 @@
 node main() {
   // Basic for-of loop
-  items = ["a", "b", "c"]
+  const items = ["a", "b", "c"]
   for (item in items) {
     print(item)
   }
@@ -11,7 +11,7 @@ node main() {
   }
 
   // Indexed for loop
-  names = ["alice", "bob"]
+  const names = ["alice", "bob"]
   for (name, index in names) {
     print(name)
     print(index)

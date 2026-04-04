@@ -1,7 +1,7 @@
-shared log = ""
+shared let log = ""
 
 node main() {
-  cp = checkpoint()
+  const cp = checkpoint()
   log = log + "before,"
   thread {
     log = log + "thread,"

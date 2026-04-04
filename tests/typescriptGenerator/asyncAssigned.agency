@@ -4,7 +4,7 @@ def compute(val: number): number {
 }
 
 node main() {
-  x = async compute(5)
-  y = async compute(10)
+  const x = async compute(5)
+  const y = async compute(10)
   return [x, y]
 }

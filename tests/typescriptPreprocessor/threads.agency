@@ -1,8 +1,8 @@
 node main() {
   thread {
-    res1: string = llm("What is 2 + 2?")
-    res2: string = llm("And what is that times 3?")
+    const res1: string = llm("What is 2 + 2?")
+    const res2: string = llm("And what is that times 3?")
   }
 
-  standalone: string = llm("Unrelated question")
+  const standalone: string = llm("Unrelated question")
 }

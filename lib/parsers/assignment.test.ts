@@ -467,6 +467,99 @@ describe("assignmentParser", () => {
       },
     },
 
+    // let/const declarations
+    {
+      input: "let x = 5",
+      expected: {
+        success: true,
+        result: {
+          type: "assignment",
+          declKind: "let",
+          variableName: "x",
+          value: { type: "number", value: "5" },
+        },
+      },
+    },
+    {
+      input: "const y = 5",
+      expected: {
+        success: true,
+        result: {
+          type: "assignment",
+          declKind: "const",
+          variableName: "y",
+          value: { type: "number", value: "5" },
+        },
+      },
+    },
+    {
+      input: 'let name: string = "Alice"',
+      expected: {
+        success: true,
+        result: {
+          type: "assignment",
+          declKind: "let",
+          variableName: "name",
+          typeHint: { type: "primitiveType", value: "string" },
+          value: {
+            type: "string",
+            segments: [{ type: "text", value: "Alice" }],
+          },
+        },
+      },
+    },
+    {
+      input: "const items: number[] = [1, 2, 3]",
+      expected: {
+        success: true,
+        result: {
+          type: "assignment",
+          declKind: "const",
+          variableName: "items",
+          typeHint: {
+            type: "arrayType",
+            elementType: { type: "primitiveType", value: "number" },
+          },
+          value: {
+            type: "agencyArray",
+            items: [
+              { type: "number", value: "1" },
+              { type: "number", value: "2" },
+              { type: "number", value: "3" },
+            ],
+          },
+        },
+      },
+    },
+
+    // Variable names starting with let/const should not be misinterpreted
+    {
+      input: "letter = 5",
+      expected: {
+        success: true,
+        result: {
+          type: "assignment",
+          variableName: "letter",
+          value: { type: "number", value: "5" },
+        },
+      },
+    },
+    {
+      input: "constant = 5",
+      expected: {
+        success: true,
+        result: {
+          type: "assignment",
+          variableName: "constant",
+          value: { type: "number", value: "5" },
+        },
+      },
+    },
+
+    // let/const with access chains should fail
+    { input: "let obj.x = 1", expected: { success: false } },
+    { input: "const arr[0] = 5", expected: { success: false } },
+
     // Failure cases
     { input: "=5", expected: { success: false } },
     { input: "x =", expected: { success: false } },
@@ -494,38 +587,51 @@ describe("assignmentParser", () => {
 });
 
 describe("sharedAssignmentParser", () => {
-  it("should parse a shared assignment with a number", () => {
-    const result = sharedAssignmentParser("shared x = 42");
+  it("should parse shared let with a number", () => {
+    const result = sharedAssignmentParser("shared let x = 42");
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result.type).toBe("assignment");
       expect(result.result.variableName).toBe("x");
       expect(result.result.shared).toBe(true);
+      expect(result.result.declKind).toBe("let");
       expect(result.result.value).toEqualWithoutLoc({ type: "number", value: "42" });
     }
   });
 
-  it("should parse a shared assignment with a string", () => {
-    const result = sharedAssignmentParser('shared name = "Alice"');
+  it("should parse shared const with a string", () => {
+    const result = sharedAssignmentParser('shared const name = "Alice"');
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result.shared).toBe(true);
+      expect(result.result.declKind).toBe("const");
       expect(result.result.variableName).toBe("name");
     }
   });
 
-  it("should parse a shared assignment with a function call", () => {
-    const result = sharedAssignmentParser('shared myPrompt = read("prompt.md")');
+  it("should parse shared const with a function call", () => {
+    const result = sharedAssignmentParser('shared const myPrompt = read("prompt.md")');
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result.shared).toBe(true);
+      expect(result.result.declKind).toBe("const");
       expect(result.result.variableName).toBe("myPrompt");
       expect(result.result.value.type).toBe("functionCall");
     }
   });
 
+  it("should reject shared without let/const", () => {
+    const result = sharedAssignmentParser("shared x = 42");
+    expect(result.success).toBe(false);
+  });
+
   it("should not parse a regular assignment", () => {
     const result = sharedAssignmentParser("x = 42");
+    expect(result.success).toBe(false);
+  });
+
+  it("should not parse let without shared", () => {
+    const result = sharedAssignmentParser("let x = 42");
     expect(result.success).toBe(false);
   });
 

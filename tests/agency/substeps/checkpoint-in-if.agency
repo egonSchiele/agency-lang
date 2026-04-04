@@ -1,7 +1,7 @@
-shared log = ""
+shared let log = ""
 
 node main(x: number) {
-  cp = checkpoint()
+  const cp = checkpoint()
   log = log + "before,"
   if (x > 5) {
     log = log + "branch,"

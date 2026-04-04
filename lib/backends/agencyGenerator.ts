@@ -409,9 +409,10 @@ export class AgencyGenerator {
     const varName = node.typeHint
       ? `${node.variableName}${chainStr}: ${variableTypeToString(node.typeHint, this.typeAliases)}`
       : `${node.variableName}${chainStr}`;
-    const prefix = node.shared ? "shared " : "";
+    const sharedPrefix = node.shared ? "shared " : "";
+    const declPrefix = node.declKind ? `${node.declKind} ` : "";
     let valueCode = this.processNode(node.value).trim();
-    return this.indentStr(`${prefix}${varName} = ${valueCode}`);
+    return this.indentStr(`${sharedPrefix}${declPrefix}${varName} = ${valueCode}`);
   }
 
   protected generateLiteral(literal: Literal): string {

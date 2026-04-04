@@ -1,5 +1,5 @@
 node main(action: string) {
-  result = "before"
+  let result = "before"
   match(action) {
     "start" => result = "starting"
     "stop" => result = interrupt("confirm stop")

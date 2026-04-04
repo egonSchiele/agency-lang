@@ -1,5 +1,5 @@
 node main() {
-  person = {name: "Alice", age: 30}
-  response: { greeting: string } = llm("Say hi to ${person.name}, who is ${person.age} years old.")
+  const person = {name: "Alice", age: 30}
+  const response: { greeting: string } = llm("Say hi to ${person.name}, who is ${person.age} years old.")
   print(response)
 }

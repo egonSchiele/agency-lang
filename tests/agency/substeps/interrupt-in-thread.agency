@@ -1,8 +1,8 @@
 node main() {
   thread {
-    x = 1
-    y = interrupt("check")
-    z = 3
+    const x = 1
+    const y = interrupt("check")
+    const z = 3
   }
   return [x, y, z]
 }

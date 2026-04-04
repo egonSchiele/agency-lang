@@ -8,12 +8,12 @@
 // 3. One llm call after the thread.
 
 node primes() {
-  res: number = llm("What is 2+2?")
-  msgs = thread {
-    res1: number[] = llm("What are the first 5 prime numbers?")
-    res2: number[] = llm("What are the next 2 prime numbers after those?")
+  const res: number = llm("What is 2+2?")
+  const msgs = thread {
+    const res1: number[] = llm("What are the first 5 prime numbers?")
+    const res2: number[] = llm("What are the next 2 prime numbers after those?")
   }
-  res3: number = llm("What is 3+3?")
+  const res3: number = llm("What is 3+3?")
   // still going to return the messages, otherwise the optimizer
   // will remove the thread and the LLM calls, since they aren't used
   return [res, msgs, res3]

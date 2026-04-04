@@ -1,4 +1,4 @@
-log = []
+const log = []
 
 def record(val: string) {
   sleep(0.01)

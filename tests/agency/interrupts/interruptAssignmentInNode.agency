@@ -3,13 +3,13 @@ type User = {
   age: number
 }
 
-user: User = { 
+const user: User = { 
   name: "Alice",
   age: 30
 }
 
 node foo() {
-  newName = interrupt("What's the new name?")
+  const newName = interrupt("What's the new name?")
   user.name = newName
   return user
 }

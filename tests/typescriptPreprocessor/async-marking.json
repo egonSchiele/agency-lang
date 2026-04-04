@@ -53,6 +53,7 @@
       "body": [
         {
           "type": "assignment",
+          "declKind": "const",
           "variableName": "result",
           "value": {
             "type": "functionCall",
@@ -72,9 +73,9 @@
                       "value": "prompt",
                       "loc": {
                         "line": 3,
-                        "col": 30,
-                        "start": 92,
-                        "end": 98
+                        "col": 36,
+                        "start": 98,
+                        "end": 104
                       },
                       "scope": "args"
                     }
@@ -84,9 +85,9 @@
             ],
             "loc": {
               "line": 3,
-              "col": 11,
-              "start": 73,
-              "end": 104
+              "col": 17,
+              "start": 79,
+              "end": 110
             },
             "tools": {
               "type": "usesTool",
@@ -97,7 +98,7 @@
             "line": 3,
             "col": 2,
             "start": 64,
-            "end": 104
+            "end": 110
           },
           "scope": "local"
         },
@@ -120,9 +121,9 @@
                     "value": "prompt",
                     "loc": {
                       "line": 3,
-                      "col": 30,
-                      "start": 92,
-                      "end": 98
+                      "col": 36,
+                      "start": 98,
+                      "end": 104
                     },
                     "scope": "args"
                   }
@@ -140,16 +141,16 @@
             "loc": {
               "line": 4,
               "col": 9,
-              "start": 111,
-              "end": 117
+              "start": 117,
+              "end": 123
             },
             "scope": "local"
           },
           "loc": {
             "line": 4,
             "col": 2,
-            "start": 104,
-            "end": 118
+            "start": 110,
+            "end": 124
           }
         }
       ],
@@ -157,7 +158,7 @@
         "line": 2,
         "col": 0,
         "start": 36,
-        "end": 119
+        "end": 125
       }
     },
     {
@@ -168,6 +169,7 @@
       "body": [
         {
           "type": "assignment",
+          "declKind": "const",
           "variableName": "a",
           "value": {
             "type": "functionCall",
@@ -185,21 +187,22 @@
             ],
             "loc": {
               "line": 8,
-              "col": 6,
-              "start": 141,
-              "end": 165
+              "col": 12,
+              "start": 153,
+              "end": 177
             }
           },
           "loc": {
             "line": 8,
             "col": 2,
-            "start": 137,
-            "end": 165
+            "start": 143,
+            "end": 177
           },
           "scope": "local"
         },
         {
           "type": "assignment",
+          "declKind": "const",
           "variableName": "b",
           "value": {
             "type": "functionCall",
@@ -217,21 +220,22 @@
             ],
             "loc": {
               "line": 9,
-              "col": 6,
-              "start": 169,
-              "end": 192
+              "col": 12,
+              "start": 187,
+              "end": 210
             }
           },
           "loc": {
             "line": 9,
             "col": 2,
-            "start": 165,
-            "end": 192
+            "start": 177,
+            "end": 210
           },
           "scope": "local"
         },
         {
           "type": "assignment",
+          "declKind": "const",
           "typeHint": {
             "type": "primitiveType",
             "value": "string"
@@ -255,9 +259,9 @@
                       "value": "a",
                       "loc": {
                         "line": 10,
-                        "col": 34,
-                        "start": 224,
-                        "end": 225
+                        "col": 40,
+                        "start": 248,
+                        "end": 249
                       },
                       "scope": "local"
                     }
@@ -273,9 +277,9 @@
                       "value": "b",
                       "loc": {
                         "line": 10,
-                        "col": 43,
-                        "start": 233,
-                        "end": 234
+                        "col": 49,
+                        "start": 257,
+                        "end": 258
                       },
                       "scope": "local"
                     }
@@ -285,9 +289,9 @@
             ],
             "loc": {
               "line": 10,
-              "col": 19,
-              "start": 209,
-              "end": 240
+              "col": 25,
+              "start": 233,
+              "end": 264
             },
             "tools": {
               "type": "usesTool",
@@ -297,8 +301,8 @@
           "loc": {
             "line": 10,
             "col": 2,
-            "start": 192,
-            "end": 240
+            "start": 210,
+            "end": 264
           },
           "scope": "local"
         },
@@ -321,9 +325,9 @@
                     "value": "a",
                     "loc": {
                       "line": 10,
-                      "col": 34,
-                      "start": 224,
-                      "end": 225
+                      "col": 40,
+                      "start": 248,
+                      "end": 249
                     },
                     "scope": "local"
                   }
@@ -339,9 +343,9 @@
                     "value": "b",
                     "loc": {
                       "line": 10,
-                      "col": 43,
-                      "start": 233,
-                      "end": 234
+                      "col": 49,
+                      "start": 257,
+                      "end": 258
                     },
                     "scope": "local"
                   }
@@ -361,8 +365,8 @@
               "loc": {
                 "line": 11,
                 "col": 8,
-                "start": 246,
-                "end": 252
+                "start": 270,
+                "end": 276
               },
               "scope": "local"
             }
@@ -370,16 +374,16 @@
           "loc": {
             "line": 11,
             "col": 2,
-            "start": 240,
-            "end": 254
+            "start": 264,
+            "end": 278
           }
         }
       ],
       "loc": {
         "line": 7,
         "col": 0,
-        "start": 121,
-        "end": 255
+        "start": 127,
+        "end": 279
       }
     }
   ]

@@ -1,9 +1,9 @@
-shared log = ""
+shared let log = ""
 
 node main() {
-  cp = checkpoint()
+  const cp = checkpoint()
   log = log + "start,"
-  x = 0
+  let x = 0
   while (x < 3) {
     log = log + x
     x = x + 1

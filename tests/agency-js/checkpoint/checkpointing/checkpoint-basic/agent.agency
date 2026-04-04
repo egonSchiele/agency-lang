@@ -1,7 +1,7 @@
-shared attempts = 0
+shared let attempts = 0
 
 node main() {
-  cp = checkpoint()
+  const cp = checkpoint()
   attempts = attempts + 1
   if (attempts < 3) {
     restore(cp, {})

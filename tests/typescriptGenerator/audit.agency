@@ -3,7 +3,7 @@ def greet(name: string): string {
 }
 
 node main() {
-  x = 5
-  greeting = greet("world")
+  const x = 5
+  const greeting = greet("world")
   print(greeting)
 }

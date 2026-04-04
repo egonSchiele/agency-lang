@@ -1,5 +1,5 @@
 node main() {
-  x = async llm("What is 2+2?")
-  y = async llm("What is 3+3?")
+  const x = async llm("What is 2+2?")
+  const y = async llm("What is 3+3?")
   return [x, y]
 }

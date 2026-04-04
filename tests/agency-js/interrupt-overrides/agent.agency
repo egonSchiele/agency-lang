@@ -1,36 +1,36 @@
 // Test 1: approveInterrupt with overrides
 node testApprove() {
-  x = 10
-  result = interrupt("check")
+  const x = 10
+  const result = interrupt("check")
   return { x: x, result: result }
 }
 
 // Test 2: rejectInterrupt with overrides
 node testReject() {
-  x = 10
-  result = interrupt("check")
+  const x = 10
+  const result = interrupt("check")
   return { x: x, result: result }
 }
 
 // Test 3: resolveInterrupt with overrides
 node testResolve() {
-  x = 10
-  result = interrupt("check")
+  const x = 10
+  const result = interrupt("check")
   return { x: x, result: result }
 }
 
 // Test 4: override an LLM call result before interrupt
 node testLlmOverride(message: string) {
-  mood: "happy" | "sad" = llm("Categorize: ${message}")
-  result = interrupt("Confirm mood: ${mood}")
+  const mood: "happy" | "sad" = llm("Categorize: ${message}")
+  const result = interrupt("Confirm mood: ${mood}")
   return { mood: mood, result: result }
 }
 
 // Test 5: override inside a thread
 node testThread(message: string) {
   thread {
-    mood: "happy" | "sad" = llm("Categorize: ${message}")
-    result = interrupt("Confirm mood: ${mood}")
+    const mood: "happy" | "sad" = llm("Categorize: ${message}")
+    const result = interrupt("Confirm mood: ${mood}")
   }
   return { mood: mood, result: result }
 }

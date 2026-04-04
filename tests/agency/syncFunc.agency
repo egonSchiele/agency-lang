@@ -7,7 +7,7 @@ sync def addToNumber(x: number): number {
 }
 
 node main() {
-  a: number = getNumber()
-  b: number = addToNumber(a)
+  const a: number = getNumber()
+  const b: number = addToNumber(a)
   return b
 }

@@ -1,7 +1,7 @@
-shared log = ""
+shared let log = ""
 
 node main(action: string) {
-  cp = checkpoint()
+  const cp = checkpoint()
   log = log + "before,"
   match(action) {
     "go" => log = log + "go,"

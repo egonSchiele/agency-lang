@@ -1,12 +1,12 @@
 node greet() {
   greeting :: string
-  greeting = llm("say hello")
+  const greeting = llm("say hello")
   return processGreeting(greeting)
 }
 
 node processGreeting(msg) {
   result :: string
-  result = llm("format this greeting: ${msg}")
+  const result = llm("format this greeting: ${msg}")
   print(result)
 }
 

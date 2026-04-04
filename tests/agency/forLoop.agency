@@ -1,5 +1,5 @@
 node main() {
-  sum = 0
+  let sum = 0
   for (i in range(5)) {
     sum = sum + i
   }

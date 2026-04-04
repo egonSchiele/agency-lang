@@ -17,7 +17,7 @@ node bar(name: string) {
 }
 
 
-globalVar = 0
+let globalVar = 0
 
 def increment() {
   globalVar = globalVar + 1

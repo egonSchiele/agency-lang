@@ -13,6 +13,7 @@
         },
         {
           "type": "assignment",
+          "declKind": "const",
           "typeHint": {
             "type": "primitiveType",
             "value": "string"
@@ -34,9 +35,9 @@
             ],
             "loc": {
               "line": 0,
-              "col": 17,
-              "start": 86,
-              "end": 114
+              "col": 23,
+              "start": 92,
+              "end": 120
             },
             "tools": {
               "type": "usesTool",
@@ -47,7 +48,7 @@
             "line": 0,
             "col": 2,
             "start": 71,
-            "end": 114
+            "end": 120
           },
           "scope": "local"
         },
@@ -78,8 +79,8 @@
               "loc": {
                 "line": 1,
                 "col": 8,
-                "start": 120,
-                "end": 124
+                "start": 126,
+                "end": 130
               },
               "scope": "local"
             }
@@ -87,8 +88,8 @@
           "loc": {
             "line": 1,
             "col": 2,
-            "start": 114,
-            "end": 129
+            "start": 120,
+            "end": 135
           }
         },
         {
@@ -97,6 +98,7 @@
         },
         {
           "type": "assignment",
+          "declKind": "const",
           "typeHint": {
             "type": "primitiveType",
             "value": "string"
@@ -118,9 +120,9 @@
             ],
             "loc": {
               "line": 4,
-              "col": 19,
-              "start": 210,
-              "end": 239
+              "col": 25,
+              "start": 222,
+              "end": 251
             },
             "tools": {
               "type": "usesTool",
@@ -130,8 +132,8 @@
           "loc": {
             "line": 4,
             "col": 2,
-            "start": 193,
-            "end": 239
+            "start": 199,
+            "end": 251
           },
           "scope": "local"
         },
@@ -175,8 +177,8 @@
             "loc": {
               "line": 7,
               "col": 9,
-              "start": 292,
-              "end": 312
+              "start": 304,
+              "end": 324
             },
             "tools": {
               "type": "usesTool",
@@ -186,8 +188,8 @@
           "loc": {
             "line": 7,
             "col": 2,
-            "start": 285,
-            "end": 312
+            "start": 297,
+            "end": 324
           }
         }
       ],
@@ -195,7 +197,7 @@
         "line": -2,
         "col": 0,
         "start": 0,
-        "end": 313
+        "end": 325
       }
     }
   ]

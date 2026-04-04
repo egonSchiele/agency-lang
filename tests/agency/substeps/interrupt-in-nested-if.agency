@@ -1,5 +1,5 @@
 node main(x: number, y: number) {
-  result = "start"
+  let result = "start"
   if (x > 5) {
     result = "outer"
     if (y > 3) {

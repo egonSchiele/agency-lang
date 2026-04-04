@@ -4,6 +4,6 @@ def foo() {
 }
 
 node main() {
-  result = foo()
+  const result = foo()
   return result
 }

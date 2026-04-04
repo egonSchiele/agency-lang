@@ -1,7 +1,7 @@
 node main(message: string) {
   thread {
-    mood: "happy" | "sad" = llm("Categorize the mood: ${message}")
-    response: string = llm("Respond with just this word, and an excalamation mark at the end: ${mood}")
+    const mood: "happy" | "sad" = llm("Categorize the mood: ${message}")
+    const response: string = llm("Respond with just this word, and an excalamation mark at the end: ${mood}")
   }
   return { 
     mood: mood,

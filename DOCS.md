@@ -28,12 +28,45 @@ Note that a call to another node should always `return`. This is because when fo
 
 If you plan to run this agency file as a script, you will need a node named `main`, which is the entry point of the script. If you plan to import it into another script instead, the `main` node is not required. More on importing later.
 
+### Variable Declarations
+
+Variables are declared using `let` or `const`, like TypeScript:
+
+```ts
+let x = 1
+const y = "hello"
+let x: number = 1
+```
+
+`const` prevents reassignment:
+```ts
+const x = 5
+x = 10 // ERROR: cannot reassign const
+```
+
+`let` allows reassignment:
+```ts
+let x = 5
+x = 10 // OK
+```
+
+Variables must be declared before use:
+```ts
+x = 5 // ERROR: x is not declared
+```
+
+The `shared` keyword requires `let` or `const`:
+```ts
+shared let cache = {}
+shared const config = read("config.json")
+```
+
 ### LLM Calls
 To make an LLM call, use the `llm` function:
 
 ```ts
-response: string = llm(`Say hi to me`)
-magicNumber: number = llm(`Add 4 + 5`)
+let response: string = llm(`Say hi to me`)
+let magicNumber: number = llm(`Add 4 + 5`)
 ```
 
 If you want to request a specific output format, use a type hint.
@@ -41,7 +74,7 @@ If you want to request a specific output format, use a type hint.
 ### Type Hints
 
 ```ts
-greet: number = llm("add 4 + 5")
+let greet: number = llm("add 4 + 5")
 ```
 
 This will tell the LLM to respond with a number. Here are some supported types:
@@ -56,19 +89,19 @@ Primitive types:
 Union types. Example:
 
 ```ts
-status: "success" | "error" = llm("Respond with either 'success' or 'error'")
+let status: "success" | "error" = llm("Respond with either 'success' or 'error'")
 ```
 
 Array types. Example:
 
 ```ts
-items: string[] = llm("List 5 fruits")
+let items: string[] = llm("List 5 fruits")
 ```
 
 Object types. Example:
 
 ```ts
-user: {name: string, age: number} = llm("Provide a user object with name and age")
+let user: {name: string, age: number} = llm("Provide a user object with name and age")
 ```
 
 You can define a new type:
@@ -95,7 +128,7 @@ Here is an example of a function in Agency:
 
 ```ts
 def greet(name: string): string {
-  greeting = llm("Greet the person named ${name}")
+  const greeting = llm("Greet the person named ${name}")
   return greeting
 }
 ```
@@ -104,7 +137,7 @@ All functions in Agency can automatically be used as tools. For example, you can
 
 ```ts
 use greet
-response: string = llm(`Use the greet function to greet Alice`)
+let response: string = llm(`Use the greet function to greet Alice`)
 ```
 
 The `use greet` line tells Agency to make the `greet` function available as a tool in the LLM prompt.
@@ -115,7 +148,7 @@ Agency supports `if` statements and `match` statements for control flow.
 Here is an example of an `if` statement:
 
 ```ts
-condition = false
+let condition = false
 if (condition) {
   print("You are an adult.")
 }
@@ -124,7 +157,7 @@ if (condition) {
 Here is an example of a `match` statement:
 
 ```ts
-status = "success"
+const status = "success"
 match(status) {
   "success" => print("Operation was successful.")
   "error" => print("There was an error.")
@@ -135,7 +168,7 @@ match(status) {
 Agency also supports `while` loops:
 
 ```ts
-condition = true
+let condition = true
 while (condition) {
   print(count)
   condition = false
@@ -207,8 +240,8 @@ For example, given a tool like this:
 
 ```ts
 def editIngredientsTool(ingredientIds: string[]): Result {
-  ingredients = await getIngredients(ingredientIds)
-  result = await editIngredients({
+  const ingredients = await getIngredients(ingredientIds)
+  const result = await editIngredients({
     ingredients: ingredients
   })
   return result
@@ -236,8 +269,8 @@ Let's look at an example. You're importing two functions, one safe and the other
 import { safe safeFunction, unsafeFunction } from "./someModule.js"
 
 def myTool() {
-  result1 = unsafeFunction()
-  result2 = safeFunction()
+  const result1 = unsafeFunction()
+  const result2 = safeFunction()
   return result1 + result2
 }
 ```
@@ -248,8 +281,8 @@ On the other hand:
 
 ```ts
 def myTool() {
-  result1 = safeFunction()
-  result2 = unsafeFunction()
+  const result1 = safeFunction()
+  const result2 = unsafeFunction()
   return result1 + result2
 }
 ```
@@ -275,8 +308,8 @@ As you can see, Agency smartly figures out at which point in the execution a too
 ```ts
 safe def myTool() {
   // this tool is safe to retry, even if it calls unsafe functions
-  result1 = unsafeFunction()
-  result2 = unsafeFunction()
+  const result1 = unsafeFunction()
+  const result2 = unsafeFunction()
   return result1 + result2
 }
 ```
@@ -290,8 +323,8 @@ You can either run an agency file directly, in which case you need to define a n
 ```ts
 // foo.agency
 node foo() {
-  name = input("> ")
-  response = llm("Greet the person named ${name}")
+  const name = input("> ")
+  const response = llm("Greet the person named ${name}")
   return response
 }
 ```
@@ -329,11 +362,11 @@ def readTodosTool(filename: string) {
 
 node todos(prompt: string) {
   +readTodosTool
-  response = llm("Help the user with their todos: ${prompt}")
+  const response = llm("Help the user with their todos: ${prompt}")
 }
 
 node foo() {
-  prompt = input("> ")
+  const prompt = input("> ")
   return todos(prompt)
 }
 ```
@@ -405,7 +438,7 @@ You can optionally stream responses from Agency by using the Stream keyword.
 
 ```ts
 node foo() {
-  response: string = stream llm("Tell me a joke and explain it")
+  const response: string = stream llm("Tell me a joke and explain it")
   print(response)
   return response
 }
@@ -434,7 +467,7 @@ If you choose to use streaming, your agent will continue to function exactly as 
 
 ```ts
 node foo() {
-  response: string = stream llm("Tell me a joke and explain it")
+  const response: string = stream llm("Tell me a joke and explain it")
   print(response) // the response variable will still be set to the full response once the stream is complete, so you can use it as normal
 }
 ```
@@ -469,8 +502,8 @@ Both of these LLM calls can be run in parallel because they don't depend on each
 ```ts
 node example() {
   // both should run in parallel
-  fibs: number[] = llm("Get the first 10 Fibonacci numbers.")
-  story: string = llm("Write a short story about a cat and a dog.")
+  const fibs: number[] = llm("Get the first 10 Fibonacci numbers.")
+  const story: string = llm("Write a short story about a cat and a dog.")
   print(fibs)
   print(story)
 }
@@ -480,9 +513,9 @@ story does not need to run at all since the value is never used.
 
 ```ts
 node example() {
-  fibs: number[] = llm("Get the first 10 Fibonacci numbers.")
+  const fibs: number[] = llm("Get the first 10 Fibonacci numbers.")
 
-  story: string = llm("Write a short story about a cat and a dog.")
+  const story: string = llm("Write a short story about a cat and a dog.")
   print(fibs)
 }
 ```
@@ -490,9 +523,9 @@ node example() {
 `sum` can only run after `fibs` is done, since it depends on the value of `fibs`.
 ```ts
 node example() {
-  fibs: number[] = llm("Get the first 10 Fibonacci numbers.")
-  // 
-  sum: number = llm("Add up these numbers ${fibs}.")
+  const fibs: number[] = llm("Get the first 10 Fibonacci numbers.")
+  //
+  const sum: number = llm("Add up these numbers ${fibs}.")
   print(sum)
 }
 ```
@@ -501,8 +534,8 @@ LLM calls inside `thread`s never run in parallel, because the message history ac
 ```ts
 node example() {
   thread {
-    fibs: number[] = llm("Get the first 10 Fibonacci numbers.")
-    story: string = llm("Write a short story about a cat and a dog.")
+    const fibs: number[] = llm("Get the first 10 Fibonacci numbers.")
+    const story: string = llm("Write a short story about a cat and a dog.")
   }
   print(fibs)
   print(story)
@@ -512,8 +545,8 @@ node example() {
 When calls run async, their value is `await`ed right before it is actually used.
 ```ts
 node example() {
-  fibs: number[] = llm("Get the first 10 Fibonacci numbers.")
-  story: string = llm("Write a short story about a cat and a dog.")
+  const fibs: number[] = llm("Get the first 10 Fibonacci numbers.")
+  const story: string = llm("Write a short story about a cat and a dog.")
   // Agency will add an await call here,
   // so that it waits for both fibs and story to be done before printing:
   print(fibs, story)
@@ -525,10 +558,10 @@ To see which calls will run in parallel, you can use the `graph` command in the 
 Save this as `foo.agency`:
 ```ts
 node main() {
-  bar: string = stream llm("Define the word 'bar'.")
+  const bar: string = stream llm("Define the word 'bar'.")
   thread {
-    story: string = stream llm("Write a 100 word story about a cat and a dog.")
-    fibs: number[] = stream llm("Get the first 10 Fibonacci numbers.")
+    const story: string = stream llm("Write a 100 word story about a cat and a dog.")
+    const fibs: number[] = stream llm("Get the first 10 Fibonacci numbers.")
   }
   print(bar)
   print(fibs, story)
@@ -548,8 +581,8 @@ Agency gives you a few ways to manage message history. By default, every LLM cal
 
 ```ts
 node main() {
-  res1: number[] = llm("What are the first 5 prime numbers?")
-  res2: number = llm("And what is the sum of those numbers?")
+  const res1: number[] = llm("What are the first 5 prime numbers?")
+  const res2: number = llm("And what is the sum of those numbers?")
   print(res1, res2)
 }
 ```
@@ -566,8 +599,8 @@ In this case, though, it makes sense that you would want to share history betwee
 ```ts
 node main() {
   thread {
-    res1: number[] = llm("What are the first 5 prime numbers?")
-    res2: number = llm("And what is the sum of those numbers?")
+    const res1: number[] = llm("What are the first 5 prime numbers?")
+    const res2: number = llm("And what is the sum of those numbers?")
   }
   print(res1, res2)
 }
@@ -585,13 +618,13 @@ You can also nest threads inside of each other. There are two ways to nest threa
 ```ts
 node main() {
   thread {
-    res1: number[] = llm("What are the first 5 prime numbers?")
-    res2: number = llm("And what is the sum of those numbers?")
-    res3: number[] = llm("What are the next 2 prime numbers after those?")
-    res4: number = llm("And what is the sum of all those numbers combined?")
-    res5: number[] = llm("What are the next 2 integers after that?")
-    res6: number = llm("And what is the sum of all those numbers combined?")
-    res7: number = llm("What was that last number again?")
+    const res1: number[] = llm("What are the first 5 prime numbers?")
+    const res2: number = llm("And what is the sum of those numbers?")
+    const res3: number[] = llm("What are the next 2 prime numbers after those?")
+    const res4: number = llm("And what is the sum of all those numbers combined?")
+    const res5: number[] = llm("What are the next 2 integers after that?")
+    const res6: number = llm("And what is the sum of all those numbers combined?")
+    const res7: number = llm("What was that last number again?")
   }
   print("res1", res1)
   print("res2", res2)
@@ -620,17 +653,17 @@ Even though the LLM got one of the answers wrong, it's clear that it is treating
 ```ts
 node main() {
   thread {
-    res1: number[] = llm("What are the first 5 prime numbers?")
-    res2: number = llm("And what is the sum of those numbers?")
+    const res1: number[] = llm("What are the first 5 prime numbers?")
+    const res2: number = llm("And what is the sum of those numbers?")
     thread {
-      res3: number[] = llm("What are the next 2 prime numbers after those?")
-      res4: number = llm("And what is the sum of all those numbers combined?")
+      const res3: number[] = llm("What are the next 2 prime numbers after those?")
+      const res4: number = llm("And what is the sum of all those numbers combined?")
     }
     thread {
-      res5: number[] = llm("What are the next 2 integers after that?")
-      res6: number = llm("And what is the sum of all those numbers combined?")
+      const res5: number[] = llm("What are the next 2 integers after that?")
+      const res6: number = llm("And what is the sum of all those numbers combined?")
     }
-    res7: number = llm("What was that last number again?")
+    const res7: number = llm("What was that last number again?")
   }
   print("res1", res1)
   print("res2", res2)
@@ -667,7 +700,7 @@ res7 28
 Each thread creates a new message history. So the two nested threads have their own history, completely unconnected to the parent's history. When Agency executes this call, there is no previous message history:
 
 ```ts
-res3: number[] = llm("What are the next 2 prime numbers after those?")
+const res3: number[] = llm("What are the next 2 prime numbers after those?")
 ```
 
 The LLM doesn't know what you mean by "next 2" because it doesn't know what prime numbers you've already seen. Similarly, when you ask for the sum of all those numbers, it doesn't know what came before the two prime numbers it's sent in this current thread, so the number it returns is completely made up.
@@ -675,7 +708,7 @@ The LLM doesn't know what you mean by "next 2" because it doesn't know what prim
 After the two nested threads, there is a final call in the main thread.
 
 ```ts
-res7: number = llm("What was that last number again?")
+const res7: number = llm("What was that last number again?")
 ```
 
 You can see it returns 28 because that was the last number in the main thread.
@@ -687,17 +720,17 @@ The other way to nest threads is with subthreads, using the `subthread` keyword.
 ```ts
 node main() {
   thread {
-    res1: number[] = llm("What are the first 5 prime numbers?")
-    res2: number = llm("And what is the sum of those numbers?")
+    const res1: number[] = llm("What are the first 5 prime numbers?")
+    const res2: number = llm("And what is the sum of those numbers?")
     subthread {
-      res3: number[] = llm("What are the next 2 prime numbers after those?")
-      res4: number = llm("And what is the sum of all those numbers combined?")
+      const res3: number[] = llm("What are the next 2 prime numbers after those?")
+      const res4: number = llm("And what is the sum of all those numbers combined?")
     }
     subthread {
-      res5: number[] = llm("What are the next 2 integers after that?")
-      res6: number = llm("And what is the sum of all those numbers combined?")
+      const res5: number[] = llm("What are the next 2 integers after that?")
+      const res6: number = llm("And what is the sum of all those numbers combined?")
     }
-    res7: number = llm("What was that last number again?")
+    const res7: number = llm("What was that last number again?")
   }
   print("res1", res1)
   print("res2", res2)
@@ -736,10 +769,10 @@ Each subthread forks the message history of its parent thread. This means that i
 Lets take this agency code as an example.
 
 ```ts
-globalVar = 0
+let globalVar = 0
 
 node foo() {
-  localVar = "radiohead"
+  const localVar = "radiohead"
   globalVar = globalVar + 1
   return globalVar
 }
@@ -764,7 +797,7 @@ Let's take a different example.
 ## Isolated execution state per call
 
 ```ts
-userId = null
+let userId = null
 
 node foo(_userId: string) {
   userId = _userId
@@ -806,13 +839,13 @@ This also gives you room to spread out a bit. If you're coming from a framework 
 Sometimes, however, you do want to share state across calls. For example, if you had a global variable where you read the contents of a file, this would cause the file to be read on every invocation of your agent.
 
 ```ts
-fileContents = read("someFile.txt")
+const fileContents = read("someFile.txt")
 ```
 
 In this case, you can mark the variable as shared.
 
 ```ts
-shared fileContents = read("someFile.txt")
+shared const fileContents = read("someFile.txt")
 ```
 
 Now `fileContents` will be shared across all calls. It will only be initialized once, and it won't get deserialized and deserialized with the rest of the state during interrupts.
@@ -820,15 +853,15 @@ Now `fileContents` will be shared across all calls. It will only be initialized 
 Shared state can also be handy if you do want to share some state across calls, for example, to count how many times a node has been called or to cache some data.
 
 ```ts
-shared callCount = 0
-shared cache = {}
+shared let callCount = 0
+shared const cache = {}
 
 node foo() {
   callCount = callCount + 1
   if (cache.data) {
     return cache.data
   } else {
-    data = read("someFile.txt")
+    const data = read("someFile.txt")
     cache.data = data
     return data
   }
@@ -851,7 +884,7 @@ Start with a node that classifies the user's intent:
 
 ```ts
 node router(userMessage: string) {
-  intent: "mood" | "todo" = `Classify the user's intent as either "mood" or "todo" based on the message: ${userMessage}`
+  const intent: "mood" | "todo" = `Classify the user's intent as either "mood" or "todo" based on the message: ${userMessage}`
 
   match(intent) {
     "mood" => return handleMood(userMessage)
@@ -865,12 +898,12 @@ Then have separate nodes for handling each intent:
 
 ```ts
 node handleMood(userMessage: string) {
-  mood = `Extract the user's mood from the message: ${userMessage}`
+  const mood = `Extract the user's mood from the message: ${userMessage}`
   print(`User's mood is: ${mood}`)
 }
 
 node handleTodo(userMessage: string) {
-  item = `Extract the to-do item from the message: ${userMessage}`
+  const item = `Extract the to-do item from the message: ${userMessage}`
   print(`Adding to-do item: ${item}`)
 }
 ```

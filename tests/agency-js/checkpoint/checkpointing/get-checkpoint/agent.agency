@@ -1,5 +1,5 @@
-shared sharedVar = 0
-globalVar = 0
+shared let sharedVar = 0
+let globalVar = 0
 
 def increment(amount: number) {
   sharedVar = sharedVar + amount
@@ -8,14 +8,14 @@ def increment(amount: number) {
 }
 
 def modifyState(amount1: number) {
-  localVar = 10
-  total = amount1 + localVar
-  result = increment(total)
-  cid = checkpoint()
+  const localVar = 10
+  const total = amount1 + localVar
+  const result = increment(total)
+  const cid = checkpoint()
   return cid
 }
 
 node main() {
-  cid = modifyState(3)
+  const cid = modifyState(3)
   return getCheckpoint(cid)
 }

@@ -1,6 +1,6 @@
 node main() {
   skill "./skills/data-processor.ts"
-  result: string = llm("Analyze this data")
+  const result: string = llm("Analyze this data")
 
-  plain: string = llm("No skills here")
+  const plain: string = llm("No skills here")
 }

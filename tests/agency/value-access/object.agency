@@ -1,11 +1,11 @@
-user = { 
+const user = {
   name: "Alice",
   age: 30
 }
 
 node main() {
-  name1 = user.name
+  const name1 = user.name
   user.name = "Bob"
-  name2 = user.name
+  const name2 = user.name
   return [name1, name2]
 }

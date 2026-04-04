@@ -5,12 +5,12 @@ def greet(name: string): string {
 
 node foo() {
   uses greet
-  res = llm("Call the greet function with name: Adit. Return JUST the result of the function call, no explanation.")
+  const res = llm("Call the greet function with name: Adit. Return JUST the result of the function call, no explanation.")
   print(res)
   return res
 }
 
 node bar() {
-  result = llm("What is 2 + 2?")
+  const result = llm("What is 2 + 2?")
   return result
 }

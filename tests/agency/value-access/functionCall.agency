@@ -1,4 +1,4 @@
-users = [{ 
+const users = [{ 
   name: "Alice",
   age: 30
 }]

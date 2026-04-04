@@ -1,5 +1,5 @@
 node main() {
-  name = interrupt("What is your name?")
-  greeting = llm("Say hello to {name}")
+  const name = interrupt("What is your name?")
+  const greeting = llm("Say hello to {name}")
   return greeting
 }

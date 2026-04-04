@@ -1,4 +1,4 @@
 node ask() {
-  answer: string = llm("What is 2+2?")
+  const answer: string = llm("What is 2+2?")
   return answer
 }

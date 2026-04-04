@@ -14,6 +14,6 @@ node noInterrupt() {
 }
 
 node interruptHandler() {
-  result = funcThrowsInterrupt(5)
+  const result = funcThrowsInterrupt(5)
   return result
 }

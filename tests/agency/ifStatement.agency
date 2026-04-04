@@ -1,9 +1,9 @@
 node main() {
   if (true) {
-    foo = "hello"
+    const foo = "hello"
   }
   if (false) {
-    bar = "world"
+    const bar = "world"
   }
   return [foo, bar]
 }

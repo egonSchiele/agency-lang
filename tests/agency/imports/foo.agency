@@ -12,13 +12,13 @@ def bestSongTool(artist: string): string {
 
 node agencyImport() {
   uses ascii
-  result: number[] = llm("Use the ascii tool to convert the string 'hello' to ASCII codes")
+  const result: number[] = llm("Use the ascii tool to convert the string 'hello' to ASCII codes")
   return result
 }
 
 node jsImport() {
   uses bestSongTool
-  result: string = llm("Use the bestSongTool to find the best song by the artist 'The Beatles'")
+  const result: string = llm("Use the bestSongTool to find the best song by the artist 'The Beatles'")
   return result
 }
 
@@ -28,13 +28,13 @@ node nodeImport() {
 
 // test that global vars with the same name in different files
 // don't clobber each other
-globalVar = 3
+const globalVar = 3
 node testGlobalVarIsolation() {
   increment()
   increment()
   return interrupt("Interrupting after 2 increments")
-  barGlobal = getGlobal()
-  return { 
+  const barGlobal = getGlobal()
+  return {
     globalVarInFoo: globalVar,
     globalVarInBar: barGlobal
   }

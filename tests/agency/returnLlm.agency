@@ -4,7 +4,7 @@ def seven(): number {
 
 
 node typed() {
-  res: number = seven()
+  const res: number = seven()
   return res
 }
 

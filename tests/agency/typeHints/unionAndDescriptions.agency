@@ -4,6 +4,6 @@ type Sentiment = {
 }
 
 node analyzeSentiment(text: string) {
-  result: Sentiment = llm("Analyze the sentiment of: '${text}'")
+  const result: Sentiment = llm("Analyze the sentiment of: '${text}'")
   return result
 }

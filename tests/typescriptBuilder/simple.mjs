@@ -118,10 +118,15 @@ let __functionCompleted = false;
     }
   })
   if (__step <= 0) {
-          
+      
           __stack.step++;
   }
   if (__step <= 1) {
+          let
+    
+          __stack.step++;
+  }
+  if (__step <= 2) {
           __self.__removedTools = __self.__removedTools || [];
 __stack.locals.greeting = await runPrompt({
       ctx: __ctx,
@@ -147,12 +152,12 @@ if (isInterrupt(__stack.locals.greeting)) {
     })
           __stack.step++;
   }
-  if (__step <= 2) {
+  if (__step <= 3) {
           if (__ctx.callbacks.onCheckpoint) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
   } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "simple.agency", scopeName: "main", stepPath: "2" });
+    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "simple.agency", scopeName: "main", stepPath: "3" });
     const __cp = __ctx.checkpoints.get(__cpId);
     await callHook({
       callbacks: __ctx.callbacks,
@@ -174,7 +179,7 @@ if (isInterrupt(__stack.locals.greeting)) {
 
           __stack.step++;
   }
-  if (__step <= 3) {
+  if (__step <= 4) {
           await print(__stack.locals.greeting)
           __stack.step++;
   }
@@ -215,4 +220,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"simple.agency:main":{"1":{"line":0,"col":2},"3":{"line":1,"col":2}}};
+export const __sourceMap = {"simple.agency:main":{"1":{"line":-1,"col":2},"2":{"line":0,"col":2},"4":{"line":1,"col":2}}};

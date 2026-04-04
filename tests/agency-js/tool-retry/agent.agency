@@ -13,7 +13,7 @@ def lookupTool(id: string) {
 // to false. If this tool throws after calling saveItem, it cannot be retried.
 def saveAndLookupTool(id: string) {
   saveItem(id)
-  item = lookupItem(id)
+  const item = lookupItem(id)
   return item
 }
 
@@ -59,7 +59,7 @@ def resetCountersTool() {
 node testSafeRetry() {
   resetCountersTool()
   uses lookupTool
-  result = llm("Look up item with id 'abc'. Use the lookupTool. If you get a temporary error, retry the same tool call.")
+  const result = llm("Look up item with id 'abc'. Use the lookupTool. If you get a temporary error, retry the same tool call.")
   return result
 }
 
@@ -68,7 +68,7 @@ node testSafeRetry() {
 node testUnsafeNoRetry() {
   resetCountersTool()
   uses saveAndLookupTool
-  result = llm("Save and look up item 'xyz'. Use the saveAndLookupTool.")
+  const result = llm("Save and look up item 'xyz'. Use the saveAndLookupTool.")
   return result
 }
 
@@ -78,7 +78,7 @@ node testUnsafeNoRetry() {
 node testSafeDefRetry() {
   resetCountersTool()
   uses safeWrapperTool
-  result = llm("Look up item with id 'def'. Use the safeWrapperTool. If you get a temporary error, retry the same tool call.")
+  const result = llm("Look up item with id 'def'. Use the safeWrapperTool. If you get a temporary error, retry the same tool call.")
   return result
 }
 
@@ -88,7 +88,7 @@ node testSafeDefRetry() {
 node testDerivedSafeRetry() {
   resetCountersTool()
   uses derivedSafeWrapperTool
-  result = llm("Look up item with id 'ghi'. Use the derivedSafeWrapperTool. If you get a temporary error, retry the same tool call.")
+  const result = llm("Look up item with id 'ghi'. Use the derivedSafeWrapperTool. If you get a temporary error, retry the same tool call.")
   return result
 }
 
@@ -99,6 +99,6 @@ node testDerivedSafeRetry() {
 node testUnsafeChainNoRetry() {
   resetCountersTool()
   uses unsafeChainTool
-  result = llm("Save and look up item 'jkl'. Use the unsafeChainTool.")
+  const result = llm("Save and look up item 'jkl'. Use the unsafeChainTool.")
   return result
 }

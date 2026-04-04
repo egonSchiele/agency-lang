@@ -1,28 +1,28 @@
 node main() {
   // Basic if statement with boolean variable
-  flag = true
+  const flag = true
   if (flag) {
-    result = "condition was true"
+    let result = "condition was true"
   }
 
   if (isReady()) {
-    status = "ready"
+    const status = "ready"
   }
 
   // If statement with property access
-  obj = { 
+  const obj = {
     active: true
   }
   if (obj.active) {
-    message = "object is active"
+    const message = "object is active"
   }
 
   // Nested if statements
-  outer = true
+  const outer = true
   if (outer) {
-    inner = false
+    const inner = false
     if (inner) {
-      nested = "both true"
+      const nested = "both true"
     }
   }
 
@@ -33,18 +33,18 @@ node main() {
   //   firstElement = "exists"
   // }
   // Multiple statements in then body
-  condition = true
+  const condition = true
   if (condition) {
-    a = 1
-    b = 2
-    c = 3
+    const a = 1
+    const b = 2
+    const c = 3
   }
 
   // Multiple statements in both then and else bodies
-  value = false
+  const value = false
   if (value) {
-    x = 10
-    y = 20
+    const x = 10
+    const y = 20
   }
 
   // Basic else

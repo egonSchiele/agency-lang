@@ -169,6 +169,7 @@
       "body": [
         {
           "type": "assignment",
+          "declKind": "const",
           "typeHint": {
             "type": "primitiveType",
             "value": "string"
@@ -190,9 +191,9 @@
             ],
             "loc": {
               "line": 9,
-              "col": 19,
-              "start": 257,
-              "end": 304
+              "col": 25,
+              "start": 263,
+              "end": 310
             },
             "tools": {
               "type": "usesTool",
@@ -206,7 +207,7 @@
             "line": 9,
             "col": 2,
             "start": 240,
-            "end": 304
+            "end": 310
           },
           "scope": "local"
         },
@@ -237,8 +238,8 @@
               "loc": {
                 "line": 10,
                 "col": 8,
-                "start": 310,
-                "end": 316
+                "start": 316,
+                "end": 322
               },
               "scope": "local"
             }
@@ -246,8 +247,8 @@
           "loc": {
             "line": 10,
             "col": 2,
-            "start": 304,
-            "end": 318
+            "start": 310,
+            "end": 324
           }
         }
       ],
@@ -255,7 +256,7 @@
         "line": 7,
         "col": 0,
         "start": 193,
-        "end": 319
+        "end": 325
       }
     }
   ]

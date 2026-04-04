@@ -1,16 +1,16 @@
 def greet(name: string): string {
-  result = llm("Hello ${name}")
+  const result = llm("Hello ${name}")
   return result
 }
 
 node main() {
-  x = 1
+  const x = 1
   if (x == 1) {
-    y = 2
+    let y = 2
   } else {
     y = 3
   }
   for (item in ["a", "b"]) {
-    z = item
+    const z = item
   }
 }

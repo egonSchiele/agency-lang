@@ -1,4 +1,4 @@
 node main() {
   bar :: number
-  bar = llm("the number 1")
+  const bar = llm("the number 1")
 }

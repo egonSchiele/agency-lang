@@ -1,6 +1,6 @@
 node main() {
-  grade = "B"
-  points = 0
+  const grade = "B"
+  let points = 0
   match(grade) {
     "A" => points = 100
     "B" => points = 85

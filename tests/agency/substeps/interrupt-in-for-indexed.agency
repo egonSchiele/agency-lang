@@ -1,9 +1,9 @@
 node main() {
-  items = ["a", "b", "c", "d"]
-  result = ""
+  const items = ["a", "b", "c", "d"]
+  let result = ""
   for (item, idx in items) {
     if (idx == 2) {
-      y = interrupt("at index 2")
+      const y = interrupt("at index 2")
     }
     result = result + item
   }

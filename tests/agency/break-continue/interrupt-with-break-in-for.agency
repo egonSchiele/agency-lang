@@ -1,8 +1,8 @@
 node main() {
-  total = 0
+  let total = 0
   for (i in range(10)) {
     if (i == 3) {
-      y = interrupt("stopping at 3")
+      const y = interrupt("stopping at 3")
       break
     }
     total = total + i

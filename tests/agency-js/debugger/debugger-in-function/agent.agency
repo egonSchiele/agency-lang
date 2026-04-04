@@ -4,6 +4,6 @@ def addTen(x: number): number {
 }
 
 node main() {
-  result = addTen(5)
+  const result = addTen(5)
   return result
 }

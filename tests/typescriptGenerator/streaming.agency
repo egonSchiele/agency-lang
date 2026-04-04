@@ -1,10 +1,10 @@
 node foo() {
-  response = llm("Generate a response word by word", { 
+  const response = llm("Generate a response word by word", {
     stream: true
   })
   print(response)
 
-  response2 = llm("Generate a response word by word, but with a different model", { 
+  const response2 = llm("Generate a response word by word, but with a different model", {
     model: "gemini-2.5-flash-lite",
     stream: true
   })

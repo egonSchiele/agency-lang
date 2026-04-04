@@ -2,7 +2,7 @@ node main() {
   // Test match blocks (pattern matching)
 
   // Simple match with string literals
-  action = "start"
+  const action = "start"
   match(action) {
     "start" => print("Starting...")
     "stop" => print("Stopping...")
@@ -11,7 +11,7 @@ node main() {
   }
 
   // Match with number literals
-  statusCode = 200
+  const statusCode = 200
   match(statusCode) {
     200 => print("OK")
     404 => print("Not Found")
@@ -20,18 +20,18 @@ node main() {
   }
 
   // Match with variable assignment in body
-  grade = "A"
-  points = 0
+  const grade = "A"
+  const points = 0
   match(grade) {
-    "A" => a = 100
-    "B" => b = 85
-    "C" => c = 70
-    "D" => d = 55
-    _ => e = 0
+    "A" => const a = 100
+    "B" => const b = 85
+    "C" => const c = 70
+    "D" => const d = 55
+    _ => const e = 0
   }
 
   // Match with function calls in body
-  level = "debug"
+  const level = "debug"
   match(level) {
     "debug" => print("Debug mode enabled")
     "info" => print("Info level logging")
@@ -40,32 +40,32 @@ node main() {
   }
 
   // Match with array results
-  resultType = "array"
+  const resultType = "array"
   match(resultType) {
-    "array" => data1 = [1, 2, 3]
-    "object" => data2 = { 
+    "array" => const data1 = [1, 2, 3]
+    "object" => const data2 = {
       x: 1,
       y: 2
     }
-    _ => data3 = []
+    _ => const data3 = []
   }
 
   // Match with object results
-  format = "json"
+  const format = "json"
   match(format) {
-    "xml" => output1 = { 
+    "xml" => const output1 = {
       type: "xml",
       ext: ".xml"
     }
-    "json" => output2 = { 
+    "json" => const output2 = {
       type: "json",
       ext: ".json"
     }
-    "csv" => output3 = { 
+    "csv" => const output3 = {
       type: "csv",
       ext: ".csv"
     }
-    _ => output4 = { 
+    _ => const output4 = {
       type: "unknown",
       ext: ""
     }

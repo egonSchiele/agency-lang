@@ -3,6 +3,7 @@
   "nodes": [
     {
       "type": "assignment",
+      "declKind": "let",
       "variableName": "globalVar",
       "value": {
         "type": "string",
@@ -17,7 +18,7 @@
         "line": -2,
         "col": 0,
         "start": 0,
-        "end": 21
+        "end": 25
       },
       "scope": "global"
     },
@@ -34,6 +35,7 @@
       "body": [
         {
           "type": "assignment",
+          "declKind": "const",
           "variableName": "localVar",
           "value": {
             "type": "string",
@@ -47,13 +49,14 @@
           "loc": {
             "line": 1,
             "col": 2,
-            "start": 43,
-            "end": 64
+            "start": 47,
+            "end": 74
           },
           "scope": "local"
         },
         {
           "type": "assignment",
+          "declKind": "const",
           "variableName": "result",
           "value": {
             "type": "string",
@@ -65,9 +68,9 @@
                   "value": "globalVar",
                   "loc": {
                     "line": 2,
-                    "col": 14,
-                    "start": 76,
-                    "end": 85
+                    "col": 20,
+                    "start": 92,
+                    "end": 101
                   },
                   "scope": "global"
                 }
@@ -83,9 +86,9 @@
                   "value": "localVar",
                   "loc": {
                     "line": 2,
-                    "col": 27,
-                    "start": 89,
-                    "end": 97
+                    "col": 33,
+                    "start": 105,
+                    "end": 113
                   },
                   "scope": "local"
                 }
@@ -101,9 +104,9 @@
                   "value": "param",
                   "loc": {
                     "line": 2,
-                    "col": 39,
-                    "start": 101,
-                    "end": 106
+                    "col": 45,
+                    "start": 117,
+                    "end": 122
                   },
                   "scope": "args"
                 }
@@ -113,8 +116,8 @@
           "loc": {
             "line": 2,
             "col": 2,
-            "start": 64,
-            "end": 111
+            "start": 74,
+            "end": 127
           },
           "scope": "local"
         },
@@ -126,24 +129,24 @@
             "loc": {
               "line": 3,
               "col": 9,
-              "start": 118,
-              "end": 124
+              "start": 134,
+              "end": 140
             },
             "scope": "local"
           },
           "loc": {
             "line": 3,
             "col": 2,
-            "start": 111,
-            "end": 125
+            "start": 127,
+            "end": 141
           }
         }
       ],
       "loc": {
         "line": 0,
         "col": 0,
-        "start": 21,
-        "end": 126
+        "start": 25,
+        "end": 142
       }
     },
     {
@@ -154,6 +157,7 @@
       "body": [
         {
           "type": "assignment",
+          "declKind": "const",
           "variableName": "nodeLocal",
           "value": {
             "type": "string",
@@ -167,13 +171,14 @@
           "loc": {
             "line": 7,
             "col": 2,
-            "start": 144,
-            "end": 165
+            "start": 160,
+            "end": 187
           },
           "scope": "local"
         },
         {
           "type": "assignment",
+          "declKind": "const",
           "variableName": "output",
           "value": {
             "type": "functionCall",
@@ -184,25 +189,25 @@
                 "value": "nodeLocal",
                 "loc": {
                   "line": 8,
-                  "col": 18,
-                  "start": 181,
-                  "end": 190
+                  "col": 24,
+                  "start": 209,
+                  "end": 218
                 },
                 "scope": "local"
               }
             ],
             "loc": {
               "line": 8,
-              "col": 11,
-              "start": 174,
-              "end": 194
+              "col": 17,
+              "start": 202,
+              "end": 222
             }
           },
           "loc": {
             "line": 8,
             "col": 2,
-            "start": 165,
-            "end": 194
+            "start": 187,
+            "end": 222
           },
           "scope": "local"
         },
@@ -216,8 +221,8 @@
               "loc": {
                 "line": 9,
                 "col": 8,
-                "start": 200,
-                "end": 206
+                "start": 228,
+                "end": 234
               },
               "scope": "local"
             }
@@ -225,16 +230,16 @@
           "loc": {
             "line": 9,
             "col": 2,
-            "start": 194,
-            "end": 208
+            "start": 222,
+            "end": 236
           }
         }
       ],
       "loc": {
         "line": 6,
         "col": 0,
-        "start": 128,
-        "end": 209
+        "start": 144,
+        "end": 237
       }
     }
   ]

@@ -1,10 +1,10 @@
 def greet(): string {
-  name = interrupt("Who do you want to say hi to?")
+  const name = interrupt("Who do you want to say hi to?")
   return "Kya chal raha jai, ${name}!"
 }
 
 node foo() {
   uses greet
-  res = llm("Call the greet function. Return JUST the result of the function call, no explanation.")
+  const res = llm("Call the greet function. Return JUST the result of the function call, no explanation.")
   return res
 }

@@ -1,6 +1,6 @@
 node main() {
-  message = input("Please enter a message: ")
+  const message = input("Please enter a message: ")
 
-  sentiment: "happy" | "sad" | "neutral" = llm("Categorize the sentiment in this message: ${message}")
+  const sentiment: "happy" | "sad" | "neutral" = llm("Categorize the sentiment in this message: ${message}")
   print(sentiment)
 }

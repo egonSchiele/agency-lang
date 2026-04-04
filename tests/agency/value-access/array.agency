@@ -1,21 +1,21 @@
-users = [{ 
+const users = [{
   name: "Alice",
   age: 30
 }]
 
 node main() {
   // index
-  name1 = users[0].name
+  const name1 = users[0].name
   users[0].name = "Bob"
-  name2 = users[0].name
+  const name2 = users[0].name
 
   // var for index
-  users.push({ 
+  users.push({
     name: "Charlie",
     age: 25
   })
-  i = 0
-  names = []
+  let i = 0
+  const names = []
   while (i < users.length) {
     names.push(users[i].name)
     i = i + 1
@@ -23,13 +23,13 @@ node main() {
 
   // print(users[0 + 1].name)
 
-  obj = { 
+  const obj = {
     x: 1
   }
 
   //print(users[obj.x].name)
 
-  return { 
+  return {
     name1: name1,
     name2: name2,
     names: names

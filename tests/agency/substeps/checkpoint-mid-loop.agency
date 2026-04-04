@@ -1,11 +1,11 @@
-shared log = ""
-shared restoreCount = 0
+shared let log = ""
+shared let restoreCount = 0
 
 node main() {
   for (i in range(4)) {
     log = log + i
     if (i == 2) {
-      cp = checkpoint()
+      const cp = checkpoint()
     }
     if (i == 3) {
       if (restoreCount < 1) {

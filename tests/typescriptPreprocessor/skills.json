@@ -9,6 +9,7 @@
       "body": [
         {
           "type": "assignment",
+          "declKind": "const",
           "typeHint": {
             "type": "primitiveType",
             "value": "string"
@@ -30,9 +31,9 @@
             ],
             "loc": {
               "line": 0,
-              "col": 19,
-              "start": 70,
-              "end": 98
+              "col": 25,
+              "start": 76,
+              "end": 104
             },
             "tools": {
               "type": "usesTool",
@@ -43,7 +44,7 @@
             "line": 0,
             "col": 2,
             "start": 53,
-            "end": 98
+            "end": 104
           },
           "scope": "local"
         },
@@ -66,6 +67,7 @@
         },
         {
           "type": "assignment",
+          "declKind": "const",
           "typeHint": {
             "type": "primitiveType",
             "value": "string"
@@ -87,9 +89,9 @@
             ],
             "loc": {
               "line": 2,
-              "col": 18,
-              "start": 114,
-              "end": 136
+              "col": 24,
+              "start": 126,
+              "end": 148
             },
             "tools": {
               "type": "usesTool",
@@ -99,8 +101,8 @@
           "loc": {
             "line": 2,
             "col": 2,
-            "start": 98,
-            "end": 136
+            "start": 104,
+            "end": 148
           },
           "scope": "local"
         },
@@ -126,7 +128,7 @@
         "line": -2,
         "col": 0,
         "start": 0,
-        "end": 137
+        "end": 149
       }
     }
   ]

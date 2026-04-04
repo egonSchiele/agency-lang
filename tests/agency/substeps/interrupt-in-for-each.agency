@@ -1,9 +1,9 @@
 node main() {
-  items = ["a", "b", "c", "d"]
-  result = ""
+  const items = ["a", "b", "c", "d"]
+  let result = ""
   for (item in items) {
     if (item == "c") {
-      y = interrupt("found c")
+      const y = interrupt("found c")
     }
     result = result + item
   }

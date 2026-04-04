@@ -11,6 +11,6 @@ def unsafeSave(id: string) {
 
 node main() {
   uses safeLookup, unsafeSave
-  result = llm("Use the tools")
+  const result = llm("Use the tools")
   return result
 }

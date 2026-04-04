@@ -21,6 +21,7 @@
       "body": [
         {
           "type": "assignment",
+          "declKind": "const",
           "variableName": "result",
           "value": {
             "type": "functionCall",
@@ -40,9 +41,9 @@
                       "value": "label",
                       "loc": {
                         "line": -1,
-                        "col": 27,
-                        "start": 65,
-                        "end": 70
+                        "col": 33,
+                        "start": 71,
+                        "end": 76
                       },
                       "scope": "args"
                     }
@@ -52,9 +53,9 @@
             ],
             "loc": {
               "line": -1,
-              "col": 11,
-              "start": 49,
-              "end": 76
+              "col": 17,
+              "start": 55,
+              "end": 82
             },
             "tools": {
               "type": "usesTool",
@@ -65,7 +66,7 @@
             "line": -1,
             "col": 2,
             "start": 40,
-            "end": 76
+            "end": 82
           },
           "scope": "local"
         },
@@ -88,9 +89,9 @@
                     "value": "label",
                     "loc": {
                       "line": -1,
-                      "col": 27,
-                      "start": 65,
-                      "end": 70
+                      "col": 33,
+                      "start": 71,
+                      "end": 76
                     },
                     "scope": "args"
                   }
@@ -108,16 +109,16 @@
             "loc": {
               "line": 0,
               "col": 9,
-              "start": 83,
-              "end": 89
+              "start": 89,
+              "end": 95
             },
             "scope": "local"
           },
           "loc": {
             "line": 0,
             "col": 2,
-            "start": 76,
-            "end": 90
+            "start": 82,
+            "end": 96
           }
         }
       ],
@@ -125,7 +126,7 @@
         "line": -2,
         "col": 0,
         "start": 0,
-        "end": 91
+        "end": 97
       }
     },
     {
@@ -136,6 +137,7 @@
       "body": [
         {
           "type": "assignment",
+          "declKind": "const",
           "typeHint": {
             "type": "primitiveType",
             "value": "string"
@@ -157,9 +159,9 @@
             ],
             "loc": {
               "line": 4,
-              "col": 14,
-              "start": 121,
-              "end": 147
+              "col": 20,
+              "start": 133,
+              "end": 159
             },
             "tools": {
               "type": "usesTool",
@@ -169,8 +171,8 @@
           "loc": {
             "line": 4,
             "col": 2,
-            "start": 109,
-            "end": 147
+            "start": 115,
+            "end": 159
           },
           "scope": "local"
         },
@@ -193,6 +195,7 @@
         },
         {
           "type": "assignment",
+          "declKind": "const",
           "typeHint": {
             "type": "primitiveType",
             "value": "string"
@@ -214,9 +217,9 @@
             ],
             "loc": {
               "line": 5,
-              "col": 14,
-              "start": 159,
-              "end": 186
+              "col": 20,
+              "start": 177,
+              "end": 204
             },
             "tools": {
               "type": "usesTool",
@@ -226,8 +229,8 @@
           "loc": {
             "line": 5,
             "col": 2,
-            "start": 147,
-            "end": 186
+            "start": 159,
+            "end": 204
           },
           "scope": "local"
         },
@@ -250,6 +253,7 @@
         },
         {
           "type": "assignment",
+          "declKind": "const",
           "variableName": "combined",
           "value": {
             "type": "string",
@@ -261,9 +265,9 @@
                   "value": "a",
                   "loc": {
                     "line": 6,
-                    "col": 16,
-                    "start": 200,
-                    "end": 201
+                    "col": 22,
+                    "start": 224,
+                    "end": 225
                   },
                   "scope": "local"
                 }
@@ -279,9 +283,9 @@
                   "value": "b",
                   "loc": {
                     "line": 6,
-                    "col": 25,
-                    "start": 209,
-                    "end": 210
+                    "col": 31,
+                    "start": 233,
+                    "end": 234
                   },
                   "scope": "local"
                 }
@@ -291,8 +295,8 @@
           "loc": {
             "line": 6,
             "col": 2,
-            "start": 186,
-            "end": 215
+            "start": 204,
+            "end": 239
           },
           "scope": "local"
         },
@@ -306,8 +310,8 @@
               "loc": {
                 "line": 7,
                 "col": 8,
-                "start": 221,
-                "end": 229
+                "start": 245,
+                "end": 253
               },
               "scope": "local"
             }
@@ -315,16 +319,16 @@
           "loc": {
             "line": 7,
             "col": 2,
-            "start": 215,
-            "end": 231
+            "start": 239,
+            "end": 255
           }
         }
       ],
       "loc": {
         "line": 3,
         "col": 0,
-        "start": 93,
-        "end": 232
+        "start": 99,
+        "end": 256
       }
     }
   ]

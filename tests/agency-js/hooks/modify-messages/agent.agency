@@ -1,4 +1,4 @@
 node ask() {
-  answer: string = llm("What is the capital of France?")
+  const answer: string = llm("What is the capital of France?")
   return answer
 }

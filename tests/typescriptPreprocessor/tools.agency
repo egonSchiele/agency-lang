@@ -8,5 +8,5 @@ def formatTemp(temp: number): string {
 
 node main() {
   uses getWeather, formatTemp
-  forecast: string = llm("What is the weather in NYC?")  summary: string = llm("Summarize the forecast")
+  const forecast: string = llm("What is the weather in NYC?")  const summary: string = llm("Summarize the forecast")
 }

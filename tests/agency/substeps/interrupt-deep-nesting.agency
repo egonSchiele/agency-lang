@@ -1,9 +1,9 @@
 node main() {
-  result = ""
+  let result = ""
   thread {
     for (i in range(3)) {
       if (i == 1) {
-        y = interrupt("deep")
+        const y = interrupt("deep")
         result = "resumed"
       }
     }

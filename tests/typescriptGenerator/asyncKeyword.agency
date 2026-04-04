@@ -1,11 +1,11 @@
 def openai(msg: string): string {
-  response = llm("Respond to this user message: ${msg}")
+  const response = llm("Respond to this user message: ${msg}")
   return "OpenAI response: ${response}"
 }
 
 def google(msg: string): string {
   @messages = []
-  response = llm("Respond to this user message: ${msg}", {
+  const response = llm("Respond to this user message: ${msg}", {
     model: "gemini-2.5-flash-lite"
   })
   return "Google response: ${response}"
@@ -16,9 +16,9 @@ def fibs(): number[] {
 }
 
 node main() {
-  msg = input("> ")
-  res2 = async google(msg)
-  res1 = async openai(msg)
-  results = await Promise.race([res1, res2])
+  const msg = input("> ")
+  const res2 = async google(msg)
+  const res1 = async openai(msg)
+  const results = await Promise.race([res1, res2])
   printJSON(results)
 }

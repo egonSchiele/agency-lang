@@ -3,13 +3,13 @@ def pureFunction(x) {
 }
 
 def llmFunction(prompt) {
-  result = llm("Respond to: ${prompt}")
+  const result = llm("Respond to: ${prompt}")
   return result
 }
 
 node main() {
-  a = pureFunction("hello")
-  b = llmFunction("world")
-  result: string = llm("Combine ${a} and ${b}")
+  const a = pureFunction("hello")
+  const b = llmFunction("world")
+  const result: string = llm("Combine ${a} and ${b}")
   print(result)
 }

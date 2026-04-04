@@ -1,4 +1,4 @@
-arr = []
+const arr = []
 
 def append(sleepTime: number, value: any) {
   sleep(sleepTime)

@@ -1,6 +1,6 @@
-adjective = "hot"
+const adjective = "hot"
 node main(name: string, item: string) {
-  adjective2 = "spicy"
-  result: string = llm("Respond with ONLY this exact text: '${name} wants ${adjective} ${adjective2} ${item}'")
+  const adjective2 = "spicy"
+  const result: string = llm("Respond with ONLY this exact text: '${name} wants ${adjective} ${adjective2} ${item}'")
   return result
 }

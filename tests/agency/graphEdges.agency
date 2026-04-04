@@ -1,5 +1,5 @@
 node classify(message: string) {
-  category: "greeting" | "farewell" = llm("Classify as 'greeting' or 'farewell': '${message}'")
+  const category: "greeting" | "farewell" = llm("Classify as 'greeting' or 'farewell': '${message}'")
   match(category) {
     "greeting" => return respondGreeting()
     "farewell" => return respondFarewell()

@@ -1,4 +1,4 @@
 def greet(name) {
-  result = llm("Hello, {name}!")
+  const result = llm("Hello, {name}!")
   return result
 }

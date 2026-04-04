@@ -4,16 +4,16 @@ type User = {
 }
 
 node foo(user: User) {
-  name = user.name
-  greeting = llm("Say hello to ${user.name}")
-  return { 
+  const name = user.name
+  const greeting = llm("Say hello to ${user.name}")
+  return {
     name: name,
     greeting: greeting
   }
 }
 
 node main() {
-  user: User = { 
+  const user: User = {
     name: "Alice",
     age: 30
   }

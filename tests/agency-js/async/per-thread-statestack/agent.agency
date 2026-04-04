@@ -7,7 +7,7 @@ def triple(x: number): number {
 }
 
 node main() {
-  a = async double(5)
-  b = async triple(5)
+  const a = async double(5)
+  const b = async triple(5)
   return { a: a, b: b }
 }

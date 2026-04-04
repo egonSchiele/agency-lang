@@ -3,6 +3,6 @@ def double(n: number): number {
 }
 
 node main(x: number): number {
-  result = double(x)
+  const result = double(x)
   return result
 }

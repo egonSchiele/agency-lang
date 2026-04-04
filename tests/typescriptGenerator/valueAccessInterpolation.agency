@@ -1,6 +1,6 @@
 node main() {
-  user = { name: "Alice", age: 30 }
-  greeting = "Hello, ${user.name}!"
-  result = llm("Tell me about ${user.name} who is ${user.age} years old")
+  const user = { name: "Alice", age: 30 }
+  const greeting = "Hello, ${user.name}!"
+  const result = llm("Tell me about ${user.name} who is ${user.age} years old")
   print(result)
 }

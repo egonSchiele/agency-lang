@@ -3,6 +3,6 @@ def add(a: number, b: number) {
 }
 
 node greet(name: string) {
-  result = llm("Say hello to ${name}! Keep it to one sentence.")
+  const result = llm("Say hello to ${name}! Keep it to one sentence.")
   return result
 }

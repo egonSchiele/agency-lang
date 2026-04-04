@@ -1,10 +1,10 @@
 def mogrify(a: number, b: number): number {
-  sum = a + b
+  const sum = a + b
   return sum * 3
 }
 
 node withUses() {
   uses mogrify
-  result: number = llm("Use the mogrify function to mogrify 3, 7. Return ONLY the result.")
+  const result: number = llm("Use the mogrify function to mogrify 3, 7. Return ONLY the result.")
   return result
 }

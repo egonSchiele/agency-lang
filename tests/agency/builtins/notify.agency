@@ -1,5 +1,5 @@
 node main(title: string, message: string) {
-  result = notify(title, message)
+  const result = notify(title, message)
   if (result == null) {
     return "notification blocked"
   }

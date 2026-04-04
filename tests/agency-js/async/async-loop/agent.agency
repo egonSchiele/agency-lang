@@ -1,4 +1,4 @@
-log = []
+const log = []
 
 def record(val: number) {
   sleep(0.01)
@@ -11,10 +11,10 @@ def compute(val: number): number {
 }
 
 node main() {
-  results = []
-  i = 0
+  const results = []
+  let i = 0
   while (i < 3) {
-    x = async compute(i)
+    const x = async compute(i)
     results.push(x)
     async record(i)
     i = i + 1

@@ -1,4 +1,4 @@
 node main() {
-  x = 42
+  const x = 42
   return x
 }

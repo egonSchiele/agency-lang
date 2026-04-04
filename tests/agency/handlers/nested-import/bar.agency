@@ -1,8 +1,8 @@
-log = []
+const log = []
 
 def logWithAssign() {
   log.push("foo start")
-  val = interrupt("check")
+  const val = interrupt("check")
   log.push(val)
   log.push("foo end")
   return "log return"
@@ -14,7 +14,7 @@ def getLog() {
 
 def barHandler() {
   handle {
-    result = logWithAssign()
+    const result = logWithAssign()
     log.push(result)
   } with (data) {
     return approve()

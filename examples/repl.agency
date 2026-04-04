@@ -40,12 +40,12 @@ def execCommandTool(command: string): string {
 
 node main() {
   while (true) {
-    msg = input("> ")
+    const msg = input("> ")
     uses writeFileTool
     uses readFileTool
     uses printLineTool
     uses execCommandTool
-    response = llm("Respond to this user message: ${msg}")
+    const response = llm("Respond to this user message: ${msg}")
     print(response)
   }
 }

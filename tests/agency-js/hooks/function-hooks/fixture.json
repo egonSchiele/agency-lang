@@ -3,6 +3,7 @@
     "onAgentStart",
     "onNodeStart",
     "onFunctionStart",
+    "onFunctionEnd",
     "onAgentEnd"
   ],
   "hookLog": [
@@ -21,6 +22,11 @@
         "x": 5
       },
       "isBuiltin": false
+    },
+    {
+      "hook": "onFunctionEnd",
+      "functionName": "double",
+      "timeTakenIsNumber": true
     },
     {
       "hook": "onAgentEnd",

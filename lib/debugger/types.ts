@@ -12,6 +12,7 @@ export type DebuggerCommand =
   | { type: "checkpoint"; label?: string }
   | { type: "set"; varName: string; value: unknown }
   | { type: "print"; varName: string }
+  | { type: "approve"; }
   | { type: "reject"; value?: unknown }
   | { type: "resolve"; value: unknown }
   | { type: "modify"; overrides: Record<string, unknown> }

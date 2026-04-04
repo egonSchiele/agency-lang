@@ -11,7 +11,6 @@ import type { TraceHeader } from "@/runtime/trace/types.js";
 import { Checkpoint } from "@/runtime/state/checkpointStore.js";
 import { createDebugInterrupt } from "@/runtime/interrupts.js";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 
 export async function debug(
@@ -48,8 +47,11 @@ export async function debug(
         console.error("Error: Bundle has invalid program path.");
         process.exit(1);
       }
-      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-bundle-"));
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      tempDir = path.resolve(`.tmp/bundle/${timestamp}`);
+      fs.mkdirSync(tempDir, { recursive: true });
       reader.writeSourcesToDisk(tempDir);
+      console.log(`Bundle extracted to: ${tempDir}`);
       const resolvedTempDir = path.resolve(tempDir);
       const resolvedProgram = path.resolve(resolvedTempDir, programPath);
       if (!resolvedProgram.startsWith(resolvedTempDir + path.sep)) {
@@ -190,7 +192,7 @@ export async function debug(
       await driver.run(initialResult);
     }
   } finally {
-    if (tempDir && (tempDir as string).startsWith(os.tmpdir())) {
+    if (tempDir && (tempDir as string).startsWith(path.resolve(".agency"))) {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
   }

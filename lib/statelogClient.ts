@@ -37,6 +37,7 @@ export class StatelogClient {
   private traceId: string;
   private apiKey: string;
   private projectId: string;
+  private enabled: boolean = true;
 
   constructor(config: StatelogConfig) {
     const { host, apiKey, projectId, traceId, debugMode } = config;
@@ -53,6 +54,7 @@ export class StatelogClient {
     }
 
     if (!this.apiKey) {
+      this.enabled = false;
       if (this.debugMode)
         console.warn(
           "API key is required for StatelogClient to send logs to a remote server. Logs will not be sent.",
@@ -418,6 +420,10 @@ export class StatelogClient {
 
   async post(body: Record<string, any>): Promise<void> {
     if (!this.host) {
+      return;
+    }
+
+    if (!this.enabled) {
       return;
     }
 

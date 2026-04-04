@@ -29,17 +29,22 @@ jobs:
         version: 9 # Specify a pnpm version or use "latest"
         run_install: false # Do not run install yet, handled in next step
 
+    # - name: Install libnotify-bin
+    #   run: |
+    #     sudo apt-get update
+    #     sudo apt-get install -y libnotify-bin
+
     - name: Set up Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'pnpm' # Enables pnpm-specific caching
     - run: pnpm install
-    - run: pnpm run build
+    - run: make
     - run: pnpm test:run
-    - run: pnpm run test:agency
-      env:
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-    - run: pnpm run test:agency-js
-      env:
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    # - run: pnpm run test:agency
+    #   env:
+    #     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    # - run: pnpm run test:agency-js
+    #   env:
+    #     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

@@ -49,25 +49,9 @@ type ListIngredientsParams = {
 }
 ```
 
-- no loops
-- no else statements
-- no infix operators yet (e.g., `+`, `-`, `*`, `/`, `&&`, `||`, `>=`, `<=`, `==`, `!=`, etc.) -- builtin replacements provided
-- can't assign to an access expression (e.g., `obj.key = value` doesn't work yet)
 - match blocks don't support blocks
 
-imported tools currently can't be used because to create the array that gets passed into the tool, we rely on knowing the names of the arguments so we can put them in the correct order in the array. One way to solve this would be to export a variable containing the arguments of the tool, import it when `import tool` is used, and use it to construct the array.
-
-- todo in lib/templates/backends/typescriptGenerator/promptFunction.mustache
-
 Use https://www.npmjs.com/package/code-block-writer for writing ts code instead?
-
-Future optimization: Currently, all LLM calls inside threads are awaited. However,  the LLM calls inside two sibling threads could be running in parallel.
-
-
-Importing tools still doesn't work perfectly, because I can't introspect imported functions to see if they throw an interrupt,
-so I have to always assume they do, which reduces some opportunity for parallelism. Maybe I just need to bite the bullet
-and commit to having a preprocessed step where all the files get read.
-I'll probably need to do that for supporting type checking anyway.
 
 
 lib/templates/backends/typescriptGenerator/promptFunction.mustache is bloated and complex. Needs help
@@ -89,16 +73,11 @@ add the ability to export and import types from other files so I can use the typ
 
 config for max messages in thread - smoltalk
 
-hooks?
-debugger? with time travel?
-
 https://www.npmjs.com/package/replace-in-file
 
 request timeout - smoltalk - support abortsignal?
 
 save agency agent generated code to file?
-
-I don't think interrupts would work correctly in a for loop, I don't think they would keep track of what iteration of the loop they're on. Something to consider as the pros and cons of having loops. Would they work in recursion? Something else to check.
 
 thoroughly read the code in lib/typeChecker.ts
 read code in lib/runtime
@@ -146,7 +125,6 @@ Currently only TypeScript functions can be marked safe. We should be able to der
 expand stdlib
 propagate and die keywords for handlers
 interrupt tests (assign interrupt reject)
-bundles
 write docs
 write post
 evals
@@ -154,11 +132,9 @@ probabilistic exec
 variadic args
 better typechecker / better typing
 llm func general interface
-agency script default should support all flags
 llm statement doesn't work correctly in debugger
   - rewind seems to break too
   - what about other interrupts?
-  - how are interrupt responses collected in debugger?
 
   make selected pane bigger?
   print tokens/cost in debugger?

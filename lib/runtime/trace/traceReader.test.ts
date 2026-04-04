@@ -115,4 +115,57 @@ describe("TraceReader", () => {
     const reader = TraceReader.fromFile(tracePath);
     expect(reader.checkpoints).toHaveLength(0);
   });
+
+  it("has empty sources for plain trace files", () => {
+    writeSimpleTrace(1);
+    const reader = TraceReader.fromFile(tracePath);
+    expect(reader.sources).toEqual({});
+  });
+
+  it("collects source lines into the sources property", () => {
+    const fd = fs.openSync(tracePath, "w");
+    fs.writeSync(fd, JSON.stringify({
+      type: "header", version: 1, program: "main.agency",
+      timestamp: new Date().toISOString(), config: { hashAlgorithm: "sha256" },
+      bundle: true,
+    }) + "\n");
+    fs.writeSync(fd, JSON.stringify({
+      type: "source", path: "main.agency", content: "node main() {\n  x = 1\n}",
+    }) + "\n");
+    fs.writeSync(fd, JSON.stringify({
+      type: "source", path: "helpers.agency", content: "function add(a, b) {\n  return a + b\n}",
+    }) + "\n");
+    fs.closeSync(fd);
+
+    const reader = TraceReader.fromFile(tracePath);
+    expect(reader.sources).toEqual({
+      "main.agency": "node main() {\n  x = 1\n}",
+      "helpers.agency": "function add(a, b) {\n  return a + b\n}",
+    });
+    expect(reader.header.bundle).toBe(true);
+  });
+
+  it("writeSourcesToDisk extracts source files to a directory", () => {
+    const fd = fs.openSync(tracePath, "w");
+    fs.writeSync(fd, JSON.stringify({
+      type: "header", version: 1, program: "main.agency",
+      timestamp: new Date().toISOString(), config: { hashAlgorithm: "sha256" },
+      bundle: true,
+    }) + "\n");
+    fs.writeSync(fd, JSON.stringify({
+      type: "source", path: "main.agency", content: "node main() {\n  x = 1\n}",
+    }) + "\n");
+    fs.writeSync(fd, JSON.stringify({
+      type: "source", path: "lib/helpers.agency", content: "function add(a, b) {}",
+    }) + "\n");
+    fs.closeSync(fd);
+
+    const reader = TraceReader.fromFile(tracePath);
+    const outDir = path.join(tmpDir, "extracted");
+    fs.mkdirSync(outDir);
+    reader.writeSourcesToDisk(outDir);
+
+    expect(fs.readFileSync(path.join(outDir, "main.agency"), "utf-8")).toBe("node main() {\n  x = 1\n}");
+    expect(fs.readFileSync(path.join(outDir, "lib/helpers.agency"), "utf-8")).toBe("function add(a, b) {}");
+  });
 });

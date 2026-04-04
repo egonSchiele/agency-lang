@@ -15,6 +15,13 @@ export type TraceHeader = {
   program: string;
   timestamp: string;
   config: { hashAlgorithm: string };
+  bundle?: boolean;
+};
+
+export type TraceSource = {
+  type: "source";
+  path: string;
+  content: string;
 };
 
 export type TraceChunk = {
@@ -34,4 +41,4 @@ export type TraceFooter = {
   timestamp: string;
 };
 
-export type TraceLine = TraceHeader | TraceChunk | TraceManifest | TraceFooter;
+export type TraceLine = TraceHeader | TraceSource | TraceChunk | TraceManifest | TraceFooter;

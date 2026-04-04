@@ -1,22 +1,23 @@
 import * as fs from "fs";
+import * as path from "path";
 import { ContentAddressableStore } from "./contentAddressableStore.js";
-import type { TraceHeader, TraceManifest, TraceFooter, CheckpointJSON } from "./types.js";
+import type { TraceHeader, TraceManifest, CheckpointJSON } from "./types.js";
 import { CHECKPOINT_SCHEMA } from "./types.js";
 import { Checkpoint } from "../state/checkpointStore.js";
 
 export class TraceReader {
   readonly header: TraceHeader;
-  readonly footer: TraceFooter | null;
   readonly checkpoints: Checkpoint[];
+  readonly sources: Record<string, string>;
 
   private constructor(
     header: TraceHeader,
-    footer: TraceFooter | null,
     checkpoints: Checkpoint[],
+    sources: Record<string, string>,
   ) {
     this.header = header;
-    this.footer = footer;
     this.checkpoints = checkpoints;
+    this.sources = sources;
   }
 
   static fromFile(filePath: string): TraceReader {
@@ -34,7 +35,7 @@ export class TraceReader {
     const header = lines[0] as TraceHeader;
     const store = new ContentAddressableStore();
     const manifests: TraceManifest[] = [];
-    let footer: TraceFooter | null = null;
+    const sources: Record<string, string> = {};
 
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i];
@@ -45,8 +46,8 @@ export class TraceReader {
         case "manifest":
           manifests.push(line as TraceManifest);
           break;
-        case "footer":
-          footer = line as TraceFooter;
+        case "source":
+          sources[line.path] = line.content;
           break;
       }
     }
@@ -63,6 +64,21 @@ export class TraceReader {
       return checkpoint;
     });
 
-    return new TraceReader(header, footer, checkpoints);
+    return new TraceReader(header, checkpoints, sources);
+  }
+
+  writeSourcesToDisk(dir: string): void {
+    const baseDir = path.resolve(dir);
+    for (const [filePath, content] of Object.entries(this.sources)) {
+      if (path.isAbsolute(filePath)) {
+        throw new Error(`Invalid source path: absolute paths not allowed: ${filePath}`);
+      }
+      const fullPath = path.resolve(baseDir, filePath);
+      if (!fullPath.startsWith(baseDir + path.sep)) {
+        throw new Error(`Invalid source path: escapes target directory: ${filePath}`);
+      }
+      fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+      fs.writeFileSync(fullPath, content);
+    }
   }
 }

@@ -12,7 +12,9 @@ import {
 } from "@/cli/commands.js";
 import { evaluate } from "@/cli/evaluate.js";
 import { fixtures, test, testTs } from "@/cli/test.js";
+import { createBundle } from "@/cli/bundle.js";
 import { AgencyConfig } from "@/config.js";
+import * as path from "path";
 import { _parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { collectProgramInfo } from "@/programInfo.js";
@@ -395,6 +397,19 @@ program
       });
     },
   );
+
+program
+  .command("bundle")
+  .description("Create a bundle from a source file and trace")
+  .argument("<source>", "Path to main .agency source file")
+  .argument("<trace>", "Path to .trace file")
+  .option("-o, --output <file>", "Output bundle file path")
+  .action((source: string, trace: string, options: { output?: string }) => {
+    const parsed = path.parse(source);
+    const output = options.output || path.join(parsed.dir, parsed.name + ".bundle");
+    createBundle(source, trace, output);
+    console.log(`Bundle created: ${output}`);
+  });
 
 program
   .command("agent")

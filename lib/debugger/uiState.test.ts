@@ -133,6 +133,72 @@ describe("UIState", () => {
     });
   });
 
+  describe("getThreadMessages", () => {
+    it("should return null for getThreadMessages when no threads in frame", async () => {
+      const ui = new UIState();
+      await ui.setCheckpoint(makeCheckpoint());
+      expect(ui.getThreadMessages()).toBeNull();
+    });
+
+    it("should return active thread messages from getThreadMessages", async () => {
+      const ui = new UIState();
+      await ui.setCheckpoint(
+        makeCheckpoint({
+          stack: makeStackJSON([
+            {
+              args: {},
+              locals: {},
+              threads: {
+                threads: {
+                  "0": {
+                    messages: [
+                      { role: "user", content: "Hello" },
+                      { role: "assistant", content: "Hi there" },
+                    ],
+                  },
+                  "1": {
+                    messages: [
+                      { role: "user", content: "Other thread" },
+                    ],
+                  },
+                },
+                counter: 2,
+                activeStack: ["0"],
+              },
+            },
+          ]),
+        }),
+      );
+      const result = ui.getThreadMessages();
+      expect(result).not.toBeNull();
+      expect(result!.threadId).toBe("0");
+      expect(result!.messages).toEqual([
+        { role: "user", content: "Hello" },
+        { role: "assistant", content: "Hi there" },
+      ]);
+    });
+
+    it("should return null for getThreadMessages when threads object has no threads", async () => {
+      const ui = new UIState();
+      await ui.setCheckpoint(
+        makeCheckpoint({
+          stack: makeStackJSON([
+            {
+              args: {},
+              locals: {},
+              threads: {
+                threads: {},
+                counter: 0,
+                activeStack: [],
+              },
+            },
+          ]),
+        }),
+      );
+      expect(ui.getThreadMessages()).toBeNull();
+    });
+  });
+
   describe("getCurrentLine", () => {
     it("should return -1 when line is not set", () => {
       const ui = new UIState();

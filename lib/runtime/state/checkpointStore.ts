@@ -14,6 +14,11 @@ export function resetGlobalCheckpointCounter(): void {
   globalCheckpointCounter = 0;
 }
 
+export type ThreadMessages = {
+  threadId: string;
+  messages: { role: string; content: string }[];
+};
+
 export type CheckpointArgs = {
   id?: number;
   stack: StateStackJSON;
@@ -64,6 +69,37 @@ export class Checkpoint implements SourceLocation {
 
   getCurrentFrame() {
     return this.stack.stack?.at(-1);
+  }
+
+  getThreadMessages(): ThreadMessages | null {
+    const frame = this.getCurrentFrame();
+    if (!frame?.threads) return null;
+
+    const { threads, activeStack } = frame.threads;
+    const threadIds = Object.keys(threads);
+    if (threadIds.length === 0) return null;
+
+    // Prefer the active thread at the top of the stack, then any existing
+    // thread still referenced by the active stack, and finally the first
+    // available thread.
+    const activeId =
+      activeStack.findLast((id) => threads[id] != null) ?? threadIds[0];
+    const activeThread = threads[activeId];
+    if (!activeThread) return null;
+
+    const messages = activeThread.messages.map((m: any) => ({
+      role: m.role ?? "unknown",
+      // smoltalk content can be string, TextPart[], or null
+      content: typeof m.content === "string"
+        ? m.content
+        : Array.isArray(m.content)
+          ? m.content.map((p: any) => p.text ?? "").join("")
+          : m.content == null
+            ? ""
+            : String(m.content),
+    }));
+
+    return { threadId: activeId, messages };
   }
 
   getGlobalsForModule(): Record<string, any> | null {

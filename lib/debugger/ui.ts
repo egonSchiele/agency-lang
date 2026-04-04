@@ -45,6 +45,7 @@ export class DebuggerUI implements DebuggerIO {
   private callStackBox: blessed.Widgets.BoxElement;
   private activityBox: blessed.Widgets.BoxElement;
   private stdoutBox: blessed.Widgets.BoxElement;
+  private threadsBox: blessed.Widgets.BoxElement;
   private commandBar: blessed.Widgets.BoxElement;
   private commandInput: blessed.Widgets.TextboxElement;
 
@@ -94,6 +95,21 @@ export class DebuggerUI implements DebuggerIO {
       width: "100%",
       height: "40%",
       label: " source ",
+      style: {
+        border: { fg: "cyan" },
+        label: { fg: "cyan" },
+      },
+    });
+
+    // Threads pane (top right, initially hidden)
+    this.threadsBox = blessed.box({
+      ...baseStyle,
+      top: 0,
+      left: "65%+1",
+      width: "35%-1",
+      height: "40%",
+      label: " threads ",
+      hidden: true,
       style: {
         border: { fg: "cyan" },
         label: { fg: "cyan" },
@@ -184,7 +200,7 @@ export class DebuggerUI implements DebuggerIO {
 
     // Build command bar content
     const commandParts = Object.entries(commands).map(
-      ([key, action]) => `{bold}(${key}){/bold}${action}`,
+      ([key, action]) => `${this.bold(`(${key})`)}${action}`,
     );
     const commandContent = commandParts.join(" ");
 
@@ -217,6 +233,7 @@ export class DebuggerUI implements DebuggerIO {
     });
 
     this.screen.append(this.sourceBox);
+    this.screen.append(this.threadsBox);
     this.screen.append(this.localsBox);
     this.screen.append(this.globalsBox);
     this.screen.append(this.callStackBox);
@@ -264,6 +281,7 @@ export class DebuggerUI implements DebuggerIO {
 
     // Update source pane
     this.renderSourcePane();
+    this.renderThreadsPane();
     //if (!full) return;
 
     // Update locals pane
@@ -318,6 +336,10 @@ export class DebuggerUI implements DebuggerIO {
     }
   }
 
+  private bold(str: string): string {
+    return `{bold}${str}{/bold}`;
+  }
+
   private highlight(str: string): string {
     return `{yellow-fg}${blessed.escape(str)}{/yellow-fg}`;
   }
@@ -329,6 +351,53 @@ export class DebuggerUI implements DebuggerIO {
   ): string {
     const formatted = `${blessed.escape(key)} = ${blessed.escape(formatValue(value))}`;
     return highlight ? this.highlight(formatted) : formatted;
+  }
+
+  private restoreFocusByName(focusedName: string | undefined): void {
+    const newIndex = this.focusablePanes.findIndex((p) => p.name === focusedName);
+    this.focusIndex = newIndex >= 0 ? newIndex : 0;
+  }
+
+  private renderThreadsPane(): void {
+    const threadData = this.state.getThreadMessages();
+    const focusedName = this.focusablePanes[this.focusIndex]?.name;
+    if (!threadData) {
+      this.threadsBox.hide();
+      this.sourceBox.width = "100%";
+      this.focusablePanes = this.focusablePanes.filter(
+        (p) => p.name !== "threadsBox",
+      );
+      this.restoreFocusByName(focusedName);
+      return;
+    }
+
+    // Resize source and show threads
+    this.sourceBox.width = "65%";
+    this.threadsBox.show();
+
+    // Add to focusable panes if not already there
+    if (!this.focusablePanes.some((p) => p.name === "threadsBox")) {
+      this.focusablePanes.splice(1, 0, {
+        box: this.threadsBox,
+        name: "threadsBox",
+        color: "cyan",
+      });
+      this.restoreFocusByName(focusedName);
+    }
+
+    this.threadsBox.setLabel(` threads: ${this.fmt(threadData.threadId)} `);
+
+    // Format messages
+    const content = threadData.messages
+      .map((m) => {
+        const truncated =
+          m.content.length > 200 ? m.content.slice(0, 197) + "..." : m.content;
+        return `  ${this.bold(`[${this.fmt(m.role)}]`)} ${this.fmt(truncated)}`;
+      })
+      .join("\n");
+
+    this.threadsBox.setContent(content);
+    this.threadsBox.setScrollPerc(100);
   }
 
   private renderLocalsPane(): void {
@@ -619,7 +688,7 @@ export class DebuggerUI implements DebuggerIO {
 
   showResult(result: unknown): void {
     this.activityBox.setContent(
-      `{green-fg}{bold}Program result:{/bold}{/green-fg}\n  ${blessed.escape(formatValue(result))}`,
+      `{green-fg}${this.bold("Program result:")}{/green-fg}\n  ${blessed.escape(formatValue(result))}`,
     );
     this.commandBar.setContent(" Press any key to exit.");
     this.screen.render();

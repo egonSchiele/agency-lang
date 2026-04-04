@@ -1,5 +1,5 @@
 import { SourceMap } from "@/backends/sourceMap.js";
-import { Checkpoint } from "../runtime/state/checkpointStore.js";
+import { Checkpoint, type ThreadMessages } from "../runtime/state/checkpointStore.js";
 import { checkpointSchema } from "../runtime/state/schemas.js";
 import { color } from "termcolors";
 import { uniq } from "@/utils.js";
@@ -161,6 +161,11 @@ export class UIState {
 
   setOverride(key: string, value: unknown) {
     this.pendingOverrides[key] = value;
+  }
+
+  getThreadMessages(): ThreadMessages | null {
+    if (!this.checkpoint) return null;
+    return this.checkpoint.getThreadMessages();
   }
 
   getModuleId() {

@@ -156,6 +156,172 @@ describe("Checkpoint", () => {
     });
   });
 
+  describe("getThreadMessages", () => {
+    it("should return null when frame has no threads", () => {
+      const cp = new Checkpoint({
+        id: 0,
+        stack: makeStackJSON([{ args: {}, locals: {} }]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+      });
+      expect(cp.getThreadMessages()).toBeNull();
+    });
+
+    it("should return null when threads object has no threads", () => {
+      const cp = new Checkpoint({
+        id: 0,
+        stack: makeStackJSON([{
+          args: {},
+          locals: {},
+          threads: { threads: {}, counter: 0, activeStack: [] },
+        }]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+      });
+      expect(cp.getThreadMessages()).toBeNull();
+    });
+
+    it("should return active thread messages", () => {
+      const cp = new Checkpoint({
+        id: 0,
+        stack: makeStackJSON([{
+          args: {},
+          locals: {},
+          threads: {
+            threads: {
+              "0": {
+                messages: [
+                  { role: "user", content: "Hello" },
+                  { role: "assistant", content: "Hi there" },
+                ],
+              },
+              "1": {
+                messages: [
+                  { role: "user", content: "Other thread" },
+                ],
+              },
+            },
+            counter: 2,
+            activeStack: ["0"],
+          },
+        }]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+      });
+      const result = cp.getThreadMessages();
+      expect(result).not.toBeNull();
+      expect(result!.threadId).toBe("0");
+      expect(result!.messages).toEqual([
+        { role: "user", content: "Hello" },
+        { role: "assistant", content: "Hi there" },
+      ]);
+    });
+
+    it("should fall back to first thread when activeStack is empty", () => {
+      const cp = new Checkpoint({
+        id: 0,
+        stack: makeStackJSON([{
+          args: {},
+          locals: {},
+          threads: {
+            threads: {
+              "0": {
+                messages: [{ role: "user", content: "First" }],
+              },
+            },
+            counter: 1,
+            activeStack: [],
+          },
+        }]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+      });
+      const result = cp.getThreadMessages();
+      expect(result).not.toBeNull();
+      expect(result!.threadId).toBe("0");
+    });
+
+    it("should skip stale activeStack IDs and find an existing thread", () => {
+      const cp = new Checkpoint({
+        id: 0,
+        stack: makeStackJSON([{
+          args: {},
+          locals: {},
+          threads: {
+            threads: {
+              "0": {
+                messages: [{ role: "user", content: "Still here" }],
+              },
+            },
+            counter: 2,
+            activeStack: ["0", "deleted-id"],
+          },
+        }]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+      });
+      const result = cp.getThreadMessages();
+      expect(result).not.toBeNull();
+      expect(result!.threadId).toBe("0");
+    });
+
+    it("should handle null message content as empty string", () => {
+      const cp = new Checkpoint({
+        id: 0,
+        stack: makeStackJSON([{
+          args: {},
+          locals: {},
+          threads: {
+            threads: {
+              "0": {
+                messages: [{ role: "assistant", content: null }],
+              },
+            },
+            counter: 1,
+            activeStack: ["0"],
+          },
+        }]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+      });
+      const result = cp.getThreadMessages();
+      expect(result!.messages).toEqual([
+        { role: "assistant", content: "" },
+      ]);
+    });
+
+    it("should concatenate TextPart[] content", () => {
+      const cp = new Checkpoint({
+        id: 0,
+        stack: makeStackJSON([{
+          args: {},
+          locals: {},
+          threads: {
+            threads: {
+              "0": {
+                messages: [{
+                  role: "assistant",
+                  content: [
+                    { type: "text", text: "Hello " },
+                    { type: "text", text: "world" },
+                  ],
+                }],
+              },
+            },
+            counter: 1,
+            activeStack: ["0"],
+          },
+        }]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+      });
+      const result = cp.getThreadMessages();
+      expect(result!.messages).toEqual([
+        { role: "assistant", content: "Hello world" },
+      ]);
+    });
+  });
+
   describe("getGlobalsForModule", () => {
     it("should return globals for the checkpoint moduleId", () => {
       const cp = new Checkpoint({

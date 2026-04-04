@@ -53,7 +53,15 @@ class TestDebuggerIO implements DebuggerIO {
   }
 
   async promptForInput(_prompt: string): Promise<string> {
-    return "";
+    const cmd = this.commands[this.commandIndex++];
+    if (!cmd) return "";
+    switch (cmd.type) {
+      case "approve": return "approve";
+      case "reject": return "reject";
+      case "resolve": return `resolve ${JSON.stringify(cmd.value)}`;
+      case "modify": return `modify ${Object.entries(cmd.overrides!).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(" ")}`;
+      default: return "";
+    }
   }
 
   appendStdout(_text: string): void { }

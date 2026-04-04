@@ -1,0 +1,6 @@
+node main() {
+  thread {
+    capital = llm("What is the capital of France?")
+    population: { capital: string; pop: number } = llm("And what is its population?")
+  }
+}

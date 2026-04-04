@@ -2,45 +2,12 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import { compile } from "../cli/commands.js";
-import { getTestDir } from "../importPaths.js";
 import { TraceReader } from "../runtime/trace/traceReader.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import { DebuggerDriver } from "./driver.js";
-import type { DebuggerCommand, DebuggerIO } from "./types.js";
-import { UIState } from "./uiState.js";
-import type { FunctionParameter } from "../types.js";
+import type { DebuggerCommand } from "./types.js";
 import { isInterrupt } from "../runtime/interrupts.js";
-
-class TestDebuggerIO implements DebuggerIO {
-  state: UIState = new UIState();
-  private commands: DebuggerCommand[];
-  private commandIndex = 0;
-  renderCalls: Checkpoint[] = [];
-
-  constructor(commands: DebuggerCommand[]) {
-    this.commands = commands;
-  }
-
-  async render(_checkpoint?: Checkpoint): Promise<void> {
-    if (_checkpoint) {
-      const checkpoint = Checkpoint.fromJSON(_checkpoint);
-      if (checkpoint) this.renderCalls.push(checkpoint);
-    }
-  }
-
-  async waitForCommand(): Promise<DebuggerCommand> {
-    return this.commands[this.commandIndex++] ?? { type: "quit" };
-  }
-
-  async showRewindSelector(_checkpoints: Checkpoint[]): Promise<number | null> { return null; }
-  async promptForNodeArgs(_parameters: FunctionParameter[]): Promise<unknown[]> { return []; }
-  async promptForInput(_prompt: string): Promise<string> { return ""; }
-  appendStdout(_text: string): void { }
-  renderActivityOnly(): void { }
-  destroy(): void { }
-}
-
-const fixtureDir = path.join(getTestDir(), "debugger");
+import { TestDebuggerIO, fixtureDir } from "./testHelpers.js";
 const traceTestAgency = path.join(fixtureDir, "trace-test.agency");
 const traceTestCompiled = path.join(fixtureDir, "trace-test.ts");
 const traceFile = path.join(fixtureDir, "trace-test.agencytrace");

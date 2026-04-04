@@ -1,77 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
-import { DebuggerDriver } from "./driver.js";
-import { UIState } from "./uiState.js";
-import type { DebuggerCommand, DebuggerIO } from "./types.js";
-import { Checkpoint, resetGlobalCheckpointCounter } from "../runtime/state/checkpointStore.js";
-import type { FunctionParameter } from "../types.js";
-import { compile, resetCompilationCache } from "../cli/commands.js";
-import { getTestDir } from "../importPaths.js";
-import { isInterrupt, createDebugInterrupt } from "@/runtime/interrupts.js";
-
-// A programmatic DebuggerIO that feeds a scripted sequence of commands
-// and records all render calls for assertions.
-class TestDebuggerIO implements DebuggerIO {
-  state: UIState = new UIState();
-  private commands: DebuggerCommand[];
-  private commandIndex = 0;
-  renderCalls: Checkpoint[] = [];
-  rewindSelector: ((checkpoints: Checkpoint[]) => number | null) | null = null;
-
-  constructor(commands: DebuggerCommand[]) {
-    this.commands = commands;
-  }
-
-  async render(_checkpoint?: Checkpoint): Promise<void> {
-    if (_checkpoint) {
-      const checkpoint = Checkpoint.fromJSON(_checkpoint);
-      if (checkpoint) {
-        this.renderCalls.push(checkpoint);
-      }
-    }
-  }
-
-  async waitForCommand(): Promise<DebuggerCommand> {
-    const cmd = this.commands[this.commandIndex++];
-    if (!cmd) {
-      // Safety: if we run out of commands, quit
-      return { type: "quit" };
-    }
-    return cmd;
-  }
-
-  async showRewindSelector(checkpoints: Checkpoint[]): Promise<number | null> {
-    if (this.rewindSelector) {
-      return this.rewindSelector(checkpoints);
-    }
-    return null;
-  }
-
-  async promptForNodeArgs(_parameters: FunctionParameter[]): Promise<unknown[]> {
-    return [];
-  }
-
-  async promptForInput(_prompt: string): Promise<string> {
-    const cmd = this.commands[this.commandIndex++];
-    if (!cmd) return "";
-    switch (cmd.type) {
-      case "approve": return "approve";
-      case "reject": return "reject";
-      case "resolve": return `resolve ${JSON.stringify(cmd.value)}`;
-      case "modify": return `modify ${Object.entries(cmd.overrides!).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(" ")}`;
-      default: return "";
-    }
-  }
-
-  appendStdout(_text: string): void { }
-
-  renderActivityOnly(): void { }
-
-  destroy(): void { }
-}
-
-const fixtureDir = path.join(getTestDir(), "debugger");
+import type { DebuggerCommand } from "./types.js";
+import { Checkpoint } from "../runtime/state/checkpointStore.js";
+import { compile } from "../cli/commands.js";
+import { createDebugInterrupt } from "@/runtime/interrupts.js";
+import { TestDebuggerIO, freshImport, makeDriver, getInitialResult, fixtureDir } from "./testHelpers.js";
 
 const stepTestAgency = path.join(fixtureDir, "step-test.agency");
 const stepTestCompiled = path.join(fixtureDir, "step-test.ts");
@@ -90,15 +24,6 @@ const ifElseCompiled = path.join(fixtureDir, "if-else-test.ts");
 
 const nestedAgency = path.join(fixtureDir, "nested-calls-test.agency");
 const nestedCompiled = path.join(fixtureDir, "nested-calls-test.ts");
-
-// Fresh import with cache-busting to get clean module state per test.
-// Also resets the global checkpoint ID counter so IDs from different
-// checkpoint stores (debugger vs context) remain comparable.
-let importCounter = 0;
-async function freshImport(compiledFile: string): Promise<any> {
-  resetGlobalCheckpointCounter();
-  return await import(compiledFile + `?t=${importCounter++}`);
-}
 
 // Compile all fixtures once, clean up after all tests
 const allCompiled = [
@@ -120,34 +45,6 @@ afterAll(() => {
     try { fs.unlinkSync(f); } catch { /* ignore */ }
   }
 });
-
-function makeDriver(mod: any, ui: DebuggerIO, opts: { checkpoints?: Checkpoint[] } = {}) {
-  const driver = new DebuggerDriver({
-    mod: {
-      approveInterrupt: mod.approveInterrupt,
-      respondToInterrupt: mod.respondToInterrupt,
-      rewindFrom: mod.rewindFrom,
-      __setDebugger: mod.__setDebugger,
-      __getCheckpoints: mod.__getCheckpoints,
-    },
-    sourceMap: mod.__sourceMap ?? {},
-    rewindSize: Math.max(30, opts.checkpoints?.length ?? 0),
-    ui,
-    checkpoints: opts.checkpoints,
-  });
-  mod.__setDebugger(driver.debuggerState);
-  return driver;
-}
-
-async function getInitialResult(mod: any, driver: DebuggerDriver, ...args: any[]) {
-  const callbacks = driver.getCallbacks();
-  const initialResult = await mod.main(...args, { callbacks });
-
-  // The initial call should have hit a debugStep and returned an interrupt
-  expect(initialResult?.data).toBeDefined();
-  expect(isInterrupt(initialResult.data)).toBe(true);
-  return initialResult;
-}
 describe("DebuggerDriver stepping", () => {
   it("takes a single step", async () => {
     const mod = await freshImport(stepTestCompiled);

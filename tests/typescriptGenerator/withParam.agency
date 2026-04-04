@@ -1,5 +1,4 @@
 node main(input) {
-  result :: string
-  const result = llm("process this input: ${input}")
+  const result: string = llm("process this input: ${input}")
   print(result)
 }

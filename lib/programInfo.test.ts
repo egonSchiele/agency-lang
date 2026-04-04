@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { collectProgramInfo, lookupType, getVisibleTypes, GLOBAL_SCOPE_KEY } from "./programInfo.js";
+import { collectProgramInfo, getVisibleTypes, GLOBAL_SCOPE_KEY } from "./programInfo.js";
 import type { AgencyProgram } from "./types.js";
 
 describe("collectProgramInfo", () => {
@@ -38,49 +38,6 @@ describe("collectProgramInfo", () => {
     });
   });
 
-  it("collects type hints at global scope", () => {
-    const program: AgencyProgram = {
-      type: "agencyProgram",
-      nodes: [
-        {
-          type: "typeHint",
-          variableName: "x",
-          variableType: { type: "primitiveType", value: "number" },
-        },
-      ],
-    };
-    const info = collectProgramInfo(program);
-    expect(info.typeHints[GLOBAL_SCOPE_KEY]).toEqual({
-      x: { type: "primitiveType", value: "number" },
-    });
-  });
-
-  it("collects type hints inside a function body", () => {
-    const program: AgencyProgram = {
-      type: "agencyProgram",
-      nodes: [
-        {
-          type: "function",
-          functionName: "greet",
-          parameters: [],
-          body: [
-            {
-              type: "typeHint",
-              variableName: "y",
-              variableType: { type: "primitiveType", value: "string" },
-            },
-          ],
-        },
-      ],
-    };
-    const info = collectProgramInfo(program);
-    expect(info.typeHints["function:greet"]).toEqual({
-      y: { type: "primitiveType", value: "string" },
-    });
-    // Should not appear at global scope
-    expect(info.typeHints[GLOBAL_SCOPE_KEY]["y"]).toBeUndefined();
-  });
-
   it("collects type aliases inside a graph node body", () => {
     const program: AgencyProgram = {
       type: "agencyProgram",
@@ -104,75 +61,6 @@ describe("collectProgramInfo", () => {
       LocalType: { type: "primitiveType", value: "number" },
     });
     expect(info.typeAliases[GLOBAL_SCOPE_KEY]["LocalType"]).toBeUndefined();
-  });
-
-  it("scoped type hints do not leak between functions", () => {
-    const program: AgencyProgram = {
-      type: "agencyProgram",
-      nodes: [
-        {
-          type: "function",
-          functionName: "a",
-          parameters: [],
-          body: [
-            {
-              type: "typeHint",
-              variableName: "foo",
-              variableType: { type: "primitiveType", value: "number" },
-            },
-          ],
-        },
-        {
-          type: "function",
-          functionName: "b",
-          parameters: [],
-          body: [
-            {
-              type: "typeHint",
-              variableName: "foo",
-              variableType: { type: "primitiveType", value: "string" },
-            },
-          ],
-        },
-      ],
-    };
-    const info = collectProgramInfo(program);
-
-    // Each function has its own type hint for foo
-    expect(lookupType(info.typeHints, "function:a", "foo")).toEqual({
-      type: "primitiveType",
-      value: "number",
-    });
-    expect(lookupType(info.typeHints, "function:b", "foo")).toEqual({
-      type: "primitiveType",
-      value: "string",
-    });
-  });
-
-  it("lookupType falls back to global scope", () => {
-    const program: AgencyProgram = {
-      type: "agencyProgram",
-      nodes: [
-        {
-          type: "typeHint",
-          variableName: "x",
-          variableType: { type: "primitiveType", value: "number" },
-        },
-        {
-          type: "function",
-          functionName: "greet",
-          parameters: [],
-          body: [],
-        },
-      ],
-    };
-    const info = collectProgramInfo(program);
-
-    // Global hint is visible from function scope via fallback
-    expect(lookupType(info.typeHints, "function:greet", "x")).toEqual({
-      type: "primitiveType",
-      value: "number",
-    });
   });
 
   it("getVisibleTypes merges scope with global (scope overrides)", () => {
@@ -264,11 +152,6 @@ describe("collectProgramInfo", () => {
           aliasedType: { type: "primitiveType", value: "string" },
         },
         {
-          type: "typeHint",
-          variableName: "x",
-          variableType: { type: "primitiveType", value: "number" },
-        },
-        {
           type: "function",
           functionName: "doStuff",
           parameters: [],
@@ -285,7 +168,6 @@ describe("collectProgramInfo", () => {
     const info = collectProgramInfo(program);
     expect(Object.keys(info.functionDefinitions)).toEqual(["doStuff"]);
     expect(Object.keys(info.typeAliases[GLOBAL_SCOPE_KEY])).toEqual(["Color"]);
-    expect(Object.keys(info.typeHints[GLOBAL_SCOPE_KEY])).toEqual(["x"]);
     expect(info.graphNodes).toHaveLength(1);
   });
 

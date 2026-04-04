@@ -1,9 +1,7 @@
 node main() {
-  count :: number
-  const count = llm("the number 42")
+  const count: number = llm("the number 42")
 
-  message :: string
-  const message = llm("a greeting message")
+  const message: string = llm("a greeting message")
 
   print(count)
   print(message)

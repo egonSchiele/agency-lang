@@ -1166,47 +1166,6 @@ describe("TypeChecker", () => {
     });
   });
 
-  describe("standalone TypeHint nodes", () => {
-    it("should use standalone TypeHint for variable type", () => {
-      const program: AgencyProgram = {
-        type: "agencyProgram",
-        nodes: [
-          {
-            type: "function",
-            functionName: "greet",
-            parameters: [
-              {
-                type: "functionParameter",
-                name: "name",
-                typeHint: { type: "primitiveType", value: "string" },
-              },
-            ],
-            body: [],
-          },
-          {
-            type: "typeHint",
-            variableName: "myName",
-            variableType: { type: "primitiveType", value: "number" },
-          },
-          {
-            type: "assignment",
-            variableName: "myName",
-            value: { type: "number", value: "42" },
-          },
-          {
-            type: "functionCall",
-            functionName: "greet",
-            arguments: [{ type: "variableName", value: "myName" }],
-          },
-        ],
-      };
-
-      const { errors } = typeCheck(program);
-      expect(errors).toHaveLength(1);
-      expect(errors[0].message).toContain("not assignable to parameter type");
-    });
-  });
-
   describe("boolean literal inference", () => {
     it("should infer boolean type from boolean literal", () => {
       const program: AgencyProgram = {

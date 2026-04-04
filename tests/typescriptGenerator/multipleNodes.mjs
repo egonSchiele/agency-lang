@@ -118,7 +118,7 @@ let __functionCompleted = false;
     }
   })
   if (__step <= 0) {
-          
+      
           __stack.step++;
   }
   if (__step <= 1) {
@@ -227,7 +227,7 @@ let __functionCompleted = false;
     __stack.args["msg"] = __state.data.msg;
   }
   if (__step <= 0) {
-          
+      
           __stack.step++;
   }
   if (__step <= 1) {
@@ -401,4 +401,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"multipleNodes.agency:greet":{"1":{"line":0,"col":2},"3":{"line":1,"col":2}},"multipleNodes.agency:processGreeting":{"1":{"line":6,"col":2},"3":{"line":7,"col":2}},"multipleNodes.agency:main":{"1":{"line":11,"col":2}}};
+export const __sourceMap = {"multipleNodes.agency:greet":{"1":{"line":-1,"col":2},"3":{"line":0,"col":2}},"multipleNodes.agency:processGreeting":{"1":{"line":4,"col":2},"3":{"line":5,"col":2}},"multipleNodes.agency:main":{"1":{"line":9,"col":2}}};

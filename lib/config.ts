@@ -1,7 +1,6 @@
 import { AgencyNode } from "./types.js";
 
 export const TYPES_THAT_DONT_TRIGGER_NEW_PART: AgencyNode["type"][] = [
-  "typeHint",
   "typeAlias",
   "usesTool",
   "comment",
@@ -33,7 +32,7 @@ export interface AgencyConfig {
 
   /**
    * Array of AST node types to exclude from code generation
-   * Example: ["comment", "typeHint"]
+   * Example: ["comment", "typeAlias"]
    */
   excludeNodeTypes?: string[];
 

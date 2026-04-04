@@ -1,9 +1,7 @@
 node main() {
-  numbers :: number[]
-  const numbers = llm("the first 5 prime numbers")
+  const numbers: number[] = llm("the first 5 prime numbers")
   print(numbers)
 
-  greetings :: string[]
-  const greetings = llm("a list of 3 common greetings in different languages")
+  const greetings: string[] = llm("a list of 3 common greetings in different languages")
   print(greetings)
 }

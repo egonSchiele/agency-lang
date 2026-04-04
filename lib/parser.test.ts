@@ -4,13 +4,6 @@ import { agencyNode, agencyParser, parseAgency } from "./parser.js";
 describe("agencyNode", () => {
   const testCases = [
     {
-      input: "bar :: number",
-      expected: {
-        success: true,
-        firstNodeType: "typeHint",
-      },
-    },
-    {
       input: "x = 5",
       expected: {
         success: true,
@@ -39,17 +32,10 @@ describe("agencyNode", () => {
       },
     },
     {
-      input: "bar :: number\nx = 5",
+      input: "let foo: string = `hello`",
       expected: {
         success: true,
-        firstNodeType: "typeHint",
-      },
-    },
-    {
-      input: "foo :: string\nfoo = `hello`",
-      expected: {
-        success: true,
-        firstNodeType: "typeHint",
+        firstNodeType: "assignment",
       },
     },
     {
@@ -90,13 +76,7 @@ describe("agencyNode", () => {
 describe("agencyParser", () => {
   const testCases = [
     {
-      input: "bar :: number",
-      expected: {
-        success: true,
-      },
-    },
-    {
-      input: "bar :: number\nbar = 5",
+      input: "let bar: number = 5",
       expected: {
         success: true,
       },
@@ -120,7 +100,7 @@ describe("agencyParser", () => {
       },
     },
     {
-      input: "result :: number\nresult = `the number 42`",
+      input: "let result: number = `the number 42`",
       expected: {
         success: true,
       },
@@ -158,7 +138,7 @@ describe("agencyParser", () => {
 describe("parseAgency", () => {
   const testCases = [
     {
-      input: "bar :: number\nbar = `the number 1`",
+      input: "let bar: number = `the number 1`",
       expected: {
         success: true,
         programType: "agencyProgram",
@@ -179,7 +159,7 @@ describe("parseAgency", () => {
       },
     },
     {
-      input: "name :: string\nname = `generate a name`\ngreet(name)",
+      input: "let name: string = `generate a name`\ngreet(name)",
       expected: {
         success: true,
         programType: "agencyProgram",

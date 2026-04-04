@@ -22,9 +22,7 @@ node main() {
   print(result)
 
   // Testing comments in different contexts
-  // 1. Before type hints
-  age :: number
-  const age = 25
+  const age: number = 25
 
   // 2. Before conditionals
   const status = "active"

@@ -1,10 +1,5 @@
 import { BaseNode } from "./base.js";
 
-export type TypeHint = BaseNode & {
-  type: "typeHint";
-  variableName: string;
-  variableType: VariableType;
-};
 export type VariableType =
   | PrimitiveType
   | ArrayType

@@ -50,7 +50,6 @@ import { specialVarParser } from "./specialVar.js";
 import { usesToolParser } from "./tools.js";
 import {
   typeAliasParser,
-  typeHintParser,
   variableTypeParser,
 } from "./typeHints.js";
 import {
@@ -169,7 +168,6 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
     keywordParser,
     usesToolParser,
     debug(typeAliasParser, "error in typeAliasParser"),
-    debug(typeHintParser, "error in typeHintParser"),
     specialVarParser,
     returnStatementParser,
     forLoopParser,

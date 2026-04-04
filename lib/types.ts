@@ -23,7 +23,7 @@ import { ReturnStatement } from "./types/returnStatement.js";
 import { Skill } from "./types/skill.js";
 import { SpecialVar } from "./types/specialVar.js";
 import { UsesTool } from "./types/tools.js";
-import { TypeAlias, TypeHint, VariableType } from "./types/typeHints.js";
+import { TypeAlias, VariableType } from "./types/typeHints.js";
 import { WhileLoop } from "./types/whileLoop.js";
 import { AwaitPending } from "./types/awaitPending.js";
 import { HandleBlock } from "./types/handleBlock.js";
@@ -184,7 +184,6 @@ export type NewLine = BaseNode & {
 };
 
 export type AgencyNode =
-  | TypeHint
   | TypeAlias
   | UsesTool
   | GraphNodeDefinition
@@ -221,8 +220,6 @@ export type AgencyProgram = {
   type: "agencyProgram";
   nodes: AgencyNode[];
 };
-
-export type TypeHintMap = Record<string, VariableType>;
 
 export type JSONEdge =
   | { type: "regular"; to: string }

@@ -14,8 +14,6 @@ import {
   ScopeType,
   StringLiteral,
   TypeAlias,
-  TypeHint,
-  TypeHintMap,
   VariableType,
 } from "../types.js";
 
@@ -51,7 +49,6 @@ import { Keyword } from "@/types/keyword.js";
 import { HandleBlock } from "@/types/handleBlock.js";
 
 export class AgencyGenerator {
-  protected typeHints: TypeHintMap = {};
   protected graphNodes: GraphNodeDefinition[] = [];
   protected generatedStatements: string[] = [];
   protected generatedTypeAliases: string[] = [];
@@ -90,21 +87,14 @@ export class AgencyGenerator {
       }
     }
 
-    // Pass 2: Collect all type hints
-    for (const node of program.nodes) {
-      if (node.type === "typeHint") {
-        this.processTypeHint(node);
-      }
-    }
-
-    // Pass 3: Collect all node names
+    // Pass 2: Collect all node names
     for (const node of program.nodes) {
       if (node.type === "graphNode") {
         this.processGraphNodeName(node);
       }
     }
 
-    // Pass 4: Collect all node and tool imports
+    // Pass 3: Collect all node and tool imports
     for (const node of program.nodes) {
       if (node.type === "importNodeStatement") {
         this.importedNodes.push(node);
@@ -113,7 +103,7 @@ export class AgencyGenerator {
       }
     }
 
-    // Pass 5: Generate code for tools
+    // Pass 4: Generate code for tools
     for (const node of program.nodes) {
       if (node.type === "function") {
         this.generatedStatements.push(this.processTool(node));
@@ -131,7 +121,7 @@ export class AgencyGenerator {
       "comment", "multiLineComment"
     ]);
 
-    // Pass 7: Process all nodes and generate code
+    // Pass 5: Process all nodes and generate code
     const stmtPairs: { type: string; code: string }[] = [];
     for (const node of program.nodes) {
       const result = this.processNode(node);
@@ -200,8 +190,6 @@ export class AgencyGenerator {
 
   protected processNode(node: AgencyNode): string {
     switch (node.type) {
-      case "typeHint":
-        return this.processTypeHint(node);
       case "typeAlias":
         return this.processTypeAlias(node);
       case "assignment":
@@ -391,12 +379,6 @@ export class AgencyGenerator {
     this.typeAliases[node.aliasName] = node.aliasedType;
     const aliasedTypeStr = this.aliasedTypeToString(node.aliasedType);
     return this.indentStr(`type ${node.aliasName} = ${aliasedTypeStr}`);
-  }
-
-  protected processTypeHint(node: TypeHint): string {
-    this.typeHints[node.variableName] = node.variableType;
-    const typeStr = variableTypeToString(node.variableType, this.typeAliases);
-    return this.indentStr(`${node.variableName} :: ${typeStr}`);
   }
 
   // Assignment and literals

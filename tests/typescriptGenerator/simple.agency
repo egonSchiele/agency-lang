@@ -1,5 +1,4 @@
 node main() {
-  greeting :: string
-  const greeting = llm("say hello")
+  const greeting: string = llm("say hello")
   print(greeting)
 }

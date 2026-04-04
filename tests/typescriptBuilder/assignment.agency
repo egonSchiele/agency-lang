@@ -1,4 +1,3 @@
 node main() {
-  let bar :: number
-  bar = llm("the number 1")
+  let bar: number = llm("the number 1")
 }

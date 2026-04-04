@@ -35,7 +35,6 @@ describe("TypescriptPreprocessor Config", () => {
         type: "agencyProgram",
         nodes: [
           { type: "comment", content: "Comment" },
-          { type: "typeHint", variableName: "x", variableType: { type: "primitiveType", value: "string" } },
           {
             type: "assignment",
             variableName: "x",
@@ -46,7 +45,7 @@ describe("TypescriptPreprocessor Config", () => {
       };
 
       const config: AgencyConfig = {
-        excludeNodeTypes: ["comment", "typeHint", "newLine"],
+        excludeNodeTypes: ["comment", "newLine"],
       };
 
       const preprocessor = new TypescriptPreprocessor(program, config);

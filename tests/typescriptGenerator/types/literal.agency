@@ -1,10 +1,7 @@
 node main() {
-  foo :: "hi"
-  const foo = llm("the string hi")
+  const foo: "hi" = llm("the string hi")
 
-  bar :: 42
-  const bar = llm("the number 42")
+  const bar: 42 = llm("the number 42")
 
-  baz :: true
-  const baz = llm("the boolean true")
+  const baz: true = llm("the boolean true")
 }

@@ -50,7 +50,7 @@ import { debuggerParser } from "./parsers/debuggerStatement.js";
 import { skillParser } from "./parsers/skill.js";
 import { specialVarParser } from "./parsers/specialVar.js";
 import { usesToolParser } from "./parsers/tools.js";
-import { typeAliasParser, typeHintParser } from "./parsers/typeHints.js";
+import { typeAliasParser } from "./parsers/typeHints.js";
 import { AgencyNode, AgencyProgram } from "./types.js";
 import { optionalSpacesOrNewline } from "./parsers/utils.js";
 
@@ -65,7 +65,6 @@ const nodeParser = or(
   ifParser,
   forLoopParser,
   whileLoopParser,
-  typeHintParser,
   matchBlockParser,
   messageThreadParser,
   handleBlockParser,

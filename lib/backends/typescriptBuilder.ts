@@ -9,8 +9,6 @@ import {
   Scope,
   ScopeType,
   TypeAlias,
-  TypeHint,
-  TypeHintMap,
   VariableType,
 } from "../types.js";
 
@@ -43,8 +41,6 @@ import {
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
 import {
-  expressionToString,
-  getBaseVarName,
   walkNodesArray,
 } from "@/utils/node.js";
 import path from "path";
@@ -95,7 +91,7 @@ import type {
   TsTemplatePart,
 } from "../ir/tsIR.js";
 import type { ProgramInfo } from "../programInfo.js";
-import { getVisibleTypes, lookupType, scopeKey } from "../programInfo.js";
+import { getVisibleTypes, scopeKey } from "../programInfo.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
@@ -248,23 +244,11 @@ export class TypeScriptBuilder {
     };
   }
 
-  private getTypeHint(varName: string): VariableType | undefined {
-    return lookupType(
-      this.programInfo.typeHints,
-      this.currentScopeKey(),
-      varName,
-    );
-  }
-
   private getVisibleTypeAliases(): Record<string, VariableType> {
     return getVisibleTypes(
       this.programInfo.typeAliases,
       this.currentScopeKey(),
     );
-  }
-
-  private getVisibleTypeHints(): TypeHintMap {
-    return getVisibleTypes(this.programInfo.typeHints, this.currentScopeKey());
   }
 
   private forkBranchSetup(branchKey: string): TsNode[] {
@@ -505,8 +489,6 @@ export class TypeScriptBuilder {
 
   private processNode(node: AgencyNode): TsNode {
     switch (node.type) {
-      case "typeHint":
-        return this.processTypeHint(node);
       case "typeAlias":
         return this.processTypeAlias(node);
       case "assignment":
@@ -622,10 +604,6 @@ export class TypeScriptBuilder {
     return ts.raw(
       `type ${node.aliasName} = ${formatTypeHint(node.aliasedType)};`,
     );
-  }
-
-  private processTypeHint(_node: TypeHint): TsNode {
-    return ts.empty();
   }
 
   // ------- Proper IR node methods -------
@@ -1805,8 +1783,7 @@ export class TypeScriptBuilder {
     node: FunctionCall,
     scope: ScopeType,
   ): TsNode {
-    const _variableType = variableType ||
-      this.getTypeHint(variableName) || {
+    const _variableType = variableType || {
       type: "primitiveType" as const,
       value: "string",
     };
@@ -2004,55 +1981,6 @@ export class TypeScriptBuilder {
       ...this.checkpointOpts(),
     });
     return ts.raw(code);
-  }
-
-  private buildPromptString({
-    segments,
-    typeHints,
-    skills,
-  }: {
-    segments: PromptSegment[];
-    typeHints: TypeHintMap;
-    skills: Skill[];
-  }): string {
-    const promptParts: string[] = [];
-
-    for (const segment of segments) {
-      if (segment.type === "text") {
-        const escaped = escape(segment.value);
-        promptParts.push(escaped);
-      } else {
-        const exprStr = expressionToString(segment.expression);
-        const baseVarName = getBaseVarName(segment);
-        const varType = typeHints[baseVarName];
-
-        if (varType && varType.type === "arrayType") {
-          promptParts.push(`\${JSON.stringify(${exprStr})}`);
-        } else {
-          promptParts.push(`\${${exprStr}}`);
-        }
-      }
-    }
-
-    if (skills.length > 0) {
-      const skillsArr = skills.map((skill) => {
-        const skillName = path.basename(
-          skill.filepath,
-          path.extname(skill.filepath),
-        );
-        if (skill.description) {
-          return `- ${skillName} (filepath: ${skill.filepath}): ${skill.description}`;
-        } else {
-          return `- ${skillName} (filepath: ${skill.filepath})`;
-        }
-      });
-
-      promptParts.push(
-        `\nYou can also read a skill file to augment your capabilities for a specific task using the "readSkill" tool. This allows you to access specialized knowledge and instructions that are relevant to particular scenarios.\n\n\nAvailable skills:\n${skillsArr.join("\n")}`,
-      );
-    }
-
-    return "`" + promptParts.join("") + "`";
   }
 
   private processSpecialVar(node: SpecialVar): TsNode {

@@ -9,7 +9,6 @@ import {
   GraphNodeDefinition,
   VariableType,
   TypeAlias,
-  TypeHint,
   Assignment,
   FunctionCall,
   ReturnStatement,
@@ -165,7 +164,6 @@ export class TypeChecker {
     });
   }
 
-
   private validateTypeReferences(vt: VariableType, context: string): void {
     switch (vt.type) {
       case "typeAliasVariable":
@@ -190,7 +188,6 @@ export class TypeChecker {
         break;
     }
   }
-
 
   private inferReturnTypes(): void {
     const allDefs: (FunctionDefinition | GraphNodeDefinition)[] = [
@@ -336,21 +333,10 @@ export class TypeChecker {
     vars: Record<string, VariableType | "any">,
     scopeName: string,
   ): void {
-    // First pass: collect standalone TypeHint nodes
-    const typeHints: Record<string, VariableType> = {};
-    for (const node of nodes) {
-      if (node.type === "typeHint") {
-        typeHints[node.variableName] = node.variableType;
-        this.validateTypeReferences(node.variableType, node.variableName);
-      }
-    }
-
-    // Second pass: collect assignments, imports, and for loops
     for (const node of nodes) {
       if (node.type === "assignment") {
         const existingType = vars[node.variableName];
-        const newType =
-          node.typeHint ?? typeHints[node.variableName] ?? undefined;
+        const newType = node.typeHint;
 
         if (newType) {
           this.validateTypeReferences(newType, node.variableName);

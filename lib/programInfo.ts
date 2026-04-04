@@ -19,7 +19,6 @@ export type ScopedTypeMap = Record<string, Record<string, VariableType>>;
 export type ProgramInfo = {
   functionDefinitions: Record<string, FunctionDefinition>;
   typeAliases: ScopedTypeMap;
-  typeHints: ScopedTypeMap;
   graphNodes: GraphNodeDefinition[];
   importedNodes: ImportNodeStatement[];
   importedTools: ImportToolStatement[];
@@ -45,15 +44,6 @@ export function scopeKey(scope: Scope): string {
   }
 }
 
-/** Look up a variable in a scoped map, checking the given scope first, then falling back to global. */
-export function lookupType(
-  map: ScopedTypeMap,
-  key: string,
-  varName: string,
-): VariableType | undefined {
-  return map[key]?.[varName] ?? map[GLOBAL_SCOPE_KEY]?.[varName];
-}
-
 /** Get a flat map of all types visible in the given scope (scope-local overrides global). */
 export function getVisibleTypes(
   map: ScopedTypeMap,
@@ -74,7 +64,6 @@ export function collectProgramInfo(program: AgencyProgram): ProgramInfo {
   const info: ProgramInfo = {
     functionDefinitions: {},
     typeAliases: { [GLOBAL_SCOPE_KEY]: {} },
-    typeHints: { [GLOBAL_SCOPE_KEY]: {} },
     graphNodes: [],
     importedNodes: [],
     importedTools: [],
@@ -122,13 +111,11 @@ export function collectProgramInfo(program: AgencyProgram): ProgramInfo {
     }
   }
 
-  // Deep walk: collect all type aliases and type hints with their scope
+  // Deep walk: collect all type aliases with their scope
   for (const { node, scopes } of walkNodes(program.nodes)) {
     const key = scopeKey(scopes[scopes.length - 1]);
     if (node.type === "typeAlias") {
       ensureScope(info.typeAliases, key)[node.aliasName] = node.aliasedType;
-    } else if (node.type === "typeHint") {
-      ensureScope(info.typeHints, key)[node.variableName] = node.variableType;
     }
   }
 

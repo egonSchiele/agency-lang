@@ -13,7 +13,6 @@ import {
   StringLiteralType,
   TypeAlias,
   TypeAliasVariable,
-  TypeHint,
   UnionType,
   VariableType,
 } from "../types.js";
@@ -36,7 +35,6 @@ import {
   seqC,
   seqR,
   set,
-  space,
   spaces,
   str,
   success,
@@ -336,19 +334,6 @@ export const variableTypeParser: Parser<VariableType> = trace(
     booleanLiteralTypeParser,
     primitiveTypeParser,
     typeAliasVariableParser,
-  ),
-);
-
-export const typeHintParser: Parser<TypeHint> = trace(
-  "typeHintParser",
-  seqC(
-    set("type", "typeHint"),
-    capture(many1Till(space), "variableName"),
-    optionalSpaces,
-    str("::"),
-    optionalSpaces,
-    capture(variableTypeParser, "variableType"),
-    optionalSemicolon,
   ),
 );
 

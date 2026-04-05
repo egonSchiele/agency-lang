@@ -24,7 +24,8 @@ def add(a: number, b: number) {
   return a + b
 }
 `);
-    expect(symbols.add).toEqual({ kind: "function", name: "add" });
+    expect(symbols.add).toMatchObject({ kind: "function", name: "add" });
+    expect(symbols.add.parameters).toHaveLength(2);
   });
 
   it("classifies type aliases", () => {
@@ -47,7 +48,7 @@ node main() {
 }
 `);
     expect(symbols.Config).toEqual({ kind: "type", name: "Config" });
-    expect(symbols.helper).toEqual({ kind: "function", name: "helper" });
+    expect(symbols.helper).toMatchObject({ kind: "function", name: "helper" });
     expect(symbols.main).toEqual({ kind: "node", name: "main" });
   });
 
@@ -59,6 +60,6 @@ def myFunc() {
 }
 `);
     expect(symbols.Inner).toEqual({ kind: "type", name: "Inner" });
-    expect(symbols.myFunc).toEqual({ kind: "function", name: "myFunc" });
+    expect(symbols.myFunc).toMatchObject({ kind: "function", name: "myFunc" });
   });
 });

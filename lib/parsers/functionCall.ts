@@ -5,11 +5,13 @@ import {
   label,
   lazy,
   many1WithJoin,
+  or,
   Parser,
   sepBy,
   seqC,
   set,
 } from "tarsec";
+import { splatParser } from "./dataStructures.js";
 import { exprParser } from "./expression.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { comma, optionalSpaces, optionalSpacesOrNewline, varNameChar } from "./utils.js";
@@ -23,7 +25,10 @@ export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
     capture(
       sepBy(
         comma,
-        lazy(() => exprParser),
+        or(
+          splatParser,
+          lazy(() => exprParser),
+        ),
       ),
       "arguments",
     ),

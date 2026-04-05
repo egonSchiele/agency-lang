@@ -1,0 +1,5 @@
+def log(prefix: string, ...messages: string[]) {
+  print(prefix, ...messages)
+}
+
+log("INFO", "hello", "world")

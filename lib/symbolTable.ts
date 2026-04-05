@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { parseAgency } from "./parser.js";
 import type { AgencyConfig } from "./config.js";
-import type { AgencyProgram } from "./types.js";
+import type { AgencyProgram, FunctionParameter } from "./types.js";
 import { walkNodes } from "./utils/node.js";
 import { resolveAgencyImportPath, isAgencyImport, getStdlibDir } from "./importPaths.js";
 
@@ -12,6 +12,7 @@ export type SymbolInfo = {
   kind: SymbolKind;
   name: string;
   safe?: boolean;
+  parameters?: FunctionParameter[];
 };
 
 /** Maps symbol name → info for a single file. */
@@ -37,6 +38,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           kind: "function",
           name: node.functionName,
           safe: node.safe,
+          parameters: node.parameters,
         };
         break;
       case "typeAlias":

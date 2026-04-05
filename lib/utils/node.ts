@@ -2,6 +2,7 @@ import {
   AgencyNode,
   Expression,
   InterpolationSegment,
+  SplatExpression,
   ValueAccess,
   VariableNameLiteral,
   functionScope,
@@ -11,6 +12,22 @@ import {
   Scope,
 } from "@/types.js";
 import { color } from "@/utils/termcolors.js";
+
+/** Unwrap a function call argument: if it's a splat, return the inner expression. */
+function unwrapCallArg(arg: Expression | SplatExpression): Expression {
+  if (arg.type === "splat") {
+    return arg.value;
+  }
+  return arg;
+}
+
+/** Convert a function call argument to string, handling splat. */
+function callArgToString(arg: Expression | SplatExpression): string {
+  if (arg.type === "splat") {
+    return `...${expressionToString(arg.value)}`;
+  }
+  return expressionToString(arg);
+}
 
 /**
  * Extract the base variable name from an interpolation segment's expression.
@@ -46,7 +63,7 @@ export function expressionToString(expr: Expression): string {
         seg.type === "text" ? seg.value : `\${${expressionToString(seg.expression)}}`
       ).join("");
     case "functionCall": {
-      const args = expr.arguments.map(a => expressionToString(a)).join(", ");
+      const args = expr.arguments.map(callArgToString).join(", ");
       return `${expr.functionName}(${args})`;
     }
     case "valueAccess": {
@@ -61,7 +78,7 @@ export function expressionToString(expr: Expression): string {
             break;
           case "methodCall": {
             const fc = element.functionCall;
-            const args = fc.arguments.map(a => expressionToString(a)).join(", ");
+            const args = fc.arguments.map(callArgToString).join(", ");
             code += `.${fc.functionName}(${args})`;
             break;
           }
@@ -111,7 +128,7 @@ export function* getAllVariablesInBody(
       }
     } else if (node.type === "functionCall") {
       for (const arg of node.arguments) {
-        yield* getAllVariablesInBody([arg]);
+        yield* getAllVariablesInBody([unwrapCallArg(arg)]);
       }
       yield { name: node.functionName, node };
     } else if (node.type === "specialVar") {
@@ -146,7 +163,9 @@ export function* getAllVariablesInBody(
         if (element.kind === "index") {
           yield* getAllVariablesInBody([element.index]);
         } else if (element.kind === "methodCall") {
-          yield* getAllVariablesInBody(element.functionCall.arguments);
+          for (const arg of element.functionCall.arguments) {
+            yield* getAllVariablesInBody([unwrapCallArg(arg)]);
+          }
         }
       }
     } else if (node.type === "agencyArray") {
@@ -278,7 +297,9 @@ export function* walkNodes(
         }
       }
     } else if (node.type === "functionCall") {
-      yield* walkNodes(node.arguments, [...ancestors, node], scopes);
+      for (const arg of node.arguments) {
+        yield* walkNodes([unwrapCallArg(arg) as AgencyNode], [...ancestors, node], scopes);
+      }
     } else if (node.type === "matchBlock") {
       yield* walkNodes([node.expression], [...ancestors, node], scopes);
       for (const caseItem of node.cases) {

@@ -1,6 +1,7 @@
 import type {
   AgencyProgram,
   FunctionDefinition,
+  FunctionParameter,
   GraphNodeDefinition,
   Scope,
   VariableType,
@@ -10,6 +11,7 @@ import type {
   ImportStatement,
   ImportToolStatement,
 } from "./types/importStatement.js";
+import type { SymbolTable } from "./symbolTable.js";
 import { walkNodes } from "./utils/node.js";
 
 export const GLOBAL_SCOPE_KEY = "global";
@@ -24,7 +26,7 @@ export type ProgramInfo = {
   importedTools: ImportToolStatement[];
   importStatements: ImportStatement[];
   safeFunctions: Record<string, boolean>;
-  importedFunctions: Record<string, boolean>;
+  importedFunctions: Record<string, { parameters: FunctionParameter[] }>;
 };
 
 export function scopeKey(scope: Scope): string {
@@ -60,7 +62,10 @@ function ensureScope(
   return map[key];
 }
 
-export function collectProgramInfo(program: AgencyProgram): ProgramInfo {
+export function collectProgramInfo(
+  program: AgencyProgram,
+  symbolTable?: SymbolTable,
+): ProgramInfo {
   const info: ProgramInfo = {
     functionDefinitions: {},
     typeAliases: { [GLOBAL_SCOPE_KEY]: {} },
@@ -90,6 +95,9 @@ export function collectProgramInfo(program: AgencyProgram): ProgramInfo {
       case "importToolStatement":
         info.importedTools.push(node);
         for (const namedImport of node.importedTools) {
+          for (const name of namedImport.importedNames) {
+            info.importedFunctions[name] = { parameters: [] };
+          }
           for (const safeName of namedImport.safeNames) {
             info.safeFunctions[safeName] = true;
           }
@@ -100,7 +108,7 @@ export function collectProgramInfo(program: AgencyProgram): ProgramInfo {
         for (const nameType of node.importedNames) {
           if (nameType.type === "namedImport") {
             for (const name of nameType.importedNames) {
-              info.importedFunctions[name] = true;
+              info.importedFunctions[name] = { parameters: [] };
             }
             for (const safeName of nameType.safeNames) {
               info.safeFunctions[safeName] = true;
@@ -108,6 +116,17 @@ export function collectProgramInfo(program: AgencyProgram): ProgramInfo {
           }
         }
         break;
+    }
+  }
+
+  // Enrich imported function info with parameter data from the symbol table
+  if (symbolTable) {
+    for (const fileSymbols of Object.values(symbolTable)) {
+      for (const [name, symbol] of Object.entries(fileSymbols)) {
+        if (symbol.parameters && info.importedFunctions[name]) {
+          info.importedFunctions[name].parameters = symbol.parameters;
+        }
+      }
     }
   }
 

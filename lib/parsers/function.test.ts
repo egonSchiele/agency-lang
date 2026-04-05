@@ -1662,6 +1662,78 @@ describe("functionParser", () => {
       expected: { success: false },
       throws: true,
     },
+    // Variadic parameter (untyped)
+    {
+      input: "def log(...messages) { messages }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "log",
+          parameters: [
+            { type: "functionParameter", name: "messages", variadic: true },
+          ],
+          returnType: null,
+          docString: undefined,
+          body: [{ type: "variableName", value: "messages" }],
+        },
+      },
+    },
+    // Variadic parameter (typed)
+    {
+      input: "def log(...messages: string[]) { messages }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "log",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "messages",
+              variadic: true,
+              typeHint: { type: "arrayType", elementType: { type: "primitiveType", value: "string" } },
+            },
+          ],
+          returnType: null,
+          docString: undefined,
+          body: [{ type: "variableName", value: "messages" }],
+        },
+      },
+    },
+    // Mixed: regular + variadic
+    {
+      input: "def log(prefix: string, ...messages: string[]) { messages }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "log",
+          parameters: [
+            { type: "functionParameter", name: "prefix", typeHint: { type: "primitiveType", value: "string" } },
+            {
+              type: "functionParameter",
+              name: "messages",
+              variadic: true,
+              typeHint: { type: "arrayType", elementType: { type: "primitiveType", value: "string" } },
+            },
+          ],
+          returnType: null,
+          docString: undefined,
+          body: [{ type: "variableName", value: "messages" }],
+        },
+      },
+    },
+    // Variadic param must be last
+    {
+      input: "def bad(...a, b) { b }",
+      expected: { success: false },
+    },
+    // Multiple variadic params
+    {
+      input: "def bad(...a, ...b) { b }",
+      expected: { success: false },
+    },
   ];
 
   testCases.forEach(({ input, expected, throws }) => {

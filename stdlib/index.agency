@@ -1,10 +1,10 @@
 import { _print, _printJSON, _input, _sleep, _round, _fetch, _fetchJSON, _read, _write, _readImage, _notify } from "./_builtins.js"
 
-safe def print(message: string) {
+safe def print(...messages) {
   """
   A tool for printing a message to the console.
   """
-  _print(message)
+  _print(...messages)
 }
 
 safe def printJSON(obj) {

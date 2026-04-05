@@ -277,6 +277,41 @@ describe("functionCallParser", () => {
         },
       },
     },
+    // Spread argument in function call
+    {
+      input: "print(...args)",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "print",
+          arguments: [
+            {
+              type: "splat",
+              value: { type: "variableName", value: "args" },
+            },
+          ],
+        },
+      },
+    },
+    // Mixed regular and spread arguments
+    {
+      input: 'log("hello", ...rest)',
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "log",
+          arguments: [
+            { type: "string", segments: [{ type: "text", value: "hello" }] },
+            {
+              type: "splat",
+              value: { type: "variableName", value: "rest" },
+            },
+          ],
+        },
+      },
+    },
   ];
 
   testCases.forEach(({ input, expected }) => {

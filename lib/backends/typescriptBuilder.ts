@@ -3,11 +3,13 @@ import {
   AgencyNode,
   AgencyProgram,
   Assignment,
+  Expression,
   Keyword,
   Literal,
   PromptSegment,
   Scope,
   ScopeType,
+  SplatExpression,
   TypeAlias,
   VariableType,
 } from "../types.js";
@@ -487,6 +489,36 @@ export class TypeScriptBuilder {
 
   // ------- Node dispatch -------
 
+  /** Process a function call argument, handling SplatExpression. */
+  private processCallArg(arg: Expression | SplatExpression): TsNode {
+    if (arg.type === "splat") {
+      return ts.spread(this.processNode(arg.value as AgencyNode));
+    }
+    return this.processNode(arg as AgencyNode);
+  }
+
+  /**
+   * For variadic functions, wrap extra call-site arguments into an array.
+   * e.g. foo(1, 2, 3, 4, 5) where def foo(x, y, ...args)
+   * becomes foo(1, 2, [3, 4, 5], __state)
+   */
+  private wrapVariadicArgs(node: FunctionCall, argNodes: TsNode[]): TsNode[] {
+    const fnDef = this.programInfo.functionDefinitions[node.functionName];
+    const imported = this.programInfo.importedFunctions[node.functionName];
+    const parameters = fnDef?.parameters ?? imported?.parameters;
+    if (!parameters || parameters.length === 0) return argNodes;
+
+    const lastParam = parameters[parameters.length - 1];
+    if (!lastParam.variadic) return argNodes;
+
+    const requiredCount = parameters.length - 1;
+    const regularArgs = argNodes.slice(0, requiredCount);
+    const variadicArgs = argNodes.slice(requiredCount);
+
+    regularArgs.push(ts.arr(variadicArgs));
+    return regularArgs;
+  }
+
   private processNode(node: AgencyNode): TsNode {
     switch (node.type) {
       case "typeAlias":
@@ -817,11 +849,11 @@ export class TypeScriptBuilder {
     ) {
       const args = node.iterable.arguments;
       const startNode =
-        args.length >= 2 ? this.processNode(args[0]) : ts.num(0);
+        args.length >= 2 ? this.processCallArg(args[0]) : ts.num(0);
       const endNode =
         args.length >= 2
-          ? this.processNode(args[1])
-          : this.processNode(args[0]);
+          ? this.processCallArg(args[1])
+          : this.processCallArg(args[0]);
       return ts.forSteps({
         subStepPath,
         init: ts.letDecl(node.itemVar, startNode),
@@ -1311,7 +1343,7 @@ export class TypeScriptBuilder {
     if (node.functionName === "throw") {
       // throw("message") → throw new Error("message")
       const argNodes: TsNode[] = node.arguments.map((arg) =>
-        this.processNode(arg),
+        this.processCallArg(arg),
       );
       const arg = argNodes.length > 0 ? argNodes[0] : ts.str("");
       return ts.throw(`new Error(${this.str(arg)})`);
@@ -1370,14 +1402,15 @@ export class TypeScriptBuilder {
       context === "valueAccess"
         ? node.functionName
         : mapFunctionName(node.functionName);
-    const argNodes: TsNode[] = node.arguments.map((arg) => {
+    const rawArgNodes: TsNode[] = node.arguments.map((arg) => {
       if (arg.type === "functionCall") {
         this.functionsUsed.add(arg.functionName);
         return this.generateFunctionCallExpression(arg, "functionArg");
       } else {
-        return this.processNode(arg);
+        return this.processCallArg(arg);
       }
     });
+    const argNodes = this.wrapVariadicArgs(node, rawArgNodes);
     const shouldAwait = !node.async && context !== "valueAccess";
 
     if (this.isAgencyFunction(node.functionName, context)) {
@@ -1414,7 +1447,7 @@ export class TypeScriptBuilder {
         this.functionsUsed.add(arg.functionName);
         return this.generateFunctionCallExpression(arg, "functionArg");
       } else {
-        return this.processNode(arg);
+        return this.processCallArg(arg);
       }
     });
 
@@ -1550,7 +1583,7 @@ export class TypeScriptBuilder {
         node.value.functionName === "interrupt"
       ) {
         const interruptArgs = node.value.arguments
-          .map((arg) => this.str(this.processNode(arg)))
+          .map((arg) => this.str(this.processCallArg(arg)))
           .join(", ");
         return ts.raw(
           renderInterruptReturn.default({
@@ -1590,7 +1623,7 @@ export class TypeScriptBuilder {
       node.value.functionName === "interrupt"
     ) {
       const interruptArgs = node.value.arguments
-        .map((arg) => this.str(this.processNode(arg)))
+        .map((arg) => this.str(this.processCallArg(arg)))
         .join(", ");
       return ts.raw(
         renderInterruptReturn.default({
@@ -1628,7 +1661,7 @@ export class TypeScriptBuilder {
       value.functionName === "interrupt"
     ) {
       const interruptArgs = value.arguments
-        .map((arg) => this.str(this.processNode(arg)))
+        .map((arg) => this.str(this.processCallArg(arg)))
         .join(", ");
       const makeAssign = (val: string) =>
         this.str(
@@ -1795,7 +1828,7 @@ export class TypeScriptBuilder {
 
     // Extract prompt from first argument, using processNode to get scoped variable references
     const promptArg = node.arguments[0];
-    const promptNode = promptArg ? this.processNode(promptArg) : ts.raw("``");
+    const promptNode = promptArg ? this.processCallArg(promptArg) : ts.raw("``");
 
     // Extract config from second argument (if present).
     // Known keys (tools) are extracted; the rest passes through as clientConfig.
@@ -1842,7 +1875,7 @@ export class TypeScriptBuilder {
           ? this.processNode({ ...configArg, entries: remainingEntries })
           : ts.obj({});
     } else if (configArg) {
-      clientConfig = this.processNode(configArg);
+      clientConfig = this.processCallArg(configArg);
     } else {
       clientConfig = ts.obj({});
     }

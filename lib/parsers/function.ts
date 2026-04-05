@@ -458,6 +458,31 @@ export const functionParameterParser: Parser<FunctionParameter> = trace(
   ),
 );
 
+export const variadicParameterParserWithTypeHint: Parser<FunctionParameter> =
+  trace(
+    "variadicParameterParserWithTypeHint",
+    seqC(
+      set("type", "functionParameter"),
+      str("..."),
+      capture(many1WithJoin(varNameChar), "name"),
+      optionalSpaces,
+      char(":"),
+      optionalSpaces,
+      capture(variableTypeParser, "typeHint"),
+      set("variadic", true),
+    ),
+  );
+
+export const variadicParameterParser: Parser<FunctionParameter> = trace(
+  "variadicParameterParser",
+  seqC(
+    set("type", "functionParameter"),
+    str("..."),
+    capture(many1WithJoin(varNameChar), "name"),
+    set("variadic", true),
+  ),
+);
+
 export const functionReturnTypeParser: Parser<VariableType> = trace(
   "functionReturnTypeParser",
   seqC(
@@ -481,7 +506,7 @@ const _baseFunctionParser: Parser<FunctionDefinition> = trace(
     capture(
       sepBy(
         comma,
-        or(functionParameterParserWithTypeHint, functionParameterParser),
+        or(variadicParameterParserWithTypeHint, variadicParameterParser, functionParameterParserWithTypeHint, functionParameterParser),
       ),
       "parameters",
     ),
@@ -532,6 +557,17 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   const result = { ...baseResult.result };
   if (isSafe) result.safe = true;
   if (isAsync !== undefined) result.async = isAsync;
+
+  // Validate variadic parameter constraints
+  const params = result.parameters;
+  for (let i = 0; i < params.length; i++) {
+    if (params[i].variadic && i !== params.length - 1) {
+      return failure(
+        `Variadic parameter '${params[i].name}' must be the last parameter`,
+        input,
+      );
+    }
+  }
 
   return { ...baseResult, result };
 };

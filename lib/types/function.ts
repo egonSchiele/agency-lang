@@ -4,12 +4,14 @@ import {
   VariableType,
 } from "../types.js";
 import { BaseNode } from "./base.js";
+import { SplatExpression } from "./dataStructures.js";
 import { UsesTool } from "./tools.js";
 
 export type FunctionParameter = {
   type: "functionParameter";
   name: string;
   typeHint?: VariableType;
+  variadic?: boolean;
 };
 
 export type FunctionDefinition = BaseNode & {
@@ -26,7 +28,7 @@ export type FunctionDefinition = BaseNode & {
 export type FunctionCall = BaseNode & {
   type: "functionCall";
   functionName: string;
-  arguments: Expression[];
+  arguments: (Expression | SplatExpression)[];
   async?: boolean;
   tools?: UsesTool;
 };

@@ -174,7 +174,7 @@ export function compile(
     symbolTable,
     absoluteInputFile,
   );
-  const info = collectProgramInfo(resolvedProgram);
+  const info = collectProgramInfo(resolvedProgram, symbolTable);
 
   // Run type checking if enabled via config
   if (config.typeCheck || config.typeCheckStrict) {

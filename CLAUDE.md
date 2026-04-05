@@ -294,6 +294,9 @@ Handlers (`handle` blocks) are a crucial part of what makes Agency safe. They mu
 - Use types instead of interfaces.
 - NEVER force push.
 
+## Things that often confuse you
+Tools and functions are the same thing in the agency. Functions are tools. So there is no point in treating tools and functions separately because they're the same thing.
+
 ## Other docs and resources:
 - `DOCS.md` — language reference and design docs
 - `docs/envFiles.md` — documentation on environment variables and .env files

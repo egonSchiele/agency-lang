@@ -128,7 +128,6 @@ write docs
 write post
 evals
 probabilistic exec
-variadic args
 better typechecker / better typing
 llm func general interface
 llm statement doesn't work correctly in debugger

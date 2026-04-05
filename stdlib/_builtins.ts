@@ -5,8 +5,8 @@ import path from "path";
 import { execFileSync } from "child_process";
 import { detectPlatform } from "./_utils.js";
 
-export function _print(message: string): void {
-  console.log(message);
+export function _print(...messages: any[]): void {
+  console.log(...messages);
 }
 
 export function _printJSON(obj: any): void {

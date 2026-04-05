@@ -452,11 +452,12 @@ export class AgencyGenerator {
 
     const params = parameters
       .map((p) => {
+        const prefix = p.variadic ? "..." : "";
         if (p.typeHint) {
           const typeStr = variableTypeToString(p.typeHint, this.typeAliases);
-          return `${p.name}: ${typeStr}`;
+          return `${prefix}${p.name}: ${typeStr}`;
         } else {
-          return p.name;
+          return `${prefix}${p.name}`;
         }
       })
       .join(", ");
@@ -509,6 +510,9 @@ export class AgencyGenerator {
     context: "valueAccess" | "functionArg" | "topLevelStatement",
   ): string {
     const args = node.arguments.map((arg) => {
+      if (arg.type === "splat") {
+        return `...${this.processNode(arg.value).trim()}`;
+      }
       return this.processNode(arg).trim();
     });
     let asyncPrefix = "";

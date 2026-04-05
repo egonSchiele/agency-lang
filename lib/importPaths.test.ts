@@ -222,7 +222,7 @@ describe("buildSymbolTable with std:: imports", () => {
 
     // The symbol table should contain entries for the stdlib file
     expect(table[stdlibMathPath]).toBeDefined();
-    expect(table[stdlibMathPath]["add"]).toEqual({
+    expect(table[stdlibMathPath]["add"]).toMatchObject({
       kind: "function",
       name: "add",
     });
@@ -283,11 +283,11 @@ describe("buildSymbolTable with pkg:: imports", () => {
 
     // The symbol table should contain the package's symbols
     expect(table[pkgIndexPath]).toBeDefined();
-    expect(table[pkgIndexPath]["double"]).toEqual({
+    expect(table[pkgIndexPath]["double"]).toMatchObject({
       kind: "function",
       name: "double",
     });
-    expect(table[pkgIndexPath]["greet"]).toEqual({
+    expect(table[pkgIndexPath]["greet"]).toMatchObject({
       kind: "function",
       name: "greet",
     });
@@ -306,7 +306,7 @@ describe("buildSymbolTable with pkg:: imports", () => {
       const pkgFooPath = path.join(FIXTURE_PKG2_DIR, "foo.agency");
 
       expect(table[pkgFooPath]).toBeDefined();
-      expect(table[pkgFooPath]["square"]).toEqual({
+      expect(table[pkgFooPath]["square"]).toMatchObject({
         kind: "function",
         name: "square",
       });

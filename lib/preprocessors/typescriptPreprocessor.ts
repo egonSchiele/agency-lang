@@ -1399,7 +1399,7 @@ export class TypescriptPreprocessor {
               isLlmCall(stmt.value) &&
               !stmt.value.async
             ) {
-              const prompt = stmt.value.arguments[0];
+              const prompt = stmt.value.arguments[0] as AgencyNode;
               if (!stmt.scope || !prompt) {
                 console.error(
                   `[insertCheckpointSentinels] Skipping checkpoint for "${stmt.variableName}": missing scope or prompt`,

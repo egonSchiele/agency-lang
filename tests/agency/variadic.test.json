@@ -1,0 +1,15 @@
+{
+  "sourceFile": "variadic.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"a, b, c\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

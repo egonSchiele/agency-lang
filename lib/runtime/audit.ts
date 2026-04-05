@@ -63,14 +63,14 @@ export type HandlerResultAudit = AuditBase & {
   type: "handlerResult";
   handlerIndex: number;
   data: unknown;
-  result: "approved" | "rejected" | "passthrough";
+  result: "approved" | "rejected" | "passthrough" | "propagated";
   value?: unknown;
 };
 
 export type HandlerDecisionAudit = AuditBase & {
   type: "handlerDecision";
   data: unknown;
-  decision: "approved" | "rejected" | "unhandled";
+  decision: "approved" | "rejected" | "unhandled" | "propagated";
   value?: unknown;
 };
 

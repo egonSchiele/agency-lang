@@ -1,0 +1,90 @@
+{
+  "sourceFile": "handle-propagate.agency",
+  "tests": [
+    {
+      "nodeName": "testBasicPropagate",
+      "description": "with propagate — interrupt reaches the user",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"foo end\",\"foo result\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "check"
+        }
+      ]
+    },
+    {
+      "nodeName": "testInnerApproveOuterPropagate",
+      "description": "Inner approve, outer propagate — propagate overrides approve, interrupt reaches user",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"foo end\",\"foo result\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "check"
+        }
+      ]
+    },
+    {
+      "nodeName": "testInnerPropagateOuterReject",
+      "description": "Inner propagate, outer reject — reject wins",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"rejected\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testInlinePropagate",
+      "description": "Inline handler returning propagate() — interrupt reaches user",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"foo end\",\"foo result\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "check"
+        }
+      ]
+    },
+    {
+      "nodeName": "testMultiplePropagate",
+      "description": "Multiple propagates — interrupt reaches the user",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"foo end\",\"foo result\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "check"
+        }
+      ]
+    },
+    {
+      "nodeName": "testPropagateApprovePassthrough",
+      "description": "Mix of propagate, approve, passthrough — propagate wins, interrupt reaches user",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"foo end\",\"foo result\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "check"
+        }
+      ]
+    },
+    {
+      "nodeName": "testInnerPropagateOuterApprove",
+      "description": "Inner propagate, outer approve — propagate wins regardless of position",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"foo end\",\"foo result\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "check"
+        }
+      ]
+    }
+  ]
+}

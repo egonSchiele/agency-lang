@@ -292,6 +292,7 @@ Handlers (`handle` blocks) are a crucial part of what makes Agency safe. They mu
 - Use objects instead of maps.
 - Use arrays instead of sets.
 - Use types instead of interfaces.
+- NEVER force push.
 
 ## Other docs and resources:
 - `DOCS.md` — language reference and design docs

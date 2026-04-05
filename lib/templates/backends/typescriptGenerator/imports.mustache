@@ -50,6 +50,7 @@ function tool(__name: string) {
 // Handler result builtins
 function approve(value?: any) { return { type: "approved" as const, value }; }
 function reject(value?: any) { return { type: "rejected" as const, value }; }
+function propagate() { return { type: "propagated" as const }; }
 
 // Interrupt and rewind re-exports bound to this module's context
 export { interrupt, isInterrupt, isDebugger };

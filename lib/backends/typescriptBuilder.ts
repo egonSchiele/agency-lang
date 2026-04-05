@@ -2170,13 +2170,14 @@ export class TypeScriptBuilder {
       );
     } else {
       const fnName = node.handler.functionName;
-      if (fnName === "approve" || fnName === "reject") {
+      if (fnName === "approve" || fnName === "reject" || fnName === "propagate") {
         // Built-in handler: wrap the built-in factory function directly
+        const args = fnName === "propagate" ? [] : [ts.id("__data")];
         handler = ts.constDecl(
           handlerName,
           ts.arrowFn(
             [{ name: "__data", typeAnnotation: "any" }],
-            ts.call(ts.id(fnName), [ts.id("__data")]),
+            ts.call(ts.id(fnName), args),
             { async: true },
           ),
         );

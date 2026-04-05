@@ -49,8 +49,9 @@ export type TokenStats = {
 
 export type Rejected = { type: "rejected"; value?: any };
 export type Approved = { type: "approved"; value?: any };
+export type Propagated = { type: "propagated" };
 
-export type HandlerFn = (data: any) => Promise<Approved | Rejected | undefined>;
+export type HandlerFn = (data: any) => Promise<Approved | Rejected | Propagated | undefined>;
 
 /* tokenstats
 {

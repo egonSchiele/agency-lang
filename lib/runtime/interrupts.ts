@@ -5,7 +5,7 @@ import { RuntimeContext } from "./state/context.js";
 import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
-import { Approved, GraphState, Rejected } from "./types.js";
+import { Approved, GraphState, Propagated, Rejected } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { applyOverrides } from "./rewind.js";
 
@@ -112,6 +112,7 @@ export async function interruptWithHandlers<T = any>(
   }
   let approvedValue: any = undefined;
   let hasApproval = false;
+  let hasPropagation = false;
   for (let i = ctx.handlers.length - 1; i >= 0; i--) {
     const result = await ctx.handlers[i](data);
     if (result === undefined) {
@@ -139,6 +140,16 @@ export async function interruptWithHandlers<T = any>(
       });
       return { type: "rejected", value: result.value };
     }
+    if (result.type === "propagated") {
+      await ctx.audit({
+        type: "handlerResult",
+        handlerIndex: i,
+        data,
+        result: "propagated",
+      });
+      hasPropagation = true;
+      continue;
+    }
     if (result.type === "approved") {
       await ctx.audit({
         type: "handlerResult",
@@ -152,8 +163,12 @@ export async function interruptWithHandlers<T = any>(
       continue;
     }
     throw new Error(
-      `Handler returned invalid result type: ${JSON.stringify(result)}. Expected "approved", "rejected", or undefined.`,
+      `Handler returned invalid result type: ${JSON.stringify(result)}. Expected "approved", "rejected", "propagated", or undefined.`,
     );
+  }
+  if (hasPropagation) {
+    await ctx.audit({ type: "handlerDecision", data, decision: "propagated" });
+    return interrupt(data);
   }
   if (hasApproval) {
     await ctx.audit({

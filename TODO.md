@@ -123,7 +123,6 @@ Currently only TypeScript functions can be marked safe. We should be able to der
 -----
 
 expand stdlib
-propagate and die keywords for handlers
 interrupt tests (assign interrupt reject)
 write docs
 write post

@@ -1,0 +1,108 @@
+const log = []
+
+def foo() {
+  log.push("foo start")
+  return interrupt("check")
+  log.push("foo end")
+  return "foo result"
+}
+
+def fooWithAssign() {
+  log.push("foo start")
+  const val = interrupt("check")
+  log.push("foo end")
+  log.push(val)
+}
+
+def approveHandler(data) {
+  return approve()
+}
+
+def rejectHandler(data) {
+  return reject("rejected")
+}
+
+def propagateHandler(data) {
+  return propagate()
+}
+
+def passthroughHandler(data) {
+  // returns nothing — no opinion
+}
+
+// 1. Basic propagate — interrupt reaches the user
+node testBasicPropagate() {
+  handle {
+    const result = foo()
+    log.push(result)
+  } with propagate
+  return log
+}
+
+// 2. Inner approve, outer propagate — propagate overrides approve
+node testInnerApproveOuterPropagate() {
+  handle {
+    handle {
+      const result = foo()
+      log.push(result)
+    } with approveHandler
+  } with propagateHandler
+  return log
+}
+
+// 3. Inner propagate, outer reject — reject wins
+node testInnerPropagateOuterReject() {
+  handle {
+    handle {
+      const result = foo()
+      log.push(result)
+    } with propagateHandler
+  } with rejectHandler
+  return log
+}
+
+// 4. Inline propagate — handler body returns propagate()
+node testInlinePropagate() {
+  handle {
+    const result = foo()
+    log.push(result)
+  } with (data) {
+    return propagate()
+  }
+  return log
+}
+
+// 5. Multiple propagates — interrupt reaches the user
+node testMultiplePropagate() {
+  handle {
+    handle {
+      const result = foo()
+      log.push(result)
+    } with propagateHandler
+  } with propagateHandler
+  return log
+}
+
+// 6. Mix of all four: outer propagate, middle approve, inner passthrough
+node testPropagateApprovePassthrough() {
+  handle {
+    handle {
+      handle {
+        const result = foo()
+        log.push(result)
+      } with passthroughHandler
+    } with approveHandler
+  } with propagateHandler
+  return log
+}
+
+// 7. Inner propagate, outer approve — propagate wins regardless of position
+node testInnerPropagateOuterApprove() {
+  handle {
+    handle {
+      const result = foo()
+      log.push(result)
+    } with propagateHandler
+  } with approveHandler
+  return log
+}

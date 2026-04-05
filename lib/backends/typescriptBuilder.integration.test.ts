@@ -127,3 +127,38 @@ describe("TypeScript Builder Integration Tests", () => {
     },
   );
 });
+
+describe("Named argument validation", () => {
+  it("should throw on mismatched named argument", () => {
+    expect(() =>
+      generateWithBuilder(`
+def greet(name: string, greeting: string = "Hello") {
+  print(name)
+}
+greet(greeting: "Hi")
+`),
+    ).toThrow("Named argument 'greeting' does not match parameter 'name' at position 1");
+  });
+
+  it("should throw on named argument beyond parameter list", () => {
+    expect(() =>
+      generateWithBuilder(`
+def foo(a: string) {
+  print(a)
+}
+foo(a: "hi", extra: "oops")
+`),
+    ).toThrow("Named argument 'extra' at position 2 is beyond the parameter list");
+  });
+
+  it("should accept correct named arguments", () => {
+    expect(() =>
+      generateWithBuilder(`
+def greet(name: string, greeting: string = "Hello") {
+  print(name)
+}
+greet(name: "world", greeting: "Hi")
+`),
+    ).not.toThrow();
+  });
+});

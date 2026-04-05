@@ -2,6 +2,7 @@ import {
   AgencyNode,
   Expression,
   InterpolationSegment,
+  NamedArgument,
   SplatExpression,
   ValueAccess,
   VariableNameLiteral,
@@ -13,18 +14,24 @@ import {
 } from "@/types.js";
 import { color } from "@/utils/termcolors.js";
 
-/** Unwrap a function call argument: if it's a splat, return the inner expression. */
-function unwrapCallArg(arg: Expression | SplatExpression): Expression {
+/** Unwrap a function call argument to its inner expression. */
+function unwrapCallArg(arg: Expression | SplatExpression | NamedArgument): Expression {
   if (arg.type === "splat") {
+    return arg.value;
+  }
+  if (arg.type === "namedArgument") {
     return arg.value;
   }
   return arg;
 }
 
-/** Convert a function call argument to string, handling splat. */
-function callArgToString(arg: Expression | SplatExpression): string {
+/** Convert a function call argument to string. */
+function callArgToString(arg: Expression | SplatExpression | NamedArgument): string {
   if (arg.type === "splat") {
     return `...${expressionToString(arg.value)}`;
+  }
+  if (arg.type === "namedArgument") {
+    return `${arg.name}: ${expressionToString(arg.value)}`;
   }
   return expressionToString(arg);
 }

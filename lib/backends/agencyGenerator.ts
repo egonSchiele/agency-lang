@@ -513,6 +513,9 @@ export class AgencyGenerator {
     context: "valueAccess" | "functionArg" | "topLevelStatement",
   ): string {
     const args = node.arguments.map((arg) => {
+      if (arg.type === "namedArgument") {
+        return `${arg.name}: ${this.processNode(arg.value).trim()}`;
+      }
       if (arg.type === "splat") {
         return `...${this.processNode(arg.value).trim()}`;
       }

@@ -312,6 +312,61 @@ describe("functionCallParser", () => {
         },
       },
     },
+    // Named argument
+    {
+      input: 'greet(name: "world")',
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "greet",
+          arguments: [
+            {
+              type: "namedArgument",
+              name: "name",
+              value: { type: "string", segments: [{ type: "text", value: "world" }] },
+            },
+          ],
+        },
+      },
+    },
+    // Mixed positional and named
+    {
+      input: 'speak("hello", voice: "nova")',
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "speak",
+          arguments: [
+            { type: "string", segments: [{ type: "text", value: "hello" }] },
+            {
+              type: "namedArgument",
+              name: "voice",
+              value: { type: "string", segments: [{ type: "text", value: "nova" }] },
+            },
+          ],
+        },
+      },
+    },
+    // Named argument with number
+    {
+      input: "foo(x: 42)",
+      expected: {
+        success: true,
+        result: {
+          type: "functionCall",
+          functionName: "foo",
+          arguments: [
+            {
+              type: "namedArgument",
+              name: "x",
+              value: { type: "number", value: "42" },
+            },
+          ],
+        },
+      },
+    },
   ];
 
   testCases.forEach(({ input, expected }) => {

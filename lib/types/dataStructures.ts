@@ -6,6 +6,12 @@ export type SplatExpression = {
   value: Expression;
 };
 
+export type NamedArgument = {
+  type: "namedArgument";
+  name: string;
+  value: Expression;
+};
+
 export type AgencyArray = BaseNode & {
   type: "agencyArray";
   items: (Expression | SplatExpression)[];

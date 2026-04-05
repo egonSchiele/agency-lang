@@ -6,6 +6,7 @@ import {
   Expression,
   Keyword,
   Literal,
+  NamedArgument,
   PromptSegment,
   Scope,
   ScopeType,
@@ -490,8 +491,37 @@ export class TypeScriptBuilder {
 
   // ------- Node dispatch -------
 
-  /** Process a function call argument, handling SplatExpression. */
-  private processCallArg(arg: Expression | SplatExpression): TsNode {
+  /** Named args are cosmetic/positional — validate name matches the param at that index. */
+  private validateNamedArgs(node: FunctionCall, paramList: FunctionParameter[] | undefined): void {
+    if (!paramList) return;
+    const lastParam = paramList[paramList.length - 1];
+    const hasVariadic = lastParam?.variadic;
+    for (let i = 0; i < node.arguments.length; i++) {
+      const arg = node.arguments[i];
+      if (arg.type !== "namedArgument") continue;
+      let expectedName: string;
+      if (i < paramList.length) {
+        expectedName = paramList[i].name;
+      } else if (hasVariadic) {
+        expectedName = lastParam.name;
+      } else {
+        throw new Error(
+          `Named argument '${arg.name}' at position ${i + 1} is beyond the parameter list in call to '${node.functionName}'`,
+        );
+      }
+      if (arg.name !== expectedName) {
+        throw new Error(
+          `Named argument '${arg.name}' does not match parameter '${expectedName}' at position ${i + 1} in call to '${node.functionName}'`,
+        );
+      }
+    }
+  }
+
+  /** Process a function call argument, unwrapping NamedArgument and SplatExpression. */
+  private processCallArg(arg: Expression | SplatExpression | NamedArgument): TsNode {
+    if (arg.type === "namedArgument") {
+      return this.processNode(arg.value as AgencyNode);
+    }
     if (arg.type === "splat") {
       return ts.spread(this.processNode(arg.value as AgencyNode));
     }
@@ -503,10 +533,7 @@ export class TypeScriptBuilder {
    * 1. Pad omitted optional args (those with defaults) with null
    * 2. Wrap extra args into an array for variadic params
    */
-  private adjustCallArgs(node: FunctionCall, argNodes: TsNode[]): TsNode[] {
-    const fnDef = this.programInfo.functionDefinitions[node.functionName];
-    const imported = this.programInfo.importedFunctions[node.functionName];
-    const parameters = fnDef?.parameters ?? imported?.parameters;
+  private adjustCallArgs(argNodes: TsNode[], parameters: FunctionParameter[] | undefined): TsNode[] {
     if (!parameters || parameters.length === 0) return argNodes;
 
     const nonVariadicCount = parameters.filter((p) => !p.variadic).length;
@@ -1432,7 +1459,14 @@ export class TypeScriptBuilder {
       context === "valueAccess"
         ? node.functionName
         : mapFunctionName(node.functionName);
-    const rawArgNodes: TsNode[] = node.arguments.map((arg) => {
+    const fnDef = this.programInfo.functionDefinitions[node.functionName];
+    const imported = this.programInfo.importedFunctions[node.functionName];
+    const paramList = fnDef?.parameters ?? imported?.parameters;
+
+    this.validateNamedArgs(node, paramList);
+
+    const rawArgNodes: TsNode[] = node.arguments.map((rawArg) => {
+      const arg = rawArg.type === "namedArgument" ? rawArg.value : rawArg;
       if (arg.type === "functionCall") {
         this.functionsUsed.add(arg.functionName);
         return this.generateFunctionCallExpression(arg, "functionArg");
@@ -1440,7 +1474,7 @@ export class TypeScriptBuilder {
         return this.processCallArg(arg);
       }
     });
-    const argNodes = this.adjustCallArgs(node, rawArgNodes);
+    const argNodes = this.adjustCallArgs(rawArgNodes, paramList);
     const shouldAwait = !node.async && context !== "valueAccess";
 
     if (this.isAgencyFunction(node.functionName, context)) {
@@ -1472,7 +1506,13 @@ export class TypeScriptBuilder {
 
   private generateNodeCallExpression(node: FunctionCall): TsNode {
     const functionName = mapFunctionName(node.functionName);
-    const argNodes: TsNode[] = node.arguments.map((arg) => {
+    const targetNode = this.programInfo.graphNodes.find(
+      (n) => n.nodeName === functionName,
+    );
+    this.validateNamedArgs(node, targetNode?.parameters);
+
+    const argNodes: TsNode[] = node.arguments.map((rawArg) => {
+      const arg = rawArg.type === "namedArgument" ? rawArg.value : rawArg;
       if (arg.type === "functionCall") {
         this.functionsUsed.add(arg.functionName);
         return this.generateFunctionCallExpression(arg, "functionArg");
@@ -1481,9 +1521,6 @@ export class TypeScriptBuilder {
       }
     });
 
-    const targetNode = this.programInfo.graphNodes.find(
-      (n) => n.nodeName === functionName,
-    );
     let dataNode: TsNode;
     if (targetNode && targetNode.parameters.length > 0) {
       const entries: Record<string, TsNode> = {};

@@ -1,4 +1,4 @@
-import { FunctionCall } from "../types.js";
+import { FunctionCall, NamedArgument } from "../types.js";
 import {
   capture,
   char,
@@ -10,11 +10,24 @@ import {
   sepBy,
   seqC,
   set,
+  trace,
 } from "tarsec";
 import { splatParser } from "./dataStructures.js";
 import { exprParser } from "./expression.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { comma, optionalSpaces, optionalSpacesOrNewline, varNameChar } from "./utils.js";
+
+const namedArgumentParser: Parser<NamedArgument> = trace(
+  "namedArgumentParser",
+  seqC(
+    set("type", "namedArgument"),
+    capture(many1WithJoin(varNameChar), "name"),
+    optionalSpaces,
+    char(":"),
+    optionalSpaces,
+    capture(lazy(() => exprParser), "value"),
+  ),
+);
 
 export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
   const parser = seqC(
@@ -26,6 +39,7 @@ export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
       sepBy(
         comma,
         or(
+          namedArgumentParser,
           splatParser,
           lazy(() => exprParser),
         ),

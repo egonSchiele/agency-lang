@@ -455,7 +455,8 @@ export class TypeChecker {
       for (let i = 0; i < call.arguments.length; i++) {
         const arg = call.arguments[i];
         if (arg.type === "splat") continue;
-        const argType = this.synthType(arg, scopeVars);
+        const innerArg = arg.type === "namedArgument" ? arg.value : arg;
+        const argType = this.synthType(innerArg, scopeVars);
         const paramType = sig.params[i];
         if (paramType === "any") continue;
         if (argType === "any") continue;
@@ -490,7 +491,8 @@ export class TypeChecker {
     for (let i = 0; i < call.arguments.length; i++) {
       const arg = call.arguments[i];
       if (arg.type === "splat") continue;
-      const argType = this.synthType(arg, scopeVars);
+      const innerArg = arg.type === "namedArgument" ? arg.value : arg;
+      const argType = this.synthType(innerArg, scopeVars);
       const paramType = params[i].typeHint;
       if (!paramType) continue; // No type hint on param, skip
       if (argType === "any") continue;

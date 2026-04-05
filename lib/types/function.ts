@@ -1,6 +1,7 @@
 import {
   AgencyNode,
   Expression,
+  Literal,
   VariableType,
 } from "../types.js";
 import { BaseNode } from "./base.js";
@@ -12,6 +13,7 @@ export type FunctionParameter = {
   name: string;
   typeHint?: VariableType;
   variadic?: boolean;
+  defaultValue?: Literal;
 };
 
 export type FunctionDefinition = BaseNode & {

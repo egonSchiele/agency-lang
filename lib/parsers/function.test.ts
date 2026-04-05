@@ -1734,6 +1734,85 @@ describe("functionParser", () => {
       input: "def bad(...a, ...b) { b }",
       expected: { success: false },
     },
+    // Default value (typed)
+    {
+      input: 'def speak(text: string, voice: string = "alloy") { text }',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "speak",
+          parameters: [
+            { type: "functionParameter", name: "text", typeHint: { type: "primitiveType", value: "string" } },
+            {
+              type: "functionParameter",
+              name: "voice",
+              typeHint: { type: "primitiveType", value: "string" },
+              defaultValue: { type: "string", segments: [{ type: "text", value: "alloy" }] },
+            },
+          ],
+          returnType: null,
+          docString: undefined,
+          body: [{ type: "variableName", value: "text" }],
+        },
+      },
+    },
+    // Default value (number, untyped)
+    {
+      input: "def foo(a, b = 5) { a }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "foo",
+          parameters: [
+            { type: "functionParameter", name: "a" },
+            {
+              type: "functionParameter",
+              name: "b",
+              defaultValue: { type: "number", value: "5" },
+            },
+          ],
+          returnType: null,
+          docString: undefined,
+          body: [{ type: "variableName", value: "a" }],
+        },
+      },
+    },
+    // Default value with variadic
+    {
+      input: 'def foo(a: string, b: number = 5, ...rest: string[]) { a }',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "foo",
+          parameters: [
+            { type: "functionParameter", name: "a", typeHint: { type: "primitiveType", value: "string" } },
+            {
+              type: "functionParameter",
+              name: "b",
+              typeHint: { type: "primitiveType", value: "number" },
+              defaultValue: { type: "number", value: "5" },
+            },
+            {
+              type: "functionParameter",
+              name: "rest",
+              variadic: true,
+              typeHint: { type: "arrayType", elementType: { type: "primitiveType", value: "string" } },
+            },
+          ],
+          returnType: null,
+          docString: undefined,
+          body: [{ type: "variableName", value: "a" }],
+        },
+      },
+    },
+    // Required after optional — invalid
+    {
+      input: "def bad(a: number = 5, b: string) { b }",
+      expected: { success: false },
+    },
   ];
 
   testCases.forEach(({ input, expected, throws }) => {

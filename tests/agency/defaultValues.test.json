@@ -1,0 +1,15 @@
+{
+  "sourceFile": "defaultValues.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"Hello world | Hi world\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

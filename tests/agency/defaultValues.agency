@@ -1,0 +1,9 @@
+safe def greet(name: string, greeting: string = "Hello"): string {
+  return greeting + " " + name
+}
+
+node main() {
+  let a = greet("world")
+  let b = greet("world", "Hi")
+  return a + " | " + b
+}

@@ -42,7 +42,7 @@ import { IfElse } from "../types/ifElse.js";
 import { _valueAccessParser, valueAccessParser } from "./access.js";
 import { commentParser } from "./comment.js";
 import { functionCallParser } from "./functionCall.js";
-import { booleanParser, literalParser } from "./literals.js";
+import { booleanParser, literalParser, literalParserNoVarName } from "./literals.js";
 import { matchBlockParser } from "./matchBlock.js";
 import { optionalSemicolon } from "./parserUtils.js";
 import { returnStatementParser } from "./returnStatement.js";
@@ -437,6 +437,36 @@ export const forLoopParser: Parser<ForLoop> = label("a for loop", withLoc(trace(
   ),
 )));
 
+export const functionParameterWithTypeHintAndDefault: Parser<FunctionParameter> =
+  trace(
+    "functionParameterWithTypeHintAndDefault",
+    seqC(
+      set("type", "functionParameter"),
+      capture(many1WithJoin(varNameChar), "name"),
+      optionalSpaces,
+      char(":"),
+      optionalSpaces,
+      capture(variableTypeParser, "typeHint"),
+      optionalSpaces,
+      str("="),
+      optionalSpaces,
+      capture(literalParserNoVarName, "defaultValue"),
+    ),
+  );
+
+export const functionParameterWithDefault: Parser<FunctionParameter> =
+  trace(
+    "functionParameterWithDefault",
+    seqC(
+      set("type", "functionParameter"),
+      capture(many1WithJoin(varNameChar), "name"),
+      optionalSpaces,
+      str("="),
+      optionalSpaces,
+      capture(literalParserNoVarName, "defaultValue"),
+    ),
+  );
+
 export const functionParameterParserWithTypeHint: Parser<FunctionParameter> =
   trace(
     "functionParameterParserWithTypeHint",
@@ -506,7 +536,14 @@ const _baseFunctionParser: Parser<FunctionDefinition> = trace(
     capture(
       sepBy(
         comma,
-        or(variadicParameterParserWithTypeHint, variadicParameterParser, functionParameterParserWithTypeHint, functionParameterParser),
+        or(
+          variadicParameterParserWithTypeHint,
+          variadicParameterParser,
+          functionParameterWithTypeHintAndDefault,
+          functionParameterWithDefault,
+          functionParameterParserWithTypeHint,
+          functionParameterParser,
+        ),
       ),
       "parameters",
     ),
@@ -558,12 +595,22 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   if (isSafe) result.safe = true;
   if (isAsync !== undefined) result.async = isAsync;
 
-  // Validate variadic parameter constraints
+  // Validate parameter ordering: required → optional (with defaults) → variadic
   const params = result.parameters;
+  let seenOptional = false;
   for (let i = 0; i < params.length; i++) {
-    if (params[i].variadic && i !== params.length - 1) {
+    if (params[i].variadic) {
+      if (i !== params.length - 1) {
+        return failure(
+          `Variadic parameter '${params[i].name}' must be the last parameter`,
+          input,
+        );
+      }
+    } else if (params[i].defaultValue) {
+      seenOptional = true;
+    } else if (seenOptional) {
       return failure(
-        `Variadic parameter '${params[i].name}' must be the last parameter`,
+        `Required parameter '${params[i].name}' cannot follow optional parameter`,
         input,
       );
     }

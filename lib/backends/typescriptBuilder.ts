@@ -15,6 +15,7 @@ import {
 } from "../types.js";
 
 import { formatTypeHint } from "@/cli/util.js";
+import { expressionToString } from "@/utils/node.js";
 import { toCompiledImportPath } from "../importPaths.js";
 import {
   BUILTIN_FUNCTIONS,
@@ -498,25 +499,35 @@ export class TypeScriptBuilder {
   }
 
   /**
-   * For variadic functions, wrap extra call-site arguments into an array.
-   * e.g. foo(1, 2, 3, 4, 5) where def foo(x, y, ...args)
-   * becomes foo(1, 2, [3, 4, 5], __state)
+   * Adjust call-site arguments to match the function's parameter list:
+   * 1. Pad omitted optional args (those with defaults) with null
+   * 2. Wrap extra args into an array for variadic params
    */
-  private wrapVariadicArgs(node: FunctionCall, argNodes: TsNode[]): TsNode[] {
+  private adjustCallArgs(node: FunctionCall, argNodes: TsNode[]): TsNode[] {
     const fnDef = this.programInfo.functionDefinitions[node.functionName];
     const imported = this.programInfo.importedFunctions[node.functionName];
     const parameters = fnDef?.parameters ?? imported?.parameters;
     if (!parameters || parameters.length === 0) return argNodes;
 
-    const lastParam = parameters[parameters.length - 1];
-    if (!lastParam.variadic) return argNodes;
+    const nonVariadicCount = parameters.filter((p) => !p.variadic).length;
+    const hasVariadic = parameters[parameters.length - 1]?.variadic;
 
-    const requiredCount = parameters.length - 1;
-    const regularArgs = argNodes.slice(0, requiredCount);
-    const variadicArgs = argNodes.slice(requiredCount);
+    // Pad omitted optional args (those with defaults) with null
+    let result = [...argNodes];
+    for (let i = result.length; i < nonVariadicCount; i++) {
+      if (!parameters[i].defaultValue) break;
+      result.push(ts.id("null"));
+    }
 
-    regularArgs.push(ts.arr(variadicArgs));
-    return regularArgs;
+    // Wrap extra args into array for variadic param
+    if (hasVariadic) {
+      const regularArgs = result.slice(0, nonVariadicCount);
+      const variadicArgs = result.slice(nonVariadicCount);
+      regularArgs.push(ts.arr(variadicArgs));
+      result = regularArgs;
+    }
+
+    return result;
   }
 
   private processNode(node: AgencyNode): TsNode {
@@ -1031,7 +1042,11 @@ export class TypeScriptBuilder {
         type: "primitiveType" as const,
         value: "string",
       };
-      const tsType = mapTypeToZodSchema(typeHint, this.getVisibleTypeAliases());
+      let tsType = mapTypeToZodSchema(typeHint, this.getVisibleTypeAliases());
+      if (param.defaultValue) {
+        const defaultStr = expressionToString(param.defaultValue);
+        tsType += `.nullable().describe(${JSON.stringify("Default: " + defaultStr)})`;
+      }
       properties[param.name] = tsType;
     });
     let schema = "";
@@ -1134,10 +1149,17 @@ export class TypeScriptBuilder {
     this.endScope();
 
     // Build function params: typed args + __state
-    const fnParams: TsParam[] = parameters.map((p) => ({
-      name: p.name,
-      typeAnnotation: p.typeHint ? formatTypeHint(p.typeHint) : "any",
-    }));
+    const fnParams: TsParam[] = parameters.map((p) => {
+      const baseType = p.typeHint ? formatTypeHint(p.typeHint) : "any";
+      if (p.defaultValue) {
+        return {
+          name: p.name,
+          typeAnnotation: `${baseType} | null`,
+          defaultValue: ts.id("null"),
+        };
+      }
+      return { name: p.name, typeAnnotation: baseType };
+    });
     fnParams.push({
       name: "__state",
       typeAnnotation: "InternalFunctionState | undefined",
@@ -1203,10 +1225,18 @@ export class TypeScriptBuilder {
     ];
 
     // Param assignments to stack
-    for (const arg of args) {
-      setupStmts.push(
-        ts.assign($(ts.stack("args")).index(ts.str(arg)).done(), ts.id(arg)),
-      );
+    for (const param of parameters) {
+      const stackTarget = $(ts.stack("args")).index(ts.str(param.name)).done();
+      if (param.defaultValue) {
+        const defaultNode = this.processNode(param.defaultValue);
+        setupStmts.push(
+          ts.assign(stackTarget, ts.binOp(ts.id(param.name), "??", defaultNode)),
+        );
+      } else {
+        setupStmts.push(
+          ts.assign(stackTarget, ts.id(param.name)),
+        );
+      }
     }
 
     // __self.__retryable
@@ -1410,7 +1440,7 @@ export class TypeScriptBuilder {
         return this.processCallArg(arg);
       }
     });
-    const argNodes = this.wrapVariadicArgs(node, rawArgNodes);
+    const argNodes = this.adjustCallArgs(node, rawArgNodes);
     const shouldAwait = !node.async && context !== "valueAccess";
 
     if (this.isAgencyFunction(node.functionName, context)) {

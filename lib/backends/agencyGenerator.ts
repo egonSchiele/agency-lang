@@ -453,11 +453,14 @@ export class AgencyGenerator {
     const params = parameters
       .map((p) => {
         const prefix = p.variadic ? "..." : "";
+        const defaultSuffix = p.defaultValue
+          ? ` = ${this.generateLiteral(p.defaultValue)}`
+          : "";
         if (p.typeHint) {
           const typeStr = variableTypeToString(p.typeHint, this.typeAliases);
-          return `${prefix}${p.name}: ${typeStr}`;
+          return `${prefix}${p.name}: ${typeStr}${defaultSuffix}`;
         } else {
-          return `${prefix}${p.name}`;
+          return `${prefix}${p.name}${defaultSuffix}`;
         }
       })
       .join(", ");

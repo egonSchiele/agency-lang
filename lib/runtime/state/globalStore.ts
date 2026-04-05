@@ -60,6 +60,15 @@ export class GlobalStore {
     return gs;
   }
 
+  static tokenStatsFromJSON(json: GlobalStoreJSON): { totalTokens: number; totalCost: number } {
+    const tokenStats = json.store?.[GlobalStore.INTERNAL_MODULE]?.["__tokenStats"];
+    if (!tokenStats) return { totalTokens: 0, totalCost: 0 };
+    return {
+      totalTokens: tokenStats.usage?.totalTokens ?? 0,
+      totalCost: tokenStats.cost?.totalCost ?? 0,
+    };
+  }
+
   static fromJSON(json: GlobalStoreJSON): GlobalStore {
     const gs = new GlobalStore();
     gs.store = json.store || {};

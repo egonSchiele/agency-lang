@@ -48,6 +48,7 @@ export class DebuggerUI implements DebuggerIO {
   private threadsBox: blessed.Widgets.BoxElement;
   private commandBar: blessed.Widgets.BoxElement;
   private commandInput: blessed.Widgets.TextboxElement;
+  private statsBar: blessed.Widgets.BoxElement;
 
   private focusIndex = 0;
   private focusablePanes: {
@@ -159,13 +160,13 @@ export class DebuggerUI implements DebuggerIO {
       },
     });
 
-    // Activity pane (~20% height)
+    // Activity pane
     this.activityBox = blessed.box({
       ...baseStyle,
       top: "65%",
       left: 0,
       width: "50%",
-      height: "35%-3",
+      height: "35%-4",
       label: " activity ",
       style: {
         border: { fg: "yellow" },
@@ -173,13 +174,13 @@ export class DebuggerUI implements DebuggerIO {
       },
     });
 
-    // Activity pane (~20% height)
+    // Stdout pane
     this.stdoutBox = blessed.box({
       ...baseStyle,
       top: "65%",
       right: 0,
       width: "50%",
-      height: "35%-3",
+      height: "35%-4",
       label: " stdout ",
       style: {
         border: { fg: "blue" },
@@ -235,6 +236,18 @@ export class DebuggerUI implements DebuggerIO {
       hidden: true,
     });
 
+    // Stats bar (thin, borderless, above command bar)
+    this.statsBar = blessed.box({
+      bottom: 3,
+      left: 0,
+      width: "100%",
+      height: 1,
+      tags: true,
+      style: {
+        fg: "gray",
+      },
+    });
+
     this.screen.append(this.sourceBox);
     this.screen.append(this.threadsBox);
     this.screen.append(this.localsBox);
@@ -242,6 +255,7 @@ export class DebuggerUI implements DebuggerIO {
     this.screen.append(this.callStackBox);
     this.screen.append(this.activityBox);
     this.screen.append(this.stdoutBox);
+    this.screen.append(this.statsBar);
     this.screen.append(this.commandBar);
     this.screen.append(this.commandInput);
 
@@ -337,6 +351,7 @@ export class DebuggerUI implements DebuggerIO {
     this.renderActivityPane();
 
     this.renderStdoutPane();
+    this.renderStatsBar();
 
     this.screen.render();
   }
@@ -511,6 +526,17 @@ export class DebuggerUI implements DebuggerIO {
     this.stdoutBox.setContent(content);
     // Scroll to bottom
     this.stdoutBox.setScrollPerc(100);
+  }
+
+  private renderStatsBar(): void {
+    const stats = this.state.getTokenStats();
+    const cost = stats.totalCost === 0
+      ? "$0.00"
+      : stats.totalCost < 0.0001
+        ? "<$0.0001"
+        : `$${stats.totalCost.toFixed(4)}`;
+    const content = `  tokens: ${stats.totalTokens.toLocaleString()} | cost: ${cost}`;
+    this.statsBar.setContent(`{gray-fg}${content}{/gray-fg}`);
   }
 
   waitForCommand(): Promise<DebuggerCommand> {

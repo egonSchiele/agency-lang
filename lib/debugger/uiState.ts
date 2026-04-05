@@ -1,5 +1,6 @@
 import { SourceMap } from "@/backends/sourceMap.js";
 import { Checkpoint, type ThreadMessages } from "../runtime/state/checkpointStore.js";
+import { GlobalStore } from "../runtime/state/globalStore.js";
 import { checkpointSchema } from "../runtime/state/schemas.js";
 import { color } from "termcolors";
 import { uniq } from "@/utils.js";
@@ -239,6 +240,11 @@ export class UIState {
 
   getStdout() {
     return this.stdoutContent;
+  }
+
+  getTokenStats(): { totalTokens: number; totalCost: number } {
+    if (!this.checkpoint?.globals) return { totalTokens: 0, totalCost: 0 };
+    return GlobalStore.tokenStatsFromJSON(this.checkpoint.globals);
   }
 
   toJSON() {

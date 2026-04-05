@@ -250,10 +250,7 @@ const inlineHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
     set("kind", "inline"),
     char("("),
     optionalSpaces,
-    capture(
-      or(functionParameterParserWithTypeHint, functionParameterParser),
-      "param",
-    ),
+    capture(functionParameterParser, "param"),
     optionalSpaces,
     char(")"),
     optionalSpaces,
@@ -437,79 +434,55 @@ export const forLoopParser: Parser<ForLoop> = label("a for loop", withLoc(trace(
   ),
 )));
 
-export const functionParameterWithTypeHintAndDefault: Parser<FunctionParameter> =
-  trace(
-    "functionParameterWithTypeHintAndDefault",
-    seqC(
-      set("type", "functionParameter"),
-      capture(many1WithJoin(varNameChar), "name"),
-      optionalSpaces,
-      char(":"),
-      optionalSpaces,
-      capture(variableTypeParser, "typeHint"),
-      optionalSpaces,
-      str("="),
-      optionalSpaces,
-      capture(literalParserNoVarName, "defaultValue"),
-    ),
-  );
-
-export const functionParameterWithDefault: Parser<FunctionParameter> =
-  trace(
-    "functionParameterWithDefault",
-    seqC(
-      set("type", "functionParameter"),
-      capture(many1WithJoin(varNameChar), "name"),
-      optionalSpaces,
-      str("="),
-      optionalSpaces,
-      capture(literalParserNoVarName, "defaultValue"),
-    ),
-  );
-
-export const functionParameterParserWithTypeHint: Parser<FunctionParameter> =
-  trace(
-    "functionParameterParserWithTypeHint",
-    seqC(
-      set("type", "functionParameter"),
-      capture(many1WithJoin(varNameChar), "name"),
-      optionalSpaces,
-      char(":"),
-      optionalSpaces,
-      capture(variableTypeParser, "typeHint"),
-    ),
-  );
-
-export const functionParameterParser: Parser<FunctionParameter> = trace(
+// Parses: name, name: type, name = default, name: type = default
+export const functionParameterParser = trace(
   "functionParameterParser",
   seqC(
     set("type", "functionParameter"),
     capture(many1WithJoin(varNameChar), "name"),
+    optional(
+      captureCaptures(
+        seqC(
+          optionalSpaces,
+          char(":"),
+          optionalSpaces,
+          capture(variableTypeParser, "typeHint"),
+        ),
+      ),
+    ),
+    optional(
+      captureCaptures(
+        seqC(
+          optionalSpaces,
+          str("="),
+          optionalSpaces,
+          capture(literalParserNoVarName, "defaultValue"),
+        ),
+      ),
+    ),
   ),
 );
 
-export const variadicParameterParserWithTypeHint: Parser<FunctionParameter> =
-  trace(
-    "variadicParameterParserWithTypeHint",
+// Parses: ...name, ...name: type
+export const variadicParameterParser: Parser<FunctionParameter> = trace(
+  "variadicParameterParser",
+  map(
     seqC(
       set("type", "functionParameter"),
       str("..."),
       capture(many1WithJoin(varNameChar), "name"),
-      optionalSpaces,
-      char(":"),
-      optionalSpaces,
-      capture(variableTypeParser, "typeHint"),
-      set("variadic", true),
+      optional(
+        captureCaptures(
+          seqC(
+            optionalSpaces,
+            char(":"),
+            optionalSpaces,
+            capture(variableTypeParser, "typeHint"),
+          ),
+        ),
+      ),
     ),
-  );
-
-export const variadicParameterParser: Parser<FunctionParameter> = trace(
-  "variadicParameterParser",
-  seqC(
-    set("type", "functionParameter"),
-    str("..."),
-    capture(many1WithJoin(varNameChar), "name"),
-    set("variadic", true),
+    (result) => ({ ...result, variadic: true }),
   ),
 );
 
@@ -536,14 +509,7 @@ const _baseFunctionParser: Parser<FunctionDefinition> = trace(
     capture(
       sepBy(
         comma,
-        or(
-          variadicParameterParserWithTypeHint,
-          variadicParameterParser,
-          functionParameterWithTypeHintAndDefault,
-          functionParameterWithDefault,
-          functionParameterParserWithTypeHint,
-          functionParameterParser,
-        ),
+        or(variadicParameterParser, functionParameterParser),
       ),
       "parameters",
     ),
@@ -640,7 +606,7 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = label("a node defini
     capture(
       sepBy(
         comma,
-        or(functionParameterParserWithTypeHint, functionParameterParser),
+        functionParameterParser,
       ),
       "parameters",
     ),

@@ -135,12 +135,12 @@ See `DOCS.md` for the full language reference and design docs.
 
 ## Code generation and backends
 The code that gets written and executed from an agency program comes from two places.
-One is new TypeScript code written for the program. This comes from the builder, which in turn uses a combination of the TypeScript IR and the Mustache templates. 
+One is new TypeScript code written for the program. This comes from the builder, which in turn uses a combination of the TypeScript IR and the Mustache templates.
 The other is TypeScript libraries and functions that get run by the generated TypeScript code. Much of this is in the runtime directory (`lib/runtime`) or imported from other libraries such as Zod.
 As you can imagine, it's much better to have functionality in these shared libraries because then it is easily testable and refactorable, and we get type safety etc. The code for generating new TypeScript code on the other hand is much harder to work with. It's harder to read and reason about, and it doesn't have the same type safety. The TypeScript IR ameliorates some of this pain, but in general, when you are thinking of adding new features or modifying existing features, you should try to push as much of the functionality as you can into the runtime TypeScript libraries. Anything that can't be pushed to this should go in the builder if possible, especially if it is TypeScript code that may need to be manipulated later. For anything that's too complex and can't be put in the runtime libs, consider putting it in a Mustache file instead, so it's easy to read.
 
 ## How to debug parser errors
-If you're having a hard time debugging a parser error, you can always use Tarsec's built-in debugger functionality. For an agency file, try running 
+If you're having a hard time debugging a parser error, you can always use Tarsec's built-in debugger functionality. For an agency file, try running
 
 ```
 DEBUG=1 pnpm run ast foo.agency
@@ -292,7 +292,7 @@ Handlers (`handle` blocks) are a crucial part of what makes Agency safe. They mu
 - Use objects instead of maps.
 - Use arrays instead of sets.
 - Use types instead of interfaces.
-- NEVER force push.
+- NEVER force push or amend commits.
 
 ## Things that often confuse you
 Tools and functions are the same thing in the agency. Functions are tools. So there is no point in treating tools and functions separately because they're the same thing.

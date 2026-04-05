@@ -57,6 +57,8 @@ export class DebuggerUI implements DebuggerIO {
   }[];
   public state: UIState;
   public prevState: UIState | null = null;
+  private commandBarContent = "";
+  private spinnerInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     this.state = new UIState();
@@ -203,6 +205,7 @@ export class DebuggerUI implements DebuggerIO {
       ([key, action]) => `${this.bold(`(${key})`)}${action}`,
     );
     const commandContent = commandParts.join(" ");
+    this.commandBarContent = commandContent;
 
     // Command bar (bottom, fixed 3 rows)
     this.commandBar = blessed.box({
@@ -263,7 +266,47 @@ export class DebuggerUI implements DebuggerIO {
     });
   }
 
+  private static SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+  private static SPINNER_PHRASES = [
+    "thinking", "pondering", "reasoning", "working",
+    "executing", "processing", "contemplating", "computing",
+  ];
+  private static SPINNER_INTERVAL_MS = 80;
+  private static SPINNER_PHRASE_TICKS = 30; // ~2.4s at 80ms interval
+
+  startSpinner(): void {
+    if (this.spinnerInterval) return;
+    let frameIdx = 0;
+    let phraseIdx = Math.floor(Math.random() * DebuggerUI.SPINNER_PHRASES.length);
+    let ticksSincePhrase = 0;
+
+    const update = () => {
+      const frame = DebuggerUI.SPINNER_FRAMES[frameIdx % DebuggerUI.SPINNER_FRAMES.length];
+      const phrase = DebuggerUI.SPINNER_PHRASES[phraseIdx % DebuggerUI.SPINNER_PHRASES.length];
+      this.commandBar.setContent(`{cyan-fg}${frame}{/cyan-fg} ${phrase}...`);
+      this.screen.render();
+      frameIdx++;
+      ticksSincePhrase++;
+      if (ticksSincePhrase >= DebuggerUI.SPINNER_PHRASE_TICKS) {
+        phraseIdx++;
+        ticksSincePhrase = 0;
+      }
+    };
+
+    update();
+    this.spinnerInterval = setInterval(update, DebuggerUI.SPINNER_INTERVAL_MS);
+  }
+
+  stopSpinner(): void {
+    if (!this.spinnerInterval) return;
+    clearInterval(this.spinnerInterval);
+    this.spinnerInterval = null;
+    this.commandBar.setContent(this.commandBarContent);
+    this.screen.render();
+  }
+
   cleanup(error?: string): void {
+    this.stopSpinner();
     this.destroy();
     if (error) {
       console.error(error);
@@ -781,6 +824,7 @@ export class DebuggerUI implements DebuggerIO {
   }
 
   destroy(): void {
+    this.stopSpinner();
     try {
       this.screen.destroy();
     } catch {

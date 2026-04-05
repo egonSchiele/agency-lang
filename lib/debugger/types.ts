@@ -30,5 +30,7 @@ export type DebuggerIO = {
   promptForInput(prompt: string): Promise<string>;
   appendStdout(text: string): void;
   renderActivityOnly(): void;
+  startSpinner(): void;
+  stopSpinner(): void;
   destroy(): void;
 };

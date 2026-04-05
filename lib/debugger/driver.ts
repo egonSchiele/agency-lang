@@ -240,27 +240,31 @@ export class DebuggerDriver {
       this.ui.state.log("Approved interrupt");
       this.debuggerState.resetCallDepth();
       this.ui.state.resetCallStack();
-      return await this.mod.approveInterrupt(interrupt, {
-        metadata: {
-          callbacks: this.getCallbacks(),
-          debugger: this.debuggerState,
-        },
-      });
+      return await this.resumeInterrupt(() =>
+        this.mod.approveInterrupt(interrupt, {
+          metadata: {
+            callbacks: this.getCallbacks(),
+            debugger: this.debuggerState,
+          },
+        }),
+      );
     }
 
     if (trimmed === "reject" || trimmed === "r") {
       this.ui.state.log("Rejected interrupt");
       this.debuggerState.resetCallDepth();
       this.ui.state.resetCallStack();
-      return await this.mod.respondToInterrupt(
-        interrupt,
-        { type: "reject" },
-        {
-          metadata: {
-            callbacks: this.getCallbacks(),
-            debugger: this.debuggerState,
+      return await this.resumeInterrupt(() =>
+        this.mod.respondToInterrupt(
+          interrupt,
+          { type: "reject" },
+          {
+            metadata: {
+              callbacks: this.getCallbacks(),
+              debugger: this.debuggerState,
+            },
           },
-        },
+        ),
       );
     }
 
@@ -275,15 +279,17 @@ export class DebuggerDriver {
       this.ui.state.log(`Resolved interrupt with: ${JSON.stringify(value)}`);
       this.debuggerState.resetCallDepth();
       this.ui.state.resetCallStack();
-      return await this.mod.respondToInterrupt(
-        interrupt,
-        { type: "resolve", value },
-        {
-          metadata: {
-            callbacks: this.getCallbacks(),
-            debugger: this.debuggerState,
+      return await this.resumeInterrupt(() =>
+        this.mod.respondToInterrupt(
+          interrupt,
+          { type: "resolve", value },
+          {
+            metadata: {
+              callbacks: this.getCallbacks(),
+              debugger: this.debuggerState,
+            },
           },
-        },
+        ),
       );
     }
 
@@ -306,15 +312,17 @@ export class DebuggerDriver {
       );
       this.debuggerState.resetCallDepth();
       this.ui.state.resetCallStack();
-      return await this.mod.respondToInterrupt(
-        interrupt,
-        { type: "modify", newArguments: overrides },
-        {
-          metadata: {
-            callbacks: this.getCallbacks(),
-            debugger: this.debuggerState,
+      return await this.resumeInterrupt(() =>
+        this.mod.respondToInterrupt(
+          interrupt,
+          { type: "modify", newArguments: overrides },
+          {
+            metadata: {
+              callbacks: this.getCallbacks(),
+              debugger: this.debuggerState,
+            },
           },
-        },
+        ),
       );
     }
 
@@ -436,15 +444,17 @@ export class DebuggerDriver {
         this.ui.state.log("Rejected interrupt");
         this.debuggerState.resetCallDepth();
         this.ui.state.resetCallStack();
-        return await this.mod.respondToInterrupt(
-          interrupt,
-          { type: "reject" },
-          {
-            metadata: {
-              callbacks: this.getCallbacks(),
-              debugger: this.debuggerState,
+        return await this.resumeInterrupt(() =>
+          this.mod.respondToInterrupt(
+            interrupt,
+            { type: "reject" },
+            {
+              metadata: {
+                callbacks: this.getCallbacks(),
+                debugger: this.debuggerState,
+              },
             },
-          },
+          ),
         );
       }
       case "resolve": {
@@ -453,15 +463,17 @@ export class DebuggerDriver {
         );
         this.debuggerState.resetCallDepth();
         this.ui.state.resetCallStack();
-        return await this.mod.respondToInterrupt(
-          interrupt,
-          { type: "resolve", value: command.value },
-          {
-            metadata: {
-              callbacks: this.getCallbacks(),
-              debugger: this.debuggerState,
+        return await this.resumeInterrupt(() =>
+          this.mod.respondToInterrupt(
+            interrupt,
+            { type: "resolve", value: command.value },
+            {
+              metadata: {
+                callbacks: this.getCallbacks(),
+                debugger: this.debuggerState,
+              },
             },
-          },
+          ),
         );
       }
       case "modify": {
@@ -470,15 +482,17 @@ export class DebuggerDriver {
         );
         this.debuggerState.resetCallDepth();
         this.ui.state.resetCallStack();
-        return await this.mod.respondToInterrupt(
-          interrupt,
-          { type: "modify", newArguments: command.overrides },
-          {
-            metadata: {
-              callbacks: this.getCallbacks(),
-              debugger: this.debuggerState,
+        return await this.resumeInterrupt(() =>
+          this.mod.respondToInterrupt(
+            interrupt,
+            { type: "modify", newArguments: command.overrides },
+            {
+              metadata: {
+                callbacks: this.getCallbacks(),
+                debugger: this.debuggerState,
+              },
             },
-          },
+          ),
         );
       }
       case "save": {
@@ -527,6 +541,15 @@ export class DebuggerDriver {
     }
   }
 
+  private async resumeInterrupt(fn: () => Promise<any>): Promise<any> {
+    this.ui.startSpinner();
+    try {
+      return await fn();
+    } finally {
+      this.ui.stopSpinner();
+    }
+  }
+
   private async resume(interrupt: Interrupt): Promise<any> {
     const overrides = this.ui.state.getOverrides();
 
@@ -536,13 +559,15 @@ export class DebuggerDriver {
     this.debuggerState.resetCallDepth();
     this.ui.state.resetCallStack();
 
-    return await this.mod.approveInterrupt(interrupt, {
-      overrides,
-      metadata: {
-        callbacks: this.getCallbacks(),
-        debugger: this.debuggerState,
-      },
-    });
+    return await this.resumeInterrupt(() =>
+      this.mod.approveInterrupt(interrupt, {
+        overrides,
+        metadata: {
+          callbacks: this.getCallbacks(),
+          debugger: this.debuggerState,
+        },
+      }),
+    );
   }
 
   private async rewindTo(
@@ -578,12 +603,14 @@ export class DebuggerDriver {
 
     this.debuggerState.deleteAfterCheckpoint(checkpoint.id);
 
-    return await this.mod.rewindFrom(rewindCp, overrides, {
-      metadata: {
-        callbacks: this.getCallbacks(),
-        debugger: this.debuggerState,
-      },
-    });
+    return await this.resumeInterrupt(() =>
+      this.mod.rewindFrom(rewindCp, overrides, {
+        metadata: {
+          callbacks: this.getCallbacks(),
+          debugger: this.debuggerState,
+        },
+      }),
+    );
   }
 
   private lookupVariable(varName: string, interrupt: Interrupt): unknown {

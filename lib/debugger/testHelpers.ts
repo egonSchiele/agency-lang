@@ -65,6 +65,8 @@ export class TestDebuggerIO implements DebuggerIO {
 
   appendStdout(_text: string): void { }
   renderActivityOnly(): void { }
+  startSpinner(): void { }
+  stopSpinner(): void { }
   destroy(): void { }
 }
 

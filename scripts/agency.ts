@@ -29,6 +29,7 @@ import { upload } from "@/cli/upload.js";
 import { loadEnv } from "@/utils/envfile.js";
 import { remoteRun } from "@/cli/remoteRun.js";
 import { debug } from "@/cli/debug.js";
+import { generateDoc } from "@/cli/doc.js";
 
 loadEnv();
 const program = new Command();
@@ -409,6 +410,16 @@ program
     const output = options.output || path.join(parsed.dir, parsed.name + ".bundle");
     createBundle(source, trace, output);
     console.log(`Bundle created: ${output}`);
+  });
+
+program
+  .command("doc")
+  .description("Generate Markdown documentation for .agency file(s)")
+  .argument("<input>", "Path to .agency file or directory")
+  .requiredOption("-o, --output <dir>", "Output directory for generated docs")
+  .action((input: string, opts: { output: string }) => {
+    const config = getConfig();
+    generateDoc(config, input, opts.output);
   });
 
 program

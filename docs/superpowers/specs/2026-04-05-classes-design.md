@@ -13,19 +13,50 @@ class User {
   name: string
   age: number
 
-  constructor(name: string, age: number) {
-    self.name = name
-    self.age = age
-  }
-
   greet(): string {
-    return "Hi, I'm " + self.name
+    return "Hi, I'm " + this.name
   }
 }
 
 let user = new User("Alice", 30)
 user.greet()
 user.age = 31
+```
+
+When no constructor is defined, a default constructor is generated that takes one argument per field in declaration order and assigns each one. The above is equivalent to writing:
+
+```
+class User {
+  name: string
+  age: number
+
+  constructor(name: string, age: number) {
+    this.name = name
+    this.age = age
+  }
+
+  greet(): string {
+    return "Hi, I'm " + this.name
+  }
+}
+```
+
+### Custom constructor
+
+An explicit constructor is only needed when custom initialization logic is required:
+
+```
+class User {
+  name: string
+  age: number
+  displayName: string
+
+  constructor(name: string, age: number) {
+    this.name = name
+    this.age = age
+    this.displayName = name + " (" + age + ")"
+  }
+}
 ```
 
 ### Inheritance
@@ -36,11 +67,11 @@ class Admin extends User {
 
   constructor(name: string, age: number, role: string) {
     super(name, age)
-    self.role = role
+    this.role = role
   }
 
   describe(): string {
-    return self.name + " is a " + self.role
+    return this.name + " is a " + this.role
   }
 }
 
@@ -49,19 +80,32 @@ admin.greet()
 admin.describe()
 ```
 
+For subclasses, the default constructor (when none is provided) takes arguments for all fields — parent fields first in declaration order, then own fields — and calls `super(...)` with the parent fields:
+
+```
+class Admin extends User {
+  role: string
+
+  describe(): string {
+    return this.name + " is a " + this.role
+  }
+}
+
+// Default constructor is equivalent to:
+// constructor(name: string, age: number, role: string) {
+//   super(name, age)
+//   this.role = role
+// }
+```
+
 ### Method overriding
 
 ```
 class Admin extends User {
   role: string
 
-  constructor(name: string, age: number, role: string) {
-    super(name, age)
-    self.role = role
-  }
-
   greet(): string {
-    return "Hi, I'm " + self.name + " (" + self.role + ")"
+    return "Hi, I'm " + this.name + " (" + this.role + ")"
   }
 }
 ```
@@ -72,17 +116,17 @@ Overriding methods must have a compatible signature: same parameter types and a 
 
 - **`class` keyword** introduces a class definition.
 - **Fields** are declared with `name: type` at the top of the class body.
-- **`constructor(...)`** defines how instances are created. Constructor body uses `self` to assign fields.
+- **`constructor(...)`** optionally defines how instances are created. If omitted, a default constructor is generated that takes one argument per field in declaration order and assigns each one. For subclasses, the default constructor takes parent fields first, then own fields, and calls `super(...)` with the parent fields.
 - **Methods** use `methodName(params): returnType { body }` syntax — no `fn` keyword.
-- **`self`** is implicitly available in all methods and the constructor. It refers to the current instance. It compiles to `this`.
+- **`this`** is implicitly available in all methods and the constructor. It refers to the current instance. It compiles directly to TypeScript's `this`.
 - **`new ClassName(...)`** creates instances.
 - **`extends`** enables single inheritance. Only one parent class is allowed.
 - **`super(...)`** calls the parent constructor from within a subclass constructor.
-- Fields are mutable: `obj.field = value` and `self.field = value` both work.
+- Fields are mutable: `obj.field = value` and `this.field = value` both work.
 
 ## Compilation
 
-Agency classes compile to TypeScript classes. `self` compiles to `this`. Inheritance compiles to `extends`. Auto-generated `toJSON()` and `fromJSON()` methods are added for serialization.
+Agency classes compile to TypeScript classes with a near 1:1 mapping. `this` in Agency is `this` in TypeScript. Inheritance compiles to `extends`. Auto-generated `toJSON()` and `fromJSON()` methods are added for serialization. If no constructor is defined, a default constructor is generated.
 
 ### Example: User
 
@@ -156,7 +200,7 @@ class Admin extends User {
 
 ### Key compilation details
 
-- `self` → `this` in all generated code.
+- `this` in Agency maps directly to `this` in TypeScript — no translation needed.
 - `super(...)` in constructor → `super(...)` in TS.
 - `toJSON()` serializes all fields plus a `__class` discriminator string.
 - Subclass `toJSON()` spreads `super.toJSON()` and overrides `__class`.
@@ -241,7 +285,7 @@ The type checker must support:
 - **Constructor validation:** `new ClassName(...)` checks argument count and types against the constructor signature.
 - **Inheritance:** Subclass types are assignable to parent class types. Inherited fields and methods are visible on the subclass. Field name shadowing across inheritance is **not allowed** — the type checker rejects subclasses that redeclare a parent field.
 - **Method overriding:** Overriding methods must have compatible signatures (same parameter types, compatible return type).
-- **`self` type:** Inside methods and the constructor, `self` has the type of the enclosing class.
+- **`this` type:** Inside methods and the constructor, `this` has the type of the enclosing class.
 - **Method return types:** Return types on methods are required (not inferred) in v1, consistent with the explicit syntax `methodName(): returnType { ... }`.
 
 ## TypeScript Interop
@@ -257,7 +301,8 @@ The type checker must support:
 - `class` keyword with fields, constructor, and methods
 - Single inheritance with `extends` and `super()`
 - Method overriding with signature compatibility checks
-- `self` as implicit instance reference
+- `this` as instance reference (matches TypeScript directly)
+- Default constructor generated from field declarations when none is provided
 - `new ClassName(...)` construction
 - Mutable fields
 - Serialization via `toJSON()`/`fromJSON()` with class registry

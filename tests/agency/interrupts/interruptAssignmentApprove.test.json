@@ -1,0 +1,22 @@
+{
+  "sourceFile": "interruptAssignmentApprove.agency",
+  "tests": [
+    {
+      "nodeName": "foo",
+      "description": "Test that approving an interrupt assigned to a variable sets it to true",
+      "input": "",
+      "expectedOutput": "\"approved\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Do you approve this action?"
+        }
+      ]
+    }
+  ]
+}

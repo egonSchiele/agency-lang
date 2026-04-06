@@ -14,8 +14,13 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
   __state.interruptData.interruptResponse = null;
 } else if (__state.interruptData?.interruptResponse?.type === "reject") {
   // reject for tool calls handled separately
-  {{{assignReject}}};
   __state.interruptData.interruptResponse = null;
+  {{#nodeContext}}
+  return { messages: __threads, data: null };
+  {{/nodeContext}}
+  {{^nodeContext}}
+  return null;
+  {{/nodeContext}}
 } else if (__state.interruptData?.interruptResponse?.type === "modify") {
   throw new Error("Interrupt response of type 'modify' is used for modifying tool call args. Use resolve instead.");
 } else {
@@ -48,9 +53,8 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
 export type TemplateType = {
   assignResolve: string | boolean | number;
   assignApprove: string | boolean | number;
-  assignReject: string | boolean | number;
-  interruptArgs: string | boolean | number;
   nodeContext: boolean;
+  interruptArgs: string | boolean | number;
   handlerApprove: string | boolean | number;
   moduleId: string | boolean | number;
   scopeName: string | boolean | number;

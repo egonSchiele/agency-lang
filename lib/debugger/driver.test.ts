@@ -389,14 +389,13 @@ describe("DebuggerDriver user interrupt handling", () => {
     expect(returnValue).toBe(6);
   });
 
-  it("reject sets the interrupted variable to false", async () => {
+  it("reject causes the function to return null", async () => {
     const intMod = await freshImport(interruptCompiled);
-    // When rejected, the interrupted variable (y) is set to false.
-    // z = x + y = 1 + false = 1 (JS coercion).
+    // When rejected, the function returns null immediately.
     const commands: DebuggerCommand[] = [
       { type: "step" },   // past x = 1
       { type: "step" },   // hits interrupt("check value")
-      { type: "reject" }, // reject the interrupt → y = false
+      { type: "reject" }, // reject the interrupt → return null
       ...Array(10).fill({ type: "step" }),
     ];
     const testUI = new TestDebuggerIO(commands);
@@ -405,7 +404,7 @@ describe("DebuggerDriver user interrupt handling", () => {
     const result = await driver.run(initialResult, { interceptConsole: false });
 
     const returnValue = result?.data !== undefined ? result.data : result;
-    expect(returnValue).toBe(1);
+    expect(returnValue).toBe(null);
   });
 });
 

@@ -182,13 +182,7 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
     throw new Error("Interrupt response of type 'modify' is not supported outside of tool calls yet.");
   }
 } else if (__state.interruptData?.interruptResponse?.type === "resolve") {
-  console.log(JSON.stringify(__state.interruptData, null, 2));
   throw new Error("Interrupt response of type 'resolve' cannot be returned from an interrupt call. It can only be assigned to a variable.");
-  const __resolvedValue = __state.interruptData.interruptResponse.value;
-  
-  
-  return __resolvedValue;
-  
 } else {
   const __handlerResult = await interruptWithHandlers(`Agent wants to call the greet function with name: ${__stack.args.name} and age: ${__stack.args.age}`, __ctx);
   if (isRejected(__handlerResult)) {

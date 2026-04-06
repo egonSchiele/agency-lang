@@ -1,0 +1,4 @@
+node foo() {
+  const name = interrupt("Who do you want to say hi to?")
+  return "Kya chal raha jai, ${name}!"
+}

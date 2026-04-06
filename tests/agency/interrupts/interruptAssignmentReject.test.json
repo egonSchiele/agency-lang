@@ -1,0 +1,22 @@
+{
+  "sourceFile": "interruptAssignmentReject.agency",
+  "tests": [
+    {
+      "nodeName": "foo",
+      "description": "Test that rejecting an interrupt assigned to a variable returns null",
+      "input": "",
+      "expectedOutput": "null",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Who do you want to say hi to?"
+        }
+      ]
+    }
+  ]
+}

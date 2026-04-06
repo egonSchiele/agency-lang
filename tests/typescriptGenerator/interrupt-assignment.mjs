@@ -134,8 +134,11 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
   __state.interruptData.interruptResponse = null;
 } else if (__state.interruptData?.interruptResponse?.type === "reject") {
   // reject for tool calls handled separately
-  __stack.locals.name = false;;
   __state.interruptData.interruptResponse = null;
+  
+  return { messages: __threads, data: null };
+  
+  
 } else if (__state.interruptData?.interruptResponse?.type === "modify") {
   throw new Error("Interrupt response of type 'modify' is used for modifying tool call args. Use resolve instead.");
 } else {

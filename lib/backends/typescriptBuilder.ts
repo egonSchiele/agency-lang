@@ -1747,7 +1747,6 @@ export class TypeScriptBuilder {
             "__state.interruptData.interruptResponse.value",
           ),
           assignApprove: makeAssign("true"),
-          assignReject: makeAssign("false"),
           handlerApprove: makeAssign("__handlerResult.value"),
           interruptArgs,
           nodeContext: this.getCurrentScope().type === "node",

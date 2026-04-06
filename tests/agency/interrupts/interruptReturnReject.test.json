@@ -1,0 +1,22 @@
+{
+  "sourceFile": "interruptReturnReject.agency",
+  "tests": [
+    {
+      "nodeName": "foo",
+      "description": "Test that rejecting a return interrupt causes the function to return null",
+      "input": "",
+      "expectedOutput": "{\"greeting\":null}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Are you sure you want to greet someone?"
+        }
+      ]
+    }
+  ]
+}

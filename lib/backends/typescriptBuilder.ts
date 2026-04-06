@@ -1336,7 +1336,24 @@ export class TypeScriptBuilder {
     return this.processNode(node);
   }
 
+  private buildInterruptReturn(args: FunctionCall["arguments"]): TsNode {
+    const interruptArgs = args
+      .map((arg) => this.str(this.processCallArg(arg)))
+      .join(", ");
+    return ts.raw(
+      renderInterruptReturn.default({
+        interruptArgs,
+        nodeContext: this.getCurrentScope().type === "node",
+        ...this.checkpointOpts(),
+      }),
+    );
+  }
+
   private processFunctionCallAsStatement(node: FunctionCall): TsNode {
+    if (node.functionName === "interrupt") {
+      return this.buildInterruptReturn(node.arguments);
+    }
+
     const callNode = this.processFunctionCall(node);
     const scope = this.getCurrentScope();
 
@@ -1651,16 +1668,7 @@ export class TypeScriptBuilder {
         node.value.type === "functionCall" &&
         node.value.functionName === "interrupt"
       ) {
-        const interruptArgs = node.value.arguments
-          .map((arg) => this.str(this.processCallArg(arg)))
-          .join(", ");
-        return ts.raw(
-          renderInterruptReturn.default({
-            interruptArgs,
-            nodeContext: true,
-            ...this.checkpointOpts(),
-          }),
-        );
+        return this.buildInterruptReturn(node.value.arguments);
       }
       if (
         node.value.type === "functionCall" &&
@@ -1691,16 +1699,7 @@ export class TypeScriptBuilder {
       node.value.type === "functionCall" &&
       node.value.functionName === "interrupt"
     ) {
-      const interruptArgs = node.value.arguments
-        .map((arg) => this.str(this.processCallArg(arg)))
-        .join(", ");
-      return ts.raw(
-        renderInterruptReturn.default({
-          interruptArgs,
-          nodeContext: this.getCurrentScope().type === "node",
-          ...this.checkpointOpts(),
-        }),
-      );
+      return this.buildInterruptReturn(node.value.arguments);
     } else if (
       node.value.type === "functionCall" &&
       node.value.functionName === "llm"

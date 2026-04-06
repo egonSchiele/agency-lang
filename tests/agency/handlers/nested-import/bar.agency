@@ -8,11 +8,11 @@ def logWithAssign() {
   return "log return"
 }
 
-def getLog() {
+export def getLog() {
   return log
 }
 
-def barHandler() {
+export def barHandler() {
   handle {
     const result = logWithAssign()
     log.push(result)

@@ -179,7 +179,6 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
     debuggerParser,
     multiLineCommentParser,
     skillParser,
-    functionParser,
     assignmentParser,
     binOpParser,
     booleanParser,
@@ -534,6 +533,11 @@ const _baseFunctionParser: Parser<FunctionDefinition> = trace(
   ),
 );
 
+const exportKeywordParser: Parser<boolean> = or(
+  map(seqC(str("export"), spaces), () => true),
+  succeed(false),
+);
+
 const safeKeywordParser: Parser<boolean> = or(
   map(seqC(str("safe"), spaces), () => true),
   succeed(false),
@@ -546,7 +550,11 @@ const asyncSyncKeywordParser: Parser<boolean | undefined> = or(
 );
 
 const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
-  const safeResult = safeKeywordParser(input);
+  const exportResult = exportKeywordParser(input);
+  if (!exportResult.success) return exportResult;
+  const isExported = exportResult.result;
+
+  const safeResult = safeKeywordParser(exportResult.rest);
   if (!safeResult.success) return safeResult;
   const isSafe = safeResult.result;
 
@@ -558,6 +566,7 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   if (!baseResult.success) return baseResult;
 
   const result = { ...baseResult.result };
+  if (isExported) result.exported = true;
   if (isSafe) result.safe = true;
   if (isAsync !== undefined) result.async = isAsync;
 

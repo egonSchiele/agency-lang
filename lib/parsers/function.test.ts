@@ -2019,6 +2019,66 @@ describe("functionParser with safe keyword", () => {
   });
 });
 
+describe("functionParser with export keyword", () => {
+  it("parses export def", () => {
+    const result = functionParser("export def foo() { x = 1 }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqualWithoutLoc({
+        type: "function",
+        functionName: "foo",
+        parameters: [],
+        returnType: null,
+        docString: undefined,
+        body: [
+          {
+            type: "assignment",
+            variableName: "x",
+            value: { type: "number", value: "1" },
+          },
+        ],
+        exported: true,
+      });
+    }
+  });
+
+  it("parses export safe def", () => {
+    const result = functionParser("export safe def foo() { x = 1 }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.exported).toBe(true);
+      expect(result.result.safe).toBe(true);
+    }
+  });
+
+  it("parses export safe async def", () => {
+    const result = functionParser("export safe async def foo() { x = 1 }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.exported).toBe(true);
+      expect(result.result.safe).toBe(true);
+      expect(result.result.async).toBe(true);
+    }
+  });
+
+  it("parses export async def", () => {
+    const result = functionParser("export async def foo() { x = 1 }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.exported).toBe(true);
+      expect(result.result.async).toBe(true);
+    }
+  });
+
+  it("does not set exported on plain def", () => {
+    const result = functionParser("def foo() { x = 1 }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.exported).toBeUndefined();
+    }
+  });
+});
+
 describe("functionParser with async/sync keywords", () => {
   const testCases = [
     // async def goes through functionParser

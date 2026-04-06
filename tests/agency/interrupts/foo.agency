@@ -1,14 +1,14 @@
 let globalVar = 0
 
-def increment() {
+export def increment() {
   globalVar = globalVar + 1
 }
 
-def getGlobal() {
+export def getGlobal() {
   return globalVar
 }
 
-def funcThrowsInterrupt(val: number) {
+export def funcThrowsInterrupt(val: number) {
   const foo = val
   const bar = 10
   return interrupt("Interrupting from funcThrowsInterrupt")

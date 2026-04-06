@@ -143,7 +143,7 @@ const __toolRegistry = {
     }
   }
 };
-export async function openai(msg: string, __state: InternalFunctionState | undefined = undefined) {
+async function openai(msg: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -270,7 +270,7 @@ return __auditReturnValue
     }
   }
 }
-export async function google(msg: string, __state: InternalFunctionState | undefined = undefined) {
+async function google(msg: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -403,7 +403,7 @@ return __auditReturnValue
     }
   }
 }
-export async function fibs(__state: InternalFunctionState | undefined = undefined) {
+async function fibs(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });

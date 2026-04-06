@@ -47,7 +47,7 @@ describe("resolveImports", () => {
     };
     const symbolTable: SymbolTable = {
       "/project/utils.agency": {
-        add: { kind: "function", name: "add" },
+        add: { kind: "function", name: "add", exported: true },
       },
     };
     const result = resolveImports(program, symbolTable, "/project/main.agency");
@@ -87,7 +87,7 @@ describe("resolveImports", () => {
     const symbolTable: SymbolTable = {
       "/project/mixed.agency": {
         greet: { kind: "node", name: "greet" },
-        add: { kind: "function", name: "add" },
+        add: { kind: "function", name: "add", exported: true },
         Config: { kind: "type", name: "Config" },
       },
     };
@@ -104,6 +104,21 @@ describe("resolveImports", () => {
 
     const typeImport = result.nodes[2] as ImportStatement;
     expect(typeImport.type).toBe("importStatement");
+  });
+
+  it("throws when importing a non-exported function", () => {
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [makeImportStatement(["helper"], "./utils.agency")],
+    };
+    const symbolTable: SymbolTable = {
+      "/project/utils.agency": {
+        helper: { kind: "function", name: "helper" },
+      },
+    };
+    expect(() =>
+      resolveImports(program, symbolTable, "/project/main.agency"),
+    ).toThrow("Function 'helper' in './utils.agency' is not exported");
   });
 
   it("throws on undefined symbols", () => {
@@ -150,7 +165,12 @@ describe("resolveImports", () => {
       type: "agencyProgram",
       nodes: [nodeImport, toolImport],
     };
-    const result = resolveImports(program, {}, "/project/main.agency");
+    const symbolTable: SymbolTable = {
+      "/project/utils.agency": {
+        add: { kind: "function", name: "add", exported: true },
+      },
+    };
+    const result = resolveImports(program, symbolTable, "/project/main.agency");
     expect(result.nodes).toEqual([nodeImport, toolImport]);
   });
 });

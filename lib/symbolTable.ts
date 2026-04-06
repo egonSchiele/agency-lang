@@ -12,6 +12,7 @@ export type SymbolInfo = {
   kind: SymbolKind;
   name: string;
   safe?: boolean;
+  exported?: boolean;
   parameters?: FunctionParameter[];
 };
 
@@ -38,6 +39,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           kind: "function",
           name: node.functionName,
           safe: node.safe,
+          exported: node.exported,
           parameters: node.parameters,
         };
         break;

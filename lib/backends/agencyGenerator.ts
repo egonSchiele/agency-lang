@@ -480,8 +480,10 @@ export class AgencyGenerator {
       asyncPrefix = "sync ";
     }
 
+    const exportPrefix = node.exported ? "export " : "";
+
     let result = this.indentStr(
-      `${safePrefix}${asyncPrefix}def ${functionName}(${params})${returnTypeStr} {\n`,
+      `${exportPrefix}${safePrefix}${asyncPrefix}def ${functionName}(${params})${returnTypeStr} {\n`,
     );
 
     this.increaseIndent();

@@ -1,41 +1,41 @@
 import { _print, _printJSON, _input, _sleep, _round, _fetch, _fetchJSON, _read, _write, _readImage, _notify } from "./_builtins.js"
 
-safe def print(...messages) {
+export safe def print(...messages) {
   """
   A tool for printing a message to the console.
   """
   _print(...messages)
 }
 
-safe def printJSON(obj) {
+export safe def printJSON(obj) {
   """
   A tool for printing an object as formatted JSON to the console.
   """
   _printJSON(obj)
 }
 
-safe def input(prompt: string): string {
+export safe def input(prompt: string): string {
   """
   A tool for prompting the user for input and returning their response.
   """
   return _input(prompt)
 }
 
-safe def sleep(seconds: number) {
+export safe def sleep(seconds: number) {
   """
   A tool for pausing execution for a specified number of seconds.
   """
   _sleep(seconds)
 }
 
-safe def round(num: number, precision: number): number {
+export safe def round(num: number, precision: number): number {
   """
   A tool for rounding a number to a specified number of decimal places.
   """
   return _round(num, precision)
 }
 
-def fetch(url: string): string {
+export def fetch(url: string): string {
   """
   A tool for fetching a URL and returning the response as text.
   """
@@ -48,7 +48,7 @@ def fetch(url: string): string {
   return _fetch(url)
 }
 
-def fetchJSON(url: string) {
+export def fetchJSON(url: string) {
   """
   A tool for fetching a URL and returning the response as parsed JSON.
   """
@@ -61,7 +61,7 @@ def fetchJSON(url: string) {
   return _fetchJSON(url)
 }
 
-def read(filename: string): string {
+export def read(filename: string): string {
   """
   A tool for reading the contents of a file and returning it as a string.
   """
@@ -73,7 +73,7 @@ def read(filename: string): string {
   return _read(filename)
 }
 
-def write(filename: string, content: string) {
+export def write(filename: string, content: string) {
   """
   A tool for writing content to a file.
   """
@@ -87,7 +87,7 @@ def write(filename: string, content: string) {
   _write(filename, content)
 }
 
-def readImage(filename: string): string {
+export def readImage(filename: string): string {
   """
   A tool for reading an image file and returning its contents as a Base64-encoded string.
   """
@@ -100,7 +100,7 @@ def readImage(filename: string): string {
   return _readImage(filename)
 }
 
-def notify(title: string, message: string): boolean {
+export def notify(title: string, message: string): boolean {
   """
   A tool for showing a native OS notification with a title and message. Returns true if the notification was sent.
   """

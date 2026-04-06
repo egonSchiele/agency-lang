@@ -25,6 +25,7 @@ export type FunctionDefinition = BaseNode & {
   docString?: DocString;
   async?: boolean;
   safe?: boolean;
+  exported?: boolean;
 };
 
 export type FunctionCall = BaseNode & {

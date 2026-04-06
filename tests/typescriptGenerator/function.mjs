@@ -93,6 +93,12 @@ export const __testTool = {
   schema: z.object({})
 };
 export const __testToolParams = [];
+export const __addTool = {
+  name: "add",
+  description: `No description provided.`,
+  schema: z.object({"a": z.string(), "b": z.string(), })
+};
+export const __addToolParams = ["a", "b"];
 const __toolRegistry = {
   test: {
     definition: __testTool,
@@ -100,6 +106,15 @@ const __toolRegistry = {
       name: "test",
       params: __testToolParams,
       execute: test,
+      isBuiltin: false
+    }
+  },
+  add: {
+    definition: __addTool,
+    handler: {
+      name: "add",
+      params: __addToolParams,
+      execute: add,
       isBuiltin: false
     }
   },
@@ -113,7 +128,7 @@ const __toolRegistry = {
     }
   }
 };
-export async function test(__state: InternalFunctionState | undefined = undefined) {
+async function test(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -184,6 +199,76 @@ let __functionCompleted = false;
     }
   }
 }
+async function add(a: any, b: any, __state: InternalFunctionState | undefined = undefined) {
+  const __setupData = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+let __forked;
+let __functionCompleted = false;
+  if (!__ctx.globals.isInitialized("function.agency")) {
+    __initializeGlobals(__ctx)
+  }
+  let __funcStartTime: number = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "add",
+      args: {
+        a: a,
+        b: b
+      },
+      isBuiltin: false
+    }
+  })
+  await __ctx.audit({
+    type: "functionCall",
+    functionName: "add",
+    args: {
+      a: a,
+      b: b
+    },
+    result: undefined
+  })
+  __stack.args["a"] = a;
+  __stack.args["b"] = b;
+  __self.__retryable = __self.__retryable ?? true;
+  try {
+    if (__step <= 0) {
+            //  multi-param function
+            __stack.step++;
+    }
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
+    }
+    if (__error instanceof ToolCallError) {
+      __error.retryable = __error.retryable && __self.__retryable
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
+    if (__functionCompleted) {
+      await callHook({
+        callbacks: __ctx.callbacks,
+        name: "onFunctionEnd",
+        data: {
+          functionName: "add",
+          timeTaken: performance.now() - __funcStartTime
+        }
+      })
+    }
+  }
+}
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -214,79 +299,6 @@ let __functionCompleted = false;
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
     }))
-          __stack.step++;
-  }
-  if (__step <= 2) {
-          export async function add(a: any, b: any, __state: InternalFunctionState | undefined = undefined) {
-      const __setupData = setupFunction({
-        state: __state
-      });
-      // __state will be undefined if this function is being called as a tool by an llm
-      const __stack = __setupData.stack;
-const __step = __setupData.step;
-const __self = __setupData.self;
-const __threads = __setupData.threads;
-const __ctx = __state?.ctx || __globalCtx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
-let __forked;
-let __functionCompleted = false;
-      if (!__ctx.globals.isInitialized("function.agency")) {
-        __initializeGlobals(__ctx)
-      }
-      let __funcStartTime: number = performance.now();
-      await callHook({
-        callbacks: __ctx.callbacks,
-        name: "onFunctionStart",
-        data: {
-          functionName: "add",
-          args: {
-            a: a,
-            b: b
-          },
-          isBuiltin: false
-        }
-      })
-      await __ctx.audit({
-        type: "functionCall",
-        functionName: "add",
-        args: {
-          a: a,
-          b: b
-        },
-        result: undefined
-      })
-      __stack.args["a"] = a;
-      __stack.args["b"] = b;
-      __self.__retryable = __self.__retryable ?? true;
-      try {
-        if (__step <= 0) {
-                //  multi-param function
-                __stack.step++;
-        }
-      } catch (__error) {
-        if (__error instanceof RestoreSignal) {
-          throw __error
-        }
-        if (__error instanceof ToolCallError) {
-          __error.retryable = __error.retryable && __self.__retryable
-          throw __error
-        }
-        throw new ToolCallError(__error, { retryable: __self.__retryable })
-      } finally {
-        if (!__state?.isForked) { __ctx.stateStack.pop() }
-        if (__functionCompleted) {
-          await callHook({
-            callbacks: __ctx.callbacks,
-            name: "onFunctionEnd",
-            data: {
-              functionName: "add",
-              timeTaken: performance.now() - __funcStartTime
-            }
-          })
-        }
-      }
-    }
           __stack.step++;
   }
   await callHook({
@@ -326,4 +338,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"function.agency:test":{"1":{"line":-1,"col":2}},"function.agency:main":{"1":{"line":3,"col":2},"2":{"line":5,"col":2}},"function.agency:add":{}};
+export const __sourceMap = {"function.agency:test":{"1":{"line":-1,"col":2}},"function.agency:add":{},"function.agency:main":{"1":{"line":7,"col":2}}};

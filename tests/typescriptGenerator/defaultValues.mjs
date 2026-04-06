@@ -113,7 +113,7 @@ const __toolRegistry = {
     }
   }
 };
-export async function greet(name: string, greeting: string | null = null, __state: InternalFunctionState | undefined = undefined) {
+async function greet(name: string, greeting: string | null = null, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });

@@ -166,7 +166,7 @@ const __toolRegistry = {
   }
 };
 //  Test docstrings in functions
-export async function add(a: any, b: any, __state: InternalFunctionState | undefined = undefined) {
+async function add(a: any, b: any, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -236,7 +236,7 @@ let __functionCompleted = false;
     }
   }
 }
-export async function greet(name: any, __state: InternalFunctionState | undefined = undefined) {
+async function greet(name: any, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -303,7 +303,7 @@ let __functionCompleted = false;
     }
   }
 }
-export async function calculateArea(width: any, height: any, __state: InternalFunctionState | undefined = undefined) {
+async function calculateArea(width: any, height: any, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -373,7 +373,7 @@ let __functionCompleted = false;
     }
   }
 }
-export async function processData(__state: InternalFunctionState | undefined = undefined) {
+async function processData(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });

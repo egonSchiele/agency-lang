@@ -113,7 +113,7 @@ const __toolRegistry = {
     }
   }
 };
-export async function append(sleepTime: number, value: any, __state: InternalFunctionState | undefined = undefined) {
+async function append(sleepTime: number, value: any, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });

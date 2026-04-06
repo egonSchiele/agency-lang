@@ -1325,7 +1325,7 @@ export class TypeScriptBuilder {
 
     return ts.functionDecl(functionName, fnParams, ts.statements(setupStmts), {
       async: true,
-      export: true,
+      export: !!node.exported,
     });
   }
 

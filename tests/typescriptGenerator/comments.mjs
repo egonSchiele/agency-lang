@@ -121,7 +121,7 @@ const __toolRegistry = {
 //  can be placed
 //  on consecutive lines
 //  Comment before function definition
-export async function greet(__state: InternalFunctionState | undefined = undefined) {
+async function greet(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });

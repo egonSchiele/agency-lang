@@ -113,7 +113,7 @@ const __toolRegistry = {
     }
   }
 };
-export async function log(prefix: string, messages: string[], __state: InternalFunctionState | undefined = undefined) {
+async function log(prefix: string, messages: string[], __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });

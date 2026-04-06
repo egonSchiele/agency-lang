@@ -2,10 +2,10 @@ def test() {
   const foo = 1
 }
 
+def add(a, b) {
+  // multi-param function
+}
+
 node main() {
   print(test())
-
-  def add(a, b) {
-    // multi-param function
-  }
 }

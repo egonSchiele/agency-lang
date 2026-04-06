@@ -1,4 +1,4 @@
-def mogrify(a: number, b: number): number {
+export def mogrify(a: number, b: number): number {
   const sum = a + b
   return sum * 3
 }

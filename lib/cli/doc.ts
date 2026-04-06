@@ -121,6 +121,8 @@ function formatDefaultValue(lit: Literal): string {
       return formatSegments(lit.segments);
     case "variableName":
       return lit.value;
+    default:
+      return "";
   }
 }
 

@@ -724,6 +724,8 @@ export class TypeScriptBuilder {
       }
       case "boolean":
         return ts.bool(literal.value);
+      case "null":
+        return ts.id("null");
     }
   }
 

@@ -409,6 +409,8 @@ export class AgencyGenerator {
         return this.generateMultiLineStringLiteral(literal);
       case "boolean":
         return literal.value ? "true" : "false";
+      case "null":
+        return "null";
       default:
         return "";
     }

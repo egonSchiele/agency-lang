@@ -31,6 +31,7 @@ import {
   InterpolationSegment,
   Literal,
   MultiLineStringLiteral,
+  NullLiteral,
   NumberLiteral,
   PromptSegment,
   StringLiteral,
@@ -233,7 +234,13 @@ export const booleanParser: Parser<BooleanLiteral> = label("a boolean", (input: 
   return parser(input);
 });
 
+export const nullParser: Parser<NullLiteral> = label("null", seqC(
+  set("type", "null"),
+  str("null"),
+));
+
 export const literalParser: Parser<Literal> = or(
+  nullParser,
   booleanParser,
   numberParser,
   multiLineStringParser,
@@ -242,6 +249,7 @@ export const literalParser: Parser<Literal> = or(
 );
 
 export const literalParserNoVarName: Parser<Literal> = or(
+  nullParser,
   booleanParser,
   numberParser,
   multiLineStringParser,

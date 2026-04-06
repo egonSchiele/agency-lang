@@ -6,7 +6,8 @@ export type Literal =
   | MultiLineStringLiteral
   | StringLiteral
   | VariableNameLiteral
-  | BooleanLiteral;
+  | BooleanLiteral
+  | NullLiteral;
 
 export type NumberLiteral = BaseNode & {
   type: "number";
@@ -33,6 +34,10 @@ export type VariableNameLiteral = BaseNode & {
 export type BooleanLiteral = BaseNode & {
   type: "boolean";
   value: boolean;
+};
+
+export type NullLiteral = BaseNode & {
+  type: "null";
 };
 
 // New types for prompt segments

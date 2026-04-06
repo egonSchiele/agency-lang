@@ -64,6 +64,8 @@ export function expressionToString(expr: Expression): string {
       return expr.value;
     case "boolean":
       return String(expr.value);
+    case "null":
+      return "null";
     case "string":
     case "multiLineString":
       return expr.segments.map(seg =>

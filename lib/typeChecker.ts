@@ -876,6 +876,15 @@ export class TypeChecker {
         return true;
     }
 
+    // ObjectType assignable to object primitive (but not the reverse)
+    if (
+      resolvedSource.type === "objectType" &&
+      resolvedTarget.type === "primitiveType" &&
+      resolvedTarget.value === "object"
+    ) {
+      return true;
+    }
+
     // Same kind matching
     if (
       resolvedSource.type === "primitiveType" &&

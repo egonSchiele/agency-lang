@@ -10,6 +10,9 @@ export function variableTypeToString(
   typeAliases: Record<string, VariableType>,
 ): string {
   if (variableType.type === "primitiveType") {
+    if (variableType.value === "object") {
+      return "Record<string, any>";
+    }
     return variableType.value;
   } else if (variableType.type === "arrayType") {
     // Recursively build array type string

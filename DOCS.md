@@ -85,6 +85,7 @@ Primitive types:
 - boolean
 - null
 - undefined (treated as null)
+- object (equivalent to `Record<string, any>`)
 
 Union types. Example:
 

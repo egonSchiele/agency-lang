@@ -40,6 +40,8 @@ export function mapTypeToZodSchema(
         return "z.any()";
       case "unknown":
         return "z.unknown()";
+      case "object":
+        return "z.record(z.string(), z.any())";
       default:
         // Default to string for unknown types
         return DEFAULT_SCHEMA;

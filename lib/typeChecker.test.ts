@@ -415,6 +415,44 @@ describe("TypeChecker", () => {
       ).toBe(true);
     });
 
+    it("should allow objectType assignable to object primitive", () => {
+      const checker = new TypeChecker(
+        { type: "agencyProgram", nodes: [] },
+      );
+      checker.check();
+
+      expect(
+        checker.isAssignable(
+          {
+            type: "objectType",
+            properties: [
+              { key: "name", value: { type: "primitiveType", value: "string" } },
+            ],
+          },
+          { type: "primitiveType", value: "object" },
+        ),
+      ).toBe(true);
+    });
+
+    it("should not allow object primitive assignable to objectType", () => {
+      const checker = new TypeChecker(
+        { type: "agencyProgram", nodes: [] },
+      );
+      checker.check();
+
+      expect(
+        checker.isAssignable(
+          { type: "primitiveType", value: "object" },
+          {
+            type: "objectType",
+            properties: [
+              { key: "name", value: { type: "primitiveType", value: "string" } },
+            ],
+          },
+        ),
+      ).toBe(false);
+    });
+
     it("should not allow string assignable to number", () => {
       const checker = new TypeChecker(
         { type: "agencyProgram", nodes: [] },

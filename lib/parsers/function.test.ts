@@ -945,7 +945,7 @@ describe("functionParser", () => {
             {
               type: "functionParameter",
               name: "obj",
-              typeHint: { type: "typeAliasVariable", aliasName: "object" },
+              typeHint: { type: "primitiveType", value: "object" },
             },
           ],
           returnType: null,

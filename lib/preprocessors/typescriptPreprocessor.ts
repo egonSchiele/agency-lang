@@ -426,10 +426,6 @@ export class TypescriptPreprocessor {
     if (this.functionNameToAsync[node.functionName] !== undefined) {
       return; // already processed
     }
-    if (node.async !== undefined) {
-      this.functionNameToAsync[node.functionName] = node.async;
-      return; // user has already marked this sync or async
-    }
     let isAsync = true;
     if (this.containsInterrupt(node)) {
       isAsync = false;

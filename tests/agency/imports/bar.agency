@@ -5,7 +5,7 @@ export def ascii(str: string): number[] {
   return llm("Return the given string as a series of ascii codes: ${str}")
 }
 
-async def greet(name: string) {
+def greet(name: string) {
   return llm("Say hello to ${name}!")
 }
 

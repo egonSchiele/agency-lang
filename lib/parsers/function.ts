@@ -543,12 +543,6 @@ const safeKeywordParser: Parser<boolean> = or(
   succeed(false),
 );
 
-const asyncSyncKeywordParser: Parser<boolean | undefined> = or(
-  map(seqC(str("async"), spaces), () => true),
-  map(seqC(str("sync"), spaces), () => false),
-  succeed(undefined),
-);
-
 const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   const exportResult = exportKeywordParser(input);
   if (!exportResult.success) return exportResult;
@@ -558,17 +552,12 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   if (!safeResult.success) return safeResult;
   const isSafe = safeResult.result;
 
-  const asyncResult = asyncSyncKeywordParser(safeResult.rest);
-  if (!asyncResult.success) return asyncResult;
-  const isAsync = asyncResult.result;
-
-  const baseResult = _baseFunctionParser(asyncResult.rest);
+  const baseResult = _baseFunctionParser(safeResult.rest);
   if (!baseResult.success) return baseResult;
 
   const result = { ...baseResult.result };
   if (isExported) result.exported = true;
   if (isSafe) result.safe = true;
-  if (isAsync !== undefined) result.async = isAsync;
 
   // Validate parameter ordering: required → optional (with defaults) → variadic
   const params = result.parameters;

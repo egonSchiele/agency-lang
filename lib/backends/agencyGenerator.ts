@@ -473,17 +473,11 @@ export class AgencyGenerator {
       : "";
 
     let safePrefix = node.safe ? "safe " : "";
-    let asyncPrefix = "";
-    if (node.async === true) {
-      asyncPrefix = "async ";
-    } else if (node.async === false) {
-      asyncPrefix = "sync ";
-    }
 
     const exportPrefix = node.exported ? "export " : "";
 
     let result = this.indentStr(
-      `${exportPrefix}${safePrefix}${asyncPrefix}def ${functionName}(${params})${returnTypeStr} {\n`,
+      `${exportPrefix}${safePrefix}def ${functionName}(${params})${returnTypeStr} {\n`,
     );
 
     this.increaseIndent();

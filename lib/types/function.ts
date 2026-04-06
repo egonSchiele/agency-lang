@@ -5,7 +5,7 @@ import {
   VariableType,
 } from "../types.js";
 import { BaseNode } from "./base.js";
-import { NamedArgument, SplatExpression } from "./dataStructures.js";
+import { AgencyArray, AgencyObject, NamedArgument, SplatExpression } from "./dataStructures.js";
 import { UsesTool } from "./tools.js";
 
 export type FunctionParameter = {
@@ -13,7 +13,7 @@ export type FunctionParameter = {
   name: string;
   typeHint?: VariableType;
   variadic?: boolean;
-  defaultValue?: Literal;
+  defaultValue?: Literal | AgencyArray | AgencyObject;
 };
 
 export type FunctionDefinition = BaseNode & {

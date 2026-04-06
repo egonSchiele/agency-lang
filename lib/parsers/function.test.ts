@@ -1813,6 +1813,78 @@ describe("functionParser", () => {
       input: "def bad(a: number = 5, b: string) { b }",
       expected: { success: false },
     },
+    // Default value: null
+    {
+      input: "def foo(x: string = null) { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "foo",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: { type: "primitiveType", value: "string" },
+              defaultValue: { type: "null" },
+            },
+          ],
+          returnType: null,
+          docString: undefined,
+          body: [{ type: "variableName", value: "x" }],
+        },
+      },
+    },
+    // Default value: empty array
+    {
+      input: "def foo(items = []) { items }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "foo",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "items",
+              defaultValue: { type: "agencyArray", items: [] },
+            },
+          ],
+          returnType: null,
+          docString: undefined,
+          body: [{ type: "variableName", value: "items" }],
+        },
+      },
+    },
+    // Default value: object
+    {
+      input: 'def foo(config = {model: "gpt-4"}) { config }',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "foo",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "config",
+              defaultValue: {
+                type: "agencyObject",
+                entries: [
+                  {
+                    key: "model",
+                    value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] },
+                  },
+                ],
+              },
+            },
+          ],
+          returnType: null,
+          docString: undefined,
+          body: [{ type: "variableName", value: "config" }],
+        },
+      },
+    },
   ];
 
   testCases.forEach(({ input, expected, throws }) => {

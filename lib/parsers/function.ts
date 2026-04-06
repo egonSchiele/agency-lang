@@ -456,7 +456,7 @@ export const functionParameterParser = trace(
           optionalSpaces,
           str("="),
           optionalSpaces,
-          capture(literalParserNoVarName, "defaultValue"),
+          capture(or(agencyArrayParser, agencyObjectParser, literalParserNoVarName), "defaultValue"),
         ),
       ),
     ),

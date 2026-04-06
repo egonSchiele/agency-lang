@@ -211,6 +211,7 @@ export class AgencyGenerator {
       case "string":
       case "variableName":
       case "boolean":
+      case "null":
         return this.generateLiteral(node);
       case "returnStatement":
         return this.processReturnStatement(node);
@@ -456,7 +457,7 @@ export class AgencyGenerator {
       .map((p) => {
         const prefix = p.variadic ? "..." : "";
         const defaultSuffix = p.defaultValue
-          ? ` = ${this.generateLiteral(p.defaultValue)}`
+          ? ` = ${this.processNode(p.defaultValue).trim()}`
           : "";
         if (p.typeHint) {
           const typeStr = variableTypeToString(p.typeHint, this.typeAliases);

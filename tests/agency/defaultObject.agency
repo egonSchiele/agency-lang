@@ -1,0 +1,10 @@
+safe def addKey(key: string, value: string, obj = {}) {
+  obj[key] = value
+  return obj
+}
+
+node main() {
+  let a = addKey("x", "1")
+  let b = addKey("y", "2")
+  return {first: a, second: b}
+}

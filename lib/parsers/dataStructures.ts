@@ -8,8 +8,8 @@ import {
   capture,
   char,
   lazy,
+  many1WithJoin,
   manyWithJoin,
-  noneOf,
   optional,
   or,
   Parser,
@@ -27,6 +27,7 @@ import {
   commaWithNewline,
   optionalSpaces,
   optionalSpacesOrNewline,
+  varNameChar,
 } from "./utils.js";
 
 export const splatParser: Parser<SplatExpression> = seqC(
@@ -70,7 +71,7 @@ export const agencyObjectKVParser: Parser<AgencyObjectKV> = (
     seqC(
       optionalSpaces,
       optional(char('"')),
-      capture(manyWithJoin(noneOf('":\n\t ')), "key"),
+      capture(many1WithJoin(varNameChar), "key"),
       optional(char('"')),
       optionalSpaces,
       char(":"),

@@ -1,0 +1,16 @@
+{
+  "sourceFile": "defaultArray.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"first\":[\"x\"],\"second\":[\"y\"]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "Default array is not shared between calls — each call gets a fresh empty array"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "sourceFile": "defaultObject.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"first\":{\"x\":\"1\"},\"second\":{\"y\":\"2\"}}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "Default object is not shared between calls — each call gets a fresh empty object"
+    }
+  ]
+}

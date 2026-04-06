@@ -470,6 +470,14 @@ async function runSingleTest(
 function collectTestFiles(inputPath: string): string[] {
   const fileStats = fs.statSync(inputPath);
   if (!fileStats.isDirectory()) {
+    if (inputPath.endsWith(".agency")) {
+      const testFile = inputPath.replace(/\.agency$/, ".test.json");
+      if (!fs.existsSync(testFile)) {
+        console.error(`Error: No test file found for '${inputPath}' (expected '${testFile}')`);
+        process.exit(1);
+      }
+      return [testFile];
+    }
     return [inputPath];
   }
   const files: string[] = [];

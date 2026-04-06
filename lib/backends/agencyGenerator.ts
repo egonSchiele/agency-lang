@@ -188,7 +188,7 @@ export class AgencyGenerator {
 
   protected processGraphNodeName(node: GraphNodeDefinition): void { }
 
-  protected processNode(node: AgencyNode): string {
+  public processNode(node: AgencyNode): string {
     switch (node.type) {
       case "typeAlias":
         return this.processTypeAlias(node);

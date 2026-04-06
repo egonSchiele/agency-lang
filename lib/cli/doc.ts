@@ -1,12 +1,11 @@
 import { AgencyConfig } from "@/config.js";
-import { generateAgency } from "@/backends/agencyGenerator.js";
+import { AgencyGenerator, generateAgency } from "@/backends/agencyGenerator.js";
 import { parse, readFile } from "./commands.js";
 import { findRecursively } from "./util.js";
 import { variableTypeToString } from "@/backends/typescriptGenerator/typeToString.js";
 import { TypeAlias, VariableType } from "@/types/typeHints.js";
 import { FunctionDefinition, FunctionParameter } from "@/types/function.js";
 import { GraphNodeDefinition } from "@/types/graphNode.js";
-import { Literal, PromptSegment } from "@/types/literals.js";
 import {
   heading,
   codeFence,
@@ -103,27 +102,11 @@ function formatSignature(
   return `${name}(${paramStr})${retStr}`;
 }
 
-function formatSegments(segments: PromptSegment[]): string {
-  const inner = segments
-    .map((s) => (s.type === "text" ? s.value : `\${...}`))
-    .join("");
-  return `"${inner}"`;
-}
+const generator = new AgencyGenerator();
 
-function formatDefaultValue(lit: Literal): string {
-  switch (lit.type) {
-    case "number":
-      return lit.value;
-    case "boolean":
-      return String(lit.value);
-    case "string":
-    case "multiLineString":
-      return formatSegments(lit.segments);
-    case "variableName":
-      return lit.value;
-    default:
-      return "";
-  }
+function formatDefaultValue(node: FunctionParameter["defaultValue"]): string {
+  if (!node) return "";
+  return generator.processNode(node).trim();
 }
 
 function generateParamTable(params: FunctionParameter[]): string | null {
@@ -131,7 +114,7 @@ function generateParamTable(params: FunctionParameter[]): string | null {
   const rows = params.map((p) => [
     p.name,
     formatType(p.typeHint),
-    p.defaultValue ? formatDefaultValue(p.defaultValue) : "",
+    formatDefaultValue(p.defaultValue),
   ]);
   return `${bold("Parameters:")}\n\n${markdownTable(["Name", "Type", "Default"], rows)}`;
 }

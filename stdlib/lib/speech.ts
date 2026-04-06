@@ -1,0 +1,75 @@
+import { execFileSync } from "child_process";
+import fsSync from "fs";
+import fs from "fs/promises";
+import { nanoid } from "nanoid";
+import os from "os";
+import path from "path";
+import process from "process";
+import { detectPlatform } from "./utils.js";
+
+export function _speak(text: string, voice: string, rate: number, outputFile: string): void {
+  if (text === "") return;
+
+  const platform = detectPlatform();
+  if (platform === "macos") {
+    const tmpFile = path.join(os.tmpdir(), `agency-speak-${nanoid()}.txt`);
+    try {
+      fsSync.writeFileSync(tmpFile, text, "utf8");
+      const args: string[] = ["-f", tmpFile];
+      if (voice !== "") {
+        args.push("-v", voice);
+      }
+      if (rate > 0) {
+        args.push("-r", String(rate));
+      }
+      if (outputFile !== "") {
+        args.push("-o", path.resolve(process.cwd(), outputFile));
+      }
+      execFileSync("say", args);
+    } finally {
+      try { fsSync.unlinkSync(tmpFile); } catch {}
+    }
+  } else {
+    console.error(
+      `speak is not supported on platform: ${platform}. ` +
+      `Supported platforms: macOS.`
+    );
+  }
+}
+
+export async function _transcribe(filepath: string, language: string): Promise<string> {
+  const apiKey = process.env["OPENAI_API_KEY"];
+  if (!apiKey) {
+    throw new Error(
+      "transcribe requires an OPENAI_API_KEY environment variable to be set."
+    );
+  }
+
+  const resolvedPath = path.resolve(process.cwd(), filepath);
+  const fileData = await fs.readFile(resolvedPath);
+  const filename = path.basename(resolvedPath);
+
+  const formData = new FormData();
+  formData.append("file", new Blob([fileData]), filename);
+  formData.append("model", "whisper-1");
+  if (language !== "") {
+    formData.append("language", language);
+  }
+
+  const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json();
+    const message = errorBody?.error?.message ?? JSON.stringify(errorBody);
+    throw new Error(`Whisper API error (${response.status}): ${message}`);
+  }
+
+  const result = await response.json();
+  return result.text;
+}

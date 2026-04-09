@@ -178,32 +178,6 @@ await __ctx.audit({
       })
     });
     await runner.step(1, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "sourceMap.agency", scopeName: "greet", stepPath: "1" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "result",
-          prompt: `Hello ${__stack.args.name}`,
-          response: __stack.locals.result,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-    });
-    await runner.step(2, async (runner) => {
 const __returnValue = __stack.locals.result;
 await __ctx.audit({
         type: "return",
@@ -347,4 +321,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"sourceMap.agency:greet":{"0":{"line":-1,"col":2},"2":{"line":0,"col":2}},"sourceMap.agency:main":{"0":{"line":4,"col":2},"1":{"line":5,"col":2},"2":{"line":10,"col":2},"1.0":{"line":8,"col":4},"2.0":{"line":11,"col":4}}};
+export const __sourceMap = {"sourceMap.agency:greet":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2}},"sourceMap.agency:main":{"0":{"line":4,"col":2},"1":{"line":5,"col":2},"2":{"line":10,"col":2},"1.0":{"line":8,"col":4},"2.0":{"line":11,"col":4}}};

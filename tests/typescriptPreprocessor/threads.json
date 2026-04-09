@@ -53,23 +53,6 @@
               "scope": "local"
             },
             {
-              "type": "sentinel",
-              "value": "checkpoint",
-              "data": {
-                "targetVariable": "res1",
-                "prompt": {
-                  "type": "string",
-                  "segments": [
-                    {
-                      "type": "text",
-                      "value": "What is 2 + 2?"
-                    }
-                  ]
-                },
-                "scope": "local"
-              }
-            },
-            {
               "type": "assignment",
               "declKind": "const",
               "typeHint": {
@@ -109,23 +92,6 @@
                 "end": 132
               },
               "scope": "local"
-            },
-            {
-              "type": "sentinel",
-              "value": "checkpoint",
-              "data": {
-                "targetVariable": "res2",
-                "prompt": {
-                  "type": "string",
-                  "segments": [
-                    {
-                      "type": "text",
-                      "value": "And what is that times 3?"
-                    }
-                  ]
-                },
-                "scope": "local"
-              }
             }
           ]
         },
@@ -169,23 +135,6 @@
             "end": 190
           },
           "scope": "local"
-        },
-        {
-          "type": "sentinel",
-          "value": "checkpoint",
-          "data": {
-            "targetVariable": "standalone",
-            "prompt": {
-              "type": "string",
-              "segments": [
-                {
-                  "type": "text",
-                  "value": "Unrelated question"
-                }
-              ]
-            },
-            "scope": "local"
-          }
         }
       ],
       "loc": {

@@ -299,35 +299,9 @@ await __ctx.audit({
     })
   });
   await runner.step(2, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "interrupt-in-node.agency", scopeName: "foo2", stepPath: "2" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "response",
-          prompt: `Greet the user with their name: ${__stack.args.name} and age ${__stack.args.age} using the greet function.`,
-          response: __stack.locals.response,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-  });
-  await runner.step(3, async (runner) => {
 await print(`Greeted, age is still ${__stack.args.age}...`)
   });
-  await runner.step(4, async (runner) => {
+  await runner.step(3, async (runner) => {
 const __returnValue = __stack.locals.response;
 await __ctx.audit({
       type: "return",
@@ -453,4 +427,4 @@ export async function sayHi(name: any, { messages, callbacks }: { messages?: any
 }
 export const __sayHiNodeParams = ["name"];
 export default graph
-export const __sourceMap = {"interrupt-in-node.agency:greet":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2}},"interrupt-in-node.agency:foo2":{"1":{"line":6,"col":2},"3":{"line":7,"col":2},"4":{"line":8,"col":2}},"interrupt-in-node.agency:sayHi":{"0":{"line":12,"col":2},"1":{"line":13,"col":2},"2":{"line":14,"col":2}}};
+export const __sourceMap = {"interrupt-in-node.agency:greet":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2}},"interrupt-in-node.agency:foo2":{"1":{"line":6,"col":2},"2":{"line":7,"col":2},"3":{"line":8,"col":2}},"interrupt-in-node.agency:sayHi":{"0":{"line":12,"col":2},"1":{"line":13,"col":2},"2":{"line":14,"col":2}}};

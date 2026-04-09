@@ -148,35 +148,9 @@ await __ctx.audit({
     })
   });
   await runner.step(1, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "streaming.agency", scopeName: "foo", stepPath: "1" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "response",
-          prompt: `Generate a response word by word`,
-          response: __stack.locals.response,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-  });
-  await runner.step(2, async (runner) => {
 await print(__stack.locals.response)
   });
-  await runner.step(3, async (runner) => {
+  await runner.step(2, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response2 = await runPrompt({
       ctx: __ctx,
@@ -205,33 +179,7 @@ await __ctx.audit({
       value: __self.__removedTools
     })
   });
-  await runner.step(4, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "streaming.agency", scopeName: "foo", stepPath: "4" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "response2",
-          prompt: `Generate a response word by word, but with a different model`,
-          response: __stack.locals.response2,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-  });
-  await runner.step(5, async (runner) => {
+  await runner.step(3, async (runner) => {
 await print(__stack.locals.response2)
   });
   if (runner.halted) return runner.haltResult;
@@ -260,4 +208,4 @@ export async function foo({ messages, callbacks }: { messages?: any; callbacks?:
 }
 export const __fooNodeParams = [];
 export default graph
-export const __sourceMap = {"streaming.agency:foo":{"0":{"line":-1,"col":2},"2":{"line":2,"col":2},"3":{"line":4,"col":2},"5":{"line":8,"col":2}}};
+export const __sourceMap = {"streaming.agency:foo":{"0":{"line":-1,"col":2},"1":{"line":2,"col":2},"2":{"line":4,"col":2},"3":{"line":8,"col":2}}};

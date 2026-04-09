@@ -150,32 +150,6 @@ await __ctx.audit({
     })
   });
   await runner.step(1, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "typeAlias.agency", scopeName: "main", stepPath: "1" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "foo",
-          prompt: `a set of coordinates`,
-          response: __stack.locals.foo,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-  });
-  await runner.step(2, async (runner) => {
 await print(__stack.locals.foo)
   });
   if (runner.halted) return runner.haltResult;
@@ -216,4 +190,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"typeAlias.agency:main":{"0":{"line":3,"col":2},"2":{"line":4,"col":2}}};
+export const __sourceMap = {"typeAlias.agency:main":{"0":{"line":3,"col":2},"1":{"line":4,"col":2}}};

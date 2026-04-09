@@ -178,33 +178,7 @@ await __ctx.audit({
           })
         });
 await runner.step(1, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "foo", stepPath: "0.1" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "res1",
-          prompt: `What are the first 5 prime numbers?`,
-          response: __stack.locals.res1,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-        });
-await runner.step(2, async (runner) => {
-await runner.thread(2, __threads, "createSubthread", async (runner) => {
+await runner.thread(1, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res2 = await runPrompt({
@@ -232,33 +206,7 @@ await __ctx.audit({
               })
             });
 await runner.step(1, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "foo", stepPath: "0.2.1" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "res2",
-          prompt: `What are the next 2 prime numbers after those?`,
-          response: __stack.locals.res2,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-            });
-await runner.step(2, async (runner) => {
-await runner.thread(2, __threads, "createSubthread", async (runner) => {
+await runner.thread(1, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res3 = await runPrompt({
@@ -285,36 +233,10 @@ await __ctx.audit({
                     value: __self.__removedTools
                   })
                 });
-await runner.step(1, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "foo", stepPath: "0.2.2.1" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "res3",
-          prompt: `And what is the sum of all those numbers combined?`,
-          response: __stack.locals.res3,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-                });
               });
             });
-await runner.step(3, async (runner) => {
-await runner.thread(3, __threads, "create", async (runner) => {
+await runner.step(2, async (runner) => {
+await runner.thread(2, __threads, "create", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res5 = await runPrompt({
@@ -341,38 +263,12 @@ await __ctx.audit({
                     value: __self.__removedTools
                   })
                 });
-await runner.step(1, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "foo", stepPath: "0.2.3.1" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "res5",
-          prompt: `And what is the sum of all those numbers combined?`,
-          response: __stack.locals.res5,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-                });
               });
             });
           });
         });
-await runner.step(3, async (runner) => {
-await runner.thread(3, __threads, "createSubthread", async (runner) => {
+await runner.step(2, async (runner) => {
+await runner.thread(2, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res4 = await runPrompt({
@@ -398,32 +294,6 @@ await __ctx.audit({
                 variable: "__self.__removedTools",
                 value: __self.__removedTools
               })
-            });
-await runner.step(1, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "foo", stepPath: "0.3.1" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "res4",
-          prompt: `And what is the sum of all those numbers combined?`,
-          response: __stack.locals.res4,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
             });
           });
         });
@@ -521,33 +391,7 @@ await __ctx.audit({
         })
       });
 await runner.step(1, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "main", stepPath: "0.1" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "res1",
-          prompt: `What are the first 5 prime numbers?`,
-          response: __stack.locals.res1,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-      });
-await runner.step(2, async (runner) => {
-await runner.thread(2, __threads, "createSubthread", async (runner) => {
+await runner.thread(1, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res2 = await runPrompt({
@@ -578,33 +422,7 @@ await __ctx.audit({
             })
           });
 await runner.step(1, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "main", stepPath: "0.2.1" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "res2",
-          prompt: `What are the next 2 prime numbers after those?`,
-          response: __stack.locals.res2,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-          });
-await runner.step(2, async (runner) => {
-await runner.thread(2, __threads, "createSubthread", async (runner) => {
+await runner.thread(1, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res3 = await runPrompt({
@@ -634,36 +452,10 @@ await __ctx.audit({
                   value: __self.__removedTools
                 })
               });
-await runner.step(1, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "main", stepPath: "0.2.2.1" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "res3",
-          prompt: `And what is the sum of all those numbers combined?`,
-          response: __stack.locals.res3,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-              });
             });
           });
-await runner.step(3, async (runner) => {
-await runner.thread(3, __threads, "create", async (runner) => {
+await runner.step(2, async (runner) => {
+await runner.thread(2, __threads, "create", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res5 = await runPrompt({
@@ -693,38 +485,12 @@ await __ctx.audit({
                   value: __self.__removedTools
                 })
               });
-await runner.step(1, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "main", stepPath: "0.2.3.1" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "res5",
-          prompt: `And what is the sum of all those numbers combined?`,
-          response: __stack.locals.res5,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-              });
             });
           });
         });
       });
-await runner.step(3, async (runner) => {
-await runner.thread(3, __threads, "createSubthread", async (runner) => {
+await runner.step(2, async (runner) => {
+await runner.thread(2, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res4 = await runPrompt({
@@ -753,32 +519,6 @@ await __ctx.audit({
               variable: "__self.__removedTools",
               value: __self.__removedTools
             })
-          });
-await runner.step(1, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "main", stepPath: "0.3.1" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "res4",
-          prompt: `And what is the sum of all those numbers combined?`,
-          response: __stack.locals.res4,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
           });
         });
       });
@@ -837,4 +577,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"threadsAndSubthreads.agency:foo":{"1":{"line":14,"col":2},"2":{"line":15,"col":2},"3":{"line":16,"col":2},"4":{"line":17,"col":2},"5":{"line":18,"col":2},"0.0":{"line":0,"col":4},"0.2.0":{"line":2,"col":6},"0.2.2.0":{"line":4,"col":8},"0.2.3.0":{"line":7,"col":8},"0.3.0":{"line":11,"col":6}},"threadsAndSubthreads.agency:main":{"1":{"line":37,"col":2},"2":{"line":38,"col":2},"3":{"line":39,"col":2},"4":{"line":40,"col":2},"5":{"line":41,"col":2},"0.0":{"line":23,"col":4},"0.2.0":{"line":25,"col":6},"0.2.2.0":{"line":27,"col":8},"0.2.3.0":{"line":30,"col":8},"0.3.0":{"line":34,"col":6}}};
+export const __sourceMap = {"threadsAndSubthreads.agency:foo":{"1":{"line":14,"col":2},"2":{"line":15,"col":2},"3":{"line":16,"col":2},"4":{"line":17,"col":2},"5":{"line":18,"col":2},"0.0":{"line":0,"col":4},"0.1.0":{"line":2,"col":6},"0.1.1.0":{"line":4,"col":8},"0.1.2.0":{"line":7,"col":8},"0.2.0":{"line":11,"col":6}},"threadsAndSubthreads.agency:main":{"1":{"line":37,"col":2},"2":{"line":38,"col":2},"3":{"line":39,"col":2},"4":{"line":40,"col":2},"5":{"line":41,"col":2},"0.0":{"line":23,"col":4},"0.1.0":{"line":25,"col":6},"0.1.1.0":{"line":27,"col":8},"0.1.2.0":{"line":30,"col":8},"0.2.0":{"line":34,"col":6}}};

@@ -165,32 +165,6 @@ await __ctx.audit({
     })
   });
   await runner.step(3, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "valueAccessInterpolation.agency", scopeName: "main", stepPath: "3" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "result",
-          prompt: `Tell me about ${__stack.locals.user.name} who is ${__stack.locals.user.age} years old`,
-          response: __stack.locals.result,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-  });
-  await runner.step(4, async (runner) => {
 await print(__stack.locals.result)
   });
   if (runner.halted) return runner.haltResult;
@@ -231,4 +205,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"valueAccessInterpolation.agency:main":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2},"2":{"line":1,"col":2},"4":{"line":2,"col":2}}};
+export const __sourceMap = {"valueAccessInterpolation.agency:main":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2},"2":{"line":1,"col":2},"3":{"line":2,"col":2}}};

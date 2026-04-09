@@ -148,32 +148,6 @@ await __ctx.audit({
       value: __self.__removedTools
     })
   });
-  await runner.step(1, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "skill.agency", scopeName: "analyzeData", stepPath: "1" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "result",
-          prompt: `Analyzing: ${__stack.args.input}`,
-          response: __stack.locals.result,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-  });
   if (runner.halted) return runner.haltResult;
   await callHook({
     callbacks: __ctx.callbacks,

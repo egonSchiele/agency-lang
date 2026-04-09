@@ -71,37 +71,6 @@
           "scope": "local"
         },
         {
-          "type": "sentinel",
-          "value": "checkpoint",
-          "data": {
-            "targetVariable": "result",
-            "prompt": {
-              "type": "string",
-              "segments": [
-                {
-                  "type": "text",
-                  "value": "Process: "
-                },
-                {
-                  "type": "interpolation",
-                  "expression": {
-                    "type": "variableName",
-                    "value": "label",
-                    "loc": {
-                      "line": -1,
-                      "col": 33,
-                      "start": 71,
-                      "end": 76
-                    },
-                    "scope": "args"
-                  }
-                }
-              ]
-            },
-            "scope": "local"
-          }
-        },
-        {
           "type": "returnStatement",
           "value": {
             "type": "variableName",
@@ -177,23 +146,6 @@
           "scope": "local"
         },
         {
-          "type": "sentinel",
-          "value": "checkpoint",
-          "data": {
-            "targetVariable": "a",
-            "prompt": {
-              "type": "string",
-              "segments": [
-                {
-                  "type": "text",
-                  "value": "First async task"
-                }
-              ]
-            },
-            "scope": "local"
-          }
-        },
-        {
           "type": "assignment",
           "declKind": "const",
           "typeHint": {
@@ -233,23 +185,6 @@
             "end": 204
           },
           "scope": "local"
-        },
-        {
-          "type": "sentinel",
-          "value": "checkpoint",
-          "data": {
-            "targetVariable": "b",
-            "prompt": {
-              "type": "string",
-              "segments": [
-                {
-                  "type": "text",
-                  "value": "Second async task"
-                }
-              ]
-            },
-            "scope": "local"
-          }
         },
         {
           "type": "assignment",

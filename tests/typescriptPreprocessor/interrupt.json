@@ -212,23 +212,6 @@
           "scope": "local"
         },
         {
-          "type": "sentinel",
-          "value": "checkpoint",
-          "data": {
-            "targetVariable": "result",
-            "prompt": {
-              "type": "string",
-              "segments": [
-                {
-                  "type": "text",
-                  "value": "Do something risky and something safe"
-                }
-              ]
-            },
-            "scope": "local"
-          }
-        },
-        {
           "type": "functionCall",
           "functionName": "print",
           "arguments": [

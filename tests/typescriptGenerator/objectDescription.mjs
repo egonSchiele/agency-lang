@@ -149,32 +149,6 @@ await __ctx.audit({
     })
   });
   await runner.step(1, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "objectDescription.agency", scopeName: "main", stepPath: "1" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "url",
-          prompt: `extract the hostname and port from 'https://example.com:8080'`,
-          response: __stack.locals.url,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-  });
-  await runner.step(2, async (runner) => {
 await print(__stack.locals.url)
   });
   if (runner.halted) return runner.haltResult;
@@ -215,4 +189,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"objectDescription.agency:main":{"0":{"line":-1,"col":2},"2":{"line":1,"col":2}}};
+export const __sourceMap = {"objectDescription.agency:main":{"0":{"line":-1,"col":2},"1":{"line":1,"col":2}}};

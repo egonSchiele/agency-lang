@@ -165,35 +165,9 @@ await __ctx.audit({
     })
   });
   await runner.step(3, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "specialVar.agency", scopeName: "main", stepPath: "3" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "response1",
-          prompt: `${__stack.locals.msg}`,
-          response: __stack.locals.response1,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-  });
-  await runner.step(4, async (runner) => {
 await print(__stack.locals.response1)
   });
-  await runner.step(5, async (runner) => {
+  await runner.step(4, async (runner) => {
 __client = __getClientWithConfig({
       model: "`gemini-2.5-flash-lite`"
     });
@@ -203,7 +177,7 @@ await __ctx.audit({
       value: __client
     })
   });
-  await runner.step(6, async (runner) => {
+  await runner.step(5, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response2 = await runPrompt({
       ctx: __ctx,
@@ -229,36 +203,10 @@ await __ctx.audit({
       value: __self.__removedTools
     })
   });
-  await runner.step(7, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "specialVar.agency", scopeName: "main", stepPath: "7" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "response2",
-          prompt: `${__stack.locals.msg}`,
-          response: __stack.locals.response2,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-  });
-  await runner.step(8, async (runner) => {
+  await runner.step(6, async (runner) => {
 await print(__stack.locals.response2)
   });
-  await runner.step(9, async (runner) => {
+  await runner.step(7, async (runner) => {
 const __returnValue = [__stack.locals.response1, __stack.locals.response2];
 await __ctx.audit({
       type: "return",
@@ -313,4 +261,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"specialVar.agency:main":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2},"2":{"line":2,"col":2},"4":{"line":4,"col":2},"6":{"line":6,"col":2},"8":{"line":8,"col":2},"9":{"line":9,"col":2}}};
+export const __sourceMap = {"specialVar.agency:main":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2},"2":{"line":2,"col":2},"3":{"line":4,"col":2},"5":{"line":6,"col":2},"6":{"line":8,"col":2},"7":{"line":9,"col":2}}};

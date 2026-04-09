@@ -241,32 +241,6 @@ await __ctx.audit({
       })
     });
     await runner.step(1, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "add", stepPath: "1" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "result",
-          prompt: `add ${__stack.args.x} and ${__stack.args.y}`,
-          response: __stack.locals.result,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-    });
-    await runner.step(2, async (runner) => {
 const __returnValue = __stack.locals.result;
 await __ctx.audit({
         type: "return",
@@ -370,32 +344,6 @@ await __ctx.audit({
       })
     });
     await runner.step(1, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "greet", stepPath: "1" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "message",
-          prompt: `Hello ${__stack.args.name}!`,
-          response: __stack.locals.message,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-    });
-    await runner.step(2, async (runner) => {
 const __returnValue = __stack.locals.message;
 await __ctx.audit({
         type: "return",
@@ -502,32 +450,6 @@ await __ctx.audit({
       })
     });
     await runner.step(1, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "mixed", stepPath: "1" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "output",
-          prompt: `${__stack.args.label}: ${__stack.args.count}`,
-          response: __stack.locals.output,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-    });
-    await runner.step(2, async (runner) => {
 const __returnValue = __stack.locals.output;
 await __ctx.audit({
         type: "return",
@@ -631,32 +553,6 @@ await __ctx.audit({
       })
     });
     await runner.step(1, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "processArray", stepPath: "1" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "result",
-          prompt: `Processing array with ${__stack.args.items} items`,
-          response: __stack.locals.result,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-    });
-    await runner.step(2, async (runner) => {
 const __returnValue = __stack.locals.result;
 await __ctx.audit({
         type: "return",
@@ -760,32 +656,6 @@ await __ctx.audit({
       })
     });
     await runner.step(1, async (runner) => {
-if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "flexible", stepPath: "1" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "result",
-          prompt: `Received value: ${__stack.args.value}`,
-          response: __stack.locals.result,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-    });
-    await runner.step(2, async (runner) => {
 const __returnValue = __stack.locals.result;
 await __ctx.audit({
         type: "return",
@@ -1052,4 +922,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"function-with-types.agency:add":{"0":{"line":2,"col":2},"2":{"line":3,"col":2}},"function-with-types.agency:greet":{"0":{"line":10,"col":2},"2":{"line":11,"col":2}},"function-with-types.agency:mixed":{"0":{"line":18,"col":2},"2":{"line":19,"col":2}},"function-with-types.agency:processArray":{"0":{"line":26,"col":2},"2":{"line":27,"col":2}},"function-with-types.agency:flexible":{"0":{"line":34,"col":2},"2":{"line":35,"col":2}},"function-with-types.agency:foo":{"0":{"line":39,"col":2},"1":{"line":40,"col":2}},"function-with-types.agency:main":{"1":{"line":45,"col":2},"2":{"line":46,"col":2},"3":{"line":47,"col":2},"4":{"line":48,"col":2},"5":{"line":49,"col":2}}};
+export const __sourceMap = {"function-with-types.agency:add":{"0":{"line":2,"col":2},"1":{"line":3,"col":2}},"function-with-types.agency:greet":{"0":{"line":10,"col":2},"1":{"line":11,"col":2}},"function-with-types.agency:mixed":{"0":{"line":18,"col":2},"1":{"line":19,"col":2}},"function-with-types.agency:processArray":{"0":{"line":26,"col":2},"1":{"line":27,"col":2}},"function-with-types.agency:flexible":{"0":{"line":34,"col":2},"1":{"line":35,"col":2}},"function-with-types.agency:foo":{"0":{"line":39,"col":2},"1":{"line":40,"col":2}},"function-with-types.agency:main":{"1":{"line":45,"col":2},"2":{"line":46,"col":2},"3":{"line":47,"col":2},"4":{"line":48,"col":2},"5":{"line":49,"col":2}}};

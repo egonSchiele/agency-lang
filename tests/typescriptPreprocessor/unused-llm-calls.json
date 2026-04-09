@@ -53,23 +53,6 @@
           "scope": "local"
         },
         {
-          "type": "sentinel",
-          "value": "checkpoint",
-          "data": {
-            "targetVariable": "used",
-            "prompt": {
-              "type": "string",
-              "segments": [
-                {
-                  "type": "text",
-                  "value": "Give me a greeting"
-                }
-              ]
-            },
-            "scope": "local"
-          }
-        },
-        {
           "type": "functionCall",
           "functionName": "print",
           "arguments": [
@@ -136,23 +119,6 @@
             "end": 251
           },
           "scope": "local"
-        },
-        {
-          "type": "sentinel",
-          "value": "checkpoint",
-          "data": {
-            "targetVariable": "unused",
-            "prompt": {
-              "type": "string",
-              "segments": [
-                {
-                  "type": "text",
-                  "value": "Give me a farewell"
-                }
-              ]
-            },
-            "scope": "local"
-          }
         },
         {
           "type": "comment",

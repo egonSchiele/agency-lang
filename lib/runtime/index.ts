@@ -79,6 +79,7 @@ export { CheckpointStore } from "./state/checkpointStore.js";
 export type { Checkpoint } from "./state/checkpointStore.js";
 
 export { setupNode, setupFunction, runNode } from "./node.js";
+export { Runner } from "./runner.js";
 
 export { rewindFrom, applyOverrides } from "./rewind.js";
 export type { RewindCheckpoint } from "./rewind.js";

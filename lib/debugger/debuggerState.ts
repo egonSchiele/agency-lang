@@ -1,12 +1,13 @@
 // lib/debugger/types.ts
 import { Checkpoint, CheckpointStore, RuntimeContext } from "@/index.js";
 import { CheckpointArgs, SourceLocationOpts } from "@/runtime/state/checkpointStore.js";
+import { color } from "termcolors";
 
 export class DebuggerState {
   private mode: "stepping" | "running" = "stepping";
-  private checkpoints: CheckpointStore;
-  private callDepth = 0;
-  private stepTarget: {
+  public checkpoints: CheckpointStore;
+  public callDepth = 0;
+  public stepTarget: {
     type: "stepIn" | "stepOut" | "next";
     targetDepth: number;
   } | null = null;
@@ -36,6 +37,11 @@ export class DebuggerState {
   isAtTargetDepth() {
     if (!this.stepTarget) return true;
     return this.callDepth === this.stepTarget.targetDepth;
+  }
+
+  isAtOrBelowTargetDepth() {
+    if (!this.stepTarget) return true;
+    return this.callDepth <= this.stepTarget.targetDepth;
   }
 
   enterCall() {

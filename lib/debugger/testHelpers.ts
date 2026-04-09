@@ -7,6 +7,7 @@ import { Checkpoint, resetGlobalCheckpointCounter } from "../runtime/state/check
 import type { FunctionParameter } from "../types.js";
 import { getTestDir } from "../importPaths.js";
 import { isInterrupt } from "@/runtime/interrupts.js";
+import { color } from "termcolors";
 
 export const fixtureDir = path.join(getTestDir(), "debugger");
 

@@ -10,15 +10,16 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   // approved, clear interrupt response and continue execution
   __state.interruptData.interruptResponse = null;
 } else if (__state.interruptData?.interruptResponse?.type === "reject" && !__state.isToolCall) {
-  // rejected, clear interrupt response and return early
+  // rejected, clear interrupt response and halt
   // tool calls will instead tell the llm that the call was rejected
   __state.interruptData.interruptResponse = null;
   {{#nodeContext}}
-  return { messages: __threads, data: null };
+  runner.halt({ messages: __threads, data: null });
   {{/nodeContext}}
   {{^nodeContext}}
-  return null;
+  runner.halt(null);
   {{/nodeContext}}
+  return;
 } else if (__state.interruptData?.interruptResponse?.type === "modify") {
   if (__state.isToolCall) {
     // continue, args will get modified in the tool call handler
@@ -31,11 +32,12 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   const __handlerResult = await interruptWithHandlers({{{interruptArgs}}}, __ctx);
   if (isRejected(__handlerResult)) {
     {{#nodeContext}}
-    return { messages: __threads, data: __handlerResult.value };
+    runner.halt({ messages: __threads, data: __handlerResult.value });
     {{/nodeContext}}
     {{^nodeContext}}
-    return __handlerResult.value;
+    runner.halt(__handlerResult.value);
     {{/nodeContext}}
+    return;
   }
   if (!isApproved(__handlerResult)) {
     // No handler — propagate interrupt to TypeScript caller
@@ -43,11 +45,12 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
     __handlerResult.checkpointId = __checkpointId;
     __handlerResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
     {{#nodeContext}}
-    return { messages: __threads, data: __handlerResult };
+    runner.halt({ messages: __threads, data: __handlerResult });
     {{/nodeContext}}
     {{^nodeContext}}
-    return __handlerResult;
+    runner.halt(__handlerResult);
     {{/nodeContext}}
+    return;
   }
   // Approved — continue execution past interrupt
 }

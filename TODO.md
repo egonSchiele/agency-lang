@@ -139,3 +139,5 @@ llm statement doesn't work correctly in debugger
   - also capture in trace?
 
   cant seem to step after tabbing around
+
+  Audit logs for assignment and variable declarations also emit logs for internal variables. We need to update these so they don't emit logs for any variables beginning with two underscores. And then we need to update the preprocessor to not allow users to name any variables beginning with two underscores.

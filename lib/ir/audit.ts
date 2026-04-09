@@ -62,32 +62,9 @@ export function auditNode(
     // at function entry (in processFunctionDefinition). Built-in function calls
     // get their audit in processFunctionCall. This avoids re-evaluating arguments.
 
-    case "return":
-      if (node.expr) {
-        // Capture value in a temp variable to avoid double-executing side effects
-        const tempVar = ts.id("__auditReturnValue");
-        return replace(ts.statements([
-          ts.constDecl("__auditReturnValue", node.expr),
-          makeAuditCall("return", { value: tempVar }),
-          ts.return(tempVar),
-        ]));
-      }
-      return replace(
-        ts.statements([
-          makeAuditCall("return", { value: ts.id("undefined") }),
-          node,
-        ]),
-      );
-
-    case "functionReturn": {
-      // Capture value in a temp variable to avoid double-executing side effects
-      const tempVar = ts.id("__auditReturnValue");
-      return replace(ts.statements([
-        ts.constDecl("__auditReturnValue", node.value),
-        makeAuditCall("return", { value: tempVar }),
-        { ...node, value: tempVar },
-      ]));
-    }
+    // return and functionReturn are handled by processReturnStatement in the
+    // builder, which converts them to runner.halt() calls. Audit calls for
+    // returns are injected there, not here.
 
     case "await":
       return auditNode(node.expr);

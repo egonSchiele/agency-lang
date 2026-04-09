@@ -32,12 +32,14 @@ export type TsNode =
   | TsNewExpr
   | TsScopedVar
   | TsFunctionReturn
-  | TsStepBlock
-  | TsIfSteps
-  | TsThreadSteps
-  | TsWhileSteps
-  | TsForSteps
-  | TsHandleSteps
+  | TsRunnerStep
+  | TsRunnerThread
+  | TsRunnerHandle
+  | TsRunnerIfElse
+  | TsRunnerLoop
+  | TsRunnerWhileLoop
+  | TsRunnerBranchStep
+  | TsRunnerDebugger
   | TsEmpty
   | TsBreak
   | TsContinue
@@ -263,13 +265,13 @@ export interface TsScopedVar {
   kind: "scopedVar";
   name: string;
   scope:
-    | "global"
-    | "shared"
-    | "function"
-    | "node"
-    | "args"
-    | "imported"
-    | "local";
+  | "global"
+  | "shared"
+  | "function"
+  | "node"
+  | "args"
+  | "imported"
+  | "local";
   moduleId?: string;
 }
 
@@ -279,94 +281,75 @@ export interface TsFunctionReturn {
   value: TsNode;
 }
 
-/** A resumable step block — wraps body in `if (__step <= N) { ... __stack.step++; }`.
- * When subStep is set, uses substep variable names instead (e.g. __sub_3, __substep_3).
- * When branchKey is set, the guard also checks for branch data at that key. */
-export interface TsStepBlock {
-  kind: "stepBlock";
-  stepIndex: number;
-  body: TsNode;
-  branchKey?: string;
-  subStep?: number[];
-}
+// ── Runner-based step IR types ──
+// These map 1:1 to Runner method calls. The builder assigns step IDs
+// that match the source map paths. The Runner handles all bookkeeping
+// (counters, substep variables, condbranch tracking, iteration tracking).
 
-/** A thread block with substep guards for each body statement.
- * Thread setup (create+pushActive) is substep 0, body statements
- * follow, and cleanup (cloneMessages+popActive) runs after all
- * substeps complete. */
-export interface TsThreadSteps {
-  kind: "threadSteps";
-  /** The substep path for naming variables */
-  subStepPath: number[];
-  /** The thread creation method — "create" or "createSubthread" */
-  createMethod: string;
-  /** The setup statements (create + pushActive) */
-  setup: TsNode[];
-  /** The body statements (each gets a substep guard) */
-  body: TsNode[];
-  /** The cleanup statements (cloneMessages + popActive) */
-  cleanup: TsNode[];
-}
-
-/** A while loop with iteration tracking and substep guards for each body statement.
- * Tracks which iteration to resume on and which substep within that iteration. */
-export interface TsWhileSteps {
-  kind: "whileSteps";
-  /** The substep path for naming variables */
-  subStepPath: number[];
-  /** The loop condition */
-  condition: TsNode;
-  /** The body statements (each gets a substep guard) */
+/** runner.step(id, async (runner) => { body }) */
+export interface TsRunnerStep {
+  kind: "runnerStep";
+  id: number;
   body: TsNode[];
 }
 
-/** A for loop with iteration tracking and substep guards for each body statement. */
-export interface TsForSteps {
-  kind: "forSteps";
-  /** The substep path for naming variables */
-  subStepPath: number[];
-  /** Loop initialization (e.g. let i = 0) */
-  init: TsNode;
-  /** Loop condition (e.g. i < 10) */
-  condition: TsNode;
-  /** Loop update (e.g. i++) */
-  update: TsNode;
-  /** Optional: extract item from collection by index at start of each iteration */
-  itemDecl?: TsNode;
-  /** The body statements (each gets a substep guard) */
+/** runner.thread(id, method, async (runner) => { body }) */
+export interface TsRunnerThread {
+  kind: "runnerThread";
+  id: number;
+  method: "create" | "createSubthread";
   body: TsNode[];
 }
 
-/** A branch in a TsIfSteps node */
-export interface TsIfStepsBranch {
-  condition: TsNode;
+/** runner.handle(id, handlerFn, async (runner) => { body }) */
+export interface TsRunnerHandle {
+  kind: "runnerHandle";
+  id: number;
+  handler: TsNode;
   body: TsNode[];
 }
 
-/** An if/else block with substep guards for each branch body.
- * Handles condbranch tracking (which branch was taken) and substep
- * guards within each branch. Used inside step-counted bodies to
- * enable precise mid-block interrupt resumption. */
-export interface TsIfSteps {
-  kind: "ifSteps";
-  /** The substep path for naming variables (e.g. [3] or [2, 1]) */
-  subStepPath: number[];
-  /** The branches — first is the "if", rest are "else if" */
-  branches: TsIfStepsBranch[];
-  /** Optional else body */
+/** runner.ifElse(id, branches, elseBranch?) */
+export interface TsRunnerIfElse {
+  kind: "runnerIfElse";
+  id: number;
+  branches: { condition: TsNode; body: TsNode[] }[];
   elseBranch?: TsNode[];
 }
 
-/** A handle block with handler push/pop and substep guards for each body statement. */
-export interface TsHandleSteps {
-  kind: "handleSteps";
-  /** The substep path for naming variables */
-  subStepPath: number[];
-  /** The handler arrow function declaration */
-  handler: TsNode;
-  /** The body statements (each gets a substep guard) */
+/** runner.loop(id, items, async (item, index, runner) => { body }) */
+export interface TsRunnerLoop {
+  kind: "runnerLoop";
+  id: number;
+  items: TsNode;
+  itemVar: string;
+  indexVar?: string;
   body: TsNode[];
 }
+
+/** runner.whileLoop(id, condition, async (runner) => { body }) */
+export interface TsRunnerWhileLoop {
+  kind: "runnerWhileLoop";
+  id: number;
+  condition: TsNode;
+  body: TsNode[];
+}
+
+/** runner.branchStep(id, branchKey, async (runner) => { body }) */
+export interface TsRunnerBranchStep {
+  kind: "runnerBranchStep";
+  id: number;
+  branchKey: string;
+  body: TsNode[];
+}
+
+export interface TsRunnerDebugger {
+  kind: "runnerDebugger";
+  id: number;
+  label: string;
+}
+
+
 
 /** No-op node — produces no output. Used for AST nodes handled elsewhere (e.g. imports collected in a separate pass). */
 export interface TsEmpty {

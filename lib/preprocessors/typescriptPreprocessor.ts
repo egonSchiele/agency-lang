@@ -161,7 +161,7 @@ export class TypescriptPreprocessor {
     this.validateNoAsyncInLoops();
 
     this.resolveVariableScopes();
-    this.insertCheckpointSentinels();
+    //this.insertCheckpointSentinels();
     return this.program;
   }
 
@@ -1231,7 +1231,7 @@ export class TypescriptPreprocessor {
         if (insideLoop) {
           throw new Error(
             `Async function call "${node.functionName}()" is not allowed inside a loop. ` +
-              `Move the async call into a separate function, or remove the "async" keyword.`,
+            `Move the async call into a separate function, or remove the "async" keyword.`,
           );
         }
       }

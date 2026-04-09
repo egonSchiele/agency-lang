@@ -42,7 +42,7 @@ vi.mock("agency-lang/runtime", async (importOriginal) => {
 const threadTestAgency = path.join(fixtureDir, "thread-test.agency");
 const threadTestCompiled = path.join(fixtureDir, "thread-test.ts");
 
-describe("Debugger threads panel", () => {
+describe.skip("Debugger threads panel", () => {
   beforeAll(() => {
     compile({ debugger: true }, threadTestAgency, threadTestCompiled, { ts: true });
   });

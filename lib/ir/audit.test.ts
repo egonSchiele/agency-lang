@@ -32,21 +32,16 @@ describe("auditNode", () => {
     expect(result).toBeNull();
   });
 
-  it("returns replace behavior for return", () => {
+  it("returns null for return (audited in processReturnStatement)", () => {
     const node = ts.return(ts.num(42));
     const result = auditNode(node);
-    expect(result).not.toBeNull();
-    // Return audit should be a statements node: [auditCall, originalReturn]
-    expect(result!.node.kind).toBe("statements");
-    expect(result!.behavior).toBe("replace");
+    expect(result).toBeNull();
   });
 
-  it("returns replace behavior for functionReturn", () => {
+  it("returns null for functionReturn (audited in processReturnStatement)", () => {
     const node: any = { kind: "functionReturn", value: ts.num(42) };
     const result = auditNode(node);
-    expect(result).not.toBeNull();
-    expect(result!.node.kind).toBe("statements");
-    expect(result!.behavior).toBe("replace");
+    expect(result).toBeNull();
   });
 
   it("unwraps await — returns null for awaited call (audited at function entry)", () => {

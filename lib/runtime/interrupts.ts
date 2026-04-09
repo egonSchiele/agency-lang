@@ -1,13 +1,13 @@
 import * as smoltalk from "smoltalk";
 import { RestoreSignal } from "./errors.js";
+import { applyOverrides } from "./rewind.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 import { RuntimeContext } from "./state/context.js";
 import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
-import { Approved, GraphState, Propagated, Rejected } from "./types.js";
+import { Approved, GraphState, Rejected } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
-import { applyOverrides } from "./rewind.js";
 
 export type InterruptApprove = {
   type: "approve";
@@ -214,8 +214,6 @@ export async function respondToInterrupt(args: {
   overrides?: Record<string, unknown>;
   metadata?: Record<string, any>;
 }): Promise<any> {
-  // console.log(color.green(JSON.stringify({ args }, null, 2)));
-  //const { interrupt, interruptResponse, metadata = {} } = args;
   const interrupt = deepClone(args.interrupt);
   const interruptResponse = deepClone(args.interruptResponse);
   const { ctx, metadata = {} } = args;

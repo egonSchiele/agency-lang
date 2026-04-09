@@ -140,6 +140,10 @@ export class Checkpoint implements SourceLocation {
     return Checkpoint.fromJSON({ ...this.toJSON(), ...opts })!;
   }
 
+  getLocation(): string {
+    return `${this.moduleId}:${this.scopeName}#${this.stepPath}`;
+  }
+
   static fromContext(
     ctx: RuntimeContext<any>,
     opts: SourceLocationOpts & { label?: string | null; pinned?: boolean },
@@ -259,8 +263,21 @@ export class CheckpointStore {
       pinned: false,
       removeDuplicate: true,
     });
+    this.removeDebugFlagsFor(id);
     this.evictIfNeeded();
     return id;
+  }
+
+  removeDebugFlagsFor(id: number): void {
+    const cp = this.checkpoints[id];
+    if (!cp) return;
+    const frame = cp.getCurrentFrame();
+    if (!frame || !frame.locals) return;
+    for (const key of Object.keys(frame.locals)) {
+      if (key.startsWith("__dbg_")) {
+        delete frame.locals[key];
+      }
+    }
   }
 
   private removeDuplicate(location: SourceLocationOpts): void {

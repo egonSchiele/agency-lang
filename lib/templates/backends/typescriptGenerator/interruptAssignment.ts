@@ -16,22 +16,24 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
   // reject for tool calls handled separately
   __state.interruptData.interruptResponse = null;
   {{#nodeContext}}
-  return { messages: __threads, data: null };
+  runner.halt({ messages: __threads, data: null });
   {{/nodeContext}}
   {{^nodeContext}}
-  return null;
+  runner.halt(null);
   {{/nodeContext}}
+  return;
 } else if (__state.interruptData?.interruptResponse?.type === "modify") {
   throw new Error("Interrupt response of type 'modify' is used for modifying tool call args. Use resolve instead.");
 } else {
   const __handlerResult = await interruptWithHandlers({{{interruptArgs}}}, __ctx);
   if (isRejected(__handlerResult)) {
     {{#nodeContext}}
-    return { messages: __threads, data: __handlerResult.value };
+    runner.halt({ messages: __threads, data: __handlerResult.value });
     {{/nodeContext}}
     {{^nodeContext}}
-    return __handlerResult.value;
+    runner.halt(__handlerResult.value);
     {{/nodeContext}}
+    return;
   }
   if (isApproved(__handlerResult)) {
     {{{handlerApprove}}};
@@ -41,11 +43,12 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
     __handlerResult.checkpointId = __checkpointId;
     __handlerResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
     {{#nodeContext}}
-    return { messages: __threads, data: __handlerResult };
+    runner.halt({ messages: __threads, data: __handlerResult });
     {{/nodeContext}}
     {{^nodeContext}}
-    return __handlerResult;
+    runner.halt(__handlerResult);
     {{/nodeContext}}
+    return;
   }
 }
 `;

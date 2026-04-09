@@ -1,11 +1,4 @@
 import type { TsNode, TsParam, TsScopedVar } from "./tsIR.js";
-import * as renderSubstepBlock from "../templates/backends/typescriptGenerator/substepBlock.js";
-import * as renderIfStepsCondbranch from "../templates/backends/typescriptGenerator/ifStepsCondbranch.js";
-import * as renderIfStepsBranchDispatch from "../templates/backends/typescriptGenerator/ifStepsBranchDispatch.js";
-import * as renderThreadSteps from "../templates/backends/typescriptGenerator/threadSteps.js";
-import * as renderWhileSteps from "../templates/backends/typescriptGenerator/whileSteps.js";
-import * as renderForSteps from "../templates/backends/typescriptGenerator/forSteps.js";
-import * as renderHandleSteps from "../templates/backends/typescriptGenerator/handleSteps.js";
 
 const INDENT = "  ";
 
@@ -244,166 +237,64 @@ export function printTs(node: TsNode, indent = 0): string {
     }
 
     case "functionReturn":
-      return `__functionCompleted = true;\nreturn ${printTs(node.value, indent)}`;
+      return `__functionCompleted = true;\nrunner.halt(${printTs(node.value, indent)});\nreturn;`;
 
-    case "stepBlock": {
-      const stepBody = printBody(node.body, indent);
-      if (node.subStep) {
-        const subKey = node.subStep.join("_");
-        return renderSubstepBlock.default({
-          guardVar: `__sub_${subKey}`,
-          stepIndex: node.stepIndex,
-          body: stepBody,
-          counterExpr: `__stack.locals.__substep_${subKey}`,
-          nextIndex: node.stepIndex + 1,
-        });
+    // ── Runner-based step IR nodes ──
+
+    case "runnerStep": {
+      const body = node.body.map((n) => printTs(n, indent + 1)).join("\n");
+      return `await runner.step(${node.id}, async (runner) => {\n${body}\n${ind(indent)}});`;
+    }
+
+    case "runnerThread": {
+      const body = node.body.map((n) => printTs(n, indent + 1)).join("\n");
+      return `await runner.thread(${node.id}, __threads, "${node.method}", async (runner) => {\n${body}\n${ind(indent)}});`;
+    }
+
+    case "runnerHandle": {
+      const handler = printTs(node.handler, indent);
+      const body = node.body.map((n) => printTs(n, indent + 1)).join("\n");
+      return `await runner.handle(${node.id}, ${handler}, async (runner) => {\n${body}\n${ind(indent)}});`;
+    }
+
+    case "runnerDebugger": {
+      return `await runner.debugger(${node.id}, ${JSON.stringify(node.label)});`;
+    }
+
+    case "runnerIfElse": {
+      const branches = node.branches
+        .map((b) => {
+          const cond = printTs(b.condition, indent + 2);
+          const body = b.body.map((n) => printTs(n, indent + 3)).join("\n");
+          return `${ind(indent + 1)}{\n${ind(indent + 2)}condition: () => ${cond},\n${ind(indent + 2)}body: async (runner) => {\n${body}\n${ind(indent + 2)}},\n${ind(indent + 1)}}`;
+        })
+        .join(",\n");
+
+      let result = `await runner.ifElse(${node.id}, [\n${branches}\n${ind(indent)}]`;
+      if (node.elseBranch) {
+        const elsBody = node.elseBranch.map((n) => printTs(n, indent + 2)).join("\n");
+        result += `, async (runner) => {\n${elsBody}\n${ind(indent)}}`;
       }
-      const guard = node.branchKey
-        ? `if (__step <= ${node.stepIndex} || (__stack.branches && __stack.branches["${node.branchKey}"])) {`
-        : `if (__step <= ${node.stepIndex}) {`;
-      return `${guard}
-      ${stepBody}
-      ${ind(indent + 1)}__stack.step++;\n${ind(indent)}}`;
+      result += ");";
+      return result;
     }
 
-    case "ifSteps": {
-      const subKey = node.subStepPath.join("_");
-      const condbranchVar = `__condbranch_${subKey}`;
-      const condbranchStore = `__stack.locals.__condbranch_${subKey}`;
-      const subVar = `__sub_${subKey}`;
-      const subStore = `__stack.locals.__substep_${subKey}`;
-
-      const condbranchCode = renderIfStepsCondbranch.default({
-        condbranchStore,
-        condbranchVar,
-        subVar,
-        subStore,
-        branches: node.branches.map((b, i) => ({
-          condition: printTs(b.condition, indent + 1),
-          condbranchStore,
-          index: i,
-          first: i === 0,
-        })),
-        hasElse: !!node.elseBranch,
-        elseIndex: node.branches.length,
-      });
-
-      const allBranches = [...node.branches.map(b => b.body)];
-      if (node.elseBranch) allBranches.push(node.elseBranch);
-
-      const dispatchCode = renderIfStepsBranchDispatch.default({
-        allBranches: allBranches.map((body, branchIdx) => ({
-          branchIndex: branchIdx,
-          first: branchIdx === 0,
-          condbranchVar,
-          subVar,
-          subStore,
-          statements: body.map((stmt, stmtIdx) => ({
-            stmtIndex: stmtIdx,
-            stmtCode: printTs(stmt, indent + 2),
-            nextIndex: stmtIdx + 1,
-            subVar,
-            subStore,
-          })),
-        })),
-      });
-
-      return condbranchCode + "\n" + dispatchCode;
+    case "runnerLoop": {
+      const items = printTs(node.items, indent);
+      const idxVar = node.indexVar ?? "_";
+      const body = node.body.map((n) => printTs(n, indent + 1)).join("\n");
+      return `await runner.loop(${node.id}, ${items}, async (${node.itemVar}, ${idxVar}, runner) => {\n${body}\n${ind(indent)}});`;
     }
 
-    case "threadSteps": {
-      const subKey = node.subStepPath.join("_");
-      const subVar = `__sub_${subKey}`;
-      const subStore = `__stack.locals.__substep_${subKey}`;
-
-      // Ensure each code block ends with a newline to prevent line concatenation
-      const ensureNewline = (s: string) => s.endsWith("\n") ? s : s + "\n";
-
-      return renderThreadSteps.default({
-        subVar,
-        subStore,
-        setup: ensureNewline(node.setup.map((s) => printTs(s, indent + 1)).join("\n")),
-        bodyStatements: node.body.map((stmt, i) => ({
-          subVar,
-          subStore,
-          index: i + 1,
-          code: ensureNewline(printTs(stmt, indent + 1)),
-          nextIndex: i + 2,
-        })),
-        cleanup: node.cleanup.map((s) => printTs(s, indent)).join("\n") + ";\n",
-      });
+    case "runnerWhileLoop": {
+      const cond = printTs(node.condition, indent + 1);
+      const body = node.body.map((n) => printTs(n, indent + 1)).join("\n");
+      return `await runner.whileLoop(${node.id}, () => ${cond}, async (runner) => {\n${body}\n${ind(indent)}});`;
     }
 
-    case "handleSteps": {
-      const subKey = node.subStepPath.join("_");
-      const subVar = `__sub_${subKey}`;
-      const subStore = `__stack.locals.__substep_${subKey}`;
-      const handlerName = `__handler_${subKey}`;
-      const ensureNewline = (s: string) => s.endsWith("\n") ? s : s + "\n";
-
-      return renderHandleSteps.default({
-        subVar,
-        subStore,
-        handlerName,
-        handlerDecl: ensureNewline(printTs(node.handler, indent)),
-        bodyStatements: node.body.map((stmt, i) => ({
-          subVar,
-          subStore,
-          index: i,
-          code: ensureNewline(printTs(stmt, indent + 1)),
-          nextIndex: i + 1,
-        })),
-      });
-    }
-
-    case "whileSteps": {
-      const subKey = node.subStepPath.join("_");
-      const subStore = `__stack.locals.__substep_${subKey}`;
-      const iterStore = `__stack.locals.__iteration_${subKey}`;
-      const currentIterVar = `__currentIter_${subKey}`;
-      const ensureNewline = (s: string) => s.endsWith("\n") ? s : s + "\n";
-
-      return renderWhileSteps.default({
-        condition: printTs(node.condition, indent + 1),
-        subStore,
-        subKey,
-        iterStore,
-        currentIterVar,
-        bodyStatements: node.body.map((stmt, i) => ({
-          subStore,
-          index: i,
-          code: ensureNewline(printTs(stmt, indent + 2)),
-          nextIndex: i + 1,
-        })),
-      });
-    }
-
-    case "forSteps": {
-      const subKey = node.subStepPath.join("_");
-      const subStore = `__stack.locals.__substep_${subKey}`;
-      const iterStore = `__stack.locals.__iteration_${subKey}`;
-      const currentIterVar = `__currentIter_${subKey}`;
-      const ensureNewline = (s: string) => s.endsWith("\n") ? s : s + "\n";
-
-      const stripSemicolon = (s: string) => s.endsWith(";") ? s.slice(0, -1) : s;
-
-      return renderForSteps.default({
-        init: stripSemicolon(printTs(node.init, indent + 1)),
-        condition: printTs(node.condition, indent + 1),
-        update: stripSemicolon(printTs(node.update, indent + 1)),
-        hasItemDecl: !!node.itemDecl,
-        itemDecl: node.itemDecl ? printTs(node.itemDecl, indent + 1) : "",
-        subStore,
-        subKey,
-        iterStore,
-        currentIterVar,
-        bodyStatements: node.body.map((stmt, i) => ({
-          subStore,
-          index: i,
-          code: ensureNewline(printTs(stmt, indent + 2)),
-          nextIndex: i + 1,
-        })),
-      });
+    case "runnerBranchStep": {
+      const body = node.body.map((n) => printTs(n, indent + 1)).join("\n");
+      return `await runner.branchStep(${node.id}, "${node.branchKey}", async (runner) => {\n${body}\n${ind(indent)}});`;
     }
 
     case "empty":

@@ -14,6 +14,8 @@ import type { FunctionParameter } from "../types.js";
 import type { TraceHeader } from "../runtime/trace/types.js";
 
 import type { InterruptResponse } from "../runtime/interrupts.js";
+import { color } from "termcolors";
+import { round } from "@/utils.js";
 
 // Functions from the compiled module that are bound to __globalCtx
 type ModuleFunctions = {
@@ -145,14 +147,14 @@ export class DebuggerDriver {
         const tokens = data.usage
           ? `${data.usage.totalTokens} tokens`
           : "unknown tokens";
-        const time = `${data.timeTaken}ms`;
+        const time = `${round(data.timeTaken)}ms`;
         this.ui.state.log(`LLM returned (${tokens}, ${time})`);
       },
       onToolCallStart: (data) => {
         this.ui.state.log(`Tool call: ${data.toolName}()`);
       },
       onToolCallEnd: (data) => {
-        this.ui.state.log(`Tool done: ${data.toolName} (${data.timeTaken}ms)`);
+        this.ui.state.log(`Tool done: ${data.toolName} (${round(data.timeTaken)}ms)`);
       },
     };
   }
@@ -171,7 +173,6 @@ export class DebuggerDriver {
       let finalResult: any = undefined;
       // eslint-disable-next-line no-constant-condition
       while (true) {
-        // we should only get here if the program has finished.
         if (!isInterrupt(result?.data)) {
           if (!lastInterrupt) {
             throw new Error("Program finished without any interrupts. This shouldn't happen with the debugger enabled.");
@@ -379,6 +380,7 @@ export class DebuggerDriver {
         if (lastCheckpoint) {
           const checkpointId =
             this.debuggerState.cloneCheckpoint(lastCheckpoint);
+          this.debuggerState.checkpoints.removeDebugFlagsFor(checkpointId);
           this.debuggerState.pinCheckpoint(checkpointId, command.label);
           this.ui.state.log(
             `Pinned checkpoint #${checkpointId}${command.label ? ` "${command.label}"` : ""}`,

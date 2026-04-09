@@ -5,6 +5,7 @@ import { StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import type { GraphState } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
+import { color } from "termcolors";
 
 export type RewindCheckpoint = {
   checkpoint: Checkpoint;

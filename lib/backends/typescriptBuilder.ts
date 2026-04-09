@@ -16,23 +16,23 @@ import {
 } from "../types.js";
 
 import { formatTypeHint } from "@/cli/util.js";
-import { expressionToString } from "@/utils/node.js";
-import { toCompiledImportPath } from "../importPaths.js";
 import {
   BUILTIN_FUNCTIONS,
   BUILTIN_TOOLS,
   BUILTIN_VARIABLES,
   TYPES_THAT_DONT_TRIGGER_NEW_PART,
 } from "@/config.js";
-import { Sentinel } from "@/types/sentinel.js";
 import type { SourceLocationOpts } from "@/runtime/state/checkpointStore.js";
 import { DebuggerStatement } from "@/types/debuggerStatement.js";
+import { Sentinel } from "@/types/sentinel.js";
 import { SpecialVar } from "@/types/specialVar.js";
+import { expressionToString } from "@/utils/node.js";
+import { toCompiledImportPath } from "../importPaths.js";
+import * as renderDebugger from "../templates/backends/typescriptGenerator/debugger.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
 import * as renderInterruptReturn from "../templates/backends/typescriptGenerator/interruptReturn.js";
 import * as renderRewindCheckpoint from "../templates/backends/typescriptGenerator/rewindCheckpoint.js";
-import * as renderDebugger from "../templates/backends/typescriptGenerator/debugger.js";
 import * as renderTraceSetup from "../templates/backends/typescriptGenerator/traceSetup.js";
 
 import { AgencyConfig } from "@/config.js";
@@ -43,11 +43,9 @@ import {
   PRECEDENCE,
 } from "@/types/binop.js";
 import { MessageThread } from "@/types/messageThread.js";
-import { Skill } from "@/types/skill.js";
 import {
   walkNodesArray,
 } from "@/utils/node.js";
-import path from "path";
 import { AccessChainElement, ValueAccess } from "../types/access.js";
 import {
   AgencyArray,
@@ -55,13 +53,13 @@ import {
   AgencyObjectKV,
 } from "../types/dataStructures.js";
 import { ForLoop } from "../types/forLoop.js";
-import { HandleBlock } from "../types/handleBlock.js";
 import {
   FunctionCall,
   FunctionDefinition,
   FunctionParameter,
 } from "../types/function.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
+import { HandleBlock } from "../types/handleBlock.js";
 import { IfElse } from "../types/ifElse.js";
 import {
   ImportNodeStatement,
@@ -83,19 +81,17 @@ import {
 } from "./typescriptGenerator/typeToZodSchema.js";
 
 import { auditNode, makeAuditCall } from "../ir/audit.js";
-import { SourceMapBuilder } from "./sourceMap.js";
 import { $, ts } from "../ir/builders.js";
 import { printTs } from "../ir/prettyPrint.js";
 import type {
-  TsElseIf,
   TsNode,
   TsObjectEntry,
   TsParam,
-  TsStepBlock,
-  TsTemplatePart,
+  TsTemplatePart
 } from "../ir/tsIR.js";
 import type { ProgramInfo } from "../programInfo.js";
 import { getVisibleTypes, scopeKey } from "../programInfo.js";
+import { SourceMapBuilder } from "./sourceMap.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
@@ -640,32 +636,20 @@ export class TypeScriptBuilder {
   }
 
   private processKeyword(node: Keyword): TsNode {
-    const keyword = node.value === "break" ? ts.break() : ts.continue();
-
     // Inside a handler body or not inside a stepped loop: emit bare keyword
     const loopSubKey =
       this._loopContextStack[this._loopContextStack.length - 1];
     if (this.insideHandlerBody || loopSubKey === undefined) {
-      return keyword;
+      return node.value === "break" ? ts.break() : ts.continue();
     }
 
-    // Inside a stepped loop: emit cleanup before the keyword.
-    // For continue, we also need to increment the iteration counters
-    // so the next iteration doesn't replay the current one.
-    const iterStore = `__stack.locals.__iteration_${loopSubKey}`;
-    const currentIterVar = `__currentIter_${loopSubKey}`;
-
-    const stmts: TsNode[] = [
-      ts.raw(`__stack.resetLoopIteration("${loopSubKey}")`),
-    ];
-
-    if (node.value === "continue") {
-      stmts.push(ts.raw(`${iterStore}++`));
-      stmts.push(ts.raw(`${currentIterVar}++`));
-    }
-
-    stmts.push(keyword);
-    return ts.statements(stmts);
+    // Inside a runner loop: use runner.breakLoop() / runner.continueLoop()
+    // and return from the callback. The runner handles iteration cleanup.
+    const method = node.value === "break" ? "breakLoop" : "continueLoop";
+    return ts.statements([
+      $(ts.id("runner")).prop(method).call().done(),
+      ts.raw("return"),
+    ]);
   }
 
   // ------- Type system (side effects only) -------
@@ -804,19 +788,7 @@ export class TypeScriptBuilder {
   }
 
   private processIfElseWithSteps(node: IfElse): TsNode {
-    const subStepPath = [...this._subStepPath];
-
-    // Process a branch body, pushing/popping each statement's index onto _subStepPath
-    const processBranchBody = (body: AgencyNode[]): TsNode[] => {
-      const expanded = this.insertDebugSteps(body);
-      return expanded.map((stmt, i) => {
-        this._subStepPath.push(i);
-        this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
-        const result = this.processStatement(stmt);
-        this._subStepPath.pop();
-        return result;
-      });
-    };
+    const id = this._subStepPath[this._subStepPath.length - 1];
 
     // Flatten the else-if chain
     const branches: { condition: TsNode; body: TsNode[] }[] = [];
@@ -824,7 +796,7 @@ export class TypeScriptBuilder {
 
     branches.push({
       condition: this.processNode(node.condition),
-      body: processBranchBody(node.thenBody),
+      body: this.processBodyAsParts(node.thenBody),
     });
 
     let current: IfElse | undefined =
@@ -836,7 +808,7 @@ export class TypeScriptBuilder {
     while (current) {
       branches.push({
         condition: this.processNode(current.condition),
-        body: processBranchBody(current.thenBody),
+        body: this.processBodyAsParts(current.thenBody),
       });
       if (
         current.elseBody?.length === 1 &&
@@ -850,31 +822,25 @@ export class TypeScriptBuilder {
     }
 
     if (remainingElse && remainingElse.length > 0) {
-      elseBranch = processBranchBody(remainingElse);
+      elseBranch = this.processBodyAsParts(remainingElse);
     }
 
-    return ts.ifSteps(subStepPath, branches, elseBranch);
+    return ts.runnerIfElse({ id, branches, elseBranch });
   }
 
   private processForLoopWithSteps(node: ForLoop): TsNode {
+    const id = this._subStepPath[this._subStepPath.length - 1];
+
     // Register loop variables so they bypass scope resolution
     this.loopVars.push(node.itemVar);
     if (node.indexVar) {
       this.loopVars.push(node.indexVar);
     }
 
-    const subStepPath = [...this._subStepPath];
-    const subKey = subStepPath.join("_");
+    const subKey = this._subStepPath.join("_");
 
     this._loopContextStack.push(subKey);
-    const expandedBody = this.insertDebugSteps(node.body);
-    const bodyNodes = expandedBody.map((stmt, i) => {
-      this._subStepPath.push(i);
-      this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
-      const result = this.processStatement(stmt);
-      this._subStepPath.pop();
-      return result;
-    });
+    const bodyNodes = this.processBodyAsParts(node.body);
     this._loopContextStack.pop();
 
     // Unregister loop variables
@@ -882,7 +848,9 @@ export class TypeScriptBuilder {
       (v) => v !== node.itemVar && v !== node.indexVar,
     );
 
-    // Range form: for (i in range(start, end))
+    // For range form, build an array expression: Array.from({length: end - start}, (_, i) => i + start)
+    // Actually, the Runner's loop() takes an array of items. For range loops,
+    // we generate the range as an array expression.
     if (
       node.iterable.type === "functionCall" &&
       node.iterable.functionName === "range"
@@ -894,78 +862,38 @@ export class TypeScriptBuilder {
         args.length >= 2
           ? this.processCallArg(args[1])
           : this.processCallArg(args[0]);
-      return ts.forSteps({
-        subStepPath,
-        init: ts.letDecl(node.itemVar, startNode),
-        condition: ts.binOp(ts.id(node.itemVar), "<", endNode),
-        update: ts.postfix(ts.id(node.itemVar), "++"),
-        body: bodyNodes,
-      });
+      // Generate: Array.from({length: end - start}, (_, i) => i + start)
+      const rangeExpr = ts.raw(
+        `Array.from({length: ${printTs(endNode, 0)} - ${printTs(startNode, 0)}}, (_, __i) => __i + ${printTs(startNode, 0)})`,
+      );
+      return ts.runnerLoop({ id, items: rangeExpr, itemVar: node.itemVar, body: bodyNodes });
     }
 
     const iterableNode = this.processNode(node.iterable);
 
-    // Indexed form: for (item, index in collection)
-    if (node.indexVar) {
-      return ts.forSteps({
-        subStepPath,
-        init: ts.letDecl(node.indexVar, ts.num(0)),
-        condition: ts.binOp(
-          ts.id(node.indexVar),
-          "<",
-          ts.prop(iterableNode, "length"),
-        ),
-        update: ts.postfix(ts.id(node.indexVar), "++"),
-        body: bodyNodes,
-        itemDecl: ts.varDecl(
-          "const",
-          node.itemVar,
-          ts.index(iterableNode, ts.id(node.indexVar)),
-        ),
-      });
-    }
-
-    // Basic form: for (item in collection) — convert to indexed loop
-    const indexVar = `__i_${subKey}`;
-    return ts.forSteps({
-      subStepPath,
-      init: ts.letDecl(indexVar, ts.num(0)),
-      condition: ts.binOp(
-        ts.id(indexVar),
-        "<",
-        ts.prop(iterableNode, "length"),
-      ),
-      update: ts.postfix(ts.id(indexVar), "++"),
+    return ts.runnerLoop({
+      id,
+      items: iterableNode,
+      itemVar: node.itemVar,
+      indexVar: node.indexVar,
       body: bodyNodes,
-      itemDecl: ts.varDecl(
-        "const",
-        node.itemVar,
-        ts.index(iterableNode, ts.id(indexVar)),
-      ),
     });
   }
 
   private processWhileLoopWithSteps(node: WhileLoop): TsNode {
-    const subStepPath = [...this._subStepPath];
-    const subKey = subStepPath.join("_");
+    const id = this._subStepPath[this._subStepPath.length - 1];
+    const subKey = this._subStepPath.join("_");
     const condition = this.processNode(node.condition);
 
     this._loopContextStack.push(subKey);
-    const expandedBody = this.insertDebugSteps(node.body);
-    const bodyNodes = expandedBody.map((stmt, i) => {
-      this._subStepPath.push(i);
-      this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
-      const result = this.processStatement(stmt);
-      this._subStepPath.pop();
-      return result;
-    });
+    const bodyNodes = this.processBodyAsParts(node.body);
     this._loopContextStack.pop();
 
-    return ts.whileSteps(subStepPath, condition, bodyNodes);
+    return ts.runnerWhileLoop({ id, condition, body: bodyNodes });
   }
 
   private processMatchBlockWithSteps(node: MatchBlock): TsNode {
-    const subStepPath = [...this._subStepPath];
+    const id = this._subStepPath[this._subStepPath.length - 1];
     const expression = this.processNode(node.expression);
 
     const filteredCases = node.cases.filter(
@@ -990,7 +918,7 @@ export class TypeScriptBuilder {
       }
     }
 
-    return ts.ifSteps(subStepPath, branches, elseBranch);
+    return ts.runnerIfElse({ id, branches, elseBranch });
   }
 
   private processImportStatement(node: ImportStatement): TsNode {
@@ -1276,11 +1204,13 @@ export class TypeScriptBuilder {
       ),
     );
 
+    // Create runner for step execution
+    setupStmts.push(ts.raw(`const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(functionName)} });`));
 
     // Try/catch wrapping the body, with finally to always pop the state stack
     setupStmts.push(
       ts.tryCatch(
-        ts.statements(bodyCode),
+        ts.statements([...bodyCode, ts.raw("if (runner.halted) return runner.haltResult;")]),
         ts.statements([
           ts.if(
             ts.raw("__error instanceof RestoreSignal"),
@@ -1391,10 +1321,9 @@ export class TypeScriptBuilder {
       const tempVar = "__funcResult";
       const nodeContext = scope.type === "node";
       // In node context, wrap with state for the driver.
-      // In function context, return the interrupt directly so the caller's
-      // isInterrupt check can detect it (wrapping in { data: ... } would
-      // hide the interrupt type from the next isInterrupt check).
-      const returnBody = nodeContext
+      // In function context, halt with the interrupt directly so the caller's
+      // isInterrupt check can detect it.
+      const haltValue = nodeContext
         ? ts.obj([
           ts.setSpread(ts.runtime.state),
           ts.set("data", ts.id(tempVar)),
@@ -1406,7 +1335,8 @@ export class TypeScriptBuilder {
           ts.call(ts.id("isInterrupt"), [ts.id(tempVar)]),
           ts.statements([
             ts.raw("await __ctx.pendingPromises.awaitAll()"),
-            ts.return(returnBody),
+            $(ts.id("runner")).prop("halt").call([haltValue]).done(),
+            ts.return(),
           ]),
         ),
       ]);
@@ -1612,6 +1542,9 @@ export class TypeScriptBuilder {
       }),
 
       ts.callHook("onNodeStart", { nodeName: ts.str(nodeName) }),
+
+      // Create runner for step execution (nodeContext enables { messages, data } wrapping for debug halts)
+      ts.raw(`const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(nodeName)} });`),
     ];
 
     // Param assignments (only when not resuming)
@@ -1627,6 +1560,10 @@ export class TypeScriptBuilder {
 
     // Body
     stmts.push(...bodyCode);
+
+    // Halt check — if runner halted (interrupt/debug/return), return the halt result directly.
+    // nodeResult and interrupt code already wrap in { messages, data } format.
+    stmts.push(ts.raw("if (runner.halted) return runner.haltResult;"));
 
     // onNodeEnd hook + return
     stmts.push(
@@ -1682,6 +1619,7 @@ export class TypeScriptBuilder {
         );
         return ts.statements([
           llmNode,
+          makeAuditCall("return", { value: ts.self(DEFAULT_PROMPT_NAME) }),
           ts.nodeResult(ts.self(DEFAULT_PROMPT_NAME)),
         ]);
       }
@@ -1692,7 +1630,12 @@ export class TypeScriptBuilder {
       ) {
         return valueNode;
       }
-      return ts.nodeResult(valueNode);
+      const tempVar = ts.id("__returnValue");
+      return ts.statements([
+        ts.constDecl("__returnValue", valueNode),
+        makeAuditCall("return", { value: tempVar }),
+        ts.nodeResult(tempVar),
+      ]);
     }
 
     if (
@@ -1712,11 +1655,17 @@ export class TypeScriptBuilder {
       );
       return ts.statements([
         llmNode,
+        makeAuditCall("return", { value: ts.self(DEFAULT_PROMPT_NAME) }),
         ts.functionReturn(ts.self(DEFAULT_PROMPT_NAME)),
       ]);
     }
     const valueNode = this.processNode(node.value);
-    return ts.functionReturn(valueNode);
+    const tempVar = ts.id("__returnValue");
+    return ts.statements([
+      ts.constDecl("__returnValue", valueNode),
+      makeAuditCall("return", { value: tempVar }),
+      ts.functionReturn(tempVar),
+    ]);
   }
 
   private processAssignment(node: Assignment): TsNode {
@@ -1797,10 +1746,10 @@ export class TypeScriptBuilder {
           ),
         );
       } else if (this.getCurrentScope().type !== "global") {
-        // Sync: interrupt check with awaitAll before return.
-        // In function context, return the interrupt directly so the caller's
+        // Sync: interrupt check with awaitAll before halt.
+        // In function context, halt with the interrupt directly so the caller's
         // isInterrupt check can detect it.
-        const returnObj =
+        const haltValue =
           this.getCurrentScope().type === "node"
             ? ts.obj([ts.setSpread(ts.runtime.state), ts.set("data", varRef)])
             : varRef;
@@ -1809,7 +1758,8 @@ export class TypeScriptBuilder {
             $(ts.id("isInterrupt")).call([varRef]).done(),
             ts.statements([
               ts.raw("await __ctx.pendingPromises.awaitAll()"),
-              ts.return(returnObj),
+              $(ts.id("runner")).prop("halt").call([haltValue]).done(),
+              ts.return(),
             ]),
           ),
         );
@@ -2025,20 +1975,18 @@ export class TypeScriptBuilder {
     } else {
       // Sync: await + interrupt check
       stmts.push(ts.assign(varRef, ts.await(runPromptCall)));
-      stmts.push(ts.comment("return early from node if this is an interrupt"));
+      stmts.push(ts.comment("halt if this is an interrupt"));
       const isNodeContext = this.getCurrentScope().type === "node";
-      const returnExpr = isNodeContext
-        ? ts.nodeReturn({
-          messages: ts.runtime.threads,
-          data: varRef,
-        })
-        : ts.return(varRef);
+      const haltValue = isNodeContext
+        ? ts.obj({ messages: ts.runtime.threads, data: varRef })
+        : varRef;
       stmts.push(
         ts.if(
           $(ts.id("isInterrupt")).call([varRef]).done(),
           ts.statements([
             ts.raw("await __ctx.pendingPromises.awaitAll()"),
-            returnExpr,
+            $(ts.id("runner")).prop("halt").call([haltValue]).done(),
+            ts.return(),
           ]),
         ),
       );
@@ -2073,14 +2021,7 @@ export class TypeScriptBuilder {
       return ts.empty();
     }
 
-    // Debug mode on: emit debugStep() call
-    const code = renderDebugger.default({
-      label: node.label !== undefined ? JSON.stringify(node.label) : "null",
-      nodeContext: this.isInsideGraphNode,
-      isUserAdded: !!node.isUserAdded,
-      ...this.checkpointOpts(),
-    });
-    return ts.raw(code);
+    return ts.runnerDebugger({ id: this._subStepPath[this._subStepPath.length - 1], label: node.label || "" });
   }
 
   private processSpecialVar(node: SpecialVar): TsNode {
@@ -2107,41 +2048,21 @@ export class TypeScriptBuilder {
     node: MessageThread,
     assignTo?: Assignment,
   ): TsNode {
-    const subStepPath = [...this._subStepPath];
-    const createMethod =
-      node.threadType === "subthread" ? "createSubthread" : "create";
-
-    // Setup: create thread + push active
-    const setup: TsNode[] = [
-      ts.varDecl(
-        "const",
-        "__tid",
-        $(ts.runtime.threads).prop(createMethod).call().done(),
-      ),
-      $(ts.runtime.threads)
-        .prop("pushActive")
-        .call([ts.id("__tid")])
-        .done(),
-    ];
+    const id = this._subStepPath[this._subStepPath.length - 1];
+    const method =
+      node.threadType === "subthread" ? "createSubthread" as const : "create" as const;
 
     // Body: process each statement with substep tracking
     const prevInsideMessageThread = this.insideMessageThread;
     this.insideMessageThread = true;
-    const expandedBody = this.insertDebugSteps(node.body);
-    const bodyNodes = expandedBody.map((stmt, i) => {
-      this._subStepPath = [...subStepPath];
-      this._subStepPath.push(i + 1); // +1 because setup is substep 0
-      this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
-      const result = this.processStatement(stmt);
-      this._subStepPath.pop();
-      return result;
-    });
+    const bodyNodes = this.processBodyAsParts(node.body);
     this.insideMessageThread = prevInsideMessageThread;
 
-    // Cleanup: cloneMessages (if assigned) + popActive
-    const cleanup: TsNode[] = [];
+    // The Runner's thread() method handles setup (create + pushActive) and
+    // cleanup (popActive). If the thread result is assigned, clone messages
+    // INSIDE the callback (before popActive runs in the finally block).
     if (assignTo) {
-      cleanup.push(
+      bodyNodes.push(
         this.scopedAssign(
           assignTo.scope!,
           assignTo.variableName,
@@ -2150,9 +2071,8 @@ export class TypeScriptBuilder {
         ),
       );
     }
-    cleanup.push($(ts.runtime.threads).prop("popActive").call().done());
 
-    return ts.threadSteps(subStepPath, createMethod, setup, bodyNodes, cleanup);
+    return ts.runnerThread({ id, method, body: bodyNodes });
   }
 
   private processBlockPlain(
@@ -2244,8 +2164,8 @@ export class TypeScriptBuilder {
   }
 
   private processHandleBlockWithSteps(node: HandleBlock): TsNode {
-    const subStepPath = [...this._subStepPath];
-    const subKey = subStepPath.join("_");
+    const id = this._subStepPath[this._subStepPath.length - 1];
+    const subKey = this._subStepPath.join("_");
     const handlerName = `__handler_${subKey}`;
 
     // Build handler arrow function
@@ -2260,31 +2180,26 @@ export class TypeScriptBuilder {
       const paramType = node.handler.param.typeHint
         ? formatTypeHint(node.handler.param.typeHint)
         : "any";
-      handler = ts.constDecl(
-        handlerName,
+      handler =
         ts.arrowFn(
           [{ name: node.handler.param.name, typeAnnotation: paramType }],
           ts.statements(handlerBody),
           { async: true },
-        ),
-      );
+        );
     } else {
       const fnName = node.handler.functionName;
       if (fnName === "approve" || fnName === "reject" || fnName === "propagate") {
         // Built-in handler: wrap the built-in factory function directly
         const args = fnName === "propagate" ? [] : [ts.id("__data")];
-        handler = ts.constDecl(
-          handlerName,
+        handler =
           ts.arrowFn(
             [{ name: "__data", typeAnnotation: "any" }],
             ts.call(ts.id(fnName), args),
             { async: true },
-          ),
-        );
+          );
       } else {
         // Function ref: wrap in arrow that calls the named function
-        handler = ts.constDecl(
-          handlerName,
+        handler =
           ts.arrowFn(
             [{ name: "__data", typeAnnotation: "any" }],
             ts.await(
@@ -2298,22 +2213,14 @@ export class TypeScriptBuilder {
               ]),
             ),
             { async: true },
-          ),
-        );
+          );
       }
     }
 
     // Body: process each statement with substep tracking
-    const expandedBody = this.insertDebugSteps(node.body);
-    const bodyNodes = expandedBody.map((stmt, i) => {
-      this._subStepPath.push(i);
-      this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
-      const result = this.processStatement(stmt);
-      this._subStepPath.pop();
-      return result;
-    });
+    const bodyNodes = this.processBodyAsParts(node.body);
 
-    return ts.handleSteps(subStepPath, handler, bodyNodes);
+    return ts.runnerHandle({ id, handler, body: bodyNodes });
   }
 
   /** In debugger mode, insert debuggerStatement nodes before each
@@ -2341,10 +2248,8 @@ export class TypeScriptBuilder {
   private processBodyAsParts(
     body: AgencyNode[],
     opts: { isInSafeFunction?: boolean } = {},
-  ): TsStepBlock[] {
-    body = this.insertDebugSteps(body);
-
-    const parts: TsNode[][] = [[]];
+  ): TsNode[] {
+    const parts: TsNode[][] = [];
     // Maps step index to the branch key (subStepPath) captured at processing time
     const branchKeys: Record<number, string> = {};
     for (const stmt of body) {
@@ -2354,31 +2259,42 @@ export class TypeScriptBuilder {
 
       const stepIndex = parts.length - 1;
       this._subStepPath.push(stepIndex);
-      this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
       if (!opts.isInSafeFunction && this.containsImpureCall(stmt)) {
+        if (parts.length === 0) parts.push([]);
         parts[parts.length - 1].push(
           ts.assign(ts.self("__retryable"), ts.bool(false)),
         );
       }
       const processed = this.processStatement(stmt);
+      if (parts.length === 0) parts.push([]);
+
+      // Audit logging: inspect the processed node and inject audit calls
       const audit = auditNode(processed);
-      if (audit && audit.behavior === "replace") {
-        parts[parts.length - 1].push(audit.node);
-      } else {
-        parts[parts.length - 1].push(processed);
-        if (audit) {
+      if (audit) {
+        if (audit.behavior === "replace") {
+          // Replace the original node (e.g., return with temp var + audit + return)
+          parts[parts.length - 1].push(audit.node);
+        } else {
+          // Append: keep original, add audit call after
+          parts[parts.length - 1].push(processed);
           parts[parts.length - 1].push(audit.node);
         }
+      } else {
+        parts[parts.length - 1].push(processed);
       }
       if (this._asyncBranchCheckNeeded) {
         branchKeys[stepIndex] = this._subStepPath.join("_");
         this._asyncBranchCheckNeeded = false;
       }
+      this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
       this._subStepPath.pop();
     }
-    return parts.map((part, i) =>
-      ts.stepBlock(i, ts.statements(part), branchKeys[i]),
-    );
+    return parts.map((part, i) => {
+      if (branchKeys[i]) {
+        return ts.runnerBranchStep({ id: i, branchKey: branchKeys[i], body: part });
+      }
+      return ts.runnerStep({ id: i, body: part });
+    });
   }
 
   // ------- Imports and pre/post processing -------

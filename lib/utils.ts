@@ -66,3 +66,8 @@ export function mergeDeep(
 
   return objA;
 }
+
+export function round(num: number, decimals = 2): number {
+  const factor = 10 ** decimals;
+  return Math.round(num * factor) / factor;
+}

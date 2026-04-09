@@ -34,6 +34,7 @@ type TestCase = {
   interruptHandlers?: InterruptHandler[];
   description?: string;
   retry?: number;
+  skip?: boolean;
 };
 type Tests = { sourceFile: string; tests: TestCase[] };
 
@@ -501,6 +502,8 @@ async function runTestFile(
     let passed = 0;
     const total = tests.tests.length;
 
+    let skipped = 0;
+
     for (let i = 0; i < total; i++) {
       const testCase = tests.tests[i];
       const interruptInfo = testCase.interruptHandlers
@@ -512,6 +515,12 @@ async function runTestFile(
       );
       if (testCase.description) {
         log(color.cyan("Description:", testCase.description) + "\n");
+      }
+
+      if (testCase.skip) {
+        log(color.yellow(`  ⊘ Skipped`));
+        skipped++;
+        continue;
       }
 
       const maxAttempts = (testCase.retry ?? 0) + 1;
@@ -534,8 +543,10 @@ async function runTestFile(
       if (testPassed) passed++;
     }
 
-    const failed = total - passed;
-    log(`\n${passed}/${total} tests passed`);
+    const ran = total - skipped;
+    const failed = ran - passed;
+    const skipMsg = skipped > 0 ? ` (${skipped} skipped)` : "";
+    log(`\n${passed}/${ran} tests passed${skipMsg}`);
 
     return {
       passed,

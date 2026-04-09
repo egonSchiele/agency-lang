@@ -41,9 +41,7 @@
     },
     {
       "type": "return",
-      "value": {
-        "data": 7
-      }
+      "value": 7
     },
     {
       "type": "nodeExit",

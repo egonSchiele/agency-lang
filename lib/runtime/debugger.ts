@@ -71,6 +71,7 @@ export async function debugStep(
 
   if (!shouldPause) {
     // Not pausing — just take a rolling checkpoint for rewind history
+    // console.log(`[debugStep] ${isStepping ? "Stepping" : "No breakpoint"} at step ${info.stepPath}, not pausing, continuing execution. call depth: ${dbg.callDepth}, target: ${dbg.stepTarget ? JSON.stringify(dbg.stepTarget) : "n/a"}`);
     return undefined;
   }
 

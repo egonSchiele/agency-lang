@@ -37,7 +37,9 @@ export async function rewindFrom(args: {
   const { ctx, overrides, metadata = {} } = args;
   const checkpoint = deepClone(args.checkpoint);
 
+  console.log(color.yellow(JSON.stringify(checkpoint, null, 2)));
   applyOverrides(checkpoint.checkpoint, overrides);
+  console.log(color.green(`Applied overrides: ${JSON.stringify(checkpoint, null, 2)}`));
   await ctx.audit({
     type: "override",
     overrides,

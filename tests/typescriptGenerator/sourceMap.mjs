@@ -7,7 +7,7 @@ import * as smoltalk from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -152,13 +152,10 @@ let __functionCompleted = false;
   })
   __stack.args["name"] = name;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "sourceMap.agency", scopeName: "greet" });
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            __self.__removedTools = __self.__removedTools || [];
+    await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
         ctx: __ctx,
         prompt: `Hello ${__stack.args.name}`,
@@ -168,24 +165,24 @@ __stack.locals.result = await runPrompt({
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
       });
-// return early from node if this is an interrupt
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.result)) {
         await __ctx.pendingPromises.awaitAll()
-        return __stack.locals.result;
+        runner.halt(__stack.locals.result)
+        return;
       }
-      await __ctx.audit({
+await __ctx.audit({
         type: "assignment",
         variable: "__self.__removedTools",
         value: __self.__removedTools
       })
-            __stack.step++;
-    }
-    if (__step <= 2) {
-            if (__ctx.callbacks.onCheckpoint) {
+    });
+    await runner.step(1, async (runner) => {
+if (__ctx.callbacks.onCheckpoint) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
   } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "sourceMap.agency", scopeName: "greet", stepPath: "2" });
+    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "sourceMap.agency", scopeName: "greet", stepPath: "1" });
     const __cp = __ctx.checkpoints.get(__cpId);
     await callHook({
       callbacks: __ctx.callbacks,
@@ -205,18 +202,23 @@ if (isInterrupt(__stack.locals.result)) {
   }
 }
 
-            __stack.step++;
-    }
-    if (__step <= 3) {
-            const __auditReturnValue = __stack.locals.result;
+    });
+    await runner.step(2, async (runner) => {
+const __returnValue = __stack.locals.result;
 await __ctx.audit({
         type: "return",
-        value: __auditReturnValue
+        value: __returnValue
       })
 __functionCompleted = true;
-return __auditReturnValue
-            __stack.step++;
-    }
+runner.halt(__returnValue)
+return;
+await __ctx.audit({
+        type: "assignment",
+        variable: "__returnValue",
+        value: __returnValue
+      })
+    });
+    if (runner.halted) return runner.haltResult;
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -260,79 +262,54 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  if (__step <= 0) {
-      
-          __stack.step++;
-  }
-  if (__step <= 1) {
-          __stack.locals.x = 1;
-    await __ctx.audit({
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "sourceMap.agency", scopeName: "main" });
+  await runner.step(0, async (runner) => {
+__stack.locals.x = 1;
+await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.x",
       value: __stack.locals.x
     })
-          __stack.step++;
-  }
-  if (__step <= 2) {
-          if (__stack.locals.__condbranch_2 === undefined) {
-
-  if (__stack.locals.x == 1) {
-    __stack.locals.__condbranch_2 = 0;
-
-
-  } else {
-    __stack.locals.__condbranch_2 = 1;
-  }
-
-
-}
-const __condbranch_2 = __stack.locals.__condbranch_2;
-const __sub_2 = __stack.locals.__substep_2 ?? 0;
-
-if (__condbranch_2 === 0) {
-
-  if (__sub_2 <= 0) {
-    __stack.locals.y = 2;
-    __stack.locals.__substep_2 = 1;
-  }
-
-
-} else if (__condbranch_2 === 1) {
-
-  if (__sub_2 <= 0) {
-    __stack.locals.y = 3;
-    __stack.locals.__substep_2 = 1;
-  }
-
-
-}
-          __stack.step++;
-  }
-  if (__step <= 3) {
-          __stack.locals.__iteration_3 = __stack.locals.__iteration_3 ?? 0;
-let __currentIter_3 = 0;
-for (let __i_3 = 0; __i_3 < [`a`, `b`].length; __i_3++) {
-  if (__currentIter_3 < __stack.locals.__iteration_3) {
-    __currentIter_3++;
-    continue;
-  }
-
-  const item = [`a`, `b`][__i_3];
-
-  __stack.locals.__substep_3 = __stack.locals.__substep_3 ?? 0;
-
-  if (__stack.locals.__substep_3 <= 0) {
-    __stack.locals.z = item;
-
-    __stack.locals.__substep_3 = 1;
-  }
-
-  __stack.resetLoopIteration("3");
-  __stack.locals.__iteration_3++;
-  __currentIter_3++;
-}
-          __stack.step++;
-  }
+  });
+  await runner.step(1, async (runner) => {
+await runner.ifElse(1, [
+      {
+        condition: () => __stack.locals.x == 1,
+        body: async (runner) => {
+await runner.step(0, async (runner) => {
+__stack.locals.y = 2;
+await __ctx.audit({
+              type: "assignment",
+              variable: "__stack.locals.y",
+              value: __stack.locals.y
+            })
+          });
+        },
+      }
+    ], async (runner) => {
+await runner.step(0, async (runner) => {
+__stack.locals.y = 3;
+await __ctx.audit({
+            type: "assignment",
+            variable: "__stack.locals.y",
+            value: __stack.locals.y
+          })
+        });
+    });
+  });
+  await runner.step(2, async (runner) => {
+await runner.loop(2, [`a`, `b`], async (item, _, runner) => {
+await runner.step(0, async (runner) => {
+__stack.locals.z = item;
+await __ctx.audit({
+          type: "assignment",
+          variable: "__stack.locals.z",
+          value: __stack.locals.z
+        })
+      });
+    });
+  });
+  if (runner.halted) return runner.haltResult;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",
@@ -370,4 +347,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"sourceMap.agency:greet":{"1":{"line":-1,"col":2},"3":{"line":0,"col":2}},"sourceMap.agency:main":{"1":{"line":4,"col":2},"2":{"line":5,"col":2},"3":{"line":10,"col":2},"2.0":{"line":8,"col":4},"3.0":{"line":11,"col":4}}};
+export const __sourceMap = {"sourceMap.agency:greet":{"0":{"line":-1,"col":2},"2":{"line":0,"col":2}},"sourceMap.agency:main":{"0":{"line":4,"col":2},"1":{"line":5,"col":2},"2":{"line":10,"col":2},"1.0":{"line":8,"col":4},"2.0":{"line":11,"col":4}}};

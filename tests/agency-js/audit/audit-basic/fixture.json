@@ -23,14 +23,7 @@
     },
     {
       "type": "return",
-      "value": {
-        "messages": {
-          "threads": {},
-          "counter": 0,
-          "activeStack": []
-        },
-        "data": 10
-      }
+      "value": 10
     },
     {
       "type": "nodeExit",

@@ -7,7 +7,7 @@ import * as smoltalk from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -155,31 +155,36 @@ let __functionCompleted = false;
     result: undefined
   })
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "comments.agency", scopeName: "greet" });
   try {
-    if (__step <= 0) {
-            //  Comment inside function
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            __stack.locals.message = `Hello, World!`;
-      await __ctx.audit({
+    await runner.step(0, async (runner) => {
+//  Comment inside function
+    });
+    await runner.step(1, async (runner) => {
+__stack.locals.message = `Hello, World!`;
+await __ctx.audit({
         type: "assignment",
         variable: "__stack.locals.message",
         value: __stack.locals.message
       })
-      //  Another comment
-            __stack.step++;
-    }
-    if (__step <= 2) {
-            const __auditReturnValue = __stack.locals.message;
+//  Another comment
+    });
+    await runner.step(2, async (runner) => {
+const __returnValue = __stack.locals.message;
 await __ctx.audit({
         type: "return",
-        value: __auditReturnValue
+        value: __returnValue
       })
 __functionCompleted = true;
-return __auditReturnValue
-            __stack.step++;
-    }
+runner.halt(__returnValue)
+return;
+await __ctx.audit({
+        type: "assignment",
+        variable: "__returnValue",
+        value: __returnValue
+      })
+    });
+    if (runner.halted) return runner.haltResult;
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -223,82 +228,63 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  if (__step <= 0) {
-          //  Comment before function call
-          __stack.step++;
-  }
-  if (__step <= 1) {
-          __stack.locals.result = await greet({
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "comments.agency", scopeName: "main" });
+  await runner.step(0, async (runner) => {
+//  Comment before function call
+  });
+  await runner.step(1, async (runner) => {
+__stack.locals.result = await greet({
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.result)) {
       await __ctx.pendingPromises.awaitAll()
-      return {
+      runner.halt({
         ...__state,
         data: __stack.locals.result
-      };
+      })
+      return;
     }
-    await __ctx.audit({
+await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.result",
       value: __stack.locals.result
     })
-          __stack.step++;
-  }
-  if (__step <= 2) {
-          await print(__stack.locals.result)
-    //  Testing comments in different contexts
-          __stack.step++;
-  }
-  if (__step <= 3) {
-          __stack.locals.age = 25;
-    await __ctx.audit({
+  });
+  await runner.step(2, async (runner) => {
+await print(__stack.locals.result)
+//  Testing comments in different contexts
+  });
+  await runner.step(3, async (runner) => {
+__stack.locals.age = 25;
+await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.age",
       value: __stack.locals.age
     })
-    //  2. Before conditionals
-          __stack.step++;
-  }
-  if (__step <= 4) {
-          __stack.locals.status = `active`;
-    await __ctx.audit({
+//  2. Before conditionals
+  });
+  await runner.step(4, async (runner) => {
+__stack.locals.status = `active`;
+await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.status",
       value: __stack.locals.status
     })
-          __stack.step++;
-  }
-  if (__step <= 5) {
-          if (__stack.locals.__condbranch_5 === undefined) {
-
-  if (__stack.locals.status === `inactive`) {
-    __stack.locals.__condbranch_5 = 0;
-
-
-
-  } else {
-    __stack.locals.__condbranch_5 = -1;
-  }
-
-}
-const __condbranch_5 = __stack.locals.__condbranch_5;
-const __sub_5 = __stack.locals.__substep_5 ?? 0;
-
-if (__condbranch_5 === 0) {
-
-  if (__sub_5 <= 0) {
-    await print(`Stopped`)
-    __stack.locals.__substep_5 = 1;
-  }
-
-
-}
-    //  Final comment at end of file
-          __stack.step++;
-  }
+  });
+  await runner.step(5, async (runner) => {
+await runner.ifElse(5, [
+      {
+        condition: () => __stack.locals.status === `inactive`,
+        body: async (runner) => {
+await print(`Stopped`)
+        },
+      }
+    ]);
+//  Final comment at end of file
+  });
+  if (runner.halted) return runner.haltResult;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",

@@ -4,8 +4,8 @@
     "result": true
   },
   "reject": {
-    "x": 99,
-    "result": false
+    "x": null,
+    "result": null
   },
   "resolve": {
     "x": 77,

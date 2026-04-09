@@ -7,7 +7,7 @@ import * as smoltalk from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -215,13 +215,10 @@ let __functionCompleted = false;
   __stack.args["x"] = x;
   __stack.args["y"] = y;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "add" });
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            __self.__removedTools = __self.__removedTools || [];
+    await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
         ctx: __ctx,
         prompt: `add ${__stack.args.x} and ${__stack.args.y}`,
@@ -231,24 +228,24 @@ __stack.locals.result = await runPrompt({
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
       });
-// return early from node if this is an interrupt
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.result)) {
         await __ctx.pendingPromises.awaitAll()
-        return __stack.locals.result;
+        runner.halt(__stack.locals.result)
+        return;
       }
-      await __ctx.audit({
+await __ctx.audit({
         type: "assignment",
         variable: "__self.__removedTools",
         value: __self.__removedTools
       })
-            __stack.step++;
-    }
-    if (__step <= 2) {
-            if (__ctx.callbacks.onCheckpoint) {
+    });
+    await runner.step(1, async (runner) => {
+if (__ctx.callbacks.onCheckpoint) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
   } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "add", stepPath: "2" });
+    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "add", stepPath: "1" });
     const __cp = __ctx.checkpoints.get(__cpId);
     await callHook({
       callbacks: __ctx.callbacks,
@@ -268,18 +265,23 @@ if (isInterrupt(__stack.locals.result)) {
   }
 }
 
-            __stack.step++;
-    }
-    if (__step <= 3) {
-            const __auditReturnValue = __stack.locals.result;
+    });
+    await runner.step(2, async (runner) => {
+const __returnValue = __stack.locals.result;
 await __ctx.audit({
         type: "return",
-        value: __auditReturnValue
+        value: __returnValue
       })
 __functionCompleted = true;
-return __auditReturnValue
-            __stack.step++;
-    }
+runner.halt(__returnValue)
+return;
+await __ctx.audit({
+        type: "assignment",
+        variable: "__returnValue",
+        value: __returnValue
+      })
+    });
+    if (runner.halted) return runner.haltResult;
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -342,13 +344,10 @@ let __functionCompleted = false;
   })
   __stack.args["name"] = name;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "greet" });
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            __self.__removedTools = __self.__removedTools || [];
+    await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.message = await runPrompt({
         ctx: __ctx,
         prompt: `Hello ${__stack.args.name}!`,
@@ -358,24 +357,24 @@ __stack.locals.message = await runPrompt({
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
       });
-// return early from node if this is an interrupt
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.message)) {
         await __ctx.pendingPromises.awaitAll()
-        return __stack.locals.message;
+        runner.halt(__stack.locals.message)
+        return;
       }
-      await __ctx.audit({
+await __ctx.audit({
         type: "assignment",
         variable: "__self.__removedTools",
         value: __self.__removedTools
       })
-            __stack.step++;
-    }
-    if (__step <= 2) {
-            if (__ctx.callbacks.onCheckpoint) {
+    });
+    await runner.step(1, async (runner) => {
+if (__ctx.callbacks.onCheckpoint) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
   } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "greet", stepPath: "2" });
+    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "greet", stepPath: "1" });
     const __cp = __ctx.checkpoints.get(__cpId);
     await callHook({
       callbacks: __ctx.callbacks,
@@ -395,18 +394,23 @@ if (isInterrupt(__stack.locals.message)) {
   }
 }
 
-            __stack.step++;
-    }
-    if (__step <= 3) {
-            const __auditReturnValue = __stack.locals.message;
+    });
+    await runner.step(2, async (runner) => {
+const __returnValue = __stack.locals.message;
 await __ctx.audit({
         type: "return",
-        value: __auditReturnValue
+        value: __returnValue
       })
 __functionCompleted = true;
-return __auditReturnValue
-            __stack.step++;
-    }
+runner.halt(__returnValue)
+return;
+await __ctx.audit({
+        type: "assignment",
+        variable: "__returnValue",
+        value: __returnValue
+      })
+    });
+    if (runner.halted) return runner.haltResult;
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -472,13 +476,10 @@ let __functionCompleted = false;
   __stack.args["count"] = count;
   __stack.args["label"] = label;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "mixed" });
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            __self.__removedTools = __self.__removedTools || [];
+    await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.output = await runPrompt({
         ctx: __ctx,
         prompt: `${__stack.args.label}: ${__stack.args.count}`,
@@ -488,24 +489,24 @@ __stack.locals.output = await runPrompt({
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
       });
-// return early from node if this is an interrupt
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.output)) {
         await __ctx.pendingPromises.awaitAll()
-        return __stack.locals.output;
+        runner.halt(__stack.locals.output)
+        return;
       }
-      await __ctx.audit({
+await __ctx.audit({
         type: "assignment",
         variable: "__self.__removedTools",
         value: __self.__removedTools
       })
-            __stack.step++;
-    }
-    if (__step <= 2) {
-            if (__ctx.callbacks.onCheckpoint) {
+    });
+    await runner.step(1, async (runner) => {
+if (__ctx.callbacks.onCheckpoint) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
   } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "mixed", stepPath: "2" });
+    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "mixed", stepPath: "1" });
     const __cp = __ctx.checkpoints.get(__cpId);
     await callHook({
       callbacks: __ctx.callbacks,
@@ -525,18 +526,23 @@ if (isInterrupt(__stack.locals.output)) {
   }
 }
 
-            __stack.step++;
-    }
-    if (__step <= 3) {
-            const __auditReturnValue = __stack.locals.output;
+    });
+    await runner.step(2, async (runner) => {
+const __returnValue = __stack.locals.output;
 await __ctx.audit({
         type: "return",
-        value: __auditReturnValue
+        value: __returnValue
       })
 __functionCompleted = true;
-return __auditReturnValue
-            __stack.step++;
-    }
+runner.halt(__returnValue)
+return;
+await __ctx.audit({
+        type: "assignment",
+        variable: "__returnValue",
+        value: __returnValue
+      })
+    });
+    if (runner.halted) return runner.haltResult;
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -599,13 +605,10 @@ let __functionCompleted = false;
   })
   __stack.args["items"] = items;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "processArray" });
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            __self.__removedTools = __self.__removedTools || [];
+    await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
         ctx: __ctx,
         prompt: `Processing array with ${__stack.args.items} items`,
@@ -615,24 +618,24 @@ __stack.locals.result = await runPrompt({
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
       });
-// return early from node if this is an interrupt
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.result)) {
         await __ctx.pendingPromises.awaitAll()
-        return __stack.locals.result;
+        runner.halt(__stack.locals.result)
+        return;
       }
-      await __ctx.audit({
+await __ctx.audit({
         type: "assignment",
         variable: "__self.__removedTools",
         value: __self.__removedTools
       })
-            __stack.step++;
-    }
-    if (__step <= 2) {
-            if (__ctx.callbacks.onCheckpoint) {
+    });
+    await runner.step(1, async (runner) => {
+if (__ctx.callbacks.onCheckpoint) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
   } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "processArray", stepPath: "2" });
+    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "processArray", stepPath: "1" });
     const __cp = __ctx.checkpoints.get(__cpId);
     await callHook({
       callbacks: __ctx.callbacks,
@@ -652,18 +655,23 @@ if (isInterrupt(__stack.locals.result)) {
   }
 }
 
-            __stack.step++;
-    }
-    if (__step <= 3) {
-            const __auditReturnValue = __stack.locals.result;
+    });
+    await runner.step(2, async (runner) => {
+const __returnValue = __stack.locals.result;
 await __ctx.audit({
         type: "return",
-        value: __auditReturnValue
+        value: __returnValue
       })
 __functionCompleted = true;
-return __auditReturnValue
-            __stack.step++;
-    }
+runner.halt(__returnValue)
+return;
+await __ctx.audit({
+        type: "assignment",
+        variable: "__returnValue",
+        value: __returnValue
+      })
+    });
+    if (runner.halted) return runner.haltResult;
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -726,13 +734,10 @@ let __functionCompleted = false;
   })
   __stack.args["value"] = value;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "flexible" });
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            __self.__removedTools = __self.__removedTools || [];
+    await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
         ctx: __ctx,
         prompt: `Received value: ${__stack.args.value}`,
@@ -742,24 +747,24 @@ __stack.locals.result = await runPrompt({
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
       });
-// return early from node if this is an interrupt
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.result)) {
         await __ctx.pendingPromises.awaitAll()
-        return __stack.locals.result;
+        runner.halt(__stack.locals.result)
+        return;
       }
-      await __ctx.audit({
+await __ctx.audit({
         type: "assignment",
         variable: "__self.__removedTools",
         value: __self.__removedTools
       })
-            __stack.step++;
-    }
-    if (__step <= 2) {
-            if (__ctx.callbacks.onCheckpoint) {
+    });
+    await runner.step(1, async (runner) => {
+if (__ctx.callbacks.onCheckpoint) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
   } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "flexible", stepPath: "2" });
+    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "flexible", stepPath: "1" });
     const __cp = __ctx.checkpoints.get(__cpId);
     await callHook({
       callbacks: __ctx.callbacks,
@@ -779,18 +784,23 @@ if (isInterrupt(__stack.locals.result)) {
   }
 }
 
-            __stack.step++;
-    }
-    if (__step <= 3) {
-            const __auditReturnValue = __stack.locals.result;
+    });
+    await runner.step(2, async (runner) => {
+const __returnValue = __stack.locals.result;
 await __ctx.audit({
         type: "return",
-        value: __auditReturnValue
+        value: __returnValue
       })
 __functionCompleted = true;
-return __auditReturnValue
-            __stack.step++;
-    }
+runner.halt(__returnValue)
+return;
+await __ctx.audit({
+        type: "assignment",
+        variable: "__returnValue",
+        value: __returnValue
+      })
+    });
+    if (runner.halted) return runner.haltResult;
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -834,26 +844,28 @@ let __functionCompleted = false;
       nodeName: "foo"
     }
   })
-  if (__step <= 0) {
-      
-          __stack.step++;
-  }
-  if (__step <= 1) {
-          await print(`This is a node with a return type`)
-          __stack.step++;
-  }
-  if (__step <= 2) {
-          const __auditReturnValue = {
-      messages: __threads,
-      data: `Node completed`
-    };
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function-with-types.agency", scopeName: "foo" });
+  await runner.step(0, async (runner) => {
+await print(`This is a node with a return type`)
+  });
+  await runner.step(1, async (runner) => {
+const __returnValue = `Node completed`;
 await __ctx.audit({
       type: "return",
-      value: __auditReturnValue
+      value: __returnValue
     })
-return __auditReturnValue;
-          __stack.step++;
-  }
+runner.halt({
+      messages: __threads,
+      data: __returnValue
+    })
+return;
+await __ctx.audit({
+      type: "assignment",
+      variable: "__returnValue",
+      value: __returnValue
+    })
+  });
+  if (runner.halted) return runner.haltResult;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",
@@ -887,110 +899,111 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  if (__step <= 0) {
-          //  Call the functions
-          __stack.step++;
-  }
-  if (__step <= 1) {
-          __stack.locals.sum = await add(5, 10, {
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function-with-types.agency", scopeName: "main" });
+  await runner.step(0, async (runner) => {
+//  Call the functions
+  });
+  await runner.step(1, async (runner) => {
+__stack.locals.sum = await add(5, 10, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.sum)) {
       await __ctx.pendingPromises.awaitAll()
-      return {
+      runner.halt({
         ...__state,
         data: __stack.locals.sum
-      };
+      })
+      return;
     }
-    await __ctx.audit({
+await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.sum",
       value: __stack.locals.sum
     })
-          __stack.step++;
-  }
-  if (__step <= 2) {
-          __stack.locals.greeting = await greet(`Alice`, {
+  });
+  await runner.step(2, async (runner) => {
+__stack.locals.greeting = await greet(`Alice`, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.greeting)) {
       await __ctx.pendingPromises.awaitAll()
-      return {
+      runner.halt({
         ...__state,
         data: __stack.locals.greeting
-      };
+      })
+      return;
     }
-    await __ctx.audit({
+await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.greeting",
       value: __stack.locals.greeting
     })
-          __stack.step++;
-  }
-  if (__step <= 3) {
-          __stack.locals.labeled = await mixed(42, `Answer`, {
+  });
+  await runner.step(3, async (runner) => {
+__stack.locals.labeled = await mixed(42, `Answer`, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.labeled)) {
       await __ctx.pendingPromises.awaitAll()
-      return {
+      runner.halt({
         ...__state,
         data: __stack.locals.labeled
-      };
+      })
+      return;
     }
-    await __ctx.audit({
+await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.labeled",
       value: __stack.locals.labeled
     })
-          __stack.step++;
-  }
-  if (__step <= 4) {
-          __stack.locals.processed = await processArray([1, 2, 3, 4, 5], {
+  });
+  await runner.step(4, async (runner) => {
+__stack.locals.processed = await processArray([1, 2, 3, 4, 5], {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.processed)) {
       await __ctx.pendingPromises.awaitAll()
-      return {
+      runner.halt({
         ...__state,
         data: __stack.locals.processed
-      };
+      })
+      return;
     }
-    await __ctx.audit({
+await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.processed",
       value: __stack.locals.processed
     })
-          __stack.step++;
-  }
-  if (__step <= 5) {
-          __stack.locals.flexResult = await flexible(`test`, {
+  });
+  await runner.step(5, async (runner) => {
+__stack.locals.flexResult = await flexible(`test`, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.flexResult)) {
       await __ctx.pendingPromises.awaitAll()
-      return {
+      runner.halt({
         ...__state,
         data: __stack.locals.flexResult
-      };
+      })
+      return;
     }
-    await __ctx.audit({
+await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.flexResult",
       value: __stack.locals.flexResult
     })
-          __stack.step++;
-  }
+  });
+  if (runner.halted) return runner.haltResult;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",
@@ -1039,4 +1052,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"function-with-types.agency:add":{"1":{"line":2,"col":2},"3":{"line":3,"col":2}},"function-with-types.agency:greet":{"1":{"line":10,"col":2},"3":{"line":11,"col":2}},"function-with-types.agency:mixed":{"1":{"line":18,"col":2},"3":{"line":19,"col":2}},"function-with-types.agency:processArray":{"1":{"line":26,"col":2},"3":{"line":27,"col":2}},"function-with-types.agency:flexible":{"1":{"line":34,"col":2},"3":{"line":35,"col":2}},"function-with-types.agency:foo":{"1":{"line":39,"col":2},"2":{"line":40,"col":2}},"function-with-types.agency:main":{"1":{"line":45,"col":2},"2":{"line":46,"col":2},"3":{"line":47,"col":2},"4":{"line":48,"col":2},"5":{"line":49,"col":2}}};
+export const __sourceMap = {"function-with-types.agency:add":{"0":{"line":2,"col":2},"2":{"line":3,"col":2}},"function-with-types.agency:greet":{"0":{"line":10,"col":2},"2":{"line":11,"col":2}},"function-with-types.agency:mixed":{"0":{"line":18,"col":2},"2":{"line":19,"col":2}},"function-with-types.agency:processArray":{"0":{"line":26,"col":2},"2":{"line":27,"col":2}},"function-with-types.agency:flexible":{"0":{"line":34,"col":2},"2":{"line":35,"col":2}},"function-with-types.agency:foo":{"0":{"line":39,"col":2},"1":{"line":40,"col":2}},"function-with-types.agency:main":{"1":{"line":45,"col":2},"2":{"line":46,"col":2},"3":{"line":47,"col":2},"4":{"line":48,"col":2},"5":{"line":49,"col":2}}};

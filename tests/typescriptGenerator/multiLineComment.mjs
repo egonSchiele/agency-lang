@@ -7,7 +7,7 @@ import * as smoltalk from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -150,21 +150,24 @@ let __functionCompleted = false;
     result: undefined
   })
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "multiLineComment.agency", scopeName: "greet" });
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            const __auditReturnValue = `hello`;
+    await runner.step(0, async (runner) => {
+const __returnValue = `hello`;
 await __ctx.audit({
         type: "return",
-        value: __auditReturnValue
+        value: __returnValue
       })
 __functionCompleted = true;
-return __auditReturnValue
-            __stack.step++;
-    }
+runner.halt(__returnValue)
+return;
+await __ctx.audit({
+        type: "assignment",
+        variable: "__returnValue",
+        value: __returnValue
+      })
+    });
+    if (runner.halted) return runner.haltResult;
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -189,4 +192,4 @@ return __auditReturnValue
   }
 }
 export default graph
-export const __sourceMap = {"multiLineComment.agency:greet":{"1":{"line":6,"col":2}}};
+export const __sourceMap = {"multiLineComment.agency:greet":{"0":{"line":6,"col":2}}};

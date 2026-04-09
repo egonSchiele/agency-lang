@@ -8,7 +8,7 @@ import * as smoltalk from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,

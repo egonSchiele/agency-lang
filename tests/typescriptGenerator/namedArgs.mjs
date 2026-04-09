@@ -7,7 +7,7 @@ import * as smoltalk from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -155,15 +155,12 @@ let __functionCompleted = false;
   __stack.args["name"] = name;
   __stack.args["greeting"] = greeting ?? `Hello`;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "namedArgs.agency", scopeName: "greet" });
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            await print(__stack.args.greeting, __stack.args.name)
-            __stack.step++;
-    }
+    await runner.step(0, async (runner) => {
+await print(__stack.args.greeting, __stack.args.name)
+    });
+    if (runner.halted) return runner.haltResult;
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -198,4 +195,4 @@ await greet(`world`, `Hi`, {
   interruptData: __state?.interruptData
 })
 export default graph
-export const __sourceMap = {"namedArgs.agency:greet":{"1":{"line":-1,"col":2}}};
+export const __sourceMap = {"namedArgs.agency:greet":{"0":{"line":-1,"col":2}}};

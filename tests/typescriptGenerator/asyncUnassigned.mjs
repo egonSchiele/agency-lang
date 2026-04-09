@@ -7,7 +7,7 @@ import * as smoltalk from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -155,15 +155,12 @@ let __functionCompleted = false;
   __stack.args["sleepTime"] = sleepTime;
   __stack.args["value"] = value;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "asyncUnassigned.agency", scopeName: "append" });
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            await sleep(__stack.args.sleepTime)
-            __stack.step++;
-    }
+    await runner.step(0, async (runner) => {
+await sleep(__stack.args.sleepTime)
+    });
+    if (runner.halted) return runner.haltResult;
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -207,19 +204,16 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  if (__step <= 0) {
-      
-          __stack.step++;
-  }
-  if (__step <= 1 || (__stack.branches && __stack.branches["1"])) {
-          if ((__stack.branches && __stack.branches["1"])) {
-      __forked = __stack.branches["1"].stack;
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "asyncUnassigned.agency", scopeName: "main" });
+  await runner.branchStep(0, "0", async (runner) => {
+if ((__stack.branches && __stack.branches["0"])) {
+      __forked = __stack.branches["0"].stack;
       __forked.deserializeMode()
     } else {
       __forked = __ctx.forkStack();
     }
 __stack.branches = (__stack.branches || {});
-__stack.branches["1"] = {
+__stack.branches["0"] = {
       stack: __forked
     };
 __ctx.pendingPromises.add(append(1, `hello`, {
@@ -229,22 +223,21 @@ __ctx.pendingPromises.add(append(1, `hello`, {
   stateStack: __forked,
   isForked: true
 }))
-    await __ctx.audit({
+await __ctx.audit({
       type: "assignment",
       variable: "__stack.branches",
       value: __stack.branches
     })
-          __stack.step++;
-  }
-  if (__step <= 2 || (__stack.branches && __stack.branches["2"])) {
-          if ((__stack.branches && __stack.branches["2"])) {
-      __forked = __stack.branches["2"].stack;
+  });
+  await runner.branchStep(1, "1", async (runner) => {
+if ((__stack.branches && __stack.branches["1"])) {
+      __forked = __stack.branches["1"].stack;
       __forked.deserializeMode()
     } else {
       __forked = __ctx.forkStack();
     }
 __stack.branches = (__stack.branches || {});
-__stack.branches["2"] = {
+__stack.branches["1"] = {
       stack: __forked
     };
 __ctx.pendingPromises.add(append(0.5, `world`, {
@@ -254,25 +247,30 @@ __ctx.pendingPromises.add(append(0.5, `world`, {
   stateStack: __forked,
   isForked: true
 }))
-    await __ctx.audit({
+await __ctx.audit({
       type: "assignment",
       variable: "__stack.branches",
       value: __stack.branches
     })
-          __stack.step++;
-  }
-  if (__step <= 3) {
-          const __auditReturnValue = {
-      messages: __threads,
-      data: `done`
-    };
+  });
+  await runner.step(2, async (runner) => {
+const __returnValue = `done`;
 await __ctx.audit({
       type: "return",
-      value: __auditReturnValue
+      value: __returnValue
     })
-return __auditReturnValue;
-          __stack.step++;
-  }
+runner.halt({
+      messages: __threads,
+      data: __returnValue
+    })
+return;
+await __ctx.audit({
+      type: "assignment",
+      variable: "__returnValue",
+      value: __returnValue
+    })
+  });
+  if (runner.halted) return runner.haltResult;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",
@@ -310,4 +308,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"asyncUnassigned.agency:append":{"1":{"line":-1,"col":2}},"asyncUnassigned.agency:main":{"1":{"line":3,"col":2},"2":{"line":4,"col":2},"3":{"line":5,"col":2}}};
+export const __sourceMap = {"asyncUnassigned.agency:append":{"0":{"line":-1,"col":2}},"asyncUnassigned.agency:main":{"0":{"line":3,"col":2},"1":{"line":4,"col":2},"2":{"line":5,"col":2}}};

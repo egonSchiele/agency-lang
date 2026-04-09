@@ -7,7 +7,7 @@ import * as smoltalk from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -118,12 +118,9 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  if (__step <= 0) {
-      
-          __stack.step++;
-  }
-  if (__step <= 1) {
-          __self.__removedTools = __self.__removedTools || [];
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "assignment.agency", scopeName: "main" });
+  await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.bar = await runPrompt({
       ctx: __ctx,
       prompt: `the number 1`,
@@ -136,27 +133,27 @@ __stack.locals.bar = await runPrompt({
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools
     });
-// return early from node if this is an interrupt
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.bar)) {
       await __ctx.pendingPromises.awaitAll()
-      return {
+      runner.halt({
         messages: __threads,
         data: __stack.locals.bar
-      };
+      })
+      return;
     }
-    await __ctx.audit({
+await __ctx.audit({
       type: "assignment",
       variable: "__self.__removedTools",
       value: __self.__removedTools
     })
-          __stack.step++;
-  }
-  if (__step <= 2) {
-          if (__ctx.callbacks.onCheckpoint) {
+  });
+  await runner.step(1, async (runner) => {
+if (__ctx.callbacks.onCheckpoint) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
   } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "assignment.agency", scopeName: "main", stepPath: "2" });
+    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "assignment.agency", scopeName: "main", stepPath: "1" });
     const __cp = __ctx.checkpoints.get(__cpId);
     await callHook({
       callbacks: __ctx.callbacks,
@@ -176,8 +173,8 @@ if (isInterrupt(__stack.locals.bar)) {
   }
 }
 
-          __stack.step++;
-  }
+  });
+  if (runner.halted) return runner.haltResult;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",
@@ -215,4 +212,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"assignment.agency:main":{"1":{"line":-1,"col":2}}};
+export const __sourceMap = {"assignment.agency:main":{"0":{"line":-1,"col":2}}};

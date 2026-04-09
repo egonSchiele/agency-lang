@@ -7,7 +7,7 @@ import * as smoltalk from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -208,11 +208,9 @@ let __functionCompleted = false;
   __stack.args["a"] = a;
   __stack.args["b"] = b;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "add" });
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
+    if (runner.halted) return runner.haltResult;
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -275,11 +273,9 @@ let __functionCompleted = false;
   })
   __stack.args["name"] = name;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "greet" });
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
+    if (runner.halted) return runner.haltResult;
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -345,11 +341,9 @@ let __functionCompleted = false;
   __stack.args["width"] = width;
   __stack.args["height"] = height;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "calculateArea" });
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
+    if (runner.halted) return runner.haltResult;
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -407,11 +401,9 @@ let __functionCompleted = false;
     result: undefined
   })
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "processData" });
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
+    if (runner.halted) return runner.haltResult;
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error

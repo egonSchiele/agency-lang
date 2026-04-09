@@ -7,7 +7,7 @@ import * as smoltalk from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -118,71 +118,73 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  if (__step <= 0) {
-      
-          __stack.step++;
-  }
-  if (__step <= 1) {
-          __stack.locals.cp = await checkpoint({
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "checkpoint-restore.agency", scopeName: "main" });
+  await runner.step(0, async (runner) => {
+__stack.locals.cp = await checkpoint({
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.cp)) {
       await __ctx.pendingPromises.awaitAll()
-      return {
+      runner.halt({
         ...__state,
         data: __stack.locals.cp
-      };
+      })
+      return;
     }
-    await __ctx.audit({
+await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.cp",
       value: __stack.locals.cp
     })
-          __stack.step++;
-  }
-  if (__step <= 2) {
-          __stack.locals.x = 1;
-    await __ctx.audit({
+  });
+  await runner.step(1, async (runner) => {
+__stack.locals.x = 1;
+await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.x",
       value: __stack.locals.x
     })
-          __stack.step++;
-  }
-  if (__step <= 3) {
-          const __funcResult = await restore(__stack.locals.cp, {}, {
+  });
+  await runner.step(2, async (runner) => {
+const __funcResult = await restore(__stack.locals.cp, {}, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__funcResult)) {
       await __ctx.pendingPromises.awaitAll()
-      return {
+      runner.halt({
         ...__state,
         data: __funcResult
-      };
+      })
+      return;
     }
-    await __ctx.audit({
+await __ctx.audit({
       type: "assignment",
       variable: "__funcResult",
       value: __funcResult
     })
-          __stack.step++;
-  }
-  if (__step <= 4) {
-          const __auditReturnValue = {
-      messages: __threads,
-      data: __stack.locals.x
-    };
+  });
+  await runner.step(3, async (runner) => {
+const __returnValue = __stack.locals.x;
 await __ctx.audit({
       type: "return",
-      value: __auditReturnValue
+      value: __returnValue
     })
-return __auditReturnValue;
-          __stack.step++;
-  }
+runner.halt({
+      messages: __threads,
+      data: __returnValue
+    })
+return;
+await __ctx.audit({
+      type: "assignment",
+      variable: "__returnValue",
+      value: __returnValue
+    })
+  });
+  if (runner.halted) return runner.haltResult;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",
@@ -220,4 +222,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"checkpoint-restore.agency:main":{"1":{"line":-1,"col":2},"2":{"line":0,"col":2},"3":{"line":1,"col":2},"4":{"line":2,"col":2}}};
+export const __sourceMap = {"checkpoint-restore.agency:main":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2},"2":{"line":1,"col":2},"3":{"line":2,"col":2}}};

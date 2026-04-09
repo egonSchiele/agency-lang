@@ -7,7 +7,7 @@ import * as smoltalk from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -118,34 +118,30 @@ let __functionCompleted = false;
       nodeName: "foo"
     }
   })
-  if (__step <= 0) {
-      
-          __stack.step++;
-  }
-  if (__step <= 1) {
-          await print(`What is your name?`)
-          __stack.step++;
-  }
-  if (__step <= 2) {
-          __stack.locals.name = await input(`> `);
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "stringConcat.agency", scopeName: "foo" });
+  await runner.step(0, async (runner) => {
+await print(`What is your name?`)
+  });
+  await runner.step(1, async (runner) => {
+__stack.locals.name = await input(`> `);
 if (isInterrupt(__stack.locals.name)) {
       await __ctx.pendingPromises.awaitAll()
-      return {
+      runner.halt({
         ...__state,
         data: __stack.locals.name
-      };
+      })
+      return;
     }
-    await __ctx.audit({
+await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.name",
       value: __stack.locals.name
     })
-          __stack.step++;
-  }
-  if (__step <= 3) {
-          await print(`Hello, ${__stack.locals.name}!`)
-          __stack.step++;
-  }
+  });
+  await runner.step(2, async (runner) => {
+await print(`Hello, ${__stack.locals.name}!`)
+  });
+  if (runner.halted) return runner.haltResult;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",
@@ -171,4 +167,4 @@ export async function foo({ messages, callbacks }: { messages?: any; callbacks?:
 }
 export const __fooNodeParams = [];
 export default graph
-export const __sourceMap = {"stringConcat.agency:foo":{"1":{"line":-1,"col":2},"2":{"line":0,"col":2},"3":{"line":1,"col":2}}};
+export const __sourceMap = {"stringConcat.agency:foo":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2},"2":{"line":1,"col":2}}};

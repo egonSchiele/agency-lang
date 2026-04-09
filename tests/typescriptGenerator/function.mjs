@@ -7,7 +7,7 @@ import * as smoltalk from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -162,20 +162,17 @@ let __functionCompleted = false;
     result: undefined
   })
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function.agency", scopeName: "test" });
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            __stack.locals.foo = 1;
-      await __ctx.audit({
+    await runner.step(0, async (runner) => {
+__stack.locals.foo = 1;
+await __ctx.audit({
         type: "assignment",
         variable: "__stack.locals.foo",
         value: __stack.locals.foo
       })
-            __stack.step++;
-    }
+    });
+    if (runner.halted) return runner.haltResult;
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -241,11 +238,12 @@ let __functionCompleted = false;
   __stack.args["a"] = a;
   __stack.args["b"] = b;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function.agency", scopeName: "add" });
   try {
-    if (__step <= 0) {
-            //  multi-param function
-            __stack.step++;
-    }
+    await runner.step(0, async (runner) => {
+//  multi-param function
+    });
+    if (runner.halted) return runner.haltResult;
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -289,18 +287,15 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  if (__step <= 0) {
-      
-          __stack.step++;
-  }
-  if (__step <= 1) {
-          await print(await test({
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function.agency", scopeName: "main" });
+  await runner.step(0, async (runner) => {
+await print(await test({
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
     }))
-          __stack.step++;
-  }
+  });
+  if (runner.halted) return runner.haltResult;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",
@@ -338,4 +333,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"function.agency:test":{"1":{"line":-1,"col":2}},"function.agency:add":{},"function.agency:main":{"1":{"line":7,"col":2}}};
+export const __sourceMap = {"function.agency:test":{"0":{"line":-1,"col":2}},"function.agency:add":{},"function.agency:main":{"0":{"line":7,"col":2}}};

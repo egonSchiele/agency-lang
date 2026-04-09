@@ -378,6 +378,7 @@ export class DebuggerDriver {
         const rollingCheckpoints = this.debuggerState.getCheckpoints();
         const lastCheckpoint = rollingCheckpoints.at(-1);
         if (lastCheckpoint) {
+          //console.log(color.cyan(`Creating checkpoint at ${lastCheckpoint.location}`, JSON.stringify(lastCheckpoint, null, 2)));
           const checkpointId =
             this.debuggerState.cloneCheckpoint(lastCheckpoint);
           this.debuggerState.checkpoints.removeDebugFlagsFor(checkpointId);

@@ -29,12 +29,15 @@ export class TestDebuggerIO implements DebuggerIO {
       const checkpoint = Checkpoint.fromJSON(_checkpoint);
       if (checkpoint) {
         this.renderCalls.push(checkpoint);
+        // console.log(JSON.stringify(checkpoint, null, 2));
+        // console.log(color.green("[DBG]"), checkpoint.getLocation());
       }
     }
   }
 
   async waitForCommand(): Promise<DebuggerCommand> {
     const cmd = this.commands[this.commandIndex++];
+    // console.log(color.green("[DBG]"), "Command", cmd);
     if (!cmd) {
       return { type: "quit" };
     }

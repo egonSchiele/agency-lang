@@ -7,7 +7,7 @@ import * as smoltalk from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -170,26 +170,24 @@ let __functionCompleted = false;
   __stack.args["name"] = name;
   __stack.args["age"] = age;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "interrupt-2-deep-in-function.agency", scopeName: "greet" });
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            // Remember this will be called both in a tool call context
+    await runner.step(0, async (runner) => {
+// Remember this will be called both in a tool call context
 // and when the user is simply calling a function.
 
 if (__state.interruptData?.interruptResponse?.type === "approve") {
   // approved, clear interrupt response and continue execution
   __state.interruptData.interruptResponse = null;
 } else if (__state.interruptData?.interruptResponse?.type === "reject" && !__state.isToolCall) {
-  // rejected, clear interrupt response and return early
+  // rejected, clear interrupt response and halt
   // tool calls will instead tell the llm that the call was rejected
   __state.interruptData.interruptResponse = null;
   
   
-  return null;
+  runner.halt(null);
   
+  return;
 } else if (__state.interruptData?.interruptResponse?.type === "modify") {
   if (__state.isToolCall) {
     // continue, args will get modified in the tool call handler
@@ -203,34 +201,41 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   if (isRejected(__handlerResult)) {
     
     
-    return __handlerResult.value;
+    runner.halt(__handlerResult.value);
     
+    return;
   }
   if (!isApproved(__handlerResult)) {
     // No handler — propagate interrupt to TypeScript caller
-    const __checkpointId = __ctx.checkpoints.create(__ctx, { moduleId: "interrupt-2-deep-in-function.agency", scopeName: "greet", stepPath: "1" });
+    const __checkpointId = __ctx.checkpoints.create(__ctx, { moduleId: "interrupt-2-deep-in-function.agency", scopeName: "greet", stepPath: "0" });
     __handlerResult.checkpointId = __checkpointId;
     __handlerResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
     
     
-    return __handlerResult;
+    runner.halt(__handlerResult);
     
+    return;
   }
   // Approved — continue execution past interrupt
 }
 
-            __stack.step++;
-    }
-    if (__step <= 2) {
-            const __auditReturnValue = `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`;
+    });
+    await runner.step(1, async (runner) => {
+const __returnValue = `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`;
 await __ctx.audit({
         type: "return",
-        value: __auditReturnValue
+        value: __returnValue
       })
 __functionCompleted = true;
-return __auditReturnValue
-            __stack.step++;
-    }
+runner.halt(__returnValue)
+return;
+await __ctx.audit({
+        type: "assignment",
+        variable: "__returnValue",
+        value: __returnValue
+      })
+    });
+    if (runner.halted) return runner.haltResult;
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -296,17 +301,13 @@ let __functionCompleted = false;
   __stack.args["name"] = name;
   __stack.args["age"] = age;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "interrupt-2-deep-in-function.agency", scopeName: "foo2" });
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            await print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`) + greet
-            __stack.step++;
-    }
-    if (__step <= 2) {
-            __self.__removedTools = __self.__removedTools || [];
+    await runner.step(0, async (runner) => {
+await print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`) + greet
+    });
+    await runner.step(1, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt({
         ctx: __ctx,
         prompt: `Greet the user with their name: ${__stack.args.name} and age ${__stack.args.age} using the greet function.`,
@@ -316,24 +317,24 @@ __stack.locals.response = await runPrompt({
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
       });
-// return early from node if this is an interrupt
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.response)) {
         await __ctx.pendingPromises.awaitAll()
-        return __stack.locals.response;
+        runner.halt(__stack.locals.response)
+        return;
       }
-      await __ctx.audit({
+await __ctx.audit({
         type: "assignment",
         variable: "__self.__removedTools",
         value: __self.__removedTools
       })
-            __stack.step++;
-    }
-    if (__step <= 3) {
-            if (__ctx.callbacks.onCheckpoint) {
+    });
+    await runner.step(2, async (runner) => {
+if (__ctx.callbacks.onCheckpoint) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
   } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "interrupt-2-deep-in-function.agency", scopeName: "foo2", stepPath: "3" });
+    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "interrupt-2-deep-in-function.agency", scopeName: "foo2", stepPath: "2" });
     const __cp = __ctx.checkpoints.get(__cpId);
     await callHook({
       callbacks: __ctx.callbacks,
@@ -353,22 +354,26 @@ if (isInterrupt(__stack.locals.response)) {
   }
 }
 
-            __stack.step++;
-    }
-    if (__step <= 4) {
-            await print(`Greeted, age is still ${__stack.args.age}...`)
-            __stack.step++;
-    }
-    if (__step <= 5) {
-            const __auditReturnValue = __stack.locals.response;
+    });
+    await runner.step(3, async (runner) => {
+await print(`Greeted, age is still ${__stack.args.age}...`)
+    });
+    await runner.step(4, async (runner) => {
+const __returnValue = __stack.locals.response;
 await __ctx.audit({
         type: "return",
-        value: __auditReturnValue
+        value: __returnValue
       })
 __functionCompleted = true;
-return __auditReturnValue
-            __stack.step++;
-    }
+runner.halt(__returnValue)
+return;
+await __ctx.audit({
+        type: "assignment",
+        variable: "__returnValue",
+        value: __returnValue
+      })
+    });
+    if (runner.halted) return runner.haltResult;
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -412,66 +417,65 @@ let __functionCompleted = false;
       nodeName: "sayHi"
     }
   })
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-2-deep-in-function.agency", scopeName: "sayHi" });
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
   }
-  if (__step <= 0) {
-      
-          __stack.step++;
-  }
-  if (__step <= 1) {
-          await print(`Saying hi to ${__stack.args.name}...`)
-          __stack.step++;
-  }
-  if (__step <= 2) {
-          __stack.locals.age = 30;
-    await __ctx.audit({
+  await runner.step(0, async (runner) => {
+await print(`Saying hi to ${__stack.args.name}...`)
+  });
+  await runner.step(1, async (runner) => {
+__stack.locals.age = 30;
+await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.age",
       value: __stack.locals.age
     })
-          __stack.step++;
-  }
-  if (__step <= 3) {
-          __stack.locals.response = await foo2(__stack.args.name, __stack.locals.age, {
+  });
+  await runner.step(2, async (runner) => {
+__stack.locals.response = await foo2(__stack.args.name, __stack.locals.age, {
       ctx: __ctx,
       threads: new ThreadStore(),
       interruptData: __state?.interruptData
     });
 if (isInterrupt(__stack.locals.response)) {
       await __ctx.pendingPromises.awaitAll()
-      return {
+      runner.halt({
         ...__state,
         data: __stack.locals.response
-      };
+      })
+      return;
     }
-    await __ctx.audit({
+await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.response",
       value: __stack.locals.response
     })
-          __stack.step++;
-  }
-  if (__step <= 4) {
-          await print(__stack.locals.response)
-          __stack.step++;
-  }
-  if (__step <= 5) {
-          await print(`Greeting sent.`)
-          __stack.step++;
-  }
-  if (__step <= 6) {
-          const __auditReturnValue = {
-      messages: __threads,
-      data: __stack.locals.response
-    };
+  });
+  await runner.step(3, async (runner) => {
+await print(__stack.locals.response)
+  });
+  await runner.step(4, async (runner) => {
+await print(`Greeting sent.`)
+  });
+  await runner.step(5, async (runner) => {
+const __returnValue = __stack.locals.response;
 await __ctx.audit({
       type: "return",
-      value: __auditReturnValue
+      value: __returnValue
     })
-return __auditReturnValue;
-          __stack.step++;
-  }
+runner.halt({
+      messages: __threads,
+      data: __returnValue
+    })
+return;
+await __ctx.audit({
+      type: "assignment",
+      variable: "__returnValue",
+      value: __returnValue
+    })
+  });
+  if (runner.halted) return runner.haltResult;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",
@@ -499,4 +503,4 @@ export async function sayHi(name: any, { messages, callbacks }: { messages?: any
 }
 export const __sayHiNodeParams = ["name"];
 export default graph
-export const __sourceMap = {"interrupt-2-deep-in-function.agency:greet":{"1":{"line":-1,"col":2},"2":{"line":0,"col":2}},"interrupt-2-deep-in-function.agency:foo2":{"2":{"line":6,"col":2},"4":{"line":7,"col":2},"5":{"line":8,"col":2}},"interrupt-2-deep-in-function.agency:sayHi":{"1":{"line":12,"col":2},"2":{"line":13,"col":2},"3":{"line":14,"col":2},"4":{"line":15,"col":2},"5":{"line":16,"col":2},"6":{"line":17,"col":2}}};
+export const __sourceMap = {"interrupt-2-deep-in-function.agency:greet":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2}},"interrupt-2-deep-in-function.agency:foo2":{"1":{"line":6,"col":2},"3":{"line":7,"col":2},"4":{"line":8,"col":2}},"interrupt-2-deep-in-function.agency:sayHi":{"0":{"line":12,"col":2},"1":{"line":13,"col":2},"2":{"line":14,"col":2},"3":{"line":15,"col":2},"4":{"line":16,"col":2},"5":{"line":17,"col":2}}};

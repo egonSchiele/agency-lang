@@ -7,7 +7,7 @@ import * as smoltalk from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -120,19 +120,16 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  if (__step <= 0) {
-      
-          __stack.step++;
-  }
-  if (__step <= 1) {
-          foo = foo + 1;
-    await __ctx.audit({
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "shared.agency", scopeName: "main" });
+  await runner.step(0, async (runner) => {
+foo = foo + 1;
+await __ctx.audit({
       type: "assignment",
       variable: "foo",
       value: foo
     })
-          __stack.step++;
-  }
+  });
+  if (runner.halted) return runner.haltResult;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",
@@ -170,4 +167,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"shared.agency:main":{"1":{"line":0,"col":2}}};
+export const __sourceMap = {"shared.agency:main":{"0":{"line":0,"col":2}}};

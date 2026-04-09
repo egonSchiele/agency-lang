@@ -7,7 +7,7 @@ import * as smoltalk from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -118,12 +118,9 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  if (__step <= 0) {
-      
-          __stack.step++;
-  }
-  if (__step <= 1) {
-          // Remember this will be called both in a tool call context
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-assignment.agency", scopeName: "main" });
+  await runner.step(0, async (runner) => {
+// Remember this will be called both in a tool call context
 // and when the user is simply calling a function.
 
 if (__state.interruptData?.interruptResponse?.type === "resolve") {
@@ -136,37 +133,39 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
   // reject for tool calls handled separately
   __state.interruptData.interruptResponse = null;
   
-  return { messages: __threads, data: null };
+  runner.halt({ messages: __threads, data: null });
   
   
+  return;
 } else if (__state.interruptData?.interruptResponse?.type === "modify") {
   throw new Error("Interrupt response of type 'modify' is used for modifying tool call args. Use resolve instead.");
 } else {
   const __handlerResult = await interruptWithHandlers(`What is your name?`, __ctx);
   if (isRejected(__handlerResult)) {
     
-    return { messages: __threads, data: __handlerResult.value };
+    runner.halt({ messages: __threads, data: __handlerResult.value });
     
     
+    return;
   }
   if (isApproved(__handlerResult)) {
     __stack.locals.name = __handlerResult.value;;
   } else {
     // No handler — propagate interrupt to TypeScript caller
-    const __checkpointId = __ctx.checkpoints.create(__ctx, { moduleId: "interrupt-assignment.agency", scopeName: "main", stepPath: "1" });
+    const __checkpointId = __ctx.checkpoints.create(__ctx, { moduleId: "interrupt-assignment.agency", scopeName: "main", stepPath: "0" });
     __handlerResult.checkpointId = __checkpointId;
     __handlerResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
     
-    return { messages: __threads, data: __handlerResult };
+    runner.halt({ messages: __threads, data: __handlerResult });
     
     
+    return;
   }
 }
 
-          __stack.step++;
-  }
-  if (__step <= 2) {
-          __self.__removedTools = __self.__removedTools || [];
+  });
+  await runner.step(1, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.greeting = await runPrompt({
       ctx: __ctx,
       prompt: `Say hello to {name}`,
@@ -176,27 +175,27 @@ __stack.locals.greeting = await runPrompt({
       interruptData: __state?.interruptData,
       removedTools: __self.__removedTools
     });
-// return early from node if this is an interrupt
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.greeting)) {
       await __ctx.pendingPromises.awaitAll()
-      return {
+      runner.halt({
         messages: __threads,
         data: __stack.locals.greeting
-      };
+      })
+      return;
     }
-    await __ctx.audit({
+await __ctx.audit({
       type: "assignment",
       variable: "__self.__removedTools",
       value: __self.__removedTools
     })
-          __stack.step++;
-  }
-  if (__step <= 3) {
-          if (__ctx.callbacks.onCheckpoint) {
+  });
+  await runner.step(2, async (runner) => {
+if (__ctx.callbacks.onCheckpoint) {
   if (__ctx._skipNextCheckpoint) {
     __ctx._skipNextCheckpoint = false;
   } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "interrupt-assignment.agency", scopeName: "main", stepPath: "3" });
+    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "interrupt-assignment.agency", scopeName: "main", stepPath: "2" });
     const __cp = __ctx.checkpoints.get(__cpId);
     await callHook({
       callbacks: __ctx.callbacks,
@@ -216,20 +215,25 @@ if (isInterrupt(__stack.locals.greeting)) {
   }
 }
 
-          __stack.step++;
-  }
-  if (__step <= 4) {
-          const __auditReturnValue = {
-      messages: __threads,
-      data: __stack.locals.greeting
-    };
+  });
+  await runner.step(3, async (runner) => {
+const __returnValue = __stack.locals.greeting;
 await __ctx.audit({
       type: "return",
-      value: __auditReturnValue
+      value: __returnValue
     })
-return __auditReturnValue;
-          __stack.step++;
-  }
+runner.halt({
+      messages: __threads,
+      data: __returnValue
+    })
+return;
+await __ctx.audit({
+      type: "assignment",
+      variable: "__returnValue",
+      value: __returnValue
+    })
+  });
+  if (runner.halted) return runner.haltResult;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",
@@ -267,4 +271,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"interrupt-assignment.agency:main":{"1":{"line":-1,"col":2},"2":{"line":0,"col":2},"4":{"line":1,"col":2}}};
+export const __sourceMap = {"interrupt-assignment.agency:main":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2},"3":{"line":1,"col":2}}};

@@ -1,0 +1,15 @@
+// When a return expression contains a function call, the generated code
+// must not evaluate it twice (once for audit logging, once for the actual
+// return). We use a side-effecting function that appends to a log array
+// so that double-execution is visible in the output.
+
+const log = []
+
+def sideEffect(x: number): number {
+  log.push("called:" + x)
+  return x * 2
+}
+
+node main() {
+  return { result: sideEffect(5), log: log }
+}

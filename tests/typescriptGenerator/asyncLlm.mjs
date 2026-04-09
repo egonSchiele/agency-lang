@@ -7,7 +7,7 @@ import * as smoltalk from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -118,12 +118,9 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  if (__step <= 0) {
-      
-          __stack.step++;
-  }
-  if (__step <= 1) {
-          __self.__removedTools = __self.__removedTools || [];
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "asyncLlm.agency", scopeName: "main" });
+  await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.x = runPrompt({
       ctx: __ctx,
       prompt: `What is 2+2?`,
@@ -134,15 +131,14 @@ __stack.locals.x = runPrompt({
       removedTools: __self.__removedTools
     });
 __self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
-    await __ctx.audit({
+await __ctx.audit({
       type: "assignment",
       variable: "__self.__removedTools",
       value: __self.__removedTools
     })
-          __stack.step++;
-  }
-  if (__step <= 2) {
-          __self.__removedTools = __self.__removedTools || [];
+  });
+  await runner.step(1, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.y = runPrompt({
       ctx: __ctx,
       prompt: `What is 3+3?`,
@@ -153,29 +149,33 @@ __stack.locals.y = runPrompt({
       removedTools: __self.__removedTools
     });
 __self.__pendingKey_y = __ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });
-    await __ctx.audit({
+await __ctx.audit({
       type: "assignment",
       variable: "__self.__removedTools",
       value: __self.__removedTools
     })
-          __stack.step++;
-  }
-  if (__step <= 3) {
-          await __ctx.pendingPromises.awaitPending([__self.__pendingKey_x, __self.__pendingKey_y]);
-          __stack.step++;
-  }
-  if (__step <= 4) {
-          const __auditReturnValue = {
-      messages: __threads,
-      data: [__stack.locals.x, __stack.locals.y]
-    };
+  });
+  await runner.step(2, async (runner) => {
+await __ctx.pendingPromises.awaitPending([__self.__pendingKey_x, __self.__pendingKey_y]);
+  });
+  await runner.step(3, async (runner) => {
+const __returnValue = [__stack.locals.x, __stack.locals.y];
 await __ctx.audit({
       type: "return",
-      value: __auditReturnValue
+      value: __returnValue
     })
-return __auditReturnValue;
-          __stack.step++;
-  }
+runner.halt({
+      messages: __threads,
+      data: __returnValue
+    })
+return;
+await __ctx.audit({
+      type: "assignment",
+      variable: "__returnValue",
+      value: __returnValue
+    })
+  });
+  if (runner.halted) return runner.haltResult;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",
@@ -213,4 +213,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"asyncLlm.agency:main":{"1":{"line":-1,"col":2},"2":{"line":0,"col":2},"4":{"line":1,"col":2}}};
+export const __sourceMap = {"asyncLlm.agency:main":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2},"3":{"line":1,"col":2}}};

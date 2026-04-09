@@ -7,7 +7,7 @@ import * as smoltalk from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -118,109 +118,53 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  if (__step <= 0) {
-          //  Basic for-of loop
-          __stack.step++;
-  }
-  if (__step <= 1) {
-          __stack.locals.items = [`a`, `b`, `c`];
-    await __ctx.audit({
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "forLoop.agency", scopeName: "main" });
+  await runner.step(0, async (runner) => {
+//  Basic for-of loop
+  });
+  await runner.step(1, async (runner) => {
+__stack.locals.items = [`a`, `b`, `c`];
+await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.items",
       value: __stack.locals.items
     })
-          __stack.step++;
-  }
-  if (__step <= 2) {
-          __stack.locals.__iteration_2 = __stack.locals.__iteration_2 ?? 0;
-let __currentIter_2 = 0;
-for (let __i_2 = 0; __i_2 < __stack.locals.items.length; __i_2++) {
-  if (__currentIter_2 < __stack.locals.__iteration_2) {
-    __currentIter_2++;
-    continue;
-  }
-
-  const item = __stack.locals.items[__i_2];
-
-  __stack.locals.__substep_2 = __stack.locals.__substep_2 ?? 0;
-
-  if (__stack.locals.__substep_2 <= 0) {
-    await print(item)
-
-    __stack.locals.__substep_2 = 1;
-  }
-
-  __stack.resetLoopIteration("2");
-  __stack.locals.__iteration_2++;
-  __currentIter_2++;
-}
-    //  Range-based for loop
-          __stack.step++;
-  }
-  if (__step <= 3) {
-          __stack.locals.__iteration_3 = __stack.locals.__iteration_3 ?? 0;
-let __currentIter_3 = 0;
-for (let i = 0; i < 5; i++) {
-  if (__currentIter_3 < __stack.locals.__iteration_3) {
-    __currentIter_3++;
-    continue;
-  }
-
-  __stack.locals.__substep_3 = __stack.locals.__substep_3 ?? 0;
-
-  if (__stack.locals.__substep_3 <= 0) {
-    await print(i)
-
-    __stack.locals.__substep_3 = 1;
-  }
-
-  __stack.resetLoopIteration("3");
-  __stack.locals.__iteration_3++;
-  __currentIter_3++;
-}
-    //  Indexed for loop
-          __stack.step++;
-  }
-  if (__step <= 4) {
-          __stack.locals.names = [`alice`, `bob`];
-    await __ctx.audit({
+  });
+  await runner.step(2, async (runner) => {
+await runner.loop(2, __stack.locals.items, async (item, _, runner) => {
+await runner.step(0, async (runner) => {
+await print(item)
+      });
+    });
+//  Range-based for loop
+  });
+  await runner.step(3, async (runner) => {
+await runner.loop(3, Array.from({length: 5 - 0}, (_, __i) => __i + 0), async (i, _, runner) => {
+await runner.step(0, async (runner) => {
+await print(i)
+      });
+    });
+//  Indexed for loop
+  });
+  await runner.step(4, async (runner) => {
+__stack.locals.names = [`alice`, `bob`];
+await __ctx.audit({
       type: "assignment",
       variable: "__stack.locals.names",
       value: __stack.locals.names
     })
-          __stack.step++;
-  }
-  if (__step <= 5) {
-          __stack.locals.__iteration_5 = __stack.locals.__iteration_5 ?? 0;
-let __currentIter_5 = 0;
-for (let index = 0; index < __stack.locals.names.length; index++) {
-  if (__currentIter_5 < __stack.locals.__iteration_5) {
-    __currentIter_5++;
-    continue;
-  }
-
-  const name = __stack.locals.names[index];
-
-  __stack.locals.__substep_5 = __stack.locals.__substep_5 ?? 0;
-
-  if (__stack.locals.__substep_5 <= 0) {
-    await print(name)
-
-    __stack.locals.__substep_5 = 1;
-  }
-
-  if (__stack.locals.__substep_5 <= 1) {
-    await print(index)
-
-    __stack.locals.__substep_5 = 2;
-  }
-
-  __stack.resetLoopIteration("5");
-  __stack.locals.__iteration_5++;
-  __currentIter_5++;
-}
-          __stack.step++;
-  }
+  });
+  await runner.step(5, async (runner) => {
+await runner.loop(5, __stack.locals.names, async (name, index, runner) => {
+await runner.step(0, async (runner) => {
+await print(name)
+      });
+await runner.step(1, async (runner) => {
+await print(index)
+      });
+    });
+  });
+  if (runner.halted) return runner.haltResult;
   await callHook({
     callbacks: __ctx.callbacks,
     name: "onNodeEnd",

@@ -5,8 +5,12 @@
       "nodeName": "main",
       "description": "Two interrupts in one loop at iterations 2 and 4, both approved",
       "input": "",
-      "expectedOutput": "15",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "expectedOutput": "[0,1,2,3,4,5]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "interruptHandlers": [
         {
           "action": "approve",

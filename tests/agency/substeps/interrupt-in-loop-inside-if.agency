@@ -1,15 +1,16 @@
+const log = []
+
 node main(x: number) {
-  let total = 0
   if (x > 5) {
     for (i in range(4)) {
       if (i == 2) {
         const y = interrupt("loop interrupt")
       }
-      total = total + i
+      log.push(i)
     }
-    total = total + 100
+    log.push("done")
   } else {
-    total = -1
+    log.push("small")
   }
-  return total
+  return log
 }

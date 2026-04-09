@@ -1,0 +1,12 @@
+const log = []
+
+node main() {
+  handle {
+    log.push("before")
+    const result = interrupt("check")
+    log.push("after:" + result)
+  } with (data) {
+    return approve()
+  }
+  return log
+}

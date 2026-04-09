@@ -5,8 +5,12 @@
       "nodeName": "main",
       "description": "Interrupt inside thread body resumes correctly, x is not re-executed",
       "input": "",
-      "expectedOutput": "[1,\"resolved\",3]",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "expectedOutput": "[\"x\",\"y:resolved\",\"z\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "interruptHandlers": [
         {
           "action": "resolve",

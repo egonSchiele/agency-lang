@@ -1,8 +1,11 @@
+const log = []
+
 node main() {
   thread {
-    const x = 1
+    log.push("x")
     const y = interrupt("check")
-    const z = 3
+    log.push("y:" + y)
+    log.push("z")
   }
-  return [x, y, z]
+  return log
 }

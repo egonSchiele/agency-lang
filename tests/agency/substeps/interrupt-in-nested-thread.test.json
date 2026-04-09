@@ -5,8 +5,12 @@
       "nodeName": "main",
       "description": "Interrupt inside nested thread resumes both inner and outer correctly",
       "input": "",
-      "expectedOutput": "[1,2,\"resolved\",4,5]",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "expectedOutput": "[\"a\",\"b\",\"c:resolved\",\"e\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "interruptHandlers": [
         {
           "action": "resolve",

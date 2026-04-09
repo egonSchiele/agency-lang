@@ -5,8 +5,12 @@
       "nodeName": "main",
       "description": "Interrupt in for loop inside if branch, loop and if both complete",
       "input": "10",
-      "expectedOutput": "106",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "expectedOutput": "[0,1,2,3,\"done\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "interruptHandlers": [
         {
           "action": "approve",

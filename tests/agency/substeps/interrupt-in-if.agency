@@ -1,11 +1,13 @@
+const log = []
+
 node main(x: number) {
-  let result = "start"
+  log.push("start")
   if (x > 5) {
-    result = "big"
+    log.push("big")
     return interrupt("check")
-    result = "confirmed big"
+    log.push("confirmed big")
   } else {
-    result = "small"
+    log.push("small")
   }
-  return result
+  return log
 }

@@ -1,9 +1,0 @@
-node main(action: string) {
-  let result = "before"
-  match(action) {
-    "start" => result = "starting"
-    "stop" => result = interrupt("confirm stop")
-    _ => result = "unknown"
-  }
-  return result
-}

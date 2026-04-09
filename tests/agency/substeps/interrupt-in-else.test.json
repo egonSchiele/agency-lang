@@ -5,8 +5,12 @@
       "nodeName": "main",
       "description": "Interrupt inside else body resumes correctly after approve",
       "input": "3",
-      "expectedOutput": "\"confirmed small\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "expectedOutput": "[\"start\",\"small\",\"confirmed small\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "interruptHandlers": [
         {
           "action": "approve",

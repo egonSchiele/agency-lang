@@ -1,0 +1,16 @@
+{
+  "sourceFile": "interrupt-in-handle.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Interrupt inside handle body resumes correctly, before is not re-executed",
+      "input": "",
+      "expectedOutput": "[\"before\",\"after:undefined\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

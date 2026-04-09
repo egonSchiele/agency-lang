@@ -5,8 +5,12 @@
       "nodeName": "main",
       "description": "Interrupt inside if inside for inside thread, resumes correctly",
       "input": "",
-      "expectedOutput": "\"resumed\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "expectedOutput": "[\"i:0\",\"i:1\",\"resumed\",\"i:2\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "interruptHandlers": [
         {
           "action": "approve",

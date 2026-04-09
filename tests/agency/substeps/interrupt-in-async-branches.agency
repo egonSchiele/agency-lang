@@ -1,0 +1,23 @@
+const log = []
+
+def helper1(): string {
+  log.push("h1-start")
+  const approval = interrupt("approve h1")
+  log.push("h1-end")
+  return "h1-done"
+}
+
+def helper2(): string {
+  log.push("h2-start")
+  const approval = interrupt("approve h2")
+  log.push("h2-end")
+  return "h2-done"
+}
+
+node main() {
+  log.push("before")
+  const a = async helper1()
+  const b = async helper2()
+  log.push("after:" + a + "," + b)
+  return log
+}

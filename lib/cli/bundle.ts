@@ -63,25 +63,41 @@ function writeBundle(
   }
 }
 
+function readJsonlLines(filePath: string, label: string): string[] {
+  const content = fs.readFileSync(filePath, "utf-8").trim();
+  if (content.length === 0) {
+    throw new Error(`Invalid ${label}: empty`);
+  }
+  return content.split("\n");
+}
+
 export function extractBundle(
   bundleFile: string,
   outputDir: string,
 ): void {
-  const content = fs.readFileSync(bundleFile, "utf-8").trim();
-  const lines = content.split("\n");
-  if (lines.length === 0) {
-    throw new Error("Invalid bundle file: empty");
-  }
+  const lines = readJsonlLines(bundleFile, "bundle file");
+  const baseDir = path.resolve(outputDir);
+  fs.mkdirSync(baseDir, { recursive: true });
 
-  fs.mkdirSync(outputDir, { recursive: true });
-
+  const header = JSON.parse(lines[0]);
   const traceLines: string[] = [];
+  const createdDirs = new Set<string>();
 
   for (const line of lines) {
     const parsed = JSON.parse(line);
     if (parsed.type === "source") {
-      const filePath = path.join(outputDir, parsed.path);
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      if (path.isAbsolute(parsed.path)) {
+        throw new Error(`Invalid source path: absolute paths not allowed: ${parsed.path}`);
+      }
+      const filePath = path.resolve(baseDir, parsed.path);
+      if (!filePath.startsWith(baseDir + path.sep)) {
+        throw new Error(`Invalid source path: escapes target directory: ${parsed.path}`);
+      }
+      const dir = path.dirname(filePath);
+      if (!createdDirs.has(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+        createdDirs.add(dir);
+      }
       fs.writeFileSync(filePath, parsed.content, "utf-8");
       console.log(`  ${parsed.path}`);
     } else {
@@ -89,10 +105,8 @@ export function extractBundle(
     }
   }
 
-  // Write the trace file (all non-source lines)
-  const header = JSON.parse(lines[0]);
   const traceName = (header.program || "trace").replace(/\.agency$/, "") + ".trace";
-  const traceFilePath = path.join(outputDir, traceName);
+  const traceFilePath = path.join(baseDir, traceName);
   fs.writeFileSync(traceFilePath, traceLines.join("\n") + "\n", "utf-8");
   console.log(`  ${traceName}`);
 }
@@ -102,11 +116,7 @@ export function createBundle(
   traceFile: string,
   outputFile: string,
 ): void {
-  const traceContent = fs.readFileSync(traceFile, "utf-8").trim();
-  const traceLines = traceContent.split("\n");
-  if (traceLines.length === 0) {
-    throw new Error("Invalid trace file: empty");
-  }
+  const traceLines = readJsonlLines(traceFile, "trace file");
 
   const sources = discoverSourceFiles(sourceFile);
   const entrypoint = path.basename(sourceFile);

@@ -92,21 +92,16 @@ addRunOptions(
   runWithOptions(input, options);
 });
 
-program
-  .command("trace")
-  .description("Compile and run .agency file, generating a trace")
-  .argument("<input>", "Path to .agency input file")
-  .option("-o, --output <file>", "Output trace file path (default: <input>.trace)")
-  .option("--resume <statefile>", "Resume execution from a saved state file")
-  .option("-l, --log <file>", "Write audit log entries to a JSONL file")
-  .action((input: string, options: { output?: string; resume?: string; log?: string }) => {
-    const traceFile = options.output || input.replace(/\.agency$/, ".trace");
-    runWithOptions(input, {
-      trace: traceFile,
-      resume: options.resume,
-      log: options.log,
-    });
-  });
+addRunOptions(
+  program
+    .command("trace")
+    .description("Compile and run .agency file, generating a trace")
+    .argument("<input>", "Path to .agency input file")
+    .option("-o, --output <file>", "Output trace file path (default: <input>.trace)")
+).action((input: string, options: RunOptions & { output?: string }) => {
+  const traceFile = options.output || input.replace(/\.agency$/, ".trace");
+  runWithOptions(input, { ...options, trace: traceFile });
+});
 
 program
   .command("format")

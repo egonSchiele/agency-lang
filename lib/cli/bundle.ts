@@ -63,6 +63,40 @@ function writeBundle(
   }
 }
 
+export function extractBundle(
+  bundleFile: string,
+  outputDir: string,
+): void {
+  const content = fs.readFileSync(bundleFile, "utf-8").trim();
+  const lines = content.split("\n");
+  if (lines.length === 0) {
+    throw new Error("Invalid bundle file: empty");
+  }
+
+  fs.mkdirSync(outputDir, { recursive: true });
+
+  const traceLines: string[] = [];
+
+  for (const line of lines) {
+    const parsed = JSON.parse(line);
+    if (parsed.type === "source") {
+      const filePath = path.join(outputDir, parsed.path);
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, parsed.content, "utf-8");
+      console.log(`  ${parsed.path}`);
+    } else {
+      traceLines.push(line);
+    }
+  }
+
+  // Write the trace file (all non-source lines)
+  const header = JSON.parse(lines[0]);
+  const traceName = (header.program || "trace").replace(/\.agency$/, "") + ".trace";
+  const traceFilePath = path.join(outputDir, traceName);
+  fs.writeFileSync(traceFilePath, traceLines.join("\n") + "\n", "utf-8");
+  console.log(`  ${traceName}`);
+}
+
 export function createBundle(
   sourceFile: string,
   traceFile: string,

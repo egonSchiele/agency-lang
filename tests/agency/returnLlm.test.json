@@ -1,5 +1,4 @@
 {
-  "sourceFile": "returnLlm.agency",
   "tests": [
     {
       "nodeName": "main",

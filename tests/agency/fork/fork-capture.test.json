@@ -1,5 +1,4 @@
 {
-  "sourceFile": "fork-capture.agency",
   "tests": [
     {
       "nodeName": "main",

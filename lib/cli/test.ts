@@ -36,7 +36,7 @@ type TestCase = {
   retry?: number;
   skip?: boolean;
 };
-type Tests = { sourceFile: string; tests: TestCase[] };
+type Tests = { sourceFile?: string; tests: TestCase[] };
 
 function readFile(filename: string): string {
   console.log("Trying to read file", filename, "...");
@@ -58,7 +58,7 @@ function writeTestCase(
   if (fs.existsSync(testFilePath)) {
     tests = JSON.parse(fs.readFileSync(testFilePath, "utf-8"));
   } else {
-    tests = { sourceFile: path.basename(agencyFilename), tests: [] };
+    tests = { tests: [] };
   }
   const testCase: TestCase = {
     nodeName,
@@ -391,15 +391,11 @@ async function runWithConcurrency<T, R>(
 async function runSingleTest(
   config: AgencyConfig,
   testFile: string,
-  tests: Tests,
   testCase: TestCase,
   log: Logger,
 ): Promise<boolean> {
   const hasArgs = testCase.input !== "";
-  const relativeSourceFilePath = path.join(
-    path.dirname(testFile),
-    tests.sourceFile,
-  );
+  const relativeSourceFilePath = testFile.replace(".test.json", ".agency");
   let result: { data: any; stdout: string; stderr: string };
   try {
     result = await executeNodeAsync({
@@ -531,7 +527,7 @@ async function runTestFile(
           log(color.yellow(`  Retry ${attempt - 1}/${testCase.retry}...`));
         }
         try {
-          testPassed = await runSingleTest(config, testFile, tests, testCase, log);
+          testPassed = await runSingleTest(config, testFile, testCase, log);
           if (testPassed) break;
         } catch (e) {
           exitIfSignal(e);

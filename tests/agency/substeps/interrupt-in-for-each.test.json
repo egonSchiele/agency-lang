@@ -1,5 +1,4 @@
 {
-  "sourceFile": "interrupt-in-for-each.agency",
   "tests": [
     {
       "nodeName": "main",

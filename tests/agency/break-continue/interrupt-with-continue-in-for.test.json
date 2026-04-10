@@ -1,5 +1,4 @@
 {
-  "sourceFile": "interrupt-with-continue-in-for.agency",
   "tests": [
     {
       "nodeName": "main",

@@ -1,32 +1,47 @@
 {
-  "sourceFile": "main.agency",
   "tests": [
     {
       "nodeName": "testStdlibAdd",
       "input": "",
       "expectedOutput": "7",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "description": "Should add 3 + 4 using std::math"
     },
     {
       "nodeName": "testStdlibMultiply",
       "input": "",
       "expectedOutput": "30",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "description": "Should multiply 5 * 6 using std::math"
     },
     {
       "nodeName": "testImplicitRound",
       "input": "",
       "expectedOutput": "3.14",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "description": "Should use round without explicit import (implicit stdlib)"
     },
     {
       "nodeName": "testRoundAsTool",
       "input": "",
       "expectedOutput": "2.718",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "description": "round should work as a tool via uses without explicit import"
     }
   ]

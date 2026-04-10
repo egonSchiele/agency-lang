@@ -1,5 +1,4 @@
 {
-  "sourceFile": "interruptBareCall.agency",
   "tests": [
     {
       "nodeName": "foo",

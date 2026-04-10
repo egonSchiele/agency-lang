@@ -1,5 +1,4 @@
 {
-  "sourceFile": "useTools.agency",
   "tests": [
     {
       "nodeName": "withUses",

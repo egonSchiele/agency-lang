@@ -1,5 +1,4 @@
 {
-  "sourceFile": "fork-interrupt.agency",
   "tests": [
     {
       "nodeName": "main",

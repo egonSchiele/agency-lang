@@ -1,14 +1,20 @@
 {
-  "sourceFile": "block-interrupt-assign-approve.agency",
   "tests": [
     {
       "nodeName": "main",
       "description": "Approving an interrupt assigned to a variable in a block sets it to true",
       "input": "",
       "expectedOutput": "\"yes\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "interruptHandlers": [
-        { "action": "approve", "expectedMessage": "do you approve?" }
+        {
+          "action": "approve",
+          "expectedMessage": "do you approve?"
+        }
       ]
     }
   ]

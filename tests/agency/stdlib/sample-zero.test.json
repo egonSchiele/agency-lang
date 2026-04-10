@@ -1,5 +1,4 @@
 {
-  "sourceFile": "sample-zero.agency",
   "tests": [
     {
       "nodeName": "main",

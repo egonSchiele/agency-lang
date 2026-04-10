@@ -1,5 +1,4 @@
 {
-  "sourceFile": "interruptReturnReject.agency",
   "tests": [
     {
       "nodeName": "foo",

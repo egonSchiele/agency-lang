@@ -1,5 +1,4 @@
 {
-  "sourceFile": "interrupt-in-else.agency",
   "tests": [
     {
       "nodeName": "main",

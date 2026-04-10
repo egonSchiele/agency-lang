@@ -1,5 +1,4 @@
 {
-  "sourceFile": "graphEdges.agency",
   "tests": [
     {
       "nodeName": "classify",

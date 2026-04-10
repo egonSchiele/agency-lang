@@ -1,5 +1,4 @@
 {
-  "sourceFile": "thread-three-levels-deep.agency",
   "tests": [
     {
       "nodeName": "main",

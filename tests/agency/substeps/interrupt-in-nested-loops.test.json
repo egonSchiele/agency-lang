@@ -1,5 +1,4 @@
 {
-  "sourceFile": "interrupt-in-nested-loops.agency",
   "tests": [
     {
       "nodeName": "main",

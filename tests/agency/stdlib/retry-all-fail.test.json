@@ -1,5 +1,4 @@
 {
-  "sourceFile": "retry-all-fail.agency",
   "tests": [
     {
       "nodeName": "main",

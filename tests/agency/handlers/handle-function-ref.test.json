@@ -1,5 +1,4 @@
 {
-  "sourceFile": "handle-function-ref.agency",
   "tests": [
     {
       "nodeName": "testApprovePolicy",

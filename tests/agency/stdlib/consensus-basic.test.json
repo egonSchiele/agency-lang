@@ -1,5 +1,4 @@
 {
-  "sourceFile": "consensus-basic.agency",
   "tests": [
     {
       "nodeName": "main",

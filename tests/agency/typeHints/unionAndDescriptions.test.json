@@ -1,5 +1,4 @@
 {
-  "sourceFile": "unionAndDescriptions.agency",
   "tests": [
     {
       "nodeName": "analyzeSentiment",

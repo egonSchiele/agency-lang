@@ -1,5 +1,4 @@
 {
-  "sourceFile": "handle-mixed-approve-reject.agency",
   "tests": [
     {
       "nodeName": "main",

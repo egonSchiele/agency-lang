@@ -1,5 +1,4 @@
 {
-  "sourceFile": "llmConfig.agency",
   "tests": [
     {
       "nodeName": "main",

@@ -1,5 +1,4 @@
 {
-  "sourceFile": "retry-first-pass.agency",
   "tests": [
     {
       "nodeName": "main",

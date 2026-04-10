@@ -1,5 +1,4 @@
 {
-  "sourceFile": "pass-messages.agency",
   "tests": [
     {
       "nodeName": "main",

@@ -1,5 +1,4 @@
 {
-  "sourceFile": "interrupt-in-loop-inside-if.agency",
   "tests": [
     {
       "nodeName": "main",

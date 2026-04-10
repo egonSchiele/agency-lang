@@ -1,5 +1,4 @@
 {
-  "sourceFile": "interrupt-in-nested-if.agency",
   "tests": [
     {
       "nodeName": "main",

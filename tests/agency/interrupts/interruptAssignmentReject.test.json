@@ -1,5 +1,4 @@
 {
-  "sourceFile": "interruptAssignmentReject.agency",
   "tests": [
     {
       "nodeName": "foo",

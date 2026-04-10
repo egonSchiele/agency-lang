@@ -1,5 +1,4 @@
 {
-  "sourceFile": "return-no-double-exec.agency",
   "tests": [
     {
       "nodeName": "main",

@@ -1,5 +1,4 @@
 {
-  "sourceFile": "race-basic.agency",
   "tests": [
     {
       "nodeName": "main",

@@ -1,5 +1,4 @@
 {
-  "sourceFile": "simple.agency",
   "tests": [
     {
       "nodeName": "categorize",

@@ -1,12 +1,15 @@
 {
-  "sourceFile": "handle-no-handler.agency",
   "tests": [
     {
       "nodeName": "main",
       "description": "No handle block — interrupt propagates to TypeScript as before",
       "input": "",
       "expectedOutput": "\"after interrupt\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "interruptHandlers": [
         {
           "action": "approve",

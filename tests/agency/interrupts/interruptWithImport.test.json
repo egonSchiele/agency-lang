@@ -1,5 +1,4 @@
 {
-  "sourceFile": "interruptWithImport.agency",
   "tests": [
     {
       "nodeName": "noInterrupt",

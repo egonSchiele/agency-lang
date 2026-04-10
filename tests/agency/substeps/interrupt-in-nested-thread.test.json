@@ -1,5 +1,4 @@
 {
-  "sourceFile": "interrupt-in-nested-thread.agency",
   "tests": [
     {
       "nodeName": "main",

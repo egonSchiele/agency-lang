@@ -1,5 +1,4 @@
 {
-  "sourceFile": "interrupt-in-async-branches.agency",
   "tests": [
     {
       "nodeName": "main",

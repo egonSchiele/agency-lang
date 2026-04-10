@@ -1,5 +1,4 @@
 {
-  "sourceFile": "retry-basic.agency",
   "tests": [
     {
       "nodeName": "main",

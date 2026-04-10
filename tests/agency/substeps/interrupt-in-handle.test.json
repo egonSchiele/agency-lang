@@ -1,5 +1,4 @@
 {
-  "sourceFile": "interrupt-in-handle.agency",
   "tests": [
     {
       "nodeName": "main",

@@ -1,5 +1,4 @@
 {
-  "sourceFile": "block-basic.agency",
   "tests": [
     {
       "nodeName": "main",

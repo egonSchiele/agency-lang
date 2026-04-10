@@ -1,5 +1,4 @@
 {
-  "sourceFile": "builtinTool.agency",
   "tests": [
     {
       "nodeName": "withUses",

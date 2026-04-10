@@ -1,5 +1,4 @@
 {
-  "sourceFile": "no-thread.agency",
   "tests": [
     {
       "nodeName": "main",

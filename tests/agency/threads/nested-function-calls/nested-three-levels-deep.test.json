@@ -1,5 +1,4 @@
 {
-  "sourceFile": "nested-three-levels-deep.agency",
   "tests": [
     {
       "nodeName": "main",

@@ -1,5 +1,4 @@
 {
-  "sourceFile": "namedArgs.agency",
   "tests": [
     {
       "nodeName": "main",

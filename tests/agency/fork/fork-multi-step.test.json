@@ -1,5 +1,4 @@
 {
-  "sourceFile": "fork-multi-step.agency",
   "tests": [
     {
       "nodeName": "main",

@@ -1,5 +1,4 @@
 {
-  "sourceFile": "interrupt-in-thread.agency",
   "tests": [
     {
       "nodeName": "main",

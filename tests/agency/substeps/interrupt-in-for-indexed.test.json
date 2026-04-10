@@ -1,5 +1,4 @@
 {
-  "sourceFile": "interrupt-in-for-indexed.agency",
   "tests": [
     {
       "nodeName": "main",

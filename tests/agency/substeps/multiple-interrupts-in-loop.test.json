@@ -1,5 +1,4 @@
 {
-  "sourceFile": "multiple-interrupts-in-loop.agency",
   "tests": [
     {
       "nodeName": "main",

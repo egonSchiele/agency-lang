@@ -1,5 +1,4 @@
 {
-  "sourceFile": "readFile.agency",
   "tests": [
     {
       "nodeName": "main",

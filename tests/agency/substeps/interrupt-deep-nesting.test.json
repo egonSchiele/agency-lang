@@ -1,5 +1,4 @@
 {
-  "sourceFile": "interrupt-deep-nesting.agency",
   "tests": [
     {
       "nodeName": "main",

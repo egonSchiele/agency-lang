@@ -139,6 +139,12 @@ export function* getAllVariablesInBody(
       for (const arg of node.arguments) {
         yield* getAllVariablesInBody([unwrapCallArg(arg)]);
       }
+      if (node.block) {
+        for (const param of node.block.params) {
+          yield { name: param.name, node };
+        }
+        yield* getAllVariablesInBody(node.block.body);
+      }
       yield { name: node.functionName, node };
     } else if (node.type === "specialVar") {
       yield { name: node.name, node };
@@ -308,6 +314,9 @@ export function* walkNodes(
     } else if (node.type === "functionCall") {
       for (const arg of node.arguments) {
         yield* walkNodes([unwrapCallArg(arg) as AgencyNode], [...ancestors, node], scopes);
+      }
+      if (node.block) {
+        yield* walkNodes(node.block.body, [...ancestors, node], scopes);
       }
     } else if (node.type === "matchBlock") {
       yield* walkNodes([node.expression], [...ancestors, node], scopes);

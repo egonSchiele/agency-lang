@@ -3,6 +3,7 @@ import {
   AgencyNode,
   AgencyProgram,
   Assignment,
+  BlockType,
   Expression,
   Keyword,
   Literal,
@@ -34,6 +35,7 @@ import * as renderInterruptAssignment from "../templates/backends/typescriptGene
 import * as renderInterruptReturn from "../templates/backends/typescriptGenerator/interruptReturn.js";
 import * as renderRewindCheckpoint from "../templates/backends/typescriptGenerator/rewindCheckpoint.js";
 import * as renderTraceSetup from "../templates/backends/typescriptGenerator/traceSetup.js";
+import * as renderBlockSetup from "../templates/backends/typescriptGenerator/blockSetup.js";
 
 import { AgencyConfig } from "@/config.js";
 import {
@@ -121,6 +123,7 @@ export class TypeScriptBuilder {
   private loopVars: string[] = [];
   private insideMessageThread: boolean = false;
   private insideHandlerBody: boolean = false;
+  private _blockCounter: number = 0;
 
   /** Stack of loop subKeys for generating break/continue cleanup code.
    * Pushed when entering a stepped loop, popped when leaving. */
@@ -225,11 +228,12 @@ export class TypeScriptBuilder {
     return scopeKey(this.getCurrentScope());
   }
 
-  /** Returns the name of the current scope (function or node name, or empty string for global). */
+  /** Returns the name of the current scope (function, node, or block name, or empty string for global). */
   private currentScopeName(): string {
     const scope = this.getCurrentScope();
     if (scope.type === "function") return scope.functionName;
     if (scope.type === "node") return scope.nodeName;
+    if (scope.type === "block") return scope.blockName;
     return "";
   }
 
@@ -1423,7 +1427,54 @@ export class TypeScriptBuilder {
         return this.processCallArg(arg);
       }
     });
-    const argNodes = this.adjustCallArgs(rawArgNodes, paramList);
+
+    const nonBlockParams = paramList?.filter(
+      (p) => !p.typeHint || p.typeHint.type !== "blockType",
+    );
+    const argNodes = this.adjustCallArgs(rawArgNodes, nonBlockParams);
+
+    if (node.block) {
+      const blockType = paramList
+        ?.map((p) => p.typeHint)
+        .find((t): t is BlockType => t?.type === "blockType");
+
+      const blockParams: TsParam[] = node.block.params.map((p, i) => ({
+        name: p.name,
+        typeAnnotation: blockType?.params[i]
+          ? formatTypeHint(blockType.params[i].typeAnnotation)
+          : "any",
+      }));
+
+      // Enter block scope, process body as runner steps
+      const blockName = `__block_${this._blockCounter++}`;
+      const parentScopeName = this.currentScopeName();
+      this.startScope({ type: "block", blockName });
+      this._sourceMapBuilder.enterScope(this.moduleId, blockName);
+      const bodyParts = this.processBodyAsParts(node.block.body);
+      this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
+      this.endScope();
+
+      // Render body parts to string for the template
+      const bodyStr = bodyParts.map((n) => printTs(n, 1)).join("\n");
+
+      const blockSetupCode = renderBlockSetup.default({
+        params: node.block.params.map((p) => ({
+          paramName: p.name,
+          paramNameQuoted: JSON.stringify(p.name),
+        })),
+        moduleId: JSON.stringify(this.moduleId),
+        scopeName: JSON.stringify(blockName),
+        body: bodyStr,
+      });
+
+      const blockFn = ts.arrowFn(
+        blockParams,
+        ts.statements([ts.raw(blockSetupCode)]),
+        { async: true },
+      );
+      argNodes.push(blockFn);
+    }
+
     const shouldAwait = !node.async && context !== "valueAccess";
 
     if (this.isAgencyFunction(node.functionName, context)) {
@@ -1598,6 +1649,18 @@ export class TypeScriptBuilder {
     // Handler bodies use plain returns — no node/function wrapping
     if (this.insideHandlerBody) {
       return ts.return(this.processNode(node.value));
+    }
+
+    // Block bodies: halt the block's runner with the raw value
+    if (this.getCurrentScope().type === "block") {
+      if (
+        node.value.type === "functionCall" &&
+        node.value.functionName === "interrupt"
+      ) {
+        return this.buildInterruptReturn(node.value.arguments);
+      }
+      const valueNode = this.processNode(node.value);
+      return ts.runnerHalt(valueNode);
     }
 
     if (this.isInsideGraphNode) {

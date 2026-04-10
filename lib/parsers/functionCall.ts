@@ -1,10 +1,12 @@
 import { FunctionCall, NamedArgument } from "../types.js";
 import {
   capture,
+  captureCaptures,
   char,
   label,
   lazy,
   many1WithJoin,
+  optional,
   or,
   Parser,
   sepBy,
@@ -12,6 +14,7 @@ import {
   set,
   trace,
 } from "tarsec";
+import { blockArgumentParser } from "./blockArgument.js";
 import { splatParser } from "./dataStructures.js";
 import { exprParser } from "./expression.js";
 import { optionalSemicolon } from "./parserUtils.js";
@@ -48,6 +51,14 @@ export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
     ),
     optionalSpaces,
     char(")"),
+    optionalSpaces,
+    optional(
+      captureCaptures(
+        seqC(
+          capture(blockArgumentParser, "block"),
+        ),
+      ),
+    ),
     optionalSemicolon,
     optionalSpacesOrNewline
   );

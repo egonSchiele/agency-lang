@@ -239,6 +239,11 @@ export function formatTypeHint(vt: VariableType): string {
       return `{ ${vt.properties.map((p) => `${p.key}: ${formatTypeHint(p.value)}`).join(", ")} }`;
     case "typeAliasVariable":
       return vt.aliasName;
+    case "blockType": {
+      const params = vt.params.map((p) => formatTypeHint(p.typeAnnotation)).join(", ");
+      const ret = formatTypeHint(vt.returnType);
+      return `(${params}) => ${ret}`;
+    }
     default:
       throw new Error(`Unknown variable type: ${(vt as any).type}`);
   }

@@ -1,0 +1,12 @@
+def withApproval(block: () => string): string {
+  let result = block()
+  return result
+}
+
+node main() {
+  let result = withApproval() as {
+    let name = interrupt("what is your name?")
+    return "hello ${name}"
+  }
+  return result
+}

@@ -48,6 +48,7 @@ export * from "./types/handleBlock.js";
 export * from "./types/keyword.js";
 export * from "./types/sentinel.js";
 export * from "./types/debuggerStatement.js";
+export * from "./types/blockArgument.js";
 export * from "./types/base.js"
 
 export type Expression =
@@ -108,14 +109,20 @@ each call will get its own copy of `globalVar`.
  * shared const foo = fetch("https://example.com/api/data");
  * ```
  */
+export type BlockScope = {
+  type: "block";
+  blockName: string;
+};
+
 export type Scope =
   | GlobalScope
   | FunctionScope
   | NodeScope
   | ImportedScope
   | SharedScope
-  | LocalScope;
-export type ScopeType = Scope["type"] | "args";
+  | LocalScope
+  | BlockScope;
+export type ScopeType = Scope["type"] | "args" | "blockArgs";
 export type GlobalScope = {
   type: "global";
 };

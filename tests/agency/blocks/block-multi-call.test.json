@@ -1,0 +1,12 @@
+{
+  "sourceFile": "block-multi-call.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[42,42]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Block called twice gets fresh state each time"
+    }
+  ]
+}

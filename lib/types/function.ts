@@ -5,6 +5,7 @@ import {
   VariableType,
 } from "../types.js";
 import { BaseNode } from "./base.js";
+import { BlockArgument } from "./blockArgument.js";
 import { AgencyArray, AgencyObject, NamedArgument, SplatExpression } from "./dataStructures.js";
 import { UsesTool } from "./tools.js";
 
@@ -32,6 +33,7 @@ export type FunctionCall = BaseNode & {
   type: "functionCall";
   functionName: string;
   arguments: (Expression | SplatExpression | NamedArgument)[];
+  block?: BlockArgument;
   async?: boolean;
   tools?: UsesTool;
 };

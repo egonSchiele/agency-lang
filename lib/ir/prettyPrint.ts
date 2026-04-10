@@ -14,6 +14,10 @@ function scopeToPrefix(scope: TsScopedVar["scope"]): string {
       return "__stack.locals";
     case "args":
       return "__stack.args";
+    case "block":
+      return "__bstack.locals";
+    case "blockArgs":
+      return "__bstack.args";
     case "imported":
     case "shared":
       return "";

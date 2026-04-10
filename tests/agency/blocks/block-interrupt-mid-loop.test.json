@@ -1,0 +1,25 @@
+{
+  "sourceFile": "block-interrupt-mid-loop.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Approve interrupt mid-loop: resumes at iteration 3 and completes all iterations",
+      "input": "",
+      "expectedOutput": "[1,2,3,4,5]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "Are you sure?" }
+      ]
+    },
+    {
+      "nodeName": "main",
+      "description": "Reject interrupt mid-loop: skips iteration 3, continues with remaining items",
+      "input": "",
+      "expectedOutput": "[1,2,4,5]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "reject", "expectedMessage": "Are you sure?" }
+      ]
+    }
+  ]
+}

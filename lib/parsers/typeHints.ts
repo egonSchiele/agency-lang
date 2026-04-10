@@ -5,6 +5,7 @@ import {
 } from "./utils.js";
 import {
   ArrayType,
+  BlockType,
   BooleanLiteralType,
   NumberLiteralType,
   ObjectProperty,
@@ -22,6 +23,7 @@ import {
   char,
   count,
   digit,
+  lazy,
   many1Till,
   many1WithJoin,
   newline,
@@ -283,6 +285,7 @@ export const objectTypeParser: Parser<ObjectType> = trace(
 export const unionItemParser: Parser<VariableType> = trace(
   "unionItemParser",
   or(
+    lazy(() => blockTypeParser),
     objectTypeParser,
     angleBracketsArrayTypeParser,
     arrayTypeParser,
@@ -323,9 +326,49 @@ export const unionTypeParser: Parser<UnionType> = trace(
   _unionTypeParser,
 );
 
+// Block type: () => string, (number) => any, (string, number) => boolean
+// Params are positional (no names in the type annotation).
+export const blockTypeParser: Parser<BlockType> = trace(
+  "blockTypeParser",
+  (input: string): ParserResult<BlockType> => {
+    const parser = seqC(
+      set("type", "blockType"),
+      char("("),
+      optionalSpaces,
+      capture(
+        sepBy(
+          seqR(optionalSpaces, char(","), optionalSpaces),
+          lazy(() => variableTypeParser),
+        ),
+        "paramTypes",
+      ),
+      optionalSpaces,
+      char(")"),
+      optionalSpaces,
+      str("=>"),
+      optionalSpaces,
+      capture(lazy(() => variableTypeParser), "returnType"),
+    );
+    const result = parser(input);
+    if (!result.success) return result;
+    return success(
+      {
+        type: "blockType" as const,
+        params: result.result.paramTypes.map((t: VariableType) => ({
+          name: "",
+          typeAnnotation: t,
+        })),
+        returnType: result.result.returnType,
+      },
+      result.rest,
+    );
+  },
+);
+
 export const variableTypeParser: Parser<VariableType> = trace(
   "variableTypeParser",
   or(
+    blockTypeParser,
     unionTypeParser,
     arrayTypeParser,
     objectTypeParser,

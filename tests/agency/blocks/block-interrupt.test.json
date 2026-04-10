@@ -1,0 +1,15 @@
+{
+  "sourceFile": "block-interrupt.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"approved\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Interrupt inside block pauses and resumes correctly",
+      "interruptHandlers": [
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

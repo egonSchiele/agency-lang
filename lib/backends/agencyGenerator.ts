@@ -527,7 +527,29 @@ export class AgencyGenerator {
       asyncPrefix = "await ";
     }
 
-    return `${asyncPrefix}${node.functionName}(${args.join(", ")})`;
+    let result = `${asyncPrefix}${node.functionName}(${args.join(", ")})`;
+
+    if (node.block) {
+      const block = node.block;
+      let asClause = "as ";
+      if (block.params.length === 1) {
+        asClause = `as ${block.params[0].name} `;
+      } else if (block.params.length > 1) {
+        asClause = `as (${block.params.map((p) => p.name).join(", ")}) `;
+      }
+
+      this.increaseIndent();
+      const bodyLines: string[] = [];
+      for (const stmt of block.body) {
+        bodyLines.push(this.processNode(stmt));
+      }
+      this.decreaseIndent();
+      const bodyStr = bodyLines.filter((s) => s !== "").join("\n").trimEnd() + "\n";
+
+      result += ` ${asClause}{\n${bodyStr}${this.indentStr("}")}`;
+    }
+
+    return result;
   }
 
   // Data structures

@@ -1,0 +1,15 @@
+{
+  "sourceFile": "block-interrupt-assign-resolve.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Resolving an interrupt assigned to a variable in a block provides the resolved value",
+      "input": "",
+      "expectedOutput": "\"hello World\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "resolve", "resolvedValue": "World", "expectedMessage": "what is your name?" }
+      ]
+    }
+  ]
+}

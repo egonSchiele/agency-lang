@@ -1,0 +1,15 @@
+{
+  "sourceFile": "block-interrupt-assign-reject.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Rejecting an interrupt assigned to a variable in a block returns null",
+      "input": "",
+      "expectedOutput": "null",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "reject", "expectedMessage": "what is your name?" }
+      ]
+    }
+  ]
+}

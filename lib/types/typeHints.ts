@@ -8,7 +8,14 @@ export type VariableType =
   | BooleanLiteralType
   | UnionType
   | ObjectType
-  | TypeAliasVariable;
+  | TypeAliasVariable
+  | BlockType;
+
+export type BlockType = {
+  type: "blockType";
+  params: { name: string; typeAnnotation: VariableType }[];
+  returnType: VariableType;
+};
 
 export type PrimitiveType = {
   type: "primitiveType";

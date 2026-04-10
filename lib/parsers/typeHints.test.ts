@@ -3,6 +3,7 @@ import {
   primitiveTypeParser,
   arrayTypeParser,
   angleBracketsArrayTypeParser,
+  blockTypeParser,
   stringLiteralTypeParser,
   numberLiteralTypeParser,
   booleanLiteralTypeParser,
@@ -2447,6 +2448,65 @@ describe("variableTypeParser", () => {
           expect(result.success).toBe(false);
         });
     }
+  });
+});
+
+describe("blockTypeParser", () => {
+  it("parses () => string", () => {
+    const result = blockTypeParser("() => string");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "blockType",
+        params: [],
+        returnType: { type: "primitiveType", value: "string" },
+      });
+    }
+  });
+
+  it("parses (number) => any", () => {
+    const result = blockTypeParser("(number) => any");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "blockType",
+        params: [{ name: "", typeAnnotation: { type: "primitiveType", value: "number" } }],
+        returnType: { type: "primitiveType", value: "any" },
+      });
+    }
+  });
+
+  it("parses (string, number) => boolean", () => {
+    const result = blockTypeParser("(string, number) => boolean");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "blockType",
+        params: [
+          { name: "", typeAnnotation: { type: "primitiveType", value: "string" } },
+          { name: "", typeAnnotation: { type: "primitiveType", value: "number" } },
+        ],
+        returnType: { type: "primitiveType", value: "boolean" },
+      });
+    }
+  });
+
+  it("parses block type via variableTypeParser", () => {
+    const result = variableTypeParser("() => string");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.type).toBe("blockType");
+    }
+  });
+
+  it("fails on missing arrow", () => {
+    const result = blockTypeParser("(number) string");
+    expect(result.success).toBe(false);
+  });
+
+  it("fails on empty input", () => {
+    const result = blockTypeParser("");
+    expect(result.success).toBe(false);
   });
 });
 

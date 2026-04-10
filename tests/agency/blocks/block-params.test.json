@@ -1,0 +1,16 @@
+{
+  "sourceFile": "block-params.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[2,4,6]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "Block with params maps items by doubling them"
+    }
+  ]
+}

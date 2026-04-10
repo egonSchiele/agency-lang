@@ -1,0 +1,16 @@
+def mapItems(items: any[], block: (any) => any): any[] {
+  let results: any[] = []
+  for (item in items) {
+    let result = block(item)
+    results = results.concat([result])
+  }
+  return results
+}
+
+node main() {
+  let items = [1, 2, 3]
+  let doubled = mapItems(items) as x {
+    return x * 2
+  }
+  return doubled
+}

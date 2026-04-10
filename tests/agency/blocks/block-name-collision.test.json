@@ -1,0 +1,12 @@
+{
+  "sourceFile": "block-name-collision.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Block param 'n' shadows outer 'n' — block gets 5, outer keeps 100, result is 110",
+      "input": "",
+      "expectedOutput": "110",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

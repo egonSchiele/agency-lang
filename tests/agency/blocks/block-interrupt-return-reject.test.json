@@ -1,0 +1,15 @@
+{
+  "sourceFile": "block-interrupt-return-reject.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Rejecting a return interrupt in block causes it to return null",
+      "input": "",
+      "expectedOutput": "null",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "reject", "expectedMessage": "please approve" }
+      ]
+    }
+  ]
+}

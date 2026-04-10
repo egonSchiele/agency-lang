@@ -1,0 +1,12 @@
+def callTwice(block: () => number): number[] {
+  let a = block()
+  let b = block()
+  return [a, b]
+}
+
+node main() {
+  let results = callTwice() as {
+    return 42
+  }
+  return results
+}

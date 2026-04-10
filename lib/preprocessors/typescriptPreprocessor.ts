@@ -51,6 +51,8 @@ function walkBody(
       if (node.handler.kind === "inline") {
         node.handler.body = walkBody(node.handler.body, fn);
       }
+    } else if (node.type === "functionCall" && node.block) {
+      node.block.body = walkBody(node.block.body, fn);
     }
     return node;
   });
@@ -1324,23 +1326,63 @@ export class TypescriptPreprocessor {
         funcArgs[nodeName] = [...node.parameters.map((p) => p.name)];
         localVarsInFunction[nodeName] = new Set();
 
-        // Then, whenever we see a variable being referenced,
-        // we try to look up its scope and set it on that variable.
-        // Note: segment expressions are now walked by walkNodes/getAllVariablesInBody,
-        // so the base VariableNameLiteral inside interpolation segments gets its scope
-        // set via the node.type === "variableName" branch below.
+        // Phase 1: Resolve block body variables first.
+        // Block params get "blockArgs" scope, new variables inside blocks get "block" scope,
+        // and references to outer-scope variables keep their original scope (captured via closure).
+        // We do this before the main walk so that the main walk sees these variables
+        // already have scopes and skips them.
+        for (const { node: bodyNode } of walkNodesArray(node.body)) {
+          if (bodyNode.type === "functionCall" && bodyNode.block) {
+            const blockParamNames = new Set(bodyNode.block.params.map((p) => p.name));
+            const blockLocalNames = new Set<string>();
+
+            // First pass: identify block-local assignments
+            for (const { node: blockVarNode } of getAllVariablesInBodyArray(bodyNode.block.body)) {
+              if (blockVarNode.type === "assignment") {
+                const name = blockVarNode.variableName;
+                if (!blockParamNames.has(name) && lookupScope(nodeName, name) === null) {
+                  blockLocalNames.add(name);
+                }
+              }
+            }
+
+            // Second pass: set scopes on all variables in the block body
+            for (const { node: blockVarNode } of getAllVariablesInBodyArray(bodyNode.block.body)) {
+              if (blockVarNode.type === "assignment") {
+                if (blockParamNames.has(blockVarNode.variableName)) {
+                  blockVarNode.scope = "blockArgs";
+                } else if (blockLocalNames.has(blockVarNode.variableName)) {
+                  blockVarNode.scope = "block";
+                } else {
+                  blockVarNode.scope = lookupScope(nodeName, blockVarNode.variableName) || "local";
+                }
+              } else if (blockVarNode.type === "variableName") {
+                if (blockParamNames.has(blockVarNode.value)) {
+                  blockVarNode.scope = "blockArgs";
+                } else if (blockLocalNames.has(blockVarNode.value)) {
+                  blockVarNode.scope = "block";
+                } else {
+                  blockVarNode.scope = lookupScope(nodeName, blockVarNode.value) || "imported";
+                }
+              }
+            }
+          }
+        }
+
+        // Phase 2: Resolve function/node body variables.
+        // Variables inside blocks already have scopes from Phase 1, so they are skipped.
         const varsDefinedInFunction = getAllVariablesInBodyArray(node.body);
         for (const { node: varNode } of varsDefinedInFunction) {
           if (varNode.type === "assignment") {
+            if (varNode.scope) continue; // already resolved in block Phase 1
             let scope = lookupScope(nodeName, varNode.variableName);
             if (scope === null) {
-              scope = "local"; // Local var, first time being assigned
+              scope = "local";
               localVarsInFunction[nodeName].add(varNode.variableName);
             }
             varNode.scope = scope;
           } else if (varNode.type === "variableName") {
-            // a var is being referenced, we don't know
-            // what it is, so assume it is either imported or a JS global, like `Promise`.
+            if (varNode.scope) continue; // already resolved in block Phase 1
             varNode.scope = lookupScope(nodeName, varNode.value) || "imported";
           }
         }

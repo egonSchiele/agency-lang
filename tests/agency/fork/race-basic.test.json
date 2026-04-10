@@ -1,0 +1,12 @@
+{
+  "sourceFile": "race-basic.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Race returns first result to complete",
+      "input": "",
+      "expectedOutput": "10",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

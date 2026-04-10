@@ -112,3 +112,28 @@ export function _notify(title: string, message: string): boolean {
   }
   return true;
 }
+
+export function _mostCommon(items: any[]): any {
+  const counts: Record<string, { value: any; count: number }> = {};
+  for (const item of items) {
+    const key = JSON.stringify(item);
+    if (!counts[key]) counts[key] = { value: item, count: 0 };
+    counts[key].count++;
+  }
+  let best: any = undefined;
+  let bestCount = 0;
+  for (const entry of Object.values(counts)) {
+    if (entry.count > bestCount) {
+      best = entry.value;
+      bestCount = entry.count;
+    }
+  }
+  return best;
+}
+
+export function _range(startOrN: number, end?: number): number[] {
+  if (end === undefined) {
+    return Array.from({ length: startOrN }, (_, i) => i);
+  }
+  return Array.from({ length: end - startOrN }, (_, i) => i + startOrN);
+}

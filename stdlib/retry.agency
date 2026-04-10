@@ -1,0 +1,29 @@
+export def retry(n: number, test: (any) => boolean, block: () => any): any {
+  """
+  Run a block up to n times. Returns the first result that passes the test function. Returns null if all attempts fail.
+  """
+  for (i in range(n)) {
+    let result = block()
+    let passed = test(result)
+    if (passed) {
+      return result
+    }
+  }
+  return null
+}
+
+export def retryWithFeedback(n: number, test: (any) => boolean, block: (any, number) => any): any {
+  """
+  Run a block up to n times. Each attempt receives the previous result and the attempt number (starting from 1). Returns the first result that passes the test, or the last result if all fail.
+  """
+  let prev = null
+  for (i in range(n)) {
+    let result = block(prev, i + 1)
+    let passed = test(result)
+    if (passed) {
+      return result
+    }
+    prev = result
+  }
+  return prev
+}

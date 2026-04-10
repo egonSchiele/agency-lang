@@ -1,0 +1,19 @@
+import { retry } from "std::retry"
+
+def isPositive(n: number): boolean {
+  return n > 0
+}
+
+let counter = 0
+
+def nextValue(): number {
+  counter = counter + 1
+  return counter - 2
+}
+
+node main() {
+  let result = retry(5, isPositive) as {
+    return nextValue()
+  }
+  return result
+}

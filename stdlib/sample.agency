@@ -1,0 +1,8 @@
+export def sample(n: number, block: () => any): any[] {
+  """
+  Run a block n times in parallel. Returns an array of all results.
+  """
+  return fork(range(n)) as _ {
+    return block()
+  }
+}

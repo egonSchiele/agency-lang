@@ -1,0 +1,12 @@
+{
+  "sourceFile": "firstValid-none-pass.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "firstValid returns null when no results pass the test",
+      "input": "",
+      "expectedOutput": "null",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

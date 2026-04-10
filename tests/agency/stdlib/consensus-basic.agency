@@ -1,0 +1,21 @@
+import { consensus } from "std::consensus"
+
+let counter = 0
+
+def classify(): string {
+  counter = counter + 1
+  if (counter <= 3) {
+    return "positive"
+  }
+  if (counter == 4) {
+    return "negative"
+  }
+  return "positive"
+}
+
+node main() {
+  let result = consensus(5) as {
+    return classify()
+  }
+  return result
+}

@@ -1354,7 +1354,9 @@ export class TypescriptPreprocessor {
                 } else if (blockLocalNames.has(blockVarNode.variableName)) {
                   blockVarNode.scope = "block";
                 } else {
-                  blockVarNode.scope = lookupScope(nodeName, blockVarNode.variableName) || "local";
+                  const resolved = lookupScope(nodeName, blockVarNode.variableName);
+                  if (resolved) blockVarNode.scope = resolved;
+                  // else: leave unscoped — Phase 2 will resolve once locals are registered
                 }
               } else if (blockVarNode.type === "variableName") {
                 if (blockParamNames.has(blockVarNode.value)) {
@@ -1362,7 +1364,9 @@ export class TypescriptPreprocessor {
                 } else if (blockLocalNames.has(blockVarNode.value)) {
                   blockVarNode.scope = "block";
                 } else {
-                  blockVarNode.scope = lookupScope(nodeName, blockVarNode.value) || "imported";
+                  const resolved = lookupScope(nodeName, blockVarNode.value);
+                  if (resolved) blockVarNode.scope = resolved;
+                  // else: leave unscoped — Phase 2 will resolve once locals are registered
                 }
               }
             }

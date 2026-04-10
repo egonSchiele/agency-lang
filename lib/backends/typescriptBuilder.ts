@@ -36,6 +36,7 @@ import * as renderInterruptReturn from "../templates/backends/typescriptGenerato
 import * as renderRewindCheckpoint from "../templates/backends/typescriptGenerator/rewindCheckpoint.js";
 import * as renderTraceSetup from "../templates/backends/typescriptGenerator/traceSetup.js";
 import * as renderBlockSetup from "../templates/backends/typescriptGenerator/blockSetup.js";
+import * as renderForkBlockSetup from "../templates/backends/typescriptGenerator/forkBlockSetup.js";
 
 import { AgencyConfig } from "@/config.js";
 import {
@@ -1350,6 +1351,10 @@ export class TypeScriptBuilder {
   }
 
   private processFunctionCall(node: FunctionCall): TsNode {
+    if ((node.functionName === "fork" || node.functionName === "race") && node.block) {
+      return this.processForkCall(node);
+    }
+
     if (node.functionName === "throw") {
       // throw("message") → throw new Error("message")
       const argNodes: TsNode[] = node.arguments.map((arg) =>
@@ -1502,6 +1507,50 @@ export class TypeScriptBuilder {
       const call = $.id(functionName).call(argNodes).done();
       return shouldAwait ? ts.await(call) : call;
     }
+  }
+
+  private processForkCall(node: FunctionCall): TsNode {
+    const mode = node.functionName === "fork" ? "all" : "race";
+    const block = node.block!;
+    const paramName = block.params[0]?.name ?? "_";
+    const id = this._subStepPath[this._subStepPath.length - 1];
+
+    const itemsNode = node.arguments.length > 0
+      ? this.processCallArg(node.arguments[0])
+      : ts.arr([]);
+
+    const blockName = `__block_${this._blockCounter++}`;
+    const parentScopeName = this.currentScopeName();
+    this.startScope({ type: "block", blockName });
+    this._sourceMapBuilder.enterScope(this.moduleId, blockName);
+    const bodyParts = this.processBodyAsParts(block.body);
+    this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
+    this.endScope();
+
+    const bodyStr = bodyParts.map((n) => printTs(n, 1)).join("\n");
+
+    const blockSetupCode = renderForkBlockSetup.default({
+      paramNameQuoted: JSON.stringify(paramName),
+      moduleId: JSON.stringify(this.moduleId),
+      scopeName: JSON.stringify(blockName),
+      body: bodyStr,
+    });
+
+    const blockFn = ts.arrowFn(
+      [
+        { name: "__forkItem" },
+        { name: "__forkIndex" },
+        { name: "__forkBranchStack" },
+      ],
+      ts.statements([ts.raw(blockSetupCode)]),
+      { async: true },
+    );
+
+    return $(ts.id("runner"))
+      .prop("fork")
+      .call([ts.num(id), itemsNode, blockFn, ts.str(mode)])
+      .await()
+      .done();
   }
 
   private generateNodeCallExpression(node: FunctionCall): TsNode {

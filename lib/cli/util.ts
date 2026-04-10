@@ -344,8 +344,8 @@ export function getImportsRecursively(
   }
   visited.add(filename);
   const contents = fs.readFileSync(filename, "utf-8");
-  const isStdlibFile = filename.startsWith(getStdlibDir());
-  const parsed = parseAgency(contents, { verbose: false }, !isStdlibFile);
+  const isStdlibIndex = filename === path.join(getStdlibDir(), "index.agency");
+  const parsed = parseAgency(contents, { verbose: false }, !isStdlibIndex);
   if (!parsed.success) {
     console.error(`Error parsing ${filename}:`, parsed);
     return [];

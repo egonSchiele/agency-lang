@@ -1,0 +1,16 @@
+def double(n: number): number {
+  return n * 2
+}
+
+def addOne(n: number): number {
+  return n + 1
+}
+
+node main() {
+  let results = fork([1, 2, 3]) as item {
+    let doubled = double(item)
+    let result = addOne(doubled)
+    return result
+  }
+  return results
+}

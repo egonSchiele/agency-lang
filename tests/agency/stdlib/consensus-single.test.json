@@ -1,0 +1,12 @@
+{
+  "sourceFile": "consensus-single.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "consensus(1) returns the single result",
+      "input": "",
+      "expectedOutput": "\"hello\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

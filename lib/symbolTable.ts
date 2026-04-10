@@ -71,8 +71,8 @@ export function buildSymbolTable(
     if (!fs.existsSync(absPath)) return;
 
     const contents = fs.readFileSync(absPath, "utf-8");
-    const isStdlibFile = absPath.startsWith(getStdlibDir());
-    const parseResult = parseAgency(contents, config, !isStdlibFile);
+    const isStdlibIndex = absPath === path.join(getStdlibDir(), "index.agency");
+    const parseResult = parseAgency(contents, config, !isStdlibIndex);
     if (!parseResult.success) return;
 
     const program = parseResult.result;

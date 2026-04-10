@@ -1,0 +1,19 @@
+import { retry } from "std::retry"
+
+def alwaysFalse(n: number): boolean {
+  return false
+}
+
+let counter = 0
+
+def getNext(): number {
+  counter = counter + 1
+  return counter
+}
+
+node main() {
+  let result = retry(3, alwaysFalse) as {
+    return getNext()
+  }
+  return result
+}

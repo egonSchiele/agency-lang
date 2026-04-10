@@ -1,0 +1,12 @@
+{
+  "sourceFile": "fork-capture.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork captures outer variable 'base' and uses it in each branch",
+      "input": "",
+      "expectedOutput": "[11,12,13]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

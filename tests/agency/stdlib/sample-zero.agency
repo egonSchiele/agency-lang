@@ -1,0 +1,8 @@
+import { sample } from "std::sample"
+
+node main() {
+  let results = sample(0) as {
+    return 42
+  }
+  return results
+}

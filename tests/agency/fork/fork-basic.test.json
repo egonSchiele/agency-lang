@@ -1,0 +1,12 @@
+{
+  "sourceFile": "fork-basic.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork runs block for each item and returns array of results",
+      "input": "",
+      "expectedOutput": "[2,4,6]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

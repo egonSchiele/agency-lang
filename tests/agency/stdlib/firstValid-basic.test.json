@@ -1,0 +1,12 @@
+{
+  "sourceFile": "firstValid-basic.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "firstValid returns first result that passes test — double(3)=6 is first > 5",
+      "input": "",
+      "expectedOutput": "6",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

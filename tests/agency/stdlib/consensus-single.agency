@@ -1,0 +1,8 @@
+import { consensus } from "std::consensus"
+
+node main() {
+  let result = consensus(1) as {
+    return "hello"
+  }
+  return result
+}

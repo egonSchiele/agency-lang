@@ -162,8 +162,8 @@ export function compile(
   compiledFiles.add(absoluteInputFile);
 
   const contents = readFile(inputFile);
-  const isStdlibFile = absoluteInputFile.startsWith(getStdlibDir());
-  const parsedProgram = parse(contents, config, !isStdlibFile);
+  const isStdlibIndex = absoluteInputFile === path.join(getStdlibDir(), "index.agency");
+  const parsedProgram = parse(contents, config, !isStdlibIndex);
 
   // Build symbol table once at the top level, reuse for recursive calls
   const symbolTable =

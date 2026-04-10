@@ -1,0 +1,11 @@
+def add(a: number, b: number): number {
+  return a + b
+}
+
+node main() {
+  let base = 10
+  let results = fork([1, 2, 3]) as item {
+    return add(base, item)
+  }
+  return results
+}

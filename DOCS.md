@@ -913,6 +913,141 @@ node handleTodo(userMessage: string) {
 
 When you create multiple agency files and import nodes from one file into another, the nodes in all the files will get merged into a single graph. This means the node names must be unique across all files.
 
+## Block Arguments
+
+Block arguments let you pass inline code blocks to functions. They're written using the `as` keyword after the function call:
+
+```
+// Block with no params
+let results = twice() as {
+  return "hello"
+}
+
+// Block with one param
+let doubled = mapItems([1, 2, 3]) as item {
+  return item * 2
+}
+
+// Block with multiple params
+let result = retryWithFeedback(3, isValid) as (prev, attempt) {
+  return llm("Fix: ${prev}")
+}
+```
+
+Functions that accept blocks declare a block parameter using arrow type syntax:
+
+```
+def twice(block: () => string): string[] {
+  let a = block()
+  let b = block()
+  return [a, b]
+}
+
+def mapItems(items: any[], block: (any) => any): any[] {
+  // ...
+}
+```
+
+Block arguments always come last. The `as` keyword is required even for blocks with no parameters.
+
+## Fork and Race
+
+`fork` runs a block for each item in an array **in parallel** and returns all results:
+
+```
+let results = fork([0.3, 0.7, 1.0]) as temp {
+  let summary: string = llm("Summarize: ${doc}") with { temperature: temp }
+  return summary
+}
+// results: ["summary1", "summary2", "summary3"]
+```
+
+`race` runs all branches in parallel but returns only the **first result** to complete:
+
+```
+let winner = race([prompt1, prompt2, prompt3]) as p {
+  return llm(p)
+}
+// winner: whichever finished first
+```
+
+Both `fork` and `race` use the standard block argument syntax. Each branch runs with its own isolated state.
+
+## Stdlib Reliability Functions
+
+Agency includes standard library functions for common LLM reliability strategies. These are regular Agency functions that use `fork`, `race`, and block arguments.
+
+### `sample(n, block) -> any[]`
+
+Run a block n times in parallel. Returns all results.
+
+```
+import { sample } from "std::sample"
+
+let answers = sample(5) as {
+  let label: "positive" | "negative" = llm("Classify: ${text}")
+  return label
+}
+// answers: ["positive", "positive", "negative", "positive", "negative"]
+```
+
+### `consensus(n, block) -> any`
+
+Run a block n times and return the most common result (majority vote).
+
+```
+import { consensus } from "std::consensus"
+
+let label = consensus(5) as {
+  llm("Classify: ${text}")
+}
+// label: "positive" (appeared 3 out of 5 times)
+```
+
+### `retry(n, test, block) -> any`
+
+Run a block up to n times. Returns the first result that passes the test function. Returns null if all attempts fail.
+
+```
+import { retry } from "std::retry"
+
+let json = retry(3, isValidJSON) as {
+  llm("Extract JSON from: ${text}")
+}
+```
+
+### `retryWithFeedback(n, test, block) -> any`
+
+Run a block up to n times. Each attempt receives the previous result and the attempt number (starting from 1). Returns the first passing result, or the last result if all fail.
+
+```
+import { retry } from "std::retry"
+
+let code = retryWithFeedback(3, typeChecks) as (prev, attempt) {
+  if (attempt == 1) {
+    return llm("Write TypeScript for: ${spec}")
+  }
+  return llm("Fix this code: ${prev}")
+}
+```
+
+### `firstValid(variants, test, block) -> any`
+
+Run a block for each variant in parallel, then return the first result that passes the test. Returns null if none pass.
+
+```
+import { firstValid } from "std::firstValid"
+
+let result = firstValid([0.2, 0.5, 0.8], isValidJSON) as temp {
+  llm("Extract JSON: ${text}") with { temperature: temp }
+}
+```
+
+### Utility functions
+
+- `range(n)` — returns `[0, 1, ..., n-1]`
+- `mostCommon(items)` — returns the most frequent element in an array
+
 ### Unsupported features
 - no higher order functions yet (e.g., `map`, `filter`, `reduce`, etc.) or lambda functions
 - string interpolation is limited -- you can only interpolate variable names, not expressions.

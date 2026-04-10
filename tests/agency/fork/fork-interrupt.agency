@@ -1,0 +1,7 @@
+node main() {
+  let results = fork(["a", "b"]) as item {
+    interrupt("approve ${item}")
+    return "done: ${item}"
+  }
+  return results
+}

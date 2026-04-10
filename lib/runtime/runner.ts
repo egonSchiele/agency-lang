@@ -1,6 +1,8 @@
-import type { State } from "./state/stateStack.js";
+import type { State, BranchState } from "./state/stateStack.js";
+import { StateStack } from "./state/stateStack.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { HandlerFn } from "./types.js";
+import { isInterrupt } from "./interrupts.js";
 import { debugStep } from "./debugger.js";
 import { color } from "termcolors";
 import { id } from "smoltalk";
@@ -430,5 +432,101 @@ export class Runner {
     if (this.halted) return;
     this.clearDebugFlag(id);
     this.setCounter(id + 1);
+  }
+
+  // ── Specialized: fork/race (parallel execution with isolation) ──
+
+  /**
+   * Run blockFn for each input in parallel. Each branch gets its own
+   * BranchState (StateStack) for isolation and serialization.
+   *
+   * mode "all" (fork): waits for all, returns results array.
+   * mode "race": returns first to complete.
+   *
+   * blockFn receives (item, index, branchStack) where branchStack is the
+   * branch's isolated StateStack (new or deserialized from interrupt).
+   *
+   * Returns the interrupt directly if any branch interrupts — the caller
+   * (generated code) handles halt via the standard isInterrupt check.
+   * Concurrent interrupt batching is deferred to stage 5.
+   */
+  async fork(
+    id: number,
+    items: any[],
+    blockFn: (item: any, index: number, branchStack: StateStack) => Promise<any>,
+    mode: "all" | "race",
+  ): Promise<any> {
+    if (this.shouldSkip()) return undefined;
+    if (this.getCounter() > id) {
+      return this.frame.locals[this.forkResultKey(id)];
+    }
+
+    if (await this.maybeDebugHook(id)) return undefined;
+
+    this.path.push(id);
+    let result: any;
+    try {
+      if (!this.frame.branches) this.frame.branches = {};
+
+      const branchStacks = items.map((_item, i) => {
+        const branchKey = this.forkBranchKey(id, i);
+        const existing = this.frame.branches![branchKey];
+        if (existing) {
+          existing.stack.deserializeMode();
+          return existing.stack;
+        }
+        const stack = new StateStack();
+        this.frame.branches![branchKey] = { stack };
+        return stack;
+      });
+
+      const promises = items.map((item, i) => blockFn(item, i, branchStacks[i]));
+
+      if (mode === "all") {
+        const settled = await Promise.allSettled(promises);
+
+        // Return first interrupt found — caller handles halt
+        for (const s of settled) {
+          if (s.status === "fulfilled" && isInterrupt(s.value)) {
+            return s.value;
+          }
+        }
+
+        for (const s of settled) {
+          if (s.status === "rejected") throw s.reason;
+        }
+
+        result = settled.map((s) => (s as PromiseFulfilledResult<any>).value);
+      } else {
+        result = await Promise.race(promises);
+        if (isInterrupt(result)) return result;
+      }
+
+      // Clean up branch state after successful completion
+      for (let i = 0; i < items.length; i++) {
+        delete this.frame.branches![this.forkBranchKey(id, i)];
+      }
+    } finally {
+      this.path.pop();
+    }
+
+    if (this.halted) return undefined;
+
+    this.frame.locals[this.forkResultKey(id)] = result;
+    this.clearDebugFlag(id);
+    this.setCounter(id + 1);
+    return result;
+  }
+
+  private forkBranchKey(id: number, index: number): string {
+    return this.path.length === 0
+      ? `fork_${id}_${index}`
+      : `fork_${this.key()}_${id}_${index}`;
+  }
+
+  private forkResultKey(id: number): string {
+    return this.path.length === 0
+      ? `__fork_result_${id}`
+      : `__fork_result_${this.key()}_${id}`;
   }
 }

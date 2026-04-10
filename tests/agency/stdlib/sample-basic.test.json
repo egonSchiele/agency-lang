@@ -1,0 +1,12 @@
+{
+  "sourceFile": "sample-basic.agency",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "sample(3) runs block 3 times and returns array of results",
+      "input": "",
+      "expectedOutput": "[2,2,2]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

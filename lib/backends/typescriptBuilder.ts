@@ -2358,69 +2358,32 @@ export class TypeScriptBuilder {
     return stages.reverse();
   }
 
-  /**
-   * Build a single __pipeBind call: await __pipeBind(leftIR, async (__pipeArg) => stage(__pipeArg))
-   * For Agency functions, appends the __state config so interrupts work.
-   */
+  /** Build: await __pipeBind(leftIR, async (__pipeArg) => stage(__pipeArg)) */
   private buildPipeBind(leftIR: TsNode, stage: Expression): TsNode {
-    const pipeArg = ts.raw("__pipeArg");
-
-    const buildCall = (funcName: string, callee: TsNode, args: TsNode[]) => {
-      if (this.isAgencyFunction(funcName, "topLevelStatement")) {
-        const configObj = ts.functionCallConfig({
-          ctx: ts.runtime.ctx,
-          threads: ts.newThreadStore(),
-          interruptData: ts.raw("__state?.interruptData"),
-        });
-        return ts.call(callee, [...args, configObj]);
-      }
-      return ts.call(callee, args);
-    };
-
-    const wrapInPipeBind = (callNode: TsNode) =>
-      ts.await(ts.call(ts.raw("__pipeBind"), [
-        leftIR,
-        ts.arrowFn([{ name: "__pipeArg" }], callNode, { async: true }),
-      ]));
-
-    if (stage.type === "valueAccess" || stage.type === "variableName") {
-      const funcName = stage.type === "variableName" ? stage.value : "";
-      const callee = this.processNode(stage);
-      return wrapInPipeBind(buildCall(funcName, callee, [pipeArg]));
-    }
-
-    if (stage.type === "functionCall") {
-      const args = stage.arguments.map((a) =>
-        a.type === "placeholder" ? pipeArg : this.processNode(a as AgencyNode)
-      );
-      const callee = ts.raw(mapFunctionName(stage.functionName));
-      return wrapInPipeBind(buildCall(stage.functionName, callee, args));
-    }
-
-    throw new Error(`Invalid pipe stage type: ${stage.type}`);
+    return ts.await(ts.call(ts.raw("__pipeBind"), [
+      leftIR,
+      this.buildPipeLambda(stage),
+    ]));
   }
 
   /**
    * Expand a pipe chain assignment into multiple IR parts, one per stage.
    * Each part becomes its own runner step so interrupts don't replay earlier stages.
    */
-  private expandPipeChain(stmt: Assignment, stages: Expression[]): TsNode[] {
+  private expandPipeChain(stmt: Assignment, stages: Expression[], baseId: number): TsNode[] {
     const tempName = `__pipe_${this._pipeCounter++}`;
     const tempVar = ts.scopedVar(tempName, "local");
     const targetVar = this.buildAssignmentLhs(stmt.scope!, stmt.variableName, stmt.accessChain);
     const nodes: TsNode[] = [];
 
-    // Step 0: evaluate initial expression into temp (plain step)
-    nodes.push(ts.runnerStep({ id: 0, body: [ts.assign(tempVar, this.processNode(stages[0]))] }));
+    nodes.push(ts.runnerStep({ id: baseId, body: [ts.assign(tempVar, this.processNode(stages[0]))] }));
 
-    // Steps 1..N-1: pipe intermediate stages via runner.pipe()
     for (let i = 1; i < stages.length - 1; i++) {
-      nodes.push(ts.runnerPipe({ id: i, target: tempVar, input: tempVar, fn: this.buildPipeLambda(stages[i]) }));
+      nodes.push(ts.runnerPipe({ id: baseId + i, target: tempVar, input: tempVar, fn: this.buildPipeLambda(stages[i]) }));
     }
 
-    // Final step: pipe last stage into target variable
     const lastIdx = stages.length - 1;
-    nodes.push(ts.runnerPipe({ id: lastIdx, target: targetVar, input: tempVar, fn: this.buildPipeLambda(stages[lastIdx]) }));
+    nodes.push(ts.runnerPipe({ id: baseId + lastIdx, target: targetVar, input: tempVar, fn: this.buildPipeLambda(stages[lastIdx]) }));
 
     return nodes;
   }
@@ -2452,9 +2415,12 @@ export class TypeScriptBuilder {
 
   private buildPipeStateArgs(funcName: string): TsNode[] {
     if (!this.isAgencyFunction(funcName, "topLevelStatement")) return [];
+    const threadsExpr = this.insideMessageThread
+      ? ts.runtime.threads
+      : ts.newThreadStore();
     return [ts.functionCallConfig({
       ctx: ts.runtime.ctx,
-      threads: ts.newThreadStore(),
+      threads: threadsExpr,
       interruptData: ts.raw("__state?.interruptData"),
     })];
   }
@@ -2488,14 +2454,11 @@ export class TypeScriptBuilder {
       const pipeStages = this.getPipeChainStages(stmt);
       if (pipeStages) {
         flushPart();
-        const pipeNodes = this.expandPipeChain(stmt as Assignment, pipeStages);
-        // Renumber IDs based on position in result array
-        for (const node of pipeNodes) {
-          const id = result.length;
-          if (node.kind === "runnerStep") node.id = id;
-          if (node.kind === "runnerPipe") node.id = id;
-          this._subStepPath.push(id);
-          result.push(node);
+        const baseId = result.length;
+        const pipeNodes = this.expandPipeChain(stmt as Assignment, pipeStages, baseId);
+        for (let i = 0; i < pipeNodes.length; i++) {
+          this._subStepPath.push(baseId + i);
+          result.push(pipeNodes[i]);
           this._subStepPath.pop();
         }
         continue;

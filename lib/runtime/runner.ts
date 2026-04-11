@@ -369,6 +369,7 @@ export class Runner {
       this.frame.clearLocalsWithPrefix(`__substep_${pathPrefix}`);
       this.frame.clearLocalsWithPrefix(`__condbranch_${pathPrefix}`);
       this.frame.clearLocalsWithPrefix(`__iteration_${pathPrefix}`);
+      this.frame.clearLocalsWithPrefix(`__pipe_result_`);
       this.frame.locals[iterKey] = i + 1;
 
       if (this._break) break;
@@ -425,6 +426,7 @@ export class Runner {
       this.frame.clearLocalsWithPrefix(`__substep_${pathPrefix}`);
       this.frame.clearLocalsWithPrefix(`__condbranch_${pathPrefix}`);
       this.frame.clearLocalsWithPrefix(`__iteration_${pathPrefix}`);
+      this.frame.clearLocalsWithPrefix(`__pipe_result_`);
       this.frame.locals[iterKey] = currentIter + 1;
       currentIter++;
 

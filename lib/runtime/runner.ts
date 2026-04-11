@@ -202,12 +202,12 @@ export class Runner {
     fn: (value: any) => any,
   ): Promise<any> {
     if (this.shouldSkip()) return input;
-    if (this.getCounter() > id) return this.frame.locals[`__pipe_result_${id}`] ?? input;
+    if (this.getCounter() > id) return this.frame.locals[`__pipe_result_${this.stepPath(id)}`] ?? input;
 
     if (await this.maybeDebugHook(id)) return input;
 
     const result = await __pipeBind(input, fn);
-    this.frame.locals[`__pipe_result_${id}`] = result;
+    this.frame.locals[`__pipe_result_${this.stepPath(id)}`] = result;
 
     if (isInterrupt(result)) {
       await this.ctx.pendingPromises.awaitAll();

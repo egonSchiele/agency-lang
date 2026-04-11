@@ -2340,13 +2340,12 @@ export class TypeScriptBuilder {
 
   /**
    * Walk a left-recursive |> tree and return [initial, stage1, stage2, ...].
-   * Returns null if the expression is not a pipe chain (2+ pipes).
+   * Returns null if the expression is not a pipe assignment.
    */
   private getPipeChainStages(node: AgencyNode): Expression[] | null {
     if (node.type !== "assignment") return null;
     const expr = node.value;
     if (expr.type !== "binOpExpression" || expr.operator !== "|>") return null;
-    if (expr.left.type !== "binOpExpression" || (expr.left as BinOpExpression).operator !== "|>") return null;
 
     const stages: Expression[] = [];
     let current: Expression = expr;
@@ -2399,6 +2398,12 @@ export class TypeScriptBuilder {
     }
 
     if (stage.type === "functionCall") {
+      const placeholderCount = stage.arguments.filter((a) => a.type === "placeholder").length;
+      if (placeholderCount !== 1) {
+        throw new Error(
+          `Function call on right side of |> must contain exactly one ? placeholder, got ${placeholderCount}`,
+        );
+      }
       const args = stage.arguments.map((a) =>
         a.type === "placeholder" ? pipeArg : this.processNode(a as AgencyNode)
       );

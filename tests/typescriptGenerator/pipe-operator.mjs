@@ -372,46 +372,50 @@ let __functionCompleted = false;
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "pipe-operator.agency", scopeName: "main" });
   await runner.step(0, async (runner) => {
-__stack.locals.r1 = await __pipeBind(await success(5), async (__pipeArg) => double(__pipeArg, {
-      ctx: __ctx,
-      threads: new ThreadStore(),
-      interruptData: __state?.interruptData
-    }));
+__stack.locals.__pipe_0 = await success(5);
   });
-  await runner.step(1, async (runner) => {
-__stack.locals.r2 = await __pipeBind(await success(5), async (__pipeArg) => multiply(10, __pipeArg, {
-      ctx: __ctx,
-      threads: new ThreadStore(),
-      interruptData: __state?.interruptData
-    }));
-  });
+  __stack.locals.r1 = await runner.pipe(1, __stack.locals.__pipe_0, async (__pipeArg) => double(__pipeArg, {
+    ctx: __ctx,
+    threads: new ThreadStore(),
+    interruptData: __state?.interruptData
+  }));
   await runner.step(2, async (runner) => {
-__stack.locals.__pipe_0 = await success(10);
+__stack.locals.__pipe_1 = await success(5);
   });
-  __stack.locals.__pipe_0 = await runner.pipe(3, __stack.locals.__pipe_0, async (__pipeArg) => double(__pipeArg, {
+  __stack.locals.r2 = await runner.pipe(3, __stack.locals.__pipe_1, async (__pipeArg) => multiply(10, __pipeArg, {
     ctx: __ctx,
     threads: new ThreadStore(),
     interruptData: __state?.interruptData
   }));
-  __stack.locals.r3 = await runner.pipe(4, __stack.locals.__pipe_0, async (__pipeArg) => multiply(3, __pipeArg, {
+  await runner.step(4, async (runner) => {
+__stack.locals.__pipe_2 = await success(10);
+  });
+  __stack.locals.__pipe_2 = await runner.pipe(5, __stack.locals.__pipe_2, async (__pipeArg) => double(__pipeArg, {
     ctx: __ctx,
     threads: new ThreadStore(),
     interruptData: __state?.interruptData
   }));
-  await runner.step(5, async (runner) => {
-__stack.locals.r4 = await __pipeBind(await failure(`nope`), async (__pipeArg) => double(__pipeArg, {
-      ctx: __ctx,
-      threads: new ThreadStore(),
-      interruptData: __state?.interruptData
-    }));
+  __stack.locals.r3 = await runner.pipe(6, __stack.locals.__pipe_2, async (__pipeArg) => multiply(3, __pipeArg, {
+    ctx: __ctx,
+    threads: new ThreadStore(),
+    interruptData: __state?.interruptData
+  }));
+  await runner.step(7, async (runner) => {
+__stack.locals.__pipe_3 = await failure(`nope`);
   });
-  await runner.step(6, async (runner) => {
-__stack.locals.r5 = await __pipeBind(await success(10), async (__pipeArg) => safeDivide(__pipeArg, 2, {
-      ctx: __ctx,
-      threads: new ThreadStore(),
-      interruptData: __state?.interruptData
-    }));
+  __stack.locals.r4 = await runner.pipe(8, __stack.locals.__pipe_3, async (__pipeArg) => double(__pipeArg, {
+    ctx: __ctx,
+    threads: new ThreadStore(),
+    interruptData: __state?.interruptData
+  }));
+  await runner.step(9, async (runner) => {
+__stack.locals.__pipe_4 = await success(10);
   });
+  __stack.locals.r5 = await runner.pipe(10, __stack.locals.__pipe_4, async (__pipeArg) => safeDivide(__pipeArg, 2, {
+    ctx: __ctx,
+    threads: new ThreadStore(),
+    interruptData: __state?.interruptData
+  }));
   if (runner.halted) return runner.haltResult;
   await callHook({
     callbacks: __ctx.callbacks,
@@ -450,4 +454,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"pipe-operator.agency:double":{"0":{"line":-1,"col":2}},"pipe-operator.agency:multiply":{"0":{"line":3,"col":2}},"pipe-operator.agency:safeDivide":{"0":{"line":7,"col":2},"1":{"line":10,"col":2},"0.0":{"line":8,"col":4}},"pipe-operator.agency:main":{"0":{"line":14,"col":2},"1":{"line":15,"col":2},"5":{"line":17,"col":2},"6":{"line":18,"col":2}}};
+export const __sourceMap = {"pipe-operator.agency:double":{"0":{"line":-1,"col":2}},"pipe-operator.agency:multiply":{"0":{"line":3,"col":2}},"pipe-operator.agency:safeDivide":{"0":{"line":7,"col":2},"1":{"line":10,"col":2},"0.0":{"line":8,"col":4}},"pipe-operator.agency:main":{}};

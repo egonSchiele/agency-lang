@@ -3,6 +3,7 @@ import { StateStack } from "./state/stateStack.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { HandlerFn } from "./types.js";
 import { isInterrupt } from "./interrupts.js";
+import { __pipeBind } from "./result.js";
 import { debugStep } from "./debugger.js";
 import { color } from "termcolors";
 import { id } from "smoltalk";
@@ -193,6 +194,36 @@ export class Runner {
 
   }
 
+  // ── Specialized: pipe ──
+
+  async pipe(
+    id: number,
+    input: any,
+    fn: (value: any) => any,
+  ): Promise<any> {
+    if (this.shouldSkip()) return input;
+    if (this.getCounter() > id) return this.frame.locals[`__pipe_result_${this.stepPath(id)}`] ?? input;
+
+    if (await this.maybeDebugHook(id)) return input;
+
+    const result = await __pipeBind(input, fn);
+    this.frame.locals[`__pipe_result_${this.stepPath(id)}`] = result;
+
+    if (isInterrupt(result)) {
+      await this.ctx.pendingPromises.awaitAll();
+      if (this.nodeContext) {
+        this.halt({ ...this.state, data: result });
+      } else {
+        this.halt(result);
+      }
+      return result;
+    }
+
+    this.clearDebugFlag(id);
+    this.setCounter(id + 1);
+    return result;
+  }
+
   // ── Specialized: thread ──
 
   async thread(
@@ -338,6 +369,7 @@ export class Runner {
       this.frame.clearLocalsWithPrefix(`__substep_${pathPrefix}`);
       this.frame.clearLocalsWithPrefix(`__condbranch_${pathPrefix}`);
       this.frame.clearLocalsWithPrefix(`__iteration_${pathPrefix}`);
+      this.frame.clearLocalsWithPrefix(`__pipe_result_`);
       this.frame.locals[iterKey] = i + 1;
 
       if (this._break) break;
@@ -394,6 +426,7 @@ export class Runner {
       this.frame.clearLocalsWithPrefix(`__substep_${pathPrefix}`);
       this.frame.clearLocalsWithPrefix(`__condbranch_${pathPrefix}`);
       this.frame.clearLocalsWithPrefix(`__iteration_${pathPrefix}`);
+      this.frame.clearLocalsWithPrefix(`__pipe_result_`);
       this.frame.locals[iterKey] = currentIter + 1;
       currentIter++;
 

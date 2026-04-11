@@ -20,9 +20,11 @@ export type Operator =
   | ">="
   | "&&"
   | "||"
-  | "!";
+  | "!"
+  | "|>";
 
 export const PRECEDENCE: Record<string, number> = {
+  "|>": -1,
   "||": 1,
   "&&": 2,
   "==": 3,

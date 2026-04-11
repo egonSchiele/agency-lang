@@ -40,6 +40,7 @@ export type TsNode =
   | TsRunnerWhileLoop
   | TsRunnerBranchStep
   | TsRunnerDebugger
+  | TsRunnerPipe
   | TsEmpty
   | TsBreak
   | TsContinue
@@ -349,6 +350,15 @@ export interface TsRunnerDebugger {
   kind: "runnerDebugger";
   id: number;
   label: string;
+}
+
+/** runner.pipe(id, input, async (__pipeArg) => fn(__pipeArg)) — one stage of a pipe chain */
+export interface TsRunnerPipe {
+  kind: "runnerPipe";
+  id: number;
+  target: TsNode;
+  input: TsNode;
+  fn: TsNode;
 }
 
 

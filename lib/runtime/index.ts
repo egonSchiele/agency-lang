@@ -86,5 +86,5 @@ export type { RewindCheckpoint } from "./rewind.js";
 export { debugStep } from "./debugger.js";
 export { DebuggerState } from "../debugger/debuggerState.js";
 
-export { success, failure, isSuccess, isFailure } from "./result.js";
+export { success, failure, isSuccess, isFailure, __pipeBind } from "./result.js";
 export type { ResultValue, ResultSuccess, ResultFailure } from "./result.js";

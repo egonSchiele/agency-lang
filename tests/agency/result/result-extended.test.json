@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"val\":42,\"err\":\"bad input\",\"r3\":{\"success\":true,\"value\":5},\"r4\":{\"success\":true,\"value\":4},\"r5\":{\"success\":false,\"error\":\"division by zero\",\"checkpoint\":null}}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

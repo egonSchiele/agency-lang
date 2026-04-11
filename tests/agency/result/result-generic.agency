@@ -1,0 +1,14 @@
+def validate(input: string): Result<number, string> {
+  if (input == "42") {
+    return success(42)
+  }
+  return failure("not the answer")
+}
+
+node main() {
+  let r = validate("42")
+  if (isSuccess(r)) {
+    return r.value
+  }
+  return -1
+}

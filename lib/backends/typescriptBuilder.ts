@@ -634,6 +634,8 @@ export class TypeScriptBuilder {
         return this.processSentinel(node);
       case "debuggerStatement":
         return this.processDebuggerStatement(node);
+      case "placeholder":
+        throw new Error("Placeholder '?' can only appear on the right side of a |> pipe operator");
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
@@ -783,12 +785,20 @@ export class TypeScriptBuilder {
   }
 
   private processBinOpExpression(node: BinOpExpression): TsNode {
+    if (node.operator === "|>") {
+      return this.processPipeExpression(node);
+    }
     const leftNode = this.processNode(node.left);
     const rightNode = this.processNode(node.right);
     return ts.binOp(leftNode, node.operator, rightNode, {
       parenLeft: this.needsParensLeft(node.left, node.operator),
       parenRight: this.needsParensRight(node.right, node.operator),
     });
+  }
+
+  private processPipeExpression(node: BinOpExpression): TsNode {
+    const left = this.processNode(node.left);
+    return this.buildPipeBind(left, node.right);
   }
 
   private processIfElseWithSteps(node: IfElse): TsNode {
@@ -2324,43 +2334,166 @@ export class TypeScriptBuilder {
     return expanded;
   }
 
+  // ── Pipe chain splitting ──
+
+  private _pipeCounter = 0;
+
+  /**
+   * Walk a left-recursive |> tree and return [initial, stage1, stage2, ...].
+   * Returns null if the expression is not a pipe assignment.
+   */
+  private getPipeChainStages(node: AgencyNode): Expression[] | null {
+    if (node.type !== "assignment") return null;
+    const expr = node.value;
+    if (expr.type !== "binOpExpression" || expr.operator !== "|>") return null;
+
+    const stages: Expression[] = [];
+    let current: Expression = expr;
+    while (current.type === "binOpExpression" && (current as BinOpExpression).operator === "|>") {
+      stages.push((current as BinOpExpression).right);
+      current = (current as BinOpExpression).left;
+    }
+    stages.push(current);
+    return stages.reverse();
+  }
+
+  /** Build: await __pipeBind(leftIR, async (__pipeArg) => stage(__pipeArg)) */
+  private buildPipeBind(leftIR: TsNode, stage: Expression): TsNode {
+    return ts.await(ts.call(ts.raw("__pipeBind"), [
+      leftIR,
+      this.buildPipeLambda(stage),
+    ]));
+  }
+
+  /**
+   * Expand a pipe chain assignment into multiple IR parts, one per stage.
+   * Each part becomes its own runner step so interrupts don't replay earlier stages.
+   */
+  private expandPipeChain(stmt: Assignment, stages: Expression[], baseId: number): TsNode[] {
+    const tempName = `__pipe_${this._pipeCounter++}`;
+    const tempVar = ts.scopedVar(tempName, "local");
+    const targetVar = this.buildAssignmentLhs(stmt.scope!, stmt.variableName, stmt.accessChain);
+    const nodes: TsNode[] = [];
+
+    nodes.push(ts.runnerStep({ id: baseId, body: [ts.assign(tempVar, this.processNode(stages[0]))] }));
+
+    for (let i = 1; i < stages.length - 1; i++) {
+      nodes.push(ts.runnerPipe({ id: baseId + i, target: tempVar, input: tempVar, fn: this.buildPipeLambda(stages[i]) }));
+    }
+
+    const lastIdx = stages.length - 1;
+    nodes.push(ts.runnerPipe({ id: baseId + lastIdx, target: targetVar, input: tempVar, fn: this.buildPipeLambda(stages[lastIdx]) }));
+
+    return nodes;
+  }
+
+  private buildPipeLambda(stage: Expression): TsNode {
+    const pipeArg = ts.raw("__pipeArg");
+
+    if (stage.type === "valueAccess" || stage.type === "variableName") {
+      const funcName = stage.type === "variableName" ? stage.value : "";
+      const callee = this.processNode(stage);
+      const args = [pipeArg, ...this.buildPipeStateArgs(funcName)];
+      return ts.arrowFn([{ name: "__pipeArg" }], ts.call(callee, args), { async: true });
+    }
+
+    if (stage.type === "functionCall") {
+      const placeholderCount = stage.arguments.filter((a) => a.type === "placeholder").length;
+      if (placeholderCount !== 1) {
+        throw new Error(
+          `Function call on right side of |> must contain exactly one ? placeholder, got ${placeholderCount}`,
+        );
+      }
+      const args = stage.arguments.map((a) =>
+        a.type === "placeholder" ? pipeArg : this.processNode(a as AgencyNode)
+      );
+      const callee = ts.raw(mapFunctionName(stage.functionName));
+      return ts.arrowFn(
+        [{ name: "__pipeArg" }],
+        ts.call(callee, [...args, ...this.buildPipeStateArgs(stage.functionName)]),
+        { async: true },
+      );
+    }
+
+    throw new Error(`Invalid pipe stage type: ${stage.type}`);
+  }
+
+  private buildPipeStateArgs(funcName: string): TsNode[] {
+    if (!this.isAgencyFunction(funcName, "topLevelStatement")) return [];
+    const threadsExpr = this.insideMessageThread
+      ? ts.runtime.threads
+      : ts.newThreadStore();
+    return [ts.functionCallConfig({
+      ctx: ts.runtime.ctx,
+      threads: threadsExpr,
+      interruptData: ts.raw("__state?.interruptData"),
+    })];
+  }
+
+  // ── Body processing ──
+
   private processBodyAsParts(
     body: AgencyNode[],
     opts: { isInSafeFunction?: boolean } = {},
   ): TsNode[] {
-    const parts: TsNode[][] = [];
-    // Maps step index to the branch key (subStepPath) captured at processing time
+    const result: TsNode[] = [];
     const branchKeys: Record<number, string> = {};
+
+    // Track the current "part" being built (for non-pipe statements)
+    let currentPart: TsNode[] | null = null;
+
+    const flushPart = () => {
+      if (currentPart) {
+        const id = result.length;
+        if (branchKeys[id]) {
+          result.push(ts.runnerBranchStep({ id, branchKey: branchKeys[id], body: currentPart }));
+        } else {
+          result.push(ts.runnerStep({ id, body: currentPart }));
+        }
+        currentPart = null;
+      }
+    };
+
     for (const stmt of body) {
-      if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type)) {
-        parts.push([]);
+      // Pipe chains produce pre-formed runner nodes
+      const pipeStages = this.getPipeChainStages(stmt);
+      if (pipeStages) {
+        flushPart();
+        const baseId = result.length;
+        const pipeNodes = this.expandPipeChain(stmt as Assignment, pipeStages, baseId);
+        for (let i = 0; i < pipeNodes.length; i++) {
+          this._subStepPath.push(baseId + i);
+          result.push(pipeNodes[i]);
+          this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
+          this._subStepPath.pop();
+        }
+        continue;
       }
 
-      const stepIndex = parts.length - 1;
+      if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type)) {
+        flushPart();
+        currentPart = [];
+      }
+
+      const stepIndex = result.length;
       this._subStepPath.push(stepIndex);
       if (!opts.isInSafeFunction && this.containsImpureCall(stmt)) {
-        if (parts.length === 0) parts.push([]);
-        parts[parts.length - 1].push(
-          ts.assign(ts.self("__retryable"), ts.bool(false)),
-        );
+        if (!currentPart) currentPart = [];
+        currentPart.push(ts.assign(ts.self("__retryable"), ts.bool(false)));
       }
       const processed = this.processStatement(stmt);
-      if (parts.length === 0) parts.push([]);
-
-      parts[parts.length - 1].push(processed);
+      if (!currentPart) currentPart = [];
+      currentPart.push(processed);
       if (this._asyncBranchCheckNeeded) {
-        branchKeys[stepIndex] = this._subStepPath.join("_");
+        branchKeys[result.length] = this._subStepPath.join("_");
         this._asyncBranchCheckNeeded = false;
       }
       this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
       this._subStepPath.pop();
     }
-    return parts.map((part, i) => {
-      if (branchKeys[i]) {
-        return ts.runnerBranchStep({ id: i, branchKey: branchKeys[i], body: part });
-      }
-      return ts.runnerStep({ id: i, body: part });
-    });
+
+    flushPart();
+    return result;
   }
 
   // ------- Imports and pre/post processing -------

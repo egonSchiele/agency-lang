@@ -2464,6 +2464,7 @@ export class TypeScriptBuilder {
         for (let i = 0; i < pipeNodes.length; i++) {
           this._subStepPath.push(baseId + i);
           result.push(pipeNodes[i]);
+          this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
           this._subStepPath.pop();
         }
         continue;

@@ -11,6 +11,7 @@ import {
   objectPropertyDescriptionParser,
   objectPropertyWithDescriptionParser,
   objectTypeParser,
+  resultTypeParser,
   typeAliasParser,
   typeAliasVariableParser,
   variableTypeParser,
@@ -2328,6 +2329,93 @@ describe("unionTypeParser", () => {
           const result = unionTypeParser(input);
           expect(result.success).toBe(false);
         });
+    }
+  });
+});
+
+describe("resultTypeParser", () => {
+  it("parses bare Result as resultType with any/any", () => {
+    const result = resultTypeParser("Result");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "resultType",
+        successType: { type: "primitiveType", value: "any" },
+        failureType: { type: "primitiveType", value: "any" },
+      });
+    }
+  });
+
+  it("parses Result<string, number> with explicit type params", () => {
+    const result = resultTypeParser("Result<string, number>");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "resultType",
+        successType: { type: "primitiveType", value: "string" },
+        failureType: { type: "primitiveType", value: "number" },
+      });
+    }
+  });
+
+  it("parses Result with object failure type", () => {
+    const result = variableTypeParser("Result<string, { message: string }>");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "resultType",
+        successType: { type: "primitiveType", value: "string" },
+        failureType: {
+          type: "objectType",
+          properties: [{ key: "message", value: { type: "primitiveType", value: "string" } }],
+        },
+      });
+    }
+  });
+
+  it("parses Result with type alias params", () => {
+    const result = resultTypeParser("Result<MySuccess, MyError>");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "resultType",
+        successType: { type: "typeAliasVariable", aliasName: "MySuccess" },
+        failureType: { type: "typeAliasVariable", aliasName: "MyError" },
+      });
+    }
+  });
+
+  it("Result<string> with one param throws a parse error", () => {
+    expect(() => resultTypeParser("Result<string>")).toThrow(
+      "expected two type parameters separated by comma",
+    );
+  });
+
+  it("does not match ResultFoo as bare Result", () => {
+    const result = resultTypeParser("ResultFoo");
+    expect(result.success).toBe(false);
+  });
+
+  it("parses bare Result via variableTypeParser", () => {
+    const result = variableTypeParser("Result");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "resultType",
+        successType: { type: "primitiveType", value: "any" },
+        failureType: { type: "primitiveType", value: "any" },
+      });
+    }
+  });
+
+  it("parses ResultFoo as a type alias via variableTypeParser", () => {
+    const result = variableTypeParser("ResultFoo");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "typeAliasVariable",
+        aliasName: "ResultFoo",
+      });
     }
   });
 });

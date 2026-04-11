@@ -1,0 +1,12 @@
+await runner.ifElse({{{id}}}, [
+{{#branches}}
+  {
+    condition: async () => {{{this.condition}}},
+    body: async (runner) => {
+{{{this.body}}}
+    },
+  },
+{{/branches}}
+]{{#hasElse}}, async (runner) => {
+{{{elseBranch}}}
+}{{/hasElse}});

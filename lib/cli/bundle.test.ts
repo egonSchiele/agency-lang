@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { createBundle } from "./bundle.js";
+import { createBundle, extractBundle } from "./bundle.js";
 import { TraceWriter } from "@/runtime/trace/traceWriter.js";
 import { TraceReader } from "@/runtime/trace/traceReader.js";
 import { Checkpoint } from "@/runtime/state/checkpointStore.js";
@@ -94,5 +94,106 @@ describe("createBundle", () => {
       tracePath,
       bundlePath,
     )).toThrow();
+  });
+});
+
+describe("extractBundle", () => {
+  let tmpDir: string;
+  let tracePath: string;
+  let bundlePath: string;
+  let sourceDir: string;
+  let outDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "bundle-test-"));
+    tracePath = path.join(tmpDir, "test.trace");
+    bundlePath = path.join(tmpDir, "test.bundle");
+    sourceDir = path.join(tmpDir, "src");
+    outDir = path.join(tmpDir, "out");
+    fs.mkdirSync(sourceDir);
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function writeTestTrace() {
+    const writer = new TraceWriter(tracePath, "main.agency");
+    writer.writeCheckpoint(new Checkpoint({
+      id: 0,
+      nodeId: "main",
+      moduleId: "main.agency",
+      scopeName: "main",
+      stepPath: "1",
+      stack: {
+        stack: [{ args: {}, locals: { x: 1 }, threads: null, step: 1 }],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: ["main"],
+      },
+      globals: {
+        store: { "main.agency": {} },
+        initializedModules: ["main.agency"],
+      },
+    }));
+  }
+
+  function writeTestSource() {
+    fs.writeFileSync(
+      path.join(sourceDir, "main.agency"),
+      "node main() {\n  x = 1\n  return x\n}\n",
+    );
+  }
+
+  function createTestBundle() {
+    writeTestTrace();
+    writeTestSource();
+    createBundle(path.join(sourceDir, "main.agency"), tracePath, bundlePath);
+  }
+
+  it("extracts source files and trace from a bundle", () => {
+    createTestBundle();
+
+    extractBundle(bundlePath, outDir);
+
+    expect(fs.existsSync(path.join(outDir, "main.agency"))).toBe(true);
+    expect(fs.readFileSync(path.join(outDir, "main.agency"), "utf-8")).toContain("node main()");
+    expect(fs.existsSync(path.join(outDir, "main.trace"))).toBe(true);
+  });
+
+  it("produces a valid trace file", () => {
+    createTestBundle();
+
+    extractBundle(bundlePath, outDir);
+
+    const reader = TraceReader.fromFile(path.join(outDir, "main.trace"));
+    expect(reader.checkpoints.length).toBe(1);
+    expect(reader.checkpoints[0].nodeId).toBe("main");
+  });
+
+  it("throws on empty bundle file", () => {
+    fs.writeFileSync(bundlePath, "");
+    expect(() => extractBundle(bundlePath, outDir)).toThrow("empty");
+  });
+
+  it("throws on absolute source path", () => {
+    const malicious = [
+      JSON.stringify({ program: "main.agency" }),
+      JSON.stringify({ type: "source", path: "/etc/passwd", content: "bad" }),
+    ].join("\n");
+    fs.writeFileSync(bundlePath, malicious);
+
+    expect(() => extractBundle(bundlePath, outDir)).toThrow("absolute paths not allowed");
+  });
+
+  it("throws on path traversal in source path", () => {
+    const malicious = [
+      JSON.stringify({ program: "main.agency" }),
+      JSON.stringify({ type: "source", path: "../../escape.txt", content: "bad" }),
+    ].join("\n");
+    fs.writeFileSync(bundlePath, malicious);
+
+    expect(() => extractBundle(bundlePath, outDir)).toThrow("escapes target directory");
   });
 });

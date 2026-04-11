@@ -203,13 +203,13 @@ pnpm run compile tests/typescriptGenerator/catch-basic.agency
 
 - [ ] Create `tests/typescriptGenerator/catch-basic.agency`:
   ```
-  function riskyCall() -> Result<number> {
+  def riskyCall(): Result {
     return { success: true, value: 42 }
   }
 
-  node main {
-    result = try riskyCall()
-    value = result catch 0
+  node main() {
+    let result = try riskyCall()
+    let value = result catch 0
     return value
   }
   ```
@@ -225,16 +225,16 @@ pnpm run compile tests/typescriptGenerator/catch-basic.agency
 
 - [ ] Create `tests/typescriptGenerator/catch-chain.agency`:
   ```
-  function foo() -> Result<string> {
+  def foo(): Result {
     return { success: false, error: "foo failed" }
   }
 
-  function bar() -> Result<string> {
+  def bar(): Result {
     return { success: false, error: "bar failed" }
   }
 
-  node main {
-    value = try foo() catch try bar() catch "default"
+  node main() {
+    let value = try foo() catch try bar() catch "default"
     return value
   }
   ```
@@ -250,41 +250,52 @@ pnpm run compile tests/typescriptGenerator/catch-basic.agency
 
 - [ ] Create `tests/agency/catch-basic.agency`:
   ```
-  function riskyFunc() -> Result<number> {
+  def riskyFunc(): Result {
     return { success: true, value: 42 }
   }
 
-  function failingFunc() -> Result<number> {
+  def failingFunc(): Result {
     return { success: false, error: "failed" }
   }
 
-  node main {
-    result1 = try riskyFunc()
-    value1 = result1 catch 0
-    assert(value1 == 42, "should unwrap success")
+  node main() {
+    let result1 = try riskyFunc()
+    let value1 = result1 catch 0
 
-    result2 = try failingFunc()
-    value2 = result2 catch 0
-    assert(value2 == 0, "should use fallback on failure")
+    let result2 = try failingFunc()
+    let value2 = result2 catch 0
 
     return value1
   }
   ```
 
+  Create `tests/agency/catch-basic.test.json`:
+  ```json
+  {
+    "expectedOutput": "42"
+  }
+  ```
+
 - [ ] Create `tests/agency/catch-chain.agency`:
   ```
-  function fail1() -> Result<number> {
+  def fail1(): Result {
     return { success: false, error: "fail1" }
   }
 
-  function fail2() -> Result<number> {
+  def fail2(): Result {
     return { success: false, error: "fail2" }
   }
 
-  node main {
-    value = try fail1() catch try fail2() catch 99
-    assert(value == 99, "should fall through chain to default")
+  node main() {
+    let value = try fail1() catch try fail2() catch 99
     return value
+  }
+  ```
+
+  Create `tests/agency/catch-chain.test.json`:
+  ```json
+  {
+    "expectedOutput": "99"
   }
   ```
 

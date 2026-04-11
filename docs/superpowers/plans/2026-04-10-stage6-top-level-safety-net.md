@@ -59,11 +59,11 @@
 
   **`tests/agency/safety-net-error.agency`:**
   ```
-  import { throwError } from "./safety-net-helper.ts"
+  import { throwError } from "./safety-net-helper.js"
 
-  node main {
-    result = throwError()
-    -> END result
+  node main() {
+    let result = throwError()
+    return result
   }
   ```
 

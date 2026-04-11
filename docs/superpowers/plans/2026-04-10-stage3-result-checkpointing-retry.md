@@ -122,10 +122,12 @@ The builder must detect when a function's return type is `Result` and emit a pin
 - [ ] Update the imports template (`lib/templates/backends/`) so generated code can access `createPinned` and any other checkpoint functions needed by the new generated code. Verify that the runtime imports in compiled output include the necessary checkpoint-related symbols.
 - [ ] Add a unit test fixture in `tests/typescriptBuilder/` with a `.agency` file containing a Result-returning function:
   ```
-  function validate(input: string) -> Result<string, string>:
-    if input == "":
+  def validate(input: string): Result<string, string> {
+    if (input == "") {
       return failure("empty input")
+    }
     return success(input)
+  }
   ```
   And a corresponding `.mts` fixture showing the expected generated code includes the pinned checkpoint creation at function entry (after setup).
 - [ ] Run: `pnpm vitest run tests/typescriptBuilder`
@@ -191,11 +193,13 @@ Retry limits are enforced through the existing `CheckpointStore.trackRestore()` 
 - [ ] No separate retry counter is needed. The `restore()` call internally invokes `CheckpointStore.trackRestore()`, which already tracks restore counts per checkpoint ID and throws `CheckpointError` when the `maxRestores` limit (configured via `result.maxRetries` in Task 6) is exceeded. Since the checkpoint is created with `createPinned()`, it persists across restores, and the restore count accumulates correctly.
 - [ ] Add a builder fixture in `tests/typescriptBuilder/`:
   ```
-  function process(input: string) -> Result<string, string>:
+  def process(input: string): Result<string, string> {
     let result = validate(input)
-    if isFailure(result):
+    if (isFailure(result)) {
       result.retry("fallback")
+    }
     return result
+  }
   ```
   Verify it compiles to the `restore(result.checkpoint, { args: ["fallback"] }, __state)` pattern (no local retry counter).
 - [ ] Run: `pnpm vitest run tests/typescriptBuilder`
@@ -206,10 +210,12 @@ Retry limits are enforced through the existing `CheckpointStore.trackRestore()` 
 
 - [ ] Create `tests/typescriptGenerator/result-checkpoint.agency`:
   ```
-  function validate(input: string) -> Result<string, string>:
-    if input == "":
+  def validate(input: string): Result<string, string> {
+    if (input == "") {
       return failure("empty")
+    }
     return success(input)
+  }
   ```
 - [ ] Create the corresponding `tests/typescriptGenerator/result-checkpoint.mts` with the expected compiled output showing:
   - `__resultCheckpointId` creation at function entry
@@ -217,11 +223,13 @@ Retry limits are enforced through the existing `CheckpointStore.trackRestore()` 
   - `success(input)` unchanged
 - [ ] Create `tests/typescriptGenerator/result-retry.agency`:
   ```
-  function process(input: string) -> Result<string, string>:
+  def process(input: string): Result<string, string> {
     let result = validate(input)
-    if isFailure(result):
+    if (isFailure(result)) {
       result.retry("default")
+    }
     return success(result.value)
+  }
   ```
 - [ ] Create the corresponding `tests/typescriptGenerator/result-retry.mts` with expected output showing the `restore()` desugaring.
 - [ ] Run: `pnpm vitest run tests/typescriptGenerator`
@@ -232,19 +240,23 @@ Retry limits are enforced through the existing `CheckpointStore.trackRestore()` 
 
 - [ ] Create `tests/agency/result-retry.agency`:
   ```
-  shared attempt = 0
+  shared let attempt = 0
 
-  function flaky(input: string) -> Result<string, string>:
+  def flaky(input: string): Result<string, string> {
     attempt = attempt + 1
-    if attempt < 3:
+    if (attempt < 3) {
       return failure("not yet")
+    }
     return success(input)
+  }
 
-  node main:
+  node main() {
     let result = flaky("hello")
-    if isFailure(result):
+    if (isFailure(result)) {
       result.retry("hello")
+    }
     return result.value
+  }
   ```
   Note: `shared` (not `global`) is used for `attempt` because shared variables are not serialized/restored — they persist across retries. A `global` variable would be restored to its checkpointed value on each retry, resetting the counter and causing an infinite loop.
 - [ ] Create `tests/agency/result-retry.test.ts`:
@@ -277,14 +289,17 @@ Retry limits are enforced through the existing `CheckpointStore.trackRestore()` 
   ```
 - [ ] Create `tests/agency/result-retry-limit.agency`:
   ```
-  function alwaysFails(input: string) -> Result<string, string>:
+  def alwaysFails(input: string): Result<string, string> {
     return failure("nope")
+  }
 
-  node main:
+  node main() {
     let result = alwaysFails("hello")
-    if isFailure(result):
+    if (isFailure(result)) {
       result.retry("hello")
+    }
     return result.value
+  }
   ```
 - [ ] Run: `pnpm vitest run tests/agency/result-retry`
 

@@ -79,19 +79,19 @@ import { tryExpressionParser } from "./tryExpression.js";
 
 describe("tryExpressionParser", () => {
   it("parses try with a simple function call", () => {
-    const result = tryExpressionParser.run("try fetchData(url)");
+    const result = tryExpressionParser("try fetchData(url)");
     expect(result.success).toBe(true);
-    expect(result.value).toMatchObject({
+    expect(result.result).toMatchObject({
       type: "tryExpression",
       call: { type: "functionCall", functionName: "fetchData" },
     });
-    expect(result.value.isAsync).toBeUndefined();
+    expect(result.result.isAsync).toBeUndefined();
   });
 
   it("parses try async with a function call", () => {
-    const result = tryExpressionParser.run("try async fetchData(url)");
+    const result = tryExpressionParser("try async fetchData(url)");
     expect(result.success).toBe(true);
-    expect(result.value).toMatchObject({
+    expect(result.result).toMatchObject({
       type: "tryExpression",
       call: { type: "functionCall", functionName: "fetchData" },
       isAsync: true,
@@ -99,20 +99,20 @@ describe("tryExpressionParser", () => {
   });
 
   it("fails on try without a function call", () => {
-    const result = tryExpressionParser.run("try 42");
+    const result = tryExpressionParser("try 42");
     expect(result.success).toBe(false);
   });
 
   it("parses try with no-arg function call", () => {
-    const result = tryExpressionParser.run("try doSomething()");
+    const result = tryExpressionParser("try doSomething()");
     expect(result.success).toBe(true);
-    expect(result.value.call.functionName).toBe("doSomething");
+    expect(result.result.call.functionName).toBe("doSomething");
   });
 
   it("parses try with multiple arguments", () => {
-    const result = tryExpressionParser.run("try sendEmail(to, subject, body)");
+    const result = tryExpressionParser("try sendEmail(to, subject, body)");
     expect(result.success).toBe(true);
-    expect(result.value.call.functionName).toBe("sendEmail");
+    expect(result.result.call.functionName).toBe("sendEmail");
   });
 });
 ```
@@ -260,12 +260,14 @@ Note: `ts.call()` takes a `TsNode` as its callee (not a string), so use `ts.id("
 - [ ] Create `tests/typescriptGenerator/try-expression.agency`:
 
 ```
-function riskyOperation(x: string) -> string:
+def riskyOperation(x: string): string {
   return x
+}
 
-node main:
-  result = try riskyOperation("hello")
+node main() {
+  let result = try riskyOperation("hello")
   return result
+}
 ```
 
 - [ ] Create the corresponding expected output `tests/typescriptGenerator/try-expression.mts` by running:
@@ -279,12 +281,14 @@ Inspect the output to confirm it contains `__tryCall(() => riskyOperation("hello
 - [ ] Create `tests/typescriptGenerator/try-async-expression.agency`:
 
 ```
-function asyncOperation(x: string) -> string:
+def asyncOperation(x: string): string {
   return x
+}
 
-node main:
-  result = try async asyncOperation("hello")
+node main() {
+  let result = try async asyncOperation("hello")
   return result
+}
 ```
 
 - [ ] Create the corresponding `.mts` fixture similarly.
@@ -313,23 +317,26 @@ export function mightFail(x: number): number {
 - [ ] Create `tests/agency/try-expression.agency`:
 
 ```
-import mightFail from "./try-expression-helper.js"
+import { mightFail } from "./try-expression-helper.js"
 
-node main:
-  successResult = try mightFail(5)
-  failResult = try mightFail(-1)
+node main() {
+  let successResult = try mightFail(5)
+  let failResult = try mightFail(-1)
 
-  if successResult.success:
-    successValue = successResult.value
-  else:
-    successValue = -1
+  if (successResult.success) {
+    let successValue = successResult.value
+  } else {
+    let successValue = -1
+  }
 
-  if failResult.success:
-    failValue = failResult.value
-  else:
-    failValue = -1
+  if (failResult.success) {
+    let failValue = failResult.value
+  } else {
+    let failValue = -1
+  }
 
   return { successValue: successValue, failValue: failValue }
+}
 ```
 
 Note: The exact Agency syntax for conditionals, object literals, property access, and JS imports may need adjustment to match the actual language. The key test is: `try` on a succeeding call returns `{ success: true, value: 10 }`, `try` on a failing call returns `{ success: false, error: ... }`.

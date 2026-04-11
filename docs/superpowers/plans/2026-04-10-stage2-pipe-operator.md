@@ -414,11 +414,13 @@ Add builder integration test fixtures. Create two files:
 
 `tests/typescriptBuilder/pipe-bare-function.agency`:
 ```
-function double(x: number) -> number:
+def double(x: number): number {
   return x * 2
+}
 
-node main -> end:
-  result = success(5) |> double
+node main() {
+  let result = success(5) |> double
+}
 ```
 
 `tests/typescriptBuilder/pipe-bare-function.mjs` (expected output — fill in after generating):
@@ -494,25 +496,30 @@ Add builder integration test fixtures:
 
 `tests/typescriptBuilder/pipe-partial.agency`:
 ```
-function multiply(a: number, b: number) -> number:
+def multiply(a: number, b: number): number {
   return a * b
+}
 
-node main -> end:
-  result = success(5) |> multiply(10, ?)
+node main() {
+  let result = success(5) |> multiply(10, ?)
+}
 ```
 
 Also test chained pipes:
 
 `tests/typescriptBuilder/pipe-chain.agency`:
 ```
-function double(x: number) -> number:
+def double(x: number): number {
   return x * 2
+}
 
-function add(a: number, b: number) -> number:
+def add(a: number, b: number): number {
   return a + b
+}
 
-node main -> end:
-  result = success(5) |> double |> add(10, ?)
+node main() {
+  let result = success(5) |> double |> add(10, ?)
+}
 ```
 
 Expected generated code for the chain should nest `__pipeBind` calls:
@@ -542,32 +549,37 @@ Create a comprehensive integration test that exercises the pipe operator through
 
 `tests/typescriptGenerator/pipe-operator.agency`:
 ```
-function double(x: number) -> number:
+def double(x: number): number {
   return x * 2
+}
 
-function multiply(a: number, b: number) -> number:
+def multiply(a: number, b: number): number {
   return a * b
+}
 
-function safeDivide(a: number, b: number) -> Result:
-  if b == 0:
+def safeDivide(a: number, b: number): Result {
+  if (b == 0) {
     return failure("division by zero")
+  }
   return success(a / b)
+}
 
-node main -> end:
+node main() {
   // Bare function reference
-  r1 = success(5) |> double
+  let r1 = success(5) |> double
 
   // Partial application with ?
-  r2 = success(5) |> multiply(10, ?)
+  let r2 = success(5) |> multiply(10, ?)
 
   // Chained pipes
-  r3 = success(10) |> double |> multiply(3, ?)
+  let r3 = success(10) |> double |> multiply(3, ?)
 
   // Short-circuit on failure
-  r4 = failure("nope") |> double
+  let r4 = failure("nope") |> double
 
   // Chain with Result-returning function (bind)
-  r5 = success(10) |> safeDivide(?, 2)
+  let r5 = success(10) |> safeDivide(?, 2)
+}
 ```
 
 Generate the expected `.mjs` output by running:
@@ -596,18 +608,21 @@ Create an end-to-end test that compiles and runs a pipe operator program. Agency
 
 `tests/agency/pipe-operator.agency`:
 ```
-function double(x: number) -> number:
+def double(x: number): number {
   return x * 2
+}
 
-function multiply(a: number, b: number) -> number:
+def multiply(a: number, b: number): number {
   return a * b
+}
 
-node main -> end:
-  r1 = success(5) |> double
-  r2 = success(5) |> multiply(10, ?)
-  r3 = success(10) |> double |> multiply(3, ?)
-  r4 = failure("nope") |> double
+node main() {
+  let r1 = success(5) |> double
+  let r2 = success(5) |> multiply(10, ?)
+  let r3 = success(10) |> double |> multiply(3, ?)
+  let r4 = failure("nope") |> double
   return { r1: r1, r2: r2, r3: r3, r4: r4 }
+}
 ```
 
 `tests/agency/pipe-operator.test.json`:

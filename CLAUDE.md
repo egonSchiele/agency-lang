@@ -288,8 +288,23 @@ Users can also set `audit.logFile` in `agency.json` (or use `agency run -l <file
 Handlers (`handle` blocks) are a crucial part of what makes Agency safe. They must NEVER be accidentally skipped or left unregistered. Any feature that affects execution flow (rewind, interrupts, checkpoints, state restoration) must ensure handlers are correctly registered and invoked. If there is any risk of a handler being skipped, treat it as a critical issue and flag it immediately. Handlers are registered on `__ctx.handlers` via `pushHandler()` in the generated code and are NOT serialized as part of checkpoint state — be aware of this when working on state restoration features.
 
 ## VERY IMPORTANT: Agency syntax rules
-- `if`, `while`, and `for` statements REQUIRE parentheses around the condition. Example: `if (x > 5) { ... }`, NOT `if x > 5 { ... }`.
-- Always check `DOCS.md` for correct Agency syntax when writing Agency code.
+When writing Agency code (in plans, specs, tests, or examples), you MUST use the correct syntax. Verify against `DOCS.md` and existing test fixtures when unsure.
+
+**Correct syntax:**
+- Functions use `def`, curly braces, and optional `: ReturnType` after params: `def foo(x: number): string { ... }`
+- Nodes use `node`, parentheses for params, and curly braces: `node main() { ... }`
+- `if`, `while`, and `for` statements REQUIRE parentheses around the condition AND curly braces for the body: `if (x > 5) { ... }`
+- Variables must be declared with `let` or `const` before use. Bare assignment (`x = 5`) is NOT allowed without a prior declaration.
+- `for` loops use `in`: `for (item in items) { ... }`
+
+**Common mistakes to NEVER make:**
+- `function foo() -> ReturnType:` — WRONG. Use `def foo(): ReturnType { ... }`
+- `node main -> end:` — WRONG. Use `node main() { ... }`
+- `if condition:` / `if condition {` — WRONG. Use `if (condition) { ... }`
+- `result = foo()` without `let`/`const` — WRONG unless already declared.
+- Using Python-style colon+indentation for blocks — WRONG. Always use `{ ... }`
+
+**When writing plans or specs:** Always verify Agency code snippets by checking DOCS.md and existing test fixtures (tests/agency/, tests/typescriptGenerator/). If unsure about syntax, run `pnpm run ast` on a test file to confirm it parses.
 
 ## General code Guidelines
 - NEVER use dynamic imports

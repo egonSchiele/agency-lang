@@ -244,6 +244,15 @@ export function formatTypeHint(vt: VariableType): string {
       const ret = formatTypeHint(vt.returnType);
       return `(${params}) => ${ret}`;
     }
+    case "resultType": {
+      const s = vt.successType;
+      const f = vt.failureType;
+      const isAny = (t: VariableType) => t.type === "primitiveType" && t.value === "any";
+      if (isAny(s) && isAny(f)) {
+        return "Result";
+      }
+      return `Result<${formatTypeHint(s)}, ${formatTypeHint(f)}>`;
+    }
     default:
       throw new Error(`Unknown variable type: ${(vt as any).type}`);
   }

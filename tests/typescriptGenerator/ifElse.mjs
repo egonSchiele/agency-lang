@@ -2,8 +2,8 @@ import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
-import * as smoltalk from "agency-lang";
+import { goToNode, color, nanoid } from "agency-lang";
+import { smoltalk } from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
@@ -23,6 +23,7 @@ import {
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
+  success, failure, isSuccess, isFailure,
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
@@ -127,27 +128,31 @@ __stack.locals.flag = true;
   });
   await runner.step(2, async (runner) => {
 await runner.ifElse(2, [
-      {
-        condition: () => __stack.locals.flag,
-        body: async (runner) => {
+
+  {
+    condition: async () => __stack.locals.flag,
+    body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `condition was true`;
           });
-        },
-      }
-    ]);
+    },
+  },
+
+]);
   });
   await runner.step(3, async (runner) => {
 await runner.ifElse(3, [
-      {
-        condition: () => await isReady(),
-        body: async (runner) => {
+
+  {
+    condition: async () => await isReady(),
+    body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.status = `ready`;
           });
-        },
-      }
-    ]);
+    },
+  },
+
+]);
 //  If statement with property access
   });
   await runner.step(4, async (runner) => {
@@ -157,15 +162,17 @@ __stack.locals.obj = {
   });
   await runner.step(5, async (runner) => {
 await runner.ifElse(5, [
-      {
-        condition: () => __stack.locals.obj.active,
-        body: async (runner) => {
+
+  {
+    condition: async () => __stack.locals.obj.active,
+    body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.message = `object is active`;
           });
-        },
-      }
-    ]);
+    },
+  },
+
+]);
 //  Nested if statements
   });
   await runner.step(6, async (runner) => {
@@ -173,27 +180,31 @@ __stack.locals.outer = true;
   });
   await runner.step(7, async (runner) => {
 await runner.ifElse(7, [
-      {
-        condition: () => __stack.locals.outer,
-        body: async (runner) => {
+
+  {
+    condition: async () => __stack.locals.outer,
+    body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.inner = false;
           });
 await runner.step(1, async (runner) => {
 await runner.ifElse(1, [
-              {
-                condition: () => __stack.locals.inner,
-                body: async (runner) => {
+
+  {
+    condition: async () => __stack.locals.inner,
+    body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.nested = `both true`;
                   });
-                },
-              }
-            ]);
+    },
+  },
+
+]);
           });
-        },
-      }
-    ]);
+    },
+  },
+
+]);
 //  TODO fix
 //  If with index access
 //  arr = [1, 2, 3]
@@ -207,9 +218,10 @@ __stack.locals.condition = true;
   });
   await runner.step(9, async (runner) => {
 await runner.ifElse(9, [
-      {
-        condition: () => __stack.locals.condition,
-        body: async (runner) => {
+
+  {
+    condition: async () => __stack.locals.condition,
+    body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.a = 1;
           });
@@ -219,9 +231,10 @@ __stack.locals.b = 2;
 await runner.step(2, async (runner) => {
 __stack.locals.c = 3;
           });
-        },
-      }
-    ]);
+    },
+  },
+
+]);
 //  Multiple statements in both then and else bodies
   });
   await runner.step(10, async (runner) => {
@@ -229,60 +242,67 @@ __stack.locals.value = false;
   });
   await runner.step(11, async (runner) => {
 await runner.ifElse(11, [
-      {
-        condition: () => __stack.locals.value,
-        body: async (runner) => {
+
+  {
+    condition: async () => __stack.locals.value,
+    body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.x = 10;
           });
 await runner.step(1, async (runner) => {
 __stack.locals.y = 20;
           });
-        },
-      }
-    ]);
+    },
+  },
+
+]);
 //  Basic else
   });
   await runner.step(12, async (runner) => {
 await runner.ifElse(12, [
-      {
-        condition: () => __stack.locals.flag,
-        body: async (runner) => {
+
+  {
+    condition: async () => __stack.locals.flag,
+    body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `yes`;
           });
-        },
-      }
-    ], async (runner) => {
+    },
+  },
+
+], async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `no`;
         });
-    });
+});
 //  else if chain
   });
   await runner.step(13, async (runner) => {
 await runner.ifElse(13, [
-      {
-        condition: () => __stack.locals.a == 1,
-        body: async (runner) => {
+
+  {
+    condition: async () => __stack.locals.a == 1,
+    body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `one`;
           });
-        },
-      },
-      {
-        condition: () => __stack.locals.a == 2,
-        body: async (runner) => {
+    },
+  },
+
+  {
+    condition: async () => __stack.locals.a == 2,
+    body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `two`;
           });
-        },
-      }
-    ], async (runner) => {
+    },
+  },
+
+], async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `other`;
         });
-    });
+});
   });
   if (runner.halted) return runner.haltResult;
   await callHook({

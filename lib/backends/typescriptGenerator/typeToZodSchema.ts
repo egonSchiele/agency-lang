@@ -78,6 +78,8 @@ export function mapTypeToZodSchema(
       })
       .join(", ");
     return `z.object({ ${props} })`;
+  } else if (variableType.type === "resultType") {
+    return mapTypeToZodSchema(variableType.successType, typeAliases);
   } else if (variableType.type === "typeAliasVariable") {
     if (!typeAliases || !typeAliases[variableType.aliasName]) {
       throw new Error(

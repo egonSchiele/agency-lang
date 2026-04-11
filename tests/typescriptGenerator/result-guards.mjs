@@ -91,7 +91,7 @@ function __initializeGlobals(__ctx) {
 export const __checkValueTool = {
   name: "checkValue",
   description: `No description provided.`,
-  schema: z.object({"r": z.string(), })
+  schema: z.object({"r": z.any(), })
 };
 export const __checkValueToolParams = ["r"];
 const __toolRegistry = {

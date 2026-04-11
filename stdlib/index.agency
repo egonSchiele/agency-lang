@@ -114,11 +114,14 @@ export def notify(title: string, message: string): boolean {
   return _notify(title, message)
 }
 
-export safe def range(n: number): number[] {
+export safe def range(start: number, end: number = -1): number[] {
   """
-  Generate an array of numbers from 0 to n-1. With two arguments, generates from start to end-1.
+  Generate an array of numbers. With one argument, generates from 0 to start-1. With two arguments, generates from start to end-1.
   """
-  return _range(n)
+  if (end == -1) {
+    return _range(start)
+  }
+  return _range(start, end)
 }
 
 export safe def mostCommon(items: any[]): any {

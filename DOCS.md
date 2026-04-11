@@ -1046,6 +1046,7 @@ let result = firstValid([0.2, 0.5, 0.8], isValidJSON) as temp {
 ### Utility functions
 
 - `range(n)` — returns `[0, 1, ..., n-1]`
+- `range(start, end)` — returns `[start, start+1, ..., end-1]`
 - `mostCommon(items)` — returns the most frequent element in an array
 
 ### Unsupported features

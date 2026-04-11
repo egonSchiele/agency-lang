@@ -7,12 +7,11 @@ import {
   parse,
   readFile,
   readStdin,
-  renderGraph,
   run,
 } from "@/cli/commands.js";
 import { evaluate } from "@/cli/evaluate.js";
 import { fixtures, test, testTs } from "@/cli/test.js";
-import { createBundle } from "@/cli/bundle.js";
+import { createBundle, extractBundle } from "@/cli/bundle.js";
 import { AgencyConfig } from "@/config.js";
 import * as path from "path";
 import { _parseAgency } from "@/parser.js";
@@ -94,6 +93,18 @@ addRunOptions(
 });
 
 program
+  .command("trace")
+  .description("Compile and run .agency file, generating a trace")
+  .argument("<input>", "Path to .agency input file")
+  .option("-o, --output <file>", "Output trace file path (default: <input>.trace)")
+  .option("--resume <statefile>", "Resume execution from a saved state file")
+  .option("-l, --log <file>", "Write audit log entries to a JSONL file")
+  .action((input: string, options: { output?: string; resume?: string; log?: string }) => {
+    const traceFile = options.output || input.replace(/\.agency$/, ".trace");
+    runWithOptions(input, { trace: traceFile, resume: options.resume, log: options.log });
+  });
+
+program
   .command("format")
   .alias("fmt")
   .description(
@@ -137,26 +148,6 @@ program
   });
 
 program
-  .command("graph")
-  .alias("mermaid")
-  .description(
-    "Render Mermaid graph from .agency file(s) (reads from stdin if no input)",
-  )
-  .argument("[inputs...]", "Paths to .agency input files")
-  .action(async (inputs: string[]) => {
-    const config = getConfig();
-    if (inputs.length === 0) {
-      const contents = await readStdin();
-      renderGraph(contents, config);
-    } else {
-      for (const input of inputs) {
-        const contents = readFile(input);
-        renderGraph(contents, config);
-      }
-    }
-  });
-
-program
   .command("preprocess")
   .description(
     "Parse .agency file(s) and show AST after preprocessing (reads from stdin if no input)",
@@ -188,9 +179,76 @@ program
     }
   });
 
-program
-  .command("evaluate")
-  .alias("eval")
+// --- test command group ---
+const testCmd = program
+  .command("test")
+  .description("Run tests (default), or use subcommands: js, fixtures, eval");
+
+testCmd
+  .command("run", { isDefault: true })
+  .description("Run Agency test files")
+  .argument("[inputs...]", "Paths to .test.json files or directories")
+  .option("-p, --parallel <number>", "Number of test files to run in parallel", parseInt)
+  .action(
+    async (
+      testFile: string[],
+      opts: { parallel?: number },
+    ) => {
+      const config = getConfig();
+      const parallel = opts.parallel ?? config.test?.parallel ?? 1;
+      const totals = await test(config, testFile, parallel);
+      const totalFiles = totals.filesPassed + totals.filesFailed;
+      const totalTests = totals.passed + totals.failed;
+      if (totalFiles > 0) {
+        const filesStatus = [
+          totals.filesFailed > 0 ? `${totals.filesFailed} failed` : "",
+          `${totals.filesPassed} passed`,
+        ]
+          .filter(Boolean)
+          .join(" | ");
+        const testsStatus = [
+          totals.failed > 0 ? `${totals.failed} failed` : "",
+          `${totals.passed} passed`,
+        ]
+          .filter(Boolean)
+          .join(" | ");
+        if (totals.failedFiles.length > 0) {
+          console.log("");
+          for (const file of totals.failedFiles) {
+            console.log(color.red(` FAIL  ${file}`));
+          }
+        }
+        const colorFn = totals.failed > 0 ? color.red : color.green;
+        console.log(colorFn(`\n Test Files  ${filesStatus} (${totalFiles})`));
+        console.log(colorFn(`      Tests  ${testsStatus} (${totalTests})`));
+      }
+      if (totals.failed > 0) {
+        process.exit(1);
+      }
+    },
+  );
+
+testCmd
+  .command("js")
+  .description("Run JavaScript integration tests")
+  .argument("[inputs...]", "Paths to test directories")
+  .option("-p, --parallel <number>", "Number of test dirs to run in parallel", parseInt)
+  .action(async (testFile: string[], opts: { parallel?: number }) => {
+    const config = getConfig();
+    const parallel = opts.parallel ?? config.test?.parallel ?? 1;
+    await testTs(config, testFile, parallel);
+  });
+
+testCmd
+  .command("fixtures")
+  .description("Generate test fixtures")
+  .argument("[target]", "Target in file.agency:nodeName format")
+  .action(async (target: string | undefined) => {
+    await fixtures(getConfig(), target);
+  });
+
+testCmd
+  .command("eval")
   .description("Run evaluation")
   .argument("[target]", "Target in file.agency:nodeName format")
   .option("--args <path>", "Path to eval args JSON file")
@@ -201,64 +259,6 @@ program
       opts: { args?: string; results?: string },
     ) => {
       await evaluate(getConfig(), target, opts.args, opts.results);
-    },
-  );
-
-program
-  .command("gen-fixtures")
-  .alias("fixtures")
-  .description("Generate test fixtures")
-  .argument("[target]", "Target in file.agency:nodeName format")
-  .action(async (target: string | undefined) => {
-    await fixtures(getConfig(), target);
-  });
-
-program
-  .command("test")
-  .description("Run tests")
-  .argument("[inputs...]", "Paths to .test.json files or directories")
-  .option("--js", "Run JavaScript integration tests")
-  .option("-p, --parallel <number>", "Number of test files to run in parallel", parseInt)
-  .action(
-    async (
-      testFile: string[],
-      opts: { js?: boolean; parallel?: number },
-    ) => {
-      const config = getConfig();
-      const parallel = opts.parallel ?? config.test?.parallel ?? 1;
-      if (opts.js) {
-        await testTs(config, testFile, parallel);
-      } else {
-        const totals = await test(config, testFile, parallel);
-        const totalFiles = totals.filesPassed + totals.filesFailed;
-        const totalTests = totals.passed + totals.failed;
-        if (totalFiles > 0) {
-          const filesStatus = [
-            totals.filesFailed > 0 ? `${totals.filesFailed} failed` : "",
-            `${totals.filesPassed} passed`,
-          ]
-            .filter(Boolean)
-            .join(" | ");
-          const testsStatus = [
-            totals.failed > 0 ? `${totals.failed} failed` : "",
-            `${totals.passed} passed`,
-          ]
-            .filter(Boolean)
-            .join(" | ");
-          if (totals.failedFiles.length > 0) {
-            console.log("");
-            for (const file of totals.failedFiles) {
-              console.log(color.red(` FAIL  ${file}`));
-            }
-          }
-          const colorFn = totals.failed > 0 ? color.red : color.green;
-          console.log(colorFn(`\n Test Files  ${filesStatus} (${totalFiles})`));
-          console.log(colorFn(`      Tests  ${testsStatus} (${totalTests})`));
-        }
-        if (totals.failed > 0) {
-          process.exit(1);
-        }
-      }
     },
   );
 
@@ -386,6 +386,17 @@ program
     const output = options.output || path.join(parsed.dir, parsed.name + ".bundle");
     createBundle(source, trace, output);
     console.log(`Bundle created: ${output}`);
+  });
+
+program
+  .command("unbundle")
+  .description("Extract source files and trace from a bundle")
+  .argument("<bundle>", "Path to .bundle file")
+  .requiredOption("-o, --output <dir>", "Output directory")
+  .action((bundle: string, options: { output: string }) => {
+    console.log(`Extracting ${bundle} to ${options.output}/`);
+    extractBundle(bundle, options.output);
+    console.log("Done.");
   });
 
 program

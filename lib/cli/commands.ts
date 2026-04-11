@@ -14,7 +14,6 @@ import {
   isPkgImport,
   getStdlibDir,
 } from "../importPaths.js";
-import { renderMermaidAscii } from "beautiful-mermaid";
 import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
@@ -100,23 +99,6 @@ export function readFile(inputFile: string): string {
   // Read and parse the Agency file
   const contents = fs.readFileSync(inputFile, "utf-8");
   return contents;
-}
-
-export function renderGraph(contents: string, config: AgencyConfig): void {
-  const parsedProgram = parse(contents, config);
-  const info = collectProgramInfo(parsedProgram);
-  const preprocessor = new TypescriptPreprocessor(parsedProgram, config, info);
-  preprocessor.preprocess();
-  const mermaid = preprocessor.renderMermaid();
-  console.log("Program Mermaid Diagram:\n");
-  mermaid.forEach((subgraph) => {
-    const ascii = renderMermaidAscii(subgraph);
-    console.log(ascii);
-  });
-  console.log("==========");
-  mermaid.forEach((subgraph) => {
-    console.log(subgraph);
-  });
 }
 
 const compiledFiles: Set<string> = new Set();

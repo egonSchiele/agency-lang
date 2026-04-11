@@ -105,8 +105,11 @@ export function extractBundle(
     }
   }
 
-  const traceName = (header.program || "trace").replace(/\.agency$/, "") + ".trace";
-  const traceFilePath = path.join(baseDir, traceName);
+  const traceName = path.basename(header.program || "trace").replace(/\.agency$/, "") + ".trace";
+  const traceFilePath = path.resolve(baseDir, traceName);
+  if (!traceFilePath.startsWith(baseDir + path.sep)) {
+    throw new Error(`Invalid trace path: escapes target directory: ${traceName}`);
+  }
   fs.writeFileSync(traceFilePath, traceLines.join("\n") + "\n", "utf-8");
   console.log(`  ${traceName}`);
 }

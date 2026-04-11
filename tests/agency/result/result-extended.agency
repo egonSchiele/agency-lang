@@ -1,0 +1,47 @@
+def tryParse(input: string): Result {
+  if (input == "ok") {
+    return success(42)
+  }
+  return failure("bad input")
+}
+
+def safeDivide(a: number, b: number): Result {
+  if (b == 0) {
+    return failure("division by zero")
+  }
+  return success(a / b)
+}
+
+def double(x: number): number {
+  return x * 2
+}
+
+def subtract(a: number, b: number): number {
+  return a - b
+}
+
+node main() {
+  // Stage 1: .value and .error access
+  let r1 = tryParse("ok")
+  let val = ""
+  if (isSuccess(r1)) {
+    val = r1.value
+  }
+
+  let r2 = tryParse("bad")
+  let err = ""
+  if (isFailure(r2)) {
+    err = r2.error
+  }
+
+  // Stage 2: pipe with Result-returning function (bind path)
+  let r3 = success(10) |> safeDivide(?, 2)
+
+  // Stage 2: ? as first argument
+  let r4 = success(7) |> subtract(?, 3)
+
+  // Stage 2: pipe bind that fails mid-chain
+  let r5 = success(10) |> safeDivide(?, 0) |> double
+
+  return { val: val, err: err, r3: r3, r4: r4, r5: r5 }
+}

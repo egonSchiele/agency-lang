@@ -9,7 +9,14 @@ export type VariableType =
   | UnionType
   | ObjectType
   | TypeAliasVariable
-  | BlockType;
+  | BlockType
+  | ResultType;
+
+export type ResultType = {
+  type: "resultType";
+  successType: VariableType;
+  failureType: VariableType;
+};
 
 export type BlockType = {
   type: "blockType";

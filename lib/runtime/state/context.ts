@@ -6,7 +6,7 @@ import type { Checkpoint } from "./checkpointStore.js";
 import { StatelogClient, StatelogConfig } from "../../statelogClient.js";
 import { SimpleMachine } from "../../simplemachine/index.js";
 import { nanoid } from "nanoid";
-import { SmolPromptConfig } from "@/index.js";
+import { SmolPromptConfig } from "smoltalk";
 import { callHook } from "../hooks.js";
 import type { AgencyCallbacks } from "../hooks.js";
 import type { HandlerFn } from "../types.js";

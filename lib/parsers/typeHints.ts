@@ -11,6 +11,7 @@ import {
   ObjectProperty,
   ObjectType,
   PrimitiveType,
+  ResultType,
   StringLiteralType,
   TypeAlias,
   TypeAliasVariable,
@@ -27,6 +28,7 @@ import {
   many1Till,
   many1WithJoin,
   newline,
+  not,
   oneOf,
   optional,
   or,
@@ -289,6 +291,7 @@ export const unionItemParser: Parser<VariableType> = trace(
     objectTypeParser,
     angleBracketsArrayTypeParser,
     arrayTypeParser,
+    lazy(() => resultTypeParser),
     stringLiteralTypeParser,
     numberLiteralTypeParser,
     booleanLiteralTypeParser,
@@ -365,6 +368,38 @@ export const blockTypeParser: Parser<BlockType> = trace(
   },
 );
 
+export const resultTypeParser: Parser<ResultType> = trace(
+  "resultTypeParser",
+  or(
+    // Result<SuccessType, FailureType>
+    seqC(
+      set("type", "resultType"),
+      str("Result"),
+      char("<"),
+      captureCaptures(
+        parseError(
+          "expected two type parameters separated by comma, e.g. `Result<string, number>`",
+          capture(lazy(() => variableTypeParser), "successType"),
+          optionalSpaces,
+          char(","),
+          optionalSpaces,
+          capture(lazy(() => variableTypeParser), "failureType"),
+          char(">"),
+        ),
+      ),
+    ),
+    // Bare Result (sugar for Result<any, any>)
+    // Use not(varNameChar) to avoid matching "ResultFoo" as bare Result
+    seqC(
+      set("type", "resultType"),
+      str("Result"),
+      not(varNameChar),
+      set("successType", { type: "primitiveType", value: "any" }),
+      set("failureType", { type: "primitiveType", value: "any" }),
+    ),
+  ),
+);
+
 export const variableTypeParser: Parser<VariableType> = trace(
   "variableTypeParser",
   or(
@@ -373,6 +408,7 @@ export const variableTypeParser: Parser<VariableType> = trace(
     arrayTypeParser,
     objectTypeParser,
     angleBracketsArrayTypeParser,
+    resultTypeParser,
     stringLiteralTypeParser,
     numberLiteralTypeParser,
     booleanLiteralTypeParser,

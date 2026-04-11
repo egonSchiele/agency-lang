@@ -1,4 +1,4 @@
-import { PromptResult, Result, StreamChunk, ToolCallJSON } from "@/index.js";
+import { PromptResult, Result, StreamChunk, ToolCallJSON } from "smoltalk";
 import { builtinSleep } from "./builtins.js";
 import type { RuntimeContext } from "./state/context.js";
 import { GraphState } from "./types.js";

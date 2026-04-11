@@ -1,0 +1,6 @@
+def checkValue(r: Result): string {
+  if (isSuccess(r)) {
+    return "ok"
+  }
+  return "error"
+}

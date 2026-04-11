@@ -252,7 +252,7 @@ export class Runner {
 
   async ifElse(
     id: number,
-    branches: { condition: () => boolean; body: (runner: Runner) => Promise<void> }[],
+    branches: { condition: () => boolean | Promise<boolean>; body: (runner: Runner) => Promise<void> }[],
     elseBranch?: (runner: Runner) => Promise<void>,
   ): Promise<void> {
     if (this.shouldSkip()) return;
@@ -270,7 +270,7 @@ export class Runner {
     if (this.frame.locals[condKey] === undefined) {
       let branchIndex = -1;
       for (let i = 0; i < branches.length; i++) {
-        if (branches[i].condition()) {
+        if (await branches[i].condition()) {
           branchIndex = i;
           break;
         }

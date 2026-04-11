@@ -48,6 +48,11 @@ export function variableTypeToString(
       .join(", ");
     const ret = variableTypeToString(variableType.returnType, typeAliases);
     return `(${params}) => ${ret}`;
+  } else if (variableType.type === "resultType") {
+    const s = variableTypeToString(variableType.successType, typeAliases);
+    const f = variableTypeToString(variableType.failureType, typeAliases);
+    if (s === "any" && f === "any") return "Result";
+    return `Result<${s}, ${f}>`;
   }
   return "unknown";
 }

@@ -1,4 +1,5 @@
 import type { TsNode, TsParam, TsScopedVar } from "./tsIR.js";
+import renderRunnerIfElse from "../templates/backends/typescriptGenerator/runnerIfElse.js";
 
 const INDENT = "  ";
 
@@ -266,21 +267,19 @@ export function printTs(node: TsNode, indent = 0): string {
     }
 
     case "runnerIfElse": {
-      const branches = node.branches
-        .map((b) => {
-          const cond = printTs(b.condition, indent + 2);
-          const body = b.body.map((n) => printTs(n, indent + 3)).join("\n");
-          return `${ind(indent + 1)}{\n${ind(indent + 2)}condition: () => ${cond},\n${ind(indent + 2)}body: async (runner) => {\n${body}\n${ind(indent + 2)}},\n${ind(indent + 1)}}`;
-        })
-        .join(",\n");
-
-      let result = `await runner.ifElse(${node.id}, [\n${branches}\n${ind(indent)}]`;
-      if (node.elseBranch) {
-        const elsBody = node.elseBranch.map((n) => printTs(n, indent + 2)).join("\n");
-        result += `, async (runner) => {\n${elsBody}\n${ind(indent)}}`;
-      }
-      result += ");";
-      return result;
+      const branches = node.branches.map((b) => ({
+        condition: printTs(b.condition, indent + 2),
+        body: b.body.map((n) => printTs(n, indent + 3)).join("\n"),
+      }));
+      const elseBranch = node.elseBranch
+        ? node.elseBranch.map((n) => printTs(n, indent + 2)).join("\n")
+        : "";
+      return renderRunnerIfElse({
+        id: node.id,
+        branches,
+        hasElse: !!node.elseBranch,
+        elseBranch,
+      });
     }
 
     case "runnerLoop": {

@@ -107,6 +107,8 @@ export function expressionToString(expr: Expression): string {
           ? `...${expressionToString(entry.value)}`
           : `${(entry as any).key}: ${expressionToString((entry as any).value)}`
       ).join(", ")}}`;
+    case "placeholder":
+      return "?";
   }
 }
 

@@ -11,6 +11,7 @@ import {
 } from "tarsec";
 import { Expression } from "../types.js";
 import { BinOpExpression, Operator } from "../types/binop.js";
+import { Placeholder } from "../types/placeholder.js";
 import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
 import { booleanParser, literalParser } from "./literals.js";
 import { valueAccessParser } from "./access.js";
@@ -40,6 +41,16 @@ const unaryNotParser: Parser<Expression> = (input: string) => {
   );
 };
 
+// Placeholder parser for `?` in pipe partial application
+const placeholderParser: Parser<Placeholder> = (input: string) => {
+  const result = char("?")(input);
+  if (!result.success) return result;
+  if (result.rest.length > 0 && /[a-zA-Z0-9_]/.test(result.rest[0])) {
+    return failure("placeholder", input);
+  }
+  return success({ type: "placeholder" as const }, result.rest);
+};
+
 // The atom parser: the smallest unit of an expression.
 // Sub-parsers are wrapped in lazy() to handle circular imports that will exist
 // after Task 3 (e.g., functionCall.ts will import exprParser from this file,
@@ -48,6 +59,7 @@ const unaryNotParser: Parser<Expression> = (input: string) => {
 // when all modules are fully loaded.
 const atom: Parser<Expression> = or(
   unaryNotParser,
+  placeholderParser,
   lazy(() => agencyArrayParser),
   lazy(() => agencyObjectParser),
   lazy(() => booleanParser),
@@ -135,6 +147,10 @@ export const exprParser: Parser<Expression> = label("an expression", buildExpres
     // Precedence 1: logical OR
     [
       { op: wsOp("||"), assoc: "left" as const, apply: makeBinOp("||") },
+    ],
+    // Precedence -1 (lowest): pipe
+    [
+      { op: wsOp("|>"), assoc: "left" as const, apply: makeBinOp("|>") },
     ],
   ],
   parenParser,

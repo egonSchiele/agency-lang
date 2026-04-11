@@ -256,6 +256,8 @@ export class AgencyGenerator {
         return this.processBinOpExpression(node);
       case "keyword":
         return this.processKeyword(node);
+      case "placeholder":
+        return "?";
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }

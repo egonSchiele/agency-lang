@@ -15,8 +15,10 @@ skills/*
 *__result.json
 docs/local/
 docs-new/node_modules/*
+stdlib/index.ts
 
 # Allow test fixture files for pkg:: import tests
 !tests/pkg-imports/node_modules/
 !tests/pkg-imports/node_modules/**
 !tests/pkg-imports/node_modules/**/*.js
+

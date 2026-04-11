@@ -1,5 +1,19 @@
+def double(x: number): number {
+  return x * 2
+}
+
+def subtract(a: number, b: number): number {
+  return a - b
+}
+
+def divide(a: number, b: number): number {
+  if (b == 0) {
+    return failure("Cannot divide by zero")
+  }
+  return success(a / b)
+}
+
 node main() {
-  const message = "I am feeling great today!"
-  const mood: "happy" | "sad" = llm("Categorize: ${message}")
-  return mood
+  const result = success(5) |> double |> subtract(10, ?) |> divide(3, ?)
+  print(result)
 }

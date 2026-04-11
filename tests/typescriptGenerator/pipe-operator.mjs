@@ -1,4 +1,3 @@
-import { lookupItem, saveItem } from "./tools.js";
 import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -87,36 +86,51 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
 function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("safe-function.agency")
+  __ctx.globals.markInitialized("pipe-operator.agency")
 }
-export const __safeLookupTool = {
-  name: "safeLookup",
+export const __doubleTool = {
+  name: "double",
   description: `No description provided.`,
-  schema: z.object({"id": z.string(), })
+  schema: z.object({"x": z.number(), })
 };
-export const __safeLookupToolParams = ["id"];
-export const __unsafeSaveTool = {
-  name: "unsafeSave",
+export const __doubleToolParams = ["x"];
+export const __multiplyTool = {
+  name: "multiply",
   description: `No description provided.`,
-  schema: z.object({"id": z.string(), })
+  schema: z.object({"a": z.number(), "b": z.number(), })
 };
-export const __unsafeSaveToolParams = ["id"];
+export const __multiplyToolParams = ["a", "b"];
+export const __safeDivideTool = {
+  name: "safeDivide",
+  description: `No description provided.`,
+  schema: z.object({"a": z.number(), "b": z.number(), })
+};
+export const __safeDivideToolParams = ["a", "b"];
 const __toolRegistry = {
-  safeLookup: {
-    definition: __safeLookupTool,
+  double: {
+    definition: __doubleTool,
     handler: {
-      name: "safeLookup",
-      params: __safeLookupToolParams,
-      execute: safeLookup,
+      name: "double",
+      params: __doubleToolParams,
+      execute: double,
       isBuiltin: false
     }
   },
-  unsafeSave: {
-    definition: __unsafeSaveTool,
+  multiply: {
+    definition: __multiplyTool,
     handler: {
-      name: "unsafeSave",
-      params: __unsafeSaveToolParams,
-      execute: unsafeSave,
+      name: "multiply",
+      params: __multiplyToolParams,
+      execute: multiply,
+      isBuiltin: false
+    }
+  },
+  safeDivide: {
+    definition: __safeDivideTool,
+    handler: {
+      name: "safeDivide",
+      params: __safeDivideToolParams,
+      execute: safeDivide,
       isBuiltin: false
     }
   },
@@ -130,8 +144,7 @@ const __toolRegistry = {
     }
   }
 };
-
-async function safeLookup(id: string, __state: InternalFunctionState | undefined = undefined) {
+async function double(x: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -145,7 +158,7 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  if (!__ctx.globals.isInitialized("safe-function.agency")) {
+  if (!__ctx.globals.isInitialized("pipe-operator.agency")) {
     __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
@@ -153,20 +166,20 @@ let __functionCompleted = false;
     callbacks: __ctx.callbacks,
     name: "onFunctionStart",
     data: {
-      functionName: "safeLookup",
+      functionName: "double",
       args: {
-        id: id
+        x: x
       },
       isBuiltin: false
     }
   })
-  __stack.args["id"] = id;
+  __stack.args["x"] = x;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "safe-function.agency", scopeName: "safeLookup" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "double" });
   try {
     await runner.step(0, async (runner) => {
 __functionCompleted = true;
-runner.halt(await lookupItem(__stack.args.id))
+runner.halt(__stack.args.x * 2)
 return;
     });
     if (runner.halted) return runner.haltResult;
@@ -186,14 +199,14 @@ return;
         callbacks: __ctx.callbacks,
         name: "onFunctionEnd",
         data: {
-          functionName: "safeLookup",
+          functionName: "double",
           timeTaken: performance.now() - __funcStartTime
         }
       })
     }
   }
 }
-async function unsafeSave(id: string, __state: InternalFunctionState | undefined = undefined) {
+async function multiply(a: number, b: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -207,7 +220,7 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  if (!__ctx.globals.isInitialized("safe-function.agency")) {
+  if (!__ctx.globals.isInitialized("pipe-operator.agency")) {
     __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
@@ -215,24 +228,22 @@ let __functionCompleted = false;
     callbacks: __ctx.callbacks,
     name: "onFunctionStart",
     data: {
-      functionName: "unsafeSave",
+      functionName: "multiply",
       args: {
-        id: id
+        a: a,
+        b: b
       },
       isBuiltin: false
     }
   })
-  __stack.args["id"] = id;
+  __stack.args["a"] = a;
+  __stack.args["b"] = b;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "safe-function.agency", scopeName: "unsafeSave" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "multiply" });
   try {
     await runner.step(0, async (runner) => {
-__self.__retryable = false;
-await saveItem(__stack.args.id)
-    });
-    await runner.step(1, async (runner) => {
 __functionCompleted = true;
-runner.halt(await lookupItem(__stack.args.id))
+runner.halt(__stack.args.a * __stack.args.b)
 return;
     });
     if (runner.halted) return runner.haltResult;
@@ -252,7 +263,87 @@ return;
         callbacks: __ctx.callbacks,
         name: "onFunctionEnd",
         data: {
-          functionName: "unsafeSave",
+          functionName: "multiply",
+          timeTaken: performance.now() - __funcStartTime
+        }
+      })
+    }
+  }
+}
+async function safeDivide(a: number, b: number, __state: InternalFunctionState | undefined = undefined) {
+  const __setupData = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+let __forked;
+let __functionCompleted = false;
+  if (!__ctx.globals.isInitialized("pipe-operator.agency")) {
+    __initializeGlobals(__ctx)
+  }
+  let __funcStartTime: number = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "safeDivide",
+      args: {
+        a: a,
+        b: b
+      },
+      isBuiltin: false
+    }
+  })
+  __stack.args["a"] = a;
+  __stack.args["b"] = b;
+  __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "safeDivide" });
+  try {
+    await runner.step(0, async (runner) => {
+await runner.ifElse(0, [
+
+  {
+    condition: async () => __stack.args.b == 0,
+    body: async (runner) => {
+await runner.step(0, async (runner) => {
+__functionCompleted = true;
+runner.halt(await failure(`division by zero`))
+return;
+            });
+    },
+  },
+
+]);
+    });
+    await runner.step(1, async (runner) => {
+__functionCompleted = true;
+runner.halt(await success(__stack.args.a / __stack.args.b))
+return;
+    });
+    if (runner.halted) return runner.haltResult;
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
+    }
+    if (__error instanceof ToolCallError) {
+      __error.retryable = __error.retryable && __self.__retryable
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
+    if (__functionCompleted) {
+      await callHook({
+        callbacks: __ctx.callbacks,
+        name: "onFunctionEnd",
+        data: {
+          functionName: "safeDivide",
           timeTaken: performance.now() - __funcStartTime
         }
       })
@@ -279,38 +370,52 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "safe-function.agency", scopeName: "main" });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "pipe-operator.agency", scopeName: "main" });
   await runner.step(0, async (runner) => {
-__self.__removedTools = __self.__removedTools || [];
-__stack.locals.result = await runPrompt({
-      ctx: __ctx,
-      prompt: `Use the tools`,
-      messages: __threads.createAndReturnThread(),
-      clientConfig: {
-        tools: [tool("safeLookup"), tool("unsafeSave")],
-        ...{}
-      },
-      maxToolCallRounds: 10,
-      interruptData: __state?.interruptData,
-      removedTools: __self.__removedTools
-    });
-// halt if this is an interrupt
-if (isInterrupt(__stack.locals.result)) {
-      await __ctx.pendingPromises.awaitAll()
-      runner.halt({
-        messages: __threads,
-        data: __stack.locals.result
-      })
-      return;
-    }
+__stack.locals.__pipe_0 = await success(5);
   });
-  await runner.step(1, async (runner) => {
-runner.halt({
-      messages: __threads,
-      data: __stack.locals.result
-    })
-return;
+  __stack.locals.r1 = await runner.pipe(1, __stack.locals.__pipe_0, async (__pipeArg) => double(__pipeArg, {
+    ctx: __ctx,
+    threads: new ThreadStore(),
+    interruptData: __state?.interruptData
+  }));
+  await runner.step(2, async (runner) => {
+__stack.locals.__pipe_1 = await success(5);
   });
+  __stack.locals.r2 = await runner.pipe(3, __stack.locals.__pipe_1, async (__pipeArg) => multiply(10, __pipeArg, {
+    ctx: __ctx,
+    threads: new ThreadStore(),
+    interruptData: __state?.interruptData
+  }));
+  await runner.step(4, async (runner) => {
+__stack.locals.__pipe_2 = await success(10);
+  });
+  __stack.locals.__pipe_2 = await runner.pipe(5, __stack.locals.__pipe_2, async (__pipeArg) => double(__pipeArg, {
+    ctx: __ctx,
+    threads: new ThreadStore(),
+    interruptData: __state?.interruptData
+  }));
+  __stack.locals.r3 = await runner.pipe(6, __stack.locals.__pipe_2, async (__pipeArg) => multiply(3, __pipeArg, {
+    ctx: __ctx,
+    threads: new ThreadStore(),
+    interruptData: __state?.interruptData
+  }));
+  await runner.step(7, async (runner) => {
+__stack.locals.__pipe_3 = await failure(`nope`);
+  });
+  __stack.locals.r4 = await runner.pipe(8, __stack.locals.__pipe_3, async (__pipeArg) => double(__pipeArg, {
+    ctx: __ctx,
+    threads: new ThreadStore(),
+    interruptData: __state?.interruptData
+  }));
+  await runner.step(9, async (runner) => {
+__stack.locals.__pipe_4 = await success(10);
+  });
+  __stack.locals.r5 = await runner.pipe(10, __stack.locals.__pipe_4, async (__pipeArg) => safeDivide(__pipeArg, 2, {
+    ctx: __ctx,
+    threads: new ThreadStore(),
+    interruptData: __state?.interruptData
+  }));
   if (runner.halted) return runner.haltResult;
   await callHook({
     callbacks: __ctx.callbacks,
@@ -349,4 +454,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"safe-function.agency:safeLookup":{"0":{"line":1,"col":2}},"safe-function.agency:unsafeSave":{"0":{"line":5,"col":2},"1":{"line":6,"col":2}},"safe-function.agency:main":{"0":{"line":11,"col":2},"1":{"line":12,"col":2}}};
+export const __sourceMap = {"pipe-operator.agency:double":{"0":{"line":-1,"col":2}},"pipe-operator.agency:multiply":{"0":{"line":3,"col":2}},"pipe-operator.agency:safeDivide":{"0":{"line":7,"col":2},"1":{"line":10,"col":2},"0.0":{"line":8,"col":4}},"pipe-operator.agency:main":{}};

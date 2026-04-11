@@ -2,8 +2,8 @@ import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
-import * as smoltalk from "agency-lang";
+import { goToNode, color, nanoid } from "agency-lang";
+import { smoltalk } from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
@@ -23,6 +23,7 @@ import {
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
+  success, failure, isSuccess, isFailure,
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
@@ -128,27 +129,31 @@ __stack.locals.action = `start`;
   });
   await runner.step(2, async (runner) => {
 await runner.ifElse(2, [
-      {
-        condition: () => __stack.locals.action === `start`,
-        body: async (runner) => {
+
+  {
+    condition: async () => __stack.locals.action === `start`,
+    body: async (runner) => {
 await print(`Starting...`)
-        },
-      },
-      {
-        condition: () => __stack.locals.action === `stop`,
-        body: async (runner) => {
+    },
+  },
+
+  {
+    condition: async () => __stack.locals.action === `stop`,
+    body: async (runner) => {
 await print(`Stopping...`)
-        },
-      },
-      {
-        condition: () => __stack.locals.action === `restart`,
-        body: async (runner) => {
+    },
+  },
+
+  {
+    condition: async () => __stack.locals.action === `restart`,
+    body: async (runner) => {
 await print(`Restarting...`)
-        },
-      }
-    ], async (runner) => {
+    },
+  },
+
+], async (runner) => {
 await print(`Unknown action`)
-    });
+});
 //  Match with number literals
   });
   await runner.step(3, async (runner) => {
@@ -156,27 +161,31 @@ __stack.locals.statusCode = 200;
   });
   await runner.step(4, async (runner) => {
 await runner.ifElse(4, [
-      {
-        condition: () => __stack.locals.statusCode === 200,
-        body: async (runner) => {
+
+  {
+    condition: async () => __stack.locals.statusCode === 200,
+    body: async (runner) => {
 await print(`OK`)
-        },
-      },
-      {
-        condition: () => __stack.locals.statusCode === 404,
-        body: async (runner) => {
+    },
+  },
+
+  {
+    condition: async () => __stack.locals.statusCode === 404,
+    body: async (runner) => {
 await print(`Not Found`)
-        },
-      },
-      {
-        condition: () => __stack.locals.statusCode === 500,
-        body: async (runner) => {
+    },
+  },
+
+  {
+    condition: async () => __stack.locals.statusCode === 500,
+    body: async (runner) => {
 await print(`Internal Server Error`)
-        },
-      }
-    ], async (runner) => {
+    },
+  },
+
+], async (runner) => {
 await print(`Unknown status`)
-    });
+});
 //  Match with variable assignment in body
   });
   await runner.step(5, async (runner) => {
@@ -187,33 +196,38 @@ __stack.locals.points = 0;
   });
   await runner.step(7, async (runner) => {
 await runner.ifElse(7, [
-      {
-        condition: () => __stack.locals.grade === `A`,
-        body: async (runner) => {
+
+  {
+    condition: async () => __stack.locals.grade === `A`,
+    body: async (runner) => {
 __stack.locals.a = 100;
-        },
-      },
-      {
-        condition: () => __stack.locals.grade === `B`,
-        body: async (runner) => {
+    },
+  },
+
+  {
+    condition: async () => __stack.locals.grade === `B`,
+    body: async (runner) => {
 __stack.locals.b = 85;
-        },
-      },
-      {
-        condition: () => __stack.locals.grade === `C`,
-        body: async (runner) => {
+    },
+  },
+
+  {
+    condition: async () => __stack.locals.grade === `C`,
+    body: async (runner) => {
 __stack.locals.c = 70;
-        },
-      },
-      {
-        condition: () => __stack.locals.grade === `D`,
-        body: async (runner) => {
+    },
+  },
+
+  {
+    condition: async () => __stack.locals.grade === `D`,
+    body: async (runner) => {
 __stack.locals.d = 55;
-        },
-      }
-    ], async (runner) => {
+    },
+  },
+
+], async (runner) => {
 __stack.locals.e = 0;
-    });
+});
 //  Match with function calls in body
   });
   await runner.step(8, async (runner) => {
@@ -221,31 +235,36 @@ __stack.locals.level = `debug`;
   });
   await runner.step(9, async (runner) => {
 await runner.ifElse(9, [
-      {
-        condition: () => __stack.locals.level === `debug`,
-        body: async (runner) => {
+
+  {
+    condition: async () => __stack.locals.level === `debug`,
+    body: async (runner) => {
 await print(`Debug mode enabled`)
-        },
-      },
-      {
-        condition: () => __stack.locals.level === `info`,
-        body: async (runner) => {
+    },
+  },
+
+  {
+    condition: async () => __stack.locals.level === `info`,
+    body: async (runner) => {
 await print(`Info level logging`)
-        },
-      },
-      {
-        condition: () => __stack.locals.level === `warn`,
-        body: async (runner) => {
+    },
+  },
+
+  {
+    condition: async () => __stack.locals.level === `warn`,
+    body: async (runner) => {
 await print(`Warning level`)
-        },
-      },
-      {
-        condition: () => __stack.locals.level === `error`,
-        body: async (runner) => {
+    },
+  },
+
+  {
+    condition: async () => __stack.locals.level === `error`,
+    body: async (runner) => {
 await print(`Error level`)
-        },
-      }
-    ]);
+    },
+  },
+
+]);
 //  Match with array results
   });
   await runner.step(10, async (runner) => {
@@ -253,24 +272,27 @@ __stack.locals.resultType = `array`;
   });
   await runner.step(11, async (runner) => {
 await runner.ifElse(11, [
-      {
-        condition: () => __stack.locals.resultType === `array`,
-        body: async (runner) => {
+
+  {
+    condition: async () => __stack.locals.resultType === `array`,
+    body: async (runner) => {
 __stack.locals.data1 = [1, 2, 3];
-        },
-      },
-      {
-        condition: () => __stack.locals.resultType === `object`,
-        body: async (runner) => {
+    },
+  },
+
+  {
+    condition: async () => __stack.locals.resultType === `object`,
+    body: async (runner) => {
 __stack.locals.data2 = {
             "x": 1,
             "y": 2
           };
-        },
-      }
-    ], async (runner) => {
+    },
+  },
+
+], async (runner) => {
 __stack.locals.data3 = [];
-    });
+});
 //  Match with object results
   });
   await runner.step(12, async (runner) => {
@@ -278,39 +300,43 @@ __stack.locals.format = `json`;
   });
   await runner.step(13, async (runner) => {
 await runner.ifElse(13, [
-      {
-        condition: () => __stack.locals.format === `xml`,
-        body: async (runner) => {
+
+  {
+    condition: async () => __stack.locals.format === `xml`,
+    body: async (runner) => {
 __stack.locals.output1 = {
             "type": `xml`,
             "ext": `.xml`
           };
-        },
-      },
-      {
-        condition: () => __stack.locals.format === `json`,
-        body: async (runner) => {
+    },
+  },
+
+  {
+    condition: async () => __stack.locals.format === `json`,
+    body: async (runner) => {
 __stack.locals.output2 = {
             "type": `json`,
             "ext": `.json`
           };
-        },
-      },
-      {
-        condition: () => __stack.locals.format === `csv`,
-        body: async (runner) => {
+    },
+  },
+
+  {
+    condition: async () => __stack.locals.format === `csv`,
+    body: async (runner) => {
 __stack.locals.output3 = {
             "type": `csv`,
             "ext": `.csv`
           };
-        },
-      }
-    ], async (runner) => {
+    },
+  },
+
+], async (runner) => {
 __stack.locals.output4 = {
           "type": `unknown`,
           "ext": ``
         };
-    });
+});
   });
   if (runner.halted) return runner.haltResult;
   await callHook({

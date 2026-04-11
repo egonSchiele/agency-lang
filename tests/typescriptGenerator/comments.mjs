@@ -2,8 +2,8 @@ import { fileURLToPath } from "url";
 import process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
-import * as smoltalk from "agency-lang";
+import { goToNode, color, nanoid } from "agency-lang";
+import { smoltalk } from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
@@ -23,6 +23,7 @@ import {
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
+  success, failure, isSuccess, isFailure,
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
@@ -239,13 +240,15 @@ __stack.locals.status = `active`;
   });
   await runner.step(5, async (runner) => {
 await runner.ifElse(5, [
-      {
-        condition: () => __stack.locals.status === `inactive`,
-        body: async (runner) => {
+
+  {
+    condition: async () => __stack.locals.status === `inactive`,
+    body: async (runner) => {
 await print(`Stopped`)
-        },
-      }
-    ]);
+    },
+  },
+
+]);
 //  Final comment at end of file
   });
   if (runner.halted) return runner.haltResult;

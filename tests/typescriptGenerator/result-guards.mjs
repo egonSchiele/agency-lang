@@ -86,9 +86,24 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
 function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("simple.agency")
+  __ctx.globals.markInitialized("result-guards.agency")
 }
+export const __checkValueTool = {
+  name: "checkValue",
+  description: `No description provided.`,
+  schema: z.object({"r": z.any(), })
+};
+export const __checkValueToolParams = ["r"];
 const __toolRegistry = {
+  checkValue: {
+    definition: __checkValueTool,
+    handler: {
+      name: "checkValue",
+      params: __checkValueToolParams,
+      execute: checkValue,
+      isBuiltin: false
+    }
+  },
   readSkill: {
     definition: __readSkillTool,
     handler: {
@@ -99,87 +114,83 @@ const __toolRegistry = {
     }
   }
 };
-graph.node("main", async (__state: GraphState) => {
-  const __setupData = setupNode({
+async function checkValue(r: Result, __state: InternalFunctionState | undefined = undefined) {
+  const __setupData = setupFunction({
     state: __state
   });
+  // __state will be undefined if this function is being called as a tool by an llm
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
-const __ctx = __state.ctx;
+const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
+  if (!__ctx.globals.isInitialized("result-guards.agency")) {
+    __initializeGlobals(__ctx)
+  }
+  let __funcStartTime: number = performance.now();
   await callHook({
     callbacks: __ctx.callbacks,
-    name: "onNodeStart",
+    name: "onFunctionStart",
     data: {
-      nodeName: "main"
+      functionName: "checkValue",
+      args: {
+        r: r
+      },
+      isBuiltin: false
     }
   })
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "simple.agency", scopeName: "main" });
-  await runner.step(0, async (runner) => {
-__self.__removedTools = __self.__removedTools || [];
-__stack.locals.greeting = await runPrompt({
-      ctx: __ctx,
-      prompt: `say hello`,
-      messages: __threads.createAndReturnThread(),
-      clientConfig: {},
-      maxToolCallRounds: 10,
-      interruptData: __state?.interruptData,
-      removedTools: __self.__removedTools
-    });
-// halt if this is an interrupt
-if (isInterrupt(__stack.locals.greeting)) {
-      await __ctx.pendingPromises.awaitAll()
-      runner.halt({
-        messages: __threads,
-        data: __stack.locals.greeting
-      })
-      return;
-    }
-  });
-  await runner.step(1, async (runner) => {
-await print(__stack.locals.greeting)
-  });
-  if (runner.halted) return runner.haltResult;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "main",
-      data: undefined
-    }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
-})
-export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
-  return runNode({
-    ctx: __globalCtx,
-    nodeName: "main",
-    data: {},
-    messages: messages,
-    callbacks: callbacks,
-    initializeGlobals: __initializeGlobals
-  });
-}
-export const __mainNodeParams = [];
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  __stack.args["r"] = r;
+  __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "result-guards.agency", scopeName: "checkValue" });
   try {
-    const initialState = {
-      messages: new ThreadStore(),
-      data: {}
-    };
-    await main(initialState)
-  } catch (__error: any) {
-    console.error(`\nAgent crashed: ${__error.message}`)
-    throw __error
+    await runner.step(0, async (runner) => {
+await runner.ifElse(0, [
+
+  {
+    condition: async () => await isSuccess(__stack.args.r),
+    body: async (runner) => {
+await runner.step(0, async (runner) => {
+__functionCompleted = true;
+runner.halt(`ok`)
+return;
+            });
+    },
+  },
+
+]);
+    });
+    await runner.step(1, async (runner) => {
+__functionCompleted = true;
+runner.halt(`error`)
+return;
+    });
+    if (runner.halted) return runner.haltResult;
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
+    }
+    if (__error instanceof ToolCallError) {
+      __error.retryable = __error.retryable && __self.__retryable
+      throw __error
+    }
+    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  } finally {
+    if (!__state?.isForked) { __ctx.stateStack.pop() }
+    if (__functionCompleted) {
+      await callHook({
+        callbacks: __ctx.callbacks,
+        name: "onFunctionEnd",
+        data: {
+          functionName: "checkValue",
+          timeTaken: performance.now() - __funcStartTime
+        }
+      })
+    }
   }
 }
 export default graph
-export const __sourceMap = {"simple.agency:main":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2}}};
+export const __sourceMap = {"result-guards.agency:checkValue":{"0":{"line":-1,"col":2},"1":{"line":2,"col":2},"0.0":{"line":0,"col":4}}};

@@ -287,6 +287,10 @@ Users can also set `audit.logFile` in `agency.json` (or use `agency run -l <file
 ## CRITICAL: Handlers are safety infrastructure
 Handlers (`handle` blocks) are a crucial part of what makes Agency safe. They must NEVER be accidentally skipped or left unregistered. Any feature that affects execution flow (rewind, interrupts, checkpoints, state restoration) must ensure handlers are correctly registered and invoked. If there is any risk of a handler being skipped, treat it as a critical issue and flag it immediately. Handlers are registered on `__ctx.handlers` via `pushHandler()` in the generated code and are NOT serialized as part of checkpoint state — be aware of this when working on state restoration features.
 
+## VERY IMPORTANT: Agency syntax rules
+- `if`, `while`, and `for` statements REQUIRE parentheses around the condition. Example: `if (x > 5) { ... }`, NOT `if x > 5 { ... }`.
+- Always check `DOCS.md` for correct Agency syntax when writing Agency code.
+
 ## General code Guidelines
 - NEVER use dynamic imports
 - Use objects instead of maps.

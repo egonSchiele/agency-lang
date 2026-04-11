@@ -1,0 +1,15 @@
+def double(n: number): number {
+  return n * 2
+}
+
+def addTen(n: number): number {
+  let doubled = double(n)
+  return doubled + 10
+}
+
+node main() {
+  let results = fork([1, 2, 3]) as item {
+    return addTen(item)
+  }
+  return results
+}

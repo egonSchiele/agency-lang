@@ -1,0 +1,6 @@
+def checkAge(age: number): Result {
+  if (age >= 18) {
+    return success(age)
+  }
+  return failure("too young")
+}

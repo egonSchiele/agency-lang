@@ -29,6 +29,7 @@ import { AwaitPending } from "./types/awaitPending.js";
 import { HandleBlock } from "./types/handleBlock.js";
 import { Sentinel } from "./types/sentinel.js";
 import { DebuggerStatement } from "./types/debuggerStatement.js";
+import { Placeholder } from "./types/placeholder.js";
 export * from "./types/access.js";
 export * from "./types/awaitPending.js";
 export * from "./types/dataStructures.js";
@@ -49,6 +50,7 @@ export * from "./types/keyword.js";
 export * from "./types/sentinel.js";
 export * from "./types/debuggerStatement.js";
 export * from "./types/blockArgument.js";
+export * from "./types/placeholder.js";
 export * from "./types/base.js"
 
 export type Expression =
@@ -57,7 +59,8 @@ export type Expression =
   | FunctionCall
   | BinOpExpression
   | AgencyArray
-  | AgencyObject;
+  | AgencyObject
+  | Placeholder;
 
 /**
  * Scope types for variable resolution.
@@ -221,7 +224,8 @@ export type AgencyNode =
   | AwaitPending
   | HandleBlock
   | Sentinel
-  | DebuggerStatement;
+  | DebuggerStatement
+  | Placeholder;
 
 export type AgencyProgram = {
   type: "agencyProgram";

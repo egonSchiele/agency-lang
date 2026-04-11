@@ -634,6 +634,8 @@ export class TypeScriptBuilder {
         return this.processSentinel(node);
       case "debuggerStatement":
         return this.processDebuggerStatement(node);
+      case "placeholder":
+        throw new Error("Placeholder '?' can only appear on the right side of a |> pipe operator");
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
@@ -783,12 +785,53 @@ export class TypeScriptBuilder {
   }
 
   private processBinOpExpression(node: BinOpExpression): TsNode {
+    if (node.operator === "|>") {
+      return this.processPipeExpression(node);
+    }
     const leftNode = this.processNode(node.left);
     const rightNode = this.processNode(node.right);
     return ts.binOp(leftNode, node.operator, rightNode, {
       parenLeft: this.needsParensLeft(node.left, node.operator),
       parenRight: this.needsParensRight(node.right, node.operator),
     });
+  }
+
+  private processPipeExpression(node: BinOpExpression): TsNode {
+    const left = this.processNode(node.left);
+    const right = node.right;
+
+    if (right.type === "valueAccess" || right.type === "variableName") {
+      // Bare function reference: a |> bar → await __pipeBind(a, async (__pipeArg) => bar(__pipeArg))
+      const callee = this.processNode(right);
+      return ts.await(ts.call(ts.raw("__pipeBind"), [
+        left,
+        ts.arrowFn([{ name: "__pipeArg" }], ts.call(callee, [ts.raw("__pipeArg")]), { async: true }),
+      ]));
+    }
+
+    if (right.type === "functionCall") {
+      const hasPlaceholder = right.arguments.some(
+        (arg) => arg.type === "placeholder"
+      );
+
+      if (!hasPlaceholder) {
+        throw new Error("Function call on right side of |> must contain exactly one ? placeholder");
+      }
+
+      const processedArgs = right.arguments.map((arg) => {
+        if (arg.type === "placeholder") {
+          return ts.raw("__pipeArg");
+        }
+        return this.processNode(arg as AgencyNode);
+      });
+      const callee = ts.raw(mapFunctionName(right.functionName));
+      return ts.await(ts.call(ts.raw("__pipeBind"), [
+        left,
+        ts.arrowFn([{ name: "__pipeArg" }], ts.call(callee, processedArgs), { async: true }),
+      ]));
+    }
+
+    throw new Error(`Right side of |> must be a function reference or function call, got '${right.type}'`);
   }
 
   private processIfElseWithSteps(node: IfElse): TsNode {

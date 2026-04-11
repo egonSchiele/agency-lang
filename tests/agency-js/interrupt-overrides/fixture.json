@@ -3,10 +3,7 @@
     "x": 42,
     "result": true
   },
-  "reject": {
-    "x": null,
-    "result": null
-  },
+  "reject": null,
   "resolve": {
     "x": 77,
     "result": "resolved-value"

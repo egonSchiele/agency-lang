@@ -15,7 +15,7 @@ import { Placeholder } from "../types/placeholder.js";
 import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
 import { booleanParser, literalParser } from "./literals.js";
 import { valueAccessParser } from "./access.js";
-import { optionalSpaces } from "./utils.js";
+import { optionalSpaces, optionalSpacesOrNewline } from "./utils.js";
 
 // --- Unary ! operator ---
 // Desugared to BinOpExpression: !x → { op: "!", left: true, right: x }
@@ -67,10 +67,13 @@ const atom: Parser<Expression> = or(
   lazy(() => literalParser),
 );
 
-// Operator helper: parse an operator with optional surrounding whitespace
+// Operator helper: parse an operator with optional surrounding whitespace.
+// Allows a newline before the operator so expressions can continue on the next line:
+//   let x = a
+//     |> b
 function wsOp(opStr: string): Parser<string> {
   return (input: string) => {
-    const r1 = optionalSpaces(input);
+    const r1 = optionalSpacesOrNewline(input);
     if (!r1.success) return r1;
     const r2 = str(opStr)(r1.rest);
     if (!r2.success) return r2;

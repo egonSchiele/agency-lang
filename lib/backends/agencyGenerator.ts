@@ -883,15 +883,22 @@ export class AgencyGenerator {
   }
 
   protected processBinOpExpression(node: BinOpExpression): string {
-    const left = this.processNode(node.left).trim();
-    const right = this.processNode(node.right).trim();
-    const wrappedLeft = this.needsParensLeft(node.left, node.operator)
-      ? `(${left})`
-      : left;
-    const wrappedRight = this.needsParensRight(node.right, node.operator)
-      ? `(${right})`
-      : right;
-    return this.indentStr(`${wrappedLeft} ${node.operator} ${wrappedRight}`);
+    // Collect a chain of the same operator (e.g. a |> b |> c)
+    const op = node.operator;
+    const parts: string[] = [];
+    let current: AgencyNode = node;
+    while (current.type === "binOpExpression" && current.operator === op) {
+      parts.push(this.processNode(current.right).trim());
+      current = current.left;
+    }
+    parts.push(this.processNode(current).trim());
+    parts.reverse();
+
+    const oneLine = parts.join(` ${op} `);
+    if (oneLine.length <= 60) {
+      return oneLine;
+    }
+    return parts[0] + "\n" + parts.slice(1).map((p) => this.indentStr(`${op} ${p}`)).join("\n");
   }
 
   protected processAccessChainElement(node: AccessChainElement): string {

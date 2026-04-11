@@ -24,7 +24,7 @@ import {
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
-  success, failure, isSuccess, isFailure,
+  success, failure, isSuccess, isFailure, __pipeBind,
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,

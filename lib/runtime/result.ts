@@ -27,9 +27,14 @@ export function isFailure(result: ResultValue): result is ResultFailure {
   return result != null && result.success === false;
 }
 
-export async function __pipeBind(result: ResultValue, fn: (value: any) => any): Promise<ResultValue> {
+export async function __pipeBind(result: ResultValue, fn: (value: any) => any): Promise<any> {
   if (!result.success) return result;
   const output = await fn(result.value);
+  // Propagate interrupts directly — they must bubble up to the node runner
+  if (output != null && typeof output === "object" && output.type === "interrupt") {
+    return output;
+  }
+  // Smart bind/fmap: if fn returns a Result, use it directly
   if (output != null && typeof output === "object" && "success" in output && typeof output.success === "boolean") {
     return output;
   }

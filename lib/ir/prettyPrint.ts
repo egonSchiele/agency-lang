@@ -266,6 +266,13 @@ export function printTs(node: TsNode, indent = 0): string {
       return `await runner.debugger(${node.id}, ${JSON.stringify(node.label)});`;
     }
 
+    case "runnerPipe": {
+      const target = printTs(node.target, indent);
+      const input = printTs(node.input, indent);
+      const fn = printTs(node.fn, indent);
+      return `${target} = await runner.pipe(${node.id}, ${input}, ${fn});`;
+    }
+
     case "runnerIfElse": {
       const branches = node.branches.map((b) => ({
         condition: printTs(b.condition, indent + 2),

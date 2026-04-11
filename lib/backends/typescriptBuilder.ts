@@ -798,40 +798,7 @@ export class TypeScriptBuilder {
 
   private processPipeExpression(node: BinOpExpression): TsNode {
     const left = this.processNode(node.left);
-    const right = node.right;
-
-    if (right.type === "valueAccess" || right.type === "variableName") {
-      // Bare function reference: a |> bar → await __pipeBind(a, async (__pipeArg) => bar(__pipeArg))
-      const callee = this.processNode(right);
-      return ts.await(ts.call(ts.raw("__pipeBind"), [
-        left,
-        ts.arrowFn([{ name: "__pipeArg" }], ts.call(callee, [ts.raw("__pipeArg")]), { async: true }),
-      ]));
-    }
-
-    if (right.type === "functionCall") {
-      const hasPlaceholder = right.arguments.some(
-        (arg) => arg.type === "placeholder"
-      );
-
-      if (!hasPlaceholder) {
-        throw new Error("Function call on right side of |> must contain exactly one ? placeholder");
-      }
-
-      const processedArgs = right.arguments.map((arg) => {
-        if (arg.type === "placeholder") {
-          return ts.raw("__pipeArg");
-        }
-        return this.processNode(arg as AgencyNode);
-      });
-      const callee = ts.raw(mapFunctionName(right.functionName));
-      return ts.await(ts.call(ts.raw("__pipeBind"), [
-        left,
-        ts.arrowFn([{ name: "__pipeArg" }], ts.call(callee, processedArgs), { async: true }),
-      ]));
-    }
-
-    throw new Error(`Right side of |> must be a function reference or function call, got '${right.type}'`);
+    return this.buildPipeBind(left, node.right);
   }
 
   private processIfElseWithSteps(node: IfElse): TsNode {
@@ -2393,24 +2360,43 @@ export class TypeScriptBuilder {
 
   /**
    * Build a single __pipeBind call: await __pipeBind(leftIR, async (__pipeArg) => stage(__pipeArg))
+   * For Agency functions, appends the __state config so interrupts work.
    */
   private buildPipeBind(leftIR: TsNode, stage: Expression): TsNode {
-    const lambda = (callee: TsNode, args: TsNode[]) =>
-      ts.arrowFn([{ name: "__pipeArg" }], ts.call(callee, args), { async: true });
+    const pipeArg = ts.raw("__pipeArg");
+
+    const buildCall = (funcName: string, callee: TsNode, args: TsNode[]) => {
+      if (this.isAgencyFunction(funcName, "topLevelStatement")) {
+        const configObj = ts.functionCallConfig({
+          ctx: ts.runtime.ctx,
+          threads: ts.newThreadStore(),
+          interruptData: ts.raw("__state?.interruptData"),
+        });
+        return ts.call(callee, [...args, configObj]);
+      }
+      return ts.call(callee, args);
+    };
+
+    const wrapInPipeBind = (callNode: TsNode) =>
+      ts.await(ts.call(ts.raw("__pipeBind"), [
+        leftIR,
+        ts.arrowFn([{ name: "__pipeArg" }], callNode, { async: true }),
+      ]));
 
     if (stage.type === "valueAccess" || stage.type === "variableName") {
-      return ts.await(ts.call(ts.raw("__pipeBind"), [
-        leftIR, lambda(this.processNode(stage), [ts.raw("__pipeArg")]),
-      ]));
+      const funcName = stage.type === "variableName" ? stage.value : "";
+      const callee = this.processNode(stage);
+      return wrapInPipeBind(buildCall(funcName, callee, [pipeArg]));
     }
+
     if (stage.type === "functionCall") {
       const args = stage.arguments.map((a) =>
-        a.type === "placeholder" ? ts.raw("__pipeArg") : this.processNode(a as AgencyNode)
+        a.type === "placeholder" ? pipeArg : this.processNode(a as AgencyNode)
       );
-      return ts.await(ts.call(ts.raw("__pipeBind"), [
-        leftIR, lambda(ts.raw(mapFunctionName(stage.functionName)), args),
-      ]));
+      const callee = ts.raw(mapFunctionName(stage.functionName));
+      return wrapInPipeBind(buildCall(stage.functionName, callee, args));
     }
+
     throw new Error(`Invalid pipe stage type: ${stage.type}`);
   }
 
@@ -2418,24 +2404,59 @@ export class TypeScriptBuilder {
    * Expand a pipe chain assignment into multiple IR parts, one per stage.
    * Each part becomes its own runner step so interrupts don't replay earlier stages.
    */
-  private expandPipeChain(stmt: Assignment, stages: Expression[]): TsNode[][] {
+  private expandPipeChain(stmt: Assignment, stages: Expression[]): TsNode[] {
     const tempName = `__pipe_${this._pipeCounter++}`;
     const tempVar = ts.scopedVar(tempName, "local");
     const targetVar = this.buildAssignmentLhs(stmt.scope!, stmt.variableName, stmt.accessChain);
-    const parts: TsNode[][] = [];
+    const nodes: TsNode[] = [];
 
-    // Initial expression → temp
-    parts.push([ts.assign(tempVar, this.processNode(stages[0]))]);
+    // Step 0: evaluate initial expression into temp (plain step)
+    nodes.push(ts.runnerStep({ id: 0, body: [ts.assign(tempVar, this.processNode(stages[0]))] }));
 
-    // Intermediate stages → temp
+    // Steps 1..N-1: pipe intermediate stages via runner.pipe()
     for (let i = 1; i < stages.length - 1; i++) {
-      parts.push([ts.assign(tempVar, this.buildPipeBind(tempVar, stages[i]))]);
+      nodes.push(ts.runnerPipe({ id: i, target: tempVar, input: tempVar, fn: this.buildPipeLambda(stages[i]) }));
     }
 
-    // Final stage → target variable
-    parts.push([ts.assign(targetVar, this.buildPipeBind(tempVar, stages[stages.length - 1]))]);
+    // Final step: pipe last stage into target variable
+    const lastIdx = stages.length - 1;
+    nodes.push(ts.runnerPipe({ id: lastIdx, target: targetVar, input: tempVar, fn: this.buildPipeLambda(stages[lastIdx]) }));
 
-    return parts;
+    return nodes;
+  }
+
+  private buildPipeLambda(stage: Expression): TsNode {
+    const pipeArg = ts.raw("__pipeArg");
+
+    if (stage.type === "valueAccess" || stage.type === "variableName") {
+      const funcName = stage.type === "variableName" ? stage.value : "";
+      const callee = this.processNode(stage);
+      const args = [pipeArg, ...this.buildPipeStateArgs(funcName)];
+      return ts.arrowFn([{ name: "__pipeArg" }], ts.call(callee, args), { async: true });
+    }
+
+    if (stage.type === "functionCall") {
+      const args = stage.arguments.map((a) =>
+        a.type === "placeholder" ? pipeArg : this.processNode(a as AgencyNode)
+      );
+      const callee = ts.raw(mapFunctionName(stage.functionName));
+      return ts.arrowFn(
+        [{ name: "__pipeArg" }],
+        ts.call(callee, [...args, ...this.buildPipeStateArgs(stage.functionName)]),
+        { async: true },
+      );
+    }
+
+    throw new Error(`Invalid pipe stage type: ${stage.type}`);
+  }
+
+  private buildPipeStateArgs(funcName: string): TsNode[] {
+    if (!this.isAgencyFunction(funcName, "topLevelStatement")) return [];
+    return [ts.functionCallConfig({
+      ctx: ts.runtime.ctx,
+      threads: ts.newThreadStore(),
+      interruptData: ts.raw("__state?.interruptData"),
+    })];
   }
 
   // ── Body processing ──
@@ -2444,50 +2465,66 @@ export class TypeScriptBuilder {
     body: AgencyNode[],
     opts: { isInSafeFunction?: boolean } = {},
   ): TsNode[] {
-    const parts: TsNode[][] = [];
+    const result: TsNode[] = [];
     const branchKeys: Record<number, string> = {};
+
+    // Track the current "part" being built (for non-pipe statements)
+    let currentPart: TsNode[] | null = null;
+
+    const flushPart = () => {
+      if (currentPart) {
+        const id = result.length;
+        if (branchKeys[id]) {
+          result.push(ts.runnerBranchStep({ id, branchKey: branchKeys[id], body: currentPart }));
+        } else {
+          result.push(ts.runnerStep({ id, body: currentPart }));
+        }
+        currentPart = null;
+      }
+    };
+
     for (const stmt of body) {
-      // Pipe chains get expanded into multiple steps
+      // Pipe chains produce pre-formed runner nodes
       const pipeStages = this.getPipeChainStages(stmt);
       if (pipeStages) {
-        for (const part of this.expandPipeChain(stmt as Assignment, pipeStages)) {
-          const stepIndex = parts.length;
-          this._subStepPath.push(stepIndex);
-          parts.push(part);
+        flushPart();
+        const pipeNodes = this.expandPipeChain(stmt as Assignment, pipeStages);
+        // Renumber IDs based on position in result array
+        for (const node of pipeNodes) {
+          const id = result.length;
+          if (node.kind === "runnerStep") node.id = id;
+          if (node.kind === "runnerPipe") node.id = id;
+          this._subStepPath.push(id);
+          result.push(node);
           this._subStepPath.pop();
         }
         continue;
       }
 
       if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type)) {
-        parts.push([]);
+        flushPart();
+        currentPart = [];
       }
 
-      const stepIndex = parts.length - 1;
+      const stepIndex = result.length;
       this._subStepPath.push(stepIndex);
       if (!opts.isInSafeFunction && this.containsImpureCall(stmt)) {
-        if (parts.length === 0) parts.push([]);
-        parts[parts.length - 1].push(
-          ts.assign(ts.self("__retryable"), ts.bool(false)),
-        );
+        if (!currentPart) currentPart = [];
+        currentPart.push(ts.assign(ts.self("__retryable"), ts.bool(false)));
       }
       const processed = this.processStatement(stmt);
-      if (parts.length === 0) parts.push([]);
-
-      parts[parts.length - 1].push(processed);
+      if (!currentPart) currentPart = [];
+      currentPart.push(processed);
       if (this._asyncBranchCheckNeeded) {
-        branchKeys[stepIndex] = this._subStepPath.join("_");
+        branchKeys[result.length] = this._subStepPath.join("_");
         this._asyncBranchCheckNeeded = false;
       }
       this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
       this._subStepPath.pop();
     }
-    return parts.map((part, i) => {
-      if (branchKeys[i]) {
-        return ts.runnerBranchStep({ id: i, branchKey: branchKeys[i], body: part });
-      }
-      return ts.runnerStep({ id: i, body: part });
-    });
+
+    flushPart();
+    return result;
   }
 
   // ------- Imports and pre/post processing -------

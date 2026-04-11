@@ -44,6 +44,7 @@ import type {
   TsRunnerLoop,
   TsRunnerWhileLoop,
   TsRunnerBranchStep,
+  TsRunnerPipe,
   TsEmpty,
   TsBreak,
   TsContinue,
@@ -395,6 +396,10 @@ export const ts = {
 
   runnerDebugger(opts: { id: number; label: string }): TsRunnerDebugger {
     return { kind: "runnerDebugger", ...opts };
+  },
+
+  runnerPipe(opts: { id: number; target: TsNode; input: TsNode; fn: TsNode }): TsRunnerPipe {
+    return { kind: "runnerPipe", ...opts };
   },
 
   empty(): TsEmpty {

@@ -372,25 +372,45 @@ let __functionCompleted = false;
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "pipe-operator.agency", scopeName: "main" });
   await runner.step(0, async (runner) => {
-__stack.locals.r1 = await __pipeBind(await success(5), async (__pipeArg) => double(__pipeArg));
+__stack.locals.r1 = await __pipeBind(await success(5), async (__pipeArg) => double(__pipeArg, {
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    }));
   });
   await runner.step(1, async (runner) => {
-__stack.locals.r2 = await __pipeBind(await success(5), async (__pipeArg) => multiply(10, __pipeArg));
+__stack.locals.r2 = await __pipeBind(await success(5), async (__pipeArg) => multiply(10, __pipeArg, {
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    }));
   });
   await runner.step(2, async (runner) => {
 __stack.locals.__pipe_0 = await success(10);
   });
-  await runner.step(3, async (runner) => {
-__stack.locals.__pipe_0 = await __pipeBind(__stack.locals.__pipe_0, async (__pipeArg) => double(__pipeArg));
-  });
-  await runner.step(4, async (runner) => {
-__stack.locals.r3 = await __pipeBind(__stack.locals.__pipe_0, async (__pipeArg) => multiply(3, __pipeArg));
-  });
+  __stack.locals.__pipe_0 = await runner.pipe(3, __stack.locals.__pipe_0, async (__pipeArg) => double(__pipeArg, {
+    ctx: __ctx,
+    threads: new ThreadStore(),
+    interruptData: __state?.interruptData
+  }));
+  __stack.locals.r3 = await runner.pipe(4, __stack.locals.__pipe_0, async (__pipeArg) => multiply(3, __pipeArg, {
+    ctx: __ctx,
+    threads: new ThreadStore(),
+    interruptData: __state?.interruptData
+  }));
   await runner.step(5, async (runner) => {
-__stack.locals.r4 = await __pipeBind(await failure(`nope`), async (__pipeArg) => double(__pipeArg));
+__stack.locals.r4 = await __pipeBind(await failure(`nope`), async (__pipeArg) => double(__pipeArg, {
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    }));
   });
   await runner.step(6, async (runner) => {
-__stack.locals.r5 = await __pipeBind(await success(10), async (__pipeArg) => safeDivide(__pipeArg, 2));
+__stack.locals.r5 = await __pipeBind(await success(10), async (__pipeArg) => safeDivide(__pipeArg, 2, {
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    }));
   });
   if (runner.halted) return runner.haltResult;
   await callHook({

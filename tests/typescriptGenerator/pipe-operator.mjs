@@ -378,12 +378,18 @@ __stack.locals.r1 = await __pipeBind(await success(5), async (__pipeArg) => doub
 __stack.locals.r2 = await __pipeBind(await success(5), async (__pipeArg) => multiply(10, __pipeArg));
   });
   await runner.step(2, async (runner) => {
-__stack.locals.r3 = await __pipeBind(await __pipeBind(await success(10), async (__pipeArg) => double(__pipeArg)), async (__pipeArg) => multiply(3, __pipeArg));
+__stack.locals.__pipe_0 = await success(10);
   });
   await runner.step(3, async (runner) => {
-__stack.locals.r4 = await __pipeBind(await failure(`nope`), async (__pipeArg) => double(__pipeArg));
+__stack.locals.__pipe_0 = await __pipeBind(__stack.locals.__pipe_0, async (__pipeArg) => double(__pipeArg));
   });
   await runner.step(4, async (runner) => {
+__stack.locals.r3 = await __pipeBind(__stack.locals.__pipe_0, async (__pipeArg) => multiply(3, __pipeArg));
+  });
+  await runner.step(5, async (runner) => {
+__stack.locals.r4 = await __pipeBind(await failure(`nope`), async (__pipeArg) => double(__pipeArg));
+  });
+  await runner.step(6, async (runner) => {
 __stack.locals.r5 = await __pipeBind(await success(10), async (__pipeArg) => safeDivide(__pipeArg, 2));
   });
   if (runner.halted) return runner.haltResult;
@@ -424,4 +430,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"pipe-operator.agency:double":{"0":{"line":-1,"col":2}},"pipe-operator.agency:multiply":{"0":{"line":3,"col":2}},"pipe-operator.agency:safeDivide":{"0":{"line":7,"col":2},"1":{"line":10,"col":2},"0.0":{"line":8,"col":4}},"pipe-operator.agency:main":{"0":{"line":14,"col":2},"1":{"line":15,"col":2},"2":{"line":16,"col":2},"3":{"line":17,"col":2},"4":{"line":18,"col":2}}};
+export const __sourceMap = {"pipe-operator.agency:double":{"0":{"line":-1,"col":2}},"pipe-operator.agency:multiply":{"0":{"line":3,"col":2}},"pipe-operator.agency:safeDivide":{"0":{"line":7,"col":2},"1":{"line":10,"col":2},"0.0":{"line":8,"col":4}},"pipe-operator.agency:main":{"0":{"line":14,"col":2},"1":{"line":15,"col":2},"5":{"line":17,"col":2},"6":{"line":18,"col":2}}};

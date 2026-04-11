@@ -2367,14 +2367,98 @@ export class TypeScriptBuilder {
     return expanded;
   }
 
+  // ── Pipe chain splitting ──
+
+  private _pipeCounter = 0;
+
+  /**
+   * Walk a left-recursive |> tree and return [initial, stage1, stage2, ...].
+   * Returns null if the expression is not a pipe chain (2+ pipes).
+   */
+  private getPipeChainStages(node: AgencyNode): Expression[] | null {
+    if (node.type !== "assignment") return null;
+    const expr = node.value;
+    if (expr.type !== "binOpExpression" || expr.operator !== "|>") return null;
+    if (expr.left.type !== "binOpExpression" || (expr.left as BinOpExpression).operator !== "|>") return null;
+
+    const stages: Expression[] = [];
+    let current: Expression = expr;
+    while (current.type === "binOpExpression" && (current as BinOpExpression).operator === "|>") {
+      stages.push((current as BinOpExpression).right);
+      current = (current as BinOpExpression).left;
+    }
+    stages.push(current);
+    return stages.reverse();
+  }
+
+  /**
+   * Build a single __pipeBind call: await __pipeBind(leftIR, async (__pipeArg) => stage(__pipeArg))
+   */
+  private buildPipeBind(leftIR: TsNode, stage: Expression): TsNode {
+    const lambda = (callee: TsNode, args: TsNode[]) =>
+      ts.arrowFn([{ name: "__pipeArg" }], ts.call(callee, args), { async: true });
+
+    if (stage.type === "valueAccess" || stage.type === "variableName") {
+      return ts.await(ts.call(ts.raw("__pipeBind"), [
+        leftIR, lambda(this.processNode(stage), [ts.raw("__pipeArg")]),
+      ]));
+    }
+    if (stage.type === "functionCall") {
+      const args = stage.arguments.map((a) =>
+        a.type === "placeholder" ? ts.raw("__pipeArg") : this.processNode(a as AgencyNode)
+      );
+      return ts.await(ts.call(ts.raw("__pipeBind"), [
+        leftIR, lambda(ts.raw(mapFunctionName(stage.functionName)), args),
+      ]));
+    }
+    throw new Error(`Invalid pipe stage type: ${stage.type}`);
+  }
+
+  /**
+   * Expand a pipe chain assignment into multiple IR parts, one per stage.
+   * Each part becomes its own runner step so interrupts don't replay earlier stages.
+   */
+  private expandPipeChain(stmt: Assignment, stages: Expression[]): TsNode[][] {
+    const tempName = `__pipe_${this._pipeCounter++}`;
+    const tempVar = ts.scopedVar(tempName, "local");
+    const targetVar = this.buildAssignmentLhs(stmt.scope!, stmt.variableName, stmt.accessChain);
+    const parts: TsNode[][] = [];
+
+    // Initial expression → temp
+    parts.push([ts.assign(tempVar, this.processNode(stages[0]))]);
+
+    // Intermediate stages → temp
+    for (let i = 1; i < stages.length - 1; i++) {
+      parts.push([ts.assign(tempVar, this.buildPipeBind(tempVar, stages[i]))]);
+    }
+
+    // Final stage → target variable
+    parts.push([ts.assign(targetVar, this.buildPipeBind(tempVar, stages[stages.length - 1]))]);
+
+    return parts;
+  }
+
+  // ── Body processing ──
+
   private processBodyAsParts(
     body: AgencyNode[],
     opts: { isInSafeFunction?: boolean } = {},
   ): TsNode[] {
     const parts: TsNode[][] = [];
-    // Maps step index to the branch key (subStepPath) captured at processing time
     const branchKeys: Record<number, string> = {};
     for (const stmt of body) {
+      // Pipe chains get expanded into multiple steps
+      const pipeStages = this.getPipeChainStages(stmt);
+      if (pipeStages) {
+        for (const part of this.expandPipeChain(stmt as Assignment, pipeStages)) {
+          const stepIndex = parts.length;
+          this._subStepPath.push(stepIndex);
+          parts.push(part);
+          this._subStepPath.pop();
+        }
+        continue;
+      }
+
       if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type)) {
         parts.push([]);
       }

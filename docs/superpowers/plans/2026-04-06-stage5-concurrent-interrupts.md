@@ -190,6 +190,20 @@ Compiled modules export `isInterruptBatch`, `respondToBatch` alongside existing 
 - Single interrupt (no fork) still works with `isInterrupt` / `approveInterrupt`
 - Existing interrupt tests all pass unchanged
 
+## Known Bug: Branch Stack Isolation for Nested Function Calls
+
+`processForkCall()` builds a fork block that receives `__forkBranchStack`, but the compiled block body does not pass that stack through to nested Agency function calls. Those calls default to `__ctx.stateStack` via `setupFunction`, which is the shared global stack — not the per-branch stack.
+
+**Impact:** For simple cases (no interrupts, or interrupts directly in the fork body), this works because the function frames are pushed/popped synchronously within a single branch's execution. But for multi-step functions that interrupt inside a fork body and then resume, the deserialized state won't be found on the correct stack.
+
+**Fix:** Plumb `__forkBranchStack` into the generated call configs. The builder should compile the fork body with a `stateStack` override so that `generateFunctionCallExpression` passes `stateStack: __forkBranchStack` for Agency function calls inside the block. This is the same pattern used by the existing async branch code (which passes `stateStack: ts.id("__forked")`).
+
+**Test case:** A fork where a nested function call has multiple steps and interrupts mid-execution, then resumes. The interrupt serialization and resume must use the branch-specific stack.
+
+## Additional Bug: Race Branch Cancellation
+
+In `runner.fork()` with mode "race", losing branches are not cancelled after the first promise resolves. They continue running in the background and may trigger LLM calls, tool calls, or interrupts whose results are discarded. Consider adding `AbortController` support plumbed into block execution, checked before LLM/tool calls.
+
 ## Files to Modify
 
 | File | Change |

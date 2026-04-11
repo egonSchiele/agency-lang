@@ -9,7 +9,6 @@ import { nanoid } from "nanoid";
 import { SmolPromptConfig } from "@/index.js";
 import { callHook } from "../hooks.js";
 import type { AgencyCallbacks } from "../hooks.js";
-import type { AuditEntry, AuditEntryInput } from "../audit.js";
 import type { HandlerFn } from "../types.js";
 import type { DebuggerState } from "../../debugger/debuggerState.js";
 import type { TraceWriter } from "../trace/traceWriter.js";
@@ -209,12 +208,4 @@ export class RuntimeContext<T> {
     return { ...this.smoltalkDefaults, ...config };
   }
 
-  async audit(entry: AuditEntryInput): Promise<void> {
-    const fullEntry = { ...entry, timestamp: Date.now() };
-    await callHook({
-      callbacks: this.callbacks,
-      name: "onAuditLog",
-      data: fullEntry as AuditEntry,
-    });
-  }
 }

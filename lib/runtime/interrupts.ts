@@ -116,48 +116,16 @@ export async function interruptWithHandlers<T = any>(
   for (let i = ctx.handlers.length - 1; i >= 0; i--) {
     const result = await ctx.handlers[i](data);
     if (result === undefined) {
-      await ctx.audit({
-        type: "handlerResult",
-        handlerIndex: i,
-        data,
-        result: "passthrough",
-      });
       continue;
     }
     if (result.type === "rejected") {
-      await ctx.audit({
-        type: "handlerResult",
-        handlerIndex: i,
-        data,
-        result: "rejected",
-        value: result.value,
-      });
-      await ctx.audit({
-        type: "handlerDecision",
-        data,
-        decision: "rejected",
-        value: result.value,
-      });
       return { type: "rejected", value: result.value };
     }
     if (result.type === "propagated") {
-      await ctx.audit({
-        type: "handlerResult",
-        handlerIndex: i,
-        data,
-        result: "propagated",
-      });
       hasPropagation = true;
       continue;
     }
     if (result.type === "approved") {
-      await ctx.audit({
-        type: "handlerResult",
-        handlerIndex: i,
-        data,
-        result: "approved",
-        value: result.value,
-      });
       hasApproval = true;
       approvedValue = result.value;
       continue;
@@ -167,19 +135,11 @@ export async function interruptWithHandlers<T = any>(
     );
   }
   if (hasPropagation) {
-    await ctx.audit({ type: "handlerDecision", data, decision: "propagated" });
     return interrupt(data);
   }
   if (hasApproval) {
-    await ctx.audit({
-      type: "handlerDecision",
-      data,
-      decision: "approved",
-      value: approvedValue,
-    });
     return { type: "approved", value: approvedValue };
   }
-  await ctx.audit({ type: "handlerDecision", data, decision: "unhandled" });
   return interrupt(data);
 }
 
@@ -231,11 +191,6 @@ export async function respondToInterrupt(args: {
 
   if (args.overrides) {
     applyOverrides(checkpoint, args.overrides);
-    await ctx.audit({
-      type: "override",
-      overrides: args.overrides,
-      source: "interrupt",
-    });
   }
 
   const execCtx = ctx.createExecutionContext();
@@ -266,7 +221,6 @@ export async function respondToInterrupt(args: {
   }
 
   let nodeName = checkpoint.nodeId;
-  await execCtx.audit({ type: "interrupt", nodeName, args: interruptResponse });
   try {
     while (true) {
       try {
@@ -289,11 +243,6 @@ export async function respondToInterrupt(args: {
         if (e instanceof RestoreSignal) {
           const cp = e.checkpoint;
           execCtx.restoreState(cp);
-          await execCtx.audit({
-            type: "restore",
-            checkpointId: cp.id,
-            nodeName: cp.nodeId,
-          });
           nodeName = cp.nodeId;
           execCtx.stateStack.nodesTraversed = [cp.nodeId];
           continue;
@@ -438,11 +387,6 @@ export async function resumeFromState(args: {
         if (e instanceof RestoreSignal) {
           const cp = e.checkpoint;
           execCtx.restoreState(cp);
-          await execCtx.audit({
-            type: "restore",
-            checkpointId: cp.id,
-            nodeName: cp.nodeId,
-          });
           nodeName = cp.nodeId;
           execCtx.stateStack.nodesTraversed = [cp.nodeId];
           continue;

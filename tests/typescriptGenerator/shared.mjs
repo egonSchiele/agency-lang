@@ -123,11 +123,6 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "shared.agency", scopeName: "main" });
   await runner.step(0, async (runner) => {
 foo = foo + 1;
-await __ctx.audit({
-      type: "assignment",
-      variable: "foo",
-      value: foo
-    })
   });
   if (runner.halted) return runner.haltResult;
   await callHook({

@@ -139,11 +139,6 @@ if (isInterrupt(__stack.locals.greeting)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__self.__removedTools",
-      value: __self.__removedTools
-    })
   });
   await runner.step(1, async (runner) => {
 __functionCompleted = true;
@@ -155,11 +150,6 @@ runner.halt(goToNode("processGreeting", {
       }
     }))
 return;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__functionCompleted",
-      value: __functionCompleted
-    })
   });
   if (runner.halted) return runner.haltResult;
   await callHook({
@@ -219,11 +209,6 @@ if (isInterrupt(__stack.locals.result)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__self.__removedTools",
-      value: __self.__removedTools
-    })
   });
   await runner.step(1, async (runner) => {
 await print(__stack.locals.result)
@@ -271,11 +256,6 @@ runner.halt(goToNode("greet", {
       data: {}
     }))
 return;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__functionCompleted",
-      value: __functionCompleted
-    })
   });
   if (runner.halted) return runner.haltResult;
   await callHook({

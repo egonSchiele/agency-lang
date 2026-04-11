@@ -148,12 +148,6 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "greet",
-    args: {},
-    result: undefined
-  })
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "comments.agency", scopeName: "greet" });
   try {
@@ -162,27 +156,12 @@ let __functionCompleted = false;
     });
     await runner.step(1, async (runner) => {
 __stack.locals.message = `Hello, World!`;
-await __ctx.audit({
-        type: "assignment",
-        variable: "__stack.locals.message",
-        value: __stack.locals.message
-      })
 //  Another comment
     });
     await runner.step(2, async (runner) => {
-const __returnValue = __stack.locals.message;
-await __ctx.audit({
-        type: "return",
-        value: __returnValue
-      })
 __functionCompleted = true;
-runner.halt(__returnValue)
+runner.halt(__stack.locals.message)
 return;
-await __ctx.audit({
-        type: "assignment",
-        variable: "__returnValue",
-        value: __returnValue
-      })
     });
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -246,11 +225,6 @@ if (isInterrupt(__stack.locals.result)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.result",
-      value: __stack.locals.result
-    })
   });
   await runner.step(2, async (runner) => {
 await print(__stack.locals.result)
@@ -258,20 +232,10 @@ await print(__stack.locals.result)
   });
   await runner.step(3, async (runner) => {
 __stack.locals.age = 25;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.age",
-      value: __stack.locals.age
-    })
 //  2. Before conditionals
   });
   await runner.step(4, async (runner) => {
 __stack.locals.status = `active`;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.status",
-      value: __stack.locals.status
-    })
   });
   await runner.step(5, async (runner) => {
 await runner.ifElse(5, [

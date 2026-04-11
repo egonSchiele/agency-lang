@@ -132,11 +132,6 @@ if (isInterrupt(__stack.locals.name)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.name",
-      value: __stack.locals.name
-    })
   });
   await runner.step(2, async (runner) => {
 await print(`Hello, ${__stack.locals.name}!`)

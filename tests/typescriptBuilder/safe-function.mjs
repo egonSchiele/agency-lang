@@ -159,32 +159,14 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "safeLookup",
-    args: {
-      id: id
-    },
-    result: undefined
-  })
   __stack.args["id"] = id;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "safe-function.agency", scopeName: "safeLookup" });
   try {
     await runner.step(0, async (runner) => {
-const __returnValue = await lookupItem(__stack.args.id);
-await __ctx.audit({
-        type: "return",
-        value: __returnValue
-      })
 __functionCompleted = true;
-runner.halt(__returnValue)
+runner.halt(await lookupItem(__stack.args.id))
 return;
-await __ctx.audit({
-        type: "assignment",
-        variable: "__returnValue",
-        value: __returnValue
-      })
     });
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -239,14 +221,6 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "unsafeSave",
-    args: {
-      id: id
-    },
-    result: undefined
-  })
   __stack.args["id"] = id;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "safe-function.agency", scopeName: "unsafeSave" });
@@ -256,19 +230,9 @@ __self.__retryable = false;
 await saveItem(__stack.args.id)
     });
     await runner.step(1, async (runner) => {
-const __returnValue = await lookupItem(__stack.args.id);
-await __ctx.audit({
-        type: "return",
-        value: __returnValue
-      })
 __functionCompleted = true;
-runner.halt(__returnValue)
+runner.halt(await lookupItem(__stack.args.id))
 return;
-await __ctx.audit({
-        type: "assignment",
-        variable: "__returnValue",
-        value: __returnValue
-      })
     });
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -338,28 +302,13 @@ if (isInterrupt(__stack.locals.result)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__self.__removedTools",
-      value: __self.__removedTools
-    })
   });
   await runner.step(1, async (runner) => {
-const __returnValue = __stack.locals.result;
-await __ctx.audit({
-      type: "return",
-      value: __returnValue
-    })
 runner.halt({
       messages: __threads,
-      data: __returnValue
+      data: __stack.locals.result
     })
 return;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__returnValue",
-      value: __returnValue
-    })
   });
   if (runner.halted) return runner.haltResult;
   await callHook({

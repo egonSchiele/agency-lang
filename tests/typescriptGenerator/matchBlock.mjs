@@ -125,11 +125,6 @@ let __functionCompleted = false;
   });
   await runner.step(1, async (runner) => {
 __stack.locals.action = `start`;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.action",
-      value: __stack.locals.action
-    })
   });
   await runner.step(2, async (runner) => {
 await runner.ifElse(2, [
@@ -158,11 +153,6 @@ await print(`Unknown action`)
   });
   await runner.step(3, async (runner) => {
 __stack.locals.statusCode = 200;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.statusCode",
-      value: __stack.locals.statusCode
-    })
   });
   await runner.step(4, async (runner) => {
 await runner.ifElse(4, [
@@ -191,19 +181,9 @@ await print(`Unknown status`)
   });
   await runner.step(5, async (runner) => {
 __stack.locals.grade = `A`;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.grade",
-      value: __stack.locals.grade
-    })
   });
   await runner.step(6, async (runner) => {
 __stack.locals.points = 0;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.points",
-      value: __stack.locals.points
-    })
   });
   await runner.step(7, async (runner) => {
 await runner.ifElse(7, [
@@ -238,11 +218,6 @@ __stack.locals.e = 0;
   });
   await runner.step(8, async (runner) => {
 __stack.locals.level = `debug`;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.level",
-      value: __stack.locals.level
-    })
   });
   await runner.step(9, async (runner) => {
 await runner.ifElse(9, [
@@ -275,11 +250,6 @@ await print(`Error level`)
   });
   await runner.step(10, async (runner) => {
 __stack.locals.resultType = `array`;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.resultType",
-      value: __stack.locals.resultType
-    })
   });
   await runner.step(11, async (runner) => {
 await runner.ifElse(11, [
@@ -305,11 +275,6 @@ __stack.locals.data3 = [];
   });
   await runner.step(12, async (runner) => {
 __stack.locals.format = `json`;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.format",
-      value: __stack.locals.format
-    })
   });
   await runner.step(13, async (runner) => {
 await runner.ifElse(13, [

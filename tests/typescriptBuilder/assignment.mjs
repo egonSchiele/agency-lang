@@ -142,11 +142,6 @@ if (isInterrupt(__stack.locals.bar)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__self.__removedTools",
-      value: __self.__removedTools
-    })
   });
   if (runner.halted) return runner.haltResult;
   await callHook({

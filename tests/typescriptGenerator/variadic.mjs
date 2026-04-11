@@ -143,15 +143,6 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "log",
-    args: {
-      prefix: prefix,
-      messages: messages
-    },
-    result: undefined
-  })
   __stack.args["prefix"] = prefix;
   __stack.args["messages"] = messages;
   __self.__retryable = __self.__retryable ?? true;

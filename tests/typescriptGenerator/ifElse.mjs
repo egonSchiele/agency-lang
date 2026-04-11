@@ -124,11 +124,6 @@ let __functionCompleted = false;
   });
   await runner.step(1, async (runner) => {
 __stack.locals.flag = true;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.flag",
-      value: __stack.locals.flag
-    })
   });
   await runner.step(2, async (runner) => {
 await runner.ifElse(2, [
@@ -137,11 +132,6 @@ await runner.ifElse(2, [
         body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `condition was true`;
-await __ctx.audit({
-              type: "assignment",
-              variable: "__stack.locals.result",
-              value: __stack.locals.result
-            })
           });
         },
       }
@@ -154,11 +144,6 @@ await runner.ifElse(3, [
         body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.status = `ready`;
-await __ctx.audit({
-              type: "assignment",
-              variable: "__stack.locals.status",
-              value: __stack.locals.status
-            })
           });
         },
       }
@@ -169,11 +154,6 @@ await __ctx.audit({
 __stack.locals.obj = {
       "active": true
     };
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.obj",
-      value: __stack.locals.obj
-    })
   });
   await runner.step(5, async (runner) => {
 await runner.ifElse(5, [
@@ -182,11 +162,6 @@ await runner.ifElse(5, [
         body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.message = `object is active`;
-await __ctx.audit({
-              type: "assignment",
-              variable: "__stack.locals.message",
-              value: __stack.locals.message
-            })
           });
         },
       }
@@ -195,11 +170,6 @@ await __ctx.audit({
   });
   await runner.step(6, async (runner) => {
 __stack.locals.outer = true;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.outer",
-      value: __stack.locals.outer
-    })
   });
   await runner.step(7, async (runner) => {
 await runner.ifElse(7, [
@@ -208,11 +178,6 @@ await runner.ifElse(7, [
         body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.inner = false;
-await __ctx.audit({
-              type: "assignment",
-              variable: "__stack.locals.inner",
-              value: __stack.locals.inner
-            })
           });
 await runner.step(1, async (runner) => {
 await runner.ifElse(1, [
@@ -221,11 +186,6 @@ await runner.ifElse(1, [
                 body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.nested = `both true`;
-await __ctx.audit({
-                      type: "assignment",
-                      variable: "__stack.locals.nested",
-                      value: __stack.locals.nested
-                    })
                   });
                 },
               }
@@ -244,11 +204,6 @@ await __ctx.audit({
   });
   await runner.step(8, async (runner) => {
 __stack.locals.condition = true;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.condition",
-      value: __stack.locals.condition
-    })
   });
   await runner.step(9, async (runner) => {
 await runner.ifElse(9, [
@@ -257,27 +212,12 @@ await runner.ifElse(9, [
         body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.a = 1;
-await __ctx.audit({
-              type: "assignment",
-              variable: "__stack.locals.a",
-              value: __stack.locals.a
-            })
           });
 await runner.step(1, async (runner) => {
 __stack.locals.b = 2;
-await __ctx.audit({
-              type: "assignment",
-              variable: "__stack.locals.b",
-              value: __stack.locals.b
-            })
           });
 await runner.step(2, async (runner) => {
 __stack.locals.c = 3;
-await __ctx.audit({
-              type: "assignment",
-              variable: "__stack.locals.c",
-              value: __stack.locals.c
-            })
           });
         },
       }
@@ -286,11 +226,6 @@ await __ctx.audit({
   });
   await runner.step(10, async (runner) => {
 __stack.locals.value = false;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.value",
-      value: __stack.locals.value
-    })
   });
   await runner.step(11, async (runner) => {
 await runner.ifElse(11, [
@@ -299,19 +234,9 @@ await runner.ifElse(11, [
         body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.x = 10;
-await __ctx.audit({
-              type: "assignment",
-              variable: "__stack.locals.x",
-              value: __stack.locals.x
-            })
           });
 await runner.step(1, async (runner) => {
 __stack.locals.y = 20;
-await __ctx.audit({
-              type: "assignment",
-              variable: "__stack.locals.y",
-              value: __stack.locals.y
-            })
           });
         },
       }
@@ -325,22 +250,12 @@ await runner.ifElse(12, [
         body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `yes`;
-await __ctx.audit({
-              type: "assignment",
-              variable: "__stack.locals.result",
-              value: __stack.locals.result
-            })
           });
         },
       }
     ], async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `no`;
-await __ctx.audit({
-            type: "assignment",
-            variable: "__stack.locals.result",
-            value: __stack.locals.result
-          })
         });
     });
 //  else if chain
@@ -352,11 +267,6 @@ await runner.ifElse(13, [
         body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `one`;
-await __ctx.audit({
-              type: "assignment",
-              variable: "__stack.locals.result",
-              value: __stack.locals.result
-            })
           });
         },
       },
@@ -365,22 +275,12 @@ await __ctx.audit({
         body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `two`;
-await __ctx.audit({
-              type: "assignment",
-              variable: "__stack.locals.result",
-              value: __stack.locals.result
-            })
           });
         },
       }
     ], async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `other`;
-await __ctx.audit({
-            type: "assignment",
-            variable: "__stack.locals.result",
-            value: __stack.locals.result
-          })
         });
     });
   });

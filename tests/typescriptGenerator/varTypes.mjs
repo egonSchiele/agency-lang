@@ -124,11 +124,6 @@ __stack.locals.person = {
       "name": `Alice`,
       "age": 30
     };
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.person",
-      value: __stack.locals.person
-    })
   });
   await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -153,11 +148,6 @@ if (isInterrupt(__stack.locals.response)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__self.__removedTools",
-      value: __self.__removedTools
-    })
   });
   await runner.step(2, async (runner) => {
 await print(__stack.locals.response)

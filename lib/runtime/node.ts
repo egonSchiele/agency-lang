@@ -107,7 +107,6 @@ export async function runNode({
     name: "onAgentStart",
     data: { nodeName, args: data, messages: messages || [] },
   });
-  await execCtx.audit({ type: "nodeEntry", nodeName });
   let isResume = false;
   try {
     while (true) {
@@ -120,7 +119,6 @@ export async function runNode({
           isResume,
         }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
         await execCtx.pendingPromises.awaitAll();
-        await execCtx.audit({ type: "nodeExit", nodeName });
         const returnObject = createReturnObject({
           result,
           globals: execCtx.globals,
@@ -135,7 +133,6 @@ export async function runNode({
         if (e instanceof RestoreSignal) {
           const cp = e.checkpoint;
           execCtx.restoreState(cp);
-          await execCtx.audit({ type: "restore", checkpointId: cp.id, nodeName: cp.nodeId });
           nodeName = cp.nodeId;
           data = {};
           isResume = true;

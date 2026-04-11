@@ -1,8 +1,0 @@
-def double(n: number): number {
-  return n * 2
-}
-
-node main(x: number): number {
-  const result = double(x)
-  return result
-}

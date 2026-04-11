@@ -9,7 +9,6 @@ import type {
   StrategyJSON,
 } from "smoltalk";
 import type { RunNodeResult } from "./types.js";
-import type { AuditEntry } from "./audit.js";
 import type { RewindCheckpoint } from "./rewind.js";
 
 export type CallbackMap = {
@@ -48,7 +47,6 @@ export type CallbackMap = {
     | { type: "tool_call"; toolCall: ToolCallJSON }
     | { type: "done"; result: PromptResult }
     | { type: "error"; error: any };
-  onAuditLog: AuditEntry;
   onCheckpoint: RewindCheckpoint;
 };
 

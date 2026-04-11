@@ -143,29 +143,13 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "greet",
-    args: {},
-    result: undefined
-  })
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "multiLineComment.agency", scopeName: "greet" });
   try {
     await runner.step(0, async (runner) => {
-const __returnValue = `hello`;
-await __ctx.audit({
-        type: "return",
-        value: __returnValue
-      })
 __functionCompleted = true;
-runner.halt(__returnValue)
+runner.halt(`hello`)
 return;
-await __ctx.audit({
-        type: "assignment",
-        variable: "__returnValue",
-        value: __returnValue
-      })
     });
     if (runner.halted) return runner.haltResult;
   } catch (__error) {

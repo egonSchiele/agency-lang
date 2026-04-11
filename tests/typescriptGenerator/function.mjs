@@ -155,22 +155,11 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "test",
-    args: {},
-    result: undefined
-  })
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function.agency", scopeName: "test" });
   try {
     await runner.step(0, async (runner) => {
 __stack.locals.foo = 1;
-await __ctx.audit({
-        type: "assignment",
-        variable: "__stack.locals.foo",
-        value: __stack.locals.foo
-      })
     });
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -225,15 +214,6 @@ let __functionCompleted = false;
       },
       isBuiltin: false
     }
-  })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "add",
-    args: {
-      a: a,
-      b: b
-    },
-    result: undefined
   })
   __stack.args["a"] = a;
   __stack.args["b"] = b;

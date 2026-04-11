@@ -142,14 +142,6 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "compute",
-    args: {
-      val: val
-    },
-    result: undefined
-  })
   __stack.args["val"] = val;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "asyncAssigned.agency", scopeName: "compute" });
@@ -158,19 +150,9 @@ let __functionCompleted = false;
 await sleep(0.1)
     });
     await runner.step(1, async (runner) => {
-const __returnValue = __stack.args.val * 2;
-await __ctx.audit({
-        type: "return",
-        value: __returnValue
-      })
 __functionCompleted = true;
-runner.halt(__returnValue)
+runner.halt(__stack.args.val * 2)
 return;
-await __ctx.audit({
-        type: "assignment",
-        variable: "__returnValue",
-        value: __returnValue
-      })
     });
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -236,11 +218,6 @@ __stack.locals.x = compute(5, {
       isForked: true
     });
 __self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.branches",
-      value: __stack.branches
-    })
   });
   await runner.branchStep(1, "1", async (runner) => {
 if ((__stack.branches && __stack.branches["1"])) {
@@ -261,31 +238,16 @@ __stack.locals.y = compute(10, {
       isForked: true
     });
 __self.__pendingKey_y = __ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.branches",
-      value: __stack.branches
-    })
   });
   await runner.step(2, async (runner) => {
 await __ctx.pendingPromises.awaitPending([__self.__pendingKey_x, __self.__pendingKey_y]);
   });
   await runner.step(3, async (runner) => {
-const __returnValue = [__stack.locals.x, __stack.locals.y];
-await __ctx.audit({
-      type: "return",
-      value: __returnValue
-    })
 runner.halt({
       messages: __threads,
-      data: __returnValue
+      data: [__stack.locals.x, __stack.locals.y]
     })
 return;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__returnValue",
-      value: __returnValue
-    })
   });
   if (runner.halted) return runner.haltResult;
   await callHook({

@@ -142,11 +142,6 @@ if (isInterrupt(__stack.locals.foo)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__self.__removedTools",
-      value: __self.__removedTools
-    })
   });
   await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -171,11 +166,6 @@ if (isInterrupt(__stack.locals.bar)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__self.__removedTools",
-      value: __self.__removedTools
-    })
   });
   await runner.step(2, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -200,11 +190,6 @@ if (isInterrupt(__stack.locals.baz)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__self.__removedTools",
-      value: __self.__removedTools
-    })
   });
   if (runner.halted) return runner.haltResult;
   await callHook({

@@ -142,11 +142,6 @@ if (isInterrupt(__stack.locals.url)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__self.__removedTools",
-      value: __self.__removedTools
-    })
   });
   await runner.step(1, async (runner) => {
 await print(__stack.locals.url)

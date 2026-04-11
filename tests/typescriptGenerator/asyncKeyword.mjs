@@ -172,14 +172,6 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "openai",
-    args: {
-      msg: msg
-    },
-    result: undefined
-  })
   __stack.args["msg"] = msg;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "asyncKeyword.agency", scopeName: "openai" });
@@ -201,26 +193,11 @@ if (isInterrupt(__stack.locals.response)) {
         runner.halt(__stack.locals.response)
         return;
       }
-await __ctx.audit({
-        type: "assignment",
-        variable: "__self.__removedTools",
-        value: __self.__removedTools
-      })
     });
     await runner.step(1, async (runner) => {
-const __returnValue = `OpenAI response: ${__stack.locals.response}`;
-await __ctx.audit({
-        type: "return",
-        value: __returnValue
-      })
 __functionCompleted = true;
-runner.halt(__returnValue)
+runner.halt(`OpenAI response: ${__stack.locals.response}`)
 return;
-await __ctx.audit({
-        type: "assignment",
-        variable: "__returnValue",
-        value: __returnValue
-      })
     });
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -275,14 +252,6 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "google",
-    args: {
-      msg: msg
-    },
-    result: undefined
-  })
   __stack.args["msg"] = msg;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "asyncKeyword.agency", scopeName: "google" });
@@ -309,26 +278,11 @@ if (isInterrupt(__stack.locals.response)) {
         runner.halt(__stack.locals.response)
         return;
       }
-await __ctx.audit({
-        type: "assignment",
-        variable: "__self.__removedTools",
-        value: __self.__removedTools
-      })
     });
     await runner.step(2, async (runner) => {
-const __returnValue = `Google response: ${__stack.locals.response}`;
-await __ctx.audit({
-        type: "return",
-        value: __returnValue
-      })
 __functionCompleted = true;
-runner.halt(__returnValue)
+runner.halt(`Google response: ${__stack.locals.response}`)
 return;
-await __ctx.audit({
-        type: "assignment",
-        variable: "__returnValue",
-        value: __returnValue
-      })
     });
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -381,12 +335,6 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "fibs",
-    args: {},
-    result: undefined
-  })
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "asyncKeyword.agency", scopeName: "fibs" });
   try {
@@ -410,18 +358,9 @@ if (isInterrupt(__stack.locals.__promptVar)) {
         runner.halt(__stack.locals.__promptVar)
         return;
       }
-await __ctx.audit({
-        type: "return",
-        value: __self.__promptVar
-      })
 __functionCompleted = true;
 runner.halt(__self.__promptVar)
 return;
-await __ctx.audit({
-        type: "assignment",
-        variable: "__self.__removedTools",
-        value: __self.__removedTools
-      })
     });
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -478,11 +417,6 @@ if (isInterrupt(__stack.locals.msg)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.msg",
-      value: __stack.locals.msg
-    })
   });
   await runner.branchStep(1, "1", async (runner) => {
 if ((__stack.branches && __stack.branches["1"])) {
@@ -503,11 +437,6 @@ __stack.locals.res2 = google(__stack.locals.msg, {
       isForked: true
     });
 __self.__pendingKey_res2 = __ctx.pendingPromises.add(__stack.locals.res2, (val) => { __stack.locals.res2 = val; });
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.branches",
-      value: __stack.branches
-    })
   });
   await runner.branchStep(2, "2", async (runner) => {
 if ((__stack.branches && __stack.branches["2"])) {
@@ -528,22 +457,12 @@ __stack.locals.res1 = openai(__stack.locals.msg, {
       isForked: true
     });
 __self.__pendingKey_res1 = __ctx.pendingPromises.add(__stack.locals.res1, (val) => { __stack.locals.res1 = val; });
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.branches",
-      value: __stack.branches
-    })
   });
   await runner.step(3, async (runner) => {
 await __ctx.pendingPromises.awaitPending([__self.__pendingKey_res2, __self.__pendingKey_res1]);
   });
   await runner.step(4, async (runner) => {
 __stack.locals.results = Promise.race([__stack.locals.res1, __stack.locals.res2]);
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.results",
-      value: __stack.locals.results
-    })
   });
   await runner.step(5, async (runner) => {
 await printJSON(__stack.locals.results)

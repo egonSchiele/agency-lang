@@ -38,11 +38,6 @@ export async function rewindFrom(args: {
   const checkpoint = deepClone(args.checkpoint);
 
   applyOverrides(checkpoint.checkpoint, overrides);
-  await ctx.audit({
-    type: "override",
-    overrides,
-    source: "rewind",
-  });
 
   const execCtx = ctx.createExecutionContext();
   execCtx.restoreState(checkpoint.checkpoint);
@@ -57,13 +52,6 @@ export async function rewindFrom(args: {
   }
 
   let nodeName = checkpoint.checkpoint.nodeId;
-
-  await execCtx.audit({
-    type: "rewind",
-    nodeName,
-    step: checkpoint.llmCall.step,
-    overrides,
-  });
 
   try {
     while (true) {
@@ -86,11 +74,6 @@ export async function rewindFrom(args: {
         if (e instanceof RestoreSignal) {
           const cp = e.checkpoint;
           execCtx.restoreState(cp);
-          await execCtx.audit({
-            type: "restore",
-            checkpointId: cp.id,
-            nodeName: cp.nodeId,
-          });
           nodeName = cp.nodeId;
           execCtx.stateStack.nodesTraversed = [cp.nodeId];
           continue;

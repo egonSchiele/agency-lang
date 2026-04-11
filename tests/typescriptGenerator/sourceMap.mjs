@@ -142,14 +142,6 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "greet",
-    args: {
-      name: name
-    },
-    result: undefined
-  })
   __stack.args["name"] = name;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "sourceMap.agency", scopeName: "greet" });
@@ -171,26 +163,11 @@ if (isInterrupt(__stack.locals.result)) {
         runner.halt(__stack.locals.result)
         return;
       }
-await __ctx.audit({
-        type: "assignment",
-        variable: "__self.__removedTools",
-        value: __self.__removedTools
-      })
     });
     await runner.step(1, async (runner) => {
-const __returnValue = __stack.locals.result;
-await __ctx.audit({
-        type: "return",
-        value: __returnValue
-      })
 __functionCompleted = true;
-runner.halt(__returnValue)
+runner.halt(__stack.locals.result)
 return;
-await __ctx.audit({
-        type: "assignment",
-        variable: "__returnValue",
-        value: __returnValue
-      })
     });
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -239,11 +216,6 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "sourceMap.agency", scopeName: "main" });
   await runner.step(0, async (runner) => {
 __stack.locals.x = 1;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.x",
-      value: __stack.locals.x
-    })
   });
   await runner.step(1, async (runner) => {
 await runner.ifElse(1, [
@@ -252,22 +224,12 @@ await runner.ifElse(1, [
         body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.y = 2;
-await __ctx.audit({
-              type: "assignment",
-              variable: "__stack.locals.y",
-              value: __stack.locals.y
-            })
           });
         },
       }
     ], async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.y = 3;
-await __ctx.audit({
-            type: "assignment",
-            variable: "__stack.locals.y",
-            value: __stack.locals.y
-          })
         });
     });
   });
@@ -275,11 +237,6 @@ await __ctx.audit({
 await runner.loop(2, [`a`, `b`], async (item, _, runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.z = item;
-await __ctx.audit({
-          type: "assignment",
-          variable: "__stack.locals.z",
-          value: __stack.locals.z
-        })
       });
     });
   });

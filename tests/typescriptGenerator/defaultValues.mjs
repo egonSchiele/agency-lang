@@ -143,15 +143,6 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "greet",
-    args: {
-      name: name,
-      greeting: greeting
-    },
-    result: undefined
-  })
   __stack.args["name"] = name;
   __stack.args["greeting"] = greeting ?? `Hello`;
   __self.__retryable = __self.__retryable ?? true;

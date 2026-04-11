@@ -184,28 +184,13 @@ if (isInterrupt(__stack.locals.greeting)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__self.__removedTools",
-      value: __self.__removedTools
-    })
   });
   await runner.step(2, async (runner) => {
-const __returnValue = __stack.locals.greeting;
-await __ctx.audit({
-      type: "return",
-      value: __returnValue
-    })
 runner.halt({
       messages: __threads,
-      data: __returnValue
+      data: __stack.locals.greeting
     })
 return;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__returnValue",
-      value: __returnValue
-    })
   });
   if (runner.halted) return runner.haltResult;
   await callHook({

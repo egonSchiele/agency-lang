@@ -83,7 +83,6 @@ import {
   mapTypeToZodSchema,
 } from "./typescriptGenerator/typeToZodSchema.js";
 
-import { auditNode, makeAuditCall } from "../ir/audit.js";
 import { $, ts } from "../ir/builders.js";
 import { printTs } from "../ir/prettyPrint.js";
 import type {
@@ -1172,18 +1171,6 @@ export class TypeScriptBuilder {
         args: ts.obj(argsObj),
         isBuiltin: ts.bool(false),
       }),
-      $(ts.runtime.ctx)
-        .prop("audit")
-        .call([
-          ts.obj({
-            type: ts.str("functionCall"),
-            functionName: ts.str(functionName),
-            args: ts.obj(argsObj),
-            result: ts.id("undefined"),
-          }),
-        ])
-        .await()
-        .done(),
     ];
 
     // Param assignments to stack
@@ -1395,15 +1382,7 @@ export class TypeScriptBuilder {
     const isBuiltinFunction = mappedName !== node.functionName;
 
     if (isBuiltinFunction) {
-      // Emit functionCall audit for built-in functions.
-      // User-defined functions get their audit at function entry in processFunctionDefinition.
-      // We don't log arg values here to avoid re-evaluating side-effecting expressions.
-      const auditCall = makeAuditCall("functionCall", {
-        functionName: ts.str(node.functionName),
-        args: ts.obj({}),
-        result: ts.id("undefined"),
-      });
-      return ts.statements([auditCall, ts.await(callNode)]);
+      return ts.await(callNode);
     }
     return callNode;
   }
@@ -1731,7 +1710,6 @@ export class TypeScriptBuilder {
         );
         return ts.statements([
           llmNode,
-          makeAuditCall("return", { value: ts.self(DEFAULT_PROMPT_NAME) }),
           ts.nodeResult(ts.self(DEFAULT_PROMPT_NAME)),
         ]);
       }
@@ -1742,12 +1720,7 @@ export class TypeScriptBuilder {
       ) {
         return valueNode;
       }
-      const tempVar = ts.id("__returnValue");
-      return ts.statements([
-        ts.constDecl("__returnValue", valueNode),
-        makeAuditCall("return", { value: tempVar }),
-        ts.nodeResult(tempVar),
-      ]);
+      return ts.nodeResult(valueNode);
     }
 
     if (
@@ -1767,17 +1740,11 @@ export class TypeScriptBuilder {
       );
       return ts.statements([
         llmNode,
-        makeAuditCall("return", { value: ts.self(DEFAULT_PROMPT_NAME) }),
         ts.functionReturn(ts.self(DEFAULT_PROMPT_NAME)),
       ]);
     }
     const valueNode = this.processNode(node.value);
-    const tempVar = ts.id("__returnValue");
-    return ts.statements([
-      ts.constDecl("__returnValue", valueNode),
-      makeAuditCall("return", { value: tempVar }),
-      ts.functionReturn(tempVar),
-    ]);
+    return ts.functionReturn(valueNode);
   }
 
   private processAssignment(node: Assignment): TsNode {
@@ -2380,20 +2347,7 @@ export class TypeScriptBuilder {
       const processed = this.processStatement(stmt);
       if (parts.length === 0) parts.push([]);
 
-      // Audit logging: inspect the processed node and inject audit calls
-      const audit = auditNode(processed);
-      if (audit) {
-        if (audit.behavior === "replace") {
-          // Replace the original node (e.g., return with temp var + audit + return)
-          parts[parts.length - 1].push(audit.node);
-        } else {
-          // Append: keep original, add audit call after
-          parts[parts.length - 1].push(processed);
-          parts[parts.length - 1].push(audit.node);
-        }
-      } else {
-        parts[parts.length - 1].push(processed);
-      }
+      parts[parts.length - 1].push(processed);
       if (this._asyncBranchCheckNeeded) {
         branchKeys[stepIndex] = this._subStepPath.join("_");
         this._asyncBranchCheckNeeded = false;
@@ -2462,18 +2416,6 @@ export class TypeScriptBuilder {
       ),
       ts.constDecl("graph", $(ts.runtime.globalCtx).prop("graph").done()),
     ]);
-
-    if (this.agencyConfig.audit?.logFile) {
-      const logFile = this.agencyConfig.audit.logFile;
-      runtimeCtx = ts.statements([
-        runtimeCtx,
-        ts.raw(`import { appendFileSync } from "fs";`),
-        ts.raw(`const __auditLogFile = ${JSON.stringify(logFile)};`),
-        ts.raw(
-          `const __defaultonAuditLog = (entry) => { appendFileSync(__auditLogFile, JSON.stringify(entry) + "\\n"); };`,
-        ),
-      ]);
-    }
 
     if (this.agencyConfig.trace) {
       const traceFile = this.agencyConfig.traceFile
@@ -2581,11 +2523,7 @@ export class TypeScriptBuilder {
                   nodeName: ts.str(node.nodeName),
                   data: ts.obj(dataObj),
                   messages: ts.id("messages"),
-                  callbacks: this.agencyConfig.audit?.logFile
-                    ? ts.raw(
-                      "{ onAuditLog: __defaultonAuditLog, ...callbacks }",
-                    )
-                    : ts.id("callbacks"),
+                  callbacks: ts.id("callbacks"),
                   initializeGlobals: ts.id("__initializeGlobals"),
                 }),
               ])

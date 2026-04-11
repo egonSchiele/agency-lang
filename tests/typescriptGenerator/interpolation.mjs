@@ -121,11 +121,6 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interpolation.agency", scopeName: "main" });
   await runner.step(0, async (runner) => {
 __stack.locals.name = `Alice`;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.name",
-      value: __stack.locals.name
-    })
   });
   await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -147,11 +142,6 @@ if (isInterrupt(__stack.locals.greeting)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__self.__removedTools",
-      value: __self.__removedTools
-    })
   });
   await runner.step(2, async (runner) => {
 await print(__stack.locals.greeting)

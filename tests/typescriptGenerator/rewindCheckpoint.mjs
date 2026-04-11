@@ -145,28 +145,13 @@ if (isInterrupt(__stack.locals.mood)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__self.__removedTools",
-      value: __self.__removedTools
-    })
   });
   await runner.step(1, async (runner) => {
-const __returnValue = __stack.locals.mood;
-await __ctx.audit({
-      type: "return",
-      value: __returnValue
-    })
 runner.halt({
       messages: __threads,
-      data: __returnValue
+      data: __stack.locals.mood
     })
 return;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__returnValue",
-      value: __returnValue
-    })
   });
   if (runner.halted) return runner.haltResult;
   await callHook({

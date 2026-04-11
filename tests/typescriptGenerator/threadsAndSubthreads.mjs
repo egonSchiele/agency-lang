@@ -140,12 +140,6 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "foo",
-    args: {},
-    result: undefined
-  })
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "threadsAndSubthreads.agency", scopeName: "foo" });
   try {
@@ -171,11 +165,6 @@ if (isInterrupt(__stack.locals.res1)) {
             runner.halt(__stack.locals.res1)
             return;
           }
-await __ctx.audit({
-            type: "assignment",
-            variable: "__self.__removedTools",
-            value: __self.__removedTools
-          })
         });
 await runner.step(1, async (runner) => {
 await runner.thread(1, __threads, "createSubthread", async (runner) => {
@@ -199,11 +188,6 @@ if (isInterrupt(__stack.locals.res2)) {
                 runner.halt(__stack.locals.res2)
                 return;
               }
-await __ctx.audit({
-                type: "assignment",
-                variable: "__self.__removedTools",
-                value: __self.__removedTools
-              })
             });
 await runner.step(1, async (runner) => {
 await runner.thread(1, __threads, "createSubthread", async (runner) => {
@@ -227,11 +211,6 @@ if (isInterrupt(__stack.locals.res3)) {
                     runner.halt(__stack.locals.res3)
                     return;
                   }
-await __ctx.audit({
-                    type: "assignment",
-                    variable: "__self.__removedTools",
-                    value: __self.__removedTools
-                  })
                 });
               });
             });
@@ -257,11 +236,6 @@ if (isInterrupt(__stack.locals.res5)) {
                     runner.halt(__stack.locals.res5)
                     return;
                   }
-await __ctx.audit({
-                    type: "assignment",
-                    variable: "__self.__removedTools",
-                    value: __self.__removedTools
-                  })
                 });
               });
             });
@@ -289,11 +263,6 @@ if (isInterrupt(__stack.locals.res4)) {
                 runner.halt(__stack.locals.res4)
                 return;
               }
-await __ctx.audit({
-                type: "assignment",
-                variable: "__self.__removedTools",
-                value: __self.__removedTools
-              })
             });
           });
         });
@@ -384,11 +353,6 @@ if (isInterrupt(__stack.locals.res1)) {
           })
           return;
         }
-await __ctx.audit({
-          type: "assignment",
-          variable: "__self.__removedTools",
-          value: __self.__removedTools
-        })
       });
 await runner.step(1, async (runner) => {
 await runner.thread(1, __threads, "createSubthread", async (runner) => {
@@ -415,11 +379,6 @@ if (isInterrupt(__stack.locals.res2)) {
               })
               return;
             }
-await __ctx.audit({
-              type: "assignment",
-              variable: "__self.__removedTools",
-              value: __self.__removedTools
-            })
           });
 await runner.step(1, async (runner) => {
 await runner.thread(1, __threads, "createSubthread", async (runner) => {
@@ -446,11 +405,6 @@ if (isInterrupt(__stack.locals.res3)) {
                   })
                   return;
                 }
-await __ctx.audit({
-                  type: "assignment",
-                  variable: "__self.__removedTools",
-                  value: __self.__removedTools
-                })
               });
             });
           });
@@ -479,11 +433,6 @@ if (isInterrupt(__stack.locals.res5)) {
                   })
                   return;
                 }
-await __ctx.audit({
-                  type: "assignment",
-                  variable: "__self.__removedTools",
-                  value: __self.__removedTools
-                })
               });
             });
           });
@@ -514,11 +463,6 @@ if (isInterrupt(__stack.locals.res4)) {
               })
               return;
             }
-await __ctx.audit({
-              type: "assignment",
-              variable: "__self.__removedTools",
-              value: __self.__removedTools
-            })
           });
         });
       });

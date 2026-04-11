@@ -60,13 +60,10 @@ program
     }
   });
 
-type RunOptions = { resume?: string; log?: string; trace?: string | true };
+type RunOptions = { resume?: string; trace?: string | true };
 
 function runWithOptions(input: string, options: RunOptions) {
   const config = getConfig();
-  if (options.log) {
-    config.audit = { ...config.audit, logFile: options.log };
-  }
   if (options.trace) {
     config.trace = true;
     config.traceFile = typeof options.trace === "string"
@@ -79,7 +76,6 @@ function runWithOptions(input: string, options: RunOptions) {
 function addRunOptions(cmd: Command) {
   return cmd
     .option("--resume <statefile>", "Resume execution from a saved state file")
-    .option("-l, --log <file>", "Write audit log entries to a JSONL file")
     .option("--trace [file]", "Write execution trace to file (default: <input>.trace)");
 }
 
@@ -98,10 +94,9 @@ program
   .argument("<input>", "Path to .agency input file")
   .option("-o, --output <file>", "Output trace file path (default: <input>.trace)")
   .option("--resume <statefile>", "Resume execution from a saved state file")
-  .option("-l, --log <file>", "Write audit log entries to a JSONL file")
-  .action((input: string, options: { output?: string; resume?: string; log?: string }) => {
+  .action((input: string, options: { output?: string; resume?: string }) => {
     const traceFile = options.output || input.replace(/\.agency$/, ".trace");
-    runWithOptions(input, { trace: traceFile, resume: options.resume, log: options.log });
+    runWithOptions(input, { trace: traceFile, resume: options.resume });
   });
 
 program
@@ -418,7 +413,7 @@ program
   });
 
 // Default: treat unknown args as a file to run.
-// Use a hidden default subcommand so its options (--trace, --resume, --log)
+// Use a hidden default subcommand so its options (--trace, --resume)
 // don't get added to the root program and shadow subcommand options.
 addRunOptions(
   program

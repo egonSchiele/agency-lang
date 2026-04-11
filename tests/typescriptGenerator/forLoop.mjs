@@ -124,11 +124,6 @@ let __functionCompleted = false;
   });
   await runner.step(1, async (runner) => {
 __stack.locals.items = [`a`, `b`, `c`];
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.items",
-      value: __stack.locals.items
-    })
   });
   await runner.step(2, async (runner) => {
 await runner.loop(2, __stack.locals.items, async (item, _, runner) => {
@@ -148,11 +143,6 @@ await print(i)
   });
   await runner.step(4, async (runner) => {
 __stack.locals.names = [`alice`, `bob`];
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.names",
-      value: __stack.locals.names
-    })
   });
   await runner.step(5, async (runner) => {
 await runner.loop(5, __stack.locals.names, async (name, index, runner) => {

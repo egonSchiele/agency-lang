@@ -142,14 +142,6 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "twice",
-    args: {
-      block: block
-    },
-    result: undefined
-  })
   __stack.args["block"] = block;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "blockBasic.agency", scopeName: "twice" });
@@ -161,11 +153,6 @@ if (isInterrupt(__stack.locals.a)) {
         runner.halt(__stack.locals.a)
         return;
       }
-await __ctx.audit({
-        type: "assignment",
-        variable: "__stack.locals.a",
-        value: __stack.locals.a
-      })
     });
     await runner.step(1, async (runner) => {
 __stack.locals.b = await block();
@@ -174,26 +161,11 @@ if (isInterrupt(__stack.locals.b)) {
         runner.halt(__stack.locals.b)
         return;
       }
-await __ctx.audit({
-        type: "assignment",
-        variable: "__stack.locals.b",
-        value: __stack.locals.b
-      })
     });
     await runner.step(2, async (runner) => {
-const __returnValue = [__stack.locals.a, __stack.locals.b];
-await __ctx.audit({
-        type: "return",
-        value: __returnValue
-      })
 __functionCompleted = true;
-runner.halt(__returnValue)
+runner.halt([__stack.locals.a, __stack.locals.b])
 return;
-await __ctx.audit({
-        type: "assignment",
-        variable: "__returnValue",
-        value: __returnValue
-      })
     });
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -269,11 +241,6 @@ if (isInterrupt(__stack.locals.results)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.results",
-      value: __stack.locals.results
-    })
   });
   await runner.step(1, async (runner) => {
 await print(__stack.locals.results)

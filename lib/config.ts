@@ -117,11 +117,6 @@ export interface AgencyConfig {
   /** Enable debugger mode — auto-inserts breakpoints before every step */
   debugger?: boolean;
 
-  /** Audit logging config */
-  audit?: {
-    logFile?: string;
-  };
-
   /** Checkpoint configuration */
   checkpoints?: {
     /** Maximum number of times a single checkpoint can be restored before throwing CheckpointError.

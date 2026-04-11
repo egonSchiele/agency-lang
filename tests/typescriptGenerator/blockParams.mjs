@@ -143,15 +143,6 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "mapItems",
-    args: {
-      items: items,
-      block: block
-    },
-    result: undefined
-  })
   __stack.args["items"] = items;
   __stack.args["block"] = block;
   __self.__retryable = __self.__retryable ?? true;
@@ -159,11 +150,6 @@ let __functionCompleted = false;
   try {
     await runner.step(0, async (runner) => {
 __stack.locals.results = [];
-await __ctx.audit({
-        type: "assignment",
-        variable: "__stack.locals.results",
-        value: __stack.locals.results
-      })
     });
     await runner.step(1, async (runner) => {
 await runner.loop(1, __stack.args.items, async (item, _, runner) => {
@@ -174,11 +160,6 @@ if (isInterrupt(__stack.locals.result)) {
             runner.halt(__stack.locals.result)
             return;
           }
-await __ctx.audit({
-            type: "assignment",
-            variable: "__stack.locals.result",
-            value: __stack.locals.result
-          })
         });
 await runner.step(1, async (runner) => {
 __stack.locals.results = await append(__stack.locals.results, __stack.locals.result);
@@ -187,28 +168,13 @@ if (isInterrupt(__stack.locals.results)) {
             runner.halt(__stack.locals.results)
             return;
           }
-await __ctx.audit({
-            type: "assignment",
-            variable: "__stack.locals.results",
-            value: __stack.locals.results
-          })
         });
       });
     });
     await runner.step(2, async (runner) => {
-const __returnValue = __stack.locals.results;
-await __ctx.audit({
-        type: "return",
-        value: __returnValue
-      })
 __functionCompleted = true;
-runner.halt(__returnValue)
+runner.halt(__stack.locals.results)
 return;
-await __ctx.audit({
-        type: "assignment",
-        variable: "__returnValue",
-        value: __returnValue
-      })
     });
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -257,11 +223,6 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "blockParams.agency", scopeName: "main" });
   await runner.step(0, async (runner) => {
 __stack.locals.items = [1, 2, 3];
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.items",
-      value: __stack.locals.items
-    })
   });
   await runner.step(1, async (runner) => {
 __stack.locals.doubled = await mapItems(__stack.locals.items, async (x: any) => {
@@ -294,11 +255,6 @@ if (isInterrupt(__stack.locals.doubled)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.doubled",
-      value: __stack.locals.doubled
-    })
   });
   await runner.step(2, async (runner) => {
 await print(__stack.locals.doubled)

@@ -131,11 +131,6 @@ __stack.locals.x = runPrompt({
       removedTools: __self.__removedTools
     });
 __self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
-await __ctx.audit({
-      type: "assignment",
-      variable: "__self.__removedTools",
-      value: __self.__removedTools
-    })
   });
   await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -149,31 +144,16 @@ __stack.locals.y = runPrompt({
       removedTools: __self.__removedTools
     });
 __self.__pendingKey_y = __ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });
-await __ctx.audit({
-      type: "assignment",
-      variable: "__self.__removedTools",
-      value: __self.__removedTools
-    })
   });
   await runner.step(2, async (runner) => {
 await __ctx.pendingPromises.awaitPending([__self.__pendingKey_x, __self.__pendingKey_y]);
   });
   await runner.step(3, async (runner) => {
-const __returnValue = [__stack.locals.x, __stack.locals.y];
-await __ctx.audit({
-      type: "return",
-      value: __returnValue
-    })
 runner.halt({
       messages: __threads,
-      data: __returnValue
+      data: [__stack.locals.x, __stack.locals.y]
     })
 return;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__returnValue",
-      value: __returnValue
-    })
   });
   if (runner.halted) return runner.haltResult;
   await callHook({

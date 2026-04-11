@@ -203,15 +203,6 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "add",
-    args: {
-      x: x,
-      y: y
-    },
-    result: undefined
-  })
   __stack.args["x"] = x;
   __stack.args["y"] = y;
   __self.__retryable = __self.__retryable ?? true;
@@ -234,26 +225,11 @@ if (isInterrupt(__stack.locals.result)) {
         runner.halt(__stack.locals.result)
         return;
       }
-await __ctx.audit({
-        type: "assignment",
-        variable: "__self.__removedTools",
-        value: __self.__removedTools
-      })
     });
     await runner.step(1, async (runner) => {
-const __returnValue = __stack.locals.result;
-await __ctx.audit({
-        type: "return",
-        value: __returnValue
-      })
 __functionCompleted = true;
-runner.halt(__returnValue)
+runner.halt(__stack.locals.result)
 return;
-await __ctx.audit({
-        type: "assignment",
-        variable: "__returnValue",
-        value: __returnValue
-      })
     });
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -308,14 +284,6 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "greet",
-    args: {
-      name: name
-    },
-    result: undefined
-  })
   __stack.args["name"] = name;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "greet" });
@@ -337,26 +305,11 @@ if (isInterrupt(__stack.locals.message)) {
         runner.halt(__stack.locals.message)
         return;
       }
-await __ctx.audit({
-        type: "assignment",
-        variable: "__self.__removedTools",
-        value: __self.__removedTools
-      })
     });
     await runner.step(1, async (runner) => {
-const __returnValue = __stack.locals.message;
-await __ctx.audit({
-        type: "return",
-        value: __returnValue
-      })
 __functionCompleted = true;
-runner.halt(__returnValue)
+runner.halt(__stack.locals.message)
 return;
-await __ctx.audit({
-        type: "assignment",
-        variable: "__returnValue",
-        value: __returnValue
-      })
     });
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -412,15 +365,6 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "mixed",
-    args: {
-      count: count,
-      label: label
-    },
-    result: undefined
-  })
   __stack.args["count"] = count;
   __stack.args["label"] = label;
   __self.__retryable = __self.__retryable ?? true;
@@ -443,26 +387,11 @@ if (isInterrupt(__stack.locals.output)) {
         runner.halt(__stack.locals.output)
         return;
       }
-await __ctx.audit({
-        type: "assignment",
-        variable: "__self.__removedTools",
-        value: __self.__removedTools
-      })
     });
     await runner.step(1, async (runner) => {
-const __returnValue = __stack.locals.output;
-await __ctx.audit({
-        type: "return",
-        value: __returnValue
-      })
 __functionCompleted = true;
-runner.halt(__returnValue)
+runner.halt(__stack.locals.output)
 return;
-await __ctx.audit({
-        type: "assignment",
-        variable: "__returnValue",
-        value: __returnValue
-      })
     });
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -517,14 +446,6 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "processArray",
-    args: {
-      items: items
-    },
-    result: undefined
-  })
   __stack.args["items"] = items;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "processArray" });
@@ -546,26 +467,11 @@ if (isInterrupt(__stack.locals.result)) {
         runner.halt(__stack.locals.result)
         return;
       }
-await __ctx.audit({
-        type: "assignment",
-        variable: "__self.__removedTools",
-        value: __self.__removedTools
-      })
     });
     await runner.step(1, async (runner) => {
-const __returnValue = __stack.locals.result;
-await __ctx.audit({
-        type: "return",
-        value: __returnValue
-      })
 __functionCompleted = true;
-runner.halt(__returnValue)
+runner.halt(__stack.locals.result)
 return;
-await __ctx.audit({
-        type: "assignment",
-        variable: "__returnValue",
-        value: __returnValue
-      })
     });
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -620,14 +526,6 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "flexible",
-    args: {
-      value: value
-    },
-    result: undefined
-  })
   __stack.args["value"] = value;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "flexible" });
@@ -649,26 +547,11 @@ if (isInterrupt(__stack.locals.result)) {
         runner.halt(__stack.locals.result)
         return;
       }
-await __ctx.audit({
-        type: "assignment",
-        variable: "__self.__removedTools",
-        value: __self.__removedTools
-      })
     });
     await runner.step(1, async (runner) => {
-const __returnValue = __stack.locals.result;
-await __ctx.audit({
-        type: "return",
-        value: __returnValue
-      })
 __functionCompleted = true;
-runner.halt(__returnValue)
+runner.halt(__stack.locals.result)
 return;
-await __ctx.audit({
-        type: "assignment",
-        variable: "__returnValue",
-        value: __returnValue
-      })
     });
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -719,21 +602,11 @@ let __functionCompleted = false;
 await print(`This is a node with a return type`)
   });
   await runner.step(1, async (runner) => {
-const __returnValue = `Node completed`;
-await __ctx.audit({
-      type: "return",
-      value: __returnValue
-    })
 runner.halt({
       messages: __threads,
-      data: __returnValue
+      data: `Node completed`
     })
 return;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__returnValue",
-      value: __returnValue
-    })
   });
   if (runner.halted) return runner.haltResult;
   await callHook({
@@ -787,11 +660,6 @@ if (isInterrupt(__stack.locals.sum)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.sum",
-      value: __stack.locals.sum
-    })
   });
   await runner.step(2, async (runner) => {
 __stack.locals.greeting = await greet(`Alice`, {
@@ -807,11 +675,6 @@ if (isInterrupt(__stack.locals.greeting)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.greeting",
-      value: __stack.locals.greeting
-    })
   });
   await runner.step(3, async (runner) => {
 __stack.locals.labeled = await mixed(42, `Answer`, {
@@ -827,11 +690,6 @@ if (isInterrupt(__stack.locals.labeled)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.labeled",
-      value: __stack.locals.labeled
-    })
   });
   await runner.step(4, async (runner) => {
 __stack.locals.processed = await processArray([1, 2, 3, 4, 5], {
@@ -847,11 +705,6 @@ if (isInterrupt(__stack.locals.processed)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.processed",
-      value: __stack.locals.processed
-    })
   });
   await runner.step(5, async (runner) => {
 __stack.locals.flexResult = await flexible(`test`, {
@@ -867,11 +720,6 @@ if (isInterrupt(__stack.locals.flexResult)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.flexResult",
-      value: __stack.locals.flexResult
-    })
   });
   if (runner.halted) return runner.haltResult;
   await callHook({

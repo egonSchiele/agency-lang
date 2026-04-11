@@ -141,11 +141,6 @@ if (isInterrupt(__stack.locals.response)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__self.__removedTools",
-      value: __self.__removedTools
-    })
   });
   await runner.step(1, async (runner) => {
 await print(__stack.locals.response)
@@ -173,11 +168,6 @@ if (isInterrupt(__stack.locals.response2)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__self.__removedTools",
-      value: __self.__removedTools
-    })
   });
   await runner.step(3, async (runner) => {
 await print(__stack.locals.response2)

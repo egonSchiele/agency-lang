@@ -143,15 +143,6 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "append",
-    args: {
-      sleepTime: sleepTime,
-      value: value
-    },
-    result: undefined
-  })
   __stack.args["sleepTime"] = sleepTime;
   __stack.args["value"] = value;
   __self.__retryable = __self.__retryable ?? true;
@@ -223,11 +214,6 @@ __ctx.pendingPromises.add(append(1, `hello`, {
   stateStack: __forked,
   isForked: true
 }))
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.branches",
-      value: __stack.branches
-    })
   });
   await runner.branchStep(1, "1", async (runner) => {
 if ((__stack.branches && __stack.branches["1"])) {
@@ -247,28 +233,13 @@ __ctx.pendingPromises.add(append(0.5, `world`, {
   stateStack: __forked,
   isForked: true
 }))
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.branches",
-      value: __stack.branches
-    })
   });
   await runner.step(2, async (runner) => {
-const __returnValue = `done`;
-await __ctx.audit({
-      type: "return",
-      value: __returnValue
-    })
 runner.halt({
       messages: __threads,
-      data: __returnValue
+      data: `done`
     })
 return;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__returnValue",
-      value: __returnValue
-    })
   });
   if (runner.halted) return runner.haltResult;
   await callHook({

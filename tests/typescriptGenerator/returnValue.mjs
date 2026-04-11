@@ -121,28 +121,13 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "returnValue.agency", scopeName: "main" });
   await runner.step(0, async (runner) => {
 __stack.locals.x = 42;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.x",
-      value: __stack.locals.x
-    })
   });
   await runner.step(1, async (runner) => {
-const __returnValue = __stack.locals.x;
-await __ctx.audit({
-      type: "return",
-      value: __returnValue
-    })
 runner.halt({
       messages: __threads,
-      data: __returnValue
+      data: __stack.locals.x
     })
 return;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__returnValue",
-      value: __returnValue
-    })
   });
   if (runner.halted) return runner.haltResult;
   await callHook({

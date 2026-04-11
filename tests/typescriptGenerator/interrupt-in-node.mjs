@@ -143,15 +143,6 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "greet",
-    args: {
-      name: name,
-      age: age
-    },
-    result: undefined
-  })
   __stack.args["name"] = name;
   __stack.args["age"] = age;
   __self.__retryable = __self.__retryable ?? true;
@@ -206,19 +197,9 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
 
     });
     await runner.step(1, async (runner) => {
-const __returnValue = `Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`;
-await __ctx.audit({
-        type: "return",
-        value: __returnValue
-      })
 __functionCompleted = true;
-runner.halt(__returnValue)
+runner.halt(`Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`)
 return;
-await __ctx.audit({
-        type: "assignment",
-        variable: "__returnValue",
-        value: __returnValue
-      })
     });
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -292,31 +273,16 @@ if (isInterrupt(__stack.locals.response)) {
       })
       return;
     }
-await __ctx.audit({
-      type: "assignment",
-      variable: "__self.__removedTools",
-      value: __self.__removedTools
-    })
   });
   await runner.step(2, async (runner) => {
 await print(`Greeted, age is still ${__stack.args.age}...`)
   });
   await runner.step(3, async (runner) => {
-const __returnValue = __stack.locals.response;
-await __ctx.audit({
-      type: "return",
-      value: __returnValue
-    })
 runner.halt({
       messages: __threads,
-      data: __returnValue
+      data: __stack.locals.response
     })
 return;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__returnValue",
-      value: __returnValue
-    })
   });
   if (runner.halted) return runner.haltResult;
   await callHook({
@@ -361,11 +327,6 @@ await print(`Saying hi to ${__stack.args.name}...`)
   });
   await runner.step(1, async (runner) => {
 __stack.locals.age = 30;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.age",
-      value: __stack.locals.age
-    })
   });
   await runner.step(2, async (runner) => {
 __functionCompleted = true;
@@ -378,11 +339,6 @@ runner.halt(goToNode("foo2", {
       }
     }))
 return;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__functionCompleted",
-      value: __functionCompleted
-    })
   });
   if (runner.halted) return runner.haltResult;
   await callHook({

@@ -121,11 +121,6 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "string-interpolation.agency", scopeName: "main" });
   await runner.step(0, async (runner) => {
 __stack.locals.greeting = `Hello, my name is ${name} and I am ${age} years old.`;
-await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.greeting",
-      value: __stack.locals.greeting
-    })
   });
   if (runner.halted) return runner.haltResult;
   await callHook({

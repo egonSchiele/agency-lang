@@ -196,9 +196,18 @@ return;
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
-      throw __error
-    }
-    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "double", args: __stack.args });
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "double",
+    args: __stack.args,
+  }
+);
+
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -270,9 +279,18 @@ return;
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
-      throw __error
-    }
-    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "multiply", args: __stack.args });
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "multiply",
+    args: __stack.args,
+  }
+);
+
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -344,7 +362,7 @@ await runner.ifElse(0, [
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __functionCompleted = true;
-runner.halt(failure(`division by zero`, { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), functionName: "safeDivide", args: __stack.args }))
+runner.halt(failure(`division by zero`, { checkpoint: __ctx.getResultCheckpoint(), functionName: "safeDivide", args: __stack.args }))
 return;
             });
     },
@@ -360,9 +378,18 @@ return;
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
-      throw __error
-    }
-    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "safeDivide", args: __stack.args });
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "safeDivide",
+    args: __stack.args,
+  }
+);
+
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {

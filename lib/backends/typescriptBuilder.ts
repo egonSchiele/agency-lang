@@ -39,6 +39,7 @@ import * as renderTraceSetup from "../templates/backends/typescriptGenerator/tra
 import * as renderBlockSetup from "../templates/backends/typescriptGenerator/blockSetup.js";
 import * as renderForkBlockSetup from "../templates/backends/typescriptGenerator/forkBlockSetup.js";
 import * as renderResultCheckpointSetup from "../templates/backends/typescriptGenerator/resultCheckpointSetup.js";
+import * as renderFunctionCatchFailure from "../templates/backends/typescriptGenerator/functionCatchFailure.js";
 
 import { AgencyConfig } from "@/config.js";
 import {
@@ -76,7 +77,6 @@ import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { escape, mergeDeep } from "../utils.js";
-import { isResultType } from "./utils.js";
 import {
   generateBuiltinHelpers,
   mapFunctionName,
@@ -143,7 +143,6 @@ export class TypeScriptBuilder {
   because this statement contains an async function call.
   */
   private _asyncBranchCheckNeeded: boolean = false;
-  private _insideResultFunction: boolean = false;
 
   /** Tracks the current substep nesting path. Empty when at the top level
    * of a stepped body. Non-empty when inside a block (if/else, etc.) that
@@ -1243,13 +1242,9 @@ export class TypeScriptBuilder {
     setupStmts.push(
       ts.tryCatch(
         ts.statements([...bodyCode, ts.raw("if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }")]),
-        ts.statements([
-          ts.if(
-            ts.raw("__error instanceof RestoreSignal"),
-            ts.statements([ts.throw("__error")]),
-          ),
-          ts.raw(`return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: ${JSON.stringify(functionName)}, args: __stack.args });`),
-        ]),
+        ts.raw(renderFunctionCatchFailure.default({
+          functionName: JSON.stringify(functionName),
+        })),
         "__error",
         // finally block: pop state stack and conditionally fire onFunctionEnd.
         // onFunctionEnd must live here (not after the try/catch) because
@@ -1379,7 +1374,7 @@ export class TypeScriptBuilder {
       );
       return ts.call(ts.id("failure"), [
         ...argNodes,
-        ts.raw(`{ checkpoint: __ctx.checkpoints.get(__resultCheckpointId), functionName: ${JSON.stringify(scope.functionName)}, args: __stack.args }`),
+        ts.raw(`{ checkpoint: __ctx.getResultCheckpoint(), functionName: ${JSON.stringify(scope.functionName)}, args: __stack.args }`),
       ]);
     }
 

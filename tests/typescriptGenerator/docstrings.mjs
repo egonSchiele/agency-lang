@@ -218,9 +218,18 @@ if (__ctx._pendingArgOverrides) {
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
-      throw __error
-    }
-    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "add", args: __stack.args });
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "add",
+    args: __stack.args,
+  }
+);
+
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -283,9 +292,18 @@ if (__ctx._pendingArgOverrides) {
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
-      throw __error
-    }
-    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "greet", args: __stack.args });
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "greet",
+    args: __stack.args,
+  }
+);
+
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -352,9 +370,18 @@ if (__ctx._pendingArgOverrides) {
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
-      throw __error
-    }
-    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "calculateArea", args: __stack.args });
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "calculateArea",
+    args: __stack.args,
+  }
+);
+
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -412,9 +439,18 @@ if (__ctx._pendingArgOverrides) {
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
-      throw __error
-    }
-    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "processData", args: __stack.args });
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "processData",
+    args: __stack.args,
+  }
+);
+
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {

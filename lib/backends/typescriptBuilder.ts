@@ -1498,11 +1498,8 @@ export class TypeScriptBuilder {
     const shouldAwait = !node.async && context !== "valueAccess";
 
     if (this.isAgencyFunction(node.functionName, context)) {
-      // Inside a message thread: pass the caller's ThreadStore so the function
-      // shares the thread context. Outside: pass a new ThreadStore for isolation.
-      const threadsExpr = this.insideMessageThread
-        ? ts.runtime.threads
-        : ts.newThreadStore();
+      // Always pass the caller's ThreadStore so the function shares the thread context
+      const threadsExpr = ts.runtime.threads;
       const configObj = ts.functionCallConfig({
         ctx: ts.runtime.ctx,
         threads: threadsExpr,
@@ -2450,12 +2447,9 @@ export class TypeScriptBuilder {
 
   private buildPipeStateArgs(funcName: string): TsNode[] {
     if (!this.isAgencyFunction(funcName, "topLevelStatement")) return [];
-    const threadsExpr = this.insideMessageThread
-      ? ts.runtime.threads
-      : ts.newThreadStore();
     return [ts.functionCallConfig({
       ctx: ts.runtime.ctx,
-      threads: threadsExpr,
+      threads: ts.runtime.threads,
       interruptData: ts.raw("__state?.interruptData"),
     })];
   }

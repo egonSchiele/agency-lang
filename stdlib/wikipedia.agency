@@ -1,0 +1,41 @@
+import { _search, _summary, _article } from "./lib/wikipedia.js"
+
+type WikiSearchResult = {
+  title: string;
+  description: string;
+  excerpt: string
+}
+
+type WikiSummary = {
+  title: string;
+  description: string;
+  extract: string;
+  url: string
+}
+
+type WikiArticle = {
+  title: string;
+  text: string;
+  url: string
+}
+
+export safe def search(query: string, limit: number = 5): WikiSearchResult[] {
+  """
+  Search Wikipedia for articles matching the given query. Returns up to limit results (default 5).
+  """
+  return _search(query, limit)
+}
+
+export safe def summary(title: string): WikiSummary {
+  """
+  Get a summary of a Wikipedia article by its title. Returns the title, description, intro extract, and URL.
+  """
+  return _summary(title)
+}
+
+export safe def article(title: string): WikiArticle {
+  """
+  Get the full text of a Wikipedia article by its title. Returns the title, full plain text content, and URL.
+  """
+  return _article(title)
+}

@@ -125,7 +125,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.x = runPrompt({
         ctx: __ctx,
         prompt: `What is 2+2?`,
-        messages: __threads.getOrCreateActive(),
+        messages: __threads.createAndReturnSubthread(),
         clientConfig: {},
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
@@ -138,7 +138,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.y = runPrompt({
         ctx: __ctx,
         prompt: `What is 3+3?`,
-        messages: __threads.getOrCreateActive(),
+        messages: __threads.createAndReturnSubthread(),
         clientConfig: {},
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,

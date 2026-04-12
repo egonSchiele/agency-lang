@@ -651,6 +651,9 @@ export const ts = {
     createSubthread(): TsCall {
       return ts.call(ts.prop(ts.runtime.threads, "createSubthread"));
     },
+    createAndReturnSubthread(): TsCall {
+      return ts.call(ts.prop(ts.runtime.threads, "createAndReturnSubthread"));
+    },
     get(id: TsNode): TsCall {
       return ts.call(ts.prop(ts.runtime.threads, "get"), [id]);
     },

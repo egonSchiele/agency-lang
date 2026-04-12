@@ -2018,8 +2018,13 @@ export class TypeScriptBuilder {
       clientConfig = ts.obj({});
     }
 
-    // Thread expression — always use the shared active thread
-    const threadExpr = ts.threads.getOrCreateActive();
+    // Thread expression — always use the shared active thread.
+    // For async prompts, fork via subthread so they get context but don't
+    // write back to the shared thread.
+    let threadExpr: TsNode = ts.threads.getOrCreateActive();
+    if (node.async) {
+      threadExpr = ts.threads.createAndReturnSubthread();
+    }
 
     // Merge tools from usesTool statements (preprocessor) and config object
     const usesToolNames = node.tools?.toolNames || [];

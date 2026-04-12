@@ -74,6 +74,7 @@ import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { escape, mergeDeep } from "../utils.js";
+import { isResultType } from "./utils.js";
 import {
   generateBuiltinHelpers,
   mapFunctionName,
@@ -140,6 +141,7 @@ export class TypeScriptBuilder {
   because this statement contains an async function call.
   */
   private _asyncBranchCheckNeeded: boolean = false;
+  private _insideResultFunction: boolean = false;
 
   /** Tracks the current substep nesting path. Empty when at the top level
    * of a stepped body. Non-empty when inside a block (if/else, etc.) that
@@ -1108,6 +1110,39 @@ export class TypeScriptBuilder {
     return ts.varDecl("const", "__toolRegistry", ts.obj(entries));
   }
 
+  /**
+   * For Result-returning functions: emit a pinned checkpoint at function entry
+   * and a preamble that applies arg overrides on restore (for result.retry()).
+   */
+  private buildResultCheckpointSetup(
+    functionName: string,
+    parameters: FunctionParameter[],
+  ): TsNode[] {
+    const stmts: TsNode[] = [];
+    stmts.push(
+      ts.constDecl("__resultCheckpointId",
+        ts.raw(`__ctx.checkpoints.createPinned(__ctx, { moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(functionName)}, stepPath: "", label: "result-entry" })`),
+      ),
+    );
+    // On restore with arg overrides (from result.retry), reassign function parameters positionally
+    if (parameters.length > 0) {
+      stmts.push(
+        ts.if(
+          ts.raw("__ctx._pendingArgOverrides"),
+          ts.statements([
+            ts.constDecl("__overrides", ts.raw("__ctx._pendingArgOverrides")),
+            ts.raw("__ctx._pendingArgOverrides = undefined;"),
+            ...parameters.map((p, i) => ts.statements([
+              ts.assign(ts.id(p.name), ts.raw(`__overrides[${i}]`)),
+              ts.assign($(ts.stack("args")).index(ts.str(p.name)).done(), ts.id(p.name)),
+            ])),
+          ]),
+        ),
+      );
+    }
+    return stmts;
+  }
+
   private processFunctionDefinition(node: FunctionDefinition): TsNode {
     this.startScope({ type: "function", functionName: node.functionName });
     this._sourceMapBuilder.enterScope(this.moduleId, node.functionName);
@@ -1209,6 +1244,9 @@ export class TypeScriptBuilder {
     // Create runner for step execution
     setupStmts.push(ts.raw(`const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(functionName)} });`));
 
+    // Pinned checkpoint at entry for all functions (enables result.retry and error-to-failure wrapping)
+    setupStmts.push(...this.buildResultCheckpointSetup(functionName, parameters));
+
     // Try/catch wrapping the body, with finally to always pop the state stack
     setupStmts.push(
       ts.tryCatch(
@@ -1227,9 +1265,7 @@ export class TypeScriptBuilder {
               ts.throw("__error"),
             ]),
           ),
-          ts.throw(
-            "new ToolCallError(__error, { retryable: __self.__retryable })",
-          ),
+          ts.raw("return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));"),
         ]),
         "__error",
         // finally block: pop state stack and conditionally fire onFunctionEnd.
@@ -1350,6 +1386,17 @@ export class TypeScriptBuilder {
   private processFunctionCall(node: FunctionCall): TsNode {
     if ((node.functionName === "fork" || node.functionName === "race") && node.block) {
       return this.processForkCall(node);
+    }
+
+    if (node.functionName === "failure" && this.getCurrentScope().type === "function") {
+      // Inside functions, inject the checkpoint so failures carry restore info
+      const argNodes: TsNode[] = node.arguments.map((arg) =>
+        this.processCallArg(arg),
+      );
+      return ts.call(ts.id("failure"), [
+        ...argNodes,
+        ts.raw("__ctx.checkpoints.get(__resultCheckpointId)"),
+      ]);
     }
 
     if (node.functionName === "throw") {

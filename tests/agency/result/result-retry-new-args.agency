@@ -1,0 +1,17 @@
+shared let attempt = 0
+
+def validate(input: string): Result {
+  attempt = attempt + 1
+  if (input == "bad") {
+    return failure("invalid input")
+  }
+  return success(input)
+}
+
+node main() {
+  let result = validate("bad")
+  if (isFailure(result)) {
+    restore(result.checkpoint, { args: ["good"] })
+  }
+  return { value: result.value, attempts: attempt }
+}

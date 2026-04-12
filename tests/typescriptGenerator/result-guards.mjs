@@ -146,6 +146,13 @@ let __functionCompleted = false;
   __stack.args["r"] = r;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "result-guards.agency", scopeName: "checkValue" });
+  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "result-guards.agency", scopeName: "checkValue", stepPath: "", label: "result-entry" });
+  if (__ctx._pendingArgOverrides) {
+    const __overrides = __ctx._pendingArgOverrides;
+    __ctx._pendingArgOverrides = undefined;
+    r = __overrides[0];
+__stack.args["r"] = r;
+  }
   try {
     await runner.step(0, async (runner) => {
 await runner.ifElse(0, [
@@ -177,7 +184,7 @@ return;
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {

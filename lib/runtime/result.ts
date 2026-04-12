@@ -15,8 +15,8 @@ export function success(value: any): ResultSuccess {
   return { success: true, value };
 }
 
-export function failure(error: any): ResultFailure {
-  return { success: false, error, checkpoint: null };
+export function failure(error: any, checkpoint?: any): ResultFailure {
+  return { success: false, error, checkpoint: checkpoint ?? null };
 }
 
 export function isSuccess(result: ResultValue): result is ResultSuccess {

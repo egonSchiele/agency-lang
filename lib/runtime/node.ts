@@ -133,6 +133,12 @@ export async function runNode({
         if (e instanceof RestoreSignal) {
           const cp = e.checkpoint;
           execCtx.restoreState(cp);
+          if (e.options?.args) {
+            execCtx._pendingArgOverrides = e.options.args;
+          }
+          if (e.options?.globals) {
+            execCtx.globals.patchGlobals(e.options.globals);
+          }
           nodeName = cp.nodeId;
           data = {};
           isResume = true;

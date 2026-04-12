@@ -143,6 +143,7 @@ let __functionCompleted = false;
   })
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "threadsAndSubthreads.agency", scopeName: "foo" });
+  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "foo", stepPath: "", label: "result-entry" });
   try {
     await runner.step(0, async (runner) => {
 await runner.thread(0, __threads, "create", async (runner) => {
@@ -293,7 +294,7 @@ await print(`res5`, __stack.locals.res5)
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {

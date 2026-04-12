@@ -43,5 +43,5 @@ node main() {
   // Stage 2: pipe bind that fails mid-chain
   let r5 = success(10) |> safeDivide(?, 0) |> double
 
-  return { val: val, err: err, r3: r3, r4: r4, r5: r5 }
+  return { val: val, err: err, r3: r3, r4: r4, r5Success: isSuccess(r5), r5Error: r5.error, r5HasCheckpoint: r5.checkpoint != null }
 }

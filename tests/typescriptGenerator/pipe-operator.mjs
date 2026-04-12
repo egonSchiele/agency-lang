@@ -176,6 +176,13 @@ let __functionCompleted = false;
   __stack.args["x"] = x;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "double" });
+  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "pipe-operator.agency", scopeName: "double", stepPath: "", label: "result-entry" });
+  if (__ctx._pendingArgOverrides) {
+    const __overrides = __ctx._pendingArgOverrides;
+    __ctx._pendingArgOverrides = undefined;
+    x = __overrides[0];
+__stack.args["x"] = x;
+  }
   try {
     await runner.step(0, async (runner) => {
 __functionCompleted = true;
@@ -191,7 +198,7 @@ return;
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -240,6 +247,15 @@ let __functionCompleted = false;
   __stack.args["b"] = b;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "multiply" });
+  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "pipe-operator.agency", scopeName: "multiply", stepPath: "", label: "result-entry" });
+  if (__ctx._pendingArgOverrides) {
+    const __overrides = __ctx._pendingArgOverrides;
+    __ctx._pendingArgOverrides = undefined;
+    a = __overrides[0];
+__stack.args["a"] = a;
+    b = __overrides[1];
+__stack.args["b"] = b;
+  }
   try {
     await runner.step(0, async (runner) => {
 __functionCompleted = true;
@@ -255,7 +271,7 @@ return;
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -304,6 +320,15 @@ let __functionCompleted = false;
   __stack.args["b"] = b;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "safeDivide" });
+  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "pipe-operator.agency", scopeName: "safeDivide", stepPath: "", label: "result-entry" });
+  if (__ctx._pendingArgOverrides) {
+    const __overrides = __ctx._pendingArgOverrides;
+    __ctx._pendingArgOverrides = undefined;
+    a = __overrides[0];
+__stack.args["a"] = a;
+    b = __overrides[1];
+__stack.args["b"] = b;
+  }
   try {
     await runner.step(0, async (runner) => {
 await runner.ifElse(0, [
@@ -313,7 +338,7 @@ await runner.ifElse(0, [
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __functionCompleted = true;
-runner.halt(await failure(`division by zero`))
+runner.halt(failure(`division by zero`, __ctx.checkpoints.get(__resultCheckpointId)))
 return;
             });
     },
@@ -335,7 +360,7 @@ return;
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {

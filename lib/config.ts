@@ -124,6 +124,13 @@ export interface AgencyConfig {
     maxRestores?: number;
   };
 
+  /** Result type configuration */
+  result?: {
+    /** Maximum number of times result.retry() can be called before throwing CheckpointError.
+     * Prevents infinite retry loops. Default: 50. */
+    maxRetries?: number;
+  };
+
   /** Enable execution tracing — writes checkpoints to a .trace file */
   trace?: boolean;
 

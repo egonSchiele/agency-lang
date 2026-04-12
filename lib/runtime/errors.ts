@@ -3,6 +3,8 @@ import type { MessageJSON } from "smoltalk";
 
 export type RestoreOptions = {
   messages?: MessageJSON[];
+  args?: any[];
+  globals?: Record<string, Record<string, any>>;
 };
 
 export class CheckpointError extends Error {

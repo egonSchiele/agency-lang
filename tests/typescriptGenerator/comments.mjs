@@ -151,6 +151,7 @@ let __functionCompleted = false;
   })
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "comments.agency", scopeName: "greet" });
+  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "comments.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
   try {
     await runner.step(0, async (runner) => {
 //  Comment inside function
@@ -173,7 +174,7 @@ return;
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {

@@ -201,6 +201,15 @@ let __functionCompleted = false;
   __stack.args["b"] = b;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "add" });
+  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "docstrings.agency", scopeName: "add", stepPath: "", label: "result-entry" });
+  if (__ctx._pendingArgOverrides) {
+    const __overrides = __ctx._pendingArgOverrides;
+    __ctx._pendingArgOverrides = undefined;
+    a = __overrides[0];
+__stack.args["a"] = a;
+    b = __overrides[1];
+__stack.args["b"] = b;
+  }
   try {
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -211,7 +220,7 @@ let __functionCompleted = false;
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -258,6 +267,13 @@ let __functionCompleted = false;
   __stack.args["name"] = name;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "greet" });
+  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "docstrings.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
+  if (__ctx._pendingArgOverrides) {
+    const __overrides = __ctx._pendingArgOverrides;
+    __ctx._pendingArgOverrides = undefined;
+    name = __overrides[0];
+__stack.args["name"] = name;
+  }
   try {
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -268,7 +284,7 @@ let __functionCompleted = false;
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -317,6 +333,15 @@ let __functionCompleted = false;
   __stack.args["height"] = height;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "calculateArea" });
+  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "docstrings.agency", scopeName: "calculateArea", stepPath: "", label: "result-entry" });
+  if (__ctx._pendingArgOverrides) {
+    const __overrides = __ctx._pendingArgOverrides;
+    __ctx._pendingArgOverrides = undefined;
+    width = __overrides[0];
+__stack.args["width"] = width;
+    height = __overrides[1];
+__stack.args["height"] = height;
+  }
   try {
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -327,7 +352,7 @@ let __functionCompleted = false;
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -371,6 +396,7 @@ let __functionCompleted = false;
   })
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "processData" });
+  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "docstrings.agency", scopeName: "processData", stepPath: "", label: "result-entry" });
   try {
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -381,7 +407,7 @@ let __functionCompleted = false;
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {

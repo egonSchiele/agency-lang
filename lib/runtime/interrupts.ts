@@ -5,7 +5,6 @@ import { Checkpoint } from "./state/checkpointStore.js";
 import { RuntimeContext } from "./state/context.js";
 import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
-import { ThreadStore } from "./state/threadStore.js";
 import { Approved, GraphState, Rejected } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
 
@@ -227,9 +226,6 @@ export async function respondToInterrupt(args: {
         const result = await execCtx.graph.run(
           nodeName,
           {
-            // todo user should be able to pass messages
-            // in metadata
-            messages: new ThreadStore(),
             data: {},
             ctx: execCtx,
             isResume: true,
@@ -372,12 +368,9 @@ export async function resumeFromState(args: {
         const result = await execCtx.graph.run(
           nodeName,
           {
-            // todo: is this correct? Do we need to pass messages here?
-            messages: new ThreadStore(),
             ctx: execCtx,
             isResume: true,
             data: {},
-            //interruptData
           },
           { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) },
         );

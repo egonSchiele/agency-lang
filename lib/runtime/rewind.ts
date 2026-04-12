@@ -2,7 +2,6 @@ import type { Checkpoint } from "./state/checkpointStore.js";
 import { RestoreSignal } from "./errors.js";
 import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
-import { ThreadStore } from "./state/threadStore.js";
 import type { GraphState } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { color } from "termcolors";

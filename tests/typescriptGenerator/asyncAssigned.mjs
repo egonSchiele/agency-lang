@@ -146,13 +146,18 @@ let __functionCompleted = false;
   __stack.args["val"] = val;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "asyncAssigned.agency", scopeName: "compute" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "asyncAssigned.agency", scopeName: "compute", stepPath: "", label: "result-entry" });
-  if (__ctx._pendingArgOverrides) {
-    const __overrides = __ctx._pendingArgOverrides;
-    __ctx._pendingArgOverrides = undefined;
-    val = __overrides[0];
-__stack.args["val"] = val;
-  }
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "asyncAssigned.agency", scopeName: "compute", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  val = __overrides[0];
+  __stack.args["val"] = val;
+
+}
+
   try {
     await runner.step(0, async (runner) => {
 await sleep(0.1)

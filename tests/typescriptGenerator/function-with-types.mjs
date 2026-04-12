@@ -208,15 +208,20 @@ let __functionCompleted = false;
   __stack.args["y"] = y;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "add" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "function-with-types.agency", scopeName: "add", stepPath: "", label: "result-entry" });
-  if (__ctx._pendingArgOverrides) {
-    const __overrides = __ctx._pendingArgOverrides;
-    __ctx._pendingArgOverrides = undefined;
-    x = __overrides[0];
-__stack.args["x"] = x;
-    y = __overrides[1];
-__stack.args["y"] = y;
-  }
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "function-with-types.agency", scopeName: "add", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  x = __overrides[0];
+  __stack.args["x"] = x;
+  y = __overrides[1];
+  __stack.args["y"] = y;
+
+}
+
   try {
     await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -297,13 +302,18 @@ let __functionCompleted = false;
   __stack.args["name"] = name;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "greet" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "function-with-types.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
-  if (__ctx._pendingArgOverrides) {
-    const __overrides = __ctx._pendingArgOverrides;
-    __ctx._pendingArgOverrides = undefined;
-    name = __overrides[0];
-__stack.args["name"] = name;
-  }
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "function-with-types.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  name = __overrides[0];
+  __stack.args["name"] = name;
+
+}
+
   try {
     await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -386,15 +396,20 @@ let __functionCompleted = false;
   __stack.args["label"] = label;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "mixed" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "function-with-types.agency", scopeName: "mixed", stepPath: "", label: "result-entry" });
-  if (__ctx._pendingArgOverrides) {
-    const __overrides = __ctx._pendingArgOverrides;
-    __ctx._pendingArgOverrides = undefined;
-    count = __overrides[0];
-__stack.args["count"] = count;
-    label = __overrides[1];
-__stack.args["label"] = label;
-  }
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "function-with-types.agency", scopeName: "mixed", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  count = __overrides[0];
+  __stack.args["count"] = count;
+  label = __overrides[1];
+  __stack.args["label"] = label;
+
+}
+
   try {
     await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -475,13 +490,18 @@ let __functionCompleted = false;
   __stack.args["items"] = items;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "processArray" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "function-with-types.agency", scopeName: "processArray", stepPath: "", label: "result-entry" });
-  if (__ctx._pendingArgOverrides) {
-    const __overrides = __ctx._pendingArgOverrides;
-    __ctx._pendingArgOverrides = undefined;
-    items = __overrides[0];
-__stack.args["items"] = items;
-  }
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "function-with-types.agency", scopeName: "processArray", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  items = __overrides[0];
+  __stack.args["items"] = items;
+
+}
+
   try {
     await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -562,13 +582,18 @@ let __functionCompleted = false;
   __stack.args["value"] = value;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "flexible" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "function-with-types.agency", scopeName: "flexible", stepPath: "", label: "result-entry" });
-  if (__ctx._pendingArgOverrides) {
-    const __overrides = __ctx._pendingArgOverrides;
-    __ctx._pendingArgOverrides = undefined;
-    value = __overrides[0];
-__stack.args["value"] = value;
-  }
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "function-with-types.agency", scopeName: "flexible", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  value = __overrides[0];
+  __stack.args["value"] = value;
+
+}
+
   try {
     await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];

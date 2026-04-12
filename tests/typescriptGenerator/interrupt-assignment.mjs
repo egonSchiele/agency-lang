@@ -135,7 +135,7 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
   // reject for tool calls handled separately
   __state.interruptData.interruptResponse = null;
   
-  runner.halt({ messages: __threads, data: null });
+  runner.halt({ messages: __threads, data: failure("interrupt rejected", { retryable: false }) });
   
   
   return;
@@ -145,7 +145,7 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
   const __handlerResult = await interruptWithHandlers(`What is your name?`, __ctx);
   if (isRejected(__handlerResult)) {
     
-    runner.halt({ messages: __threads, data: __handlerResult.value });
+    runner.halt({ messages: __threads, data: failure(__handlerResult.value ?? "interrupt rejected", { retryable: false }) });
     
     
     return;

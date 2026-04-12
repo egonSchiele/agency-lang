@@ -176,13 +176,18 @@ let __functionCompleted = false;
   __stack.args["msg"] = msg;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "asyncKeyword.agency", scopeName: "openai" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "asyncKeyword.agency", scopeName: "openai", stepPath: "", label: "result-entry" });
-  if (__ctx._pendingArgOverrides) {
-    const __overrides = __ctx._pendingArgOverrides;
-    __ctx._pendingArgOverrides = undefined;
-    msg = __overrides[0];
-__stack.args["msg"] = msg;
-  }
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "asyncKeyword.agency", scopeName: "openai", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  msg = __overrides[0];
+  __stack.args["msg"] = msg;
+
+}
+
   try {
     await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -263,13 +268,18 @@ let __functionCompleted = false;
   __stack.args["msg"] = msg;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "asyncKeyword.agency", scopeName: "google" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "asyncKeyword.agency", scopeName: "google", stepPath: "", label: "result-entry" });
-  if (__ctx._pendingArgOverrides) {
-    const __overrides = __ctx._pendingArgOverrides;
-    __ctx._pendingArgOverrides = undefined;
-    msg = __overrides[0];
-__stack.args["msg"] = msg;
-  }
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "asyncKeyword.agency", scopeName: "google", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  msg = __overrides[0];
+  __stack.args["msg"] = msg;
+
+}
+
   try {
     await runner.step(0, async (runner) => {
 __threads.active().setMessages([])
@@ -352,7 +362,16 @@ let __functionCompleted = false;
   })
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "asyncKeyword.agency", scopeName: "fibs" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "asyncKeyword.agency", scopeName: "fibs", stepPath: "", label: "result-entry" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "asyncKeyword.agency", scopeName: "fibs", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+
+}
+
   try {
     await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];

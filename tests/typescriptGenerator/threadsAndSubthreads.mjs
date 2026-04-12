@@ -143,7 +143,16 @@ let __functionCompleted = false;
   })
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "threadsAndSubthreads.agency", scopeName: "foo" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "foo", stepPath: "", label: "result-entry" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "foo", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+
+}
+
   try {
     await runner.step(0, async (runner) => {
 await runner.thread(0, __threads, "create", async (runner) => {

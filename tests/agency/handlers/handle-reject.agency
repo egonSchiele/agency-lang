@@ -9,5 +9,8 @@ node main() {
   } with (data) {
     return reject("not allowed")
   }
+  if (isFailure(result)) {
+    return result.error
+  }
   return result
 }

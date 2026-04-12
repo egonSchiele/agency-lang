@@ -148,15 +148,20 @@ let __functionCompleted = false;
   __stack.args["greeting"] = greeting ?? `Hello`;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "defaultValues.agency", scopeName: "greet" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "defaultValues.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
-  if (__ctx._pendingArgOverrides) {
-    const __overrides = __ctx._pendingArgOverrides;
-    __ctx._pendingArgOverrides = undefined;
-    name = __overrides[0];
-__stack.args["name"] = name;
-    greeting = __overrides[1];
-__stack.args["greeting"] = greeting;
-  }
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "defaultValues.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  name = __overrides[0];
+  __stack.args["name"] = name;
+  greeting = __overrides[1];
+  __stack.args["greeting"] = greeting;
+
+}
+
   try {
     await runner.step(0, async (runner) => {
 await print(__stack.args.greeting, __stack.args.name)

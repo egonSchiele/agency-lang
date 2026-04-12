@@ -6,6 +6,9 @@ import { checkpointSchema } from "./schemas.js";
 import type { SourceLocation } from "./sourceLocation.js";
 import type { StateStackJSON } from "./stateStack.js";
 
+/** Label used for pinned checkpoints created at function entry for Result error handling. */
+export const RESULT_ENTRY_LABEL = "result-entry";
+
 let globalCheckpointCounter = 0;
 
 export type SourceLocationOpts = Omit<SourceLocation, "nodeId">;

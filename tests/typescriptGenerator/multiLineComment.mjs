@@ -146,7 +146,16 @@ let __functionCompleted = false;
   })
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "multiLineComment.agency", scopeName: "greet" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "multiLineComment.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "multiLineComment.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+
+}
+
   try {
     await runner.step(0, async (runner) => {
 __functionCompleted = true;

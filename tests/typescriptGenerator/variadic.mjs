@@ -148,15 +148,20 @@ let __functionCompleted = false;
   __stack.args["messages"] = messages;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "variadic.agency", scopeName: "log" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "variadic.agency", scopeName: "log", stepPath: "", label: "result-entry" });
-  if (__ctx._pendingArgOverrides) {
-    const __overrides = __ctx._pendingArgOverrides;
-    __ctx._pendingArgOverrides = undefined;
-    prefix = __overrides[0];
-__stack.args["prefix"] = prefix;
-    messages = __overrides[1];
-__stack.args["messages"] = messages;
-  }
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "variadic.agency", scopeName: "log", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  prefix = __overrides[0];
+  __stack.args["prefix"] = prefix;
+  messages = __overrides[1];
+  __stack.args["messages"] = messages;
+
+}
+
   try {
     await runner.step(0, async (runner) => {
 await print(__stack.args.prefix, ...__stack.args.messages)

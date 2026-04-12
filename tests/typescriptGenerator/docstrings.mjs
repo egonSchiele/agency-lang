@@ -201,15 +201,20 @@ let __functionCompleted = false;
   __stack.args["b"] = b;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "add" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "docstrings.agency", scopeName: "add", stepPath: "", label: "result-entry" });
-  if (__ctx._pendingArgOverrides) {
-    const __overrides = __ctx._pendingArgOverrides;
-    __ctx._pendingArgOverrides = undefined;
-    a = __overrides[0];
-__stack.args["a"] = a;
-    b = __overrides[1];
-__stack.args["b"] = b;
-  }
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "docstrings.agency", scopeName: "add", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  a = __overrides[0];
+  __stack.args["a"] = a;
+  b = __overrides[1];
+  __stack.args["b"] = b;
+
+}
+
   try {
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -267,13 +272,18 @@ let __functionCompleted = false;
   __stack.args["name"] = name;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "greet" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "docstrings.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
-  if (__ctx._pendingArgOverrides) {
-    const __overrides = __ctx._pendingArgOverrides;
-    __ctx._pendingArgOverrides = undefined;
-    name = __overrides[0];
-__stack.args["name"] = name;
-  }
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "docstrings.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  name = __overrides[0];
+  __stack.args["name"] = name;
+
+}
+
   try {
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -333,15 +343,20 @@ let __functionCompleted = false;
   __stack.args["height"] = height;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "calculateArea" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "docstrings.agency", scopeName: "calculateArea", stepPath: "", label: "result-entry" });
-  if (__ctx._pendingArgOverrides) {
-    const __overrides = __ctx._pendingArgOverrides;
-    __ctx._pendingArgOverrides = undefined;
-    width = __overrides[0];
-__stack.args["width"] = width;
-    height = __overrides[1];
-__stack.args["height"] = height;
-  }
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "docstrings.agency", scopeName: "calculateArea", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  width = __overrides[0];
+  __stack.args["width"] = width;
+  height = __overrides[1];
+  __stack.args["height"] = height;
+
+}
+
   try {
     if (runner.halted) return runner.haltResult;
   } catch (__error) {
@@ -396,7 +411,16 @@ let __functionCompleted = false;
   })
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "processData" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "docstrings.agency", scopeName: "processData", stepPath: "", label: "result-entry" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "docstrings.agency", scopeName: "processData", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+
+}
+
   try {
     if (runner.halted) return runner.haltResult;
   } catch (__error) {

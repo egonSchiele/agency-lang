@@ -163,15 +163,20 @@ let __functionCompleted = false;
   __stack.args["age"] = age;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "interrupt-2-deep-in-function.agency", scopeName: "greet" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "interrupt-2-deep-in-function.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
-  if (__ctx._pendingArgOverrides) {
-    const __overrides = __ctx._pendingArgOverrides;
-    __ctx._pendingArgOverrides = undefined;
-    name = __overrides[0];
-__stack.args["name"] = name;
-    age = __overrides[1];
-__stack.args["age"] = age;
-  }
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "interrupt-2-deep-in-function.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  name = __overrides[0];
+  __stack.args["name"] = name;
+  age = __overrides[1];
+  __stack.args["age"] = age;
+
+}
+
   try {
     await runner.step(0, async (runner) => {
 // Remember this will be called both in a tool call context
@@ -186,7 +191,7 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   __state.interruptData.interruptResponse = null;
   
   
-  runner.halt(null);
+  runner.halt(failure("interrupt rejected", { retryable: false, checkpoint: __ctx.getResultCheckpoint() }));
   
   return;
 } else if (__state.interruptData?.interruptResponse?.type === "modify") {
@@ -202,7 +207,7 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   if (isRejected(__handlerResult)) {
     
     
-    runner.halt(__handlerResult.value);
+    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { retryable: false, checkpoint: __ctx.checkpoints.get(__resultCheckpointId) }));
     
     return;
   }
@@ -284,15 +289,20 @@ let __functionCompleted = false;
   __stack.args["age"] = age;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "interrupt-2-deep-in-function.agency", scopeName: "foo2" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "interrupt-2-deep-in-function.agency", scopeName: "foo2", stepPath: "", label: "result-entry" });
-  if (__ctx._pendingArgOverrides) {
-    const __overrides = __ctx._pendingArgOverrides;
-    __ctx._pendingArgOverrides = undefined;
-    name = __overrides[0];
-__stack.args["name"] = name;
-    age = __overrides[1];
-__stack.args["age"] = age;
-  }
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "interrupt-2-deep-in-function.agency", scopeName: "foo2", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  name = __overrides[0];
+  __stack.args["name"] = name;
+  age = __overrides[1];
+  __stack.args["age"] = age;
+
+}
+
   try {
     await runner.step(0, async (runner) => {
 await print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`) + greet

@@ -146,13 +146,18 @@ let __functionCompleted = false;
   __stack.args["block"] = block;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "blockBasic.agency", scopeName: "twice" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "blockBasic.agency", scopeName: "twice", stepPath: "", label: "result-entry" });
-  if (__ctx._pendingArgOverrides) {
-    const __overrides = __ctx._pendingArgOverrides;
-    __ctx._pendingArgOverrides = undefined;
-    block = __overrides[0];
-__stack.args["block"] = block;
-  }
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "blockBasic.agency", scopeName: "twice", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  block = __overrides[0];
+  __stack.args["block"] = block;
+
+}
+
   try {
     await runner.step(0, async (runner) => {
 __stack.locals.a = await block();

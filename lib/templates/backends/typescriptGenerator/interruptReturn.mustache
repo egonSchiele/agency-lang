@@ -9,10 +9,10 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   // tool calls will instead tell the llm that the call was rejected
   __state.interruptData.interruptResponse = null;
   {{#nodeContext}}
-  runner.halt({ messages: __threads, data: null });
+  runner.halt({ messages: __threads, data: failure("interrupt rejected", { retryable: false }) });
   {{/nodeContext}}
   {{^nodeContext}}
-  runner.halt(null);
+  runner.halt(failure("interrupt rejected", { retryable: false, checkpoint: __ctx.getResultCheckpoint() }));
   {{/nodeContext}}
   return;
 } else if (__state.interruptData?.interruptResponse?.type === "modify") {
@@ -27,10 +27,10 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
   const __handlerResult = await interruptWithHandlers({{{interruptArgs}}}, __ctx);
   if (isRejected(__handlerResult)) {
     {{#nodeContext}}
-    runner.halt({ messages: __threads, data: __handlerResult.value });
+    runner.halt({ messages: __threads, data: failure(__handlerResult.value ?? "interrupt rejected", { retryable: false }) });
     {{/nodeContext}}
     {{^nodeContext}}
-    runner.halt(__handlerResult.value);
+    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { retryable: false, checkpoint: __ctx.checkpoints.get(__resultCheckpointId) }));
     {{/nodeContext}}
     return;
   }

@@ -1,7 +1,7 @@
 import { StateStack } from "../state/stateStack.js";
 import { GlobalStore } from "../state/globalStore.js";
 import { PendingPromiseStore } from "./pendingPromiseStore.js";
-import { CheckpointStore } from "./checkpointStore.js";
+import { CheckpointStore, RESULT_ENTRY_LABEL } from "./checkpointStore.js";
 import type { Checkpoint } from "./checkpointStore.js";
 import { StatelogClient, StatelogConfig } from "../../statelogClient.js";
 import { SimpleMachine } from "../../simplemachine/index.js";
@@ -162,6 +162,17 @@ export class RuntimeContext<T> {
     this.callbacks = null as any;
     this.handlers = null as any;
     this.traceWriter = null;
+  }
+
+  /** Get the most recent result-entry checkpoint for the current function. */
+  getResultCheckpoint(): Checkpoint | undefined {
+    const sorted = this.checkpoints.getSorted();
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      if (sorted[i].pinned && sorted[i].label === RESULT_ENTRY_LABEL) {
+        return sorted[i];
+      }
+    }
+    return undefined;
   }
 
   restoreState(checkpoint: Checkpoint): void {

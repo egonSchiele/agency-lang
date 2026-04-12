@@ -146,13 +146,18 @@ let __functionCompleted = false;
   __stack.args["age"] = age;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "result-basic.agency", scopeName: "checkAge" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "result-basic.agency", scopeName: "checkAge", stepPath: "", label: "result-entry" });
-  if (__ctx._pendingArgOverrides) {
-    const __overrides = __ctx._pendingArgOverrides;
-    __ctx._pendingArgOverrides = undefined;
-    age = __overrides[0];
-__stack.args["age"] = age;
-  }
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "result-basic.agency", scopeName: "checkAge", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  age = __overrides[0];
+  __stack.args["age"] = age;
+
+}
+
   try {
     await runner.step(0, async (runner) => {
 await runner.ifElse(0, [

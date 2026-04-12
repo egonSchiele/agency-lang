@@ -148,15 +148,20 @@ let __functionCompleted = false;
   __stack.args["value"] = value;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "asyncUnassigned.agency", scopeName: "append" });
-  const __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "asyncUnassigned.agency", scopeName: "append", stepPath: "", label: "result-entry" });
-  if (__ctx._pendingArgOverrides) {
-    const __overrides = __ctx._pendingArgOverrides;
-    __ctx._pendingArgOverrides = undefined;
-    sleepTime = __overrides[0];
-__stack.args["sleepTime"] = sleepTime;
-    value = __overrides[1];
-__stack.args["value"] = value;
-  }
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "asyncUnassigned.agency", scopeName: "append", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  sleepTime = __overrides[0];
+  __stack.args["sleepTime"] = sleepTime;
+  value = __overrides[1];
+  __stack.args["value"] = value;
+
+}
+
   try {
     await runner.step(0, async (runner) => {
 await sleep(__stack.args.sleepTime)

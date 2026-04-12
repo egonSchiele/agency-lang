@@ -38,6 +38,7 @@ import * as renderRewindCheckpoint from "../templates/backends/typescriptGenerat
 import * as renderTraceSetup from "../templates/backends/typescriptGenerator/traceSetup.js";
 import * as renderBlockSetup from "../templates/backends/typescriptGenerator/blockSetup.js";
 import * as renderForkBlockSetup from "../templates/backends/typescriptGenerator/forkBlockSetup.js";
+import * as renderResultCheckpointSetup from "../templates/backends/typescriptGenerator/resultCheckpointSetup.js";
 
 import { AgencyConfig } from "@/config.js";
 import {
@@ -1118,30 +1119,20 @@ export class TypeScriptBuilder {
   private buildResultCheckpointSetup(
     functionName: string,
     parameters: FunctionParameter[],
-  ): TsNode[] {
-    const stmts: TsNode[] = [];
-    stmts.push(
-      ts.constDecl("__resultCheckpointId",
-        ts.raw(`__ctx.checkpoints.createPinned(__ctx, { moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(functionName)}, stepPath: "", label: "result-entry" })`),
-      ),
-    );
-    // On restore with arg overrides (from result.retry), reassign function parameters positionally
-    if (parameters.length > 0) {
-      stmts.push(
-        ts.if(
-          ts.raw("__ctx._pendingArgOverrides"),
-          ts.statements([
-            ts.constDecl("__overrides", ts.raw("__ctx._pendingArgOverrides")),
-            ts.raw("__ctx._pendingArgOverrides = undefined;"),
-            ...parameters.map((p, i) => ts.statements([
-              ts.assign(ts.id(p.name), ts.raw(`__overrides[${i}]`)),
-              ts.assign($(ts.stack("args")).index(ts.str(p.name)).done(), ts.id(p.name)),
-            ])),
-          ]),
-        ),
-      );
-    }
-    return stmts;
+  ): TsNode {
+    let paramsStr = "";
+    parameters.forEach((p, i) => {
+      paramsStr += `  ${p.name} = __overrides[${i}];
+  __stack.args[${JSON.stringify(p.name)}] = ${p.name};
+`;
+    });
+    const str = renderResultCheckpointSetup.default({
+      moduleId: JSON.stringify(this.moduleId),
+      scopeName: JSON.stringify(functionName),
+      paramsStr
+    })
+
+    return ts.raw(str);
   }
 
   private processFunctionDefinition(node: FunctionDefinition): TsNode {
@@ -1246,7 +1237,7 @@ export class TypeScriptBuilder {
     setupStmts.push(ts.raw(`const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(functionName)} });`));
 
     // Pinned checkpoint at entry for all functions (enables result.retry and error-to-failure wrapping)
-    setupStmts.push(...this.buildResultCheckpointSetup(functionName, parameters));
+    setupStmts.push(this.buildResultCheckpointSetup(functionName, parameters));
 
     // Try/catch wrapping the body, with finally to always pop the state stack
     setupStmts.push(

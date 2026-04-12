@@ -23,8 +23,16 @@ def readStuff() {
 def foo() {
   const res1 = greet()
   const res2 = readStuff()
-  log.push(res1)
-  log.push(res2)
+  if (isFailure(res1)) {
+    log.push(res1.error)
+  } else {
+    log.push(res1)
+  }
+  if (isFailure(res2)) {
+    log.push(res2.error)
+  } else {
+    log.push(res2)
+  }
   log.push("foo-done")
   return "foo result"
 }

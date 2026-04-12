@@ -19,7 +19,11 @@ node testInnerApproveOuterReject() {
   handle {
     handle {
       const result = foo()
-      log.push(result)
+      if (isFailure(result)) {
+        log.push(result.error)
+      } else {
+        log.push(result)
+      }
     } with (data) {
       return approve()
     }
@@ -34,7 +38,11 @@ node testInnerRejectOuterApprove() {
   handle {
     handle {
       const result = foo()
-      log.push(result)
+      if (isFailure(result)) {
+        log.push(result.error)
+      } else {
+        log.push(result)
+      }
     } with (data) {
       return reject("rejected")
     }
@@ -49,7 +57,11 @@ node testBothReject() {
   handle {
     handle {
       const result = foo()
-      log.push(result)
+      if (isFailure(result)) {
+        log.push(result.error)
+      } else {
+        log.push(result)
+      }
     } with (data) {
       return reject("rejected")
     }

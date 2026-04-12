@@ -59,7 +59,6 @@ export async function rewindFrom(args: {
         const result = await execCtx.graph.run(
           nodeName,
           {
-            messages: new ThreadStore(),
             data: {},
             ctx: execCtx,
             isResume: true,

@@ -6,7 +6,7 @@ import { StatelogClient } from "@/statelogClient.js";
 import { InterruptData } from "./interrupts.js";
 
 export type GraphState = {
-  messages: ThreadStore;
+  messages?: ThreadStore;
   data: any; //Record<string, any>;
 
   // make sure each node has access to the graph

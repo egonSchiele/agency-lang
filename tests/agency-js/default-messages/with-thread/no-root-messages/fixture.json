@@ -2,6 +2,9 @@
   "messages": {
     "threads": {
       "0": {
+        "messages": []
+      },
+      "1": {
         "messages": [
           {
             "role": "user",
@@ -22,7 +25,9 @@
         ]
       }
     },
-    "counter": 1,
-    "activeStack": []
+    "counter": 2,
+    "activeStack": [
+      "0"
+    ]
   }
 }

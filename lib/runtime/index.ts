@@ -74,7 +74,7 @@ export type { RestoreOptions } from "./errors.js";
 
 export { checkpoint, getCheckpoint, restore } from "./checkpoint.js";
 
-export { CheckpointStore } from "./state/checkpointStore.js";
+export { CheckpointStore, RESULT_ENTRY_LABEL } from "./state/checkpointStore.js";
 export type { Checkpoint } from "./state/checkpointStore.js";
 
 export { setupNode, setupFunction, runNode } from "./node.js";

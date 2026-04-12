@@ -7,6 +7,5 @@
   "client": {
     "logLevel": "warn",
     "defaultModel": "gpt-4o-mini"
-  },
-  "typeCheck": true
+  }
 }

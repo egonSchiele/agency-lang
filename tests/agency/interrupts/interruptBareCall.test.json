@@ -21,7 +21,7 @@
       "nodeName": "foo",
       "description": "Test that a bare interrupt() call returns null on reject",
       "input": "",
-      "expectedOutput": "{\"greeting\":null}",
+      "expectedOutput": "{\"greeting\":\"interrupt rejected\"}",
       "evaluationCriteria": [
         {
           "type": "exact"

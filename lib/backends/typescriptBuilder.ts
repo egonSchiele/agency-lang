@@ -9,6 +9,7 @@ import {
   Literal,
   NamedArgument,
   PromptSegment,
+  FunctionScope,
   Scope,
   ScopeType,
   SplatExpression,
@@ -37,6 +38,7 @@ import * as renderRewindCheckpoint from "../templates/backends/typescriptGenerat
 import * as renderTraceSetup from "../templates/backends/typescriptGenerator/traceSetup.js";
 import * as renderBlockSetup from "../templates/backends/typescriptGenerator/blockSetup.js";
 import * as renderForkBlockSetup from "../templates/backends/typescriptGenerator/forkBlockSetup.js";
+import * as renderResultCheckpointSetup from "../templates/backends/typescriptGenerator/resultCheckpointSetup.js";
 
 import { AgencyConfig } from "@/config.js";
 import {
@@ -74,6 +76,7 @@ import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { escape, mergeDeep } from "../utils.js";
+import { isResultType } from "./utils.js";
 import {
   generateBuiltinHelpers,
   mapFunctionName,
@@ -140,6 +143,7 @@ export class TypeScriptBuilder {
   because this statement contains an async function call.
   */
   private _asyncBranchCheckNeeded: boolean = false;
+  private _insideResultFunction: boolean = false;
 
   /** Tracks the current substep nesting path. Empty when at the top level
    * of a stepped body. Non-empty when inside a block (if/else, etc.) that
@@ -1108,6 +1112,29 @@ export class TypeScriptBuilder {
     return ts.varDecl("const", "__toolRegistry", ts.obj(entries));
   }
 
+  /**
+   * For Result-returning functions: emit a pinned checkpoint at function entry
+   * and a preamble that applies arg overrides on restore (for result.retry()).
+   */
+  private buildResultCheckpointSetup(
+    functionName: string,
+    parameters: FunctionParameter[],
+  ): TsNode {
+    let paramsStr = "";
+    parameters.forEach((p, i) => {
+      paramsStr += `  ${p.name} = __overrides[${i}];
+  __stack.args[${JSON.stringify(p.name)}] = ${p.name};
+`;
+    });
+    const str = renderResultCheckpointSetup.default({
+      moduleId: JSON.stringify(this.moduleId),
+      scopeName: JSON.stringify(functionName),
+      paramsStr
+    })
+
+    return ts.raw(str);
+  }
+
   private processFunctionDefinition(node: FunctionDefinition): TsNode {
     this.startScope({ type: "function", functionName: node.functionName });
     this._sourceMapBuilder.enterScope(this.moduleId, node.functionName);
@@ -1209,10 +1236,13 @@ export class TypeScriptBuilder {
     // Create runner for step execution
     setupStmts.push(ts.raw(`const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(functionName)} });`));
 
+    // Pinned checkpoint at entry for all functions (enables result.retry and error-to-failure wrapping)
+    setupStmts.push(this.buildResultCheckpointSetup(functionName, parameters));
+
     // Try/catch wrapping the body, with finally to always pop the state stack
     setupStmts.push(
       ts.tryCatch(
-        ts.statements([...bodyCode, ts.raw("if (runner.halted) return runner.haltResult;")]),
+        ts.statements([...bodyCode, ts.raw("if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }")]),
         ts.statements([
           ts.if(
             ts.raw("__error instanceof RestoreSignal"),
@@ -1227,9 +1257,7 @@ export class TypeScriptBuilder {
               ts.throw("__error"),
             ]),
           ),
-          ts.throw(
-            "new ToolCallError(__error, { retryable: __self.__retryable })",
-          ),
+          ts.raw(`return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: ${JSON.stringify(functionName)}, args: __stack.args });`),
         ]),
         "__error",
         // finally block: pop state stack and conditionally fire onFunctionEnd.
@@ -1350,6 +1378,18 @@ export class TypeScriptBuilder {
   private processFunctionCall(node: FunctionCall): TsNode {
     if ((node.functionName === "fork" || node.functionName === "race") && node.block) {
       return this.processForkCall(node);
+    }
+
+    if (node.functionName === "failure" && this.getCurrentScope().type === "function") {
+      // Inside functions, inject checkpoint, function name, and args
+      const scope = this.getCurrentScope() as FunctionScope;
+      const argNodes: TsNode[] = node.arguments.map((arg) =>
+        this.processCallArg(arg),
+      );
+      return ts.call(ts.id("failure"), [
+        ...argNodes,
+        ts.raw(`{ checkpoint: __ctx.checkpoints.get(__resultCheckpointId), functionName: ${JSON.stringify(scope.functionName)}, args: __stack.args }`),
+      ]);
     }
 
     if (node.functionName === "throw") {
@@ -1647,26 +1687,36 @@ export class TypeScriptBuilder {
       stmts.push(ts.if(ts.raw("!__state.isResume"), ts.statements(paramStmts)));
     }
 
-    // Body
-    stmts.push(...bodyCode);
-
-    // Halt check — if runner halted (interrupt/debug/return), return the halt result directly.
-    // nodeResult and interrupt code already wrap in { messages, data } format.
-    stmts.push(ts.raw("if (runner.halted) return runner.haltResult;"));
-
-    // onNodeEnd hook + return
+    // Body wrapped in try-catch so node errors return failure instead of crashing
     stmts.push(
-      ts.callHook("onNodeEnd", {
-        nodeName: ts.str(nodeName),
-        data: ts.id("undefined"),
-      }),
-    );
-    stmts.push(
-      ts.return(
-        ts.obj({
-          messages: ts.runtime.threads,
-          data: ts.id("undefined"),
-        }),
+      ts.tryCatch(
+        ts.statements([
+          ...bodyCode,
+          ts.raw("if (runner.halted) return runner.haltResult;"),
+          ts.callHook("onNodeEnd", {
+            nodeName: ts.str(nodeName),
+            data: ts.id("undefined"),
+          }),
+          ts.return(
+            ts.obj({
+              messages: ts.runtime.threads,
+              data: ts.id("undefined"),
+            }),
+          ),
+        ]),
+        ts.statements([
+          ts.if(
+            ts.raw("__error instanceof RestoreSignal"),
+            ts.statements([ts.throw("__error")]),
+          ),
+          ts.return(
+            ts.obj({
+              messages: ts.runtime.threads,
+              data: ts.raw(`failure(__error instanceof Error ? __error.message : String(__error), { functionName: ${JSON.stringify(nodeName)} })`),
+            }),
+          ),
+        ]),
+        "__error",
       ),
     );
 

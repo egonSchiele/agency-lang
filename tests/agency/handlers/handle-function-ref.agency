@@ -41,7 +41,11 @@ node testApprovePolicy() {
 node testRejectPolicy() {
   handle {
     const result = foo()
-    log.push(result)
+    if (isFailure(result)) {
+      log.push(result.error)
+    } else {
+      log.push(result)
+    }
   } with rejectPolicy
   return log
 }
@@ -59,7 +63,11 @@ node testApprovePolicyWithValue() {
 node testRejectPolicyWithValue() {
   handle {
     const result = foo()
-    log.push(result)
+    if (isFailure(result)) {
+      log.push(result.error)
+    } else {
+      log.push(result)
+    }
   } with rejectPolicyWithValue
   return log
 }
@@ -75,7 +83,11 @@ node testApprovePolicyWithAssign() {
 node testRejectPolicyWithAssign() {
   handle {
     const result = fooWithAssign()
-    log.push(result)
+    if (isFailure(result)) {
+      log.push(result.error)
+    } else {
+      log.push(result)
+    }
   } with rejectPolicy
   return log
 }
@@ -91,7 +103,11 @@ node testApprovePolicyWithValueAndAssign() {
 node testRejectPolicyWithValueAndAssign() {
   handle {
     const result = fooWithAssign()
-    log.push(result)
+    if (isFailure(result)) {
+      log.push(result.error)
+    } else {
+      log.push(result)
+    }
   } with rejectPolicyWithValue
   return log
 }

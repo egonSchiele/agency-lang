@@ -8,5 +8,8 @@ node main() {
     let name = interrupt("what is your name?")
     return "hello ${name}"
   }
+  if (isFailure(result)) {
+    return result.error
+  }
   return result
 }

@@ -21,7 +21,14 @@ describe("success", () => {
 describe("failure", () => {
   it("creates a failure result with string error", () => {
     const result = failure("something went wrong");
-    expect(result).toEqual({ success: false, error: "something went wrong", checkpoint: null });
+    expect(result).toEqual({
+      success: false,
+      error: "something went wrong",
+      checkpoint: null,
+      retryable: false,
+      functionName: null,
+      args: null,
+    });
   });
 
   it("creates a failure result with object error", () => {
@@ -30,10 +37,27 @@ describe("failure", () => {
       success: false,
       error: { code: 404, message: "not found" },
       checkpoint: null,
+      retryable: false,
+      functionName: null,
+      args: null,
     });
   });
 
-  it("always sets checkpoint to null", () => {
+  it("accepts opts with checkpoint, retryable, functionName, args", () => {
+    const cp = { id: 1 };
+    const result = failure("error", {
+      checkpoint: cp,
+      retryable: true,
+      functionName: "myFunc",
+      args: { x: 10 },
+    });
+    expect(result.checkpoint).toBe(cp);
+    expect(result.retryable).toBe(true);
+    expect(result.functionName).toBe("myFunc");
+    expect(result.args).toEqual({ x: 10 });
+  });
+
+  it("defaults checkpoint to null when no opts", () => {
     const result = failure("error");
     expect(result.checkpoint).toBeNull();
   });

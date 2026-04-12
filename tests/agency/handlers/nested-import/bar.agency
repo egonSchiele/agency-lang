@@ -15,7 +15,11 @@ export def getLog() {
 export def barHandler() {
   handle {
     const result = logWithAssign()
-    log.push(result)
+    if (isFailure(result)) {
+      log.push(result.error)
+    } else {
+      log.push(result)
+    }
   } with (data) {
     return approve()
   }

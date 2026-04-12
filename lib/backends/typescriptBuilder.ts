@@ -66,6 +66,7 @@ import {
 } from "../types/function.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { HandleBlock } from "../types/handleBlock.js";
+import { WithModifier } from "../types/withModifier.js";
 import { IfElse } from "../types/ifElse.js";
 import {
   ImportNodeStatement,
@@ -125,6 +126,7 @@ export class TypeScriptBuilder {
   // Threading & control flow
   private loopVars: string[] = [];
   private insideHandlerBody: boolean = false;
+  private insideGlobalInit: boolean = false;
   private _blockCounter: number = 0;
 
   /** Stack of loop subKeys for generating break/continue cleanup code.
@@ -417,10 +419,33 @@ export class TypeScriptBuilder {
     const globalInitStatements: TsNode[] = [];
     for (const node of program.nodes) {
       if (node.type === "assignment" && node.scope === "global") {
+        this.insideGlobalInit = true;
         const valueNode = this.processNode(node.value);
+        this.insideGlobalInit = false;
         globalInitStatements.push(
           ts.globalSet(this.moduleId, node.variableName, valueNode),
         );
+      } else if (
+        node.type === "withModifier" &&
+        node.statement.type === "assignment" &&
+        node.statement.scope === "global"
+      ) {
+        // Global assignment with handler modifier — wrap in pushHandler/popHandler
+        const stmt = node.statement;
+        this.insideGlobalInit = true;
+        const valueNode = this.processNode(stmt.value);
+        this.insideGlobalInit = false;
+        const setNode = ts.globalSet(this.moduleId, stmt.variableName, valueNode);
+
+        const handlerName = node.handlerName;
+        const args = handlerName === "propagate" ? [] : [ts.id("__data")];
+        const handler = ts.arrowFn(
+          [{ name: "__data", typeAnnotation: "any" }],
+          ts.call(ts.id(handlerName), args),
+          { async: true },
+        );
+
+        globalInitStatements.push(ts.withHandler(handler, setNode));
       } else {
         const result = this.processNode(node);
         this.generatedStatements.push(result);
@@ -461,16 +486,15 @@ export class TypeScriptBuilder {
         "__initializeGlobals",
         [{ name: "__ctx" }],
         ts.statements([
-          ...globalInitStatements,
-          // Mark this module as initialized on the GlobalStore. The flag is
-          // serialized with the store, so on interrupt resume the restored
-          // GlobalStore already has this flag set and __initializeGlobals
-          // won't be called again — avoiding re-evaluation of init expressions
-          // and overwriting of restored global values.
+          // Mark this module as initialized BEFORE running init statements.
+          // This prevents infinite recursion when a global init expression
+          // calls a function defined in the same module (which would trigger
+          // __initializeGlobals again via the isInitialized check).
           ts.call(
             $(ts.runtime.ctx).prop("globals").prop("markInitialized").done(),
             [ts.str(this.moduleId)],
           ),
+          ...globalInitStatements,
         ]),
         { async: true },
       ),
@@ -627,6 +651,8 @@ export class TypeScriptBuilder {
         return this.processMessageThread(node);
       case "handleBlock":
         return this.processHandleBlockWithSteps(node);
+      case "withModifier":
+        return this.processWithModifier(node);
       case "skill":
         return ts.empty();
       case "binOpExpression":
@@ -1498,15 +1524,18 @@ export class TypeScriptBuilder {
     const shouldAwait = !node.async && context !== "valueAccess";
 
     if (this.isAgencyFunction(node.functionName, context)) {
-      // Always pass the caller's ThreadStore so the function shares the thread context
-      const threadsExpr = ts.runtime.threads;
-      const configObj = ts.functionCallConfig({
-        ctx: ts.runtime.ctx,
-        threads: threadsExpr,
-        interruptData: ts.raw("__state?.interruptData"),
-        stateStack: options?.stateStack,
-        isForked: node.async,
-      });
+      // In global init scope, __threads and __state don't exist — pass only ctx
+      const configObj = this.insideGlobalInit
+        ? ts.functionCallConfig({
+            ctx: ts.runtime.ctx,
+          })
+        : ts.functionCallConfig({
+            ctx: ts.runtime.ctx,
+            threads: ts.runtime.threads,
+            interruptData: ts.raw("__state?.interruptData"),
+            stateStack: options?.stateStack,
+            isForked: node.async,
+          });
       const call = ts.call(ts.id(functionName), [...argNodes, configObj]);
       return shouldAwait ? ts.await(call) : call;
     } else if (node.functionName === "system") {
@@ -2337,6 +2366,24 @@ export class TypeScriptBuilder {
 
     // Body: process each statement with substep tracking
     const bodyNodes = this.processBodyAsParts(node.body);
+
+    return ts.runnerHandle({ id, handler, body: bodyNodes });
+  }
+
+  private processWithModifier(node: WithModifier): TsNode {
+    const id = this._subStepPath[this._subStepPath.length - 1];
+    const handlerName = node.handlerName;
+
+    // Build the handler arrow — same pattern as processHandleBlockWithSteps for builtin refs
+    const args = handlerName === "propagate" ? [] : [ts.id("__data")];
+    const handler = ts.arrowFn(
+      [{ name: "__data", typeAnnotation: "any" }],
+      ts.call(ts.id(handlerName), args),
+      { async: true },
+    );
+
+    // Process inner statement via processBodyAsParts for proper substep tracking
+    const bodyNodes = this.processBodyAsParts([node.statement]);
 
     return ts.runnerHandle({ id, handler, body: bodyNodes });
   }

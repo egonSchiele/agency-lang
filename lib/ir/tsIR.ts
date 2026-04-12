@@ -48,7 +48,15 @@ export type TsNode =
   | TsAnd
   | TsOr
   | TsNot
+  | TsWithHandler
   | TsTernary;
+
+/** Raw pushHandler/popHandler wrapping for global scope (no runner) */
+export interface TsWithHandler {
+  kind: "withHandler";
+  handler: TsNode;
+  body: TsNode;
+}
 
 /** Escape hatch: verbatim string */
 export interface TsRaw {

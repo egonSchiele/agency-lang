@@ -1,0 +1,12 @@
+def foo() {
+  return interrupt("check")
+  return "after interrupt"
+}
+
+node main() {
+  const result = foo() with reject
+  if (isFailure(result)) {
+    return result.error
+  }
+  return result
+}

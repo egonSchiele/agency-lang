@@ -224,6 +224,8 @@ export function* getAllVariablesInBody(
       if (node.handler.kind === "inline") {
         yield* getAllVariablesInBody(node.handler.body);
       }
+    } else if (node.type === "withModifier") {
+      yield* getAllVariablesInBody([node.statement]);
     }
   }
 }
@@ -286,6 +288,8 @@ export function* walkNodes(
       if (node.handler.kind === "inline") {
         yield* walkNodes(node.handler.body, [...ancestors, node], scopes);
       }
+    } else if (node.type === "withModifier") {
+      yield* walkNodes([node.statement], [...ancestors, node], scopes);
     } else if (node.type === "returnStatement") {
       yield* walkNodes([node.value], [...ancestors, node], scopes);
     } else if (node.type === "assignment") {

@@ -84,7 +84,7 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
-function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("asyncKeyword.agency")
 }
 export const __openaiTool = {
@@ -158,7 +158,7 @@ const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("asyncKeyword.agency")) {
-    __initializeGlobals(__ctx)
+    await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
   await callHook({
@@ -255,7 +255,7 @@ const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("asyncKeyword.agency")) {
-    __initializeGlobals(__ctx)
+    await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
   await callHook({
@@ -357,7 +357,7 @@ const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("asyncKeyword.agency")) {
-    __initializeGlobals(__ctx)
+    await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
   await callHook({

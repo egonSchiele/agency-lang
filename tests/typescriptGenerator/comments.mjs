@@ -84,10 +84,10 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
-function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__ctx) {
+  __ctx.globals.markInitialized("comments.agency")
   __ctx.globals.set("comments.agency", "x", 42)
   __ctx.globals.set("comments.agency", "y", `hello`)
-  __ctx.globals.markInitialized("comments.agency")
 }
 export const __greetTool = {
   name: "greet",
@@ -136,7 +136,7 @@ const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("comments.agency")) {
-    __initializeGlobals(__ctx)
+    await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
   await callHook({

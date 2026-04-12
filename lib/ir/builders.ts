@@ -51,6 +51,7 @@ import type {
   TsPostfixOp,
   TsTernary,
   TsRunnerDebugger,
+  TsWithHandler,
 } from "./tsIR.js";
 
 export { $, TsChain } from "./fluent.js";
@@ -378,6 +379,10 @@ export const ts = {
     return { kind: "runnerHandle", ...opts };
   },
 
+  withHandler(handler: TsNode, body: TsNode): TsWithHandler {
+    return { kind: "withHandler", handler, body };
+  },
+
   runnerIfElse(opts: { id: number; branches: { condition: TsNode; body: TsNode[] }[]; elseBranch?: TsNode[] }): TsRunnerIfElse {
     return { kind: "runnerIfElse", ...opts };
   },
@@ -527,16 +532,20 @@ export const ts = {
     isForked,
   }: {
     ctx: TsNode;
-    threads: TsNode;
-    interruptData: TsNode;
+    threads?: TsNode;
+    interruptData?: TsNode;
     stateStack?: TsNode;
     isForked?: boolean;
   }): TsNode {
     const entries: Record<string, TsNode> = {
       ctx,
-      threads,
-      interruptData,
     };
+    if (threads) {
+      entries.threads = threads;
+    }
+    if (interruptData) {
+      entries.interruptData = interruptData;
+    }
     if (stateStack) {
       entries.stateStack = stateStack;
     }

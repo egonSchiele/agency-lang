@@ -1,0 +1,13 @@
+def foo(val: string) {
+  const result = interrupt(val)
+  return result
+}
+
+node main() {
+  const results = []
+  for (item in ["a", "b", "c"]) {
+    const result = foo(item) with approve
+    results.push(result)
+  }
+  return results
+}

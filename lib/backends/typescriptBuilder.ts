@@ -124,7 +124,6 @@ export class TypeScriptBuilder {
 
   // Threading & control flow
   private loopVars: string[] = [];
-  private insideMessageThread: boolean = false;
   private insideHandlerBody: boolean = false;
   private _blockCounter: number = 0;
 
@@ -1603,7 +1602,7 @@ export class TypeScriptBuilder {
     }
 
     const goToArgs = ts.obj({
-      messages: ts.stack("messages"),
+      messages: ts.runtime.threads,
       ctx: ts.runtime.ctx,
       data: dataNode,
     });
@@ -2169,10 +2168,7 @@ export class TypeScriptBuilder {
       node.threadType === "subthread" ? "createSubthread" as const : "create" as const;
 
     // Body: process each statement with substep tracking
-    const prevInsideMessageThread = this.insideMessageThread;
-    this.insideMessageThread = true;
     const bodyNodes = this.processBodyAsParts(node.body);
-    this.insideMessageThread = prevInsideMessageThread;
 
     // The Runner's thread() method handles setup (create + pushActive) and
     // cleanup (popActive). If the thread result is assigned, clone messages
@@ -2323,7 +2319,7 @@ export class TypeScriptBuilder {
                 ts.id("__data"),
                 ts.functionCallConfig({
                   ctx: ts.runtime.ctx,
-                  threads: ts.newThreadStore(),
+                  threads: ts.runtime.threads,
                   interruptData: ts.id("undefined"),
                 }),
               ]),

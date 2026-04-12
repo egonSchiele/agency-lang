@@ -11,6 +11,7 @@ import {
   RawCode,
   ScopeType,
   Sentinel,
+  Tag,
   WhileLoop,
 } from "@/types.js";
 import { MessageThread } from "@/types/messageThread.js";
@@ -92,6 +93,43 @@ function llmCallToString(call: FunctionCall): string {
   return "llm(...)";
 }
 
+function collectTags(nodes: AgencyNode[]): AgencyNode[] {
+  const result: AgencyNode[] = [];
+  let pendingTags: Tag[] = [];
+
+  for (const node of nodes) {
+    if (node.type === "tag") {
+      pendingTags.push(node);
+      continue;
+    }
+
+    if (pendingTags.length > 0) {
+      if (["graphNode", "function", "assignment", "functionCall"].includes(node.type)) {
+        (node as any).tags = [...((node as any).tags || []), ...pendingTags];
+      }
+      pendingTags = [];
+    }
+
+    // Recurse into bodies
+    if ("body" in node && Array.isArray((node as any).body)) {
+      (node as any).body = collectTags((node as any).body);
+    }
+    if (node.type === "ifElse") {
+      node.thenBody = collectTags(node.thenBody);
+      if (node.elseBody) {
+        node.elseBody = collectTags(node.elseBody);
+      }
+    }
+    if (node.type === "handleBlock" && node.handler.kind === "inline") {
+      node.handler.body = collectTags(node.handler.body);
+    }
+
+    result.push(node);
+  }
+
+  return result;
+}
+
 export class TypescriptPreprocessor {
   public program: AgencyProgram;
   protected config: AgencyConfig;
@@ -117,6 +155,7 @@ export class TypescriptPreprocessor {
   }
 
   preprocess(): AgencyProgram {
+    this.program.nodes = collectTags(this.program.nodes);
     if (Object.keys(this.functionDefinitions).length === 0) {
       this.getFunctionDefinitions();
     }

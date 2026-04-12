@@ -69,6 +69,7 @@ import { HandleBlock } from "@/types/handleBlock.js";
 import { WithModifier } from "@/types/withModifier.js";
 import { debuggerParser } from "./debuggerStatement.js";
 import { exprParser } from "./expression.js";
+import { tagParser } from "./tag.js";
 import { withLoc } from "./loc.js";
 import { label } from "tarsec";
 
@@ -170,6 +171,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
     usesToolParser,
     debug(typeAliasParser, "error in typeAliasParser"),
     specialVarParser,
+    tagParser,
     returnStatementParser,
     forLoopParser,
     whileLoopParser,

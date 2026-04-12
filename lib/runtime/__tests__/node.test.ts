@@ -41,7 +41,7 @@ describe("setupNode", () => {
     const state = { ctx, data: {} } as any;
 
     expect(() => setupNode({ state })).toThrow(
-      "setupNode: no ThreadStore available",
+      "setupNode: no ThreadStore available. state.messages is not set",
     );
   });
 });

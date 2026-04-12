@@ -17,16 +17,7 @@ export function setupNode(args: { state: GraphState }): {
 } {
   let { state } = args;
   const ctx = state.ctx;
-  /* 
-  if (state.isResume) {
-    // restore global state
-    // to to restore data that was saved on the state stack for this node
-    // clear the state stack from metadata so it doesn't propagate to other nodes.
-    //state.__metadata.__stateStack = undefined;
-  } */
 
-  // either creates a new stack for this node,
-  // or restores the stack if we're resuming after an interrupt
   const stack = ctx.stateStack.getNewState();
   const step = stack.step;
   const self = stack.locals;
@@ -38,7 +29,7 @@ export function setupNode(args: { state: GraphState }): {
   } else if (state.messages instanceof ThreadStore) {
     threads = state.messages;
   } else {
-    throw new Error("setupNode: no ThreadStore available. Expected state.messages to be a ThreadStore.");
+    throw new Error("setupNode: no ThreadStore available. state.messages is not set and stack has no serialized threads.");
   }
   stack.threads = threads;
 
@@ -113,8 +104,7 @@ export async function runNode({
     data: { nodeName, args: data, messages: messages || [] },
   });
   let isResume = false;
-  let threadStore = new ThreadStore();
-  threadStore.getOrCreateActive();
+  let threadStore = ThreadStore.withDefaultActive();
   try {
     while (true) {
       try {
@@ -158,8 +148,7 @@ export async function runNode({
           isResume = true;
           execCtx.stateStack.nodesTraversed = [cp.nodeId];
           // Reset ThreadStore for the restored execution
-          threadStore = new ThreadStore();
-          threadStore.getOrCreateActive();
+          threadStore = ThreadStore.withDefaultActive();
           continue;
         }
         throw e;

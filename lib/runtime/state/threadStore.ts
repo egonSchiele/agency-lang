@@ -19,6 +19,12 @@ export class ThreadStore {
     this.activeStack = [];
   }
 
+  static withDefaultActive(): ThreadStore {
+    const store = new ThreadStore();
+    store.getOrCreateActive();
+    return store;
+  }
+
   // Create a new empty thread, return its ID
   create(): MessageThreadID {
     const id = (this.counter++).toString();

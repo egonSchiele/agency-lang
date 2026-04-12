@@ -29,7 +29,10 @@ export function setupNode(args: { state: GraphState }): {
   } else if (state.messages instanceof ThreadStore) {
     threads = state.messages;
   } else {
-    throw new Error("setupNode: no ThreadStore available. state.messages is not set and stack has no serialized threads.");
+    // Fallback: create a new ThreadStore with a default active thread.
+    // This can happen on debugger/rewind resume paths where messages is not passed
+    // and the checkpoint frame doesn't have serialized threads.
+    threads = ThreadStore.withDefaultActive();
   }
   stack.threads = threads;
 

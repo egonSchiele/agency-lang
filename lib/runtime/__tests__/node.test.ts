@@ -36,12 +36,13 @@ describe("setupNode", () => {
     expect(result.threads.activeId()).toBeDefined();
   });
 
-  it("throws when no ThreadStore is available", () => {
+  it("falls back to new ThreadStore when neither source is available", () => {
     const ctx = { stateStack: new StateStack() } as any;
     const state = { ctx, data: {} } as any;
 
-    expect(() => setupNode({ state })).toThrow(
-      "setupNode: no ThreadStore available. state.messages is not set",
-    );
+    const result = setupNode({ state });
+
+    expect(result.threads).toBeInstanceOf(ThreadStore);
+    expect(result.threads.activeId()).toBeDefined();
   });
 });

@@ -18,7 +18,6 @@ Flip the default: all LLM calls share a common message history by default, as if
 
 - `thread { }` and `subthread { }` block semantics are unchanged.
 - Tool-invoked functions (functions called by the LLM as tools) remain isolated — they get a fresh `ThreadStore`.
-- Handler functions (`handle` blocks) remain isolated — they get a fresh `ThreadStore`. Handlers are safety infrastructure and must not accidentally share or corrupt the main thread.
 - Functions called internally share the caller's `ThreadStore`, same as today when inside a thread block.
 
 ## Changes
@@ -134,14 +133,27 @@ const initialState = {
 
 This is the entry point when running an Agency file as a script (not through `runNode()`). The `new ThreadStore()` here also needs a pre-pushed active thread. However, since `setupNode()` will call `getOrCreateActive()` on the ThreadStore it receives, this may be handled automatically. Verify during implementation.
 
-### 5. Locations that should remain isolated
+### 5. Builder: Handler function refs share the thread
 
-These locations create a `new ThreadStore()` and should **not** be changed:
+**File: `lib/backends/typescriptBuilder.ts` (line 2335)**
 
-- **Handler function refs** (line 2335): `threads: ts.newThreadStore()` — handlers are safety infrastructure and must not share or corrupt the main thread.
+Currently:
+```ts
+threads: ts.newThreadStore(),
+```
+
+Change to:
+```ts
+threads: ts.runtime.threads,
+```
+
+Handler functions that make LLM calls should see and contribute to the main conversation history.
+
+### 6. Locations that should remain isolated
+
 - **Tool-invoked function calls** in `lib/runtime/prompt.ts` (line 229-233): `threads: new ThreadStore()` — tool calls are implementation details and should not bleed into the parent conversation.
 
-### 6. Async prompts (nice-to-have)
+### 7. Async prompts (nice-to-have)
 
 Currently async prompts get `new MessageThread()` (completely isolated). Ideally they should fork the current history via a new `createAndReturnSubthread()` method on `ThreadStore`, so they have context but don't write back to the shared thread.
 
@@ -155,7 +167,7 @@ createAndReturnSubthread(): MessageThread {
 }
 ```
 
-### 7. Serialization for interrupts
+### 8. Serialization for interrupts
 
 The existing serialization path in `setupNode()` already handles this correctly — `ThreadStore.fromJSON` restores threads and the active stack. The only change needed is that the `new ThreadStore()` fallback (when not resuming) should use `state.messages` instead (the ThreadStore carried through graph transitions).
 

@@ -18,7 +18,6 @@ import {
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
   rewindFrom as _rewindFrom,
-  ToolCallError,
   RestoreSignal,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
@@ -120,73 +119,83 @@ let __functionCompleted = false;
     }
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "array.agency", scopeName: "main" });
-  await runner.step(0, async (runner) => {
+  try {
+    await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.numbers = await runPrompt({
-      ctx: __ctx,
-      prompt: `the first 5 prime numbers`,
-      messages: __threads.createAndReturnThread(),
-      responseFormat: z.object({
-        response: z.array(z.number())
-      }),
-      clientConfig: {},
-      maxToolCallRounds: 10,
-      interruptData: __state?.interruptData,
-      removedTools: __self.__removedTools
-    });
+        ctx: __ctx,
+        prompt: `the first 5 prime numbers`,
+        messages: __threads.createAndReturnThread(),
+        responseFormat: z.object({
+          response: z.array(z.number())
+        }),
+        clientConfig: {},
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
+      });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.numbers)) {
-      await __ctx.pendingPromises.awaitAll()
-      runner.halt({
-        messages: __threads,
-        data: __stack.locals.numbers
-      })
-      return;
-    }
-  });
-  await runner.step(1, async (runner) => {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          messages: __threads,
+          data: __stack.locals.numbers
+        })
+        return;
+      }
+    });
+    await runner.step(1, async (runner) => {
 await print(__stack.locals.numbers)
-  });
-  await runner.step(2, async (runner) => {
+    });
+    await runner.step(2, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.greetings = await runPrompt({
-      ctx: __ctx,
-      prompt: `a list of 3 common greetings in different languages`,
-      messages: __threads.createAndReturnThread(),
-      responseFormat: z.object({
-        response: z.array(z.string())
-      }),
-      clientConfig: {},
-      maxToolCallRounds: 10,
-      interruptData: __state?.interruptData,
-      removedTools: __self.__removedTools
-    });
+        ctx: __ctx,
+        prompt: `a list of 3 common greetings in different languages`,
+        messages: __threads.createAndReturnThread(),
+        responseFormat: z.object({
+          response: z.array(z.string())
+        }),
+        clientConfig: {},
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
+      });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.greetings)) {
-      await __ctx.pendingPromises.awaitAll()
-      runner.halt({
-        messages: __threads,
-        data: __stack.locals.greetings
-      })
-      return;
-    }
-  });
-  await runner.step(3, async (runner) => {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          messages: __threads,
+          data: __stack.locals.greetings
+        })
+        return;
+      }
+    });
+    await runner.step(3, async (runner) => {
 await print(__stack.locals.greetings)
-  });
-  if (runner.halted) return runner.haltResult;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "main",
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "main",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+    };
+  }
 })
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({

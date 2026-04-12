@@ -12,7 +12,10 @@ def map(items: any[], block: (any) => any): any[] {
 node main() {
   map([1, 2, 3, 4, 5]) as num {
     if (num == 3) {
-      interrupt("Are you sure?")
+      const check = interrupt("Are you sure?")
+      if (isFailure(check)) {
+        return null
+      }
     }
     log.push(num)
   }

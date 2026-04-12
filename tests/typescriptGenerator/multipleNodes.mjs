@@ -18,7 +18,6 @@ import {
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
   rewindFrom as _rewindFrom,
-  ToolCallError,
   RestoreSignal,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
@@ -120,51 +119,61 @@ let __functionCompleted = false;
     }
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "greet" });
-  await runner.step(0, async (runner) => {
+  try {
+    await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.greeting = await runPrompt({
-      ctx: __ctx,
-      prompt: `say hello`,
-      messages: __threads.createAndReturnThread(),
-      clientConfig: {},
-      maxToolCallRounds: 10,
-      interruptData: __state?.interruptData,
-      removedTools: __self.__removedTools
-    });
+        ctx: __ctx,
+        prompt: `say hello`,
+        messages: __threads.createAndReturnThread(),
+        clientConfig: {},
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
+      });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.greeting)) {
-      await __ctx.pendingPromises.awaitAll()
-      runner.halt({
-        messages: __threads,
-        data: __stack.locals.greeting
-      })
-      return;
-    }
-  });
-  await runner.step(1, async (runner) => {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          messages: __threads,
+          data: __stack.locals.greeting
+        })
+        return;
+      }
+    });
+    await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(goToNode("processGreeting", {
-      messages: __stack.messages,
-      ctx: __ctx,
-      data: {
-        msg: __stack.locals.greeting
-      }
-    }))
+        messages: __stack.messages,
+        ctx: __ctx,
+        data: {
+          msg: __stack.locals.greeting
+        }
+      }))
 return;
-  });
-  if (runner.halted) return runner.haltResult;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "greet",
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "greet",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "greet" })
+    };
+  }
 })
 graph.node("processGreeting", async (__state: GraphState) => {
   const __setupData = setupNode({
@@ -190,43 +199,53 @@ let __functionCompleted = false;
   if (!__state.isResume) {
     __stack.args["msg"] = __state.data.msg;
   }
-  await runner.step(0, async (runner) => {
+  try {
+    await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
-      ctx: __ctx,
-      prompt: `format this greeting: ${__stack.args.msg}`,
-      messages: __threads.createAndReturnThread(),
-      clientConfig: {},
-      maxToolCallRounds: 10,
-      interruptData: __state?.interruptData,
-      removedTools: __self.__removedTools
-    });
+        ctx: __ctx,
+        prompt: `format this greeting: ${__stack.args.msg}`,
+        messages: __threads.createAndReturnThread(),
+        clientConfig: {},
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
+      });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.result)) {
-      await __ctx.pendingPromises.awaitAll()
-      runner.halt({
-        messages: __threads,
-        data: __stack.locals.result
-      })
-      return;
-    }
-  });
-  await runner.step(1, async (runner) => {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          messages: __threads,
+          data: __stack.locals.result
+        })
+        return;
+      }
+    });
+    await runner.step(1, async (runner) => {
 await print(__stack.locals.result)
-  });
-  if (runner.halted) return runner.haltResult;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "processGreeting",
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "processGreeting",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "processGreeting" })
+    };
+  }
 })
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
@@ -249,28 +268,38 @@ let __functionCompleted = false;
     }
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "main" });
-  await runner.step(0, async (runner) => {
+  try {
+    await runner.step(0, async (runner) => {
 __functionCompleted = true;
 runner.halt(goToNode("greet", {
-      messages: __stack.messages,
-      ctx: __ctx,
-      data: {}
-    }))
+        messages: __stack.messages,
+        ctx: __ctx,
+        data: {}
+      }))
 return;
-  });
-  if (runner.halted) return runner.haltResult;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "main",
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "main",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+    };
+  }
 })
 graph.conditionalEdge("greet", ["processGreeting"])
 graph.conditionalEdge("main", ["greet"])

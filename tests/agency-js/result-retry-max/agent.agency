@@ -1,0 +1,14 @@
+shared let attempts = 0
+
+def alwaysFails(input: string): Result {
+  attempts = attempts + 1
+  return failure("nope")
+}
+
+node main() {
+  let result = alwaysFails("hello")
+  if (isFailure(result)) {
+    restore(result.checkpoint, { args: ["hello"] })
+  }
+  return result.value
+}

@@ -25,7 +25,11 @@ node testWithApprove() {
 node testWithReject() {
   handle {
     const result = foo()
-    log.push(result)
+    if (isFailure(result)) {
+      log.push(result.error)
+    } else {
+      log.push(result)
+    }
   } with reject
   return log
 }
@@ -41,7 +45,11 @@ node testWithApproveAssigned() {
 node testWithRejectAssigned() {
   handle {
     const result = fooWithAssign()
-    log.push(result)
+    if (isFailure(result)) {
+      log.push(result.error)
+    } else {
+      log.push(result)
+    }
   } with reject
   return log
 }

@@ -3,7 +3,14 @@
     "x": 42,
     "result": true
   },
-  "reject": null,
+  "reject": {
+    "success": false,
+    "error": "interrupt rejected",
+    "checkpoint": null,
+    "retryable": false,
+    "functionName": null,
+    "args": null
+  },
   "resolve": {
     "x": 77,
     "result": "resolved-value"

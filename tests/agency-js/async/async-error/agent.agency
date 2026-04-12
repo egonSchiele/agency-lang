@@ -1,9 +1,0 @@
-def failing() {
-  sleep(0.01)
-  throw("async error")
-}
-
-node main() {
-  async failing()
-  return "should not reach"
-}

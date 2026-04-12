@@ -4,7 +4,7 @@
       "nodeName": "foo",
       "description": "Test that rejecting an interrupt assigned to a variable returns null",
       "input": "",
-      "expectedOutput": "null",
+      "expectedOutput": "{\"success\":false,\"error\":\"interrupt rejected\",\"checkpoint\":null,\"retryable\":false,\"functionName\":null,\"args\":null}",
       "evaluationCriteria": [
         {
           "type": "exact"

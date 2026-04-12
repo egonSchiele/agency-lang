@@ -55,7 +55,11 @@ node testInnerPropagateOuterReject() {
   handle {
     handle {
       const result = foo()
-      log.push(result)
+      if (isFailure(result)) {
+        log.push(result.error)
+      } else {
+        log.push(result)
+      }
     } with propagateHandler
   } with rejectHandler
   return log

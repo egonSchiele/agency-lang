@@ -2,7 +2,7 @@ import { MessageJSON } from "smoltalk";
 import { callHook } from "./hooks.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
-import { RestoreSignal } from "./errors.js";
+import { CheckpointError, RestoreSignal } from "./errors.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { GraphState, InternalFunctionState, RunNodeResult } from "./types.js";
@@ -131,8 +131,22 @@ export async function runNode({
         return returnObject;
       } catch (e) {
         if (e instanceof RestoreSignal) {
+          execCtx._restoreCount++;
+          if (execCtx._restoreCount > execCtx.maxRestores) {
+            throw new CheckpointError(
+              `Exceeded maximum number of restores (${execCtx.maxRestores}). Possible infinite loop.`,
+            );
+          }
           const cp = e.checkpoint;
           execCtx.restoreState(cp);
+          if (e.options?.args) {
+            execCtx._pendingArgOverrides = e.options.args;
+          }
+          if (e.options?.globals) {
+            for (const [varName, value] of Object.entries(e.options.globals)) {
+              execCtx.globals.set(cp.moduleId, varName, value);
+            }
+          }
           nodeName = cp.nodeId;
           data = {};
           isResume = true;

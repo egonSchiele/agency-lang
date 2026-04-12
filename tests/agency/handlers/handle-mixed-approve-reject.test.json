@@ -13,7 +13,7 @@
     {
       "nodeName": "bothRejected",
       "input": "",
-      "expectedOutput": "[\"greet-before\",\"read-before\",null,\"not allowed\",\"foo-done\",\"foo returned foo result\"]",
+      "expectedOutput": "[\"greet-before\",\"read-before\",\"interrupt rejected\",\"not allowed\",\"foo-done\",\"foo returned foo result\"]",
       "evaluationCriteria": [
         {
           "type": "exact"

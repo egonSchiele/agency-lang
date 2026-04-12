@@ -8,5 +8,8 @@ node main() {
     return interrupt("please approve")
     return "approved"
   }
+  if (isFailure(result)) {
+    return result.error
+  }
   return result
 }

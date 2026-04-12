@@ -18,7 +18,6 @@ import {
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
   rewindFrom as _rewindFrom,
-  ToolCallError,
   RestoreSignal,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
@@ -120,46 +119,56 @@ let __functionCompleted = false;
     }
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "objectDescription.agency", scopeName: "main" });
-  await runner.step(0, async (runner) => {
+  try {
+    await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.url = await runPrompt({
-      ctx: __ctx,
-      prompt: `extract the hostname and port from 'https://example.com:8080'`,
-      messages: __threads.createAndReturnThread(),
-      responseFormat: z.object({
-        response: z.object({ "hostname": z.string(), "port": z.number() })
-      }),
-      clientConfig: {},
-      maxToolCallRounds: 10,
-      interruptData: __state?.interruptData,
-      removedTools: __self.__removedTools
-    });
+        ctx: __ctx,
+        prompt: `extract the hostname and port from 'https://example.com:8080'`,
+        messages: __threads.createAndReturnThread(),
+        responseFormat: z.object({
+          response: z.object({ "hostname": z.string(), "port": z.number() })
+        }),
+        clientConfig: {},
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
+      });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.url)) {
-      await __ctx.pendingPromises.awaitAll()
-      runner.halt({
-        messages: __threads,
-        data: __stack.locals.url
-      })
-      return;
-    }
-  });
-  await runner.step(1, async (runner) => {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          messages: __threads,
+          data: __stack.locals.url
+        })
+        return;
+      }
+    });
+    await runner.step(1, async (runner) => {
 await print(__stack.locals.url)
-  });
-  if (runner.halted) return runner.haltResult;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "main",
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "main",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+    };
+  }
 })
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({

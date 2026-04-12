@@ -1,6 +1,6 @@
 node main(title: string, message: string) {
   const result = notify(title, message)
-  if (result == null) {
+  if (isFailure(result)) {
     return "notification blocked"
   }
   return "notification sent"

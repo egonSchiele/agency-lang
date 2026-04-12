@@ -1,0 +1,5 @@
+{
+  "checkpoints": {
+    "maxRestores": 3
+  }
+}

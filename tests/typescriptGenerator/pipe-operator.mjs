@@ -194,7 +194,7 @@ __functionCompleted = true;
 runner.halt(__stack.args.x * 2)
 return;
     });
-    if (runner.halted) return runner.haltResult;
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -272,7 +272,7 @@ __functionCompleted = true;
 runner.halt(__stack.args.a * __stack.args.b)
 return;
     });
-    if (runner.halted) return runner.haltResult;
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -366,7 +366,7 @@ __functionCompleted = true;
 runner.halt(await success(__stack.args.a / __stack.args.b))
 return;
     });
-    if (runner.halted) return runner.haltResult;
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error

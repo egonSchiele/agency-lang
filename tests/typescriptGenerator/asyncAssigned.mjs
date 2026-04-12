@@ -167,7 +167,7 @@ __functionCompleted = true;
 runner.halt(__stack.args.val * 2)
 return;
     });
-    if (runner.halted) return runner.haltResult;
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error

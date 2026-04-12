@@ -172,7 +172,7 @@ if (__ctx._pendingArgOverrides) {
     await runner.step(0, async (runner) => {
 __stack.locals.foo = 1;
     });
-    if (runner.halted) return runner.haltResult;
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -248,7 +248,7 @@ if (__ctx._pendingArgOverrides) {
     await runner.step(0, async (runner) => {
 //  multi-param function
     });
-    if (runner.halted) return runner.haltResult;
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error

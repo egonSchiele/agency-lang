@@ -181,7 +181,7 @@ __functionCompleted = true;
 runner.halt(await lookupItem(__stack.args.id))
 return;
     });
-    if (runner.halted) return runner.haltResult;
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -259,7 +259,7 @@ __functionCompleted = true;
 runner.halt(await lookupItem(__stack.args.id))
 return;
     });
-    if (runner.halted) return runner.haltResult;
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error

@@ -212,7 +212,7 @@ __functionCompleted = true;
 runner.halt(`OpenAI response: ${__stack.locals.response}`)
 return;
     });
-    if (runner.halted) return runner.haltResult;
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -309,7 +309,7 @@ __functionCompleted = true;
 runner.halt(`Google response: ${__stack.locals.response}`)
 return;
     });
-    if (runner.halted) return runner.haltResult;
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
@@ -397,7 +397,7 @@ __functionCompleted = true;
 runner.halt(__self.__promptVar)
 return;
     });
-    if (runner.halted) return runner.haltResult;
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error

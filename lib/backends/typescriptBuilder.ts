@@ -1242,7 +1242,7 @@ export class TypeScriptBuilder {
     // Try/catch wrapping the body, with finally to always pop the state stack
     setupStmts.push(
       ts.tryCatch(
-        ts.statements([...bodyCode, ts.raw("if (runner.halted) return runner.haltResult;")]),
+        ts.statements([...bodyCode, ts.raw("if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }")]),
         ts.statements([
           ts.if(
             ts.raw("__error instanceof RestoreSignal"),

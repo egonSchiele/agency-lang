@@ -294,7 +294,7 @@ await print(`res4`, __stack.locals.res4)
     await runner.step(5, async (runner) => {
 await print(`res5`, __stack.locals.res5)
     });
-    if (runner.halted) return runner.haltResult;
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error

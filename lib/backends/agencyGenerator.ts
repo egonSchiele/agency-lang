@@ -47,6 +47,7 @@ import {
 import { expressionToString } from "@/utils/node.js";
 import { Keyword } from "@/types/keyword.js";
 import { HandleBlock } from "@/types/handleBlock.js";
+import { Tag } from "@/types/tag.js";
 
 export class AgencyGenerator {
   protected graphNodes: GraphNodeDefinition[] = [];
@@ -118,7 +119,7 @@ export class AgencyGenerator {
       "graphNode", "function", "typeAlias",
     ]);
     const NO_SPACE_TYPES = new Set([
-      "comment", "multiLineComment"
+      "comment", "multiLineComment", "tag"
     ]);
 
     // Pass 5: Process all nodes and generate code
@@ -258,6 +259,8 @@ export class AgencyGenerator {
         return this.processBinOpExpression(node);
       case "keyword":
         return this.processKeyword(node);
+      case "tag":
+        return this.formatTag(node);
       case "placeholder":
         return "?";
       default:
@@ -389,6 +392,7 @@ export class AgencyGenerator {
   // Assignment and literals
 
   protected processAssignment(node: Assignment): string {
+    const tags = this.formatAttachedTags(node);
     const chainStr =
       node.accessChain
         ?.map((ce) => this.processAccessChainElement(ce))
@@ -399,7 +403,7 @@ export class AgencyGenerator {
     const sharedPrefix = node.shared ? "shared " : "";
     const declPrefix = node.declKind ? `${node.declKind} ` : "";
     let valueCode = this.processNode(node.value).trim();
-    return this.indentStr(`${sharedPrefix}${declPrefix}${varName} = ${valueCode}`);
+    return tags + this.indentStr(`${sharedPrefix}${declPrefix}${varName} = ${valueCode}`);
   }
 
   protected generateLiteral(literal: Literal): string {
@@ -455,6 +459,7 @@ export class AgencyGenerator {
   // Function methods
 
   protected processFunctionDefinition(node: FunctionDefinition): string {
+    const tags = this.formatAttachedTags(node);
     const { functionName, body, parameters } = node;
 
     const params = parameters
@@ -503,12 +508,13 @@ export class AgencyGenerator {
 
     result += this.indentStr(`}`);
 
-    return result;
+    return tags + result;
   }
 
   protected processFunctionCall(node: FunctionCall): string {
+    const tags = this.formatAttachedTags(node);
     const expr = this.generateFunctionCallExpression(node, "topLevelStatement");
-    return this.indentStr(`${expr}`);
+    return tags + this.indentStr(`${expr}`);
   }
 
   protected generateFunctionCallExpression(
@@ -786,6 +792,7 @@ export class AgencyGenerator {
   }
 
   protected processGraphNode(node: GraphNodeDefinition): string {
+    const tags = this.formatAttachedTags(node);
     const { nodeName, body, parameters } = node;
     const params = parameters
       .map((p) =>
@@ -814,7 +821,7 @@ export class AgencyGenerator {
     this.decreaseIndent();
 
     result += this.indentStr(`}`);
-    return result;
+    return tags + result;
   }
 
   protected processTool(node: FunctionDefinition): string {
@@ -916,6 +923,24 @@ export class AgencyGenerator {
           `Unknown access chain element kind: ${(node as any).kind}`,
         );
     }
+  }
+
+  protected formatTag(tag: Tag): string {
+    if (tag.arguments.length === 0) {
+      return this.indentStr(`@${tag.name}`);
+    }
+    const args = tag.arguments.map((arg: string) => {
+      if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(arg)) {
+        return arg;
+      }
+      return `"${arg}"`;
+    });
+    return this.indentStr(`@${tag.name}(${args.join(", ")})`);
+  }
+
+  protected formatAttachedTags(node: any): string {
+    if (!node.tags?.length) return "";
+    return node.tags.map((tag: Tag) => this.formatTag(tag)).join("\n") + "\n";
   }
 
   protected processKeyword(node: Keyword): string {

@@ -50,7 +50,9 @@ const threads = stack.threads
   : new ThreadStore();
 ```
 
-Change: When not resuming from an interrupt, use the `ThreadStore` from `state.messages` (the one carried through graph transitions) instead of creating a new one. The `state.messages` field is already part of the `GraphState` type — each node returns `{ messages: __threads, data: ... }` and the graph passes this forward. When resuming from an interrupt, continue using `ThreadStore.fromJSON(stack.threads)` as today.
+Change: When resuming from an interrupt, continue using `ThreadStore.fromJSON(stack.threads)` as today. Otherwise, use the `ThreadStore` from `state.messages` — the one carried through graph transitions via the `GraphState`.
+
+**How graph transitions carry the ThreadStore:** Each node returns `{ messages: __threads, data: ... }` as a `GraphState`. The `SimpleMachine.run()` loop assigns `data = result.data` (for GoToNode) or `data = result` (for simple returns), where `data` is of type `T = GraphState`. So the entire `GraphState` — including `messages` — propagates to the next node. The next node receives it as its `state` argument, where `state.messages` is the ThreadStore from the previous node.
 
 ### 2. Builder: GoToNode must pass the ThreadStore
 
@@ -153,7 +155,19 @@ Handler functions that make LLM calls should see and contribute to the main conv
 
 - **Tool-invoked function calls** in `lib/runtime/prompt.ts` (line 229-233): `threads: new ThreadStore()` — tool calls are implementation details and should not bleed into the parent conversation.
 
-### 7. Async prompts (nice-to-have)
+### 7. Runtime: Make `messages` optional on `GraphState`
+
+**File: `lib/runtime/types.ts`**
+
+Currently `GraphState.messages` is required (`messages: ThreadStore`). Change to optional (`messages?: ThreadStore`).
+
+This allows `respondToInterrupt()` and `resumeFromState()` in `lib/runtime/interrupts.ts` to stop passing a throwaway `new ThreadStore()` when resuming. On resume, `setupNode()` restores the ThreadStore from `stack.threads` (serialized in the checkpoint), so the `messages` field passed through `graph.run()` is unused.
+
+**File: `lib/runtime/interrupts.ts` — `respondToInterrupt()` (line 232) and `resumeFromState()` (line 376)**
+
+Remove the `messages: new ThreadStore()` from the graph.run calls. The ThreadStore will be restored from the checkpoint's serialized `stack.threads` instead.
+
+### 8. Async prompts (nice-to-have)
 
 Currently async prompts get `new MessageThread()` (completely isolated). Ideally they should fork the current history via a new `createAndReturnSubthread()` method on `ThreadStore`, so they have context but don't write back to the shared thread.
 
@@ -167,9 +181,16 @@ createAndReturnSubthread(): MessageThread {
 }
 ```
 
-### 8. Serialization for interrupts
+### 9. Serialization for interrupts
 
-The existing serialization path in `setupNode()` already handles this correctly — `ThreadStore.fromJSON` restores threads and the active stack. The only change needed is that the `new ThreadStore()` fallback (when not resuming) should use `state.messages` instead (the ThreadStore carried through graph transitions).
+The interrupt resume flow works correctly under the new design:
+
+1. During normal execution, `setupNode()` sets `stack.threads = threads` (the shared ThreadStore). As messages accumulate, they're reflected in the stack frame.
+2. When an interrupt fires, a checkpoint serializes the `StateStack`, including `stack.threads` with the full message history.
+3. On resume, `restoreState()` restores the `StateStack` from the checkpoint. `setupNode()` sees `stack.threads` is non-null and restores via `ThreadStore.fromJSON()`.
+4. The `messages` field on `GraphState` is not needed for resume — `stack.threads` is the source of truth.
+
+**Cross-node interrupts (e.g., Node A → Node B, interrupt in B):** The ThreadStore is serialized on Node B's stack frame, which includes all messages accumulated across both nodes. On resume, Node B's `setupNode()` restores the full ThreadStore from the checkpoint. The fact that Node B is in a different file does not matter — the checkpoint captures the `StateStack` and `GlobalStore` regardless of file boundaries.
 
 ## Test impact
 

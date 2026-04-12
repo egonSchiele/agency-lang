@@ -1,5 +1,6 @@
 import { AgencyConfig } from "@/config.js";
 import { executeNodeAsync, parseTarget } from "./util.js";
+import { resetCompilationCache } from "./commands.js";
 import { parseAgency } from "@/parser.js";
 import { Tag, AgencyProgram, AgencyNode } from "@/types.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
@@ -215,7 +216,8 @@ export async function optimize(
       })
       .join(", ");
 
-    // c. Run the node
+    // c. Run the node (reset compilation cache so the updated .agency file is recompiled)
+    resetCompilationCache();
     console.log("Running agent...");
     let result: { data: any; stdout: string; stderr: string };
     try {

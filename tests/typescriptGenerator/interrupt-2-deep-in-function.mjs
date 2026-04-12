@@ -235,7 +235,7 @@ return;
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
+    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "greet", args: __stack.args });
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -332,7 +332,7 @@ return;
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
+    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "foo2", args: __stack.args });
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -371,53 +371,63 @@ let __functionCompleted = false;
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
   }
-  await runner.step(0, async (runner) => {
+  try {
+    await runner.step(0, async (runner) => {
 await print(`Saying hi to ${__stack.args.name}...`)
-  });
-  await runner.step(1, async (runner) => {
-__stack.locals.age = 30;
-  });
-  await runner.step(2, async (runner) => {
-__stack.locals.response = await foo2(__stack.args.name, __stack.locals.age, {
-      ctx: __ctx,
-      threads: new ThreadStore(),
-      interruptData: __state?.interruptData
     });
+    await runner.step(1, async (runner) => {
+__stack.locals.age = 30;
+    });
+    await runner.step(2, async (runner) => {
+__stack.locals.response = await foo2(__stack.args.name, __stack.locals.age, {
+        ctx: __ctx,
+        threads: new ThreadStore(),
+        interruptData: __state?.interruptData
+      });
 if (isInterrupt(__stack.locals.response)) {
-      await __ctx.pendingPromises.awaitAll()
-      runner.halt({
-        ...__state,
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __stack.locals.response
+        })
+        return;
+      }
+    });
+    await runner.step(3, async (runner) => {
+await print(__stack.locals.response)
+    });
+    await runner.step(4, async (runner) => {
+await print(`Greeting sent.`)
+    });
+    await runner.step(5, async (runner) => {
+runner.halt({
+        messages: __threads,
         data: __stack.locals.response
       })
-      return;
-    }
-  });
-  await runner.step(3, async (runner) => {
-await print(__stack.locals.response)
-  });
-  await runner.step(4, async (runner) => {
-await print(`Greeting sent.`)
-  });
-  await runner.step(5, async (runner) => {
-runner.halt({
-      messages: __threads,
-      data: __stack.locals.response
-    })
 return;
-  });
-  if (runner.halted) return runner.haltResult;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "sayHi",
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "sayHi",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "sayHi" })
+    };
+  }
 })
 export async function sayHi(name: any, { messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({

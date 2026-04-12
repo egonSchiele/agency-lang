@@ -184,7 +184,7 @@ return;
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
+    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "twice", args: __stack.args });
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -220,9 +220,10 @@ let __functionCompleted = false;
     }
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "blockBasic.agency", scopeName: "main" });
-  await runner.step(0, async (runner) => {
+  try {
+    await runner.step(0, async (runner) => {
 __stack.locals.results = await twice(async () => {
-      const __bsetup = setupFunction({ state: { ctx: __ctx, threads: __threads } });
+        const __bsetup = setupFunction({ state: { ctx: __ctx, threads: __threads } });
 const __bstack = __bsetup.stack;
 const __self = __bstack.locals;
 
@@ -236,36 +237,45 @@ return runner.halted ? runner.haltResult : undefined;
 } finally {
 __ctx.stateStack.pop();
 }
-    }, {
-      ctx: __ctx,
-      threads: new ThreadStore(),
-      interruptData: __state?.interruptData
-    });
+      }, {
+        ctx: __ctx,
+        threads: new ThreadStore(),
+        interruptData: __state?.interruptData
+      });
 if (isInterrupt(__stack.locals.results)) {
-      await __ctx.pendingPromises.awaitAll()
-      runner.halt({
-        ...__state,
-        data: __stack.locals.results
-      })
-      return;
-    }
-  });
-  await runner.step(1, async (runner) => {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __stack.locals.results
+        })
+        return;
+      }
+    });
+    await runner.step(1, async (runner) => {
 await print(__stack.locals.results)
-  });
-  if (runner.halted) return runner.haltResult;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "main",
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "main",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+    };
+  }
 })
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({

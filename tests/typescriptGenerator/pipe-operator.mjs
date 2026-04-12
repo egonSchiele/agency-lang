@@ -198,7 +198,7 @@ return;
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
+    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "double", args: __stack.args });
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -271,7 +271,7 @@ return;
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
+    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "multiply", args: __stack.args });
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -338,7 +338,7 @@ await runner.ifElse(0, [
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __functionCompleted = true;
-runner.halt(failure(`division by zero`, __ctx.checkpoints.get(__resultCheckpointId)))
+runner.halt(failure(`division by zero`, { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), functionName: "safeDivide", args: __stack.args }))
 return;
             });
     },
@@ -360,7 +360,7 @@ return;
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
+    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "safeDivide", args: __stack.args });
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -396,64 +396,74 @@ let __functionCompleted = false;
     }
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "pipe-operator.agency", scopeName: "main" });
-  await runner.step(0, async (runner) => {
+  try {
+    await runner.step(0, async (runner) => {
 __stack.locals.__pipe_0 = await success(5);
-  });
-  __stack.locals.r1 = await runner.pipe(1, __stack.locals.__pipe_0, async (__pipeArg) => double(__pipeArg, {
-    ctx: __ctx,
-    threads: new ThreadStore(),
-    interruptData: __state?.interruptData
-  }));
-  await runner.step(2, async (runner) => {
+    });
+    __stack.locals.r1 = await runner.pipe(1, __stack.locals.__pipe_0, async (__pipeArg) => double(__pipeArg, {
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    }));
+    await runner.step(2, async (runner) => {
 __stack.locals.__pipe_1 = await success(5);
-  });
-  __stack.locals.r2 = await runner.pipe(3, __stack.locals.__pipe_1, async (__pipeArg) => multiply(10, __pipeArg, {
-    ctx: __ctx,
-    threads: new ThreadStore(),
-    interruptData: __state?.interruptData
-  }));
-  await runner.step(4, async (runner) => {
+    });
+    __stack.locals.r2 = await runner.pipe(3, __stack.locals.__pipe_1, async (__pipeArg) => multiply(10, __pipeArg, {
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    }));
+    await runner.step(4, async (runner) => {
 __stack.locals.__pipe_2 = await success(10);
-  });
-  __stack.locals.__pipe_2 = await runner.pipe(5, __stack.locals.__pipe_2, async (__pipeArg) => double(__pipeArg, {
-    ctx: __ctx,
-    threads: new ThreadStore(),
-    interruptData: __state?.interruptData
-  }));
-  __stack.locals.r3 = await runner.pipe(6, __stack.locals.__pipe_2, async (__pipeArg) => multiply(3, __pipeArg, {
-    ctx: __ctx,
-    threads: new ThreadStore(),
-    interruptData: __state?.interruptData
-  }));
-  await runner.step(7, async (runner) => {
+    });
+    __stack.locals.__pipe_2 = await runner.pipe(5, __stack.locals.__pipe_2, async (__pipeArg) => double(__pipeArg, {
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    }));
+    __stack.locals.r3 = await runner.pipe(6, __stack.locals.__pipe_2, async (__pipeArg) => multiply(3, __pipeArg, {
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    }));
+    await runner.step(7, async (runner) => {
 __stack.locals.__pipe_3 = await failure(`nope`);
-  });
-  __stack.locals.r4 = await runner.pipe(8, __stack.locals.__pipe_3, async (__pipeArg) => double(__pipeArg, {
-    ctx: __ctx,
-    threads: new ThreadStore(),
-    interruptData: __state?.interruptData
-  }));
-  await runner.step(9, async (runner) => {
+    });
+    __stack.locals.r4 = await runner.pipe(8, __stack.locals.__pipe_3, async (__pipeArg) => double(__pipeArg, {
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    }));
+    await runner.step(9, async (runner) => {
 __stack.locals.__pipe_4 = await success(10);
-  });
-  __stack.locals.r5 = await runner.pipe(10, __stack.locals.__pipe_4, async (__pipeArg) => safeDivide(__pipeArg, 2, {
-    ctx: __ctx,
-    threads: new ThreadStore(),
-    interruptData: __state?.interruptData
-  }));
-  if (runner.halted) return runner.haltResult;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "main",
+    });
+    __stack.locals.r5 = await runner.pipe(10, __stack.locals.__pipe_4, async (__pipeArg) => safeDivide(__pipeArg, 2, {
+      ctx: __ctx,
+      threads: new ThreadStore(),
+      interruptData: __state?.interruptData
+    }));
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "main",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+    };
+  }
 })
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({

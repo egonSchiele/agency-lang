@@ -120,36 +120,46 @@ let __functionCompleted = false;
     }
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "stringConcat.agency", scopeName: "foo" });
-  await runner.step(0, async (runner) => {
+  try {
+    await runner.step(0, async (runner) => {
 await print(`What is your name?`)
-  });
-  await runner.step(1, async (runner) => {
+    });
+    await runner.step(1, async (runner) => {
 __stack.locals.name = await input(`> `);
 if (isInterrupt(__stack.locals.name)) {
-      await __ctx.pendingPromises.awaitAll()
-      runner.halt({
-        ...__state,
-        data: __stack.locals.name
-      })
-      return;
-    }
-  });
-  await runner.step(2, async (runner) => {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __stack.locals.name
+        })
+        return;
+      }
+    });
+    await runner.step(2, async (runner) => {
 await print(`Hello, ${__stack.locals.name}!`)
-  });
-  if (runner.halted) return runner.haltResult;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "foo",
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "foo",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "foo" })
+    };
+  }
 })
 export async function foo({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({

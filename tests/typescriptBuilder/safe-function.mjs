@@ -185,7 +185,7 @@ return;
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
+    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "safeLookup", args: __stack.args });
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -258,7 +258,7 @@ return;
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
+    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "unsafeSave", args: __stack.args });
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -294,50 +294,60 @@ let __functionCompleted = false;
     }
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "safe-function.agency", scopeName: "main" });
-  await runner.step(0, async (runner) => {
+  try {
+    await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
-      ctx: __ctx,
-      prompt: `Use the tools`,
-      messages: __threads.createAndReturnThread(),
-      clientConfig: {
-        tools: [tool("safeLookup"), tool("unsafeSave")],
-        ...{}
-      },
-      maxToolCallRounds: 10,
-      interruptData: __state?.interruptData,
-      removedTools: __self.__removedTools
-    });
+        ctx: __ctx,
+        prompt: `Use the tools`,
+        messages: __threads.createAndReturnThread(),
+        clientConfig: {
+          tools: [tool("safeLookup"), tool("unsafeSave")],
+          ...{}
+        },
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
+      });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.result)) {
-      await __ctx.pendingPromises.awaitAll()
-      runner.halt({
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          messages: __threads,
+          data: __stack.locals.result
+        })
+        return;
+      }
+    });
+    await runner.step(1, async (runner) => {
+runner.halt({
         messages: __threads,
         data: __stack.locals.result
       })
-      return;
-    }
-  });
-  await runner.step(1, async (runner) => {
-runner.halt({
-      messages: __threads,
-      data: __stack.locals.result
-    })
 return;
-  });
-  if (runner.halted) return runner.haltResult;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "main",
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "main",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+    };
+  }
 })
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({

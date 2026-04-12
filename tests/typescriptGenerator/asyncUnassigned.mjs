@@ -170,7 +170,7 @@ await sleep(__stack.args.sleepTime)
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
+    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "append", args: __stack.args });
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -206,17 +206,18 @@ let __functionCompleted = false;
     }
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "asyncUnassigned.agency", scopeName: "main" });
-  await runner.branchStep(0, "0", async (runner) => {
+  try {
+    await runner.branchStep(0, "0", async (runner) => {
 if ((__stack.branches && __stack.branches["0"])) {
-      __forked = __stack.branches["0"].stack;
-      __forked.deserializeMode()
-    } else {
-      __forked = __ctx.forkStack();
-    }
+        __forked = __stack.branches["0"].stack;
+        __forked.deserializeMode()
+      } else {
+        __forked = __ctx.forkStack();
+      }
 __stack.branches = (__stack.branches || {});
 __stack.branches["0"] = {
-      stack: __forked
-    };
+        stack: __forked
+      };
 __ctx.pendingPromises.add(append(1, `hello`, {
   ctx: __ctx,
   threads: new ThreadStore(),
@@ -224,18 +225,18 @@ __ctx.pendingPromises.add(append(1, `hello`, {
   stateStack: __forked,
   isForked: true
 }))
-  });
-  await runner.branchStep(1, "1", async (runner) => {
+    });
+    await runner.branchStep(1, "1", async (runner) => {
 if ((__stack.branches && __stack.branches["1"])) {
-      __forked = __stack.branches["1"].stack;
-      __forked.deserializeMode()
-    } else {
-      __forked = __ctx.forkStack();
-    }
+        __forked = __stack.branches["1"].stack;
+        __forked.deserializeMode()
+      } else {
+        __forked = __ctx.forkStack();
+      }
 __stack.branches = (__stack.branches || {});
 __stack.branches["1"] = {
-      stack: __forked
-    };
+        stack: __forked
+      };
 __ctx.pendingPromises.add(append(0.5, `world`, {
   ctx: __ctx,
   threads: new ThreadStore(),
@@ -243,27 +244,36 @@ __ctx.pendingPromises.add(append(0.5, `world`, {
   stateStack: __forked,
   isForked: true
 }))
-  });
-  await runner.step(2, async (runner) => {
+    });
+    await runner.step(2, async (runner) => {
 runner.halt({
-      messages: __threads,
-      data: `done`
-    })
+        messages: __threads,
+        data: `done`
+      })
 return;
-  });
-  if (runner.halted) return runner.haltResult;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "main",
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "main",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+    };
+  }
 })
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({

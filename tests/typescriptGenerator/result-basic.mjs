@@ -172,7 +172,7 @@ return;
     });
     await runner.step(1, async (runner) => {
 __functionCompleted = true;
-runner.halt(failure(`too young`, __ctx.checkpoints.get(__resultCheckpointId)))
+runner.halt(failure(`too young`, { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), functionName: "checkAge", args: __stack.args }))
 return;
     });
     if (runner.halted) return runner.haltResult;
@@ -184,7 +184,7 @@ return;
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
+    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "checkAge", args: __stack.args });
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {

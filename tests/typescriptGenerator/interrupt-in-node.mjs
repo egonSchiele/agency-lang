@@ -220,7 +220,7 @@ return;
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
+    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "greet", args: __stack.args });
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -260,53 +260,63 @@ let __functionCompleted = false;
     __stack.args["name"] = __state.data.name;
     __stack.args["age"] = __state.data.age;
   }
-  await runner.step(0, async (runner) => {
+  try {
+    await runner.step(0, async (runner) => {
 await print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`) + greet
-  });
-  await runner.step(1, async (runner) => {
+    });
+    await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt({
-      ctx: __ctx,
-      prompt: `Greet the user with their name: ${__stack.args.name} and age ${__stack.args.age} using the greet function.`,
-      messages: __threads.createAndReturnThread(),
-      clientConfig: {},
-      maxToolCallRounds: 10,
-      interruptData: __state?.interruptData,
-      removedTools: __self.__removedTools
-    });
+        ctx: __ctx,
+        prompt: `Greet the user with their name: ${__stack.args.name} and age ${__stack.args.age} using the greet function.`,
+        messages: __threads.createAndReturnThread(),
+        clientConfig: {},
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
+      });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.response)) {
-      await __ctx.pendingPromises.awaitAll()
-      runner.halt({
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          messages: __threads,
+          data: __stack.locals.response
+        })
+        return;
+      }
+    });
+    await runner.step(2, async (runner) => {
+await print(`Greeted, age is still ${__stack.args.age}...`)
+    });
+    await runner.step(3, async (runner) => {
+runner.halt({
         messages: __threads,
         data: __stack.locals.response
       })
-      return;
-    }
-  });
-  await runner.step(2, async (runner) => {
-await print(`Greeted, age is still ${__stack.args.age}...`)
-  });
-  await runner.step(3, async (runner) => {
-runner.halt({
-      messages: __threads,
-      data: __stack.locals.response
-    })
 return;
-  });
-  if (runner.halted) return runner.haltResult;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "foo2",
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "foo2",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "foo2" })
+    };
+  }
 })
 graph.node("sayHi", async (__state: GraphState) => {
   const __setupData = setupNode({
@@ -332,37 +342,47 @@ let __functionCompleted = false;
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
   }
-  await runner.step(0, async (runner) => {
+  try {
+    await runner.step(0, async (runner) => {
 await print(`Saying hi to ${__stack.args.name}...`)
-  });
-  await runner.step(1, async (runner) => {
+    });
+    await runner.step(1, async (runner) => {
 __stack.locals.age = 30;
-  });
-  await runner.step(2, async (runner) => {
+    });
+    await runner.step(2, async (runner) => {
 __functionCompleted = true;
 runner.halt(goToNode("foo2", {
-      messages: __stack.messages,
-      ctx: __ctx,
-      data: {
-        name: __stack.args.name,
-        age: __stack.locals.age
-      }
-    }))
+        messages: __stack.messages,
+        ctx: __ctx,
+        data: {
+          name: __stack.args.name,
+          age: __stack.locals.age
+        }
+      }))
 return;
-  });
-  if (runner.halted) return runner.haltResult;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "sayHi",
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "sayHi",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "sayHi" })
+    };
+  }
 })
 graph.conditionalEdge("sayHi", ["foo2"])
 export async function foo2(name: string, age: number, { messages, callbacks }: { messages?: any; callbacks?: any } = {}) {

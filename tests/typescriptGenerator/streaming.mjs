@@ -120,72 +120,82 @@ let __functionCompleted = false;
     }
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "streaming.agency", scopeName: "foo" });
-  await runner.step(0, async (runner) => {
+  try {
+    await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt({
-      ctx: __ctx,
-      prompt: `Generate a response word by word`,
-      messages: __threads.createAndReturnThread(),
-      clientConfig: {
-        "stream": true
-      },
-      maxToolCallRounds: 10,
-      interruptData: __state?.interruptData,
-      removedTools: __self.__removedTools
-    });
+        ctx: __ctx,
+        prompt: `Generate a response word by word`,
+        messages: __threads.createAndReturnThread(),
+        clientConfig: {
+          "stream": true
+        },
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
+      });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.response)) {
-      await __ctx.pendingPromises.awaitAll()
-      runner.halt({
-        messages: __threads,
-        data: __stack.locals.response
-      })
-      return;
-    }
-  });
-  await runner.step(1, async (runner) => {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          messages: __threads,
+          data: __stack.locals.response
+        })
+        return;
+      }
+    });
+    await runner.step(1, async (runner) => {
 await print(__stack.locals.response)
-  });
-  await runner.step(2, async (runner) => {
+    });
+    await runner.step(2, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response2 = await runPrompt({
-      ctx: __ctx,
-      prompt: `Generate a response word by word, but with a different model`,
-      messages: __threads.createAndReturnThread(),
-      clientConfig: {
-        "model": `gemini-2.5-flash-lite`,
-        "stream": true
-      },
-      maxToolCallRounds: 10,
-      interruptData: __state?.interruptData,
-      removedTools: __self.__removedTools
-    });
+        ctx: __ctx,
+        prompt: `Generate a response word by word, but with a different model`,
+        messages: __threads.createAndReturnThread(),
+        clientConfig: {
+          "model": `gemini-2.5-flash-lite`,
+          "stream": true
+        },
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
+      });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.response2)) {
-      await __ctx.pendingPromises.awaitAll()
-      runner.halt({
-        messages: __threads,
-        data: __stack.locals.response2
-      })
-      return;
-    }
-  });
-  await runner.step(3, async (runner) => {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          messages: __threads,
+          data: __stack.locals.response2
+        })
+        return;
+      }
+    });
+    await runner.step(3, async (runner) => {
 await print(__stack.locals.response2)
-  });
-  if (runner.halted) return runner.haltResult;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "foo",
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "foo",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "foo" })
+    };
+  }
 })
 export async function foo({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({

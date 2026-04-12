@@ -120,54 +120,64 @@ let __functionCompleted = false;
     }
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "forLoop.agency", scopeName: "main" });
-  await runner.step(0, async (runner) => {
+  try {
+    await runner.step(0, async (runner) => {
 //  Basic for-of loop
-  });
-  await runner.step(1, async (runner) => {
+    });
+    await runner.step(1, async (runner) => {
 __stack.locals.items = [`a`, `b`, `c`];
-  });
-  await runner.step(2, async (runner) => {
+    });
+    await runner.step(2, async (runner) => {
 await runner.loop(2, __stack.locals.items, async (item, _, runner) => {
 await runner.step(0, async (runner) => {
 await print(item)
+        });
       });
-    });
 //  Range-based for loop
-  });
-  await runner.step(3, async (runner) => {
+    });
+    await runner.step(3, async (runner) => {
 await runner.loop(3, Array.from({length: 5 - 0}, (_, __i) => __i + 0), async (i, _, runner) => {
 await runner.step(0, async (runner) => {
 await print(i)
+        });
       });
-    });
 //  Indexed for loop
-  });
-  await runner.step(4, async (runner) => {
+    });
+    await runner.step(4, async (runner) => {
 __stack.locals.names = [`alice`, `bob`];
-  });
-  await runner.step(5, async (runner) => {
+    });
+    await runner.step(5, async (runner) => {
 await runner.loop(5, __stack.locals.names, async (name, index, runner) => {
 await runner.step(0, async (runner) => {
 await print(name)
-      });
+        });
 await runner.step(1, async (runner) => {
 await print(index)
+        });
       });
     });
-  });
-  if (runner.halted) return runner.haltResult;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "main",
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "main",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+    };
+  }
 })
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({

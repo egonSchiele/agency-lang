@@ -5,18 +5,35 @@ export type ResultSuccess = {
   value: any;
 };
 
+export type FailureOpts = {
+  checkpoint?: any;
+  retryable?: boolean;
+  functionName?: string;
+  args?: Record<string, any>;
+};
+
 export type ResultFailure = {
   success: false;
   error: any;
   checkpoint: any;
+  retryable: boolean;
+  functionName: string | null;
+  args: Record<string, any> | null;
 };
 
 export function success(value: any): ResultSuccess {
   return { success: true, value };
 }
 
-export function failure(error: any, checkpoint?: any): ResultFailure {
-  return { success: false, error, checkpoint: checkpoint ?? null };
+export function failure(error: any, opts?: FailureOpts): ResultFailure {
+  return {
+    success: false,
+    error,
+    checkpoint: opts?.checkpoint ?? null,
+    retryable: opts?.retryable ?? false,
+    functionName: opts?.functionName ?? null,
+    args: opts?.args ?? null,
+  };
 }
 
 export function isSuccess(result: ResultValue): result is ResultSuccess {

@@ -294,7 +294,7 @@ await print(`res5`, __stack.locals.res5)
       __error.retryable = __error.retryable && __self.__retryable
       throw __error
     }
-    return failure(__error instanceof Error ? __error.message : String(__error), __ctx.checkpoints.get(__resultCheckpointId));
+    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "foo", args: __stack.args });
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -330,174 +330,184 @@ let __functionCompleted = false;
     }
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "threadsAndSubthreads.agency", scopeName: "main" });
-  await runner.step(0, async (runner) => {
+  try {
+    await runner.step(0, async (runner) => {
 await runner.thread(0, __threads, "create", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res1 = await runPrompt({
-          ctx: __ctx,
-          prompt: `What are the first 5 prime numbers?`,
-          messages: __threads.getOrCreateActive(),
-          responseFormat: z.object({
-            response: z.array(z.number())
-          }),
-          clientConfig: {},
-          maxToolCallRounds: 10,
-          interruptData: __state?.interruptData,
-          removedTools: __self.__removedTools
-        });
+            ctx: __ctx,
+            prompt: `What are the first 5 prime numbers?`,
+            messages: __threads.getOrCreateActive(),
+            responseFormat: z.object({
+              response: z.array(z.number())
+            }),
+            clientConfig: {},
+            maxToolCallRounds: 10,
+            interruptData: __state?.interruptData,
+            removedTools: __self.__removedTools
+          });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.res1)) {
-          await __ctx.pendingPromises.awaitAll()
-          runner.halt({
-            messages: __threads,
-            data: __stack.locals.res1
-          })
-          return;
-        }
-      });
+            await __ctx.pendingPromises.awaitAll()
+            runner.halt({
+              messages: __threads,
+              data: __stack.locals.res1
+            })
+            return;
+          }
+        });
 await runner.step(1, async (runner) => {
 await runner.thread(1, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res2 = await runPrompt({
-              ctx: __ctx,
-              prompt: `What are the next 2 prime numbers after those?`,
-              messages: __threads.getOrCreateActive(),
-              responseFormat: z.object({
-                response: z.array(z.number())
-              }),
-              clientConfig: {},
-              maxToolCallRounds: 10,
-              interruptData: __state?.interruptData,
-              removedTools: __self.__removedTools
-            });
+                ctx: __ctx,
+                prompt: `What are the next 2 prime numbers after those?`,
+                messages: __threads.getOrCreateActive(),
+                responseFormat: z.object({
+                  response: z.array(z.number())
+                }),
+                clientConfig: {},
+                maxToolCallRounds: 10,
+                interruptData: __state?.interruptData,
+                removedTools: __self.__removedTools
+              });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.res2)) {
-              await __ctx.pendingPromises.awaitAll()
-              runner.halt({
-                messages: __threads,
-                data: __stack.locals.res2
-              })
-              return;
-            }
-          });
+                await __ctx.pendingPromises.awaitAll()
+                runner.halt({
+                  messages: __threads,
+                  data: __stack.locals.res2
+                })
+                return;
+              }
+            });
 await runner.step(1, async (runner) => {
 await runner.thread(1, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res3 = await runPrompt({
-                  ctx: __ctx,
-                  prompt: `And what is the sum of all those numbers combined?`,
-                  messages: __threads.getOrCreateActive(),
-                  responseFormat: z.object({
-                    response: z.number()
-                  }),
-                  clientConfig: {},
-                  maxToolCallRounds: 10,
-                  interruptData: __state?.interruptData,
-                  removedTools: __self.__removedTools
-                });
+                    ctx: __ctx,
+                    prompt: `And what is the sum of all those numbers combined?`,
+                    messages: __threads.getOrCreateActive(),
+                    responseFormat: z.object({
+                      response: z.number()
+                    }),
+                    clientConfig: {},
+                    maxToolCallRounds: 10,
+                    interruptData: __state?.interruptData,
+                    removedTools: __self.__removedTools
+                  });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.res3)) {
-                  await __ctx.pendingPromises.awaitAll()
-                  runner.halt({
-                    messages: __threads,
-                    data: __stack.locals.res3
-                  })
-                  return;
-                }
+                    await __ctx.pendingPromises.awaitAll()
+                    runner.halt({
+                      messages: __threads,
+                      data: __stack.locals.res3
+                    })
+                    return;
+                  }
+                });
               });
             });
-          });
 await runner.step(2, async (runner) => {
 await runner.thread(2, __threads, "create", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res5 = await runPrompt({
-                  ctx: __ctx,
-                  prompt: `And what is the sum of all those numbers combined?`,
-                  messages: __threads.getOrCreateActive(),
-                  responseFormat: z.object({
-                    response: z.number()
-                  }),
-                  clientConfig: {},
-                  maxToolCallRounds: 10,
-                  interruptData: __state?.interruptData,
-                  removedTools: __self.__removedTools
-                });
+                    ctx: __ctx,
+                    prompt: `And what is the sum of all those numbers combined?`,
+                    messages: __threads.getOrCreateActive(),
+                    responseFormat: z.object({
+                      response: z.number()
+                    }),
+                    clientConfig: {},
+                    maxToolCallRounds: 10,
+                    interruptData: __state?.interruptData,
+                    removedTools: __self.__removedTools
+                  });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.res5)) {
-                  await __ctx.pendingPromises.awaitAll()
-                  runner.halt({
-                    messages: __threads,
-                    data: __stack.locals.res5
-                  })
-                  return;
-                }
+                    await __ctx.pendingPromises.awaitAll()
+                    runner.halt({
+                      messages: __threads,
+                      data: __stack.locals.res5
+                    })
+                    return;
+                  }
+                });
               });
             });
           });
         });
-      });
 await runner.step(2, async (runner) => {
 await runner.thread(2, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res4 = await runPrompt({
-              ctx: __ctx,
-              prompt: `And what is the sum of all those numbers combined?`,
-              messages: __threads.getOrCreateActive(),
-              responseFormat: z.object({
-                response: z.number()
-              }),
-              clientConfig: {},
-              maxToolCallRounds: 10,
-              interruptData: __state?.interruptData,
-              removedTools: __self.__removedTools
-            });
+                ctx: __ctx,
+                prompt: `And what is the sum of all those numbers combined?`,
+                messages: __threads.getOrCreateActive(),
+                responseFormat: z.object({
+                  response: z.number()
+                }),
+                clientConfig: {},
+                maxToolCallRounds: 10,
+                interruptData: __state?.interruptData,
+                removedTools: __self.__removedTools
+              });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.res4)) {
-              await __ctx.pendingPromises.awaitAll()
-              runner.halt({
-                messages: __threads,
-                data: __stack.locals.res4
-              })
-              return;
-            }
+                await __ctx.pendingPromises.awaitAll()
+                runner.halt({
+                  messages: __threads,
+                  data: __stack.locals.res4
+                })
+                return;
+              }
+            });
           });
         });
       });
     });
-  });
-  await runner.step(1, async (runner) => {
+    await runner.step(1, async (runner) => {
 await print(`res1`, __stack.locals.res1)
-  });
-  await runner.step(2, async (runner) => {
+    });
+    await runner.step(2, async (runner) => {
 await print(`res2`, __stack.locals.res2)
-  });
-  await runner.step(3, async (runner) => {
+    });
+    await runner.step(3, async (runner) => {
 await print(`res3`, __stack.locals.res3)
-  });
-  await runner.step(4, async (runner) => {
+    });
+    await runner.step(4, async (runner) => {
 await print(`res4`, __stack.locals.res4)
-  });
-  await runner.step(5, async (runner) => {
+    });
+    await runner.step(5, async (runner) => {
 await print(`res5`, __stack.locals.res5)
-  });
-  if (runner.halted) return runner.haltResult;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "main",
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "main",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+    };
+  }
 })
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({

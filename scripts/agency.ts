@@ -412,9 +412,9 @@ program
   .option("--iterations <n>", "Maximum iterations", parseInt)
   .action(async (target: string, opts: any) => {
     const config = getConfig();
-    await optimize(config, target, {
-      iterations: opts.iterations,
-    });
+    const optimizeOpts: Record<string, any> = {};
+    if (opts.iterations !== undefined) optimizeOpts.iterations = opts.iterations;
+    await optimize(config, target, optimizeOpts);
   });
 
 program

@@ -28,7 +28,7 @@ describe("parsePromptToSegments", () => {
     expect(segments[0]).toEqual({ type: "text", value: "classify: " });
     expect(segments[1]).toMatchObject({
       type: "interpolation",
-      expression: { type: "valueAccess", name: "msg", accessChain: [] },
+      expression: { type: "variableName", value: "msg" },
     });
   });
 
@@ -37,12 +37,12 @@ describe("parsePromptToSegments", () => {
     expect(segments).toHaveLength(3);
     expect(segments[0]).toMatchObject({
       type: "interpolation",
-      expression: { type: "valueAccess", name: "a", accessChain: [] },
+      expression: { type: "variableName", value: "a" },
     });
     expect(segments[1]).toEqual({ type: "text", value: " and " });
     expect(segments[2]).toMatchObject({
       type: "interpolation",
-      expression: { type: "valueAccess", name: "b", accessChain: [] },
+      expression: { type: "variableName", value: "b" },
     });
   });
 
@@ -51,7 +51,7 @@ describe("parsePromptToSegments", () => {
     expect(segments).toHaveLength(2);
     expect(segments[0]).toMatchObject({
       type: "interpolation",
-      expression: { type: "valueAccess", name: "x", accessChain: [] },
+      expression: { type: "variableName", value: "x" },
     });
     expect(segments[1]).toEqual({ type: "text", value: " is the answer" });
   });
@@ -62,7 +62,7 @@ describe("parsePromptToSegments", () => {
     expect(segments[0]).toEqual({ type: "text", value: "the answer is " });
     expect(segments[1]).toMatchObject({
       type: "interpolation",
-      expression: { type: "valueAccess", name: "x", accessChain: [] },
+      expression: { type: "variableName", value: "x" },
     });
   });
 });

@@ -5,6 +5,7 @@ import { Tag, AgencyProgram, AgencyNode } from "@/types.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { collectProgramInfo } from "@/programInfo.js";
 import { AgencyGenerator } from "@/backends/agencyGenerator.js";
+import { expressionToString } from "@/utils/node.js";
 import * as smoltalk from "smoltalk";
 import prompts from "prompts";
 import fs from "fs";
@@ -137,7 +138,7 @@ export function parsePromptToSegments(prompt: string): any[] {
     }
     segments.push({
       type: "interpolation",
-      expression: { type: "valueAccess", name: match[1].trim(), accessChain: [] },
+      expression: { type: "variableName", value: match[1].trim() },
     });
     lastIndex = match.index + match[0].length;
   }
@@ -341,7 +342,7 @@ function collectOptimizeTargets(
         if (llmCall.arguments[0]?.type === "string") {
           target.promptValue = llmCall.arguments[0].segments
             .map((s: any) =>
-              s.type === "text" ? s.value : `\${${s.expression}}`,
+              s.type === "text" ? s.value : `\${${expressionToString(s.expression)}}`,
             )
             .join("");
         }

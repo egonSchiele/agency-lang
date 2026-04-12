@@ -990,7 +990,9 @@ export class TypescriptPreprocessor {
           node.handler.body = this.filterNodesByType(node.handler.body, excludeSet);
         }
       } else if (node.type === "withModifier") {
-        node.statement = this.filterNodesByType([node.statement], excludeSet)[0];
+        const filtered = this.filterNodesByType([node.statement], excludeSet)[0];
+        if (!filtered) continue;
+        node.statement = filtered;
       } else if (node.type === "matchBlock") {
         // Filter case bodies - Note: match block bodies are single nodes, not arrays
         // We don't filter them here as they're of a specific type
@@ -1091,7 +1093,9 @@ export class TypescriptPreprocessor {
           node.handler.body = this.filterBuiltinFunctionCalls(node.handler.body, excludeSet);
         }
       } else if (node.type === "withModifier") {
-        node.statement = this.filterBuiltinFunctionCalls([node.statement], excludeSet)[0];
+        const filtered = this.filterBuiltinFunctionCalls([node.statement], excludeSet)[0];
+        if (!filtered) continue;
+        node.statement = filtered;
       } else if (node.type === "matchBlock") {
         node.cases = node.cases.map((caseItem) => {
           if (caseItem.type === "comment") {

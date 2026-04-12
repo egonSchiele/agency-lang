@@ -113,10 +113,11 @@ export async function runNode({
     data: { nodeName, args: data, messages: messages || [] },
   });
   let isResume = false;
+  let threadStore = new ThreadStore();
+  threadStore.getOrCreateActive();
   try {
     while (true) {
       try {
-        const threadStore = new ThreadStore();
         const result = await execCtx.graph.run(nodeName, {
           messages: threadStore,
           data,
@@ -156,6 +157,9 @@ export async function runNode({
           data = {};
           isResume = true;
           execCtx.stateStack.nodesTraversed = [cp.nodeId];
+          // Reset ThreadStore for the restored execution
+          threadStore = new ThreadStore();
+          threadStore.getOrCreateActive();
           continue;
         }
         throw e;

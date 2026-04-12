@@ -32,9 +32,14 @@ export function setupNode(args: { state: GraphState }): {
   const self = stack.locals;
 
   // Initialize or restore the ThreadStore for dynamic message thread management
-  const threads = stack.threads
-    ? ThreadStore.fromJSON(stack.threads)
-    : new ThreadStore();
+  let threads: ThreadStore;
+  if (stack.threads) {
+    threads = ThreadStore.fromJSON(stack.threads);
+  } else if (state.messages instanceof ThreadStore) {
+    threads = state.messages;
+  } else {
+    throw new Error("setupNode: no ThreadStore available. Expected state.messages to be a ThreadStore.");
+  }
   stack.threads = threads;
 
   return { stack, step, self, threads };

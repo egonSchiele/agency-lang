@@ -18,6 +18,7 @@ Flip the default: all LLM calls share a common message history by default, as if
 
 - `thread { }` and `subthread { }` block semantics are unchanged.
 - Tool-invoked functions (functions called by the LLM as tools) remain isolated — they get a fresh `ThreadStore`.
+- Handler functions (`handle` blocks) remain isolated — they get a fresh `ThreadStore`. Handlers are safety infrastructure and must not accidentally share or corrupt the main thread.
 - Functions called internally share the caller's `ThreadStore`, same as today when inside a thread block.
 
 ## Changes
@@ -37,7 +38,9 @@ const result = await execCtx.graph.run(nodeName, {
 }, ...);
 ```
 
-Change: Create a `ThreadStore` with a pre-pushed active thread. This ThreadStore persists across all node transitions during graph execution.
+Change: Create a `ThreadStore` with a pre-pushed active thread (via `getOrCreateActive()`). This ThreadStore persists across all node transitions during graph execution. Move the ThreadStore creation outside the `while(true)` loop so it survives rewind/checkpoint restores.
+
+On `RestoreSignal` (checkpoint restore, line 133-154): The shared ThreadStore should be reset to a fresh state with a new pre-pushed active thread, since the checkpoint restores execution from a previous point and the old message history may no longer be relevant.
 
 **File: `lib/runtime/node.ts` — `setupNode()`**
 
@@ -48,13 +51,33 @@ const threads = stack.threads
   : new ThreadStore();
 ```
 
-Change: When not resuming from an interrupt, use the `ThreadStore` from `state.messages` (the one passed through graph transitions) instead of creating a new one. The fallback (for the very first node) creates a new ThreadStore with a pre-pushed active thread via `getOrCreateActive()`.
+Change: When not resuming from an interrupt, use the `ThreadStore` from `state.messages` (the one carried through graph transitions) instead of creating a new one. The `state.messages` field is already part of the `GraphState` type — each node returns `{ messages: __threads, data: ... }` and the graph passes this forward. When resuming from an interrupt, continue using `ThreadStore.fromJSON(stack.threads)` as today.
 
-**File: `lib/simplemachine/graph.ts`**
+### 2. Builder: GoToNode must pass the ThreadStore
 
-The graph execution loop currently only carries `data` between nodes. The `messages` field returned by each node (`{ messages: __threads, data: ... }`) must also be carried forward to the next node.
+**File: `lib/backends/typescriptBuilder.ts` — `processNodeCall()` (line 1608-1612)**
 
-### 2. Builder: Always use shared thread path
+Currently:
+```ts
+const goToArgs = ts.obj({
+  messages: ts.stack("messages"),  // __stack.messages — undefined! State has no messages property
+  ctx: ts.runtime.ctx,
+  data: dataNode,
+});
+```
+
+Change: Pass the actual ThreadStore instead of the (undefined) stack field:
+```ts
+const goToArgs = ts.obj({
+  messages: ts.runtime.threads,  // __threads — the actual ThreadStore
+  ctx: ts.runtime.ctx,
+  data: dataNode,
+});
+```
+
+This is what makes the ThreadStore propagate across node transitions. Without this fix, `state.messages` would be `undefined` when the next node starts.
+
+### 3. Builder: Always use shared thread path
 
 **File: `lib/backends/typescriptBuilder.ts`**
 
@@ -97,7 +120,28 @@ const threadsExpr = ts.runtime.threads;
 
 The `insideMessageThread` flag is still needed for `processMessageThread` body processing, but no longer drives thread expression decisions.
 
-### 3. Async prompts (nice-to-have)
+### 4. Builder: CLI entry point initialState
+
+**File: `lib/backends/typescriptBuilder.ts` (line 2731)**
+
+Currently:
+```ts
+const initialState = {
+  messages: new ThreadStore(),
+  data: {}
+};
+```
+
+This is the entry point when running an Agency file as a script (not through `runNode()`). The `new ThreadStore()` here also needs a pre-pushed active thread. However, since `setupNode()` will call `getOrCreateActive()` on the ThreadStore it receives, this may be handled automatically. Verify during implementation.
+
+### 5. Locations that should remain isolated
+
+These locations create a `new ThreadStore()` and should **not** be changed:
+
+- **Handler function refs** (line 2335): `threads: ts.newThreadStore()` — handlers are safety infrastructure and must not share or corrupt the main thread.
+- **Tool-invoked function calls** in `lib/runtime/prompt.ts` (line 229-233): `threads: new ThreadStore()` — tool calls are implementation details and should not bleed into the parent conversation.
+
+### 6. Async prompts (nice-to-have)
 
 Currently async prompts get `new MessageThread()` (completely isolated). Ideally they should fork the current history via a new `createAndReturnSubthread()` method on `ThreadStore`, so they have context but don't write back to the shared thread.
 
@@ -111,12 +155,12 @@ createAndReturnSubthread(): MessageThread {
 }
 ```
 
-### 4. Serialization for interrupts
+### 7. Serialization for interrupts
 
-The existing serialization path in `setupNode()` already handles this correctly — `ThreadStore.fromJSON` restores threads and the active stack. The only change needed is that the `new ThreadStore()` fallback (when not resuming) should also pre-push an active thread.
+The existing serialization path in `setupNode()` already handles this correctly — `ThreadStore.fromJSON` restores threads and the active stack. The only change needed is that the `new ThreadStore()` fallback (when not resuming) should use `state.messages` instead (the ThreadStore carried through graph transitions).
 
 ## Test impact
 
 - **Generator/builder fixtures** (`tests/typescriptGenerator/`, `tests/typescriptBuilder/`): Many fixtures reference `createAndReturnThread()` in generated code. Regenerate with `make fixtures`.
 - **Thread tests** (`tests/agency/threads/`): Should still pass — `thread { }` and `subthread { }` still create nested threads on the active stack.
-- **Existing agency tests** (`tests/agency/`): Tests with multiple LLM calls in a node will now share history. Review for any that depend on isolation.
+- **Existing agency tests** (`tests/agency/`): Tests with multiple LLM calls in a node will now share history. Review for any that depend on isolation — particularly tests that have multiple LLM calls and expect them to be independent.

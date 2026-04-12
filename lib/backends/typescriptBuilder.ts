@@ -2022,14 +2022,8 @@ export class TypeScriptBuilder {
       clientConfig = ts.obj({});
     }
 
-    // Thread expression
-    let threadExpr: TsNode;
-    const isInFunction = this.getCurrentScope().type === "function";
-    if (this.insideMessageThread || isInFunction) {
-      threadExpr = ts.threads.getOrCreateActive();
-    } else {
-      threadExpr = ts.threads.createAndReturnThread();
-    }
+    // Thread expression — always use the shared active thread
+    const threadExpr = ts.threads.getOrCreateActive();
 
     // Merge tools from usesTool statements (preprocessor) and config object
     const usesToolNames = node.tools?.toolNames || [];

@@ -113,13 +113,18 @@ const threads = stack.threads
 stack.threads = threads;
 
 // After:
-const threads = stack.threads
-  ? ThreadStore.fromJSON(stack.threads)
-  : (state.messages instanceof ThreadStore ? state.messages : new ThreadStore());
+let threads: ThreadStore;
+if (stack.threads) {
+  threads = ThreadStore.fromJSON(stack.threads);
+} else if (state.messages instanceof ThreadStore) {
+  threads = state.messages;
+} else {
+  throw new Error("setupNode: no ThreadStore available. Expected state.messages to be a ThreadStore.");
+}
 stack.threads = threads;
 ```
 
-Note: The `new ThreadStore()` fallback should never be hit in practice (the first node always receives a ThreadStore from `runNode()`), but it's a safe default.
+The error should never be hit in practice (the first node always receives a ThreadStore from `runNode()`), but throwing makes bugs visible rather than silently creating an empty thread.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -503,7 +508,109 @@ git commit -m "fix agency tests for default shared thread behavior"
 
 ---
 
-### Task 10: Async prompts — fork via subthread (nice-to-have)
+### Task 10: Add new tests for default shared thread behavior
+
+**Files:**
+- Create: `tests/agency/threads/default-shared-thread.agency`
+- Create: `tests/agency/threads/default-shared-thread.test.json`
+- Create: `tests/agency/threads/default-shared-cross-node.agency`
+- Create: `tests/agency/threads/default-shared-cross-node.test.json`
+
+- [ ] **Step 1: Create test for default shared thread within a single node**
+
+This tests the core new behavior: multiple LLM calls in a single node share message history by default (no `thread { }` needed).
+
+`tests/agency/threads/default-shared-thread.agency`:
+```
+node main() {
+  const res1: number[] = llm("What are the first 5 prime numbers?")
+  const res2: number = llm("And what is the sum of those numbers?")
+  return {
+    res1: res1,
+    res2: res2
+  }
+}
+```
+
+`tests/agency/threads/default-shared-thread.test.json`:
+```json
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"res1\":[2,3,5,7,11],\"res2\":28}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "LLM calls share history by default — res2 should know about res1"
+    }
+  ]
+}
+```
+
+Note: This is the same code as the existing `simple.agency` test but WITHOUT the `thread { }` wrapper. It should produce the same result now that sharing is the default.
+
+- [ ] **Step 2: Create test for cross-node thread persistence**
+
+This tests that message history persists when transitioning between nodes.
+
+`tests/agency/threads/default-shared-cross-node.agency`:
+```
+node setup() {
+  const res1: number[] = llm("What are the first 5 prime numbers?")
+  return process(res1)
+}
+
+node process(nums: number[]) {
+  const res2: number = llm("And what is the sum of those numbers?")
+  return {
+    nums: nums,
+    sum: res2
+  }
+}
+
+node main() {
+  return setup()
+}
+```
+
+`tests/agency/threads/default-shared-cross-node.test.json`:
+```json
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"nums\":[2,3,5,7,11],\"sum\":28}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Message history persists across node transitions — process node sees setup node history"
+    }
+  ]
+}
+```
+
+- [ ] **Step 3: Run the new tests**
+
+Run: `pnpm run agency test tests/agency/threads/default-shared-thread.test.json`
+Run: `pnpm run agency test tests/agency/threads/default-shared-cross-node.test.json`
+Expected: PASS for both.
+
+- [ ] **Step 4: Verify existing thread isolation test still works**
+
+Run: `pnpm run agency test tests/agency/threads/simple.test.json`
+Run: `pnpm run agency test tests/agency/threads/nested-threads.test.json`
+Run: `pnpm run agency test tests/agency/threads/subthreads.test.json`
+Expected: PASS — explicit `thread { }` and `subthread { }` still work as before.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add tests/agency/threads/default-shared-thread.agency tests/agency/threads/default-shared-thread.test.json tests/agency/threads/default-shared-cross-node.agency tests/agency/threads/default-shared-cross-node.test.json
+git commit -m "add tests for default shared thread behavior"
+```
+
+---
+
+### Task 11: Async prompts — fork via subthread (nice-to-have)
 
 Skip this task if it adds significant complexity. Instead, add a note to `docs/dev/async.md`.
 

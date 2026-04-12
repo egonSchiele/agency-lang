@@ -434,7 +434,7 @@ export const ts = {
   },
 
   env(varName: string): TsRaw {
-    return ts.raw(`process.env[${JSON.stringify(varName)}]`);
+    return ts.raw(`__process.env[${JSON.stringify(varName)}]`);
   },
 
   callHook(hookName: string, data: Record<string, TsNode>): TsNode {

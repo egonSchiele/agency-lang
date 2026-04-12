@@ -5,8 +5,8 @@ import { apply } from "typestache";
 
 export const template = `function _builtinInput(prompt: string): Promise<string> {
   const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
+    input: __process.stdin,
+    output: __process.stdout
   });
 
   return new Promise((resolve) => {

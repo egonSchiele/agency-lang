@@ -2705,7 +2705,7 @@ export class TypeScriptBuilder {
       result.push(
         ts.if(
           ts.binOp(
-            $(ts.id("process")).prop("argv").index(ts.num(1)).done(),
+            $(ts.id("__process")).prop("argv").index(ts.num(1)).done(),
             "===",
             ts.call(ts.id("fileURLToPath"), [
               $(ts.id("import")).prop("meta").prop("url").done(),

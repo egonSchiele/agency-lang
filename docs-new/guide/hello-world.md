@@ -5,7 +5,7 @@ Agency is a domain-specific language for defining AI agent workflows. It compile
 ## Installation
 
 ```bash
-pnpm install
+npm install agency-lang
 ```
 
 ## Quick Start
@@ -13,8 +13,9 @@ pnpm install
 Create a file called `hello.agency`:
 
 ```agency
-node main {
-  prompt "Say hello" -> string
+node main() {
+  const greeting = llm("Say hello to the world!");
+  print(greeting);
 }
 ```
 

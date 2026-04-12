@@ -8,6 +8,7 @@ import { BaseNode } from "./base.js";
 import { BlockArgument } from "./blockArgument.js";
 import { AgencyArray, AgencyObject, NamedArgument, SplatExpression } from "./dataStructures.js";
 import { UsesTool } from "./tools.js";
+import { Tag } from "./tag.js";
 
 export type FunctionParameter = {
   type: "functionParameter";
@@ -27,6 +28,7 @@ export type FunctionDefinition = BaseNode & {
   async?: boolean;
   safe?: boolean;
   exported?: boolean;
+  tags?: Tag[];
 };
 
 export type FunctionCall = BaseNode & {
@@ -36,6 +38,7 @@ export type FunctionCall = BaseNode & {
   block?: BlockArgument;
   async?: boolean;
   tools?: UsesTool;
+  tags?: Tag[];
 };
 
 export type DocString = {

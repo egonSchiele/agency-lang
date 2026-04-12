@@ -3,6 +3,7 @@ import { ValueAccess } from "./access.js";
 import { BaseNode } from "./base.js";
 import { FunctionParameter } from "./function.js";
 import { Literal } from "./literals.js";
+import { Tag } from "./tag.js";
 
 /*
 export type FunctionDefinition = {
@@ -24,6 +25,7 @@ export type GraphNodeDefinition = BaseNode & {
   body: AgencyNode[];
   returnType?: VariableType | null;
   visibility?: Visibility;
+  tags?: Tag[];
 };
 
 export type NodeCall = {

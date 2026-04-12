@@ -1,4 +1,4 @@
-const text = read("/Users/adityabhargava/agency-lang/README.md")
+const text = read("/Users/adityabhargava/agency-lang/README.md") with approve
 
 node main() {
   print(text)

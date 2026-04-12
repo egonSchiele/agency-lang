@@ -2,10 +2,11 @@
 layout: home
 hero:
   name: Agency
-  text: AI Agent Workflows
-  tagline: A domain-specific language for defining AI agent workflows that compile to executable TypeScript.
+  tagline: A language for building agents.
   actions:
     - theme: brand
       text: Get Started
       link: /guide/getting-started
+    - text: GitHub
+      link: https://github.com/egonSchiele/agency-lang
 ---

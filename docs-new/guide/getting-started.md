@@ -24,3 +24,5 @@ Compile and run it:
 ```bash
 pnpm run agency hello.agency
 ```
+
+Now read [Agency in Ten Minutes](./agency-in-ten-minutes.md) to learn more about the language and how to use it!

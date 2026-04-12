@@ -18,7 +18,6 @@ import {
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
   rewindFrom as _rewindFrom,
-  ToolCallError,
   RestoreSignal,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
@@ -176,6 +175,18 @@ let __functionCompleted = false;
   __stack.args["msg"] = msg;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "asyncKeyword.agency", scopeName: "openai" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "asyncKeyword.agency", scopeName: "openai", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  msg = __overrides[0];
+  __stack.args["msg"] = msg;
+
+}
+
   try {
     await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -200,16 +211,12 @@ __functionCompleted = true;
 runner.halt(`OpenAI response: ${__stack.locals.response}`)
 return;
     });
-    if (runner.halted) return runner.haltResult;
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
     }
-    if (__error instanceof ToolCallError) {
-      __error.retryable = __error.retryable && __self.__retryable
-      throw __error
-    }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "openai", args: __stack.args });
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -256,6 +263,18 @@ let __functionCompleted = false;
   __stack.args["msg"] = msg;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "asyncKeyword.agency", scopeName: "google" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "asyncKeyword.agency", scopeName: "google", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  msg = __overrides[0];
+  __stack.args["msg"] = msg;
+
+}
+
   try {
     await runner.step(0, async (runner) => {
 __threads.active().setMessages([])
@@ -285,16 +304,12 @@ __functionCompleted = true;
 runner.halt(`Google response: ${__stack.locals.response}`)
 return;
     });
-    if (runner.halted) return runner.haltResult;
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
     }
-    if (__error instanceof ToolCallError) {
-      __error.retryable = __error.retryable && __self.__retryable
-      throw __error
-    }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "google", args: __stack.args });
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -338,6 +353,16 @@ let __functionCompleted = false;
   })
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "asyncKeyword.agency", scopeName: "fibs" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "asyncKeyword.agency", scopeName: "fibs", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+
+}
+
   try {
     await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -363,16 +388,12 @@ __functionCompleted = true;
 runner.halt(__self.__promptVar)
 return;
     });
-    if (runner.halted) return runner.haltResult;
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
     }
-    if (__error instanceof ToolCallError) {
-      __error.retryable = __error.retryable && __self.__retryable
-      throw __error
-    }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+    return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: "fibs", args: __stack.args });
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -408,79 +429,89 @@ let __functionCompleted = false;
     }
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "asyncKeyword.agency", scopeName: "main" });
-  await runner.step(0, async (runner) => {
+  try {
+    await runner.step(0, async (runner) => {
 __stack.locals.msg = await input(`> `);
 if (isInterrupt(__stack.locals.msg)) {
-      await __ctx.pendingPromises.awaitAll()
-      runner.halt({
-        ...__state,
-        data: __stack.locals.msg
-      })
-      return;
-    }
-  });
-  await runner.branchStep(1, "1", async (runner) => {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __stack.locals.msg
+        })
+        return;
+      }
+    });
+    await runner.branchStep(1, "1", async (runner) => {
 if ((__stack.branches && __stack.branches["1"])) {
-      __forked = __stack.branches["1"].stack;
-      __forked.deserializeMode()
-    } else {
-      __forked = __ctx.forkStack();
-    }
+        __forked = __stack.branches["1"].stack;
+        __forked.deserializeMode()
+      } else {
+        __forked = __ctx.forkStack();
+      }
 __stack.branches = (__stack.branches || {});
 __stack.branches["1"] = {
-      stack: __forked
-    };
+        stack: __forked
+      };
 __stack.locals.res2 = google(__stack.locals.msg, {
-      ctx: __ctx,
-      threads: new ThreadStore(),
-      interruptData: __state?.interruptData,
-      stateStack: __forked,
-      isForked: true
-    });
+        ctx: __ctx,
+        threads: new ThreadStore(),
+        interruptData: __state?.interruptData,
+        stateStack: __forked,
+        isForked: true
+      });
 __self.__pendingKey_res2 = __ctx.pendingPromises.add(__stack.locals.res2, (val) => { __stack.locals.res2 = val; });
-  });
-  await runner.branchStep(2, "2", async (runner) => {
+    });
+    await runner.branchStep(2, "2", async (runner) => {
 if ((__stack.branches && __stack.branches["2"])) {
-      __forked = __stack.branches["2"].stack;
-      __forked.deserializeMode()
-    } else {
-      __forked = __ctx.forkStack();
-    }
+        __forked = __stack.branches["2"].stack;
+        __forked.deserializeMode()
+      } else {
+        __forked = __ctx.forkStack();
+      }
 __stack.branches = (__stack.branches || {});
 __stack.branches["2"] = {
-      stack: __forked
-    };
+        stack: __forked
+      };
 __stack.locals.res1 = openai(__stack.locals.msg, {
-      ctx: __ctx,
-      threads: new ThreadStore(),
-      interruptData: __state?.interruptData,
-      stateStack: __forked,
-      isForked: true
-    });
+        ctx: __ctx,
+        threads: new ThreadStore(),
+        interruptData: __state?.interruptData,
+        stateStack: __forked,
+        isForked: true
+      });
 __self.__pendingKey_res1 = __ctx.pendingPromises.add(__stack.locals.res1, (val) => { __stack.locals.res1 = val; });
-  });
-  await runner.step(3, async (runner) => {
+    });
+    await runner.step(3, async (runner) => {
 await __ctx.pendingPromises.awaitPending([__self.__pendingKey_res2, __self.__pendingKey_res1]);
-  });
-  await runner.step(4, async (runner) => {
+    });
+    await runner.step(4, async (runner) => {
 __stack.locals.results = Promise.race([__stack.locals.res1, __stack.locals.res2]);
-  });
-  await runner.step(5, async (runner) => {
+    });
+    await runner.step(5, async (runner) => {
 await printJSON(__stack.locals.results)
-  });
-  if (runner.halted) return runner.haltResult;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "main",
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "main",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+    };
+  }
 })
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({

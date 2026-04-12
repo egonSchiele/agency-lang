@@ -16,7 +16,6 @@ import { GraphState } from "./types.js";
 import { PromptResult, Result, StreamChunk, ToolCallJSON } from "smoltalk";
 import { ZodType } from "zod/v3";
 import { ThreadStore } from "./state/threadStore.js";
-import { ToolCallError } from "./errors.js";
 import { isFailure } from "./result.js";
 
 export interface ToolHandler {
@@ -258,8 +257,7 @@ async function executeToolCalls({
       try {
         result = await handler.execute(...params);
       } catch (error: unknown) {
-        const retryable =
-          error instanceof ToolCallError ? error.retryable : false;
+        const retryable = false;
         const errorMessage =
           error instanceof Error ? error.message : String(error);
         toolErrorCounts[handler.name] =
@@ -300,7 +298,7 @@ async function executeToolCalls({
         }
         continue;
       }
-      // Tool returned a failure Result — handle retry logic like ToolCallError
+      // Tool returned a failure Result — handle retry logic
       if (isFailure(result)) {
         const errorMessage = typeof result.error === "string" ? result.error : String(result.error);
         toolErrorCounts[handler.name] = (toolErrorCounts[handler.name] || 0) + 1;

@@ -18,7 +18,6 @@ import {
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
   rewindFrom as _rewindFrom,
-  ToolCallError,
   RestoreSignal,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
@@ -120,7 +119,8 @@ let __functionCompleted = false;
     }
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-assignment.agency", scopeName: "main" });
-  await runner.step(0, async (runner) => {
+  try {
+    await runner.step(0, async (runner) => {
 // Remember this will be called both in a tool call context
 // and when the user is simply calling a function.
 
@@ -134,7 +134,7 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
   // reject for tool calls handled separately
   __state.interruptData.interruptResponse = null;
   
-  runner.halt({ messages: __threads, data: null });
+  runner.halt({ messages: __threads, data: failure("interrupt rejected", { retryable: false }) });
   
   
   return;
@@ -144,7 +144,7 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
   const __handlerResult = await interruptWithHandlers(`What is your name?`, __ctx);
   if (isRejected(__handlerResult)) {
     
-    runner.halt({ messages: __threads, data: __handlerResult.value });
+    runner.halt({ messages: __threads, data: failure(__handlerResult.value ?? "interrupt rejected", { retryable: false }) });
     
     
     return;
@@ -164,48 +164,57 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
   }
 }
 
-  });
-  await runner.step(1, async (runner) => {
+    });
+    await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.greeting = await runPrompt({
-      ctx: __ctx,
-      prompt: `Say hello to {name}`,
-      messages: __threads.createAndReturnThread(),
-      clientConfig: {},
-      maxToolCallRounds: 10,
-      interruptData: __state?.interruptData,
-      removedTools: __self.__removedTools
-    });
+        ctx: __ctx,
+        prompt: `Say hello to {name}`,
+        messages: __threads.createAndReturnThread(),
+        clientConfig: {},
+        maxToolCallRounds: 10,
+        interruptData: __state?.interruptData,
+        removedTools: __self.__removedTools
+      });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.greeting)) {
-      await __ctx.pendingPromises.awaitAll()
-      runner.halt({
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          messages: __threads,
+          data: __stack.locals.greeting
+        })
+        return;
+      }
+    });
+    await runner.step(2, async (runner) => {
+runner.halt({
         messages: __threads,
         data: __stack.locals.greeting
       })
-      return;
-    }
-  });
-  await runner.step(2, async (runner) => {
-runner.halt({
-      messages: __threads,
-      data: __stack.locals.greeting
-    })
 return;
-  });
-  if (runner.halted) return runner.haltResult;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "main",
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "main",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+    };
+  }
 })
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({

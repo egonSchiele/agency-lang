@@ -18,7 +18,6 @@ import {
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
   rewindFrom as _rewindFrom,
-  ToolCallError,
   RestoreSignal,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
@@ -120,13 +119,14 @@ let __functionCompleted = false;
     }
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "ifElse.agency", scopeName: "main" });
-  await runner.step(0, async (runner) => {
+  try {
+    await runner.step(0, async (runner) => {
 //  Basic if statement with boolean variable
-  });
-  await runner.step(1, async (runner) => {
+    });
+    await runner.step(1, async (runner) => {
 __stack.locals.flag = true;
-  });
-  await runner.step(2, async (runner) => {
+    });
+    await runner.step(2, async (runner) => {
 await runner.ifElse(2, [
 
   {
@@ -134,13 +134,13 @@ await runner.ifElse(2, [
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `condition was true`;
-          });
+            });
     },
   },
 
 ]);
-  });
-  await runner.step(3, async (runner) => {
+    });
+    await runner.step(3, async (runner) => {
 await runner.ifElse(3, [
 
   {
@@ -148,19 +148,19 @@ await runner.ifElse(3, [
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.status = `ready`;
-          });
+            });
     },
   },
 
 ]);
 //  If statement with property access
-  });
-  await runner.step(4, async (runner) => {
+    });
+    await runner.step(4, async (runner) => {
 __stack.locals.obj = {
-      "active": true
-    };
-  });
-  await runner.step(5, async (runner) => {
+        "active": true
+      };
+    });
+    await runner.step(5, async (runner) => {
 await runner.ifElse(5, [
 
   {
@@ -168,17 +168,17 @@ await runner.ifElse(5, [
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.message = `object is active`;
-          });
+            });
     },
   },
 
 ]);
 //  Nested if statements
-  });
-  await runner.step(6, async (runner) => {
+    });
+    await runner.step(6, async (runner) => {
 __stack.locals.outer = true;
-  });
-  await runner.step(7, async (runner) => {
+    });
+    await runner.step(7, async (runner) => {
 await runner.ifElse(7, [
 
   {
@@ -186,7 +186,7 @@ await runner.ifElse(7, [
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.inner = false;
-          });
+            });
 await runner.step(1, async (runner) => {
 await runner.ifElse(1, [
 
@@ -195,12 +195,12 @@ await runner.ifElse(1, [
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.nested = `both true`;
-                  });
+                    });
     },
   },
 
 ]);
-          });
+            });
     },
   },
 
@@ -212,11 +212,11 @@ __stack.locals.nested = `both true`;
 //    firstElement = "exists"
 //  }
 //  Multiple statements in then body
-  });
-  await runner.step(8, async (runner) => {
+    });
+    await runner.step(8, async (runner) => {
 __stack.locals.condition = true;
-  });
-  await runner.step(9, async (runner) => {
+    });
+    await runner.step(9, async (runner) => {
 await runner.ifElse(9, [
 
   {
@@ -224,23 +224,23 @@ await runner.ifElse(9, [
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.a = 1;
-          });
+            });
 await runner.step(1, async (runner) => {
 __stack.locals.b = 2;
-          });
+            });
 await runner.step(2, async (runner) => {
 __stack.locals.c = 3;
-          });
+            });
     },
   },
 
 ]);
 //  Multiple statements in both then and else bodies
-  });
-  await runner.step(10, async (runner) => {
+    });
+    await runner.step(10, async (runner) => {
 __stack.locals.value = false;
-  });
-  await runner.step(11, async (runner) => {
+    });
+    await runner.step(11, async (runner) => {
 await runner.ifElse(11, [
 
   {
@@ -248,17 +248,17 @@ await runner.ifElse(11, [
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.x = 10;
-          });
+            });
 await runner.step(1, async (runner) => {
 __stack.locals.y = 20;
-          });
+            });
     },
   },
 
 ]);
 //  Basic else
-  });
-  await runner.step(12, async (runner) => {
+    });
+    await runner.step(12, async (runner) => {
 await runner.ifElse(12, [
 
   {
@@ -266,18 +266,18 @@ await runner.ifElse(12, [
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `yes`;
-          });
+            });
     },
   },
 
 ], async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `no`;
-        });
+          });
 });
 //  else if chain
-  });
-  await runner.step(13, async (runner) => {
+    });
+    await runner.step(13, async (runner) => {
 await runner.ifElse(13, [
 
   {
@@ -285,7 +285,7 @@ await runner.ifElse(13, [
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `one`;
-          });
+            });
     },
   },
 
@@ -294,29 +294,38 @@ __stack.locals.result = `one`;
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `two`;
-          });
+            });
     },
   },
 
 ], async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `other`;
-        });
+          });
 });
-  });
-  if (runner.halted) return runner.haltResult;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "main",
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "main",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+    };
+  }
 })
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({

@@ -1248,15 +1248,6 @@ export class TypeScriptBuilder {
             ts.raw("__error instanceof RestoreSignal"),
             ts.statements([ts.throw("__error")]),
           ),
-          ts.if(
-            ts.raw("__error instanceof ToolCallError"),
-            ts.statements([
-              ts.raw(
-                "__error.retryable = __error.retryable && __self.__retryable",
-              ),
-              ts.throw("__error"),
-            ]),
-          ),
           ts.raw(`return failure(__error instanceof Error ? __error.message : String(__error), { checkpoint: __ctx.checkpoints.get(__resultCheckpointId), retryable: __self.__retryable, functionName: ${JSON.stringify(functionName)}, args: __stack.args });`),
         ]),
         "__error",

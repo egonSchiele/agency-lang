@@ -18,7 +18,6 @@ import {
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
   rewindFrom as _rewindFrom,
-  ToolCallError,
   RestoreSignal,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
@@ -120,14 +119,15 @@ let __functionCompleted = false;
     }
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "matchBlock.agency", scopeName: "main" });
-  await runner.step(0, async (runner) => {
+  try {
+    await runner.step(0, async (runner) => {
 //  Test match blocks (pattern matching)
 //  Simple match with string literals
-  });
-  await runner.step(1, async (runner) => {
+    });
+    await runner.step(1, async (runner) => {
 __stack.locals.action = `start`;
-  });
-  await runner.step(2, async (runner) => {
+    });
+    await runner.step(2, async (runner) => {
 await runner.ifElse(2, [
 
   {
@@ -155,11 +155,11 @@ await print(`Restarting...`)
 await print(`Unknown action`)
 });
 //  Match with number literals
-  });
-  await runner.step(3, async (runner) => {
+    });
+    await runner.step(3, async (runner) => {
 __stack.locals.statusCode = 200;
-  });
-  await runner.step(4, async (runner) => {
+    });
+    await runner.step(4, async (runner) => {
 await runner.ifElse(4, [
 
   {
@@ -187,14 +187,14 @@ await print(`Internal Server Error`)
 await print(`Unknown status`)
 });
 //  Match with variable assignment in body
-  });
-  await runner.step(5, async (runner) => {
+    });
+    await runner.step(5, async (runner) => {
 __stack.locals.grade = `A`;
-  });
-  await runner.step(6, async (runner) => {
+    });
+    await runner.step(6, async (runner) => {
 __stack.locals.points = 0;
-  });
-  await runner.step(7, async (runner) => {
+    });
+    await runner.step(7, async (runner) => {
 await runner.ifElse(7, [
 
   {
@@ -229,11 +229,11 @@ __stack.locals.d = 55;
 __stack.locals.e = 0;
 });
 //  Match with function calls in body
-  });
-  await runner.step(8, async (runner) => {
+    });
+    await runner.step(8, async (runner) => {
 __stack.locals.level = `debug`;
-  });
-  await runner.step(9, async (runner) => {
+    });
+    await runner.step(9, async (runner) => {
 await runner.ifElse(9, [
 
   {
@@ -266,11 +266,11 @@ await print(`Error level`)
 
 ]);
 //  Match with array results
-  });
-  await runner.step(10, async (runner) => {
+    });
+    await runner.step(10, async (runner) => {
 __stack.locals.resultType = `array`;
-  });
-  await runner.step(11, async (runner) => {
+    });
+    await runner.step(11, async (runner) => {
 await runner.ifElse(11, [
 
   {
@@ -284,9 +284,9 @@ __stack.locals.data1 = [1, 2, 3];
     condition: async () => __stack.locals.resultType === `object`,
     body: async (runner) => {
 __stack.locals.data2 = {
-            "x": 1,
-            "y": 2
-          };
+              "x": 1,
+              "y": 2
+            };
     },
   },
 
@@ -294,20 +294,20 @@ __stack.locals.data2 = {
 __stack.locals.data3 = [];
 });
 //  Match with object results
-  });
-  await runner.step(12, async (runner) => {
+    });
+    await runner.step(12, async (runner) => {
 __stack.locals.format = `json`;
-  });
-  await runner.step(13, async (runner) => {
+    });
+    await runner.step(13, async (runner) => {
 await runner.ifElse(13, [
 
   {
     condition: async () => __stack.locals.format === `xml`,
     body: async (runner) => {
 __stack.locals.output1 = {
-            "type": `xml`,
-            "ext": `.xml`
-          };
+              "type": `xml`,
+              "ext": `.xml`
+            };
     },
   },
 
@@ -315,9 +315,9 @@ __stack.locals.output1 = {
     condition: async () => __stack.locals.format === `json`,
     body: async (runner) => {
 __stack.locals.output2 = {
-            "type": `json`,
-            "ext": `.json`
-          };
+              "type": `json`,
+              "ext": `.json`
+            };
     },
   },
 
@@ -325,32 +325,41 @@ __stack.locals.output2 = {
     condition: async () => __stack.locals.format === `csv`,
     body: async (runner) => {
 __stack.locals.output3 = {
-            "type": `csv`,
-            "ext": `.csv`
-          };
+              "type": `csv`,
+              "ext": `.csv`
+            };
     },
   },
 
 ], async (runner) => {
 __stack.locals.output4 = {
-          "type": `unknown`,
-          "ext": ``
-        };
+            "type": `unknown`,
+            "ext": ``
+          };
 });
-  });
-  if (runner.halted) return runner.haltResult;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "main",
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "main",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+    };
+  }
 })
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({

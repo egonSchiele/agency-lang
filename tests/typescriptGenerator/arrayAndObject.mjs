@@ -84,7 +84,8 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
-function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__ctx) {
+  __ctx.globals.markInitialized("arrayAndObject.agency")
   __ctx.globals.set("arrayAndObject.agency", "nums", [1, 2, 3, 4, 5])
   __ctx.globals.set("arrayAndObject.agency", "names", [`Alice`, `Bob`, `Charlie`])
   __ctx.globals.set("arrayAndObject.agency", "matrix", [[1, 2], [3, 4], [5, 6]])
@@ -117,7 +118,6 @@ function __initializeGlobals(__ctx) {
   })
   __ctx.globals.set("arrayAndObject.agency", "firstNum", __ctx.globals.get("arrayAndObject.agency", "nums")[0])
   __ctx.globals.set("arrayAndObject.agency", "personName", __ctx.globals.get("arrayAndObject.agency", "person").name)
-  __ctx.globals.markInitialized("arrayAndObject.agency")
 }
 const __toolRegistry = {
   readSkill: {

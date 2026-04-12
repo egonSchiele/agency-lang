@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "bare function call (no assignment) with approve — interrupt auto-approved, execution continues",
+      "input": "",
+      "expectedOutput": "[\"before interrupt\",\"after interrupt\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

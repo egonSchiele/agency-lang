@@ -66,6 +66,7 @@ import { binOpParser } from "./binop.js";
 import { multiLineCommentParser } from "./multiLineComment.js";
 import { keywordParser } from "./keyword.js";
 import { HandleBlock } from "@/types/handleBlock.js";
+import { WithModifier } from "@/types/withModifier.js";
 import { debuggerParser } from "./debuggerStatement.js";
 import { exprParser } from "./expression.js";
 import { withLoc } from "./loc.js";
@@ -179,6 +180,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
     debuggerParser,
     multiLineCommentParser,
     skillParser,
+    withModifierParser,
     assignmentParser,
     binOpParser,
     booleanParser,
@@ -299,6 +301,34 @@ export const handleBlockParser: Parser<HandleBlock> = trace(
     capture(or(inlineHandlerParser, functionRefHandlerParser), "handler"),
   ),
 );
+
+export const withModifierParser: Parser<WithModifier> = (input: string) => {
+  // Try to parse an assignment or a bare function call as the inner statement.
+  const stmtResult = or(assignmentParser, functionCallParser)(input);
+  if (!stmtResult.success) return failure("expected statement before 'with'", input);
+
+  // Look for "with <builtin>" on remaining input.
+  // assignmentParser consumes trailing whitespace, so rest starts at "with...".
+  // functionCallParser does NOT consume trailing whitespace, so we need optionalSpaces first.
+  const modParser = seqC(
+    optionalSpaces,
+    str("with"),
+    spaces,
+    capture(or(str("approve"), str("reject"), str("propagate")), "handlerName"),
+    optionalSpacesOrNewline,
+  );
+  const modResult = modParser(stmtResult.rest);
+  if (!modResult.success) return failure("expected 'with approve/reject/propagate'", input);
+
+  return success(
+    {
+      type: "withModifier" as const,
+      statement: stmtResult.result,
+      handlerName: modResult.result.handlerName as WithModifier["handlerName"],
+    },
+    modResult.rest,
+  );
+};
 
 const elseClauseParser: Parser<AgencyNode[]> = (input: string) => {
   const parser = seqC(optionalSpaces, str("else"), optionalSpaces);

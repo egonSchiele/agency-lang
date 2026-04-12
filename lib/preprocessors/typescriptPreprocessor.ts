@@ -51,6 +51,8 @@ function walkBody(
       if (node.handler.kind === "inline") {
         node.handler.body = walkBody(node.handler.body, fn);
       }
+    } else if (node.type === "withModifier") {
+      node.statement = walkBody([node.statement], fn)[0];
     } else if (node.type === "functionCall" && node.block) {
       node.block.body = walkBody(node.block.body, fn);
     }
@@ -727,6 +729,8 @@ export class TypescriptPreprocessor {
         }
       } else if (node.type === "handleBlock") {
         this._collectAsyncVariablesInScope(node.body, asyncVarToAssignment);
+      } else if (node.type === "withModifier") {
+        this._collectAsyncVariablesInScope([node.statement], asyncVarToAssignment);
       }
     }
   }
@@ -779,6 +783,14 @@ export class TypescriptPreprocessor {
       } else if (node.type === "handleBlock") {
         const found = this._findFirstUsageInScope(
           node.body,
+          varName,
+          assignmentNode,
+          [...bodyPath, i],
+        );
+        if (found) return found;
+      } else if (node.type === "withModifier") {
+        const found = this._findFirstUsageInScope(
+          [node.statement],
           varName,
           assignmentNode,
           [...bodyPath, i],
@@ -876,6 +888,11 @@ export class TypescriptPreprocessor {
           ...currentPath,
           i,
         ]);
+      } else if (node.type === "withModifier") {
+        node.statement = this._insertAwaitPendingCalls([node.statement], locationToVars, [
+          ...currentPath,
+          i,
+        ])[0];
       } else if (node.type === "ifElse") {
         node.thenBody = this._insertAwaitPendingCalls(
           node.thenBody,
@@ -972,6 +989,10 @@ export class TypescriptPreprocessor {
         if (node.handler.kind === "inline") {
           node.handler.body = this.filterNodesByType(node.handler.body, excludeSet);
         }
+      } else if (node.type === "withModifier") {
+        const filtered = this.filterNodesByType([node.statement], excludeSet)[0];
+        if (!filtered) continue;
+        node.statement = filtered;
       } else if (node.type === "matchBlock") {
         // Filter case bodies - Note: match block bodies are single nodes, not arrays
         // We don't filter them here as they're of a specific type
@@ -1071,6 +1092,10 @@ export class TypescriptPreprocessor {
         if (node.handler.kind === "inline") {
           node.handler.body = this.filterBuiltinFunctionCalls(node.handler.body, excludeSet);
         }
+      } else if (node.type === "withModifier") {
+        const filtered = this.filterBuiltinFunctionCalls([node.statement], excludeSet)[0];
+        if (!filtered) continue;
+        node.statement = filtered;
       } else if (node.type === "matchBlock") {
         node.cases = node.cases.map((caseItem) => {
           if (caseItem.type === "comment") {

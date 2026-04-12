@@ -1,0 +1,12 @@
+def foo() {
+  const result = interrupt("check")
+  return result
+}
+
+node main() {
+  let result = null
+  handle {
+    result = foo() with approve
+  } with approve
+  return result
+}

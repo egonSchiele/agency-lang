@@ -34,6 +34,7 @@ import {
   messageThreadParser,
   sharedAssignmentParser,
   whileLoopParser,
+  withModifierParser,
 } from "./parsers/function.js";
 import {
   importNodeStatmentParser,
@@ -74,6 +75,7 @@ const nodeParser = or(
   returnStatementParser,
   specialVarParser,
   sharedAssignmentParser,
+  withModifierParser,
   assignmentParser,
   binOpParser,
   booleanParser,

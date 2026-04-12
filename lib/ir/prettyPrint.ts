@@ -262,6 +262,12 @@ export function printTs(node: TsNode, indent = 0): string {
       return `await runner.handle(${node.id}, ${handler}, async (runner) => {\n${body}\n${ind(indent)}});`;
     }
 
+    case "withHandler": {
+      const handler = printTs(node.handler, indent);
+      const body = `${ind(indent + 1)}${printTs(node.body, indent + 1)}`;
+      return `__ctx.pushHandler(${handler});\n${ind(indent)}try {\n${body}\n${ind(indent)}} finally {\n${ind(indent + 1)}__ctx.popHandler();\n${ind(indent)}}`;
+    }
+
     case "runnerDebugger": {
       return `await runner.debugger(${node.id}, ${JSON.stringify(node.label)});`;
     }

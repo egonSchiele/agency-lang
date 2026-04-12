@@ -250,6 +250,8 @@ export class AgencyGenerator {
         return this.processMessageThread(node);
       case "handleBlock":
         return this.processHandleBlock(node);
+      case "withModifier":
+        return `${this.processNode(node.statement)} with ${node.handlerName}`;
       case "skill":
         return this.processSkill(node);
       case "binOpExpression":

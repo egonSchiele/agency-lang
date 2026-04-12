@@ -154,7 +154,7 @@ export class Checkpoint implements SourceLocation {
     const nodeId = ctx.stateStack.currentNodeId();
     if (!nodeId) {
       throw new CheckpointError(
-        "Cannot create checkpoint: no current node id in state stack.",
+        "Cannot create checkpoint: no current node id in state stack. This error can happen if you call a function that throws an interrupt from the global namespace. Please use `const foo = funcName() with approve` syntax.",
       );
     }
     return new Checkpoint({

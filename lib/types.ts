@@ -30,6 +30,7 @@ import { HandleBlock } from "./types/handleBlock.js";
 import { Sentinel } from "./types/sentinel.js";
 import { DebuggerStatement } from "./types/debuggerStatement.js";
 import { Placeholder } from "./types/placeholder.js";
+import { WithModifier } from "./types/withModifier.js";
 export * from "./types/access.js";
 export * from "./types/awaitPending.js";
 export * from "./types/dataStructures.js";
@@ -51,6 +52,7 @@ export * from "./types/sentinel.js";
 export * from "./types/debuggerStatement.js";
 export * from "./types/blockArgument.js";
 export * from "./types/placeholder.js";
+export * from "./types/withModifier.js";
 export * from "./types/base.js"
 
 export type Expression =
@@ -223,6 +225,7 @@ export type AgencyNode =
   | ForLoop
   | AwaitPending
   | HandleBlock
+  | WithModifier
   | Sentinel
   | DebuggerStatement
   | Placeholder;

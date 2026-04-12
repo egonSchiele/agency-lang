@@ -1,5 +1,5 @@
 import { fileURLToPath } from "url";
-import process from "process";
+import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
 import { goToNode, color, nanoid } from "agency-lang";
@@ -31,26 +31,26 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const __cwd = process.cwd();
+const __cwd = __process.cwd();
 
 const getDirname = () => __dirname;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
     host: "https://agency-lang.com",
-    apiKey: process.env["STATELOG_API_KEY"] || "",
+    apiKey: __process.env["STATELOG_API_KEY"] || "",
     projectId: "",
     debugMode: false
   },
   smoltalkDefaults: {
-    openAiApiKey: process.env["OPENAI_API_KEY"] || "",
-    googleApiKey: process.env["GEMINI_API_KEY"] || "",
+    openAiApiKey: __process.env["OPENAI_API_KEY"] || "",
+    googleApiKey: __process.env["GEMINI_API_KEY"] || "",
     model: "gpt-4o-mini",
     logLevel: "warn",
     statelog: {
       host: "https://agency-lang.com",
       projectId: "smoltalk",
-      apiKey: process.env["STATELOG_SMOLTALK_API_KEY"] || "",
+      apiKey: __process.env["STATELOG_SMOLTALK_API_KEY"] || "",
       traceId: nanoid()
     }
   },
@@ -196,7 +196,7 @@ return failure(
 }
 await log(`INFO`, [`hello`, `world`], {
   ctx: __ctx,
-  threads: new ThreadStore(),
+  threads: __threads,
   interruptData: __state?.interruptData
 })
 export default graph

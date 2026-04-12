@@ -1,5 +1,5 @@
 import { fileURLToPath } from "url";
-import process from "process";
+import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
 import { goToNode, color, nanoid } from "agency-lang";
@@ -31,26 +31,26 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const __cwd = process.cwd();
+const __cwd = __process.cwd();
 
 const getDirname = () => __dirname;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
     host: "https://agency-lang.com",
-    apiKey: process.env["STATELOG_API_KEY"] || "",
+    apiKey: __process.env["STATELOG_API_KEY"] || "",
     projectId: "",
     debugMode: false
   },
   smoltalkDefaults: {
-    openAiApiKey: process.env["OPENAI_API_KEY"] || "",
-    googleApiKey: process.env["GEMINI_API_KEY"] || "",
+    openAiApiKey: __process.env["OPENAI_API_KEY"] || "",
+    googleApiKey: __process.env["GEMINI_API_KEY"] || "",
     model: "gpt-4o-mini",
     logLevel: "warn",
     statelog: {
       host: "https://agency-lang.com",
       projectId: "smoltalk",
-      apiKey: process.env["STATELOG_SMOLTALK_API_KEY"] || "",
+      apiKey: __process.env["STATELOG_SMOLTALK_API_KEY"] || "",
       traceId: nanoid()
     }
   },
@@ -749,7 +749,7 @@ let __functionCompleted = false;
     await runner.step(1, async (runner) => {
 __stack.locals.sum = await add(5, 10, {
         ctx: __ctx,
-        threads: new ThreadStore(),
+        threads: __threads,
         interruptData: __state?.interruptData
       });
 if (isInterrupt(__stack.locals.sum)) {
@@ -764,7 +764,7 @@ if (isInterrupt(__stack.locals.sum)) {
     await runner.step(2, async (runner) => {
 __stack.locals.greeting = await greet(`Alice`, {
         ctx: __ctx,
-        threads: new ThreadStore(),
+        threads: __threads,
         interruptData: __state?.interruptData
       });
 if (isInterrupt(__stack.locals.greeting)) {
@@ -779,7 +779,7 @@ if (isInterrupt(__stack.locals.greeting)) {
     await runner.step(3, async (runner) => {
 __stack.locals.labeled = await mixed(42, `Answer`, {
         ctx: __ctx,
-        threads: new ThreadStore(),
+        threads: __threads,
         interruptData: __state?.interruptData
       });
 if (isInterrupt(__stack.locals.labeled)) {
@@ -794,7 +794,7 @@ if (isInterrupt(__stack.locals.labeled)) {
     await runner.step(4, async (runner) => {
 __stack.locals.processed = await processArray([1, 2, 3, 4, 5], {
         ctx: __ctx,
-        threads: new ThreadStore(),
+        threads: __threads,
         interruptData: __state?.interruptData
       });
 if (isInterrupt(__stack.locals.processed)) {
@@ -809,7 +809,7 @@ if (isInterrupt(__stack.locals.processed)) {
     await runner.step(5, async (runner) => {
 __stack.locals.flexResult = await flexible(`test`, {
         ctx: __ctx,
-        threads: new ThreadStore(),
+        threads: __threads,
         interruptData: __state?.interruptData
       });
 if (isInterrupt(__stack.locals.flexResult)) {
@@ -866,7 +866,7 @@ export async function main({ messages, callbacks }: { messages?: any; callbacks?
   });
 }
 export const __mainNodeParams = [];
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const initialState = {
       messages: new ThreadStore(),

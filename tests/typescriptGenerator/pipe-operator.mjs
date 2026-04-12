@@ -1,5 +1,5 @@
 import { fileURLToPath } from "url";
-import process from "process";
+import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
 import { goToNode, color, nanoid } from "agency-lang";
@@ -31,26 +31,26 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const __cwd = process.cwd();
+const __cwd = __process.cwd();
 
 const getDirname = () => __dirname;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
     host: "https://agency-lang.com",
-    apiKey: process.env["STATELOG_API_KEY"] || "",
+    apiKey: __process.env["STATELOG_API_KEY"] || "",
     projectId: "",
     debugMode: false
   },
   smoltalkDefaults: {
-    openAiApiKey: process.env["OPENAI_API_KEY"] || "",
-    googleApiKey: process.env["GEMINI_API_KEY"] || "",
+    openAiApiKey: __process.env["OPENAI_API_KEY"] || "",
+    googleApiKey: __process.env["GEMINI_API_KEY"] || "",
     model: "gpt-4o-mini",
     logLevel: "warn",
     statelog: {
       host: "https://agency-lang.com",
       projectId: "smoltalk",
-      apiKey: process.env["STATELOG_SMOLTALK_API_KEY"] || "",
+      apiKey: __process.env["STATELOG_SMOLTALK_API_KEY"] || "",
       traceId: nanoid()
     }
   },
@@ -431,7 +431,7 @@ __stack.locals.__pipe_0 = await success(5);
     });
     __stack.locals.r1 = await runner.pipe(1, __stack.locals.__pipe_0, async (__pipeArg) => double(__pipeArg, {
       ctx: __ctx,
-      threads: new ThreadStore(),
+      threads: __threads,
       interruptData: __state?.interruptData
     }));
     await runner.step(2, async (runner) => {
@@ -439,7 +439,7 @@ __stack.locals.__pipe_1 = await success(5);
     });
     __stack.locals.r2 = await runner.pipe(3, __stack.locals.__pipe_1, async (__pipeArg) => multiply(10, __pipeArg, {
       ctx: __ctx,
-      threads: new ThreadStore(),
+      threads: __threads,
       interruptData: __state?.interruptData
     }));
     await runner.step(4, async (runner) => {
@@ -447,12 +447,12 @@ __stack.locals.__pipe_2 = await success(10);
     });
     __stack.locals.__pipe_2 = await runner.pipe(5, __stack.locals.__pipe_2, async (__pipeArg) => double(__pipeArg, {
       ctx: __ctx,
-      threads: new ThreadStore(),
+      threads: __threads,
       interruptData: __state?.interruptData
     }));
     __stack.locals.r3 = await runner.pipe(6, __stack.locals.__pipe_2, async (__pipeArg) => multiply(3, __pipeArg, {
       ctx: __ctx,
-      threads: new ThreadStore(),
+      threads: __threads,
       interruptData: __state?.interruptData
     }));
     await runner.step(7, async (runner) => {
@@ -460,7 +460,7 @@ __stack.locals.__pipe_3 = await failure(`nope`);
     });
     __stack.locals.r4 = await runner.pipe(8, __stack.locals.__pipe_3, async (__pipeArg) => double(__pipeArg, {
       ctx: __ctx,
-      threads: new ThreadStore(),
+      threads: __threads,
       interruptData: __state?.interruptData
     }));
     await runner.step(9, async (runner) => {
@@ -468,7 +468,7 @@ __stack.locals.__pipe_4 = await success(10);
     });
     __stack.locals.r5 = await runner.pipe(10, __stack.locals.__pipe_4, async (__pipeArg) => safeDivide(__pipeArg, 2, {
       ctx: __ctx,
-      threads: new ThreadStore(),
+      threads: __threads,
       interruptData: __state?.interruptData
     }));
     if (runner.halted) return runner.haltResult;
@@ -505,7 +505,7 @@ export async function main({ messages, callbacks }: { messages?: any; callbacks?
   });
 }
 export const __mainNodeParams = [];
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const initialState = {
       messages: new ThreadStore(),

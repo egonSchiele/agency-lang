@@ -1,0 +1,24 @@
+type Response = {
+  message: string;
+  action: "continue" | "stop"
+}
+
+node main() {
+  handle {
+    let response: Response | null = null
+    while (response == null || response.action == "continue") {
+      msg = input("> ")
+      uses read, write
+      response: Response = llm("Respond to the users message: ${msg}")
+      print(color.blue(response.message))
+    }
+  } with (data) {
+    print(data)
+    const resp = input("Approve? (yes/no) ")
+    if (resp == "yes" || resp == "y") {
+      return approve()
+    } else {
+      return reject()
+    }
+  }
+}

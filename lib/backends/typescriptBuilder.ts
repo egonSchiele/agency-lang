@@ -124,7 +124,6 @@ export class TypeScriptBuilder {
 
   // Threading & control flow
   private loopVars: string[] = [];
-  private insideMessageThread: boolean = false;
   private insideHandlerBody: boolean = false;
   private _blockCounter: number = 0;
 
@@ -1499,11 +1498,8 @@ export class TypeScriptBuilder {
     const shouldAwait = !node.async && context !== "valueAccess";
 
     if (this.isAgencyFunction(node.functionName, context)) {
-      // Inside a message thread: pass the caller's ThreadStore so the function
-      // shares the thread context. Outside: pass a new ThreadStore for isolation.
-      const threadsExpr = this.insideMessageThread
-        ? ts.runtime.threads
-        : ts.newThreadStore();
+      // Always pass the caller's ThreadStore so the function shares the thread context
+      const threadsExpr = ts.runtime.threads;
       const configObj = ts.functionCallConfig({
         ctx: ts.runtime.ctx,
         threads: threadsExpr,
@@ -1607,7 +1603,7 @@ export class TypeScriptBuilder {
     }
 
     const goToArgs = ts.obj({
-      messages: ts.stack("messages"),
+      messages: ts.runtime.threads,
       ctx: ts.runtime.ctx,
       data: dataNode,
     });
@@ -2023,13 +2019,12 @@ export class TypeScriptBuilder {
       clientConfig = ts.obj({});
     }
 
-    // Thread expression
-    let threadExpr: TsNode;
-    const isInFunction = this.getCurrentScope().type === "function";
-    if (this.insideMessageThread || isInFunction) {
-      threadExpr = ts.threads.getOrCreateActive();
-    } else {
-      threadExpr = ts.threads.createAndReturnThread();
+    // Thread expression — always use the shared active thread.
+    // For async prompts, fork via subthread so they get context but don't
+    // write back to the shared thread.
+    let threadExpr: TsNode = ts.threads.getOrCreateActive();
+    if (node.async) {
+      threadExpr = ts.threads.createAndReturnSubthread();
     }
 
     // Merge tools from usesTool statements (preprocessor) and config object
@@ -2179,10 +2174,7 @@ export class TypeScriptBuilder {
       node.threadType === "subthread" ? "createSubthread" as const : "create" as const;
 
     // Body: process each statement with substep tracking
-    const prevInsideMessageThread = this.insideMessageThread;
-    this.insideMessageThread = true;
     const bodyNodes = this.processBodyAsParts(node.body);
-    this.insideMessageThread = prevInsideMessageThread;
 
     // The Runner's thread() method handles setup (create + pushActive) and
     // cleanup (popActive). If the thread result is assigned, clone messages
@@ -2333,7 +2325,7 @@ export class TypeScriptBuilder {
                 ts.id("__data"),
                 ts.functionCallConfig({
                   ctx: ts.runtime.ctx,
-                  threads: ts.newThreadStore(),
+                  threads: ts.runtime.threads,
                   interruptData: ts.id("undefined"),
                 }),
               ]),
@@ -2457,12 +2449,9 @@ export class TypeScriptBuilder {
 
   private buildPipeStateArgs(funcName: string): TsNode[] {
     if (!this.isAgencyFunction(funcName, "topLevelStatement")) return [];
-    const threadsExpr = this.insideMessageThread
-      ? ts.runtime.threads
-      : ts.newThreadStore();
     return [ts.functionCallConfig({
       ctx: ts.runtime.ctx,
-      threads: threadsExpr,
+      threads: ts.runtime.threads,
       interruptData: ts.raw("__state?.interruptData"),
     })];
   }
@@ -2717,7 +2706,7 @@ export class TypeScriptBuilder {
       result.push(
         ts.if(
           ts.binOp(
-            $(ts.id("process")).prop("argv").index(ts.num(1)).done(),
+            $(ts.id("__process")).prop("argv").index(ts.num(1)).done(),
             "===",
             ts.call(ts.id("fileURLToPath"), [
               $(ts.id("import")).prop("meta").prop("url").done(),

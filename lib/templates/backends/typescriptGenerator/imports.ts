@@ -4,7 +4,7 @@
 import { apply } from "typestache";
 
 export const template = `import { fileURLToPath } from "url";
-import process from "process";
+import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
 import { goToNode, color, nanoid } from "agency-lang";
@@ -36,7 +36,7 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const __cwd = process.cwd();
+const __cwd = __process.cwd();
 
 const getDirname = () => __dirname;
 

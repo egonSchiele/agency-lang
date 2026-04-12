@@ -1,5 +1,5 @@
 import { fileURLToPath } from "url";
-import process from "process";
+import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
 import { goToNode, color, nanoid } from "agency-lang";
@@ -31,26 +31,26 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const __cwd = process.cwd();
+const __cwd = __process.cwd();
 
 const getDirname = () => __dirname;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
     host: "https://agency-lang.com",
-    apiKey: process.env["STATELOG_API_KEY"] || "",
+    apiKey: __process.env["STATELOG_API_KEY"] || "",
     projectId: "",
     debugMode: false
   },
   smoltalkDefaults: {
-    openAiApiKey: process.env["OPENAI_API_KEY"] || "",
-    googleApiKey: process.env["GEMINI_API_KEY"] || "",
+    openAiApiKey: __process.env["OPENAI_API_KEY"] || "",
+    googleApiKey: __process.env["GEMINI_API_KEY"] || "",
     model: "gpt-4o-mini",
     logLevel: "warn",
     statelog: {
       host: "https://agency-lang.com",
       projectId: "smoltalk",
-      apiKey: process.env["STATELOG_SMOLTALK_API_KEY"] || "",
+      apiKey: __process.env["STATELOG_SMOLTALK_API_KEY"] || "",
       traceId: nanoid()
     }
   },
@@ -125,7 +125,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt({
         ctx: __ctx,
         prompt: `Generate a response word by word`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         clientConfig: {
           "stream": true
         },
@@ -151,7 +151,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response2 = await runPrompt({
         ctx: __ctx,
         prompt: `Generate a response word by word, but with a different model`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         clientConfig: {
           "model": `gemini-2.5-flash-lite`,
           "stream": true

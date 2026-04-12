@@ -10,6 +10,14 @@
           {
             "role": "assistant",
             "content": "{\"response\":4}"
+          },
+          {
+            "role": "user",
+            "content": "What is 3+3?"
+          },
+          {
+            "role": "assistant",
+            "content": "{\"response\":6}"
           }
         ]
       },
@@ -32,21 +40,11 @@
             "content": "{\"response\":[13,17]}"
           }
         ]
-      },
-      "2": {
-        "messages": [
-          {
-            "role": "user",
-            "content": "What is 3+3?"
-          },
-          {
-            "role": "assistant",
-            "content": "{\"response\":6}"
-          }
-        ]
       }
     },
-    "counter": 3,
-    "activeStack": []
+    "counter": 2,
+    "activeStack": [
+      "0"
+    ]
   }
 }

@@ -419,9 +419,7 @@ export class TypeScriptBuilder {
     const globalInitStatements: TsNode[] = [];
     for (const node of program.nodes) {
       if (node.type === "assignment" && node.scope === "global") {
-        this.insideGlobalInit = true;
-        const valueNode = this.processNode(node.value);
-        this.insideGlobalInit = false;
+        const valueNode = this.processNodeInGlobalInit(node.value);
         globalInitStatements.push(
           ts.globalSet(this.moduleId, node.variableName, valueNode),
         );
@@ -430,20 +428,10 @@ export class TypeScriptBuilder {
         node.statement.type === "assignment" &&
         node.statement.scope === "global"
       ) {
-        // Global assignment with handler modifier — wrap in pushHandler/popHandler
         const stmt = node.statement;
-        this.insideGlobalInit = true;
-        const valueNode = this.processNode(stmt.value);
-        this.insideGlobalInit = false;
+        const valueNode = this.processNodeInGlobalInit(stmt.value);
         const setNode = ts.globalSet(this.moduleId, stmt.variableName, valueNode);
-
-        const handlerName = node.handlerName;
-        const args = handlerName === "propagate" ? [] : [ts.id("__data")];
-        const handler = ts.arrowFn(
-          [{ name: "__data", typeAnnotation: "any" }],
-          ts.call(ts.id(handlerName), args),
-          { async: true },
-        );
+        const handler = this.buildBuiltinHandlerArrow(node.handlerName);
 
         globalInitStatements.push(ts.withHandler(handler, setNode));
       } else {
@@ -2310,6 +2298,24 @@ export class TypeScriptBuilder {
     );
   }
 
+  private processNodeInGlobalInit(node: AgencyNode): TsNode {
+    this.insideGlobalInit = true;
+    try {
+      return this.processNode(node);
+    } finally {
+      this.insideGlobalInit = false;
+    }
+  }
+
+  private buildBuiltinHandlerArrow(handlerName: string): TsNode {
+    const args = handlerName === "propagate" ? [] : [ts.id("__data")];
+    return ts.arrowFn(
+      [{ name: "__data", typeAnnotation: "any" }],
+      ts.call(ts.id(handlerName), args),
+      { async: true },
+    );
+  }
+
   private processHandleBlockWithSteps(node: HandleBlock): TsNode {
     const id = this._subStepPath[this._subStepPath.length - 1];
     const subKey = this._subStepPath.join("_");
@@ -2336,14 +2342,7 @@ export class TypeScriptBuilder {
     } else {
       const fnName = node.handler.functionName;
       if (fnName === "approve" || fnName === "reject" || fnName === "propagate") {
-        // Built-in handler: wrap the built-in factory function directly
-        const args = fnName === "propagate" ? [] : [ts.id("__data")];
-        handler =
-          ts.arrowFn(
-            [{ name: "__data", typeAnnotation: "any" }],
-            ts.call(ts.id(fnName), args),
-            { async: true },
-          );
+        handler = this.buildBuiltinHandlerArrow(fnName);
       } else {
         // Function ref: wrap in arrow that calls the named function
         handler =
@@ -2372,19 +2371,8 @@ export class TypeScriptBuilder {
 
   private processWithModifier(node: WithModifier): TsNode {
     const id = this._subStepPath[this._subStepPath.length - 1];
-    const handlerName = node.handlerName;
-
-    // Build the handler arrow — same pattern as processHandleBlockWithSteps for builtin refs
-    const args = handlerName === "propagate" ? [] : [ts.id("__data")];
-    const handler = ts.arrowFn(
-      [{ name: "__data", typeAnnotation: "any" }],
-      ts.call(ts.id(handlerName), args),
-      { async: true },
-    );
-
-    // Process inner statement via processBodyAsParts for proper substep tracking
+    const handler = this.buildBuiltinHandlerArrow(node.handlerName);
     const bodyNodes = this.processBodyAsParts([node.statement]);
-
     return ts.runnerHandle({ id, handler, body: bodyNodes });
   }
 

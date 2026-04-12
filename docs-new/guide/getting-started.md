@@ -12,7 +12,7 @@ npm install agency-lang
 
 Create a file called `hello.agency`:
 
-```agency
+```ts
 node main() {
   const greeting = llm("Say hello to the world!");
   print(greeting);

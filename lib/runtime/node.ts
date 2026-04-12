@@ -95,11 +95,11 @@ export async function runNode({
   callbacks?: AgencyCallbacks;
 
   // initializes global variables on the execution context
-  initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void;
+  initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
 }): Promise<RunNodeResult<any>> {
   const execCtx = ctx.createExecutionContext();
   if (initializeGlobals) {
-    initializeGlobals(execCtx);
+    await initializeGlobals(execCtx);
   }
   execCtx.callbacks = callbacks || {};
   await callHook({

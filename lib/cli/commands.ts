@@ -211,6 +211,7 @@ export function compile(
     const result = transformSync(generatedCode, {
       loader: "ts",
       format: "esm",
+      supported: { "top-level-await": true },
     });
     fs.writeFileSync(outputFile, result.code, "utf-8");
   }

@@ -473,6 +473,7 @@ export class TypeScriptBuilder {
             [ts.str(this.moduleId)],
           ),
         ]),
+        { async: true },
       ),
     );
 
@@ -1198,7 +1199,7 @@ export class TypeScriptBuilder {
         ts.raw(
           `!__ctx.globals.isInitialized(${JSON.stringify(this.moduleId)})`,
         ),
-        ts.call(ts.id("__initializeGlobals"), [ts.runtime.ctx]),
+        ts.await(ts.call(ts.id("__initializeGlobals"), [ts.runtime.ctx])),
       ),
 
       ts.time("__funcStartTime"),

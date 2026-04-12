@@ -1,23 +1,5 @@
-def askFirst(num = 0): Result {
-  const nums: number[] = llm("What are the first 3 prime numbers > ${num}?")
-  return success(nums)
-}
-
-def askNext(prev: number[]): Result {
-  const nums: number[] = llm("What are the next 3 prime numbers after those?")
-  return success(nums)
-}
+const text = read("/Users/adityabhargava/agency-lang/README.md")
 
 node main() {
-  thread {
-    let r = success(100)
-    |> askFirst
-    |> askNext
-    |> askNext / askNext
-    |> askNext + askNext
-  }
-  if (isSuccess(r)) {
-    return r.value
-  }
-  return "failed"
+  print(text)
 }

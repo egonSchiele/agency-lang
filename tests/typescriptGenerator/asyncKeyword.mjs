@@ -481,7 +481,7 @@ __stack.branches["1"] = {
       };
 __stack.locals.res2 = google(__stack.locals.msg, {
         ctx: __ctx,
-        threads: new ThreadStore(),
+        threads: __threads,
         interruptData: __state?.interruptData,
         stateStack: __forked,
         isForked: true
@@ -501,7 +501,7 @@ __stack.branches["2"] = {
       };
 __stack.locals.res1 = openai(__stack.locals.msg, {
         ctx: __ctx,
-        threads: new ThreadStore(),
+        threads: __threads,
         interruptData: __state?.interruptData,
         stateStack: __forked,
         isForked: true

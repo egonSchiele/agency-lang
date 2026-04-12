@@ -125,7 +125,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt({
         ctx: __ctx,
         prompt: `Generate a response word by word`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         clientConfig: {
           "stream": true
         },
@@ -151,7 +151,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response2 = await runPrompt({
         ctx: __ctx,
         prompt: `Generate a response word by word, but with a different model`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         clientConfig: {
           "model": `gemini-2.5-flash-lite`,
           "stream": true

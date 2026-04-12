@@ -126,7 +126,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.foo = await runPrompt({
         ctx: __ctx,
         prompt: `a set of coordinates`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
           response: z.object({ "x": z.number(), "y": z.number() })
         }),

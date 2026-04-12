@@ -230,7 +230,7 @@ __stack.branches["0"] = {
       };
 __stack.locals.x = compute(5, {
         ctx: __ctx,
-        threads: new ThreadStore(),
+        threads: __threads,
         interruptData: __state?.interruptData,
         stateStack: __forked,
         isForked: true
@@ -250,7 +250,7 @@ __stack.branches["1"] = {
       };
 __stack.locals.y = compute(10, {
         ctx: __ctx,
-        threads: new ThreadStore(),
+        threads: __threads,
         interruptData: __state?.interruptData,
         stateStack: __forked,
         isForked: true

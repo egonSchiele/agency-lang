@@ -128,7 +128,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.mood = await runPrompt({
         ctx: __ctx,
         prompt: `Categorize: ${__stack.args.message}`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
           response: z.union([z.literal("happy"), z.literal("sad")])
         }),

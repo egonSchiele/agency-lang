@@ -125,7 +125,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.url = await runPrompt({
         ctx: __ctx,
         prompt: `extract the hostname and port from 'https://example.com:8080'`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
           response: z.object({ "hostname": z.string(), "port": z.number() })
         }),

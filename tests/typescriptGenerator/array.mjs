@@ -125,7 +125,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.numbers = await runPrompt({
         ctx: __ctx,
         prompt: `the first 5 prime numbers`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
           response: z.array(z.number())
         }),
@@ -152,7 +152,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.greetings = await runPrompt({
         ctx: __ctx,
         prompt: `a list of 3 common greetings in different languages`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
           response: z.array(z.string())
         }),

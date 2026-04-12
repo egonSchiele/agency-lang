@@ -749,7 +749,7 @@ let __functionCompleted = false;
     await runner.step(1, async (runner) => {
 __stack.locals.sum = await add(5, 10, {
         ctx: __ctx,
-        threads: new ThreadStore(),
+        threads: __threads,
         interruptData: __state?.interruptData
       });
 if (isInterrupt(__stack.locals.sum)) {
@@ -764,7 +764,7 @@ if (isInterrupt(__stack.locals.sum)) {
     await runner.step(2, async (runner) => {
 __stack.locals.greeting = await greet(`Alice`, {
         ctx: __ctx,
-        threads: new ThreadStore(),
+        threads: __threads,
         interruptData: __state?.interruptData
       });
 if (isInterrupt(__stack.locals.greeting)) {
@@ -779,7 +779,7 @@ if (isInterrupt(__stack.locals.greeting)) {
     await runner.step(3, async (runner) => {
 __stack.locals.labeled = await mixed(42, `Answer`, {
         ctx: __ctx,
-        threads: new ThreadStore(),
+        threads: __threads,
         interruptData: __state?.interruptData
       });
 if (isInterrupt(__stack.locals.labeled)) {
@@ -794,7 +794,7 @@ if (isInterrupt(__stack.locals.labeled)) {
     await runner.step(4, async (runner) => {
 __stack.locals.processed = await processArray([1, 2, 3, 4, 5], {
         ctx: __ctx,
-        threads: new ThreadStore(),
+        threads: __threads,
         interruptData: __state?.interruptData
       });
 if (isInterrupt(__stack.locals.processed)) {
@@ -809,7 +809,7 @@ if (isInterrupt(__stack.locals.processed)) {
     await runner.step(5, async (runner) => {
 __stack.locals.flexResult = await flexible(`test`, {
         ctx: __ctx,
-        threads: new ThreadStore(),
+        threads: __threads,
         interruptData: __state?.interruptData
       });
 if (isInterrupt(__stack.locals.flexResult)) {

@@ -319,7 +319,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
         ctx: __ctx,
         prompt: `Use the tools`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         clientConfig: {
           tools: [tool("safeLookup"), tool("unsafeSave")],
           ...{}

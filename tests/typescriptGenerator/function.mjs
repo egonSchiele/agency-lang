@@ -306,7 +306,7 @@ let __functionCompleted = false;
     await runner.step(0, async (runner) => {
 await print(await test({
         ctx: __ctx,
-        threads: new ThreadStore(),
+        threads: __threads,
         interruptData: __state?.interruptData
       }))
     });

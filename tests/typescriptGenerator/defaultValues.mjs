@@ -196,12 +196,12 @@ return failure(
 }
 await greet(`world`, null, {
   ctx: __ctx,
-  threads: new ThreadStore(),
+  threads: __threads,
   interruptData: __state?.interruptData
 })
 await greet(`world`, `Hi`, {
   ctx: __ctx,
-  threads: new ThreadStore(),
+  threads: __threads,
   interruptData: __state?.interruptData
 })
 export default graph

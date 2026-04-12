@@ -128,7 +128,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.foo = await runPrompt({
         ctx: __ctx,
         prompt: `What are 5 numbers?`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
           response: z.array(z.number())
         }),
@@ -152,7 +152,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.foo2 = await runPrompt({
         ctx: __ctx,
         prompt: `What are 5 numbers?`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
           response: z.array(z.number())
         }),

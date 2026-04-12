@@ -230,7 +230,7 @@ let __functionCompleted = false;
     await runner.step(1, async (runner) => {
 __stack.locals.result = await greet({
         ctx: __ctx,
-        threads: new ThreadStore(),
+        threads: __threads,
         interruptData: __state?.interruptData
       });
 if (isInterrupt(__stack.locals.result)) {

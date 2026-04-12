@@ -125,7 +125,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.greeting = await runPrompt({
         ctx: __ctx,
         prompt: `say hello`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
@@ -144,7 +144,7 @@ if (isInterrupt(__stack.locals.greeting)) {
     await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(goToNode("processGreeting", {
-        messages: __stack.messages,
+        messages: __threads,
         ctx: __ctx,
         data: {
           msg: __stack.locals.greeting
@@ -205,7 +205,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
         ctx: __ctx,
         prompt: `format this greeting: ${__stack.args.msg}`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
@@ -272,7 +272,7 @@ let __functionCompleted = false;
     await runner.step(0, async (runner) => {
 __functionCompleted = true;
 runner.halt(goToNode("greet", {
-        messages: __stack.messages,
+        messages: __threads,
         ctx: __ctx,
         data: {}
       }))

@@ -139,7 +139,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response1 = await runPrompt({
         ctx: __ctx,
         prompt: `${__stack.locals.msg}`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
@@ -168,7 +168,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response2 = await runPrompt({
         ctx: __ctx,
         prompt: `${__stack.locals.msg}`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,

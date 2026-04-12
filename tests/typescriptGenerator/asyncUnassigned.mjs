@@ -229,7 +229,7 @@ __stack.branches["0"] = {
       };
 __ctx.pendingPromises.add(append(1, `hello`, {
   ctx: __ctx,
-  threads: new ThreadStore(),
+  threads: __threads,
   interruptData: __state?.interruptData,
   stateStack: __forked,
   isForked: true
@@ -248,7 +248,7 @@ __stack.branches["1"] = {
       };
 __ctx.pendingPromises.add(append(0.5, `world`, {
   ctx: __ctx,
-  threads: new ThreadStore(),
+  threads: __threads,
   interruptData: __state?.interruptData,
   stateStack: __forked,
   isForked: true

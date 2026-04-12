@@ -125,7 +125,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.count = await runPrompt({
         ctx: __ctx,
         prompt: `the number 42`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
           response: z.number()
         }),
@@ -149,7 +149,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.message = await runPrompt({
         ctx: __ctx,
         prompt: `a greeting message`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,

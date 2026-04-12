@@ -123,7 +123,7 @@ let __functionCompleted = false;
     await runner.step(0, async (runner) => {
 __stack.locals.cp = await checkpoint({
         ctx: __ctx,
-        threads: new ThreadStore(),
+        threads: __threads,
         interruptData: __state?.interruptData
       });
 if (isInterrupt(__stack.locals.cp)) {
@@ -141,7 +141,7 @@ __stack.locals.x = 1;
     await runner.step(2, async (runner) => {
 const __funcResult = await restore(__stack.locals.cp, {}, {
         ctx: __ctx,
-        threads: new ThreadStore(),
+        threads: __threads,
         interruptData: __state?.interruptData
       });
 if (isInterrupt(__funcResult)) {

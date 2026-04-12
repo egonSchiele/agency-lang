@@ -131,7 +131,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt({
         ctx: __ctx,
         prompt: `Say hi to ${__stack.locals.person.name}, who is ${__stack.locals.person.age} years old.`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
           response: z.object({ "greeting": z.string() })
         }),

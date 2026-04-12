@@ -136,7 +136,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.sentiment = await runPrompt({
         ctx: __ctx,
         prompt: `Categorize the sentiment in this message: ${__stack.locals.message}`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
           response: z.union([z.literal("happy"), z.literal("sad"), z.literal("neutral")])
         }),

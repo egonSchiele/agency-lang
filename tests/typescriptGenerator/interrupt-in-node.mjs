@@ -278,7 +278,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt({
         ctx: __ctx,
         prompt: `Greet the user with their name: ${__stack.args.name} and age ${__stack.args.age} using the greet function.`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
@@ -361,7 +361,7 @@ __stack.locals.age = 30;
     await runner.step(2, async (runner) => {
 __functionCompleted = true;
 runner.halt(goToNode("foo2", {
-        messages: __stack.messages,
+        messages: __threads,
         ctx: __ctx,
         data: {
           name: __stack.args.name,

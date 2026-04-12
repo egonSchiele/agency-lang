@@ -400,7 +400,7 @@ __stack.locals.age = 30;
     await runner.step(2, async (runner) => {
 __stack.locals.response = await foo2(__stack.args.name, __stack.locals.age, {
         ctx: __ctx,
-        threads: new ThreadStore(),
+        threads: __threads,
         interruptData: __state?.interruptData
       });
 if (isInterrupt(__stack.locals.response)) {

@@ -196,7 +196,7 @@ return failure(
 }
 await log(`INFO`, [`hello`, `world`], {
   ctx: __ctx,
-  threads: new ThreadStore(),
+  threads: __threads,
   interruptData: __state?.interruptData
 })
 export default graph

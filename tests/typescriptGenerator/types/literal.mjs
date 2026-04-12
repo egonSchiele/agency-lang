@@ -125,7 +125,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.foo = await runPrompt({
         ctx: __ctx,
         prompt: `the string hi`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
           response: z.literal("hi")
         }),
@@ -149,7 +149,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.bar = await runPrompt({
         ctx: __ctx,
         prompt: `the number 42`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
           response: z.literal(42)
         }),
@@ -173,7 +173,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.baz = await runPrompt({
         ctx: __ctx,
         prompt: `the boolean true`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
           response: z.literal(true)
         }),

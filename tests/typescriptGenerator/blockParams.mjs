@@ -264,7 +264,7 @@ __ctx.stateStack.pop();
 }
       }, {
         ctx: __ctx,
-        threads: new ThreadStore(),
+        threads: __threads,
         interruptData: __state?.interruptData
       });
 if (isInterrupt(__stack.locals.doubled)) {

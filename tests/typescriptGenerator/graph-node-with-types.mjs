@@ -129,7 +129,7 @@ __self.__removedTools = __self.__removedTools || [];
 __stack.locals.greeting = await runPrompt({
         ctx: __ctx,
         prompt: `Say hello to ${__stack.args.name}`,
-        messages: __threads.createAndReturnThread(),
+        messages: __threads.getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,

@@ -1,0 +1,4 @@
+{
+  "error": true,
+  "message": "Exceeded maximum number of restores (3). Possible infinite loop."
+}

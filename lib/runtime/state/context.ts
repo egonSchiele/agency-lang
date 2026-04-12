@@ -28,6 +28,7 @@ export class RuntimeContext<T> {
   graph: SimpleMachine<T>;
   _skipNextCheckpoint: boolean;
   _pendingArgOverrides?: any[];
+  _restoreCount: number;
   debuggerState: DebuggerState | null;
   traceWriter: TraceWriter | null;
 
@@ -41,7 +42,7 @@ export class RuntimeContext<T> {
 
   // stored so createExecutionContext can create new StatelogClients
   private statelogConfig: StatelogConfig;
-  private maxRestores: number;
+  maxRestores: number;
 
   constructor(args: {
     statelogConfig: StatelogConfig;
@@ -67,6 +68,7 @@ export class RuntimeContext<T> {
     // On restore, the sentinel re-runs and would emit a duplicate checkpoint.
     // rewindFrom sets this flag so the first sentinel skips, then clears it.
     this._skipNextCheckpoint = false;
+    this._restoreCount = 0;
     this.pendingPromises = new PendingPromiseStore();
     this.debuggerState = null;
     this.traceWriter = null;
@@ -100,6 +102,7 @@ export class RuntimeContext<T> {
     execCtx.callbacks = {};
     execCtx.onStreamLock = false;
     execCtx._skipNextCheckpoint = false;
+    execCtx._restoreCount = 0;
     execCtx.debuggerState = this.debuggerState;
     execCtx.traceWriter = this.traceWriter;
     execCtx.pendingPromises = new PendingPromiseStore();

@@ -24,14 +24,6 @@ export class GlobalStore {
     this.initializedModules.add(moduleId);
   }
 
-  patchGlobals(overrides: Record<string, Record<string, any>>): void {
-    for (const [moduleId, vars] of Object.entries(overrides)) {
-      for (const [varName, value] of Object.entries(vars)) {
-        this.set(moduleId, varName, value);
-      }
-    }
-  }
-
   toJSON(): GlobalStoreJSON {
     return JSON.parse(JSON.stringify({
       store: this.store,

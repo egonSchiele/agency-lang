@@ -66,6 +66,12 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
   }
 }
 
+/** Unwrap a Result: return value on success, evaluate fallback on failure. */
+export async function __catchResult(result: ResultValue, fallback: () => any): Promise<any> {
+  if (result.success) return result.value;
+  return await fallback();
+}
+
 export async function __pipeBind(result: ResultValue, fn: (value: any) => any): Promise<any> {
   if (!result.success) return result;
   const output = await fn(result.value);

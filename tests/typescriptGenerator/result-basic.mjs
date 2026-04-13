@@ -152,8 +152,10 @@ if (__ctx.stateStack.currentNodeId()) {
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;
-  age = __overrides[0];
-  __stack.args["age"] = age;
+  if ("age" in __overrides) {
+    age = __overrides["age"];
+    __stack.args["age"] = age;
+  }
 
 }
 

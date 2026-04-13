@@ -27,7 +27,7 @@ export class RuntimeContext<T> {
   pendingPromises: PendingPromiseStore;
   graph: SimpleMachine<T>;
   _skipNextCheckpoint: boolean;
-  _pendingArgOverrides?: any[];
+  _pendingArgOverrides?: Record<string, any>;
   _restoreCount: number;
   debuggerState: DebuggerState | null;
   traceWriter: TraceWriter | null;

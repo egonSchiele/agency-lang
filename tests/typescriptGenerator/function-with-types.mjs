@@ -214,10 +214,14 @@ if (__ctx.stateStack.currentNodeId()) {
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;
-  x = __overrides[0];
-  __stack.args["x"] = x;
-  y = __overrides[1];
-  __stack.args["y"] = y;
+  if ("x" in __overrides) {
+    x = __overrides["x"];
+    __stack.args["x"] = x;
+  }
+  if ("y" in __overrides) {
+    y = __overrides["y"];
+    __stack.args["y"] = y;
+  }
 
 }
 
@@ -313,8 +317,10 @@ if (__ctx.stateStack.currentNodeId()) {
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;
-  name = __overrides[0];
-  __stack.args["name"] = name;
+  if ("name" in __overrides) {
+    name = __overrides["name"];
+    __stack.args["name"] = name;
+  }
 
 }
 
@@ -412,10 +418,14 @@ if (__ctx.stateStack.currentNodeId()) {
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;
-  count = __overrides[0];
-  __stack.args["count"] = count;
-  label = __overrides[1];
-  __stack.args["label"] = label;
+  if ("count" in __overrides) {
+    count = __overrides["count"];
+    __stack.args["count"] = count;
+  }
+  if ("label" in __overrides) {
+    label = __overrides["label"];
+    __stack.args["label"] = label;
+  }
 
 }
 
@@ -511,8 +521,10 @@ if (__ctx.stateStack.currentNodeId()) {
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;
-  items = __overrides[0];
-  __stack.args["items"] = items;
+  if ("items" in __overrides) {
+    items = __overrides["items"];
+    __stack.args["items"] = items;
+  }
 
 }
 
@@ -608,8 +620,10 @@ if (__ctx.stateStack.currentNodeId()) {
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;
-  value = __overrides[0];
-  __stack.args["value"] = value;
+  if ("value" in __overrides) {
+    value = __overrides["value"];
+    __stack.args["value"] = value;
+  }
 
 }
 

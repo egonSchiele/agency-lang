@@ -207,10 +207,14 @@ if (__ctx.stateStack.currentNodeId()) {
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;
-  a = __overrides[0];
-  __stack.args["a"] = a;
-  b = __overrides[1];
-  __stack.args["b"] = b;
+  if ("a" in __overrides) {
+    a = __overrides["a"];
+    __stack.args["a"] = a;
+  }
+  if ("b" in __overrides) {
+    b = __overrides["b"];
+    __stack.args["b"] = b;
+  }
 
 }
 
@@ -283,8 +287,10 @@ if (__ctx.stateStack.currentNodeId()) {
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;
-  name = __overrides[0];
-  __stack.args["name"] = name;
+  if ("name" in __overrides) {
+    name = __overrides["name"];
+    __stack.args["name"] = name;
+  }
 
 }
 
@@ -359,10 +365,14 @@ if (__ctx.stateStack.currentNodeId()) {
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;
-  width = __overrides[0];
-  __stack.args["width"] = width;
-  height = __overrides[1];
-  __stack.args["height"] = height;
+  if ("width" in __overrides) {
+    width = __overrides["width"];
+    __stack.args["width"] = width;
+  }
+  if ("height" in __overrides) {
+    height = __overrides["height"];
+    __stack.args["height"] = height;
+  }
 
 }
 

@@ -8,7 +8,7 @@ def alwaysFails(input: string): Result {
 node main() {
   let result = alwaysFails("hello")
   if (isFailure(result)) {
-    restore(result.checkpoint, { args: ["hello"] })
+    restore(result.checkpoint, { args: { input: "hello" } })
   }
   return result.value
 }

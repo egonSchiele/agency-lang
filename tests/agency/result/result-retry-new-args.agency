@@ -11,7 +11,7 @@ def validate(input: string): Result {
 node main() {
   let result = validate("bad")
   if (isFailure(result)) {
-    restore(result.checkpoint, { args: ["good"] })
+    restore(result.checkpoint, { args: { input: "good" } })
   }
   return { value: result.value, attempts: attempt }
 }

@@ -154,10 +154,14 @@ if (__ctx.stateStack.currentNodeId()) {
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;
-  prefix = __overrides[0];
-  __stack.args["prefix"] = prefix;
-  messages = __overrides[1];
-  __stack.args["messages"] = messages;
+  if ("prefix" in __overrides) {
+    prefix = __overrides["prefix"];
+    __stack.args["prefix"] = prefix;
+  }
+  if ("messages" in __overrides) {
+    messages = __overrides["messages"];
+    __stack.args["messages"] = messages;
+  }
 
 }
 

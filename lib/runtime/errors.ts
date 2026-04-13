@@ -3,7 +3,7 @@ import type { MessageJSON } from "smoltalk";
 
 export type RestoreOptions = {
   messages?: MessageJSON[];
-  args?: any[];
+  args?: Record<string, any>;
   /** Override global variables on restore. Applied to the checkpoint's module.
    * Only affects globals defined in the same file as the checkpoint.
    * Globals in other imported files are restored from checkpoint state. */

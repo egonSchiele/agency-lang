@@ -154,10 +154,14 @@ if (__ctx.stateStack.currentNodeId()) {
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;
-  sleepTime = __overrides[0];
-  __stack.args["sleepTime"] = sleepTime;
-  value = __overrides[1];
-  __stack.args["value"] = value;
+  if ("sleepTime" in __overrides) {
+    sleepTime = __overrides["sleepTime"];
+    __stack.args["sleepTime"] = sleepTime;
+  }
+  if ("value" in __overrides) {
+    value = __overrides["value"];
+    __stack.args["value"] = value;
+  }
 
 }
 

@@ -182,8 +182,10 @@ if (__ctx.stateStack.currentNodeId()) {
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;
-  msg = __overrides[0];
-  __stack.args["msg"] = msg;
+  if ("msg" in __overrides) {
+    msg = __overrides["msg"];
+    __stack.args["msg"] = msg;
+  }
 
 }
 
@@ -279,8 +281,10 @@ if (__ctx.stateStack.currentNodeId()) {
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;
-  msg = __overrides[0];
-  __stack.args["msg"] = msg;
+  if ("msg" in __overrides) {
+    msg = __overrides["msg"];
+    __stack.args["msg"] = msg;
+  }
 
 }
 

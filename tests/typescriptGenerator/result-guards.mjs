@@ -152,8 +152,10 @@ if (__ctx.stateStack.currentNodeId()) {
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;
-  r = __overrides[0];
-  __stack.args["r"] = r;
+  if ("r" in __overrides) {
+    r = __overrides["r"];
+    __stack.args["r"] = r;
+  }
 
 }
 

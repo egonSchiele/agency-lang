@@ -1168,9 +1168,11 @@ export class TypeScriptBuilder {
     parameters: FunctionParameter[],
   ): TsNode {
     let paramsStr = "";
-    parameters.forEach((p, i) => {
-      paramsStr += `  ${p.name} = __overrides[${i}];
-  __stack.args[${JSON.stringify(p.name)}] = ${p.name};
+    parameters.forEach((p) => {
+      paramsStr += `  if (${JSON.stringify(p.name)} in __overrides) {
+    ${p.name} = __overrides[${JSON.stringify(p.name)}];
+    __stack.args[${JSON.stringify(p.name)}] = ${p.name};
+  }
 `;
     });
     const str = renderResultCheckpointSetup.default({

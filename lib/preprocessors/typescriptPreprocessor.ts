@@ -93,7 +93,7 @@ function llmCallToString(call: FunctionCall): string {
   return "llm(...)";
 }
 
-function collectTags(nodes: AgencyNode[]): AgencyNode[] {
+function attachTags(nodes: AgencyNode[]): AgencyNode[] {
   const result: AgencyNode[] = [];
   let pendingTags: Tag[] = [];
 
@@ -104,30 +104,29 @@ function collectTags(nodes: AgencyNode[]): AgencyNode[] {
     }
 
     if (pendingTags.length > 0) {
-      if (["graphNode", "function", "assignment", "functionCall"].includes(node.type)) {
-        (node as any).tags = [...((node as any).tags || []), ...pendingTags];
+      if (node.type === "graphNode" || node.type === "function" ||
+          node.type === "assignment" || node.type === "functionCall") {
+        node.tags = [...(node.tags || []), ...pendingTags];
       }
       pendingTags = [];
-    }
-
-    // Recurse into bodies
-    if ("body" in node && Array.isArray((node as any).body)) {
-      (node as any).body = collectTags((node as any).body);
-    }
-    if (node.type === "ifElse") {
-      node.thenBody = collectTags(node.thenBody);
-      if (node.elseBody) {
-        node.elseBody = collectTags(node.elseBody);
-      }
-    }
-    if (node.type === "handleBlock" && node.handler.kind === "inline") {
-      node.handler.body = collectTags(node.handler.body);
     }
 
     result.push(node);
   }
 
   return result;
+}
+
+function collectTags(nodes: AgencyNode[]): AgencyNode[] {
+  // walkBody handles control-flow bodies (ifElse, loops, etc.) but not
+  // graphNode/function bodies, so recurse into those explicitly.
+  const withNestedBodies = nodes.map((node) => {
+    if ((node.type === "graphNode" || node.type === "function") && node.body) {
+      node.body = collectTags(node.body);
+    }
+    return node;
+  });
+  return walkBody(withNestedBodies, attachTags);
 }
 
 export class TypescriptPreprocessor {

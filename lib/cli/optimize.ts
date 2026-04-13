@@ -2,7 +2,7 @@ import { AgencyConfig } from "@/config.js";
 import { executeNodeAsync, parseTarget } from "./util.js";
 import { resetCompilationCache } from "./commands.js";
 import { parseAgency } from "@/parser.js";
-import { Tag, AgencyProgram, AgencyNode } from "@/types.js";
+import { Tag, AgencyProgram, AgencyNode, PromptSegment, FunctionParameter, GraphNodeDefinition } from "@/types.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { collectProgramInfo } from "@/programInfo.js";
 import { AgencyGenerator } from "@/backends/agencyGenerator.js";
@@ -38,6 +38,17 @@ export type FeedbackEntry = {
   promptUsed: string;
 };
 
+export function getPromptValue(target: OptimizeTarget): string {
+  if (target.llmCall && target.llmCall.type === "functionCall" && target.llmCall.arguments[0]?.type === "string") {
+    return target.llmCall.arguments[0].segments
+      .map((s: PromptSegment) =>
+        s.type === "text" ? s.value : `\${${expressionToString(s.expression)}}`,
+      )
+      .join("");
+  }
+  return "";
+}
+
 export function updatePrompt(target: OptimizeTarget, newPrompt: string) {
   if (target.llmCall && target.llmCall.type === "functionCall" && target.llmCall.arguments[0]?.type === "string") {
     target.llmCall.arguments[0].segments = parsePromptToSegments(newPrompt);
@@ -50,8 +61,8 @@ export function writeBack(filename: string, program: AgencyProgram) {
   fs.writeFileSync(filename, result.output);
 }
 
-export function parsePromptToSegments(prompt: string): any[] {
-  const segments: any[] = [];
+export function parsePromptToSegments(prompt: string): PromptSegment[] {
+  const segments: PromptSegment[] = [];
   const regex = /\$\{([^}]+)\}/g;
   let lastIndex = 0;
   let match;
@@ -116,31 +127,25 @@ export async function optimize(
   console.log(`Found ${optimizeTargets.length} optimization target(s)`);
   console.log(`Running up to ${options.iterations} iterations...\n`);
 
-  // 3. Interactive optimization loop
   const targetNode = program.nodes.find(
-    (n: any) => n.type === "graphNode" && n.nodeName === nodeName,
-  ) as any;
+    (n): n is GraphNodeDefinition => n.type === "graphNode" && n.nodeName === nodeName,
+  )!;
 
   const history: FeedbackEntry[] = [];
-  let currentPrompt = optimizeTargets[0].promptValue || "";
   let bestScore = -Infinity;
   let stagnantIterations = 0;
 
   for (let iteration = 1; iteration <= options.iterations; iteration++) {
     console.log(`\n--- Iteration ${iteration}/${options.iterations} ---\n`);
 
-    // a. Get input
     const input = await _io.getUserInput(nodeName, targetNode.parameters);
-
-    // b. Build args string
     const argsString = targetNode.parameters
-      .map((p: any) => {
+      .map((p: FunctionParameter) => {
         const val = input[p.name];
         return typeof val === "string" ? JSON.stringify(val) : String(val);
       })
       .join(", ");
 
-    // c. Run the node (reset compilation cache so the updated .agency file is recompiled)
     resetCompilationCache();
     console.log("Running agent...");
     let result: { data: any; stdout: string; stderr: string };
@@ -157,20 +162,17 @@ export async function optimize(
       continue;
     }
 
-    // d. Show output
     console.log("\nOutput:");
     console.log(JSON.stringify(result.data, null, 2));
 
-    // e. Get feedback
     const { score, feedback } = await _io.collectFeedback(result.data);
     if (feedback === "done") {
       console.log("\nStopping optimization.");
       break;
     }
 
-    history.push({ input, output: result.data, score, feedback, promptUsed: currentPrompt });
+    history.push({ input, output: result.data, score, feedback, promptUsed: getPromptValue(optimizeTargets[0]) });
 
-    // f. Early stopping
     if (score !== null) {
       const improvement = bestScore > -Infinity ? (score - bestScore) / Math.abs(bestScore) : 1;
       if (score > bestScore) bestScore = score;
@@ -185,13 +187,11 @@ export async function optimize(
       }
     }
 
-    // g. Propose improvement
     if (iteration < options.iterations) {
       console.log("\nProposing improved prompt...");
-      const proposed = await _io.proposeImprovement(currentPrompt, goal, history);
+      const proposed = await _io.proposeImprovement(getPromptValue(optimizeTargets[0]), goal, history);
 
       if (await _io.confirmProposal(proposed)) {
-        currentPrompt = proposed;
         updatePrompt(optimizeTargets[0], proposed);
         writeBack(filename, program);
         console.log(`Updated ${filename}`);
@@ -204,7 +204,7 @@ export async function optimize(
     console.log("\n--- Optimization Summary ---");
     console.log(`Iterations: ${history.length}`);
     if (bestScore > -Infinity) console.log(`Best score: ${bestScore}/10`);
-    console.log(`Final prompt: "${currentPrompt}"`);
+    console.log(`Final prompt: "${getPromptValue(optimizeTargets[0])}"`);
   }
 }
 
@@ -239,7 +239,8 @@ function collectOptimizeTargets(
   targets: OptimizeTarget[],
 ) {
   for (const node of body) {
-    const tags: Tag[] = (node as any).tags || [];
+    if (node.type !== "assignment" && node.type !== "functionCall") continue;
+    const tags: Tag[] = node.tags || [];
     const optimizeTag = tags.find((t: Tag) => t.name === "optimize");
     if (optimizeTag) {
       let llmCall: AgencyNode | null = null;
@@ -255,21 +256,8 @@ function collectOptimizeTargets(
       }
 
       const target: OptimizeTarget = { node, llmCall, tag: optimizeTag };
-
-      if (llmCall && llmCall.type === "functionCall") {
-        if (llmCall.arguments[0]?.type === "string") {
-          target.promptValue = llmCall.arguments[0].segments
-            .map((s: any) =>
-              s.type === "text" ? s.value : `\${${expressionToString(s.expression)}}`,
-            )
-            .join("");
-        }
-        if (optimizeTag.arguments.length === 0) {
-          target.configKeys = ["prompt"];
-        } else {
-          target.configKeys = optimizeTag.arguments;
-        }
-      }
+      target.promptValue = getPromptValue(target);
+      target.configKeys = optimizeTag.arguments.length === 0 ? ["prompt"] : optimizeTag.arguments;
       targets.push(target);
     }
   }

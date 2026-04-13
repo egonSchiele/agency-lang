@@ -938,7 +938,7 @@ export class AgencyGenerator {
     return this.indentStr(`@${tag.name}(${args.join(", ")})`);
   }
 
-  protected formatAttachedTags(node: any): string {
+  protected formatAttachedTags(node: { tags?: Tag[] }): string {
     if (!node.tags?.length) return "";
     return node.tags.map((tag: Tag) => this.formatTag(tag)).join("\n") + "\n";
   }

@@ -14,18 +14,8 @@ import {
 } from "tarsec";
 import { Tag } from "@/types.js";
 import { comma, optionalSpaces, varNameChar } from "./utils.js";
-import { optionalSemicolon } from "./parserUtils.js";
+import { optionalSemicolon, removeQuotes } from "./parserUtils.js";
 import { withLoc } from "./loc.js";
-
-function removeQuotes(s: string): string {
-  if (
-    (s.startsWith('"') && s.endsWith('"')) ||
-    (s.startsWith("'") && s.endsWith("'"))
-  ) {
-    return s.slice(1, -1);
-  }
-  return s;
-}
 
 // A single tag argument: either a quoted string or a bare identifier
 // Both are normalized to plain strings

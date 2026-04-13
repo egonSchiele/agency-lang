@@ -823,17 +823,18 @@ export class TypeScriptBuilder {
 
   private processTryExpression(node: TryExpression): TsNode {
     const callNode = this.processFunctionCall(node.call);
-    // try fn(args) → await __tryCall(async () => await fn(args), { checkpoint, functionName, args })
+    const args: TsNode[] = [
+      ts.arrowFn([], callNode, { async: true }),
+    ];
     const scope = this.getCurrentScope();
-    const fnName = scope.type === "function" ? (scope as FunctionScope).functionName : undefined;
-    const optsEntries: string[] = [];
-    if (fnName) {
-      optsEntries.push(`checkpoint: __ctx.getResultCheckpoint()`);
-      optsEntries.push(`functionName: ${JSON.stringify(fnName)}`);
-      optsEntries.push(`args: __stack.args`);
+    if (scope.type === "function") {
+      args.push(ts.obj({
+        checkpoint: ts.raw("__ctx.getResultCheckpoint()"),
+        functionName: ts.str((scope as FunctionScope).functionName),
+        args: ts.raw("__stack.args"),
+      }));
     }
-    const optsArg = optsEntries.length > 0 ? `, { ${optsEntries.join(", ")} }` : "";
-    return ts.raw(`await __tryCall(async () => ${this.str(callNode)}${optsArg})`);
+    return ts.await(ts.call(ts.id("__tryCall"), args));
   }
 
   private processIfElseWithSteps(node: IfElse): TsNode {

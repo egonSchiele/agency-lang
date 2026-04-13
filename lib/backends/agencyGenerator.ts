@@ -1,4 +1,3 @@
-import { SpecialVar } from "@/types/specialVar.js";
 import {
   AgencyComment,
   AgencyMultiLineComment,
@@ -241,8 +240,6 @@ export class AgencyGenerator {
         return this.processWhileLoop(node);
       case "ifElse":
         return this.processIfElse(node);
-      case "specialVar":
-        return this.processSpecialVar(node);
       case "newLine":
         return this.processNewLine(node);
       case "rawCode":
@@ -832,12 +829,6 @@ export class AgencyGenerator {
 
   protected processUsesTool(node: UsesTool): string {
     return this.indentStr(`uses ${node.toolNames.join(", ")}`);
-  }
-
-  protected processSpecialVar(node: SpecialVar): string {
-    return this.indentStr(
-      `@${node.name} = ${this.processNode(node.value).trim()}`,
-    );
   }
 
   protected processNewLine(_node: NewLine): string {

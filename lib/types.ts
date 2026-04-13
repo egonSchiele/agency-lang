@@ -21,7 +21,6 @@ import { MatchBlock } from "./types/matchBlock.js";
 import { MessageThread } from "./types/messageThread.js";
 import { ReturnStatement } from "./types/returnStatement.js";
 import { Skill } from "./types/skill.js";
-import { SpecialVar } from "./types/specialVar.js";
 import { UsesTool } from "./types/tools.js";
 import { TypeAlias, VariableType } from "./types/typeHints.js";
 import { WhileLoop } from "./types/whileLoop.js";
@@ -43,7 +42,6 @@ export * from "./types/importStatement.js";
 export * from "./types/literals.js";
 export * from "./types/matchBlock.js";
 export * from "./types/returnStatement.js";
-export * from "./types/specialVar.js";
 export * from "./types/tools.js";
 export * from "./types/typeHints.js";
 export * from "./types/whileLoop.js";
@@ -221,7 +219,6 @@ export type AgencyNode =
   | ImportToolStatement
   | WhileLoop
   | IfElse
-  | SpecialVar
   | NewLine
   | RawCode
   | MessageThread

@@ -27,7 +27,6 @@ import {
 import type { SourceLocationOpts } from "@/runtime/state/checkpointStore.js";
 import { DebuggerStatement } from "@/types/debuggerStatement.js";
 import { Sentinel } from "@/types/sentinel.js";
-import { SpecialVar } from "@/types/specialVar.js";
 import { expressionToString } from "@/utils/node.js";
 import { toCompiledImportPath } from "../importPaths.js";
 import * as renderDebugger from "../templates/backends/typescriptGenerator/debugger.js";
@@ -640,8 +639,6 @@ export class TypeScriptBuilder {
         return this.insideHandlerBody
           ? this.processBlockPlain(node)
           : this.processIfElseWithSteps(node);
-      case "specialVar":
-        return this.processSpecialVar(node);
       case "newLine":
         return ts.empty();
       case "rawCode":
@@ -1424,9 +1421,9 @@ export class TypeScriptBuilder {
       // isInterrupt check can detect it.
       const haltValue = nodeContext
         ? ts.obj([
-            ts.setSpread(ts.runtime.state),
-            ts.set("data", ts.id(tempVar)),
-          ])
+          ts.setSpread(ts.runtime.state),
+          ts.set("data", ts.id(tempVar)),
+        ])
         : ts.id(tempVar);
       return ts.statements([
         ts.constDecl(tempVar, callNode),
@@ -1592,15 +1589,15 @@ export class TypeScriptBuilder {
       // In global init scope, __threads and __state don't exist — pass only ctx
       const configObj = this.insideGlobalInit
         ? ts.functionCallConfig({
-            ctx: ts.runtime.ctx,
-          })
+          ctx: ts.runtime.ctx,
+        })
         : ts.functionCallConfig({
-            ctx: ts.runtime.ctx,
-            threads: ts.runtime.threads,
-            interruptData: ts.raw("__state?.interruptData"),
-            stateStack: options?.stateStack,
-            isForked: node.async,
-          });
+          ctx: ts.runtime.ctx,
+          threads: ts.runtime.threads,
+          interruptData: ts.raw("__state?.interruptData"),
+          stateStack: options?.stateStack,
+          isForked: node.async,
+        });
       const call = ts.call(ts.id(functionName), [...argNodes, configObj]);
       return shouldAwait ? ts.await(call) : call;
     } else if (node.functionName === "system") {
@@ -2247,26 +2244,6 @@ export class TypeScriptBuilder {
       id: this._subStepPath[this._subStepPath.length - 1],
       label: node.label || "",
     });
-  }
-
-  private processSpecialVar(node: SpecialVar): TsNode {
-    const value = this.str(this.processNode(node.value));
-    switch (node.name) {
-      case "model":
-        return ts.assign(
-          ts.id("__client"),
-          $.id("__getClientWithConfig")
-            .namedArgs({ model: ts.str(value) })
-            .done(),
-        );
-      case "messages":
-        return $(ts.threads.active())
-          .prop("setMessages")
-          .call([this.processNode(node.value)])
-          .done();
-      default:
-        throw new Error(`Unhandled SpecialVar name: ${node.name}`);
-    }
   }
 
   private processMessageThread(

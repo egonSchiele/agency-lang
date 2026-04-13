@@ -105,11 +105,6 @@ import { ReturnStatement } from "../types/returnStatement.js";
 import { DebuggerStatement } from "../types/debuggerStatement.js";
 import { Keyword, keywords, createKeyword } from "@/types/keyword.js";
 import { Skill } from "@/types/skill.js";
-import {
-  SpecialVar,
-  SpecialVarName,
-  specialVarNames,
-} from "@/types/specialVar.js";
 import { UsesTool } from "../types/tools.js";
 import {
   AgencyArray,
@@ -955,29 +950,6 @@ export function _skillParserWithDescription(
 export const skillParser = (input: string) => {
   return or(_skillParserWithDescription, _skillParser)(input);
 };
-
-// =============================================================================
-// specialVar.ts
-// =============================================================================
-
-export const specialVarNameParser: Parser<SpecialVarName> = or(
-  ...specialVarNames.map((name) => str(name))
-);
-export const specialVarParser: Parser<SpecialVar> = seqC(
-  set("type", "specialVar"),
-  char("@"),
-  capture(specialVarNameParser, "name"),
-  captureCaptures(
-    parseError(
-      "expected `= value` after special variable @name",
-      optionalSpaces,
-      char("="),
-      optionalSpaces,
-      capture(lazy(() => exprParser), "value"),
-      optionalSemicolon,
-    ),
-  )
-);
 
 // =============================================================================
 // tag.ts
@@ -1863,7 +1835,6 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
     keywordParser,
     usesToolParser,
     debug(typeAliasParser, "error in typeAliasParser"),
-    specialVarParser,
     tagParser,
     returnStatementParser,
     forLoopParser,

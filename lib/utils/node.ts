@@ -150,8 +150,6 @@ export function* getAllVariablesInBody(
         yield* getAllVariablesInBody(node.block.body);
       }
       yield { name: node.functionName, node };
-    } else if (node.type === "specialVar") {
-      yield { name: node.name, node };
     } else if (node.type === "importStatement") {
       for (const nameObj of node.importedNames) {
         for (const name of getImportedNames(nameObj)) {
@@ -362,8 +360,6 @@ export function* walkNodes(
         "type" in e && e.type === "splat" ? e.value : (e as any).value,
       );
       yield* walkNodes(objValues as AgencyNode[], [...ancestors, node], scopes);
-    } else if (node.type === "specialVar") {
-      yield* walkNodes([node.value], [...ancestors, node], scopes);
     } else if (
       node.type === "string" ||
       node.type === "multiLineString"

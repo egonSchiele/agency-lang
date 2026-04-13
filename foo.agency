@@ -1,8 +1,5 @@
-node main() {
-  const names = ["Alice", "Bob", "Charlie"]
-  print("Generating greetings...")
-  const greetings = map(names) as name {
-    return "Hello, ${name}!"
-  }
-  print(greetings)
+@goal
+node main(msg: string) {
+  const response = llm("Detect the users mood: ${msg}")
+  return response
 }

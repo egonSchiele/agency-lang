@@ -184,6 +184,12 @@ export function printTs(node: TsNode, indent = 0): string {
     }
 
     case "binOp": {
+      if (node.op === "!") {
+        const right = node.parenRight
+          ? `(${printTs(node.right, indent)})`
+          : printTs(node.right, indent);
+        return `!${right}`;
+      }
       const left = node.parenLeft
         ? `(${printTs(node.left, indent)})`
         : printTs(node.left, indent);

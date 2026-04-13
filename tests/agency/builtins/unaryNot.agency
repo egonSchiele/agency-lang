@@ -1,0 +1,7 @@
+node main() {
+  const items = [true, false, true, false, true]
+  const result = filter(items) as x {
+    return !x
+  }
+  return result
+}

@@ -92,6 +92,20 @@ describe("prettyPrint", () => {
     expect(printTs(ts.binOp(ts.id("a"), "+", ts.id("b")))).toBe("a + b");
   });
 
+  it("TsBinOp unary not", () => {
+    expect(printTs(ts.binOp(ts.bool(true), "!", ts.id("x")))).toBe("!x");
+  });
+
+  it("TsBinOp unary not with parens", () => {
+    expect(
+      printTs(
+        ts.binOp(ts.bool(true), "!", ts.binOp(ts.id("a"), "&&", ts.id("b")), {
+          parenRight: true,
+        }),
+      ),
+    ).toBe("!(a && b)");
+  });
+
   it("TsPropertyAccess dot", () => {
     expect(printTs(ts.prop(ts.id("obj"), "foo"))).toBe("obj.foo");
   });

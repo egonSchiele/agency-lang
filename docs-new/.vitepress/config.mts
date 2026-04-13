@@ -19,6 +19,7 @@ export default defineConfig({
       {
         text: "Features",
         items: [
+          { text: "Intro", link: "/features/intro" },
           { text: "Interrupts", link: "/features/interrupts" },
           { text: "Debugging", link: "/features/debugging" },
           { text: "Error Handling", link: "/features/error-handling" },

@@ -1,4 +1,4 @@
-## Help my agent keeps failing!
+# Help, my agent keeps failing!
 
 Agents are non-deterministic creatures and will fail. Because of that, they'll fail much more often than other code, and you need to be able to handle failures. Here's how Agency handles failures: There are no exceptions, and there are no try-catch statements. Instead, failures are returned as values.
 For example, here is a function that returns a success or a failure:

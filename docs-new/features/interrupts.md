@@ -1,4 +1,4 @@
-## The OpenClaw problem
+# The OpenClaw problem
 In case you haven't heard of it, [OpenClaw](https://github.com/openclaw/openclaw) is an open-source, personal AI assistant app:
 
 > The AI that actually does things. Clears your inbox, sends emails, manages your calendar, checks you in for flights.

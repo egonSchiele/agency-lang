@@ -1,6 +1,6 @@
 # Getting Started
 
-Agency is a domain-specific language for defining AI agent workflows. It compiles Agency code to executable TypeScript that calls OpenAI's structured output API.
+Agency is a language for building agents that compiles to TypeScript.
 
 ## Installation
 
@@ -25,4 +25,4 @@ Compile and run it:
 pnpm run agency hello.agency
 ```
 
-Now read [Agency in Ten Minutes](./agency-in-ten-minutes.md) to learn more about the language and how to use it!
+Next, you should check out the [basic syntax](./basic-syntax.html) and tour the [features](/features/intro.html) that make Agency great for building agents.

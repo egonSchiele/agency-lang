@@ -1,16 +1,6 @@
-# Agency in Ten Minutes
+# Basic syntax
 
-Hello and welcome! Agency is a language for building agents, or any other type of system that is complex, hard to debug, and involves non-deterministic outputs. In this quick intro we'll cover some common problems while writing agents, and how Agency solves those problems.
-
-Let's take two minutes to quickly cover installation and syntax.
-
-Installation:
-
-```
-npm i agency-lang
-```
-
-Okay, that was easy. Now syntax.
+Hello and welcome! Agency is a language for building agents, or any other type of system that is complex, hard to debug, and involves non-deterministic outputs. But before you read about that, let's take two minutes to quickly cover installation and syntax.
 
 Agency is a language that compiles down to TypeScript or JavaScript. It borrows its syntax from these languages, if you have used either JS or TS before, a lot of Agency will be familiar to you.
 

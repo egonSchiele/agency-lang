@@ -1,4 +1,4 @@
-## The debugger problem
+# The debugger problem
 Agents are hard to debug, and an agent that works reliably is hard to write. Why? Because agents are non-deterministic. Let's say you make an LLM call that works 90% of the time. The other 10% it spits out the wrong answer or just gibberish. Now, let's say you have a chain of five LLM calls like this, all of them working 90% of the time. Well, guess what? That means your entire chain only returns the correct response 59% of the time!
 We also love letting our agents make tool calls, giving them the ability to do things. Let's say you have a chain of five LLM calls. All of them might be able to call tools, and if you get an incorrect response, which as we have seen, can happen a lot of the time, it is a huge pain to debug. Every LLM call is pretty opaque. It's hard to know which LLM calls went wrong and why. The system fundamentally has a lot of uncertainty.
 

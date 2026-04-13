@@ -54,8 +54,8 @@ export * from "./types/debuggerStatement.js";
 export * from "./types/blockArgument.js";
 export * from "./types/placeholder.js";
 export * from "./types/withModifier.js";
-export * from "./types/base.js"
-export * from "./types/tag.js"
+export * from "./types/base.js";
+export * from "./types/tag.js";
 
 export type Expression =
   | ValueAccess

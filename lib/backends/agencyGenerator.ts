@@ -933,7 +933,7 @@ export class AgencyGenerator {
       if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(arg)) {
         return arg;
       }
-      return `"${arg}"`;
+      return JSON.stringify(arg);
     });
     return this.indentStr(`@${tag.name}(${args.join(", ")})`);
   }

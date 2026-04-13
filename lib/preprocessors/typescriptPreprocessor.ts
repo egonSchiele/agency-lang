@@ -107,11 +107,20 @@ function attachTags(nodes: AgencyNode[]): AgencyNode[] {
       if (node.type === "graphNode" || node.type === "function" ||
           node.type === "assignment" || node.type === "functionCall") {
         node.tags = [...(node.tags || []), ...pendingTags];
+        pendingTags = [];
+      } else {
+        // No valid attach target — preserve tags as standalone nodes
+        result.push(...pendingTags);
+        pendingTags = [];
       }
-      pendingTags = [];
     }
 
     result.push(node);
+  }
+
+  // Preserve any trailing tags (e.g., at end of block)
+  if (pendingTags.length > 0) {
+    result.push(...pendingTags);
   }
 
   return result;

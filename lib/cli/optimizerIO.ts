@@ -9,7 +9,7 @@ import { FeedbackEntry } from "./optimize.js";
 
 export type OptimizerIO = {
   getUserInput(nodeName: string, parameters: { name: string; typeHint?: any }[]): Promise<Record<string, any>>;
-  collectFeedback(output: any): Promise<{ score: number | null; feedback: string }>;
+  collectFeedback(): Promise<{ score: number | null; feedback: string }>;
   proposeImprovement(currentPrompt: string, goal: string, history: FeedbackEntry[]): Promise<string>;
   confirmProposal(proposed: string): Promise<boolean>;
 };

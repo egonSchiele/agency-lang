@@ -2,6 +2,7 @@ import { AgencyConfig } from "@/config.js";
 import { executeNodeAsync, parseTarget } from "./util.js";
 import { resetCompilationCache } from "./commands.js";
 import { parseAgency } from "@/parser.js";
+import { exprParser } from "@/parsers/expression.js";
 import { Tag, AgencyProgram, AgencyNode, PromptSegment, FunctionParameter, GraphNodeDefinition } from "@/types.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { collectProgramInfo } from "@/programInfo.js";
@@ -70,10 +71,12 @@ export function parsePromptToSegments(prompt: string): PromptSegment[] {
     if (match.index > lastIndex) {
       segments.push({ type: "text", value: prompt.slice(lastIndex, match.index) });
     }
-    segments.push({
-      type: "interpolation",
-      expression: { type: "variableName", value: match[1].trim() },
-    });
+    const exprStr = match[1].trim();
+    const parsed = exprParser(exprStr);
+    if (!parsed.success) {
+      throw new Error(`Failed to parse interpolation expression: ${exprStr}`);
+    }
+    segments.push({ type: "interpolation", expression: parsed.result });
     lastIndex = match.index + match[0].length;
   }
   if (lastIndex < prompt.length) {
@@ -122,9 +125,23 @@ export async function optimize(
     process.exit(1);
   }
 
+  if (optimizeTargets.length > 1) {
+    console.error(
+      `Multiple @optimize targets found in node "${nodeName}". Only one @optimize target is supported in v1.`,
+    );
+    process.exit(1);
+  }
+
+  const optimizeTarget = optimizeTargets[0];
+  const nonPromptKeys = (optimizeTarget.configKeys || []).filter(k => k !== "prompt");
+  if (nonPromptKeys.length > 0) {
+    console.warn(
+      `Warning: @optimize(${nonPromptKeys.join(", ")}) — only prompt optimization is supported in v1. Parameter tuning for ${nonPromptKeys.join(", ")} will be ignored.`,
+    );
+  }
+
   const goal = goalTag.arguments[0];
   console.log(`Goal: ${goal}`);
-  console.log(`Found ${optimizeTargets.length} optimization target(s)`);
   console.log(`Running up to ${options.iterations} iterations...\n`);
 
   const targetNode = program.nodes.find(
@@ -165,13 +182,13 @@ export async function optimize(
     console.log("\nOutput:");
     console.log(JSON.stringify(result.data, null, 2));
 
-    const { score, feedback } = await _io.collectFeedback(result.data);
+    const { score, feedback } = await _io.collectFeedback();
     if (feedback === "done") {
       console.log("\nStopping optimization.");
       break;
     }
 
-    history.push({ input, output: result.data, score, feedback, promptUsed: getPromptValue(optimizeTargets[0]) });
+    history.push({ input, output: result.data, score, feedback, promptUsed: getPromptValue(optimizeTarget) });
 
     if (score !== null) {
       const improvement = bestScore > -Infinity ? (score - bestScore) / Math.abs(bestScore) : 1;
@@ -189,10 +206,10 @@ export async function optimize(
 
     if (iteration < options.iterations) {
       console.log("\nProposing improved prompt...");
-      const proposed = await _io.proposeImprovement(getPromptValue(optimizeTargets[0]), goal, history);
+      const proposed = await _io.proposeImprovement(getPromptValue(optimizeTarget), goal, history);
 
       if (await _io.confirmProposal(proposed)) {
-        updatePrompt(optimizeTargets[0], proposed);
+        updatePrompt(optimizeTarget, proposed);
         writeBack(filename, program);
         console.log(`Updated ${filename}`);
       }
@@ -204,7 +221,7 @@ export async function optimize(
     console.log("\n--- Optimization Summary ---");
     console.log(`Iterations: ${history.length}`);
     if (bestScore > -Infinity) console.log(`Best score: ${bestScore}/10`);
-    console.log(`Final prompt: "${getPromptValue(optimizeTargets[0])}"`);
+    console.log(`Final prompt: "${getPromptValue(optimizeTarget)}"`);
   }
 }
 

@@ -68,6 +68,16 @@ describe("parsePromptToSegments", () => {
       expression: { type: "variableName", value: "x" },
     });
   });
+
+  it("handles value access expressions like ${response.message}", () => {
+    const segments = parsePromptToSegments("Categorize: ${response.message}");
+    expect(segments).toHaveLength(2);
+    expect(segments[0]).toEqual({ type: "text", value: "Categorize: " });
+    expect(segments[1].type).toBe("interpolation");
+    if (segments[1].type === "interpolation") {
+      expect(segments[1].expression.type).toBe("valueAccess");
+    }
+  });
 });
 
 describe("findGoalTag", () => {

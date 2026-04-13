@@ -27,6 +27,7 @@ import { agent } from "@/cli/agent.js";
 import { loadEnv } from "@/utils/envfile.js";
 import { debug } from "@/cli/debug.js";
 import { generateDoc } from "@/cli/doc.js";
+import { optimize } from "@/cli/optimize.js";
 
 loadEnv();
 const program = new Command();
@@ -402,6 +403,18 @@ program
   .action((input: string, opts: { output: string }) => {
     const config = getConfig();
     generateDoc(config, input, opts.output);
+  });
+
+program
+  .command("optimize")
+  .description("Optimize prompts and parameters using iterative feedback")
+  .argument("<target>", "Target node (e.g., file.agency:nodeName)")
+  .option("--iterations <n>", "Maximum iterations", parseInt)
+  .action(async (target: string, opts: any) => {
+    const config = getConfig();
+    const optimizeOpts: Record<string, any> = {};
+    if (opts.iterations !== undefined) optimizeOpts.iterations = opts.iterations;
+    await optimize(config, target, optimizeOpts);
   });
 
 program

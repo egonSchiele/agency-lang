@@ -31,6 +31,7 @@ import { Sentinel } from "./types/sentinel.js";
 import { DebuggerStatement } from "./types/debuggerStatement.js";
 import { Placeholder } from "./types/placeholder.js";
 import { WithModifier } from "./types/withModifier.js";
+import { Tag } from "./types/tag.js";
 export * from "./types/access.js";
 export * from "./types/awaitPending.js";
 export * from "./types/dataStructures.js";
@@ -53,7 +54,8 @@ export * from "./types/debuggerStatement.js";
 export * from "./types/blockArgument.js";
 export * from "./types/placeholder.js";
 export * from "./types/withModifier.js";
-export * from "./types/base.js"
+export * from "./types/base.js";
+export * from "./types/tag.js";
 
 export type Expression =
   | ValueAccess
@@ -167,6 +169,7 @@ export type Assignment = BaseNode & {
   shared?: boolean;
   declKind?: "let" | "const";
   value: Expression | MessageThread;
+  tags?: Tag[];
 };
 
 export function globalScope(): Scope {
@@ -228,7 +231,8 @@ export type AgencyNode =
   | WithModifier
   | Sentinel
   | DebuggerStatement
-  | Placeholder;
+  | Placeholder
+  | Tag;
 
 export type AgencyProgram = {
   type: "agencyProgram";

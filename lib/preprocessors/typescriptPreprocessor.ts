@@ -11,6 +11,7 @@ import {
   RawCode,
   ScopeType,
   Sentinel,
+  Tag,
   WhileLoop,
 } from "@/types.js";
 import { MessageThread } from "@/types/messageThread.js";
@@ -92,6 +93,51 @@ function llmCallToString(call: FunctionCall): string {
   return "llm(...)";
 }
 
+function attachTags(nodes: AgencyNode[]): AgencyNode[] {
+  const result: AgencyNode[] = [];
+  let pendingTags: Tag[] = [];
+
+  for (const node of nodes) {
+    if (node.type === "tag") {
+      pendingTags.push(node);
+      continue;
+    }
+
+    if (pendingTags.length > 0) {
+      if (node.type === "graphNode" || node.type === "function" ||
+          node.type === "assignment" || node.type === "functionCall") {
+        node.tags = [...(node.tags || []), ...pendingTags];
+        pendingTags = [];
+      } else {
+        // No valid attach target — preserve tags as standalone nodes
+        result.push(...pendingTags);
+        pendingTags = [];
+      }
+    }
+
+    result.push(node);
+  }
+
+  // Preserve any trailing tags (e.g., at end of block)
+  if (pendingTags.length > 0) {
+    result.push(...pendingTags);
+  }
+
+  return result;
+}
+
+function collectTags(nodes: AgencyNode[]): AgencyNode[] {
+  // walkBody handles control-flow bodies (ifElse, loops, etc.) but not
+  // graphNode/function bodies, so recurse into those explicitly.
+  const withNestedBodies = nodes.map((node) => {
+    if ((node.type === "graphNode" || node.type === "function") && node.body) {
+      node.body = collectTags(node.body);
+    }
+    return node;
+  });
+  return walkBody(withNestedBodies, attachTags);
+}
+
 export class TypescriptPreprocessor {
   public program: AgencyProgram;
   protected config: AgencyConfig;
@@ -117,6 +163,7 @@ export class TypescriptPreprocessor {
   }
 
   preprocess(): AgencyProgram {
+    this.program.nodes = collectTags(this.program.nodes);
     if (Object.keys(this.functionDefinitions).length === 0) {
       this.getFunctionDefinitions();
     }

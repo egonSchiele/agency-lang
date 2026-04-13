@@ -50,6 +50,7 @@ import { returnStatementParser } from "./parsers/returnStatement.js";
 import { debuggerParser } from "./parsers/debuggerStatement.js";
 import { skillParser } from "./parsers/skill.js";
 import { specialVarParser } from "./parsers/specialVar.js";
+import { tagParser } from "./parsers/tag.js";
 import { usesToolParser } from "./parsers/tools.js";
 import { typeAliasParser } from "./parsers/typeHints.js";
 import { AgencyNode, AgencyProgram } from "./types.js";
@@ -74,6 +75,7 @@ const nodeParser = or(
   functionParser,
   returnStatementParser,
   specialVarParser,
+  tagParser,
   sharedAssignmentParser,
   withModifierParser,
   assignmentParser,

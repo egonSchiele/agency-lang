@@ -17,16 +17,7 @@ import {
   failure,
 } from "tarsec";
 import { comma, optionalSpaces } from "./utils.js";
-
-function removeQuotes(str: string): string {
-  if (
-    (str.startsWith('"') && str.endsWith('"')) ||
-    (str.startsWith("'") && str.endsWith("'"))
-  ) {
-    return str.slice(1, -1);
-  }
-  return str;
-}
+import { removeQuotes } from "./parserUtils.js";
 
 export function _skillParser(input: string): ParserResult<Skill> {
   const parser = trace(

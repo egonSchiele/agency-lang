@@ -23,3 +23,5 @@ The way it works is:
 3. Runs each keyword search in parallel and collects the results.
 
 What makes `fork` really powerful is that each of these threads gets isolated execution state. That means that in each thread you can do whatever you want with the state, and not worry about it conflicting with any other thread. You can also nest `fork`s inside other `fork`s. This can be a powerful way to run multiple LLM calls in parallel to explore a problem space and pick which direction you want to go in.
+
+also `race`

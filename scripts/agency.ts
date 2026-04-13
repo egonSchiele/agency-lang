@@ -17,7 +17,7 @@ import * as path from "path";
 import { _parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { collectProgramInfo } from "@/programInfo.js";
-import { formatErrors, typeCheck } from "@/typeChecker.js";
+import { formatErrors, typeCheck } from "@/typeChecker/index.js";
 import { Command } from "commander";
 import * as fs from "fs";
 import { color } from "@/utils/termcolors.js";

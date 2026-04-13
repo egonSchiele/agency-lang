@@ -4,7 +4,7 @@ import { AgencyProgram, generateTypeScript } from "@/index.js";
 import { transformSync } from "esbuild";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { collectProgramInfo } from "@/programInfo.js";
-import { typeCheck, formatErrors } from "@/typeChecker.js";
+import { typeCheck, formatErrors } from "@/typeChecker/index.js";
 import { ImportStatement } from "@/types/importStatement.js";
 import { buildSymbolTable, type SymbolTable } from "@/symbolTable.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";

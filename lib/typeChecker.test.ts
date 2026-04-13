@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { TypeChecker, typeCheck } from "./typeChecker.js";
+import { TypeChecker, typeCheck } from "./typeChecker/index.js";
 import { AgencyProgram } from "./types.js";
 
 describe("TypeChecker", () => {

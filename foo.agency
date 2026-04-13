@@ -1,5 +1,13 @@
-const text = read("/Users/adityabhargava/agency-lang/README.md")
+def deleteEmail(numEmails: number) {
+  // explicitly return the number of emails to be deleted
+  return interrupt({ 
+    message: "Are you sure you want to delete ${numEmails} emails!!!",
+    numEmails: numEmails
+  })
+  print("deleting ${numEmails} emails! DO DO DO!")
+}
 
 node main() {
-  print(text)
+  const aMillion = 1000000
+  deleteEmail(aMillion) with approve
 }

@@ -77,6 +77,8 @@ Save the "Hello World" code in `test.agency`, and then run:
 npm run agency test.agency
 ```
 
-You should see a hello world message get printed. If you get an error, make sure you have your OpenAI API key set up correctly. You can set it as an environment variable called `OPENAI_API_KEY`, or you can create a `.env` file in the root of your project with the line `OPENAI_API_KEY=your_api_key_here`.
+You should see a hello world message get printed.
+
+> If you get an error, make sure you have your OpenAI API key set up correctly. You can set it as an environment variable called `OPENAI_API_KEY`, or you can create a `.env` file in the root of your project with the line `OPENAI_API_KEY=your_api_key_here`. Or just remove the `llm` call and replace it with a string, like `const greeting = "Hello, World!"` for now.
 
 Now we're ready to dive into the more exciting features of the Agency.

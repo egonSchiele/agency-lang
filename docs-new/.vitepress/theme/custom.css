@@ -1,0 +1,11 @@
+:root {
+  --vp-sidebar-width: 240px;
+}
+
+.VPSidebar {
+  padding-right: 8px;
+}
+
+.VPContent.has-sidebar {
+  padding-left: 24px;
+}

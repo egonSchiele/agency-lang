@@ -44,6 +44,21 @@ export function isFailure(result: ResultValue): result is ResultFailure {
   return result != null && result.success === false;
 }
 
+/** Wrap a function call in try-catch, returning a Result.
+ * If the function already returns a Result (failure), pass it through. */
+export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<ResultValue> {
+  try {
+    const value = await fn();
+    if (isFailure(value)) return value;
+    return success(value);
+  } catch (error) {
+    return failure(
+      error instanceof Error ? error.message : String(error),
+      opts,
+    );
+  }
+}
+
 export async function __pipeBind(result: ResultValue, fn: (value: any) => any): Promise<any> {
   if (!result.success) return result;
   const output = await fn(result.value);

@@ -59,6 +59,7 @@ import {
   AgencyObjectKV,
 } from "../types/dataStructures.js";
 import { ForLoop } from "../types/forLoop.js";
+import { TryExpression } from "../types/tryExpression.js";
 import {
   FunctionCall,
   FunctionDefinition,
@@ -653,6 +654,8 @@ export class TypeScriptBuilder {
         return this.processDebuggerStatement(node);
       case "placeholder":
         throw new Error("Placeholder '?' can only appear on the right side of a |> pipe operator");
+      case "tryExpression":
+        return this.processTryExpression(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
@@ -816,6 +819,21 @@ export class TypeScriptBuilder {
   private processPipeExpression(node: BinOpExpression): TsNode {
     const left = this.processNode(node.left);
     return this.buildPipeBind(left, node.right);
+  }
+
+  private processTryExpression(node: TryExpression): TsNode {
+    const callNode = this.processFunctionCall(node.call);
+    // try fn(args) → await __tryCall(async () => await fn(args), { checkpoint, functionName, args })
+    const scope = this.getCurrentScope();
+    const fnName = scope.type === "function" ? (scope as FunctionScope).functionName : undefined;
+    const optsEntries: string[] = [];
+    if (fnName) {
+      optsEntries.push(`checkpoint: __ctx.getResultCheckpoint()`);
+      optsEntries.push(`functionName: ${JSON.stringify(fnName)}`);
+      optsEntries.push(`args: __stack.args`);
+    }
+    const optsArg = optsEntries.length > 0 ? `, { ${optsEntries.join(", ")} }` : "";
+    return ts.raw(`await __tryCall(async () => ${this.str(callNode)}${optsArg})`);
   }
 
   private processIfElseWithSteps(node: IfElse): TsNode {

@@ -12,6 +12,7 @@ import {
 import { Expression } from "../types.js";
 import { BinOpExpression, Operator } from "../types/binop.js";
 import { Placeholder } from "../types/placeholder.js";
+import { TryExpression } from "../types/tryExpression.js";
 import { agencyArrayParser, agencyObjectParser } from "./dataStructures.js";
 import { booleanParser, literalParser } from "./literals.js";
 import { valueAccessParser } from "./access.js";
@@ -51,6 +52,22 @@ const placeholderParser: Parser<Placeholder> = (input: string) => {
   return success({ type: "placeholder" as const }, result.rest);
 };
 
+// --- try keyword ---
+// Parses: try functionCall(args)
+// Uses valueAccessParser (already imported) since bare function calls parse as value accesses.
+const tryExpressionParser: Parser<TryExpression> = (input: string) => {
+  const tryResult = str("try ")(input);
+  if (!tryResult.success) return tryResult;
+  const callResult = valueAccessParser(tryResult.rest);
+  if (!callResult.success || callResult.result.type !== "functionCall") {
+    return failure("expected function call after try", input);
+  }
+  return success(
+    { type: "tryExpression" as const, call: callResult.result },
+    callResult.rest,
+  );
+};
+
 // The atom parser: the smallest unit of an expression.
 // Sub-parsers are wrapped in lazy() to handle circular imports that will exist
 // after Task 3 (e.g., functionCall.ts will import exprParser from this file,
@@ -59,6 +76,7 @@ const placeholderParser: Parser<Placeholder> = (input: string) => {
 // when all modules are fully loaded.
 const atom: Parser<Expression> = or(
   unaryNotParser,
+  tryExpressionParser,
   placeholderParser,
   lazy(() => agencyArrayParser),
   lazy(() => agencyObjectParser),

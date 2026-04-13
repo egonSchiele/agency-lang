@@ -32,6 +32,7 @@ import { DebuggerStatement } from "./types/debuggerStatement.js";
 import { Placeholder } from "./types/placeholder.js";
 import { WithModifier } from "./types/withModifier.js";
 import { Tag } from "./types/tag.js";
+import { TryExpression } from "./types/tryExpression.js";
 export * from "./types/access.js";
 export * from "./types/awaitPending.js";
 export * from "./types/dataStructures.js";
@@ -56,6 +57,7 @@ export * from "./types/placeholder.js";
 export * from "./types/withModifier.js";
 export * from "./types/base.js";
 export * from "./types/tag.js";
+export type { TryExpression } from "./types/tryExpression.js";
 
 export type Expression =
   | ValueAccess
@@ -64,7 +66,8 @@ export type Expression =
   | BinOpExpression
   | AgencyArray
   | AgencyObject
-  | Placeholder;
+  | Placeholder
+  | TryExpression;
 
 /**
  * Scope types for variable resolution.
@@ -232,7 +235,8 @@ export type AgencyNode =
   | Sentinel
   | DebuggerStatement
   | Placeholder
-  | Tag;
+  | Tag
+  | TryExpression;
 
 export type AgencyProgram = {
   type: "agencyProgram";

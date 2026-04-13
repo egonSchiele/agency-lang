@@ -263,6 +263,8 @@ export class AgencyGenerator {
         return this.formatTag(node);
       case "placeholder":
         return "?";
+      case "tryExpression":
+        return `try ${this.processNode(node.call)}`;
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }

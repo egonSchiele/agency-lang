@@ -1,0 +1,17 @@
+def riskyDouble(x: number): number {
+  if (x < 0) {
+    throw("negative number")
+  }
+  return x * 2
+}
+
+node main() {
+  let good = try riskyDouble(5)
+  let bad = try riskyDouble(-1)
+  return {
+    goodSuccess: isSuccess(good),
+    goodValue: good.value,
+    badSuccess: isSuccess(bad),
+    badError: bad.error
+  }
+}

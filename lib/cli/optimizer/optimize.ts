@@ -1,9 +1,16 @@
 import { AgencyConfig } from "@/config.js";
-import { executeNodeAsync, parseTarget } from "./util.js";
-import { resetCompilationCache } from "./commands.js";
+import { executeNodeAsync, parseTarget } from "../util.js";
+import { resetCompilationCache } from "../commands.js";
 import { parseAgency } from "@/parser.js";
 import { exprParser } from "@/parsers/parsers.js";
-import { Tag, AgencyProgram, AgencyNode, PromptSegment, FunctionParameter, GraphNodeDefinition } from "@/types.js";
+import {
+  Tag,
+  AgencyProgram,
+  AgencyNode,
+  PromptSegment,
+  FunctionParameter,
+  GraphNodeDefinition,
+} from "@/types.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { collectProgramInfo } from "@/programInfo.js";
 import { AgencyGenerator } from "@/backends/agencyGenerator.js";
@@ -40,7 +47,11 @@ export type FeedbackEntry = {
 };
 
 export function getPromptValue(target: OptimizeTarget): string {
-  if (target.llmCall && target.llmCall.type === "functionCall" && target.llmCall.arguments[0]?.type === "string") {
+  if (
+    target.llmCall &&
+    target.llmCall.type === "functionCall" &&
+    target.llmCall.arguments[0]?.type === "string"
+  ) {
     return target.llmCall.arguments[0].segments
       .map((s: PromptSegment) =>
         s.type === "text" ? s.value : `\${${expressionToString(s.expression)}}`,
@@ -51,7 +62,11 @@ export function getPromptValue(target: OptimizeTarget): string {
 }
 
 export function updatePrompt(target: OptimizeTarget, newPrompt: string) {
-  if (target.llmCall && target.llmCall.type === "functionCall" && target.llmCall.arguments[0]?.type === "string") {
+  if (
+    target.llmCall &&
+    target.llmCall.type === "functionCall" &&
+    target.llmCall.arguments[0]?.type === "string"
+  ) {
     target.llmCall.arguments[0].segments = parsePromptToSegments(newPrompt);
   }
 }
@@ -69,7 +84,10 @@ export function parsePromptToSegments(prompt: string): PromptSegment[] {
   let match;
   while ((match = regex.exec(prompt)) !== null) {
     if (match.index > lastIndex) {
-      segments.push({ type: "text", value: prompt.slice(lastIndex, match.index) });
+      segments.push({
+        type: "text",
+        value: prompt.slice(lastIndex, match.index),
+      });
     }
     const exprStr = match[1].trim();
     const parsed = exprParser(exprStr);
@@ -133,7 +151,9 @@ export async function optimize(
   }
 
   const optimizeTarget = optimizeTargets[0];
-  const nonPromptKeys = (optimizeTarget.configKeys || []).filter(k => k !== "prompt");
+  const nonPromptKeys = (optimizeTarget.configKeys || []).filter(
+    (k) => k !== "prompt",
+  );
   if (nonPromptKeys.length > 0) {
     console.warn(
       `Warning: @optimize(${nonPromptKeys.join(", ")}) — only prompt optimization is supported in v1. Parameter tuning for ${nonPromptKeys.join(", ")} will be ignored.`,
@@ -145,7 +165,8 @@ export async function optimize(
   console.log(`Running up to ${options.iterations} iterations...\n`);
 
   const targetNode = program.nodes.find(
-    (n): n is GraphNodeDefinition => n.type === "graphNode" && n.nodeName === nodeName,
+    (n): n is GraphNodeDefinition =>
+      n.type === "graphNode" && n.nodeName === nodeName,
   )!;
 
   const history: FeedbackEntry[] = [];
@@ -188,10 +209,17 @@ export async function optimize(
       break;
     }
 
-    history.push({ input, output: result.data, score, feedback, promptUsed: getPromptValue(optimizeTarget) });
+    history.push({
+      input,
+      output: result.data,
+      score,
+      feedback,
+      promptUsed: getPromptValue(optimizeTarget),
+    });
 
     if (score !== null) {
-      const improvement = bestScore > -Infinity ? (score - bestScore) / Math.abs(bestScore) : 1;
+      const improvement =
+        bestScore > -Infinity ? (score - bestScore) / Math.abs(bestScore) : 1;
       if (score > bestScore) bestScore = score;
       if (improvement < options.earlyStopThreshold) {
         stagnantIterations++;
@@ -199,14 +227,20 @@ export async function optimize(
         stagnantIterations = 0;
       }
       if (stagnantIterations >= options.earlyStopPatience) {
-        console.log(`\nScore hasn't improved significantly for ${options.earlyStopPatience} iterations. Stopping.`);
+        console.log(
+          `\nScore hasn't improved significantly for ${options.earlyStopPatience} iterations. Stopping.`,
+        );
         break;
       }
     }
 
     if (iteration < options.iterations) {
       console.log("\nProposing improved prompt...");
-      const proposed = await _io.proposeImprovement(getPromptValue(optimizeTarget), goal, history);
+      const proposed = await _io.proposeImprovement(
+        getPromptValue(optimizeTarget),
+        goal,
+        history,
+      );
 
       if (await _io.confirmProposal(proposed)) {
         updatePrompt(optimizeTarget, proposed);
@@ -251,10 +285,7 @@ export function findOptimizeTargets(
   return targets;
 }
 
-function collectOptimizeTargets(
-  body: AgencyNode[],
-  targets: OptimizeTarget[],
-) {
+function collectOptimizeTargets(body: AgencyNode[], targets: OptimizeTarget[]) {
   for (const node of body) {
     if (node.type !== "assignment" && node.type !== "functionCall") continue;
     const tags: Tag[] = node.tags || [];
@@ -274,7 +305,8 @@ function collectOptimizeTargets(
 
       const target: OptimizeTarget = { node, llmCall, tag: optimizeTag };
       target.promptValue = getPromptValue(target);
-      target.configKeys = optimizeTag.arguments.length === 0 ? ["prompt"] : optimizeTag.arguments;
+      target.configKeys =
+        optimizeTag.arguments.length === 0 ? ["prompt"] : optimizeTag.arguments;
       targets.push(target);
     }
   }

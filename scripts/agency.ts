@@ -27,7 +27,7 @@ import { agent } from "@/cli/agent.js";
 import { loadEnv } from "@/utils/envfile.js";
 import { debug } from "@/cli/debug.js";
 import { generateDoc } from "@/cli/doc.js";
-import { optimize } from "@/cli/optimize.js";
+import { optimize } from "@/cli/optimizer/optimize.js";
 
 loadEnv();
 const program = new Command();
@@ -67,9 +67,10 @@ function runWithOptions(input: string, options: RunOptions) {
   const config = getConfig();
   if (options.trace) {
     config.trace = true;
-    config.traceFile = typeof options.trace === "string"
-      ? options.trace
-      : input.replace(/\.agency$/, ".trace");
+    config.traceFile =
+      typeof options.trace === "string"
+        ? options.trace
+        : input.replace(/\.agency$/, ".trace");
   }
   run(config, input, undefined, options.resume);
 }
@@ -77,14 +78,17 @@ function runWithOptions(input: string, options: RunOptions) {
 function addRunOptions(cmd: Command) {
   return cmd
     .option("--resume <statefile>", "Resume execution from a saved state file")
-    .option("--trace [file]", "Write execution trace to file (default: <input>.trace)");
+    .option(
+      "--trace [file]",
+      "Write execution trace to file (default: <input>.trace)",
+    );
 }
 
 addRunOptions(
   program
     .command("run")
     .description("Compile and run .agency file(s)")
-    .argument("<input>", "Path to .agency input file")
+    .argument("<input>", "Path to .agency input file"),
 ).action((input: string, options: RunOptions) => {
   runWithOptions(input, options);
 });
@@ -93,7 +97,10 @@ program
   .command("trace")
   .description("Compile and run .agency file, generating a trace")
   .argument("<input>", "Path to .agency input file")
-  .option("-o, --output <file>", "Output trace file path (default: <input>.trace)")
+  .option(
+    "-o, --output <file>",
+    "Output trace file path (default: <input>.trace)",
+  )
   .option("--resume <statefile>", "Resume execution from a saved state file")
   .action((input: string, options: { output?: string; resume?: string }) => {
     const traceFile = options.output || input.replace(/\.agency$/, ".trace");
@@ -184,51 +191,54 @@ testCmd
   .command("run", { isDefault: true })
   .description("Run Agency test files")
   .argument("[inputs...]", "Paths to .test.json files or directories")
-  .option("-p, --parallel <number>", "Number of test files to run in parallel", parseInt)
-  .action(
-    async (
-      testFile: string[],
-      opts: { parallel?: number },
-    ) => {
-      const config = getConfig();
-      const parallel = opts.parallel ?? config.test?.parallel ?? 1;
-      const totals = await test(config, testFile, parallel);
-      const totalFiles = totals.filesPassed + totals.filesFailed;
-      const totalTests = totals.passed + totals.failed;
-      if (totalFiles > 0) {
-        const filesStatus = [
-          totals.filesFailed > 0 ? `${totals.filesFailed} failed` : "",
-          `${totals.filesPassed} passed`,
-        ]
-          .filter(Boolean)
-          .join(" | ");
-        const testsStatus = [
-          totals.failed > 0 ? `${totals.failed} failed` : "",
-          `${totals.passed} passed`,
-        ]
-          .filter(Boolean)
-          .join(" | ");
-        if (totals.failedFiles.length > 0) {
-          console.log("");
-          for (const file of totals.failedFiles) {
-            console.log(color.red(` FAIL  ${file}`));
-          }
+  .option(
+    "-p, --parallel <number>",
+    "Number of test files to run in parallel",
+    parseInt,
+  )
+  .action(async (testFile: string[], opts: { parallel?: number }) => {
+    const config = getConfig();
+    const parallel = opts.parallel ?? config.test?.parallel ?? 1;
+    const totals = await test(config, testFile, parallel);
+    const totalFiles = totals.filesPassed + totals.filesFailed;
+    const totalTests = totals.passed + totals.failed;
+    if (totalFiles > 0) {
+      const filesStatus = [
+        totals.filesFailed > 0 ? `${totals.filesFailed} failed` : "",
+        `${totals.filesPassed} passed`,
+      ]
+        .filter(Boolean)
+        .join(" | ");
+      const testsStatus = [
+        totals.failed > 0 ? `${totals.failed} failed` : "",
+        `${totals.passed} passed`,
+      ]
+        .filter(Boolean)
+        .join(" | ");
+      if (totals.failedFiles.length > 0) {
+        console.log("");
+        for (const file of totals.failedFiles) {
+          console.log(color.red(` FAIL  ${file}`));
         }
-        const colorFn = totals.failed > 0 ? color.red : color.green;
-        console.log(colorFn(`\n Test Files  ${filesStatus} (${totalFiles})`));
-        console.log(colorFn(`      Tests  ${testsStatus} (${totalTests})`));
       }
-      if (totals.failed > 0) {
-        process.exit(1);
-      }
-    },
-  );
+      const colorFn = totals.failed > 0 ? color.red : color.green;
+      console.log(colorFn(`\n Test Files  ${filesStatus} (${totalFiles})`));
+      console.log(colorFn(`      Tests  ${testsStatus} (${totalTests})`));
+    }
+    if (totals.failed > 0) {
+      process.exit(1);
+    }
+  });
 
 testCmd
   .command("js")
   .description("Run JavaScript integration tests")
   .argument("[inputs...]", "Paths to test directories")
-  .option("-p, --parallel <number>", "Number of test dirs to run in parallel", parseInt)
+  .option(
+    "-p, --parallel <number>",
+    "Number of test dirs to run in parallel",
+    parseInt,
+  )
   .action(async (testFile: string[], opts: { parallel?: number }) => {
     const config = getConfig();
     const parallel = opts.parallel ?? config.test?.parallel ?? 1;
@@ -342,7 +352,6 @@ program
     if (hasErrors) process.exit(1);
   });
 
-
 program
   .command("debug")
   .description("Debug an Agency file interactively")
@@ -379,7 +388,8 @@ program
   .option("-o, --output <file>", "Output bundle file path")
   .action((source: string, trace: string, options: { output?: string }) => {
     const parsed = path.parse(source);
-    const output = options.output || path.join(parsed.dir, parsed.name + ".bundle");
+    const output =
+      options.output || path.join(parsed.dir, parsed.name + ".bundle");
     createBundle(source, trace, output);
     console.log(`Bundle created: ${output}`);
   });
@@ -413,7 +423,8 @@ program
   .action(async (target: string, opts: any) => {
     const config = getConfig();
     const optimizeOpts: Record<string, any> = {};
-    if (opts.iterations !== undefined) optimizeOpts.iterations = opts.iterations;
+    if (opts.iterations !== undefined)
+      optimizeOpts.iterations = opts.iterations;
     await optimize(config, target, optimizeOpts);
   });
 

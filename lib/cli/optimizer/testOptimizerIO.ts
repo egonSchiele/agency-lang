@@ -25,7 +25,9 @@ export class TestOptimizerIO implements OptimizerIO {
   }
 
   async collectFeedback(): Promise<{ score: number | null; feedback: string }> {
-    return this.feedbacks[this.feedbackIndex++] || { score: null, feedback: "done" };
+    return (
+      this.feedbacks[this.feedbackIndex++] || { score: null, feedback: "done" }
+    );
   }
 
   async proposeImprovement(

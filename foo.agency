@@ -1,5 +1,6 @@
-@goal
+@goal("Detect the users mood based on their message")
 node main(msg: string) {
+  @optimize("Detect the users mood based on their message")
   const response = llm("Detect the users mood: ${msg}")
   return response
 }

@@ -109,6 +109,8 @@ export function expressionToString(expr: Expression): string {
       ).join(", ")}}`;
     case "placeholder":
       return "?";
+    case "tryExpression":
+      return `try ${expressionToString(expr.call)}`;
   }
 }
 

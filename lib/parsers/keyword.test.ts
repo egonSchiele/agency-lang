@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { keywordParser } from "./keyword.js";
+import { keywordParser } from "./parsers.js";
 
 describe("keywordParser", () => {
   const testCases = [

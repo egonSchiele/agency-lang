@@ -4,7 +4,7 @@ import {
   agencyObjectParser,
   agencyObjectKVParser,
   splatParser,
-} from "./dataStructures.js";
+} from "./parsers.js";
 
 describe("dataStructures parsers", () => {
   describe("agencyArrayParser", () => {

@@ -1,4 +1,11 @@
+import { z } from "zod";
+
 export type ResultValue = ResultSuccess | ResultFailure;
+
+const resultValueSchema = z.union([
+  z.object({ success: z.literal(true), value: z.any() }),
+  z.object({ success: z.literal(false), error: z.any() }),
+]);
 
 export type ResultSuccess = {
   success: true;
@@ -42,6 +49,21 @@ export function isSuccess(result: ResultValue): result is ResultSuccess {
 
 export function isFailure(result: ResultValue): result is ResultFailure {
   return result != null && result.success === false;
+}
+
+/** Wrap a function call in try-catch, returning a Result.
+ * If the function already returns a Result, pass it through (no double-wrapping). */
+export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<ResultValue> {
+  try {
+    const value = await fn();
+    if (resultValueSchema.safeParse(value).success) return value;
+    return success(value);
+  } catch (error) {
+    return failure(
+      error instanceof Error ? error.message : String(error),
+      opts,
+    );
+  }
 }
 
 export async function __pipeBind(result: ResultValue, fn: (value: any) => any): Promise<any> {

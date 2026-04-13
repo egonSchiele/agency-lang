@@ -59,6 +59,7 @@ import {
   AgencyObjectKV,
 } from "../types/dataStructures.js";
 import { ForLoop } from "../types/forLoop.js";
+import { TryExpression } from "../types/tryExpression.js";
 import {
   FunctionCall,
   FunctionDefinition,
@@ -653,6 +654,8 @@ export class TypeScriptBuilder {
         return this.processDebuggerStatement(node);
       case "placeholder":
         throw new Error("Placeholder '?' can only appear on the right side of a |> pipe operator");
+      case "tryExpression":
+        return this.processTryExpression(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
@@ -816,6 +819,25 @@ export class TypeScriptBuilder {
   private processPipeExpression(node: BinOpExpression): TsNode {
     const left = this.processNode(node.left);
     return this.buildPipeBind(left, node.right);
+  }
+
+  private processTryExpression(node: TryExpression): TsNode {
+    if (node.call.functionName === "throw") {
+      throw new Error("Cannot use 'try' with 'throw' — throw always raises an error.");
+    }
+    const callNode = this.processFunctionCall(node.call);
+    const args: TsNode[] = [
+      ts.arrowFn([], callNode, { async: true }),
+    ];
+    const scope = this.getCurrentScope();
+    if (scope.type === "function") {
+      args.push(ts.obj({
+        checkpoint: ts.raw("__ctx.getResultCheckpoint()"),
+        functionName: ts.str((scope as FunctionScope).functionName),
+        args: ts.raw("__stack.args"),
+      }));
+    }
+    return ts.await(ts.call(ts.id("__tryCall"), args));
   }
 
   private processIfElseWithSteps(node: IfElse): TsNode {

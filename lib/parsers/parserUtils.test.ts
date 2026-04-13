@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { optionalSemicolon } from "./parserUtils.js";
+import { optionalSemicolon } from "./parsers.js";
 
 describe("parserUtils", () => {
   describe("optionalSemicolon", () => {

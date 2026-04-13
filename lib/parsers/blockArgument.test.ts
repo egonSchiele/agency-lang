@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { blockArgumentParser } from "./blockArgument.js";
-import { functionCallParser } from "./functionCall.js";
+import { blockArgumentParser } from "./parsers.js";
+import { functionCallParser } from "./parsers.js";
 
 describe("blockArgumentParser", () => {
   it("parses block with no params", () => {

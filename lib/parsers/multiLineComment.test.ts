@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { multiLineCommentParser } from "./multiLineComment.js";
+import { multiLineCommentParser } from "./parsers.js";
 
 describe("multiLineCommentParser", () => {
   const testCases = [

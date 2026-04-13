@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { withModifierParser } from "./function.js";
+import { withModifierParser } from "./parsers.js";
 import { normalizeCode } from "@/index.js";
 
 describe("withModifierParser", () => {

@@ -2,7 +2,7 @@ import { AgencyConfig } from "@/config.js";
 import { executeNodeAsync, parseTarget } from "./util.js";
 import { resetCompilationCache } from "./commands.js";
 import { parseAgency } from "@/parser.js";
-import { exprParser } from "@/parsers/expression.js";
+import { exprParser } from "@/parsers/parsers.js";
 import { Tag, AgencyProgram, AgencyNode, PromptSegment, FunctionParameter, GraphNodeDefinition } from "@/types.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { collectProgramInfo } from "@/programInfo.js";

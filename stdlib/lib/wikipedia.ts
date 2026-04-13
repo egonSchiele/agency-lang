@@ -3,7 +3,7 @@ export async function _search(
   limit: number = 5,
 ): Promise<{ title: string; description: string; excerpt: string }[]> {
   const url = `https://en.wikipedia.org/w/rest.php/v1/search/page?q=${encodeURIComponent(query)}&limit=${limit}`;
-  const response = await fetch(url, { headers });
+  const response = await fetch(url);
   if (!response.ok) {
     throw new Error(
       `Wikipedia search failed for "${query}": ${response.status} ${response.statusText}`,

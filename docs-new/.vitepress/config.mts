@@ -2,7 +2,7 @@ import { defineConfig } from "vitepress";
 
 export default defineConfig({
   title: "Agency",
-  description: "A domain-specific language for defining AI agent workflows",
+  description: "A language for creating agents.",
   themeConfig: {
     nav: [
       { text: "Home", link: "/" },
@@ -13,11 +13,20 @@ export default defineConfig({
         text: "Guide",
         items: [
           { text: "Getting Started", link: "/guide/getting-started" },
+          { text: "Basic Syntax", link: "/guide/basic-syntax" },
+        ],
+      },
+      {
+        text: "Features",
+        items: [
+          { text: "Interrupts", link: "/features/interrupts" },
+          { text: "Debugging", link: "/features/debugging" },
+          { text: "Error Handling", link: "/features/error-handling" },
         ],
       },
     ],
     socialLinks: [
-      { icon: "github", link: "https://github.com/your-org/agency-lang" },
+      { icon: "github", link: "https://github.com/egonSchiele/agency-lang" },
     ],
   },
 });

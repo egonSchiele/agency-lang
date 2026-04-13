@@ -1,5 +1,18 @@
+def divide(a: number, b: number) {
+  if (b == 0) {
+    return failure("Can't divide by zero!")
+  }
+  return success(a / b)
+}
+
 node main() {
-  const name = "world"
-  const greeting = llm("Say hello to ${name}!")
-  print(greeting)
+  const result = divide(10, 0)
+  if (isSuccess(result)) {
+    print("The result is ${result.value}")
+  } else {
+    print("The operation failed!: ${result.functionName} called with ${JSON.stringify(result.args)}")
+    restore(result.checkpoint, { 
+      args: [result.args.a, 2]
+    })
+  }
 }

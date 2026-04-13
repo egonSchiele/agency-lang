@@ -177,7 +177,7 @@ export class DebuggerDriver {
           if (!lastInterrupt) {
             throw new Error("Program finished without any interrupts. This shouldn't happen with the debugger enabled.");
           }
-          this.ui.state.log(`Program finished. Return value: ${JSON.stringify(result?.data ?? result)}`);
+          this.ui.state.log(`Program finished. Return value: ${JSON.stringify(result?.data ?? undefined)}`);
           this.programFinished = true;
           finalResult = result;
 

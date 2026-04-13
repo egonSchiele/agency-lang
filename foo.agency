@@ -1,5 +1,5 @@
-const text = read("/Users/adityabhargava/agency-lang/README.md")
-
 node main() {
-  print(text)
+  const name = "world"
+  const greeting = llm("Say hello to ${name}!")
+  print(greeting)
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { exprParser } from "./expression.js";
+import { exprParser } from "./parsers.js";
 
 describe("exprParser", () => {
   describe("atoms", () => {

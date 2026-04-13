@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { debuggerParser } from "./debuggerStatement.js";
+import { debuggerParser } from "./parsers.js";
 import { parseAgency } from "../parser.js";
 
 describe("debuggerParser", () => {

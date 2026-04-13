@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { binOpParser } from "./binop.js";
+import { binOpParser } from "./parsers.js";
 
 describe("binOpParser", () => {
   // Arithmetic operators

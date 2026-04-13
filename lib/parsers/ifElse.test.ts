@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ifParser } from "./function.js";
+import { ifParser } from "./parsers.js";
 
 describe("ifParser", () => {
   const testCases = [

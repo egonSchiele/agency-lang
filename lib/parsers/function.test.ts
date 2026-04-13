@@ -6,7 +6,7 @@ import {
   messageThreadParser,
   _messageThreadParser,
   _submessageThreadParser,
-} from "./function.js";
+} from "./parsers.js";
 import { normalizeCode } from "@/parser.js";
 
 describe("docStringParser", () => {

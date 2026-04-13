@@ -4,7 +4,7 @@ import {
   _valueAccessParser,
   asyncValueAccessParser,
   syncValueAccessParser,
-} from "./access.js";
+} from "./parsers.js";
 
 describe("valueAccessParser", () => {
   describe("bare variable names (unwrapped)", () => {

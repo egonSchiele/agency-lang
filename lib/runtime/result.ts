@@ -1,4 +1,11 @@
+import { z } from "zod";
+
 export type ResultValue = ResultSuccess | ResultFailure;
+
+const resultValueSchema = z.union([
+  z.object({ success: z.literal(true), value: z.any() }),
+  z.object({ success: z.literal(false), error: z.any() }),
+]);
 
 export type ResultSuccess = {
   success: true;
@@ -49,7 +56,7 @@ export function isFailure(result: ResultValue): result is ResultFailure {
 export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<ResultValue> {
   try {
     const value = await fn();
-    if (value != null && typeof value === "object" && typeof value.success === "boolean") return value;
+    if (resultValueSchema.safeParse(value).success) return value;
     return success(value);
   } catch (error) {
     return failure(

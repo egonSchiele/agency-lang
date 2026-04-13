@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { tagParser } from "./tag.js";
+import { tagParser } from "./parsers.js";
 
 describe("tagParser", () => {
   it("parses a simple tag", () => {

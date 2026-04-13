@@ -16,7 +16,7 @@ import {
   typeAliasVariableParser,
   variableTypeParser,
   unionTypeParser,
-} from "./typeHints.js";
+} from "./parsers.js";
 
 describe("primitiveTypeParser", () => {
   const testCases = [

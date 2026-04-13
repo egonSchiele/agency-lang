@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { specialVarNameParser, specialVarParser } from "./specialVar.js";
+import { specialVarNameParser, specialVarParser } from "./parsers.js";
 
 describe("specialVar parsers", () => {
   describe("specialVarParser", () => {

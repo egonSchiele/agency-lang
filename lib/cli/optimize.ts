@@ -7,8 +7,7 @@ import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.j
 import { collectProgramInfo } from "@/programInfo.js";
 import { AgencyGenerator } from "@/backends/agencyGenerator.js";
 import { expressionToString } from "@/utils/node.js";
-import * as smoltalk from "smoltalk";
-import prompts from "prompts";
+import { OptimizerIO, DefaultOptimizerIO } from "./optimizerIO.js";
 import fs from "fs";
 
 type OptimizeOptions = {
@@ -39,90 +38,13 @@ export type FeedbackEntry = {
   promptUsed: string;
 };
 
-async function getUserInput(
-  nodeName: string,
-  parameters: { name: string; typeHint?: any }[],
-): Promise<Record<string, any>> {
-  console.log(`Provide input for node "${nodeName}":`);
-  const args: Record<string, any> = {};
-  for (const param of parameters) {
-    const typeLabel = param.typeHint ? ` (${JSON.stringify(param.typeHint)})` : "";
-    const response = await prompts({
-      type: "text",
-      name: "value",
-      message: `${param.name}${typeLabel}:`,
-    });
-    if (response.value === undefined) process.exit(0);
-    try {
-      args[param.name] = JSON.parse(response.value);
-    } catch {
-      args[param.name] = response.value;
-    }
-  }
-  return args;
-}
-
-async function collectFeedback(): Promise<{ score: number | null; feedback: string }> {
-  const response = await prompts({
-    type: "text",
-    name: "feedback",
-    message: "Score (1-10) and/or feedback (or 'done' to finish):",
-  });
-  if (!response.feedback || response.feedback.toLowerCase() === "done") {
-    return { score: null, feedback: "done" };
-  }
-  const match = response.feedback.match(/^(\d+)\s*[,.]?\s*(.*)/);
-  if (match) {
-    return { score: parseInt(match[1], 10), feedback: match[2] || "" };
-  }
-  return { score: null, feedback: response.feedback };
-}
-
-async function proposeImprovement(
-  currentPrompt: string,
-  goal: string,
-  history: FeedbackEntry[],
-  config: AgencyConfig,
-): Promise<string> {
-  const historyText = history.map((entry, i) => {
-    const scoreText = entry.score !== null ? `Score: ${entry.score}/10` : "No score";
-    return `--- Attempt ${i + 1} ---\nPrompt: "${entry.promptUsed}"\nInput: ${JSON.stringify(entry.input)}\nOutput: ${JSON.stringify(entry.output)}\n${scoreText}\nFeedback: ${entry.feedback || "none"}`;
-  }).join("\n\n");
-
-  const optimizerPrompt = `You are a prompt optimization assistant. Your job is to improve an LLM prompt based on user feedback.
-
-GOAL: ${goal}
-
-CURRENT PROMPT: "${currentPrompt}"
-
-HISTORY OF ATTEMPTS AND FEEDBACK:
-${historyText}
-
-Based on the feedback, propose an improved version of the prompt. The prompt may contain template variables like \${variableName} — preserve these exactly as they are.
-
-Respond with ONLY the improved prompt text, nothing else. Do not wrap it in quotes.`;
-
-  const model = config.client?.defaultModel || "gpt-4o-mini";
-
-  const result = await smoltalk.textSync({
-    messages: [smoltalk.userMessage(optimizerPrompt)],
-    model,
-  });
-
-  if (!result.success) {
-    throw new Error(`Error from LLM during optimization: ${result.error}`);
-  }
-
-  return (result.value.output || "").trim();
-}
-
-function updatePrompt(target: OptimizeTarget, newPrompt: string) {
+export function updatePrompt(target: OptimizeTarget, newPrompt: string) {
   if (target.llmCall && target.llmCall.type === "functionCall" && target.llmCall.arguments[0]?.type === "string") {
     target.llmCall.arguments[0].segments = parsePromptToSegments(newPrompt);
   }
 }
 
-function writeBack(filename: string, program: AgencyProgram) {
+export function writeBack(filename: string, program: AgencyProgram) {
   const generator = new AgencyGenerator();
   const result = generator.generate(program);
   fs.writeFileSync(filename, result.output);
@@ -153,8 +75,10 @@ export async function optimize(
   config: AgencyConfig,
   target: string,
   opts: Partial<OptimizeOptions> = {},
+  io?: OptimizerIO,
 ) {
   const options = { ...DEFAULT_OPTIONS, ...opts };
+  const _io = io || new DefaultOptimizerIO(config);
   const { filename, nodeName } = parseTarget(target);
 
   // 1. Parse the file and run preprocessor to attach tags to nodes
@@ -206,7 +130,7 @@ export async function optimize(
     console.log(`\n--- Iteration ${iteration}/${options.iterations} ---\n`);
 
     // a. Get input
-    const input = await getUserInput(nodeName, targetNode.parameters);
+    const input = await _io.getUserInput(nodeName, targetNode.parameters);
 
     // b. Build args string
     const argsString = targetNode.parameters
@@ -238,7 +162,7 @@ export async function optimize(
     console.log(JSON.stringify(result.data, null, 2));
 
     // e. Get feedback
-    const { score, feedback } = await collectFeedback();
+    const { score, feedback } = await _io.collectFeedback(result.data);
     if (feedback === "done") {
       console.log("\nStopping optimization.");
       break;
@@ -264,17 +188,9 @@ export async function optimize(
     // g. Propose improvement
     if (iteration < options.iterations) {
       console.log("\nProposing improved prompt...");
-      const proposed = await proposeImprovement(currentPrompt, goal, history, config);
-      console.log(`\nProposed prompt:\n  "${proposed}"\n`);
+      const proposed = await _io.proposeImprovement(currentPrompt, goal, history);
 
-      const acceptResponse = await prompts({
-        type: "confirm",
-        name: "accept",
-        message: "Accept this prompt?",
-        initial: true,
-      });
-
-      if (acceptResponse.accept) {
+      if (await _io.confirmProposal(proposed)) {
         currentPrompt = proposed;
         updatePrompt(optimizeTargets[0], proposed);
         writeBack(filename, program);

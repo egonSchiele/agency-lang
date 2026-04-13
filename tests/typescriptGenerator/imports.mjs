@@ -50,7 +50,7 @@ const getDirname = () => __dirname;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
-    host: "https://agency-lang.com",
+    host: "https://statelog.adit.io",
     apiKey: __process.env["STATELOG_API_KEY"] || "",
     projectId: "",
     debugMode: false
@@ -61,7 +61,7 @@ const __globalCtx = new RuntimeContext({
     model: "gpt-4o-mini",
     logLevel: "warn",
     statelog: {
-      host: "https://agency-lang.com",
+      host: "https://statelog.adit.io",
       projectId: "smoltalk",
       apiKey: __process.env["STATELOG_SMOLTALK_API_KEY"] || "",
       traceId: nanoid()

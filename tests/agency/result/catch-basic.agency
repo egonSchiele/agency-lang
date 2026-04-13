@@ -7,7 +7,7 @@ def failingFunc(): Result {
 }
 
 node main() {
-  let value1 = try riskyFunc() catch 0
-  let value2 = try failingFunc() catch 0
+  let value1 = try riskyFunc() catch -1
+  let value2 = try failingFunc() catch -1
   return { value1: value1, value2: value2 }
 }

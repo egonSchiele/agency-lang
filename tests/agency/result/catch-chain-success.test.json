@@ -3,7 +3,7 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "{\"value1\":42,\"value2\":-1}",
+      "expectedOutput": "42",
       "evaluationCriteria": [
         {
           "type": "exact"

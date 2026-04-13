@@ -824,7 +824,7 @@ export class TypeScriptBuilder {
     const right = this.processNode(node.right);
     return ts.await(ts.call(ts.id("__catchResult"), [
       left,
-      ts.arrowFn([], right, { async: true }),
+      ts.arrowFn([], ts.statements([ts.return(right)]), { async: true }),
     ]));
   }
 

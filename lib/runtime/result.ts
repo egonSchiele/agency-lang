@@ -66,8 +66,10 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
   }
 }
 
-/** Unwrap a Result: return value on success, evaluate fallback on failure. */
-export function __catchResult(result: ResultValue, fallback: () => any): any {
+/** Unwrap a Result: return value on success, evaluate fallback on failure.
+ * If the input is not a valid Result, returns it as-is. */
+export function __catchResult(result: any, fallback: () => any): any {
+  if (!resultValueSchema.safeParse(result).success) return result;
   if (result.success) return result.value;
   return fallback();
 }

@@ -808,12 +808,24 @@ export class TypeScriptBuilder {
     if (node.operator === "|>") {
       return this.processPipeExpression(node);
     }
+    if (node.operator === "catch") {
+      return this.processCatchExpression(node);
+    }
     const leftNode = this.processNode(node.left);
     const rightNode = this.processNode(node.right);
     return ts.binOp(leftNode, node.operator, rightNode, {
       parenLeft: this.needsParensLeft(node.left, node.operator),
       parenRight: this.needsParensRight(node.right, node.operator),
     });
+  }
+
+  private processCatchExpression(node: BinOpExpression): TsNode {
+    const left = this.processNode(node.left);
+    const right = this.processNode(node.right);
+    return ts.await(ts.call(ts.id("__catchResult"), [
+      left,
+      ts.arrowFn([], ts.statements([ts.return(right)]), { async: true }),
+    ]));
   }
 
   private processPipeExpression(node: BinOpExpression): TsNode {

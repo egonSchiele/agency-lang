@@ -1354,6 +1354,10 @@ function wsOp(opStr: string): Parser<string> {
   };
 }
 
+// Like wsOp but with word boundary check (for keyword operators like "catch")
+const wsKeyword = (kw: string): Parser<string> =>
+  map(seqR(optionalSpacesOrNewline, str(kw), not(varNameChar), optionalSpaces), () => kw);
+
 // Build a BinOpExpression AST node
 function makeBinOp(op: string): (left: Expression, right: Expression) => Expression {
   return (left, right) => ({
@@ -1421,6 +1425,10 @@ export const exprParser: Parser<Expression> = label("an expression", buildExpres
     // Precedence 1: logical OR
     [
       { op: wsOp("||"), assoc: "left" as const, apply: makeBinOp("||") },
+    ],
+    // Precedence 0: catch (unwrap Result with fallback)
+    [
+      { op: wsKeyword("catch"), assoc: "left" as const, apply: makeBinOp("catch") },
     ],
     // Precedence -1 (lowest): pipe
     [

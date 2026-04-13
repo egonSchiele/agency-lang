@@ -1,0 +1,12 @@
+def ok(): Result {
+  return success(42)
+}
+
+def fail1(): Result {
+  return failure("fail1")
+}
+
+node main() {
+  let value = try ok() catch try fail1() catch 99
+  return value
+}

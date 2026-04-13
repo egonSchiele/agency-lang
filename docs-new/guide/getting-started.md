@@ -25,4 +25,6 @@ Compile and run it:
 pnpm run agency hello.agency
 ```
 
-Next, you should check out the [basic syntax](./basic-syntax.html) and tour the [features](/features/intro.html) that make Agency great for building agents.
+Next, you should check out the [basic syntax](./basic-syntax.html) and tour the [use cases](/use-cases/intro.html) that make Agency great for building agents.
+
+Or if you would like, jump right in and [start learning the language](/book/index.html).

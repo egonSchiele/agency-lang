@@ -17,13 +17,17 @@ export default defineConfig({
         ],
       },
       {
-        text: "Features",
+        text: "Use Cases",
         items: [
-          { text: "Intro", link: "/features/intro" },
-          { text: "Interrupts", link: "/features/interrupts" },
-          { text: "Debugging", link: "/features/debugging" },
-          { text: "Error Handling", link: "/features/error-handling" },
+          { text: "Intro", link: "/use-cases/intro" },
+          { text: "Interrupts", link: "/use-cases/interrupts" },
+          { text: "Debugging", link: "/use-cases/debugging" },
+          { text: "Error Handling", link: "/use-cases/error-handling" },
         ],
+      },
+      {
+        text: "The Book",
+        items: [{ text: "The Agency Book", link: "/book/index" }],
       },
     ],
     socialLinks: [

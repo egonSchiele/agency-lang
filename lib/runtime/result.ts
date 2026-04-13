@@ -45,11 +45,11 @@ export function isFailure(result: ResultValue): result is ResultFailure {
 }
 
 /** Wrap a function call in try-catch, returning a Result.
- * If the function already returns a Result (failure), pass it through. */
+ * If the function already returns a Result, pass it through (no double-wrapping). */
 export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<ResultValue> {
   try {
     const value = await fn();
-    if (isFailure(value)) return value;
+    if (value != null && typeof value === "object" && typeof value.success === "boolean") return value;
     return success(value);
   } catch (error) {
     return failure(

@@ -56,9 +56,15 @@ const placeholderParser: Parser<Placeholder> = (input: string) => {
 // Parses: try functionCall(args)
 // Uses valueAccessParser (already imported) since bare function calls parse as value accesses.
 const tryExpressionParser: Parser<TryExpression> = (input: string) => {
-  const tryResult = str("try ")(input);
+  const tryResult = str("try")(input);
   if (!tryResult.success) return tryResult;
-  const callResult = valueAccessParser(tryResult.rest);
+  // Require at least one whitespace after "try"
+  if (!tryResult.rest.length || !/\s/.test(tryResult.rest[0])) {
+    return failure("expected whitespace after try", input);
+  }
+  const wsResult = optionalSpacesOrNewline(tryResult.rest);
+  if (!wsResult.success) return failure("expected function call after try", input);
+  const callResult = valueAccessParser(wsResult.rest);
   if (!callResult.success || callResult.result.type !== "functionCall") {
     return failure("expected function call after try", input);
   }

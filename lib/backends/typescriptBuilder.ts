@@ -822,6 +822,9 @@ export class TypeScriptBuilder {
   }
 
   private processTryExpression(node: TryExpression): TsNode {
+    if (node.call.functionName === "throw") {
+      throw new Error("Cannot use 'try' with 'throw' — throw always raises an error.");
+    }
     const callNode = this.processFunctionCall(node.call);
     const args: TsNode[] = [
       ts.arrowFn([], callNode, { async: true }),

@@ -1,13 +1,5 @@
-def deleteEmail(numEmails: number) {
-  // explicitly return the number of emails to be deleted
-  return interrupt({ 
-    message: "Are you sure you want to delete ${numEmails} emails!!!",
-    numEmails: numEmails
-  })
-  print("deleting ${numEmails} emails! DO DO DO!")
-}
-
 node main() {
-  const aMillion = 1000000
-  deleteEmail(aMillion) with approve
+  const name = "world"
+  const greeting = llm("Say hello to ${name}!")
+  print(greeting)
 }

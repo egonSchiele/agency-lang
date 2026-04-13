@@ -121,10 +121,12 @@ node main() {
 }
 ```
 
-Besides "approve" and "reject," the other keyword is "propagate." "propagate" means "I don't want to reject the interrupt, but I don't want anyone to be able to programmatically approve it either. I want to make sure it always goes to a user for approval or rejection."
+Besides `approve` and `reject,` the other keyword is `propagate.` `propagate` means "I don't want to reject the interrupt, but I don't want anyone to be able to programmatically approve it either. I want to make sure it always goes to a user for approval or rejection."
 
 ### The rules of handlers are thus:
 1. If any handler rejects, the interrupt is rejected.
 2. Otherwise, if any handler propagates, the interrupt propagates to the user for a decision.
 3. Otherwise, if a handler approves, the interrupt is approved.
 4. Of course, a handler doesn't need to approve, reject, or propagate. It can simply choose to log the interrupt data, print out the lyrics to "A Day in the Life," or whatever. If no handler approves, rejects, or propagates, by default, the interrupt propagates up to the user for a decision.
+
+Oh by the way, can I just say that interrupts work in tool calls too. Every function in Agency is also automatically a tool. That means an agent can use `deleteEmail` as a tool, and before it deletes the email, it will check with the user, following the rules of handlers.

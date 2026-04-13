@@ -5,7 +5,7 @@ Agency is a domain-specific language for defining AI agent workflows. It compile
 ## Installation
 
 ```bash
-npm install agency-lang
+npm install agency-lang zod
 ```
 
 ## Quick Start

@@ -49,9 +49,7 @@ import {
   PRECEDENCE,
 } from "@/types/binop.js";
 import { MessageThread } from "@/types/messageThread.js";
-import {
-  walkNodesArray,
-} from "@/utils/node.js";
+import { walkNodesArray } from "@/utils/node.js";
 import { AccessChainElement, ValueAccess } from "../types/access.js";
 import {
   AgencyArray,
@@ -94,7 +92,7 @@ import type {
   TsNode,
   TsObjectEntry,
   TsParam,
-  TsTemplatePart
+  TsTemplatePart,
 } from "../ir/tsIR.js";
 import type { ProgramInfo } from "../programInfo.js";
 import { getVisibleTypes, scopeKey } from "../programInfo.js";
@@ -177,13 +175,13 @@ export class TypeScriptBuilder {
     return {
       maxToolCallRounds: 10,
       log: {
-        host: "https://agency-lang.com",
+        host: "https://statelog.adit.io",
       },
       client: {
         logLevel: "warn",
         defaultModel: "gpt-4o-mini",
         statelog: {
-          host: "https://agency-lang.com",
+          host: "https://statelog.adit.io",
           projectId: "smoltalk",
         },
       },
@@ -431,7 +429,11 @@ export class TypeScriptBuilder {
       ) {
         const stmt = node.statement;
         const valueNode = this.processNodeInGlobalInit(stmt.value);
-        const setNode = ts.globalSet(this.moduleId, stmt.variableName, valueNode);
+        const setNode = ts.globalSet(
+          this.moduleId,
+          stmt.variableName,
+          valueNode,
+        );
         const handler = this.buildBuiltinHandlerArrow(node.handlerName);
 
         globalInitStatements.push(ts.withHandler(handler, setNode));
@@ -508,7 +510,10 @@ export class TypeScriptBuilder {
   // ------- Node dispatch -------
 
   /** Named args are cosmetic/positional — validate name matches the param at that index. */
-  private validateNamedArgs(node: FunctionCall, paramList: FunctionParameter[] | undefined): void {
+  private validateNamedArgs(
+    node: FunctionCall,
+    paramList: FunctionParameter[] | undefined,
+  ): void {
     if (!paramList) return;
     const lastParam = paramList[paramList.length - 1];
     const hasVariadic = lastParam?.variadic;
@@ -534,7 +539,9 @@ export class TypeScriptBuilder {
   }
 
   /** Process a function call argument, unwrapping NamedArgument and SplatExpression. */
-  private processCallArg(arg: Expression | SplatExpression | NamedArgument): TsNode {
+  private processCallArg(
+    arg: Expression | SplatExpression | NamedArgument,
+  ): TsNode {
     if (arg.type === "namedArgument") {
       return this.processNode(arg.value as AgencyNode);
     }
@@ -549,7 +556,10 @@ export class TypeScriptBuilder {
    * 1. Pad omitted optional args (those with defaults) with null
    * 2. Wrap extra args into an array for variadic params
    */
-  private adjustCallArgs(argNodes: TsNode[], parameters: FunctionParameter[] | undefined): TsNode[] {
+  private adjustCallArgs(
+    argNodes: TsNode[],
+    parameters: FunctionParameter[] | undefined,
+  ): TsNode[] {
     if (!parameters || parameters.length === 0) return argNodes;
 
     const nonVariadicCount = parameters.filter((p) => !p.variadic).length;
@@ -653,7 +663,9 @@ export class TypeScriptBuilder {
       case "debuggerStatement":
         return this.processDebuggerStatement(node);
       case "placeholder":
-        throw new Error("Placeholder '?' can only appear on the right side of a |> pipe operator");
+        throw new Error(
+          "Placeholder '?' can only appear on the right side of a |> pipe operator",
+        );
       case "tryExpression":
         return this.processTryExpression(node);
       default:
@@ -822,10 +834,12 @@ export class TypeScriptBuilder {
   private processCatchExpression(node: BinOpExpression): TsNode {
     const left = this.processNode(node.left);
     const right = this.processNode(node.right);
-    return ts.await(ts.call(ts.id("__catchResult"), [
-      left,
-      ts.arrowFn([], ts.statements([ts.return(right)]), { async: true }),
-    ]));
+    return ts.await(
+      ts.call(ts.id("__catchResult"), [
+        left,
+        ts.arrowFn([], ts.statements([ts.return(right)]), { async: true }),
+      ]),
+    );
   }
 
   private processPipeExpression(node: BinOpExpression): TsNode {
@@ -835,19 +849,21 @@ export class TypeScriptBuilder {
 
   private processTryExpression(node: TryExpression): TsNode {
     if (node.call.functionName === "throw") {
-      throw new Error("Cannot use 'try' with 'throw' — throw always raises an error.");
+      throw new Error(
+        "Cannot use 'try' with 'throw' — throw always raises an error.",
+      );
     }
     const callNode = this.processFunctionCall(node.call);
-    const args: TsNode[] = [
-      ts.arrowFn([], callNode, { async: true }),
-    ];
+    const args: TsNode[] = [ts.arrowFn([], callNode, { async: true })];
     const scope = this.getCurrentScope();
     if (scope.type === "function") {
-      args.push(ts.obj({
-        checkpoint: ts.raw("__ctx.getResultCheckpoint()"),
-        functionName: ts.str((scope as FunctionScope).functionName),
-        args: ts.raw("__stack.args"),
-      }));
+      args.push(
+        ts.obj({
+          checkpoint: ts.raw("__ctx.getResultCheckpoint()"),
+          functionName: ts.str((scope as FunctionScope).functionName),
+          args: ts.raw("__stack.args"),
+        }),
+      );
     }
     return ts.await(ts.call(ts.id("__tryCall"), args));
   }
@@ -931,7 +947,12 @@ export class TypeScriptBuilder {
       const rangeExpr = ts.raw(
         `Array.from({length: ${printTs(endNode, 0)} - ${printTs(startNode, 0)}}, (_, __i) => __i + ${printTs(startNode, 0)})`,
       );
-      return ts.runnerLoop({ id, items: rangeExpr, itemVar: node.itemVar, body: bodyNodes });
+      return ts.runnerLoop({
+        id,
+        items: rangeExpr,
+        itemVar: node.itemVar,
+        body: bodyNodes,
+      });
     }
 
     const iterableNode = this.processNode(node.iterable);
@@ -1178,8 +1199,8 @@ export class TypeScriptBuilder {
     const str = renderResultCheckpointSetup.default({
       moduleId: JSON.stringify(this.moduleId),
       scopeName: JSON.stringify(functionName),
-      paramsStr
-    })
+      paramsStr,
+    });
 
     return ts.raw(str);
   }
@@ -1265,12 +1286,13 @@ export class TypeScriptBuilder {
       if (param.defaultValue) {
         const defaultNode = this.processNode(param.defaultValue);
         setupStmts.push(
-          ts.assign(stackTarget, ts.binOp(ts.id(param.name), "??", defaultNode)),
+          ts.assign(
+            stackTarget,
+            ts.binOp(ts.id(param.name), "??", defaultNode),
+          ),
         );
       } else {
-        setupStmts.push(
-          ts.assign(stackTarget, ts.id(param.name)),
-        );
+        setupStmts.push(ts.assign(stackTarget, ts.id(param.name)));
       }
     }
 
@@ -1283,7 +1305,11 @@ export class TypeScriptBuilder {
     );
 
     // Create runner for step execution
-    setupStmts.push(ts.raw(`const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(functionName)} });`));
+    setupStmts.push(
+      ts.raw(
+        `const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(functionName)} });`,
+      ),
+    );
 
     // Pinned checkpoint at entry for all functions (enables result.retry and error-to-failure wrapping)
     setupStmts.push(this.buildResultCheckpointSetup(functionName, parameters));
@@ -1291,10 +1317,17 @@ export class TypeScriptBuilder {
     // Try/catch wrapping the body, with finally to always pop the state stack
     setupStmts.push(
       ts.tryCatch(
-        ts.statements([...bodyCode, ts.raw("if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }")]),
-        ts.raw(renderFunctionCatchFailure.default({
-          functionName: JSON.stringify(functionName),
-        })),
+        ts.statements([
+          ...bodyCode,
+          ts.raw(
+            "if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }",
+          ),
+        ]),
+        ts.raw(
+          renderFunctionCatchFailure.default({
+            functionName: JSON.stringify(functionName),
+          }),
+        ),
         "__error",
         // finally block: pop state stack and conditionally fire onFunctionEnd.
         // onFunctionEnd must live here (not after the try/catch) because
@@ -1391,9 +1424,9 @@ export class TypeScriptBuilder {
       // isInterrupt check can detect it.
       const haltValue = nodeContext
         ? ts.obj([
-          ts.setSpread(ts.runtime.state),
-          ts.set("data", ts.id(tempVar)),
-        ])
+            ts.setSpread(ts.runtime.state),
+            ts.set("data", ts.id(tempVar)),
+          ])
         : ts.id(tempVar);
       return ts.statements([
         ts.constDecl(tempVar, callNode),
@@ -1412,11 +1445,17 @@ export class TypeScriptBuilder {
   }
 
   private processFunctionCall(node: FunctionCall): TsNode {
-    if ((node.functionName === "fork" || node.functionName === "race") && node.block) {
+    if (
+      (node.functionName === "fork" || node.functionName === "race") &&
+      node.block
+    ) {
       return this.processForkCall(node);
     }
 
-    if (node.functionName === "failure" && this.getCurrentScope().type === "function") {
+    if (
+      node.functionName === "failure" &&
+      this.getCurrentScope().type === "function"
+    ) {
       // Inside functions, inject checkpoint, function name, and args
       const scope = this.getCurrentScope() as FunctionScope;
       const argNodes: TsNode[] = node.arguments.map((arg) =>
@@ -1424,7 +1463,9 @@ export class TypeScriptBuilder {
       );
       return ts.call(ts.id("failure"), [
         ...argNodes,
-        ts.raw(`{ checkpoint: __ctx.getResultCheckpoint(), functionName: ${JSON.stringify(scope.functionName)}, args: __stack.args }`),
+        ts.raw(
+          `{ checkpoint: __ctx.getResultCheckpoint(), functionName: ${JSON.stringify(scope.functionName)}, args: __stack.args }`,
+        ),
       ]);
     }
 
@@ -1580,9 +1621,10 @@ export class TypeScriptBuilder {
     const paramName = block.params[0]?.name ?? "_";
     const id = this._subStepPath[this._subStepPath.length - 1];
 
-    const itemsNode = node.arguments.length > 0
-      ? this.processCallArg(node.arguments[0])
-      : ts.arr([]);
+    const itemsNode =
+      node.arguments.length > 0
+        ? this.processCallArg(node.arguments[0])
+        : ts.arr([]);
 
     const blockName = `__block_${this._blockCounter++}`;
     const parentScopeName = this.currentScopeName();
@@ -1709,7 +1751,9 @@ export class TypeScriptBuilder {
       ts.callHook("onNodeStart", { nodeName: ts.str(nodeName) }),
 
       // Create runner for step execution (nodeContext enables { messages, data } wrapping for debug halts)
-      ts.raw(`const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(nodeName)} });`),
+      ts.raw(
+        `const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(nodeName)} });`,
+      ),
     ];
 
     // Param assignments (only when not resuming)
@@ -1748,7 +1792,9 @@ export class TypeScriptBuilder {
           ts.return(
             ts.obj({
               messages: ts.runtime.threads,
-              data: ts.raw(`failure(__error instanceof Error ? __error.message : String(__error), { functionName: ${JSON.stringify(nodeName)} })`),
+              data: ts.raw(
+                `failure(__error instanceof Error ? __error.message : String(__error), { functionName: ${JSON.stringify(nodeName)} })`,
+              ),
             }),
           ),
         ]),
@@ -2020,7 +2066,9 @@ export class TypeScriptBuilder {
 
     // Extract prompt from first argument, using processNode to get scoped variable references
     const promptArg = node.arguments[0];
-    const promptNode = promptArg ? this.processCallArg(promptArg) : ts.raw("``");
+    const promptNode = promptArg
+      ? this.processCallArg(promptArg)
+      : ts.raw("``");
 
     // Extract config from second argument (if present).
     // Known keys (tools) are extracted; the rest passes through as clientConfig.
@@ -2195,7 +2243,10 @@ export class TypeScriptBuilder {
       return ts.empty();
     }
 
-    return ts.runnerDebugger({ id: this._subStepPath[this._subStepPath.length - 1], label: node.label || "" });
+    return ts.runnerDebugger({
+      id: this._subStepPath[this._subStepPath.length - 1],
+      label: node.label || "",
+    });
   }
 
   private processSpecialVar(node: SpecialVar): TsNode {
@@ -2224,7 +2275,9 @@ export class TypeScriptBuilder {
   ): TsNode {
     const id = this._subStepPath[this._subStepPath.length - 1];
     const method =
-      node.threadType === "subthread" ? "createSubthread" as const : "create" as const;
+      node.threadType === "subthread"
+        ? ("createSubthread" as const)
+        : ("create" as const);
 
     // Body: process each statement with substep tracking
     const bodyNodes = this.processBodyAsParts(node.body);
@@ -2369,33 +2422,35 @@ export class TypeScriptBuilder {
       const paramType = node.handler.param.typeHint
         ? formatTypeHint(node.handler.param.typeHint)
         : "any";
-      handler =
-        ts.arrowFn(
-          [{ name: node.handler.param.name, typeAnnotation: paramType }],
-          ts.statements(handlerBody),
-          { async: true },
-        );
+      handler = ts.arrowFn(
+        [{ name: node.handler.param.name, typeAnnotation: paramType }],
+        ts.statements(handlerBody),
+        { async: true },
+      );
     } else {
       const fnName = node.handler.functionName;
-      if (fnName === "approve" || fnName === "reject" || fnName === "propagate") {
+      if (
+        fnName === "approve" ||
+        fnName === "reject" ||
+        fnName === "propagate"
+      ) {
         handler = this.buildBuiltinHandlerArrow(fnName);
       } else {
         // Function ref: wrap in arrow that calls the named function
-        handler =
-          ts.arrowFn(
-            [{ name: "__data", typeAnnotation: "any" }],
-            ts.await(
-              ts.call(ts.id(node.handler.functionName), [
-                ts.id("__data"),
-                ts.functionCallConfig({
-                  ctx: ts.runtime.ctx,
-                  threads: ts.runtime.threads,
-                  interruptData: ts.id("undefined"),
-                }),
-              ]),
-            ),
-            { async: true },
-          );
+        handler = ts.arrowFn(
+          [{ name: "__data", typeAnnotation: "any" }],
+          ts.await(
+            ts.call(ts.id(node.handler.functionName), [
+              ts.id("__data"),
+              ts.functionCallConfig({
+                ctx: ts.runtime.ctx,
+                threads: ts.runtime.threads,
+                interruptData: ts.id("undefined"),
+              }),
+            ]),
+          ),
+          { async: true },
+        );
       }
     }
 
@@ -2449,7 +2504,10 @@ export class TypeScriptBuilder {
 
     const stages: Expression[] = [];
     let current: Expression = expr;
-    while (current.type === "binOpExpression" && (current as BinOpExpression).operator === "|>") {
+    while (
+      current.type === "binOpExpression" &&
+      (current as BinOpExpression).operator === "|>"
+    ) {
       stages.push((current as BinOpExpression).right);
       current = (current as BinOpExpression).left;
     }
@@ -2459,30 +2517,56 @@ export class TypeScriptBuilder {
 
   /** Build: await __pipeBind(leftIR, async (__pipeArg) => stage(__pipeArg)) */
   private buildPipeBind(leftIR: TsNode, stage: Expression): TsNode {
-    return ts.await(ts.call(ts.raw("__pipeBind"), [
-      leftIR,
-      this.buildPipeLambda(stage),
-    ]));
+    return ts.await(
+      ts.call(ts.raw("__pipeBind"), [leftIR, this.buildPipeLambda(stage)]),
+    );
   }
 
   /**
    * Expand a pipe chain assignment into multiple IR parts, one per stage.
    * Each part becomes its own runner step so interrupts don't replay earlier stages.
    */
-  private expandPipeChain(stmt: Assignment, stages: Expression[], baseId: number): TsNode[] {
+  private expandPipeChain(
+    stmt: Assignment,
+    stages: Expression[],
+    baseId: number,
+  ): TsNode[] {
     const tempName = `__pipe_${this._pipeCounter++}`;
     const tempVar = ts.scopedVar(tempName, "local");
-    const targetVar = this.buildAssignmentLhs(stmt.scope!, stmt.variableName, stmt.accessChain);
+    const targetVar = this.buildAssignmentLhs(
+      stmt.scope!,
+      stmt.variableName,
+      stmt.accessChain,
+    );
     const nodes: TsNode[] = [];
 
-    nodes.push(ts.runnerStep({ id: baseId, body: [ts.assign(tempVar, this.processNode(stages[0]))] }));
+    nodes.push(
+      ts.runnerStep({
+        id: baseId,
+        body: [ts.assign(tempVar, this.processNode(stages[0]))],
+      }),
+    );
 
     for (let i = 1; i < stages.length - 1; i++) {
-      nodes.push(ts.runnerPipe({ id: baseId + i, target: tempVar, input: tempVar, fn: this.buildPipeLambda(stages[i]) }));
+      nodes.push(
+        ts.runnerPipe({
+          id: baseId + i,
+          target: tempVar,
+          input: tempVar,
+          fn: this.buildPipeLambda(stages[i]),
+        }),
+      );
     }
 
     const lastIdx = stages.length - 1;
-    nodes.push(ts.runnerPipe({ id: baseId + lastIdx, target: targetVar, input: tempVar, fn: this.buildPipeLambda(stages[lastIdx]) }));
+    nodes.push(
+      ts.runnerPipe({
+        id: baseId + lastIdx,
+        target: targetVar,
+        input: tempVar,
+        fn: this.buildPipeLambda(stages[lastIdx]),
+      }),
+    );
 
     return nodes;
   }
@@ -2494,23 +2578,30 @@ export class TypeScriptBuilder {
       const funcName = stage.type === "variableName" ? stage.value : "";
       const callee = this.processNode(stage);
       const args = [pipeArg, ...this.buildPipeStateArgs(funcName)];
-      return ts.arrowFn([{ name: "__pipeArg" }], ts.call(callee, args), { async: true });
+      return ts.arrowFn([{ name: "__pipeArg" }], ts.call(callee, args), {
+        async: true,
+      });
     }
 
     if (stage.type === "functionCall") {
-      const placeholderCount = stage.arguments.filter((a) => a.type === "placeholder").length;
+      const placeholderCount = stage.arguments.filter(
+        (a) => a.type === "placeholder",
+      ).length;
       if (placeholderCount !== 1) {
         throw new Error(
           `Function call on right side of |> must contain exactly one ? placeholder, got ${placeholderCount}`,
         );
       }
       const args = stage.arguments.map((a) =>
-        a.type === "placeholder" ? pipeArg : this.processNode(a as AgencyNode)
+        a.type === "placeholder" ? pipeArg : this.processNode(a as AgencyNode),
       );
       const callee = ts.raw(mapFunctionName(stage.functionName));
       return ts.arrowFn(
         [{ name: "__pipeArg" }],
-        ts.call(callee, [...args, ...this.buildPipeStateArgs(stage.functionName)]),
+        ts.call(callee, [
+          ...args,
+          ...this.buildPipeStateArgs(stage.functionName),
+        ]),
         { async: true },
       );
     }
@@ -2520,11 +2611,13 @@ export class TypeScriptBuilder {
 
   private buildPipeStateArgs(funcName: string): TsNode[] {
     if (!this.isAgencyFunction(funcName, "topLevelStatement")) return [];
-    return [ts.functionCallConfig({
-      ctx: ts.runtime.ctx,
-      threads: ts.runtime.threads,
-      interruptData: ts.raw("__state?.interruptData"),
-    })];
+    return [
+      ts.functionCallConfig({
+        ctx: ts.runtime.ctx,
+        threads: ts.runtime.threads,
+        interruptData: ts.raw("__state?.interruptData"),
+      }),
+    ];
   }
 
   // ── Body processing ──
@@ -2543,7 +2636,13 @@ export class TypeScriptBuilder {
       if (currentPart) {
         const id = result.length;
         if (branchKeys[id]) {
-          result.push(ts.runnerBranchStep({ id, branchKey: branchKeys[id], body: currentPart }));
+          result.push(
+            ts.runnerBranchStep({
+              id,
+              branchKey: branchKeys[id],
+              body: currentPart,
+            }),
+          );
         } else {
           result.push(ts.runnerStep({ id, body: currentPart }));
         }
@@ -2557,7 +2656,11 @@ export class TypeScriptBuilder {
       if (pipeStages) {
         flushPart();
         const baseId = result.length;
-        const pipeNodes = this.expandPipeChain(stmt as Assignment, pipeStages, baseId);
+        const pipeNodes = this.expandPipeChain(
+          stmt as Assignment,
+          pipeStages,
+          baseId,
+        );
         for (let i = 0; i < pipeNodes.length; i++) {
           this._subStepPath.push(baseId + i);
           result.push(pipeNodes[i]);
@@ -2648,14 +2751,17 @@ export class TypeScriptBuilder {
     ]);
 
     if (this.agencyConfig.trace) {
-      const traceFile = this.agencyConfig.traceFile
-        || this.moduleId.replace(/\.agency$/, ".trace");
+      const traceFile =
+        this.agencyConfig.traceFile ||
+        this.moduleId.replace(/\.agency$/, ".trace");
       runtimeCtx = ts.statements([
         runtimeCtx,
-        ts.raw(renderTraceSetup.default({
-          traceFile: JSON.stringify(traceFile),
-          programId: JSON.stringify(this.moduleId),
-        })),
+        ts.raw(
+          renderTraceSetup.default({
+            traceFile: JSON.stringify(traceFile),
+            programId: JSON.stringify(this.moduleId),
+          }),
+        ),
       ]);
     }
 

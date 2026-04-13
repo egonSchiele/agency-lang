@@ -21,4 +21,6 @@ stdlib/index.ts
 !tests/pkg-imports/node_modules/
 !tests/pkg-imports/node_modules/**
 !tests/pkg-imports/node_modules/**/*.js
-
+!docs-new/.vitepress
+docs-new/.vitepress/dist
+docs-new/.vitepress/cache

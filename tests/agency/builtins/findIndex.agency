@@ -1,0 +1,7 @@
+node main() {
+  const names = ["Alice", "Bob", "Charlie", "Dave"]
+  const idx = findIndex(names) as name {
+    return name == "Charlie"
+  }
+  return idx
+}

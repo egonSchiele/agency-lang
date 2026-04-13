@@ -1,0 +1,7 @@
+node main() {
+  const numbers = [1, 2, 3]
+  const result = find(numbers) as n {
+    return n > 100
+  }
+  return result
+}

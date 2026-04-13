@@ -1,5 +1,8 @@
 node main() {
-  const name = "world"
-  const greeting = llm("Say hello to ${name}!")
-  print(greeting)
+  const names = ["Alice", "Bob", "Charlie"]
+  print("Generating greetings...")
+  const greetings = map(names) as name {
+    return "Hello, ${name}!"
+  }
+  print(greetings)
 }

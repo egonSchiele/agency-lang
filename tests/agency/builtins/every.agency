@@ -1,0 +1,9 @@
+node main() {
+  const allPositive = every([1, 2, 3]) as n {
+    return n > 0
+  }
+  const allBig = every([1, 2, 3]) as n {
+    return n > 2
+  }
+  return { allPositive: allPositive, allBig: allBig }
+}

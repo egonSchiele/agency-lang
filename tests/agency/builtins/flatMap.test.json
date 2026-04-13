@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"hello world\",\"!\",\"foo bar\",\"!\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "flatMap maps and flattens results by one level"
+    }
+  ]
+}

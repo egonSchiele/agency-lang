@@ -1398,6 +1398,7 @@ export const exprParser: Parser<Expression> = label("an expression", buildExpres
       { op: wsOp("/="), assoc: "right" as const, apply: makeBinOp("/=") },
       { op: wsOp("*"), assoc: "left" as const, apply: makeBinOp("*") },
       { op: wsOp("/"), assoc: "left" as const, apply: makeBinOp("/") },
+      { op: wsOp("%"), assoc: "left" as const, apply: makeBinOp("%") },
     ],
     // Precedence 5: additive (and +=, -=)
     [
@@ -1415,6 +1416,7 @@ export const exprParser: Parser<Expression> = label("an expression", buildExpres
     ],
     // Precedence 3: equality
     [
+      { op: wsOp("==="), assoc: "left" as const, apply: makeBinOp("===") },
       { op: wsOp("=="), assoc: "left" as const, apply: makeBinOp("==") },
       { op: wsOp("!="), assoc: "left" as const, apply: makeBinOp("!=") },
     ],

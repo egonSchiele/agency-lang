@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"a\":true,\"b\":false,\"c\":true,\"d\":false}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "=== operator works for strict equality comparison"
+    }
+  ]
+}

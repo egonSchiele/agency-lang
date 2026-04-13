@@ -556,7 +556,7 @@ describe("binOpParser", () => {
       { input: "", description: "empty string" },
       { input: "1 +", description: "missing right operand" },
       { input: "+ 2", description: "missing left operand" },
-      { input: "1 % 2", description: "unsupported operator" },
+      { input: "1 ^ 2", description: "unsupported operator" },
     ];
 
     failureCases.forEach(({ input, description }) => {

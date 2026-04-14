@@ -53,8 +53,8 @@ function walkBody(
         node.handler.body = walkBody(node.handler.body, fn);
       }
     } else if (node.type === "classDefinition") {
-      if (node.constructor) {
-        node.constructor.body = walkBody(node.constructor.body, fn);
+      if (node.ctor) {
+        node.ctor.body = walkBody(node.ctor.body, fn);
       }
       for (const method of node.methods) {
         method.body = walkBody(method.body, fn);
@@ -1458,6 +1458,7 @@ export class TypescriptPreprocessor {
         for (const { node: varNode } of varsDefinedInFunction) {
           if (varNode.type === "assignment") {
             if (varNode.scope) continue; // already resolved in block Phase 1
+            if (varNode.variableName === "this" || varNode.variableName === "super") continue;
             let scope = lookupScope(nodeName, varNode.variableName);
             if (scope === null) {
               scope = "local";
@@ -1466,6 +1467,7 @@ export class TypescriptPreprocessor {
             varNode.scope = scope;
           } else if (varNode.type === "variableName") {
             if (varNode.scope) continue; // already resolved in block Phase 1
+            if (varNode.value === "this" || varNode.value === "super") continue;
             varNode.scope = lookupScope(nodeName, varNode.value) || "imported";
           }
         }
@@ -1478,6 +1480,7 @@ export class TypescriptPreprocessor {
         if (!node.scope) {
           const name =
             node.type === "variableName" ? node.value : node.variableName;
+          if (name === "this" || name === "super") continue;
           const scope = lookupScope("", name);
           node.scope = scope || "imported";
         }

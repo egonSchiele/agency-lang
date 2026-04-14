@@ -75,6 +75,7 @@ import { MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
+import { ClassDefinition, ClassField, NewExpression } from "../types/classDefinition.js";
 import { escape, mergeDeep } from "../utils.js";
 import {
   generateBuiltinHelpers,
@@ -665,6 +666,10 @@ export class TypeScriptBuilder {
         );
       case "tryExpression":
         return this.processTryExpression(node);
+      case "classDefinition":
+        return this.processClassDefinition(node);
+      case "newExpression":
+        return this.processNewExpression(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
@@ -732,11 +737,12 @@ export class TypeScriptBuilder {
       case "multiLineString":
         return this.generateStringLiteralNode(literal.segments);
       case "variableName": {
+        const isClassKeyword = literal.value === "this" || literal.value === "super";
         const importedOrUnknownScope =
           literal.scope === "imported" || !literal.scope;
         const isBuiltinVar = BUILTIN_VARIABLES.includes(literal.value);
         const isLoopVar = this.loopVars.includes(literal.value);
-        if (importedOrUnknownScope || isBuiltinVar || isLoopVar) {
+        if (isClassKeyword || importedOrUnknownScope || isBuiltinVar || isLoopVar) {
           return ts.id(literal.value);
         }
         return ts.scopedVar(literal.value, literal.scope!, this.moduleId);
@@ -798,10 +804,19 @@ export class TypeScriptBuilder {
             callNode.kind === "call" &&
             callNode.callee.kind === "identifier"
           ) {
-            result = $(result)
+            // Inject __state config for class method calls (Option C: all method calls get it)
+            const methodCallConfig = this.insideGlobalInit
+              ? ts.functionCallConfig({ ctx: ts.runtime.ctx })
+              : ts.functionCallConfig({
+                  ctx: ts.runtime.ctx,
+                  threads: ts.runtime.threads,
+                  interruptData: ts.raw("__state?.interruptData"),
+                });
+            const call = $(result)
               .prop(callNode.callee.name)
-              .call(callNode.arguments)
+              .call([...callNode.arguments, methodCallConfig])
               .done();
+            result = ts.await(call);
           } else {
             // Fallback for complex cases (e.g. await-wrapped)
             result = ts.raw(`${this.str(result)}.${this.str(callNode)}`);
@@ -863,6 +878,196 @@ export class TypeScriptBuilder {
       );
     }
     return ts.await(ts.call(ts.id("__tryCall"), args));
+  }
+
+  // ------- Class compilation -------
+
+  private processNewExpression(node: NewExpression): TsNode {
+    const args = node.arguments.map((a) => this.processNode(a as AgencyNode));
+    return ts.new(ts.id(node.className), args);
+  }
+
+  /**
+   * Collect all fields for a class, walking the inheritance chain.
+   * Returns parent fields first, then own fields.
+   */
+  private collectAllClassFields(node: ClassDefinition): ClassField[] {
+    const allFields: ClassField[] = [];
+    if (node.parentClass) {
+      const parent = this.programInfo.classDefinitions[node.parentClass];
+      if (parent) {
+        allFields.push(...this.collectAllClassFields(parent));
+      }
+    }
+    allFields.push(...node.fields);
+    return allFields;
+  }
+
+  private processClassDefinition(node: ClassDefinition): TsNode {
+    const { className, fields, methods, parentClass } = node;
+    const allFields = this.collectAllClassFields(node);
+    const classKey = `${this.moduleId}::${className}`;
+
+    const lines: string[] = [];
+
+    // Class declaration
+    const extendsStr = parentClass ? ` extends ${parentClass}` : "";
+    lines.push(`class ${className}${extendsStr} {`);
+
+    // Field declarations
+    for (const field of fields) {
+      lines.push(`  ${field.name}: ${formatTypeHint(field.typeHint)};`);
+    }
+
+    // Constructor
+    if (node.ctor) {
+      const params = node.ctor.parameters
+        .map((p) => {
+          const typeStr = p.typeHint ? `: ${formatTypeHint(p.typeHint)}` : "";
+          return `${p.name}${typeStr}`;
+        })
+        .join(", ");
+      lines.push("");
+      lines.push(`  constructor(${params}) {`);
+      for (const stmt of node.ctor.body) {
+        const code = printTs(this.processNode(stmt), 2);
+        if (code.trim()) lines.push(`    ${code.trim()}`);
+      }
+      lines.push("  }");
+    } else {
+      // Default constructor: takes args for each field in order
+      // For subclasses, parent fields come first, then own fields
+      const parentDef = parentClass
+        ? this.programInfo.classDefinitions[parentClass]
+        : undefined;
+      const parentFields = parentDef
+        ? this.collectAllClassFields(parentDef)
+        : [];
+
+      const allParams = [...parentFields, ...fields];
+      const params = allParams
+        .map(
+          (f) => `${f.name}: ${formatTypeHint(f.typeHint)}`,
+        )
+        .join(", ");
+
+      lines.push("");
+      lines.push(`  constructor(${params}) {`);
+      if (parentFields.length > 0) {
+        const superArgs = parentFields.map((f) => f.name).join(", ");
+        lines.push(`    super(${superArgs});`);
+      }
+      for (const field of fields) {
+        lines.push(`    this.${field.name} = ${field.name};`);
+      }
+      lines.push("  }");
+    }
+
+    // Methods — compiled with full runtime machinery (steps, interrupts, async)
+    for (const method of methods) {
+      const methodScopeName = `${className}.${method.name}`;
+      this.startScope({ type: "function", functionName: methodScopeName });
+      this._sourceMapBuilder.enterScope(this.moduleId, methodScopeName);
+
+      const bodyCode = this.processBodyAsParts(method.body);
+      this.endScope();
+
+      const params = method.parameters
+        .map((p) => {
+          const typeStr = p.typeHint ? `: ${formatTypeHint(p.typeHint)}` : "";
+          return `${p.name}${typeStr}`;
+        })
+        .join(", ");
+      const stateParam = params
+        ? `, __state: any = undefined`
+        : `__state: any = undefined`;
+
+      lines.push("");
+      lines.push(`  async ${method.name}(${params}${stateParam}) {`);
+
+      // Setup — same pattern as processFunctionDefinition
+      lines.push(`    const __setupData = setupFunction({ state: __state });`);
+      lines.push(`    const __stack = __setupData.stack;`);
+      lines.push(`    const __step = __setupData.step;`);
+      lines.push(`    const __self = __setupData.self;`);
+      lines.push(`    const __threads = __setupData.threads;`);
+      lines.push(`    const __ctx = __state?.ctx || __globalCtx;`);
+      lines.push(`    const statelogClient = __ctx.statelogClient;`);
+      lines.push(`    const __graph = __ctx.graph;`);
+      lines.push(`    let __forked;`);
+      lines.push(`    let __functionCompleted = false;`);
+
+      // Global init check
+      lines.push(`    if (!__ctx.globals.isInitialized(${JSON.stringify(this.moduleId)})) {`);
+      lines.push(`      await __initializeGlobals(__ctx);`);
+      lines.push(`    }`);
+
+      // Runner
+      lines.push(`    const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(methodScopeName)} });`);
+
+      // Param assignments to stack
+      for (const param of method.parameters) {
+        lines.push(`    __stack.args[${JSON.stringify(param.name)}] = ${param.name};`);
+      }
+
+      // Try/catch/finally with body
+      lines.push(`    try {`);
+      for (const part of bodyCode) {
+        const code = printTs(part, 3);
+        if (code.trim()) lines.push(`      ${code.trim()}`);
+      }
+      lines.push(`      if (runner.halted) { return runner.haltResult; }`);
+      lines.push(`      __functionCompleted = true;`);
+      lines.push(`    } catch (__error) {`);
+      lines.push(`      if (__error instanceof RestoreSignal) { throw __error; }`);
+      lines.push(`      throw __error;`);
+      lines.push(`    } finally {`);
+      lines.push(`      if (!__state?.isForked) { __ctx.stateStack.pop() }`);
+      lines.push(`    }`);
+
+      lines.push("  }");
+    }
+
+    // toJSON
+    lines.push("");
+    lines.push("  toJSON(): object {");
+    if (parentClass) {
+      lines.push("    return {");
+      lines.push("      ...super.toJSON(),");
+      lines.push(`      __class: "${classKey}",`);
+      for (const field of fields) {
+        lines.push(`      ${field.name}: this.${field.name},`);
+      }
+      lines.push("    };");
+    } else {
+      lines.push("    return {");
+      lines.push(`      __class: "${classKey}",`);
+      for (const field of fields) {
+        lines.push(`      ${field.name}: this.${field.name},`);
+      }
+      lines.push("    };");
+    }
+    lines.push("  }");
+
+    // fromJSON
+    lines.push("");
+    lines.push(`  static fromJSON(data: any): ${className} {`);
+    lines.push(`    const instance = Object.create(${className}.prototype);`);
+    for (const field of allFields) {
+      lines.push(`    instance.${field.name} = data.${field.name};`);
+    }
+    lines.push("    return instance;");
+    lines.push("  }");
+
+    lines.push("}");
+
+    // Class registration
+    lines.push("");
+    lines.push(
+      `__ctx.registerClass("${classKey}", ${className});`,
+    );
+
+    return ts.raw(lines.join("\n"));
   }
 
   private processIfElseWithSteps(node: IfElse): TsNode {
@@ -1889,6 +2094,12 @@ export class TypeScriptBuilder {
   private processAssignment(node: Assignment): TsNode {
     const { variableName, typeHint, value } = node;
 
+    // `this.field = value` and `super.field = value` — emit as direct property assignment
+    if (variableName === "this" || variableName === "super") {
+      const lhs = this.buildAccessChain(ts.id(variableName), node.accessChain);
+      return ts.assign(lhs, this.processNode(value));
+    }
+
     if (value.type === "functionCall" && value.functionName === "llm") {
       return this.processLlmCall(variableName, typeHint, value, node.scope!);
     } else if (
@@ -2015,10 +2226,18 @@ export class TypeScriptBuilder {
             callNode.kind === "call" &&
             callNode.callee.kind === "identifier"
           ) {
-            result = $(result)
+            const methodCallConfig = this.insideGlobalInit
+              ? ts.functionCallConfig({ ctx: ts.runtime.ctx })
+              : ts.functionCallConfig({
+                  ctx: ts.runtime.ctx,
+                  threads: ts.runtime.threads,
+                  interruptData: ts.raw("__state?.interruptData"),
+                });
+            const call2 = $(result)
               .prop(callNode.callee.name)
-              .call(callNode.arguments)
+              .call([...callNode.arguments, methodCallConfig])
               .done();
+            result = ts.await(call2);
           } else {
             result = ts.raw(`${this.str(result)}.${this.str(callNode)}`);
           }

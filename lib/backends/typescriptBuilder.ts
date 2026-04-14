@@ -936,7 +936,9 @@ export class TypeScriptBuilder {
     const methodScopeName = `${className}.${method.name}`;
     this.startScope({ type: "function", functionName: methodScopeName });
     this._sourceMapBuilder.enterScope(this.moduleId, methodScopeName);
-    const bodyCode = this.processBodyAsParts(method.body);
+    const bodyCode = this.processBodyAsParts(method.body, {
+      isInSafeFunction: !!method.safe,
+    });
     this.endScope();
 
     // Reuse the same function body logic as processFunctionDefinition

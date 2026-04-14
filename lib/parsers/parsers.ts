@@ -2380,6 +2380,7 @@ const rejectConstructorParser: Parser<never> = (input: string) => {
 const classMethodParser: Parser<ClassMethod> = map(
   seqC(
     set("type", "classMethod"),
+    capture(safeKeywordParser, "safe"),
     capture(many1WithJoin(varNameChar), "name"),
     char("("),
     optionalSpaces,
@@ -2401,7 +2402,11 @@ const classMethodParser: Parser<ClassMethod> = map(
     char("}"),
     optionalSpacesOrNewline,
   ),
-  (result) => result as ClassMethod,
+  (result) => {
+    const method = result as ClassMethod;
+    if (!method.safe) delete method.safe;
+    return method;
+  },
 );
 
 // Class body member: field, constructor, or method.

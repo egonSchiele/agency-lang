@@ -162,3 +162,43 @@ greet(name: "world", greeting: "Hi")
     ).not.toThrow();
   });
 });
+
+describe("Safe class methods", () => {
+  it("safe method does not emit __retryable = false for impure calls", () => {
+    const code = `
+import { saveItem } from "./tools.js"
+
+class Svc {
+  x: number
+
+  safe lookup(id: string): string {
+    return saveItem(id)
+  }
+}
+`;
+    const output = generateWithBuilder(code);
+    // The method body should NOT contain __retryable = false
+    // Extract just the lookup method body
+    const methodMatch = output.match(/async lookup\([\s\S]*?finally/);
+    expect(methodMatch).toBeTruthy();
+    expect(methodMatch![0]).not.toContain("__retryable = false");
+  });
+
+  it("non-safe method emits __retryable = false for impure calls", () => {
+    const code = `
+import { saveItem } from "./tools.js"
+
+class Svc {
+  x: number
+
+  doSave(id: string): string {
+    return saveItem(id)
+  }
+}
+`;
+    const output = generateWithBuilder(code);
+    const methodMatch = output.match(/async doSave\([\s\S]*?finally/);
+    expect(methodMatch).toBeTruthy();
+    expect(methodMatch![0]).toContain("__retryable = false");
+  });
+});

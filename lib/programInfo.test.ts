@@ -185,4 +185,37 @@ describe("collectProgramInfo", () => {
     const info = collectProgramInfo(program);
     expect(info.functionDefinitions["test"]).toBe(funcNode);
   });
+
+  it("registers safe class methods in safeFunctions", () => {
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [
+        {
+          type: "classDefinition",
+          className: "Math",
+          fields: [{ type: "classField", name: "x", typeHint: { type: "primitiveType", value: "number" } }],
+          methods: [
+            {
+              type: "classMethod",
+              name: "add",
+              parameters: [],
+              body: [],
+              returnType: { type: "primitiveType", value: "number" },
+              safe: true,
+            },
+            {
+              type: "classMethod",
+              name: "save",
+              parameters: [],
+              body: [],
+              returnType: { type: "primitiveType", value: "number" },
+            },
+          ],
+        },
+      ],
+    };
+    const info = collectProgramInfo(program);
+    expect(info.safeFunctions["Math.add"]).toBe(true);
+    expect(info.safeFunctions["Math.save"]).toBeUndefined();
+  });
 });

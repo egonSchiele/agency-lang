@@ -125,27 +125,42 @@ export async function optimize(
   const preprocessor = new TypescriptPreprocessor(parsed.result, config, info);
   const program = preprocessor.preprocess();
 
-  // 2. Find @goal and @optimize tags
-  const goalTag = findGoalTag(program, nodeName);
-  const optimizeTargets = findOptimizeTargets(program, nodeName);
+  // 2. Resolve node name — if not specified, use the only node or error
+  let resolvedNodeName = nodeName;
+  if (!resolvedNodeName) {
+    const graphNodes = program.nodes.filter(
+      (n): n is GraphNodeDefinition => n.type === "graphNode",
+    );
+    if (graphNodes.length === 1) {
+      resolvedNodeName = graphNodes[0].nodeName;
+    } else {
+      console.error(
+        `Multiple nodes found. Specify which to optimize: agency optimize ${filename}:<nodeName>`,
+      );
+      process.exit(1);
+    }
+  }
+
+  const goalTag = findGoalTag(program, resolvedNodeName);
+  const optimizeTargets = findOptimizeTargets(program, resolvedNodeName);
 
   if (!goalTag) {
     console.error(
-      `No @goal tag found on node "${nodeName}". Add @goal("description") to define what success looks like.`,
+      `No @goal tag found on node "${resolvedNodeName}". Add @goal("description") to define what success looks like.`,
     );
     process.exit(1);
   }
 
   if (optimizeTargets.length === 0) {
     console.error(
-      `No @optimize tags found in node "${nodeName}". Mark statements with @optimize to tell the optimizer what to tune.`,
+      `No @optimize tags found in node "${resolvedNodeName}". Mark statements with @optimize to tell the optimizer what to tune.`,
     );
     process.exit(1);
   }
 
   if (optimizeTargets.length > 1) {
     console.error(
-      `Multiple @optimize targets found in node "${nodeName}". Only one @optimize target is supported in v1.`,
+      `Multiple @optimize targets found in node "${resolvedNodeName}". Only one @optimize target is supported in v1.`,
     );
     process.exit(1);
   }
@@ -166,7 +181,7 @@ export async function optimize(
 
   const targetNode = program.nodes.find(
     (n): n is GraphNodeDefinition =>
-      n.type === "graphNode" && n.nodeName === nodeName,
+      n.type === "graphNode" && n.nodeName === resolvedNodeName,
   )!;
 
   const history: FeedbackEntry[] = [];
@@ -176,7 +191,7 @@ export async function optimize(
   for (let iteration = 1; iteration <= options.iterations; iteration++) {
     console.log(`\n--- Iteration ${iteration}/${options.iterations} ---\n`);
 
-    const input = await _io.getUserInput(nodeName, targetNode.parameters);
+    const input = await _io.getUserInput(resolvedNodeName, targetNode.parameters);
     const argsString = targetNode.parameters
       .map((p: FunctionParameter) => {
         const val = input[p.name];
@@ -191,7 +206,7 @@ export async function optimize(
       result = await executeNodeAsync({
         config,
         agencyFile: filename,
-        nodeName,
+        nodeName: resolvedNodeName,
         hasArgs: targetNode.parameters.length > 0,
         argsString,
       });

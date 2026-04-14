@@ -273,6 +273,13 @@ export function* walkNodes(
         [...ancestors, node],
         [...scopes, nodeScope(node.nodeName)],
       );
+    } else if (node.type === "classDefinition") {
+      if (node.constructor) {
+        yield* walkNodes(node.constructor.body, [...ancestors, node], scopes);
+      }
+      for (const method of node.methods) {
+        yield* walkNodes(method.body, [...ancestors, node], scopes);
+      }
     } else if (node.type === "ifElse") {
       yield* walkNodes([node.condition], [...ancestors, node], scopes);
       yield* walkNodes(node.thenBody, [...ancestors, node], scopes);

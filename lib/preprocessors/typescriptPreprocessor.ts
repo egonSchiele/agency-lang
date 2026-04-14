@@ -52,6 +52,13 @@ function walkBody(
       if (node.handler.kind === "inline") {
         node.handler.body = walkBody(node.handler.body, fn);
       }
+    } else if (node.type === "classDefinition") {
+      if (node.constructor) {
+        node.constructor.body = walkBody(node.constructor.body, fn);
+      }
+      for (const method of node.methods) {
+        method.body = walkBody(method.body, fn);
+      }
     } else if (node.type === "withModifier") {
       node.statement = walkBody([node.statement], fn)[0];
     } else if (node.type === "functionCall" && node.block) {

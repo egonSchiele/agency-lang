@@ -7,6 +7,8 @@ import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { Approved, GraphState, Rejected } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
+import { reviveWithClasses } from "./classReviver.js";
+export { type ClassRegistry, createClassReviver, reviveWithClasses } from "./classReviver.js";
 
 export type InterruptApprove = {
   type: "approve";
@@ -52,9 +54,6 @@ export type InterruptState = {
   stack: StateStackJSON;
   globals: GlobalStoreJSON;
 };
-
-import { reviveWithClasses } from "./classReviver.js";
-export { type ClassRegistry, createClassReviver, reviveWithClasses } from "./classReviver.js";
 
 export type Interrupt<T = any> = {
   type: "interrupt";
@@ -347,10 +346,7 @@ export async function resumeFromState(args: {
 
   const execCtx = ctx.createExecutionContext();
 
-  // Revive class instances in the serialized state if any classes are registered
-  const state = Object.keys(ctx.classRegistry).length > 0
-    ? reviveWithClasses(args.state, ctx.classRegistry)
-    : args.state;
+  const state = reviveWithClasses(args.state, ctx.classRegistry);
 
   execCtx.stateStack = StateStack.fromJSON(state.stack);
   execCtx.stateStack.deserializeMode();

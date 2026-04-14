@@ -191,13 +191,8 @@ export class RuntimeContext<T> {
   restoreState(checkpoint: Checkpoint): void {
     const currentTokenStats = this.globals.getTokenStats();
 
-    // Revive class instances in serialized checkpoint data
-    let stack = checkpoint.stack;
-    let globals = checkpoint.globals;
-    if (Object.keys(this.classRegistry).length > 0) {
-      stack = reviveWithClasses(stack, this.classRegistry);
-      globals = reviveWithClasses(globals, this.classRegistry);
-    }
+    const stack = reviveWithClasses(checkpoint.stack, this.classRegistry);
+    const globals = reviveWithClasses(checkpoint.globals, this.classRegistry);
 
     this.stateStack = StateStack.fromJSON(stack);
     this.stateStack.deserializeMode();

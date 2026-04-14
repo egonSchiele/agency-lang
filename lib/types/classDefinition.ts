@@ -31,6 +31,11 @@ export type ClassDefinition = BaseNode & {
   parentClass?: string;
 };
 
+/** Check if a variable name is a class-related keyword (this, super) that should bypass scope resolution. */
+export function isClassKeyword(name: string): boolean {
+  return name === "this" || name === "super";
+}
+
 export type NewExpression = BaseNode & {
   type: "newExpression";
   className: string;

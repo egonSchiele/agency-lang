@@ -21,6 +21,7 @@ export function createClassReviver(classRegistry: ClassRegistry) {
  * Re-serializes and re-parses with the class reviver.
  */
 export function reviveWithClasses<T>(data: T, classRegistry: ClassRegistry): T {
+  if (Object.keys(classRegistry).length === 0) return data;
   const reviver = createClassReviver(classRegistry);
   return JSON.parse(JSON.stringify(data), reviver);
 }

@@ -2393,14 +2393,11 @@ const classConstructorParser: Parser<ClassConstructor> = (input: string) => {
 };
 
 // Parses: name(params): returnType { body }
-const classMethodParser: Parser<ClassMethod> = (input: string) => {
-  const nameResult = seqC(
+const classMethodParser: Parser<ClassMethod> = map(
+  seqC(
+    set("type", "classMethod"),
     capture(many1WithJoin(varNameChar), "name"),
     char("("),
-  )(input);
-  if (!nameResult.success) return failure("expected method name", input);
-
-  const parser = seqC(
     optionalSpaces,
     capture(
       sepBy(comma, or(variadicParameterParser, functionParameterParser)),
@@ -2419,21 +2416,9 @@ const classMethodParser: Parser<ClassMethod> = (input: string) => {
     optionalSpacesOrNewline,
     char("}"),
     optionalSpacesOrNewline,
-  );
-  const bodyResult = parser(nameResult.rest);
-  if (!bodyResult.success) return failure("expected method body", input);
-
-  return success(
-    {
-      type: "classMethod" as const,
-      name: nameResult.result.name,
-      parameters: bodyResult.result.parameters,
-      body: bodyResult.result.body,
-      returnType: bodyResult.result.returnType,
-    },
-    bodyResult.rest,
-  );
-};
+  ),
+  (result) => result as ClassMethod,
+);
 
 // Class body member: field, constructor, or method.
 // Fields are tried first (name: type), then constructor, then methods (name(...): type { ... }).
@@ -2445,8 +2430,7 @@ const classBodyMemberParser = or(
 );
 
 const _classParserInner: Parser<ClassDefinition> = (input: string) => {
-  // Parse: class ClassName [extends ParentName] {
-  const headerParser = seqC(
+  const parser = seqC(
     str("class"),
     spaces,
     capture(many1WithJoin(varNameChar), "className"),
@@ -2466,25 +2450,21 @@ const _classParserInner: Parser<ClassDefinition> = (input: string) => {
     ),
     char("{"),
     optionalSpacesOrNewline,
+    capture(many(classBodyMemberParser), "members"),
+    optionalSpacesOrNewline,
+    char("}"),
+    optionalSpacesOrNewline,
   );
 
-  const headerResult = headerParser(input);
-  if (!headerResult.success) return failure("expected class definition", input);
-
-  // Parse body members
-  const membersResult = many(classBodyMemberParser)(headerResult.rest);
-  if (!membersResult.success) return failure("expected class body", input);
-
-  // Parse closing brace
-  const closingResult = seqC(optionalSpacesOrNewline, char("}"), optionalSpacesOrNewline)(membersResult.rest);
-  if (!closingResult.success) return failure("expected '}' to close class body", input);
+  const result = parser(input);
+  if (!result.success) return failure("expected class definition", input);
 
   // Separate fields, constructor, and methods
   const fields: ClassField[] = [];
   let ctor: ClassConstructor | undefined;
   const methods: ClassMethod[] = [];
 
-  for (const member of membersResult.result) {
+  for (const member of result.result.members) {
     if (member.type === "classField") {
       fields.push(member);
     } else if (member.type === "classConstructor") {
@@ -2495,17 +2475,17 @@ const _classParserInner: Parser<ClassDefinition> = (input: string) => {
     }
   }
 
-  const parentClass = headerResult.result._extends?.parentClass;
+  const parentClass = result.result._extends?.parentClass;
   const def: ClassDefinition = {
     type: "classDefinition",
-    className: headerResult.result.className,
+    className: result.result.className,
     fields,
     methods,
     ...(ctor ? { ctor } : {}),
     ...(parentClass ? { parentClass } : {}),
   };
 
-  return success(def, closingResult.rest);
+  return success(def, result.rest);
 };
 
 export const classParser: Parser<ClassDefinition> = label("a class definition", withLoc(_classParserInner));

@@ -77,7 +77,7 @@ import { MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
-import { ClassDefinition, ClassField, ClassMethod, NewExpression } from "../types/classDefinition.js";
+import { ClassDefinition, ClassField, ClassMethod, NewExpression, isClassKeyword } from "../types/classDefinition.js";
 import { escape, mergeDeep } from "../utils.js";
 import {
   generateBuiltinHelpers,
@@ -739,12 +739,12 @@ export class TypeScriptBuilder {
       case "multiLineString":
         return this.generateStringLiteralNode(literal.segments);
       case "variableName": {
-        const isClassKeyword = literal.value === "this" || literal.value === "super";
+        const classKeyword = isClassKeyword(literal.value);
         const importedOrUnknownScope =
           literal.scope === "imported" || !literal.scope;
         const isBuiltinVar = BUILTIN_VARIABLES.includes(literal.value);
         const isLoopVar = this.loopVars.includes(literal.value);
-        if (isClassKeyword || importedOrUnknownScope || isBuiltinVar || isLoopVar) {
+        if (classKeyword || importedOrUnknownScope || isBuiltinVar || isLoopVar) {
           return ts.id(literal.value);
         }
         return ts.scopedVar(literal.value, literal.scope!, this.moduleId);
@@ -2018,7 +2018,7 @@ export class TypeScriptBuilder {
     const { variableName, typeHint, value } = node;
 
     // `this.field = value` and `super.field = value` — emit as direct property assignment
-    if (variableName === "this" || variableName === "super") {
+    if (isClassKeyword(variableName)) {
       const lhs = this.buildAccessChain(ts.id(variableName), node.accessChain);
       return ts.assign(lhs, this.processNode(value));
     }

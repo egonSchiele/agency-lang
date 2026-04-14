@@ -13,6 +13,7 @@ import {
   Sentinel,
   Tag,
   WhileLoop,
+  isClassKeyword,
 } from "@/types.js";
 import { MessageThread } from "@/types/messageThread.js";
 // import { Skill } from "@/types/skill.js"; // Unused after llm() refactor
@@ -1458,7 +1459,7 @@ export class TypescriptPreprocessor {
         for (const { node: varNode } of varsDefinedInFunction) {
           if (varNode.type === "assignment") {
             if (varNode.scope) continue; // already resolved in block Phase 1
-            if (varNode.variableName === "this" || varNode.variableName === "super") continue;
+            if (isClassKeyword(varNode.variableName)) continue;
             let scope = lookupScope(nodeName, varNode.variableName);
             if (scope === null) {
               scope = "local";
@@ -1467,7 +1468,7 @@ export class TypescriptPreprocessor {
             varNode.scope = scope;
           } else if (varNode.type === "variableName") {
             if (varNode.scope) continue; // already resolved in block Phase 1
-            if (varNode.value === "this" || varNode.value === "super") continue;
+            if (isClassKeyword(varNode.value)) continue;
             varNode.scope = lookupScope(nodeName, varNode.value) || "imported";
           }
         }
@@ -1480,7 +1481,7 @@ export class TypescriptPreprocessor {
         if (!node.scope) {
           const name =
             node.type === "variableName" ? node.value : node.variableName;
-          if (name === "this" || name === "super") continue;
+          if (isClassKeyword(name)) continue;
           const scope = lookupScope("", name);
           node.scope = scope || "imported";
         }

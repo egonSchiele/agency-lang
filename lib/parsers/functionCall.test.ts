@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
   functionCallParser,
-} from "./functionCall.js";
+} from "./parsers.js";
 import {
   valueAccessParser,
   asyncValueAccessParser,
   syncValueAccessParser,
-} from "./access.js";
+} from "./parsers.js";
 
 describe("functionCallParser", () => {
   const testCases = [

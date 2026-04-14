@@ -239,6 +239,19 @@ export function formatTypeHint(vt: VariableType): string {
       return `{ ${vt.properties.map((p) => `${p.key}: ${formatTypeHint(p.value)}`).join(", ")} }`;
     case "typeAliasVariable":
       return vt.aliasName;
+    case "blockType": {
+      const params = vt.params.map((p) => formatTypeHint(p.typeAnnotation)).join(", ");
+      const ret = formatTypeHint(vt.returnType);
+      return `(${params}) => ${ret}`;
+    }
+    case "resultType": {
+      const { successType, failureType } = vt;
+      if (successType.type === "primitiveType" && successType.value === "any" &&
+          failureType.type === "primitiveType" && failureType.value === "any") {
+        return "Result";
+      }
+      return `Result<${formatTypeHint(successType)}, ${formatTypeHint(failureType)}>`;
+    }
     default:
       throw new Error(`Unknown variable type: ${(vt as any).type}`);
   }
@@ -339,8 +352,8 @@ export function getImportsRecursively(
   }
   visited.add(filename);
   const contents = fs.readFileSync(filename, "utf-8");
-  const isStdlibFile = filename.startsWith(getStdlibDir());
-  const parsed = parseAgency(contents, { verbose: false }, !isStdlibFile);
+  const isStdlibIndex = filename === path.join(getStdlibDir(), "index.agency");
+  const parsed = parseAgency(contents, { verbose: false }, !isStdlibIndex);
   if (!parsed.success) {
     console.error(`Error parsing ${filename}:`, parsed);
     return [];

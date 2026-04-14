@@ -1,0 +1,9 @@
+def foo() {
+  const result = interrupt("check")
+  return result
+}
+
+node main() {
+  const result = foo() with propagate
+  return result
+}

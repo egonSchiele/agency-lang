@@ -1,19 +1,26 @@
 {
-  "sourceFile": "async-in-if.agency",
   "tests": [
     {
       "nodeName": "main",
       "description": "Async calls inside if body use correct branch keys",
       "input": "10",
       "expectedOutput": "[20,22]",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "main",
       "description": "Else branch returns default when condition is false",
       "input": "3",
       "expectedOutput": "[0,0]",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

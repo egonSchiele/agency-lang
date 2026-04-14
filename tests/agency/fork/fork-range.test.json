@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork with range(4) generates [0,2,4,6]",
+      "input": "",
+      "expectedOutput": "[0,2,4,6]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

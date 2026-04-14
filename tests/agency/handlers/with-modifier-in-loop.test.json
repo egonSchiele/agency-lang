@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "with approve inside a for loop auto-approves each iteration",
+      "input": "",
+      "expectedOutput": "[\"a\",\"b\",\"c\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

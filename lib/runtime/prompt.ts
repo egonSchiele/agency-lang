@@ -16,7 +16,7 @@ import { GraphState } from "./types.js";
 import { PromptResult, Result, StreamChunk, ToolCallJSON } from "smoltalk";
 import { ZodType } from "zod/v3";
 import { ThreadStore } from "./state/threadStore.js";
-import { ToolCallError } from "./errors.js";
+import { isFailure } from "./result.js";
 
 export interface ToolHandler {
   name: string;
@@ -128,14 +128,6 @@ async function _runPrompt({
     globals: ctx.globals,
     usage: completion.usage,
     cost: completion.cost,
-  });
-  await ctx.audit({
-    type: "llmCall",
-    model: String(modelName),
-    prompt,
-    response: completion.output,
-    tokens: completion.usage,
-    duration: endTime - startTime,
   });
   const endHookResult = await callHook({
     callbacks: ctx.callbacks,
@@ -252,7 +244,6 @@ async function executeToolCalls({
         data: { toolName: handler.name, args: params },
       });
 
-      const auditArgs = [...params];
       // todo do we want to pass an existing message thread
       // into tool calls
       params.push({
@@ -266,8 +257,7 @@ async function executeToolCalls({
       try {
         result = await handler.execute(...params);
       } catch (error: unknown) {
-        const retryable =
-          error instanceof ToolCallError ? error.retryable : false;
+        const retryable = false;
         const errorMessage =
           error instanceof Error ? error.message : String(error);
         toolErrorCounts[handler.name] =
@@ -308,6 +298,38 @@ async function executeToolCalls({
         }
         continue;
       }
+      // Tool returned a failure Result — handle retry logic
+      if (isFailure(result)) {
+        const errorMessage = typeof result.error === "string" ? result.error : String(result.error);
+        toolErrorCounts[handler.name] = (toolErrorCounts[handler.name] || 0) + 1;
+
+        if (result.retryable && toolErrorCounts[handler.name] < 5) {
+          messages.push(
+            smoltalk.toolMessage(
+              `Error: ${errorMessage}. You may retry this tool call with corrected arguments.`,
+              { tool_call_id: toolCall.id, name: toolCall.name },
+            ),
+          );
+        } else if (result.retryable) {
+          messages.push(
+            smoltalk.toolMessage(
+              `Error: ${errorMessage}. This tool has failed too many times and can no longer be called.`,
+              { tool_call_id: toolCall.id, name: toolCall.name },
+            ),
+          );
+          removedTools.push(handler.name);
+        } else {
+          messages.push(
+            smoltalk.toolMessage(
+              `Error: ${errorMessage}. This operation failed and cannot be retried.`,
+              { tool_call_id: toolCall.id, name: toolCall.name },
+            ),
+          );
+          removedTools.push(handler.name);
+        }
+        continue;
+      }
+
       if (isRejected(result)) {
         const message =
           typeof result.value === "string"
@@ -334,14 +356,6 @@ async function executeToolCalls({
           result,
           timeTaken: toolCallEndTime - toolCallStartTime,
         },
-      });
-
-      await ctx.audit({
-        type: "toolCall",
-        functionName: handler.name,
-        args: auditArgs,
-        result,
-        duration: toolCallEndTime - toolCallStartTime,
       });
 
       ctx.statelogClient.toolCall({

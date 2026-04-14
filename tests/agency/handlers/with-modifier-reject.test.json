@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "with reject auto-rejects, result is a failure with interrupt data as error",
+      "input": "",
+      "expectedOutput": "\"check\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

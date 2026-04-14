@@ -1,5 +1,4 @@
 {
-  "sourceFile": "variadic.agency",
   "tests": [
     {
       "nodeName": "main",

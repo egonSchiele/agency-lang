@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork with multiple steps in body: double then add one",
+      "input": "",
+      "expectedOutput": "[3,5,7]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

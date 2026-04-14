@@ -64,6 +64,8 @@ export function expressionToString(expr: Expression): string {
       return expr.value;
     case "boolean":
       return String(expr.value);
+    case "null":
+      return "null";
     case "string":
     case "multiLineString":
       return expr.segments.map(seg =>
@@ -105,6 +107,10 @@ export function expressionToString(expr: Expression): string {
           ? `...${expressionToString(entry.value)}`
           : `${(entry as any).key}: ${expressionToString((entry as any).value)}`
       ).join(", ")}}`;
+    case "placeholder":
+      return "?";
+    case "tryExpression":
+      return `try ${expressionToString(expr.call)}`;
   }
 }
 
@@ -137,9 +143,13 @@ export function* getAllVariablesInBody(
       for (const arg of node.arguments) {
         yield* getAllVariablesInBody([unwrapCallArg(arg)]);
       }
+      if (node.block) {
+        for (const param of node.block.params) {
+          yield { name: param.name, node };
+        }
+        yield* getAllVariablesInBody(node.block.body);
+      }
       yield { name: node.functionName, node };
-    } else if (node.type === "specialVar") {
-      yield { name: node.name, node };
     } else if (node.type === "importStatement") {
       for (const nameObj of node.importedNames) {
         for (const name of getImportedNames(nameObj)) {
@@ -214,6 +224,8 @@ export function* getAllVariablesInBody(
       if (node.handler.kind === "inline") {
         yield* getAllVariablesInBody(node.handler.body);
       }
+    } else if (node.type === "withModifier") {
+      yield* getAllVariablesInBody([node.statement]);
     }
   }
 }
@@ -276,6 +288,8 @@ export function* walkNodes(
       if (node.handler.kind === "inline") {
         yield* walkNodes(node.handler.body, [...ancestors, node], scopes);
       }
+    } else if (node.type === "withModifier") {
+      yield* walkNodes([node.statement], [...ancestors, node], scopes);
     } else if (node.type === "returnStatement") {
       yield* walkNodes([node.value], [...ancestors, node], scopes);
     } else if (node.type === "assignment") {
@@ -306,6 +320,9 @@ export function* walkNodes(
     } else if (node.type === "functionCall") {
       for (const arg of node.arguments) {
         yield* walkNodes([unwrapCallArg(arg) as AgencyNode], [...ancestors, node], scopes);
+      }
+      if (node.block) {
+        yield* walkNodes(node.block.body, [...ancestors, node], scopes);
       }
     } else if (node.type === "matchBlock") {
       yield* walkNodes([node.expression], [...ancestors, node], scopes);
@@ -343,8 +360,6 @@ export function* walkNodes(
         "type" in e && e.type === "splat" ? e.value : (e as any).value,
       );
       yield* walkNodes(objValues as AgencyNode[], [...ancestors, node], scopes);
-    } else if (node.type === "specialVar") {
-      yield* walkNodes([node.value], [...ancestors, node], scopes);
     } else if (
       node.type === "string" ||
       node.type === "multiLineString"

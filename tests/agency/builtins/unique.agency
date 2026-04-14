@@ -1,0 +1,7 @@
+node main() {
+  const items = [1, 2, 2, 3, 1, 4, 3]
+  const result = unique(items) as n {
+    return n
+  }
+  return result
+}

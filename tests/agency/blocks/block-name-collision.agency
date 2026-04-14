@@ -1,0 +1,11 @@
+def apply(block: (number) => number): number {
+  return block(5)
+}
+
+node main() {
+  let n = 100
+  let result = apply() as n {
+    return n * 2
+  }
+  return n + result
+}

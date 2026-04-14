@@ -1,12 +1,14 @@
+const log = []
+
 node main() {
-  let result = ""
   thread {
     for (i in range(3)) {
+      log.push("i:" + i)
       if (i == 1) {
         const y = interrupt("deep")
-        result = "resumed"
+        log.push("resumed")
       }
     }
   }
-  return result
+  return log
 }

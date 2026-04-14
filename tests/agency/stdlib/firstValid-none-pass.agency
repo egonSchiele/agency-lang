@@ -1,0 +1,16 @@
+import { firstValid } from "std::firstValid"
+
+def alwaysFalse(n: number): boolean {
+  return false
+}
+
+def double(n: number): number {
+  return n * 2
+}
+
+node main() {
+  let result = firstValid([1, 2, 3], alwaysFalse) as v {
+    return double(v)
+  }
+  return result
+}

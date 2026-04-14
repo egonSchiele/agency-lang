@@ -1,0 +1,15 @@
+def withApproval(block: () => string): string {
+  let result = block()
+  return result
+}
+
+node main() {
+  let result = withApproval() as {
+    return interrupt("please approve")
+    return "approved"
+  }
+  if (isFailure(result)) {
+    return result.error
+  }
+  return result
+}

@@ -1,12 +1,13 @@
 // lib/debugger/types.ts
 import { Checkpoint, CheckpointStore, RuntimeContext } from "@/index.js";
 import { CheckpointArgs, SourceLocationOpts } from "@/runtime/state/checkpointStore.js";
+import { color } from "termcolors";
 
 export class DebuggerState {
   private mode: "stepping" | "running" = "stepping";
-  private checkpoints: CheckpointStore;
-  private callDepth = 0;
-  private stepTarget: {
+  public checkpoints: CheckpointStore;
+  public callDepth = 0;
+  public stepTarget: {
     type: "stepIn" | "stepOut" | "next";
     targetDepth: number;
   } | null = null;
@@ -38,11 +39,18 @@ export class DebuggerState {
     return this.callDepth === this.stepTarget.targetDepth;
   }
 
+  isAtOrBelowTargetDepth() {
+    if (!this.stepTarget) return true;
+    return this.callDepth <= this.stepTarget.targetDepth;
+  }
+
   enterCall() {
+    // console.log(color.blue(`[DebuggerState] enterCall at depth ${this.callDepth}, target: ${this.stepTarget ? JSON.stringify(this.stepTarget) : "n/a"}`));
     this.callDepth++;
   }
 
   exitCall() {
+    // console.log(color.blue(`[DebuggerState] exitCall at depth ${this.callDepth}, target: ${this.stepTarget ? JSON.stringify(this.stepTarget) : "n/a"}`));
     if (this.callDepth > 0) {
       this.callDepth--;
     }
@@ -63,6 +71,7 @@ export class DebuggerState {
 
   stepIn() {
     this.stepping();
+    // console.log(color.red(`[DebuggerState] stepIn called at call depth ${this.callDepth}, setting target to ${this.callDepth + 1}`));
     this.stepTarget = {
       type: "stepIn",
       targetDepth: this.callDepth + 1,

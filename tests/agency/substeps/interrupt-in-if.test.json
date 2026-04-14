@@ -1,12 +1,15 @@
 {
-  "sourceFile": "interrupt-in-if.agency",
   "tests": [
     {
       "nodeName": "main",
       "description": "Interrupt inside if body resumes correctly after approve",
       "input": "10",
-      "expectedOutput": "\"confirmed big\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "expectedOutput": "[\"start\",\"big\",\"confirmed big\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "interruptHandlers": [
         {
           "action": "approve",

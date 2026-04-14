@@ -1,0 +1,12 @@
+import { retry } from "std::retry"
+
+def alwaysTrue(n: number): boolean {
+  return true
+}
+
+node main() {
+  let result = retry(5, alwaysTrue) as {
+    return 99
+  }
+  return result
+}

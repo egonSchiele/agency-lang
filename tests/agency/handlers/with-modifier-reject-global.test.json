@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "with reject in global scope auto-rejects interrupt during global init",
+      "input": "",
+      "expectedOutput": "\"test.txt\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

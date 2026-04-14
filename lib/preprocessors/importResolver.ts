@@ -4,6 +4,7 @@ import type {
   ImportToolStatement,
   ImportStatement,
 } from "../types/importStatement.js";
+import { getImportedToolNames } from "../types/importStatement.js";
 import type { SymbolTable } from "../symbolTable.js";
 import { resolveAgencyImportPath, isAgencyImport } from "../importPaths.js";
 
@@ -16,6 +17,14 @@ import { resolveAgencyImportPath, isAgencyImport } from "../importPaths.js";
  * (.agency files, std:: imports, or pkg:: imports).
  * Leaves import node / import tool statements and non-Agency imports untouched.
  */
+function assertExported(name: string, modulePath: string, exported?: boolean): void {
+  if (!exported) {
+    throw new Error(
+      `Function '${name}' in '${modulePath}' is not exported. Add the 'export' keyword to its definition.`,
+    );
+  }
+}
+
 export function resolveImports(
   program: AgencyProgram,
   symbolTable: SymbolTable,
@@ -24,6 +33,28 @@ export function resolveImports(
   const newNodes: AgencyNode[] = [];
 
   for (const node of program.nodes) {
+    // Validate that directly-written import tool statements reference exported functions
+    if (node.type === "importToolStatement") {
+      const importedFilePath = resolveAgencyImportPath(node.agencyFile, currentFile);
+      const fileSymbols = symbolTable[importedFilePath] ?? {};
+      for (const name of getImportedToolNames(node)) {
+        const symbol = fileSymbols[name];
+        if (!symbol) {
+          throw new Error(
+            `Symbol '${name}' is not defined in '${node.agencyFile}'`,
+          );
+        }
+        if (symbol.kind !== "function") {
+          throw new Error(
+            `Symbol '${name}' in '${node.agencyFile}' is not a function and cannot be imported as a tool.`,
+          );
+        }
+        assertExported(name, node.agencyFile, symbol.exported);
+      }
+      newNodes.push(node);
+      continue;
+    }
+
     if (
       node.type !== "importStatement" ||
       !isAgencyImport(node.modulePath)
@@ -59,6 +90,7 @@ export function resolveImports(
             nodeNames.push(name);
             break;
           case "function":
+            assertExported(name, node.modulePath, symbol.exported);
             functionNames.push(name);
             // Mark as safe if the function definition is safe OR if the
             // original import explicitly marked it safe

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "consensus returns most common result — 'positive' appears 4 out of 5 times",
+      "input": "",
+      "expectedOutput": "\"positive\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

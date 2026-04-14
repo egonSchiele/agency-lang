@@ -1,0 +1,7 @@
+node main() {
+  const words = ["hello world", "foo bar"]
+  const letters = flatMap(words) as word {
+    return [word, "!"]
+  }
+  return letters
+}

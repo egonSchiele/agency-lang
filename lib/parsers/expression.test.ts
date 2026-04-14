@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { exprParser } from "./expression.js";
+import { exprParser } from "./parsers.js";
 
 describe("exprParser", () => {
   describe("atoms", () => {
@@ -322,6 +322,84 @@ describe("exprParser", () => {
         expect(result.result.type).toBe("binOpExpression");
         if (result.result.type === "binOpExpression") {
           expect(result.result.operator).toBe("&&");
+        }
+      }
+    });
+  });
+
+  describe("pipe operator |>", () => {
+    it("parses a simple pipe expression", () => {
+      const result = exprParser("a |> b");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "|>",
+          left: { type: "variableName", value: "a" },
+          right: { type: "variableName", value: "b" },
+        });
+      }
+    });
+
+    it("parses chained pipe expressions left-to-right", () => {
+      const result = exprParser("a |> b |> c");
+      expect(result.success).toBe(true);
+      if (result.success && result.result.type === "binOpExpression") {
+        expect(result.result.operator).toBe("|>");
+        expect(result.result.left).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "|>",
+          left: { type: "variableName", value: "a" },
+          right: { type: "variableName", value: "b" },
+        });
+      }
+    });
+
+    it("pipe has lower precedence than ||", () => {
+      const result = exprParser("a || b |> c");
+      expect(result.success).toBe(true);
+      if (result.success && result.result.type === "binOpExpression") {
+        expect(result.result.operator).toBe("|>");
+        if (result.result.left.type === "binOpExpression") {
+          expect(result.result.left.operator).toBe("||");
+        }
+      }
+    });
+
+    it("parses pipe with function call on right side", () => {
+      const result = exprParser("a |> foo(10)");
+      expect(result.success).toBe(true);
+      if (result.success && result.result.type === "binOpExpression") {
+        expect(result.result.operator).toBe("|>");
+        expect(result.result.right.type).toBe("functionCall");
+      }
+    });
+  });
+
+  describe("placeholder ?", () => {
+    it("parses ? as a placeholder", () => {
+      const result = exprParser("?");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({ type: "placeholder" });
+      }
+    });
+
+    it("parses ? inside function call arguments", () => {
+      const result = exprParser("foo(10, ?)");
+      expect(result.success).toBe(true);
+      if (result.success && result.result.type === "functionCall") {
+        expect(result.result.arguments[1]).toEqualWithoutLoc({ type: "placeholder" });
+      }
+    });
+
+    it("parses pipe with partial application", () => {
+      const result = exprParser("a |> multiply(10, ?)");
+      expect(result.success).toBe(true);
+      if (result.success && result.result.type === "binOpExpression") {
+        expect(result.result.operator).toBe("|>");
+        if (result.result.right.type === "functionCall") {
+          expect(result.result.right.arguments[1]).toEqualWithoutLoc({ type: "placeholder" });
         }
       }
     });

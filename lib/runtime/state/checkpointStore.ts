@@ -6,6 +6,9 @@ import { checkpointSchema } from "./schemas.js";
 import type { SourceLocation } from "./sourceLocation.js";
 import type { StateStackJSON } from "./stateStack.js";
 
+/** Label used for pinned checkpoints created at function entry for Result error handling. */
+export const RESULT_ENTRY_LABEL = "result-entry";
+
 let globalCheckpointCounter = 0;
 
 export type SourceLocationOpts = Omit<SourceLocation, "nodeId">;
@@ -140,6 +143,10 @@ export class Checkpoint implements SourceLocation {
     return Checkpoint.fromJSON({ ...this.toJSON(), ...opts })!;
   }
 
+  getLocation(): string {
+    return `${this.moduleId}:${this.scopeName}#${this.stepPath}`;
+  }
+
   static fromContext(
     ctx: RuntimeContext<any>,
     opts: SourceLocationOpts & { label?: string | null; pinned?: boolean },
@@ -147,7 +154,7 @@ export class Checkpoint implements SourceLocation {
     const nodeId = ctx.stateStack.currentNodeId();
     if (!nodeId) {
       throw new CheckpointError(
-        "Cannot create checkpoint: no current node id in state stack.",
+        "Cannot create checkpoint: no current node id in state stack. This error can happen if you call a function that throws an interrupt from the global namespace. Please use `const foo = funcName() with approve` syntax.",
       );
     }
     return new Checkpoint({
@@ -259,8 +266,21 @@ export class CheckpointStore {
       pinned: false,
       removeDuplicate: true,
     });
+    this.removeDebugFlagsFor(id);
     this.evictIfNeeded();
     return id;
+  }
+
+  removeDebugFlagsFor(id: number): void {
+    const cp = this.checkpoints[id];
+    if (!cp) return;
+    const frame = cp.getCurrentFrame();
+    if (!frame || !frame.locals) return;
+    for (const key of Object.keys(frame.locals)) {
+      if (key.startsWith("__dbg_")) {
+        delete frame.locals[key];
+      }
+    }
   }
 
   private removeDuplicate(location: SourceLocationOpts): void {

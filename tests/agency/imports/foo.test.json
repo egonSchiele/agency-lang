@@ -1,5 +1,4 @@
 {
-  "sourceFile": "foo.agency",
   "tests": [
     {
       "nodeName": "jsImport",

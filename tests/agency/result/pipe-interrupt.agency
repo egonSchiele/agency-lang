@@ -1,0 +1,18 @@
+shared let callCount = 0
+
+def countAndDouble(x: number): number {
+  callCount = callCount + 1
+  return x * 2
+}
+
+def interruptingAdd(x: number, y: number): number {
+  const extra = interrupt("How much extra?")
+  return x + y + extra
+}
+
+node main() {
+  // Chain: countAndDouble runs first, then interruptingAdd pauses.
+  // On resume, countAndDouble should NOT re-run (callCount stays 1).
+  let r = success(5) |> countAndDouble |> interruptingAdd(?, 10)
+  return { value: r, callCount: callCount }
+}

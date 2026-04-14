@@ -1,0 +1,10 @@
+def interruptingRead(filename: string) {
+  const result = interrupt(filename)
+  return result
+}
+
+const text = interruptingRead("test.txt") with approve
+
+node main() {
+  return text
+}

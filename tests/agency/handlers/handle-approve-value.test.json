@@ -1,12 +1,15 @@
 {
-  "sourceFile": "handle-approve-value.agency",
   "tests": [
     {
       "nodeName": "main",
       "description": "Handler approves with value, assigned interrupt gets the approved value",
       "input": "",
       "expectedOutput": "\"custom value\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

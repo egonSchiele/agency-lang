@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "with approve in global scope auto-approves interrupt during global init",
+      "input": "",
+      "expectedOutput": "\"test.txt\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

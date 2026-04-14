@@ -358,28 +358,6 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       }
     });
 
-    it("should respect user-defined async flag", () => {
-      const program: AgencyProgram = {
-        type: "agencyProgram",
-        nodes: [
-          {
-            type: "function",
-            functionName: "testFunc",
-            parameters: [],
-            body: [],
-            async: false, // User explicitly set to false
-          },
-        ],
-      };
-
-      const preprocessor = new TypescriptPreprocessor(program);
-      preprocessor.preprocess();
-
-      const funcNode = preprocessor.program.nodes[0];
-      if (funcNode.type === "function") {
-        expect(funcNode.async).toBe(false);
-      }
-    });
   });
 
   describe.skip("markFunctionCallsAsync", () => {

@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Rejecting a return interrupt in block causes it to return null",
+      "input": "",
+      "expectedOutput": "\"interrupt rejected\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "please approve"
+        }
+      ]
+    }
+  ]
+}

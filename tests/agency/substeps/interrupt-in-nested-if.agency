@@ -1,13 +1,15 @@
+const log = []
+
 node main(x: number, y: number) {
-  let result = "start"
+  log.push("start")
   if (x > 5) {
-    result = "outer"
+    log.push("outer")
     if (y > 3) {
-      result = "inner"
+      log.push("inner")
       return interrupt("check")
-      result = "confirmed inner"
+      log.push("confirmed inner")
     }
-    result = result + " done"
+    log.push("done")
   }
-  return result
+  return log
 }

@@ -1,0 +1,10 @@
+def identity(n: number): number {
+  return n
+}
+
+node main() {
+  let result = race([10, 20, 30]) as item {
+    return identity(item)
+  }
+  return result
+}

@@ -1,12 +1,15 @@
 {
-  "sourceFile": "interrupt-in-elseif.agency",
   "tests": [
     {
       "nodeName": "main",
       "description": "Interrupt inside else-if branch resumes correctly after approve",
       "input": "7",
-      "expectedOutput": "\"confirmed big\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "expectedOutput": "[\"big\",\"confirmed big\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "interruptHandlers": [
         {
           "action": "approve",

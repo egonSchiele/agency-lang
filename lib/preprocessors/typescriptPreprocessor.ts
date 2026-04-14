@@ -11,6 +11,7 @@ import {
   RawCode,
   ScopeType,
   Sentinel,
+  Tag,
   WhileLoop,
 } from "@/types.js";
 import { MessageThread } from "@/types/messageThread.js";
@@ -51,6 +52,10 @@ function walkBody(
       if (node.handler.kind === "inline") {
         node.handler.body = walkBody(node.handler.body, fn);
       }
+    } else if (node.type === "withModifier") {
+      node.statement = walkBody([node.statement], fn)[0];
+    } else if (node.type === "functionCall" && node.block) {
+      node.block.body = walkBody(node.block.body, fn);
     }
     return node;
   });
@@ -88,6 +93,51 @@ function llmCallToString(call: FunctionCall): string {
   return "llm(...)";
 }
 
+function attachTags(nodes: AgencyNode[]): AgencyNode[] {
+  const result: AgencyNode[] = [];
+  let pendingTags: Tag[] = [];
+
+  for (const node of nodes) {
+    if (node.type === "tag") {
+      pendingTags.push(node);
+      continue;
+    }
+
+    if (pendingTags.length > 0) {
+      if (node.type === "graphNode" || node.type === "function" ||
+          node.type === "assignment" || node.type === "functionCall") {
+        node.tags = [...(node.tags || []), ...pendingTags];
+        pendingTags = [];
+      } else {
+        // No valid attach target — preserve tags as standalone nodes
+        result.push(...pendingTags);
+        pendingTags = [];
+      }
+    }
+
+    result.push(node);
+  }
+
+  // Preserve any trailing tags (e.g., at end of block)
+  if (pendingTags.length > 0) {
+    result.push(...pendingTags);
+  }
+
+  return result;
+}
+
+function collectTags(nodes: AgencyNode[]): AgencyNode[] {
+  // walkBody handles control-flow bodies (ifElse, loops, etc.) but not
+  // graphNode/function bodies, so recurse into those explicitly.
+  const withNestedBodies = nodes.map((node) => {
+    if ((node.type === "graphNode" || node.type === "function") && node.body) {
+      node.body = collectTags(node.body);
+    }
+    return node;
+  });
+  return walkBody(withNestedBodies, attachTags);
+}
+
 export class TypescriptPreprocessor {
   public program: AgencyProgram;
   protected config: AgencyConfig;
@@ -113,6 +163,7 @@ export class TypescriptPreprocessor {
   }
 
   preprocess(): AgencyProgram {
+    this.program.nodes = collectTags(this.program.nodes);
     if (Object.keys(this.functionDefinitions).length === 0) {
       this.getFunctionDefinitions();
     }
@@ -159,9 +210,9 @@ export class TypescriptPreprocessor {
     this.filterExcludedBuiltinFunctions();
     this.validateFetchDomains();
     this.validateNoAsyncInLoops();
-    this.validateNoBareInterrupts();
+
     this.resolveVariableScopes();
-    this.insertCheckpointSentinels();
+    //this.insertCheckpointSentinels();
     return this.program;
   }
 
@@ -425,10 +476,6 @@ export class TypescriptPreprocessor {
   protected _markFunctionAsAsync(node: FunctionDefinition): void {
     if (this.functionNameToAsync[node.functionName] !== undefined) {
       return; // already processed
-    }
-    if (node.async !== undefined) {
-      this.functionNameToAsync[node.functionName] = node.async;
-      return; // user has already marked this sync or async
     }
     let isAsync = true;
     if (this.containsInterrupt(node)) {
@@ -729,6 +776,8 @@ export class TypescriptPreprocessor {
         }
       } else if (node.type === "handleBlock") {
         this._collectAsyncVariablesInScope(node.body, asyncVarToAssignment);
+      } else if (node.type === "withModifier") {
+        this._collectAsyncVariablesInScope([node.statement], asyncVarToAssignment);
       }
     }
   }
@@ -781,6 +830,14 @@ export class TypescriptPreprocessor {
       } else if (node.type === "handleBlock") {
         const found = this._findFirstUsageInScope(
           node.body,
+          varName,
+          assignmentNode,
+          [...bodyPath, i],
+        );
+        if (found) return found;
+      } else if (node.type === "withModifier") {
+        const found = this._findFirstUsageInScope(
+          [node.statement],
           varName,
           assignmentNode,
           [...bodyPath, i],
@@ -878,6 +935,11 @@ export class TypescriptPreprocessor {
           ...currentPath,
           i,
         ]);
+      } else if (node.type === "withModifier") {
+        node.statement = this._insertAwaitPendingCalls([node.statement], locationToVars, [
+          ...currentPath,
+          i,
+        ])[0];
       } else if (node.type === "ifElse") {
         node.thenBody = this._insertAwaitPendingCalls(
           node.thenBody,
@@ -974,6 +1036,10 @@ export class TypescriptPreprocessor {
         if (node.handler.kind === "inline") {
           node.handler.body = this.filterNodesByType(node.handler.body, excludeSet);
         }
+      } else if (node.type === "withModifier") {
+        const filtered = this.filterNodesByType([node.statement], excludeSet)[0];
+        if (!filtered) continue;
+        node.statement = filtered;
       } else if (node.type === "matchBlock") {
         // Filter case bodies - Note: match block bodies are single nodes, not arrays
         // We don't filter them here as they're of a specific type
@@ -1073,6 +1139,10 @@ export class TypescriptPreprocessor {
         if (node.handler.kind === "inline") {
           node.handler.body = this.filterBuiltinFunctionCalls(node.handler.body, excludeSet);
         }
+      } else if (node.type === "withModifier") {
+        const filtered = this.filterBuiltinFunctionCalls([node.statement], excludeSet)[0];
+        if (!filtered) continue;
+        node.statement = filtered;
       } else if (node.type === "matchBlock") {
         node.cases = node.cases.map((caseItem) => {
           if (caseItem.type === "comment") {
@@ -1235,30 +1305,7 @@ export class TypescriptPreprocessor {
         if (insideLoop) {
           throw new Error(
             `Async function call "${node.functionName}()" is not allowed inside a loop. ` +
-              `Move the async call into a separate function, or remove the "async" keyword.`,
-          );
-        }
-      }
-    }
-  }
-
-  /**
-   * Validate that interrupt() is never called as a bare statement.
-   * It must be used with `return` or assigned to a variable.
-   */
-  protected validateNoBareInterrupts(): void {
-    for (const { node, ancestors } of walkNodesArray(this.program.nodes)) {
-      if (
-        node.type === "functionCall" &&
-        node.functionName === "interrupt"
-      ) {
-        const parent = ancestors[ancestors.length - 1];
-        const isBare = parent &&
-          parent.type !== "returnStatement" &&
-          parent.type !== "assignment";
-        if (isBare) {
-          throw new Error(
-            `Bare interrupt() call is not allowed. Use "return interrupt(...)" or "x = interrupt(...)".`,
+            `Move the async call into a separate function, or remove the "async" keyword.`,
           );
         }
       }
@@ -1351,23 +1398,67 @@ export class TypescriptPreprocessor {
         funcArgs[nodeName] = [...node.parameters.map((p) => p.name)];
         localVarsInFunction[nodeName] = new Set();
 
-        // Then, whenever we see a variable being referenced,
-        // we try to look up its scope and set it on that variable.
-        // Note: segment expressions are now walked by walkNodes/getAllVariablesInBody,
-        // so the base VariableNameLiteral inside interpolation segments gets its scope
-        // set via the node.type === "variableName" branch below.
+        // Phase 1: Resolve block body variables first.
+        // Block params get "blockArgs" scope, new variables inside blocks get "block" scope,
+        // and references to outer-scope variables keep their original scope (captured via closure).
+        // We do this before the main walk so that the main walk sees these variables
+        // already have scopes and skips them.
+        for (const { node: bodyNode } of walkNodesArray(node.body)) {
+          if (bodyNode.type === "functionCall" && bodyNode.block) {
+            const blockParamNames = new Set(bodyNode.block.params.map((p) => p.name));
+            const blockLocalNames = new Set<string>();
+
+            // First pass: identify block-local assignments
+            for (const { node: blockVarNode } of getAllVariablesInBodyArray(bodyNode.block.body)) {
+              if (blockVarNode.type === "assignment") {
+                const name = blockVarNode.variableName;
+                if (!blockParamNames.has(name) && lookupScope(nodeName, name) === null) {
+                  blockLocalNames.add(name);
+                }
+              }
+            }
+
+            // Second pass: set scopes on all variables in the block body
+            for (const { node: blockVarNode } of getAllVariablesInBodyArray(bodyNode.block.body)) {
+              if (blockVarNode.type === "assignment") {
+                if (blockParamNames.has(blockVarNode.variableName)) {
+                  blockVarNode.scope = "blockArgs";
+                } else if (blockLocalNames.has(blockVarNode.variableName)) {
+                  blockVarNode.scope = "block";
+                } else {
+                  const resolved = lookupScope(nodeName, blockVarNode.variableName);
+                  if (resolved) blockVarNode.scope = resolved;
+                  // else: leave unscoped — Phase 2 will resolve once locals are registered
+                }
+              } else if (blockVarNode.type === "variableName") {
+                if (blockParamNames.has(blockVarNode.value)) {
+                  blockVarNode.scope = "blockArgs";
+                } else if (blockLocalNames.has(blockVarNode.value)) {
+                  blockVarNode.scope = "block";
+                } else {
+                  const resolved = lookupScope(nodeName, blockVarNode.value);
+                  if (resolved) blockVarNode.scope = resolved;
+                  // else: leave unscoped — Phase 2 will resolve once locals are registered
+                }
+              }
+            }
+          }
+        }
+
+        // Phase 2: Resolve function/node body variables.
+        // Variables inside blocks already have scopes from Phase 1, so they are skipped.
         const varsDefinedInFunction = getAllVariablesInBodyArray(node.body);
         for (const { node: varNode } of varsDefinedInFunction) {
           if (varNode.type === "assignment") {
+            if (varNode.scope) continue; // already resolved in block Phase 1
             let scope = lookupScope(nodeName, varNode.variableName);
             if (scope === null) {
-              scope = "local"; // Local var, first time being assigned
+              scope = "local";
               localVarsInFunction[nodeName].add(varNode.variableName);
             }
             varNode.scope = scope;
           } else if (varNode.type === "variableName") {
-            // a var is being referenced, we don't know
-            // what it is, so assume it is either imported or a JS global, like `Promise`.
+            if (varNode.scope) continue; // already resolved in block Phase 1
             varNode.scope = lookupScope(nodeName, varNode.value) || "imported";
           }
         }

@@ -1,12 +1,14 @@
+const log = []
+
 node main() {
   thread {
-    const a = 1
+    log.push("a")
     thread {
-      const b = 2
+      log.push("b")
       const c = interrupt("inner check")
-      const d = 4
+      log.push("c:" + c)
     }
-    const e = 5
+    log.push("e")
   }
-  return [a, b, c, d, e]
+  return log
 }

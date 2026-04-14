@@ -1,19 +1,12 @@
-type Category = "reminder" | "todo" | "general" | "quit"
-
-node categorize(message: string) {
-  prompt = """
-        Please categorize this user message.
-        If the message is about remembering something, or about the user's reminders, return 'reminder'.
-        If the message is about a to-do, return 'todo'.
-        If the user wants to quit, return 'quit'.
-        Otherwise, return 'general'.
-        """
-  category: Category = llm("${prompt}. Here's the user message: '${message}'")
-  print(category)
-  return category
-}
-
 node main() {
-  userMessage = "Remind me to buy milk tomorrow"
-  return categorize(userMessage)
+  const giftIdea = input("Tell me about a person you want to get a gift for: ")
+  const prompt = """
+    This person is looking for a gift for a special someone. Based on the gift recipient's description and interests, please suggest some keyword searches on Etsy for finding them a gift. The gift recipient is: ${giftIdea}
+    """
+  const searches: string[] = llm(prompt)
+  const results = fork(searches) as search {
+    print("Searching for ${search}...")
+  }
+  print("Here are some gift ideas based on your description:")
+  print(results)
 }

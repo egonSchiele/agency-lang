@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "retry returns null when all attempts fail the test",
+      "input": "",
+      "expectedOutput": "null",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

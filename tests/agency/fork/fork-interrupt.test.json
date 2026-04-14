@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork with interrupt in branches — first interrupt is surfaced and approved, then fork re-runs and completes",
+      "input": "",
+      "expectedOutput": "[\"done: a\",\"done: b\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

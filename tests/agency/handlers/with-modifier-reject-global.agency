@@ -1,0 +1,13 @@
+def interruptingRead(filename: string) {
+  const result = interrupt(filename)
+  return result
+}
+
+const text = interruptingRead("test.txt") with reject
+
+node main() {
+  if (isFailure(text)) {
+    return text.error
+  }
+  return text
+}

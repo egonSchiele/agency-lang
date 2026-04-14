@@ -1,0 +1,16 @@
+node setup() {
+  const res1: number[] = llm("What are the first 5 prime numbers?")
+  return process(res1)
+}
+
+node process(nums: number[]) {
+  const res2: number = llm("And what is the sum of those numbers?")
+  return {
+    nums: nums,
+    sum: res2
+  }
+}
+
+node main() {
+  return setup()
+}

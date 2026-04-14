@@ -2,7 +2,7 @@ import { MessageJSON } from "smoltalk";
 import { callHook } from "./hooks.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
-import { RestoreSignal } from "./errors.js";
+import { CheckpointError, RestoreSignal } from "./errors.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { GraphState, InternalFunctionState, RunNodeResult } from "./types.js";
@@ -17,24 +17,23 @@ export function setupNode(args: { state: GraphState }): {
 } {
   let { state } = args;
   const ctx = state.ctx;
-  /* 
-  if (state.isResume) {
-    // restore global state
-    // to to restore data that was saved on the state stack for this node
-    // clear the state stack from metadata so it doesn't propagate to other nodes.
-    //state.__metadata.__stateStack = undefined;
-  } */
 
-  // either creates a new stack for this node,
-  // or restores the stack if we're resuming after an interrupt
   const stack = ctx.stateStack.getNewState();
   const step = stack.step;
   const self = stack.locals;
 
   // Initialize or restore the ThreadStore for dynamic message thread management
-  const threads = stack.threads
-    ? ThreadStore.fromJSON(stack.threads)
-    : new ThreadStore();
+  let threads: ThreadStore;
+  if (stack.threads) {
+    threads = ThreadStore.fromJSON(stack.threads);
+  } else if (state.messages instanceof ThreadStore) {
+    threads = state.messages;
+  } else {
+    // Fallback: create a new ThreadStore with a default active thread.
+    // This can happen on debugger/rewind resume paths where messages is not passed
+    // and the checkpoint frame doesn't have serialized threads.
+    threads = ThreadStore.withDefaultActive();
+  }
   stack.threads = threads;
 
   return { stack, step, self, threads };
@@ -63,7 +62,6 @@ export function setupFunction(args: { state?: InternalFunctionState }): {
   const stack = stateStack.getNewState();
   const step = stack.step;
   const self = stack.locals;
-
 
   // if being called from a node, we'll pass in threads.
   // if being called as a tool, we won't have threads, but we'll create an empty ThreadStore here.
@@ -96,11 +94,11 @@ export async function runNode({
   callbacks?: AgencyCallbacks;
 
   // initializes global variables on the execution context
-  initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void;
+  initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
 }): Promise<RunNodeResult<any>> {
   const execCtx = ctx.createExecutionContext();
   if (initializeGlobals) {
-    initializeGlobals(execCtx);
+    await initializeGlobals(execCtx);
   }
   execCtx.callbacks = callbacks || {};
   await callHook({
@@ -108,12 +106,11 @@ export async function runNode({
     name: "onAgentStart",
     data: { nodeName, args: data, messages: messages || [] },
   });
-  await execCtx.audit({ type: "nodeEntry", nodeName });
   let isResume = false;
+  let threadStore = ThreadStore.withDefaultActive();
   try {
     while (true) {
       try {
-        const threadStore = new ThreadStore();
         const result = await execCtx.graph.run(nodeName, {
           messages: threadStore,
           data,
@@ -121,7 +118,6 @@ export async function runNode({
           isResume,
         }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
         await execCtx.pendingPromises.awaitAll();
-        await execCtx.audit({ type: "nodeExit", nodeName });
         const returnObject = createReturnObject({
           result,
           globals: execCtx.globals,
@@ -134,13 +130,28 @@ export async function runNode({
         return returnObject;
       } catch (e) {
         if (e instanceof RestoreSignal) {
+          execCtx._restoreCount++;
+          if (execCtx._restoreCount > execCtx.maxRestores) {
+            throw new CheckpointError(
+              `Exceeded maximum number of restores (${execCtx.maxRestores}). Possible infinite loop.`,
+            );
+          }
           const cp = e.checkpoint;
           execCtx.restoreState(cp);
-          await execCtx.audit({ type: "restore", checkpointId: cp.id, nodeName: cp.nodeId });
+          if (e.options?.args) {
+            execCtx._pendingArgOverrides = e.options.args;
+          }
+          if (e.options?.globals) {
+            for (const [varName, value] of Object.entries(e.options.globals)) {
+              execCtx.globals.set(cp.moduleId, varName, value);
+            }
+          }
           nodeName = cp.nodeId;
           data = {};
           isResume = true;
           execCtx.stateStack.nodesTraversed = [cp.nodeId];
+          // Reset ThreadStore for the restored execution
+          threadStore = ThreadStore.withDefaultActive();
           continue;
         }
         throw e;

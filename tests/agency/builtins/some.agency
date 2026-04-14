@@ -1,0 +1,9 @@
+node main() {
+  const hasNegative = some([1, -2, 3]) as n {
+    return n < 0
+  }
+  const hasBig = some([1, 2, 3]) as n {
+    return n > 100
+  }
+  return { hasNegative: hasNegative, hasBig: hasBig }
+}

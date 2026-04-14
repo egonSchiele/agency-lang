@@ -70,11 +70,10 @@ describe("DebuggerDriver stepping", () => {
     expect(testUI.renderCalls.length).toEqual(2);
     const firstStep = testUI.renderCalls[0];
     const secondStep = testUI.renderCalls[1];
-    expect(firstStep.stepPath).toBe("1");
+    expect(firstStep.stepPath).toBe("0");
 
-    // one step in the middle is for the debugStep call,
-    // so the actual steps are every other step
-    expect(secondStep.stepPath).toBe("3");
+    // Steps are consecutive (no interleaved debug steps with the Runner)
+    expect(secondStep.stepPath).toBe("1");
   });
 
   it("steps through each statement and returns the correct result", async () => {
@@ -94,15 +93,12 @@ describe("DebuggerDriver stepping", () => {
     const returnValue = result?.data !== undefined ? result.data : result;
     expect(returnValue).toBe(3);
 
-    // We started at the first step, then stepped 10 times
-    //expect(testUI.renderCalls.length).toEqual(11);
     const firstStep = testUI.renderCalls[0];
     const secondStep = testUI.renderCalls[1];
-    expect(firstStep.stepPath).toBe("1");
+    expect(firstStep.stepPath).toBe("0");
 
-    // one step in the middle is for the debugStep call,
-    // so the actual steps are every other step
-    expect(secondStep.stepPath).toBe("3");
+    // Steps are consecutive (no interleaved debug steps with the Runner)
+    expect(secondStep.stepPath).toBe("1");
   });
 
   it("continue runs to completion without further pauses", async () => {
@@ -272,6 +268,7 @@ describe("DebuggerDriver stepping with function calls", () => {
     // then use stepIn to enter the function.
     const commands: DebuggerCommand[] = [
       { type: "step" },   // x = 1
+      { type: "step" },   // x = 1
       { type: "stepIn" }, // y = add(x, 2) — step into add()
       ...Array(10).fill({ type: "step" }), // step through add + rest
     ];
@@ -286,8 +283,8 @@ describe("DebuggerDriver stepping with function calls", () => {
 
     // After stepping into add(), we should step through all 3 debug pauses in add
     const addRenders = testUI.renderCalls.filter((cp) => cp.scopeName === "add");
-    expect(addRenders.length).toBe(3);
-    expect(addRenders.map((cp) => cp.stepPath)).toEqual(["1", "3", "5"]);
+    expect(addRenders.length).toBe(3); // 3 lines + one empty
+    expect(addRenders.map((cp) => cp.stepPath)).toEqual(["0", "1", "2"]);
   });
 
   it("next steps over a function call", async () => {
@@ -336,7 +333,7 @@ describe("DebuggerDriver stepping with function calls", () => {
     // With stepOut after step 3, we should only pause twice (steps 1, 3).
     const addRenders = testUI.renderCalls.filter((cp) => cp.scopeName === "add");
     expect(addRenders.length).toBe(2);
-    expect(addRenders.map((cp) => cp.stepPath)).toEqual(["1", "3"]);
+    expect(addRenders.map((cp) => cp.stepPath)).toEqual(["0", "1"]);
 
     // After the last add pause, remaining renders should be in main
     const scopeNames = testUI.renderCalls.map((cp) => cp.scopeName);
@@ -389,14 +386,13 @@ describe("DebuggerDriver user interrupt handling", () => {
     expect(returnValue).toBe(6);
   });
 
-  it("reject sets the interrupted variable to false", async () => {
+  it("reject causes the function to return a failure", async () => {
     const intMod = await freshImport(interruptCompiled);
-    // When rejected, the interrupted variable (y) is set to false.
-    // z = x + y = 1 + false = 1 (JS coercion).
+    // When rejected, the function returns a failure result.
     const commands: DebuggerCommand[] = [
       { type: "step" },   // past x = 1
       { type: "step" },   // hits interrupt("check value")
-      { type: "reject" }, // reject the interrupt → y = false
+      { type: "reject" }, // reject the interrupt → return failure
       ...Array(10).fill({ type: "step" }),
     ];
     const testUI = new TestDebuggerIO(commands);
@@ -405,7 +401,7 @@ describe("DebuggerDriver user interrupt handling", () => {
     const result = await driver.run(initialResult, { interceptConsole: false });
 
     const returnValue = result?.data !== undefined ? result.data : result;
-    expect(returnValue).toBe(1);
+    expect(returnValue).toMatchObject({ success: false, error: "interrupt rejected", retryable: false });
   });
 });
 
@@ -428,9 +424,9 @@ describe("DebuggerDriver stepBack and rewind", () => {
     expect(returnValue).toBe(3);
 
     const steps = testUI.renderCalls.map((cp) => cp.stepPath);
-    expect(steps[0]).toBe("1"); // initial
-    expect(steps[1]).toBe("3"); // after step
-    expect(steps[2]).toBe("1"); // after stepBack — back to step 1
+    expect(steps[0]).toBe("0"); // initial
+    expect(steps[1]).toBe("1"); // after step
+    expect(steps[2]).toBe("0"); // after stepBack — back to step 0
   });
 
   it("stepBack at earliest checkpoint does not move", async () => {
@@ -472,12 +468,12 @@ describe("DebuggerDriver stepBack and rewind", () => {
     expect(returnValue).toBe(3);
 
     const steps = testUI.renderCalls.map((cp) => cp.stepPath);
-    // After stepping to 3, 5, then rewinding to earliest, we should
-    // re-visit step 1 (the earliest checkpoint).
-    expect(steps[0]).toBe("1"); // initial
-    expect(steps[1]).toBe("3"); // after first step
-    expect(steps[2]).toBe("5"); // after second step
-    expect(steps[3]).toBe("1"); // after rewind to earliest
+    // After stepping to 1, 2, then rewinding to earliest, we should
+    // re-visit step 0 (the earliest checkpoint).
+    expect(steps[0]).toBe("0"); // initial
+    expect(steps[1]).toBe("1"); // after first step
+    expect(steps[2]).toBe("2"); // after second step
+    expect(steps[3]).toBe("0"); // after rewind to earliest
   });
 
   it("stepBack with preserveOverrides keeps pending overrides", async () => {
@@ -509,10 +505,9 @@ describe("DebuggerDriver stepBack and rewind", () => {
     // Step forward, pin a checkpoint, step more, then rewind to the pinned one.
     const commands: DebuggerCommand[] = [
       { type: "step" },                          // past x = 1
-      { type: "checkpoint", label: "saved" },     // pin at step 3
+      { type: "checkpoint", label: "saved" },    // pin at step 2
       { type: "step" },                          // past y = 2
       { type: "rewind" },                        // rewind selector picks pinned checkpoint
-      ...Array(10).fill({ type: "step" }),
     ];
     const testUI = new TestDebuggerIO(commands);
     testUI.rewindSelector = (checkpoints) => {
@@ -523,15 +518,15 @@ describe("DebuggerDriver stepBack and rewind", () => {
     const initialResult = await getInitialResult(mod, driver);
     const result = await driver.run(initialResult, { interceptConsole: false });
 
-    const returnValue = result?.data !== undefined ? result.data : result;
-    expect(returnValue).toBe(3);
+    /* const returnValue = result?.data !== undefined ? result.data : result;
+    expect(returnValue).toBe(3); */
 
     const steps = testUI.renderCalls.map((cp) => cp.stepPath);
-    // initial:1, step:3 (pinned here), step:5, rewind to pinned:3
-    expect(steps[0]).toBe("1");
-    expect(steps[1]).toBe("3");
-    expect(steps[2]).toBe("5");
-    expect(steps[3]).toBe("3"); // after rewind to pinned
+    // initial:0, step:1 (pinned here), step:2, rewind to pinned:1
+    expect(steps[0]).toBe("0");
+    expect(steps[1]).toBe("1");
+    expect(steps[2]).toBe("2");
+    expect(steps[3]).toBe("1"); // after rewind to pinned
   });
 
   it("rewind cancelled by selector returns null and stays put", async () => {

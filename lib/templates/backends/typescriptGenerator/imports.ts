@@ -4,15 +4,15 @@
 import { apply } from "typestache";
 
 export const template = `import { fileURLToPath } from "url";
-import process from "process";
+import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
-import * as smoltalk from "agency-lang";
+import { goToNode, color, nanoid } from "agency-lang";
+import { smoltalk } from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -23,11 +23,11 @@ import {
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
   rewindFrom as _rewindFrom,
-  ToolCallError,
   RestoreSignal,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
+  success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
@@ -36,7 +36,7 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const __cwd = process.cwd();
+const __cwd = __process.cwd();
 
 const getDirname = () => __dirname;
 

@@ -1,0 +1,7 @@
+node foo() {
+  const approved = interrupt("Do you approve this action?")
+  if (approved == true) {
+    return "approved"
+  }
+  return "not approved"
+}

@@ -1,13 +1,12 @@
 import * as smoltalk from "smoltalk";
 import { RestoreSignal } from "./errors.js";
+import { applyOverrides } from "./rewind.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 import { RuntimeContext } from "./state/context.js";
 import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
-import { ThreadStore } from "./state/threadStore.js";
-import { Approved, GraphState, Propagated, Rejected } from "./types.js";
+import { Approved, GraphState, Rejected } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
-import { applyOverrides } from "./rewind.js";
 
 export type InterruptApprove = {
   type: "approve";
@@ -116,48 +115,16 @@ export async function interruptWithHandlers<T = any>(
   for (let i = ctx.handlers.length - 1; i >= 0; i--) {
     const result = await ctx.handlers[i](data);
     if (result === undefined) {
-      await ctx.audit({
-        type: "handlerResult",
-        handlerIndex: i,
-        data,
-        result: "passthrough",
-      });
       continue;
     }
     if (result.type === "rejected") {
-      await ctx.audit({
-        type: "handlerResult",
-        handlerIndex: i,
-        data,
-        result: "rejected",
-        value: result.value,
-      });
-      await ctx.audit({
-        type: "handlerDecision",
-        data,
-        decision: "rejected",
-        value: result.value,
-      });
       return { type: "rejected", value: result.value };
     }
     if (result.type === "propagated") {
-      await ctx.audit({
-        type: "handlerResult",
-        handlerIndex: i,
-        data,
-        result: "propagated",
-      });
       hasPropagation = true;
       continue;
     }
     if (result.type === "approved") {
-      await ctx.audit({
-        type: "handlerResult",
-        handlerIndex: i,
-        data,
-        result: "approved",
-        value: result.value,
-      });
       hasApproval = true;
       approvedValue = result.value;
       continue;
@@ -167,19 +134,11 @@ export async function interruptWithHandlers<T = any>(
     );
   }
   if (hasPropagation) {
-    await ctx.audit({ type: "handlerDecision", data, decision: "propagated" });
     return interrupt(data);
   }
   if (hasApproval) {
-    await ctx.audit({
-      type: "handlerDecision",
-      data,
-      decision: "approved",
-      value: approvedValue,
-    });
     return { type: "approved", value: approvedValue };
   }
-  await ctx.audit({ type: "handlerDecision", data, decision: "unhandled" });
   return interrupt(data);
 }
 
@@ -214,8 +173,6 @@ export async function respondToInterrupt(args: {
   overrides?: Record<string, unknown>;
   metadata?: Record<string, any>;
 }): Promise<any> {
-  // console.log(color.green(JSON.stringify({ args }, null, 2)));
-  //const { interrupt, interruptResponse, metadata = {} } = args;
   const interrupt = deepClone(args.interrupt);
   const interruptResponse = deepClone(args.interruptResponse);
   const { ctx, metadata = {} } = args;
@@ -233,11 +190,6 @@ export async function respondToInterrupt(args: {
 
   if (args.overrides) {
     applyOverrides(checkpoint, args.overrides);
-    await ctx.audit({
-      type: "override",
-      overrides: args.overrides,
-      source: "interrupt",
-    });
   }
 
   const execCtx = ctx.createExecutionContext();
@@ -268,16 +220,12 @@ export async function respondToInterrupt(args: {
   }
 
   let nodeName = checkpoint.nodeId;
-  await execCtx.audit({ type: "interrupt", nodeName, args: interruptResponse });
   try {
     while (true) {
       try {
         const result = await execCtx.graph.run(
           nodeName,
           {
-            // todo user should be able to pass messages
-            // in metadata
-            messages: new ThreadStore(),
             data: {},
             ctx: execCtx,
             isResume: true,
@@ -291,11 +239,6 @@ export async function respondToInterrupt(args: {
         if (e instanceof RestoreSignal) {
           const cp = e.checkpoint;
           execCtx.restoreState(cp);
-          await execCtx.audit({
-            type: "restore",
-            checkpointId: cp.id,
-            nodeName: cp.nodeId,
-          });
           nodeName = cp.nodeId;
           execCtx.stateStack.nodesTraversed = [cp.nodeId];
           continue;
@@ -425,12 +368,9 @@ export async function resumeFromState(args: {
         const result = await execCtx.graph.run(
           nodeName,
           {
-            // todo: is this correct? Do we need to pass messages here?
-            messages: new ThreadStore(),
             ctx: execCtx,
             isResume: true,
             data: {},
-            //interruptData
           },
           { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) },
         );
@@ -440,11 +380,6 @@ export async function resumeFromState(args: {
         if (e instanceof RestoreSignal) {
           const cp = e.checkpoint;
           execCtx.restoreState(cp);
-          await execCtx.audit({
-            type: "restore",
-            checkpointId: cp.id,
-            nodeName: cp.nodeId,
-          });
           nodeName = cp.nodeId;
           execCtx.stateStack.nodesTraversed = [cp.nodeId];
           continue;

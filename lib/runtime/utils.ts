@@ -73,7 +73,7 @@ export function createReturnObject<T>({
   result,
   globals,
 }: {
-  result: { data: T; messages: ThreadStore };
+  result: { data: T; messages?: ThreadStore };
   globals: GlobalStore;
 }): RunNodeResult<T> {
   // Note: we're *not* using structuredClone here because structuredClone

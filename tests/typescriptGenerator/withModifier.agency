@@ -1,0 +1,8 @@
+def foo() {
+  return interrupt("check")
+}
+
+node main() {
+  const result = foo() with approve
+  return result
+}

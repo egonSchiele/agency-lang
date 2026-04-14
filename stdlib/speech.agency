@@ -1,13 +1,13 @@
 import { _speak, _transcribe } from "./lib/speech.js"
 
-def speak(text: string, voice: string = "", rate: number = 0, outputFile: string = "") {
+export def speak(text: string, voice: string = "", rate: number = 0, outputFile: string = "") {
   """
   A tool for speaking text aloud using text-to-speech. Optionally specify a voice name, rate in words per minute, and an output file to save the audio to instead of playing it.
   """
   _speak(text, voice, rate, outputFile)
 }
 
-def transcribe(filepath: string, language: string = ""): string {
+export def transcribe(filepath: string, language: string = ""): string {
   """
   A tool for transcribing an audio file to text using OpenAI's Whisper API. Optionally specify a language code (e.g. "en") for better accuracy.
   """

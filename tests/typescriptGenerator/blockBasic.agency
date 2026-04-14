@@ -1,0 +1,12 @@
+def twice(block: () => string): string[] {
+  let a: string = block()
+  let b: string = block()
+  return [a, b]
+}
+
+node main() {
+  let results = twice() as {
+    return "hello"
+  }
+  print(results)
+}

@@ -1,0 +1,16 @@
+global let threshold = 10
+
+def check(value: number): Result {
+  if (value < threshold) {
+    return failure("too low")
+  }
+  return success(value)
+}
+
+node main() {
+  let result = check(5)
+  if (isFailure(result)) {
+    restore(result.checkpoint, { globals: { threshold: 3 } })
+  }
+  return result.value
+}

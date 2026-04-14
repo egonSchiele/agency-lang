@@ -50,23 +50,6 @@
           "scope": "local"
         },
         {
-          "type": "sentinel",
-          "value": "checkpoint",
-          "data": {
-            "targetVariable": "result",
-            "prompt": {
-              "type": "string",
-              "segments": [
-                {
-                  "type": "text",
-                  "value": "Hello, {name}!"
-                }
-              ]
-            },
-            "scope": "local"
-          }
-        },
-        {
           "type": "returnStatement",
           "value": {
             "type": "variableName",

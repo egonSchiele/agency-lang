@@ -1,0 +1,12 @@
+if (__error instanceof RestoreSignal) {
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: {{{functionName}}},
+    args: __stack.args,
+  }
+);

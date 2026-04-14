@@ -1,13 +1,13 @@
 import { fileURLToPath } from "url";
-import process from "process";
+import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
-import * as smoltalk from "agency-lang";
+import { goToNode, color, nanoid } from "agency-lang";
+import { smoltalk } from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -18,11 +18,11 @@ import {
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
   rewindFrom as _rewindFrom,
-  ToolCallError,
   RestoreSignal,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
+  success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
@@ -31,26 +31,26 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const __cwd = process.cwd();
+const __cwd = __process.cwd();
 
 const getDirname = () => __dirname;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
-    host: "https://agency-lang.com",
-    apiKey: process.env["STATELOG_API_KEY"] || "",
+    host: "https://statelog.adit.io",
+    apiKey: __process.env["STATELOG_API_KEY"] || "",
     projectId: "",
     debugMode: false
   },
   smoltalkDefaults: {
-    openAiApiKey: process.env["OPENAI_API_KEY"] || "",
-    googleApiKey: process.env["GEMINI_API_KEY"] || "",
+    openAiApiKey: __process.env["OPENAI_API_KEY"] || "",
+    googleApiKey: __process.env["GEMINI_API_KEY"] || "",
     model: "gpt-4o-mini",
     logLevel: "warn",
     statelog: {
-      host: "https://agency-lang.com",
+      host: "https://statelog.adit.io",
       projectId: "smoltalk",
-      apiKey: process.env["STATELOG_SMOLTALK_API_KEY"] || "",
+      apiKey: __process.env["STATELOG_SMOLTALK_API_KEY"] || "",
       traceId: nanoid()
     }
   },
@@ -84,7 +84,7 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
-function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("function-with-types.agency")
 }
 export const __addTool = {
@@ -173,7 +173,7 @@ const __toolRegistry = {
     }
   }
 };
-export async function add(x: number, y: number, __state: InternalFunctionState | undefined = undefined) {
+async function add(x: number, y: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -188,7 +188,7 @@ const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("function-with-types.agency")) {
-    __initializeGlobals(__ctx)
+    await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
   await callHook({
@@ -203,25 +203,31 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "add",
-    args: {
-      x: x,
-      y: y
-    },
-    result: undefined
-  })
   __stack.args["x"] = x;
   __stack.args["y"] = y;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "add" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "function-with-types.agency", scopeName: "add", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  if ("x" in __overrides) {
+    x = __overrides["x"];
+    __stack.args["x"] = x;
+  }
+  if ("y" in __overrides) {
+    y = __overrides["y"];
+    __stack.args["y"] = y;
+  }
+
+}
+
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            __self.__removedTools = __self.__removedTools || [];
+    await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
         ctx: __ctx,
         prompt: `add ${__stack.args.x} and ${__stack.args.y}`,
@@ -231,64 +237,33 @@ __stack.locals.result = await runPrompt({
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
       });
-// return early from node if this is an interrupt
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.result)) {
         await __ctx.pendingPromises.awaitAll()
-        return __stack.locals.result;
+        runner.halt(__stack.locals.result)
+        return;
       }
-      await __ctx.audit({
-        type: "assignment",
-        variable: "__self.__removedTools",
-        value: __self.__removedTools
-      })
-            __stack.step++;
-    }
-    if (__step <= 2) {
-            if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "add", stepPath: "2" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "result",
-          prompt: `add ${__stack.args.x} and ${__stack.args.y}`,
-          response: __stack.locals.result,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
     });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-            __stack.step++;
-    }
-    if (__step <= 3) {
-            const __auditReturnValue = __stack.locals.result;
-await __ctx.audit({
-        type: "return",
-        value: __auditReturnValue
-      })
+    await runner.step(1, async (runner) => {
 __functionCompleted = true;
-return __auditReturnValue
-            __stack.step++;
-    }
+runner.halt(__stack.locals.result)
+return;
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
-      throw __error
-    }
-    if (__error instanceof ToolCallError) {
-      __error.retryable = __error.retryable && __self.__retryable
-      throw __error
-    }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "add",
+    args: __stack.args,
+  }
+);
+
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -303,7 +278,7 @@ return __auditReturnValue
     }
   }
 }
-export async function greet(name: string, __state: InternalFunctionState | undefined = undefined) {
+async function greet(name: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -318,7 +293,7 @@ const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("function-with-types.agency")) {
-    __initializeGlobals(__ctx)
+    await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
   await callHook({
@@ -332,23 +307,26 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "greet",
-    args: {
-      name: name
-    },
-    result: undefined
-  })
   __stack.args["name"] = name;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "greet" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "function-with-types.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  if ("name" in __overrides) {
+    name = __overrides["name"];
+    __stack.args["name"] = name;
+  }
+
+}
+
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            __self.__removedTools = __self.__removedTools || [];
+    await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.message = await runPrompt({
         ctx: __ctx,
         prompt: `Hello ${__stack.args.name}!`,
@@ -358,64 +336,33 @@ __stack.locals.message = await runPrompt({
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
       });
-// return early from node if this is an interrupt
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.message)) {
         await __ctx.pendingPromises.awaitAll()
-        return __stack.locals.message;
+        runner.halt(__stack.locals.message)
+        return;
       }
-      await __ctx.audit({
-        type: "assignment",
-        variable: "__self.__removedTools",
-        value: __self.__removedTools
-      })
-            __stack.step++;
-    }
-    if (__step <= 2) {
-            if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "greet", stepPath: "2" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "message",
-          prompt: `Hello ${__stack.args.name}!`,
-          response: __stack.locals.message,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
     });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-            __stack.step++;
-    }
-    if (__step <= 3) {
-            const __auditReturnValue = __stack.locals.message;
-await __ctx.audit({
-        type: "return",
-        value: __auditReturnValue
-      })
+    await runner.step(1, async (runner) => {
 __functionCompleted = true;
-return __auditReturnValue
-            __stack.step++;
-    }
+runner.halt(__stack.locals.message)
+return;
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
-      throw __error
-    }
-    if (__error instanceof ToolCallError) {
-      __error.retryable = __error.retryable && __self.__retryable
-      throw __error
-    }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "greet",
+    args: __stack.args,
+  }
+);
+
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -430,7 +377,7 @@ return __auditReturnValue
     }
   }
 }
-export async function mixed(count: number, label: any, __state: InternalFunctionState | undefined = undefined) {
+async function mixed(count: number, label: any, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -445,7 +392,7 @@ const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("function-with-types.agency")) {
-    __initializeGlobals(__ctx)
+    await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
   await callHook({
@@ -460,25 +407,31 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "mixed",
-    args: {
-      count: count,
-      label: label
-    },
-    result: undefined
-  })
   __stack.args["count"] = count;
   __stack.args["label"] = label;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "mixed" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "function-with-types.agency", scopeName: "mixed", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  if ("count" in __overrides) {
+    count = __overrides["count"];
+    __stack.args["count"] = count;
+  }
+  if ("label" in __overrides) {
+    label = __overrides["label"];
+    __stack.args["label"] = label;
+  }
+
+}
+
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            __self.__removedTools = __self.__removedTools || [];
+    await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.output = await runPrompt({
         ctx: __ctx,
         prompt: `${__stack.args.label}: ${__stack.args.count}`,
@@ -488,64 +441,33 @@ __stack.locals.output = await runPrompt({
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
       });
-// return early from node if this is an interrupt
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.output)) {
         await __ctx.pendingPromises.awaitAll()
-        return __stack.locals.output;
+        runner.halt(__stack.locals.output)
+        return;
       }
-      await __ctx.audit({
-        type: "assignment",
-        variable: "__self.__removedTools",
-        value: __self.__removedTools
-      })
-            __stack.step++;
-    }
-    if (__step <= 2) {
-            if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "mixed", stepPath: "2" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "output",
-          prompt: `${__stack.args.label}: ${__stack.args.count}`,
-          response: __stack.locals.output,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
     });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-            __stack.step++;
-    }
-    if (__step <= 3) {
-            const __auditReturnValue = __stack.locals.output;
-await __ctx.audit({
-        type: "return",
-        value: __auditReturnValue
-      })
+    await runner.step(1, async (runner) => {
 __functionCompleted = true;
-return __auditReturnValue
-            __stack.step++;
-    }
+runner.halt(__stack.locals.output)
+return;
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
-      throw __error
-    }
-    if (__error instanceof ToolCallError) {
-      __error.retryable = __error.retryable && __self.__retryable
-      throw __error
-    }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "mixed",
+    args: __stack.args,
+  }
+);
+
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -560,7 +482,7 @@ return __auditReturnValue
     }
   }
 }
-export async function processArray(items: number[], __state: InternalFunctionState | undefined = undefined) {
+async function processArray(items: number[], __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -575,7 +497,7 @@ const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("function-with-types.agency")) {
-    __initializeGlobals(__ctx)
+    await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
   await callHook({
@@ -589,23 +511,26 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "processArray",
-    args: {
-      items: items
-    },
-    result: undefined
-  })
   __stack.args["items"] = items;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "processArray" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "function-with-types.agency", scopeName: "processArray", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  if ("items" in __overrides) {
+    items = __overrides["items"];
+    __stack.args["items"] = items;
+  }
+
+}
+
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            __self.__removedTools = __self.__removedTools || [];
+    await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
         ctx: __ctx,
         prompt: `Processing array with ${__stack.args.items} items`,
@@ -615,64 +540,33 @@ __stack.locals.result = await runPrompt({
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
       });
-// return early from node if this is an interrupt
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.result)) {
         await __ctx.pendingPromises.awaitAll()
-        return __stack.locals.result;
+        runner.halt(__stack.locals.result)
+        return;
       }
-      await __ctx.audit({
-        type: "assignment",
-        variable: "__self.__removedTools",
-        value: __self.__removedTools
-      })
-            __stack.step++;
-    }
-    if (__step <= 2) {
-            if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "processArray", stepPath: "2" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "result",
-          prompt: `Processing array with ${__stack.args.items} items`,
-          response: __stack.locals.result,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
     });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-            __stack.step++;
-    }
-    if (__step <= 3) {
-            const __auditReturnValue = __stack.locals.result;
-await __ctx.audit({
-        type: "return",
-        value: __auditReturnValue
-      })
+    await runner.step(1, async (runner) => {
 __functionCompleted = true;
-return __auditReturnValue
-            __stack.step++;
-    }
+runner.halt(__stack.locals.result)
+return;
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
-      throw __error
-    }
-    if (__error instanceof ToolCallError) {
-      __error.retryable = __error.retryable && __self.__retryable
-      throw __error
-    }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "processArray",
+    args: __stack.args,
+  }
+);
+
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -687,7 +581,7 @@ return __auditReturnValue
     }
   }
 }
-export async function flexible(value: string | number, __state: InternalFunctionState | undefined = undefined) {
+async function flexible(value: string | number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -702,7 +596,7 @@ const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("function-with-types.agency")) {
-    __initializeGlobals(__ctx)
+    await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
   await callHook({
@@ -716,23 +610,26 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "flexible",
-    args: {
-      value: value
-    },
-    result: undefined
-  })
   __stack.args["value"] = value;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "flexible" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "function-with-types.agency", scopeName: "flexible", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  if ("value" in __overrides) {
+    value = __overrides["value"];
+    __stack.args["value"] = value;
+  }
+
+}
+
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            __self.__removedTools = __self.__removedTools || [];
+    await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
         ctx: __ctx,
         prompt: `Received value: ${__stack.args.value}`,
@@ -742,64 +639,33 @@ __stack.locals.result = await runPrompt({
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
       });
-// return early from node if this is an interrupt
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.result)) {
         await __ctx.pendingPromises.awaitAll()
-        return __stack.locals.result;
+        runner.halt(__stack.locals.result)
+        return;
       }
-      await __ctx.audit({
-        type: "assignment",
-        variable: "__self.__removedTools",
-        value: __self.__removedTools
-      })
-            __stack.step++;
-    }
-    if (__step <= 2) {
-            if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "function-with-types.agency", scopeName: "flexible", stepPath: "2" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "result",
-          prompt: `Received value: ${__stack.args.value}`,
-          response: __stack.locals.result,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
     });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-            __stack.step++;
-    }
-    if (__step <= 3) {
-            const __auditReturnValue = __stack.locals.result;
-await __ctx.audit({
-        type: "return",
-        value: __auditReturnValue
-      })
+    await runner.step(1, async (runner) => {
 __functionCompleted = true;
-return __auditReturnValue
-            __stack.step++;
-    }
+runner.halt(__stack.locals.result)
+return;
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
-      throw __error
-    }
-    if (__error instanceof ToolCallError) {
-      __error.retryable = __error.retryable && __self.__retryable
-      throw __error
-    }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "flexible",
+    args: __stack.args,
+  }
+);
+
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -834,38 +700,40 @@ let __functionCompleted = false;
       nodeName: "foo"
     }
   })
-  if (__step <= 0) {
-      
-          __stack.step++;
-  }
-  if (__step <= 1) {
-          await print(`This is a node with a return type`)
-          __stack.step++;
-  }
-  if (__step <= 2) {
-          const __auditReturnValue = {
-      messages: __threads,
-      data: `Node completed`
-    };
-await __ctx.audit({
-      type: "return",
-      value: __auditReturnValue
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function-with-types.agency", scopeName: "foo" });
+  try {
+    await runner.step(0, async (runner) => {
+await print(`This is a node with a return type`)
+    });
+    await runner.step(1, async (runner) => {
+runner.halt({
+        messages: __threads,
+        data: `Node completed`
+      })
+return;
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "foo",
+        data: undefined
+      }
     })
-return __auditReturnValue;
-          __stack.step++;
-  }
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "foo",
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "foo" })
+    };
+  }
 })
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
@@ -887,122 +755,108 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  if (__step <= 0) {
-          //  Call the functions
-          __stack.step++;
-  }
-  if (__step <= 1) {
-          __stack.locals.sum = await add(5, 10, {
-      ctx: __ctx,
-      threads: new ThreadStore(),
-      interruptData: __state?.interruptData
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function-with-types.agency", scopeName: "main" });
+  try {
+    await runner.step(0, async (runner) => {
+//  Call the functions
     });
+    await runner.step(1, async (runner) => {
+__stack.locals.sum = await add(5, 10, {
+        ctx: __ctx,
+        threads: __threads,
+        interruptData: __state?.interruptData
+      });
 if (isInterrupt(__stack.locals.sum)) {
-      await __ctx.pendingPromises.awaitAll()
-      return {
-        ...__state,
-        data: __stack.locals.sum
-      };
-    }
-    await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.sum",
-      value: __stack.locals.sum
-    })
-          __stack.step++;
-  }
-  if (__step <= 2) {
-          __stack.locals.greeting = await greet(`Alice`, {
-      ctx: __ctx,
-      threads: new ThreadStore(),
-      interruptData: __state?.interruptData
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __stack.locals.sum
+        })
+        return;
+      }
     });
+    await runner.step(2, async (runner) => {
+__stack.locals.greeting = await greet(`Alice`, {
+        ctx: __ctx,
+        threads: __threads,
+        interruptData: __state?.interruptData
+      });
 if (isInterrupt(__stack.locals.greeting)) {
-      await __ctx.pendingPromises.awaitAll()
-      return {
-        ...__state,
-        data: __stack.locals.greeting
-      };
-    }
-    await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.greeting",
-      value: __stack.locals.greeting
-    })
-          __stack.step++;
-  }
-  if (__step <= 3) {
-          __stack.locals.labeled = await mixed(42, `Answer`, {
-      ctx: __ctx,
-      threads: new ThreadStore(),
-      interruptData: __state?.interruptData
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __stack.locals.greeting
+        })
+        return;
+      }
     });
+    await runner.step(3, async (runner) => {
+__stack.locals.labeled = await mixed(42, `Answer`, {
+        ctx: __ctx,
+        threads: __threads,
+        interruptData: __state?.interruptData
+      });
 if (isInterrupt(__stack.locals.labeled)) {
-      await __ctx.pendingPromises.awaitAll()
-      return {
-        ...__state,
-        data: __stack.locals.labeled
-      };
-    }
-    await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.labeled",
-      value: __stack.locals.labeled
-    })
-          __stack.step++;
-  }
-  if (__step <= 4) {
-          __stack.locals.processed = await processArray([1, 2, 3, 4, 5], {
-      ctx: __ctx,
-      threads: new ThreadStore(),
-      interruptData: __state?.interruptData
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __stack.locals.labeled
+        })
+        return;
+      }
     });
+    await runner.step(4, async (runner) => {
+__stack.locals.processed = await processArray([1, 2, 3, 4, 5], {
+        ctx: __ctx,
+        threads: __threads,
+        interruptData: __state?.interruptData
+      });
 if (isInterrupt(__stack.locals.processed)) {
-      await __ctx.pendingPromises.awaitAll()
-      return {
-        ...__state,
-        data: __stack.locals.processed
-      };
-    }
-    await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.processed",
-      value: __stack.locals.processed
-    })
-          __stack.step++;
-  }
-  if (__step <= 5) {
-          __stack.locals.flexResult = await flexible(`test`, {
-      ctx: __ctx,
-      threads: new ThreadStore(),
-      interruptData: __state?.interruptData
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __stack.locals.processed
+        })
+        return;
+      }
     });
+    await runner.step(5, async (runner) => {
+__stack.locals.flexResult = await flexible(`test`, {
+        ctx: __ctx,
+        threads: __threads,
+        interruptData: __state?.interruptData
+      });
 if (isInterrupt(__stack.locals.flexResult)) {
-      await __ctx.pendingPromises.awaitAll()
-      return {
-        ...__state,
-        data: __stack.locals.flexResult
-      };
-    }
-    await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.flexResult",
-      value: __stack.locals.flexResult
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __stack.locals.flexResult
+        })
+        return;
+      }
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "main",
+        data: undefined
+      }
     })
-          __stack.step++;
-  }
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "main",
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+    };
+  }
 })
 export async function foo({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
@@ -1026,7 +880,7 @@ export async function main({ messages, callbacks }: { messages?: any; callbacks?
   });
 }
 export const __mainNodeParams = [];
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const initialState = {
       messages: new ThreadStore(),
@@ -1039,4 +893,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"function-with-types.agency:add":{"1":{"line":2,"col":2},"3":{"line":3,"col":2}},"function-with-types.agency:greet":{"1":{"line":10,"col":2},"3":{"line":11,"col":2}},"function-with-types.agency:mixed":{"1":{"line":18,"col":2},"3":{"line":19,"col":2}},"function-with-types.agency:processArray":{"1":{"line":26,"col":2},"3":{"line":27,"col":2}},"function-with-types.agency:flexible":{"1":{"line":34,"col":2},"3":{"line":35,"col":2}},"function-with-types.agency:foo":{"1":{"line":39,"col":2},"2":{"line":40,"col":2}},"function-with-types.agency:main":{"1":{"line":45,"col":2},"2":{"line":46,"col":2},"3":{"line":47,"col":2},"4":{"line":48,"col":2},"5":{"line":49,"col":2}}};
+export const __sourceMap = {"function-with-types.agency:add":{"0":{"line":2,"col":2},"1":{"line":3,"col":2}},"function-with-types.agency:greet":{"0":{"line":10,"col":2},"1":{"line":11,"col":2}},"function-with-types.agency:mixed":{"0":{"line":18,"col":2},"1":{"line":19,"col":2}},"function-with-types.agency:processArray":{"0":{"line":26,"col":2},"1":{"line":27,"col":2}},"function-with-types.agency:flexible":{"0":{"line":34,"col":2},"1":{"line":35,"col":2}},"function-with-types.agency:foo":{"0":{"line":39,"col":2},"1":{"line":40,"col":2}},"function-with-types.agency:main":{"1":{"line":45,"col":2},"2":{"line":46,"col":2},"3":{"line":47,"col":2},"4":{"line":48,"col":2},"5":{"line":49,"col":2}}};

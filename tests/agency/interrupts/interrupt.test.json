@@ -1,5 +1,4 @@
 {
-  "sourceFile": "interrupt.agency",
   "tests": [
     {
       "nodeName": "foo",

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { handleBlockParser } from "./function.js";
+import { handleBlockParser } from "./parsers.js";
 import { normalizeCode } from "@/index.js";
 
 describe("handleBlockParser", () => {

@@ -1,6 +1,5 @@
 export type { GraphState, InternalFunctionState, Rejected, Approved, HandlerFn } from "./types.js";
 export type { Interrupt, InterruptResponse } from "./interrupts.js";
-export type { AuditEntry, AuditEntryInput } from "./audit.js";
 export { RuntimeContext } from "./state/context.js";
 export { StateStack, State } from "./state/stateStack.js";
 export { GlobalStore } from "./state/globalStore.js";
@@ -66,7 +65,6 @@ export { runPrompt } from "./prompt.js";
 export type { ToolHandler } from "./prompt.js";
 
 export {
-  ToolCallError,
   ConcurrentInterruptError,
   CheckpointError,
   RestoreSignal,
@@ -75,13 +73,17 @@ export type { RestoreOptions } from "./errors.js";
 
 export { checkpoint, getCheckpoint, restore } from "./checkpoint.js";
 
-export { CheckpointStore } from "./state/checkpointStore.js";
+export { CheckpointStore, RESULT_ENTRY_LABEL } from "./state/checkpointStore.js";
 export type { Checkpoint } from "./state/checkpointStore.js";
 
 export { setupNode, setupFunction, runNode } from "./node.js";
+export { Runner } from "./runner.js";
 
 export { rewindFrom, applyOverrides } from "./rewind.js";
 export type { RewindCheckpoint } from "./rewind.js";
 
 export { debugStep } from "./debugger.js";
 export { DebuggerState } from "../debugger/debuggerState.js";
+
+export { success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult } from "./result.js";
+export type { ResultValue, ResultSuccess, ResultFailure } from "./result.js";

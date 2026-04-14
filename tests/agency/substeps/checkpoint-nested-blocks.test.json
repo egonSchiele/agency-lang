@@ -1,12 +1,15 @@
 {
-  "sourceFile": "checkpoint-nested-blocks.agency",
   "tests": [
     {
       "nodeName": "main",
       "description": "Checkpoint with if inside for loop restores correctly, condbranch resets per iteration",
       "input": "",
       "expectedOutput": "\"start,a,b,start,a,b,\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

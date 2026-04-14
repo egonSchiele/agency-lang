@@ -1,0 +1,25 @@
+import { _bash } from "./lib/process.js"
+
+type BashResult {
+  stdout: string
+  stderr: string
+  exitCode: number
+}
+
+def bash(command: string, cwd?: string, timeout?: number, stdin?: string, env?: object, maxBuffer?: number): BashResult {
+  """
+  A tool for running a shell command and returning its stdout, stderr, and exit code.
+  """
+  return interrupt({
+    type: "std::bash",
+    message: "Are you sure you want to run this shell command?",
+    command: command,
+    cwd: cwd,
+    timeout: timeout,
+    stdin: stdin,
+    env: env,
+    maxBuffer: maxBuffer
+  })
+
+  return _bash(command, cwd, timeout, stdin, env, maxBuffer)
+}

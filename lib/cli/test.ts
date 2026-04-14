@@ -34,8 +34,9 @@ type TestCase = {
   interruptHandlers?: InterruptHandler[];
   description?: string;
   retry?: number;
+  skip?: boolean;
 };
-type Tests = { sourceFile: string; tests: TestCase[] };
+type Tests = { sourceFile?: string; tests: TestCase[] };
 
 function readFile(filename: string): string {
   console.log("Trying to read file", filename, "...");
@@ -57,7 +58,7 @@ function writeTestCase(
   if (fs.existsSync(testFilePath)) {
     tests = JSON.parse(fs.readFileSync(testFilePath, "utf-8"));
   } else {
-    tests = { sourceFile: path.basename(agencyFilename), tests: [] };
+    tests = { tests: [] };
   }
   const testCase: TestCase = {
     nodeName,
@@ -390,15 +391,11 @@ async function runWithConcurrency<T, R>(
 async function runSingleTest(
   config: AgencyConfig,
   testFile: string,
-  tests: Tests,
   testCase: TestCase,
   log: Logger,
 ): Promise<boolean> {
   const hasArgs = testCase.input !== "";
-  const relativeSourceFilePath = path.join(
-    path.dirname(testFile),
-    tests.sourceFile,
-  );
+  const relativeSourceFilePath = testFile.replace(".test.json", ".agency");
   let result: { data: any; stdout: string; stderr: string };
   try {
     result = await executeNodeAsync({
@@ -470,6 +467,14 @@ async function runSingleTest(
 function collectTestFiles(inputPath: string): string[] {
   const fileStats = fs.statSync(inputPath);
   if (!fileStats.isDirectory()) {
+    if (inputPath.endsWith(".agency")) {
+      const testFile = inputPath.replace(/\.agency$/, ".test.json");
+      if (!fs.existsSync(testFile)) {
+        console.error(`Error: No test file found for '${inputPath}' (expected '${testFile}')`);
+        process.exit(1);
+      }
+      return [testFile];
+    }
     return [inputPath];
   }
   const files: string[] = [];
@@ -493,6 +498,8 @@ async function runTestFile(
     let passed = 0;
     const total = tests.tests.length;
 
+    let skipped = 0;
+
     for (let i = 0; i < total; i++) {
       const testCase = tests.tests[i];
       const interruptInfo = testCase.interruptHandlers
@@ -506,6 +513,12 @@ async function runTestFile(
         log(color.cyan("Description:", testCase.description) + "\n");
       }
 
+      if (testCase.skip) {
+        log(color.yellow(`  ⊘ Skipped`));
+        skipped++;
+        continue;
+      }
+
       const maxAttempts = (testCase.retry ?? 0) + 1;
       let testPassed = false;
 
@@ -514,7 +527,7 @@ async function runTestFile(
           log(color.yellow(`  Retry ${attempt - 1}/${testCase.retry}...`));
         }
         try {
-          testPassed = await runSingleTest(config, testFile, tests, testCase, log);
+          testPassed = await runSingleTest(config, testFile, testCase, log);
           if (testPassed) break;
         } catch (e) {
           exitIfSignal(e);
@@ -526,8 +539,10 @@ async function runTestFile(
       if (testPassed) passed++;
     }
 
-    const failed = total - passed;
-    log(`\n${passed}/${total} tests passed`);
+    const ran = total - skipped;
+    const failed = ran - passed;
+    const skipMsg = skipped > 0 ? ` (${skipped} skipped)` : "";
+    log(`\n${passed}/${ran} tests passed${skipMsg}`);
 
     return {
       passed,

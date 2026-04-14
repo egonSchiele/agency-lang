@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Function call in return expression is only executed once, not duplicated by audit",
+      "input": "",
+      "expectedOutput": "{\"result\":10,\"log\":[\"called:5\"]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

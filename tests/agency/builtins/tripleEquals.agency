@@ -1,0 +1,7 @@
+node main() {
+  const a = 5 === 5
+  const b = 5 === 3
+  const c = "hello" === "hello"
+  const d = "hello" === "world"
+  return { a: a, b: b, c: c, d: d }
+}

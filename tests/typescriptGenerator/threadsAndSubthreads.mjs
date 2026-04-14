@@ -1,13 +1,13 @@
 import { fileURLToPath } from "url";
-import process from "process";
+import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
-import * as smoltalk from "agency-lang";
+import { goToNode, color, nanoid } from "agency-lang";
+import { smoltalk } from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -18,11 +18,11 @@ import {
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
   rewindFrom as _rewindFrom,
-  ToolCallError,
   RestoreSignal,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
+  success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
@@ -31,26 +31,26 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const __cwd = process.cwd();
+const __cwd = __process.cwd();
 
 const getDirname = () => __dirname;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
-    host: "https://agency-lang.com",
-    apiKey: process.env["STATELOG_API_KEY"] || "",
+    host: "https://statelog.adit.io",
+    apiKey: __process.env["STATELOG_API_KEY"] || "",
     projectId: "",
     debugMode: false
   },
   smoltalkDefaults: {
-    openAiApiKey: process.env["OPENAI_API_KEY"] || "",
-    googleApiKey: process.env["GEMINI_API_KEY"] || "",
+    openAiApiKey: __process.env["OPENAI_API_KEY"] || "",
+    googleApiKey: __process.env["GEMINI_API_KEY"] || "",
     model: "gpt-4o-mini",
     logLevel: "warn",
     statelog: {
-      host: "https://agency-lang.com",
+      host: "https://statelog.adit.io",
       projectId: "smoltalk",
-      apiKey: process.env["STATELOG_SMOLTALK_API_KEY"] || "",
+      apiKey: __process.env["STATELOG_SMOLTALK_API_KEY"] || "",
       traceId: nanoid()
     }
   },
@@ -84,7 +84,7 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
-function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("threadsAndSubthreads.agency")
 }
 export const __fooTool = {
@@ -113,7 +113,7 @@ const __toolRegistry = {
     }
   }
 };
-export async function foo(__state: InternalFunctionState | undefined = undefined) {
+async function foo(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -128,7 +128,7 @@ const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("threadsAndSubthreads.agency")) {
-    __initializeGlobals(__ctx)
+    await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
   await callHook({
@@ -140,92 +140,26 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "foo",
-    args: {},
-    result: undefined
-  })
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "threadsAndSubthreads.agency", scopeName: "foo" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "foo", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+
+}
+
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            const __sub_1 = __stack.locals.__substep_1 ?? 0;
-if (__sub_1 <= 0) {
-  const __tid = __threads.create();
-__threads.pushActive(__tid)
-
-  __stack.locals.__substep_1 = 1;
-}
-
-if (__sub_1 <= 1) {
-  __self.__removedTools = __self.__removedTools || [];
+    await runner.step(0, async (runner) => {
+await runner.thread(0, __threads, "create", async (runner) => {
+await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.res1 = await runPrompt({
-          ctx: __ctx,
-          prompt: `What are the first 5 prime numbers?`,
-          messages: __threads.getOrCreateActive(),
-          responseFormat: z.object({
-            response: z.array(z.number())
-          }),
-          clientConfig: {},
-          maxToolCallRounds: 10,
-          interruptData: __state?.interruptData,
-          removedTools: __self.__removedTools
-        });
-// return early from node if this is an interrupt
-if (isInterrupt(__stack.locals.res1)) {
-          await __ctx.pendingPromises.awaitAll()
-          return __stack.locals.res1;
-        }
-
-  __stack.locals.__substep_1 = 2;
-}
-
-if (__sub_1 <= 2) {
-  if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "foo", stepPath: "1.2" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "res1",
-          prompt: `What are the first 5 prime numbers?`,
-          response: __stack.locals.res1,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-  __stack.locals.__substep_1 = 3;
-}
-
-if (__sub_1 <= 3) {
-  const __sub_1_3 = __stack.locals.__substep_1_3 ?? 0;
-if (__sub_1_3 <= 0) {
-  const __tid = __threads.createSubthread();
-__threads.pushActive(__tid)
-
-  __stack.locals.__substep_1_3 = 1;
-}
-
-if (__sub_1_3 <= 1) {
-  __self.__removedTools = __self.__removedTools || [];
-__stack.locals.res2 = await runPrompt({
             ctx: __ctx,
-            prompt: `What are the next 2 prime numbers after those?`,
+            prompt: `What are the first 5 prime numbers?`,
             messages: __threads.getOrCreateActive(),
             responseFormat: z.object({
               response: z.array(z.number())
@@ -235,281 +169,145 @@ __stack.locals.res2 = await runPrompt({
             interruptData: __state?.interruptData,
             removedTools: __self.__removedTools
           });
-// return early from node if this is an interrupt
+// halt if this is an interrupt
+if (isInterrupt(__stack.locals.res1)) {
+            await __ctx.pendingPromises.awaitAll()
+            runner.halt(__stack.locals.res1)
+            return;
+          }
+        });
+await runner.step(1, async (runner) => {
+await runner.thread(1, __threads, "createSubthread", async (runner) => {
+await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
+__stack.locals.res2 = await runPrompt({
+                ctx: __ctx,
+                prompt: `What are the next 2 prime numbers after those?`,
+                messages: __threads.getOrCreateActive(),
+                responseFormat: z.object({
+                  response: z.array(z.number())
+                }),
+                clientConfig: {},
+                maxToolCallRounds: 10,
+                interruptData: __state?.interruptData,
+                removedTools: __self.__removedTools
+              });
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.res2)) {
-            await __ctx.pendingPromises.awaitAll()
-            return __stack.locals.res2;
-          }
-
-  __stack.locals.__substep_1_3 = 2;
-}
-
-if (__sub_1_3 <= 2) {
-  if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "foo", stepPath: "1.3.2" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "res2",
-          prompt: `What are the next 2 prime numbers after those?`,
-          response: __stack.locals.res2,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-  __stack.locals.__substep_1_3 = 3;
-}
-
-if (__sub_1_3 <= 3) {
-  const __sub_1_3_3 = __stack.locals.__substep_1_3_3 ?? 0;
-if (__sub_1_3_3 <= 0) {
-  const __tid = __threads.createSubthread();
-__threads.pushActive(__tid)
-
-  __stack.locals.__substep_1_3_3 = 1;
-}
-
-if (__sub_1_3_3 <= 1) {
-  __self.__removedTools = __self.__removedTools || [];
+                await __ctx.pendingPromises.awaitAll()
+                runner.halt(__stack.locals.res2)
+                return;
+              }
+            });
+await runner.step(1, async (runner) => {
+await runner.thread(1, __threads, "createSubthread", async (runner) => {
+await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.res3 = await runPrompt({
-              ctx: __ctx,
-              prompt: `And what is the sum of all those numbers combined?`,
-              messages: __threads.getOrCreateActive(),
-              responseFormat: z.object({
-                response: z.number()
-              }),
-              clientConfig: {},
-              maxToolCallRounds: 10,
-              interruptData: __state?.interruptData,
-              removedTools: __self.__removedTools
-            });
-// return early from node if this is an interrupt
+                    ctx: __ctx,
+                    prompt: `And what is the sum of all those numbers combined?`,
+                    messages: __threads.getOrCreateActive(),
+                    responseFormat: z.object({
+                      response: z.number()
+                    }),
+                    clientConfig: {},
+                    maxToolCallRounds: 10,
+                    interruptData: __state?.interruptData,
+                    removedTools: __self.__removedTools
+                  });
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.res3)) {
-              await __ctx.pendingPromises.awaitAll()
-              return __stack.locals.res3;
-            }
-
-  __stack.locals.__substep_1_3_3 = 2;
-}
-
-if (__sub_1_3_3 <= 2) {
-  if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "foo", stepPath: "1.3.3.2" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "res3",
-          prompt: `And what is the sum of all those numbers combined?`,
-          response: __stack.locals.res3,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-  __stack.locals.__substep_1_3_3 = 3;
-}
-
-__threads.popActive();
-
-
-  __stack.locals.__substep_1_3 = 4;
-}
-
-if (__sub_1_3 <= 4) {
-  const __sub_1_3_4 = __stack.locals.__substep_1_3_4 ?? 0;
-if (__sub_1_3_4 <= 0) {
-  const __tid = __threads.create();
-__threads.pushActive(__tid)
-
-  __stack.locals.__substep_1_3_4 = 1;
-}
-
-if (__sub_1_3_4 <= 1) {
-  __self.__removedTools = __self.__removedTools || [];
-__stack.locals.res5 = await runPrompt({
-              ctx: __ctx,
-              prompt: `And what is the sum of all those numbers combined?`,
-              messages: __threads.getOrCreateActive(),
-              responseFormat: z.object({
-                response: z.number()
-              }),
-              clientConfig: {},
-              maxToolCallRounds: 10,
-              interruptData: __state?.interruptData,
-              removedTools: __self.__removedTools
+                    await __ctx.pendingPromises.awaitAll()
+                    runner.halt(__stack.locals.res3)
+                    return;
+                  }
+                });
+              });
             });
-// return early from node if this is an interrupt
+await runner.step(2, async (runner) => {
+await runner.thread(2, __threads, "create", async (runner) => {
+await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
+__stack.locals.res5 = await runPrompt({
+                    ctx: __ctx,
+                    prompt: `And what is the sum of all those numbers combined?`,
+                    messages: __threads.getOrCreateActive(),
+                    responseFormat: z.object({
+                      response: z.number()
+                    }),
+                    clientConfig: {},
+                    maxToolCallRounds: 10,
+                    interruptData: __state?.interruptData,
+                    removedTools: __self.__removedTools
+                  });
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.res5)) {
-              await __ctx.pendingPromises.awaitAll()
-              return __stack.locals.res5;
-            }
-
-  __stack.locals.__substep_1_3_4 = 2;
-}
-
-if (__sub_1_3_4 <= 2) {
-  if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "foo", stepPath: "1.3.4.2" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "res5",
-          prompt: `And what is the sum of all those numbers combined?`,
-          response: __stack.locals.res5,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-  __stack.locals.__substep_1_3_4 = 3;
-}
-
-__threads.popActive();
-
-
-  __stack.locals.__substep_1_3 = 5;
-}
-
-__threads.popActive();
-
-
-  __stack.locals.__substep_1 = 4;
-}
-
-if (__sub_1 <= 4) {
-  const __sub_1_4 = __stack.locals.__substep_1_4 ?? 0;
-if (__sub_1_4 <= 0) {
-  const __tid = __threads.createSubthread();
-__threads.pushActive(__tid)
-
-  __stack.locals.__substep_1_4 = 1;
-}
-
-if (__sub_1_4 <= 1) {
-  __self.__removedTools = __self.__removedTools || [];
-__stack.locals.res4 = await runPrompt({
-            ctx: __ctx,
-            prompt: `And what is the sum of all those numbers combined?`,
-            messages: __threads.getOrCreateActive(),
-            responseFormat: z.object({
-              response: z.number()
-            }),
-            clientConfig: {},
-            maxToolCallRounds: 10,
-            interruptData: __state?.interruptData,
-            removedTools: __self.__removedTools
+                    await __ctx.pendingPromises.awaitAll()
+                    runner.halt(__stack.locals.res5)
+                    return;
+                  }
+                });
+              });
+            });
           });
-// return early from node if this is an interrupt
+        });
+await runner.step(2, async (runner) => {
+await runner.thread(2, __threads, "createSubthread", async (runner) => {
+await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
+__stack.locals.res4 = await runPrompt({
+                ctx: __ctx,
+                prompt: `And what is the sum of all those numbers combined?`,
+                messages: __threads.getOrCreateActive(),
+                responseFormat: z.object({
+                  response: z.number()
+                }),
+                clientConfig: {},
+                maxToolCallRounds: 10,
+                interruptData: __state?.interruptData,
+                removedTools: __self.__removedTools
+              });
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.res4)) {
-            await __ctx.pendingPromises.awaitAll()
-            return __stack.locals.res4;
-          }
-
-  __stack.locals.__substep_1_4 = 2;
-}
-
-if (__sub_1_4 <= 2) {
-  if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "foo", stepPath: "1.4.2" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "res4",
-          prompt: `And what is the sum of all those numbers combined?`,
-          response: __stack.locals.res4,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
+                await __ctx.pendingPromises.awaitAll()
+                runner.halt(__stack.locals.res4)
+                return;
+              }
+            });
+          });
+        });
+      });
     });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-  __stack.locals.__substep_1_4 = 3;
-}
-
-__threads.popActive();
-
-
-  __stack.locals.__substep_1 = 5;
-}
-
-__threads.popActive();
-
-
-            __stack.step++;
-    }
-    if (__step <= 2) {
-            await print(`res1`, __stack.locals.res1)
-            __stack.step++;
-    }
-    if (__step <= 3) {
-            await print(`res2`, __stack.locals.res2)
-            __stack.step++;
-    }
-    if (__step <= 4) {
-            await print(`res3`, __stack.locals.res3)
-            __stack.step++;
-    }
-    if (__step <= 5) {
-            await print(`res4`, __stack.locals.res4)
-            __stack.step++;
-    }
-    if (__step <= 6) {
-            await print(`res5`, __stack.locals.res5)
-            __stack.step++;
-    }
+    await runner.step(1, async (runner) => {
+await print(`res1`, __stack.locals.res1)
+    });
+    await runner.step(2, async (runner) => {
+await print(`res2`, __stack.locals.res2)
+    });
+    await runner.step(3, async (runner) => {
+await print(`res3`, __stack.locals.res3)
+    });
+    await runner.step(4, async (runner) => {
+await print(`res4`, __stack.locals.res4)
+    });
+    await runner.step(5, async (runner) => {
+await print(`res5`, __stack.locals.res5)
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
-      throw __error
-    }
-    if (__error instanceof ToolCallError) {
-      __error.retryable = __error.retryable && __self.__retryable
-      throw __error
-    }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "foo",
+    args: __stack.args,
+  }
+);
+
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -544,386 +342,185 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  if (__step <= 0) {
-      
-          __stack.step++;
-  }
-  if (__step <= 1) {
-          const __sub_1 = __stack.locals.__substep_1 ?? 0;
-if (__sub_1 <= 0) {
-  const __tid = __threads.create();
-__threads.pushActive(__tid)
-
-  __stack.locals.__substep_1 = 1;
-}
-
-if (__sub_1 <= 1) {
-  __self.__removedTools = __self.__removedTools || [];
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "threadsAndSubthreads.agency", scopeName: "main" });
+  try {
+    await runner.step(0, async (runner) => {
+await runner.thread(0, __threads, "create", async (runner) => {
+await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.res1 = await runPrompt({
-        ctx: __ctx,
-        prompt: `What are the first 5 prime numbers?`,
-        messages: __threads.getOrCreateActive(),
-        responseFormat: z.object({
-          response: z.array(z.number())
-        }),
-        clientConfig: {},
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
-      });
-// return early from node if this is an interrupt
+            ctx: __ctx,
+            prompt: `What are the first 5 prime numbers?`,
+            messages: __threads.getOrCreateActive(),
+            responseFormat: z.object({
+              response: z.array(z.number())
+            }),
+            clientConfig: {},
+            maxToolCallRounds: 10,
+            interruptData: __state?.interruptData,
+            removedTools: __self.__removedTools
+          });
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.res1)) {
-        await __ctx.pendingPromises.awaitAll()
-        return {
-          messages: __threads,
-          data: __stack.locals.res1
-        };
-      }
-
-  __stack.locals.__substep_1 = 2;
-}
-
-if (__sub_1 <= 2) {
-  if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "main", stepPath: "1.2" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "res1",
-          prompt: `What are the first 5 prime numbers?`,
-          response: __stack.locals.res1,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-  __stack.locals.__substep_1 = 3;
-}
-
-if (__sub_1 <= 3) {
-  const __sub_1_3 = __stack.locals.__substep_1_3 ?? 0;
-if (__sub_1_3 <= 0) {
-  const __tid = __threads.createSubthread();
-__threads.pushActive(__tid)
-
-  __stack.locals.__substep_1_3 = 1;
-}
-
-if (__sub_1_3 <= 1) {
-  __self.__removedTools = __self.__removedTools || [];
+            await __ctx.pendingPromises.awaitAll()
+            runner.halt({
+              messages: __threads,
+              data: __stack.locals.res1
+            })
+            return;
+          }
+        });
+await runner.step(1, async (runner) => {
+await runner.thread(1, __threads, "createSubthread", async (runner) => {
+await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.res2 = await runPrompt({
-          ctx: __ctx,
-          prompt: `What are the next 2 prime numbers after those?`,
-          messages: __threads.getOrCreateActive(),
-          responseFormat: z.object({
-            response: z.array(z.number())
-          }),
-          clientConfig: {},
-          maxToolCallRounds: 10,
-          interruptData: __state?.interruptData,
-          removedTools: __self.__removedTools
-        });
-// return early from node if this is an interrupt
+                ctx: __ctx,
+                prompt: `What are the next 2 prime numbers after those?`,
+                messages: __threads.getOrCreateActive(),
+                responseFormat: z.object({
+                  response: z.array(z.number())
+                }),
+                clientConfig: {},
+                maxToolCallRounds: 10,
+                interruptData: __state?.interruptData,
+                removedTools: __self.__removedTools
+              });
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.res2)) {
-          await __ctx.pendingPromises.awaitAll()
-          return {
-            messages: __threads,
-            data: __stack.locals.res2
-          };
-        }
-
-  __stack.locals.__substep_1_3 = 2;
-}
-
-if (__sub_1_3 <= 2) {
-  if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "main", stepPath: "1.3.2" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "res2",
-          prompt: `What are the next 2 prime numbers after those?`,
-          response: __stack.locals.res2,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-  __stack.locals.__substep_1_3 = 3;
-}
-
-if (__sub_1_3 <= 3) {
-  const __sub_1_3_3 = __stack.locals.__substep_1_3_3 ?? 0;
-if (__sub_1_3_3 <= 0) {
-  const __tid = __threads.createSubthread();
-__threads.pushActive(__tid)
-
-  __stack.locals.__substep_1_3_3 = 1;
-}
-
-if (__sub_1_3_3 <= 1) {
-  __self.__removedTools = __self.__removedTools || [];
+                await __ctx.pendingPromises.awaitAll()
+                runner.halt({
+                  messages: __threads,
+                  data: __stack.locals.res2
+                })
+                return;
+              }
+            });
+await runner.step(1, async (runner) => {
+await runner.thread(1, __threads, "createSubthread", async (runner) => {
+await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.res3 = await runPrompt({
-            ctx: __ctx,
-            prompt: `And what is the sum of all those numbers combined?`,
-            messages: __threads.getOrCreateActive(),
-            responseFormat: z.object({
-              response: z.number()
-            }),
-            clientConfig: {},
-            maxToolCallRounds: 10,
-            interruptData: __state?.interruptData,
-            removedTools: __self.__removedTools
-          });
-// return early from node if this is an interrupt
+                    ctx: __ctx,
+                    prompt: `And what is the sum of all those numbers combined?`,
+                    messages: __threads.getOrCreateActive(),
+                    responseFormat: z.object({
+                      response: z.number()
+                    }),
+                    clientConfig: {},
+                    maxToolCallRounds: 10,
+                    interruptData: __state?.interruptData,
+                    removedTools: __self.__removedTools
+                  });
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.res3)) {
-            await __ctx.pendingPromises.awaitAll()
-            return {
-              messages: __threads,
-              data: __stack.locals.res3
-            };
-          }
-
-  __stack.locals.__substep_1_3_3 = 2;
-}
-
-if (__sub_1_3_3 <= 2) {
-  if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "main", stepPath: "1.3.3.2" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "res3",
-          prompt: `And what is the sum of all those numbers combined?`,
-          response: __stack.locals.res3,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-  __stack.locals.__substep_1_3_3 = 3;
-}
-
-__threads.popActive();
-
-
-  __stack.locals.__substep_1_3 = 4;
-}
-
-if (__sub_1_3 <= 4) {
-  const __sub_1_3_4 = __stack.locals.__substep_1_3_4 ?? 0;
-if (__sub_1_3_4 <= 0) {
-  const __tid = __threads.create();
-__threads.pushActive(__tid)
-
-  __stack.locals.__substep_1_3_4 = 1;
-}
-
-if (__sub_1_3_4 <= 1) {
-  __self.__removedTools = __self.__removedTools || [];
+                    await __ctx.pendingPromises.awaitAll()
+                    runner.halt({
+                      messages: __threads,
+                      data: __stack.locals.res3
+                    })
+                    return;
+                  }
+                });
+              });
+            });
+await runner.step(2, async (runner) => {
+await runner.thread(2, __threads, "create", async (runner) => {
+await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.res5 = await runPrompt({
-            ctx: __ctx,
-            prompt: `And what is the sum of all those numbers combined?`,
-            messages: __threads.getOrCreateActive(),
-            responseFormat: z.object({
-              response: z.number()
-            }),
-            clientConfig: {},
-            maxToolCallRounds: 10,
-            interruptData: __state?.interruptData,
-            removedTools: __self.__removedTools
-          });
-// return early from node if this is an interrupt
+                    ctx: __ctx,
+                    prompt: `And what is the sum of all those numbers combined?`,
+                    messages: __threads.getOrCreateActive(),
+                    responseFormat: z.object({
+                      response: z.number()
+                    }),
+                    clientConfig: {},
+                    maxToolCallRounds: 10,
+                    interruptData: __state?.interruptData,
+                    removedTools: __self.__removedTools
+                  });
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.res5)) {
-            await __ctx.pendingPromises.awaitAll()
-            return {
-              messages: __threads,
-              data: __stack.locals.res5
-            };
-          }
-
-  __stack.locals.__substep_1_3_4 = 2;
-}
-
-if (__sub_1_3_4 <= 2) {
-  if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "main", stepPath: "1.3.4.2" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "res5",
-          prompt: `And what is the sum of all those numbers combined?`,
-          response: __stack.locals.res5,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-  __stack.locals.__substep_1_3_4 = 3;
-}
-
-__threads.popActive();
-
-
-  __stack.locals.__substep_1_3 = 5;
-}
-
-__threads.popActive();
-
-
-  __stack.locals.__substep_1 = 4;
-}
-
-if (__sub_1 <= 4) {
-  const __sub_1_4 = __stack.locals.__substep_1_4 ?? 0;
-if (__sub_1_4 <= 0) {
-  const __tid = __threads.createSubthread();
-__threads.pushActive(__tid)
-
-  __stack.locals.__substep_1_4 = 1;
-}
-
-if (__sub_1_4 <= 1) {
-  __self.__removedTools = __self.__removedTools || [];
-__stack.locals.res4 = await runPrompt({
-          ctx: __ctx,
-          prompt: `And what is the sum of all those numbers combined?`,
-          messages: __threads.getOrCreateActive(),
-          responseFormat: z.object({
-            response: z.number()
-          }),
-          clientConfig: {},
-          maxToolCallRounds: 10,
-          interruptData: __state?.interruptData,
-          removedTools: __self.__removedTools
+                    await __ctx.pendingPromises.awaitAll()
+                    runner.halt({
+                      messages: __threads,
+                      data: __stack.locals.res5
+                    })
+                    return;
+                  }
+                });
+              });
+            });
+          });
         });
-// return early from node if this is an interrupt
+await runner.step(2, async (runner) => {
+await runner.thread(2, __threads, "createSubthread", async (runner) => {
+await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
+__stack.locals.res4 = await runPrompt({
+                ctx: __ctx,
+                prompt: `And what is the sum of all those numbers combined?`,
+                messages: __threads.getOrCreateActive(),
+                responseFormat: z.object({
+                  response: z.number()
+                }),
+                clientConfig: {},
+                maxToolCallRounds: 10,
+                interruptData: __state?.interruptData,
+                removedTools: __self.__removedTools
+              });
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.res4)) {
-          await __ctx.pendingPromises.awaitAll()
-          return {
-            messages: __threads,
-            data: __stack.locals.res4
-          };
-        }
-
-  __stack.locals.__substep_1_4 = 2;
-}
-
-if (__sub_1_4 <= 2) {
-  if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "main", stepPath: "1.4.2" });
-    const __cp = __ctx.checkpoints.get(__cpId);
+                await __ctx.pendingPromises.awaitAll()
+                runner.halt({
+                  messages: __threads,
+                  data: __stack.locals.res4
+                })
+                return;
+              }
+            });
+          });
+        });
+      });
+    });
+    await runner.step(1, async (runner) => {
+await print(`res1`, __stack.locals.res1)
+    });
+    await runner.step(2, async (runner) => {
+await print(`res2`, __stack.locals.res2)
+    });
+    await runner.step(3, async (runner) => {
+await print(`res3`, __stack.locals.res3)
+    });
+    await runner.step(4, async (runner) => {
+await print(`res4`, __stack.locals.res4)
+    });
+    await runner.step(5, async (runner) => {
+await print(`res5`, __stack.locals.res5)
+    });
+    if (runner.halted) return runner.haltResult;
     await callHook({
       callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
+      name: "onNodeEnd",
       data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "res4",
-          prompt: `And what is the sum of all those numbers combined?`,
-          response: __stack.locals.res4,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
-    });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-  __stack.locals.__substep_1_4 = 3;
-}
-
-__threads.popActive();
-
-
-  __stack.locals.__substep_1 = 5;
-}
-
-__threads.popActive();
-
-
-          __stack.step++;
-  }
-  if (__step <= 2) {
-          await print(`res1`, __stack.locals.res1)
-          __stack.step++;
-  }
-  if (__step <= 3) {
-          await print(`res2`, __stack.locals.res2)
-          __stack.step++;
-  }
-  if (__step <= 4) {
-          await print(`res3`, __stack.locals.res3)
-          __stack.step++;
-  }
-  if (__step <= 5) {
-          await print(`res4`, __stack.locals.res4)
-          __stack.step++;
-  }
-  if (__step <= 6) {
-          await print(`res5`, __stack.locals.res5)
-          __stack.step++;
-  }
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "main",
+        nodeName: "main",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+    };
+  }
 })
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
@@ -936,7 +533,7 @@ export async function main({ messages, callbacks }: { messages?: any; callbacks?
   });
 }
 export const __mainNodeParams = [];
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const initialState = {
       messages: new ThreadStore(),
@@ -949,4 +546,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"threadsAndSubthreads.agency:foo":{"2":{"line":14,"col":2},"3":{"line":15,"col":2},"4":{"line":16,"col":2},"5":{"line":17,"col":2},"6":{"line":18,"col":2},"1.1":{"line":0,"col":4},"1.3.1":{"line":2,"col":6},"1.3.3.1":{"line":4,"col":8},"1.3.4.1":{"line":7,"col":8},"1.4.1":{"line":11,"col":6}},"threadsAndSubthreads.agency:main":{"2":{"line":37,"col":2},"3":{"line":38,"col":2},"4":{"line":39,"col":2},"5":{"line":40,"col":2},"6":{"line":41,"col":2},"1.1":{"line":23,"col":4},"1.3.1":{"line":25,"col":6},"1.3.3.1":{"line":27,"col":8},"1.3.4.1":{"line":30,"col":8},"1.4.1":{"line":34,"col":6}}};
+export const __sourceMap = {"threadsAndSubthreads.agency:foo":{"1":{"line":14,"col":2},"2":{"line":15,"col":2},"3":{"line":16,"col":2},"4":{"line":17,"col":2},"5":{"line":18,"col":2},"0.0":{"line":0,"col":4},"0.1.0":{"line":2,"col":6},"0.1.1.0":{"line":4,"col":8},"0.1.2.0":{"line":7,"col":8},"0.2.0":{"line":11,"col":6}},"threadsAndSubthreads.agency:main":{"1":{"line":37,"col":2},"2":{"line":38,"col":2},"3":{"line":39,"col":2},"4":{"line":40,"col":2},"5":{"line":41,"col":2},"0.0":{"line":23,"col":4},"0.1.0":{"line":25,"col":6},"0.1.1.0":{"line":27,"col":8},"0.1.2.0":{"line":30,"col":8},"0.2.0":{"line":34,"col":6}}};

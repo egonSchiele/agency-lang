@@ -3,7 +3,7 @@ export * from "./types.js";
 export * from "./backends/index.js";
 export * from "./simplemachine/index.js";
 export * from "./statelogClient.js";
-export * from "smoltalk";
+export * as smoltalk from "smoltalk";
 export type { StreamChunk } from "smoltalk";
 export { nanoid } from "nanoid";
 export { AgencyConfig } from "./config.js";

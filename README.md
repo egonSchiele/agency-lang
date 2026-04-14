@@ -1,38 +1,31 @@
-# Agency
-Agent Definition Language
+# Getting Started
+
+Agency is a language for building agents that compiles to TypeScript.
+
+## Installation
+
+```bash
+npm install agency-lang zod
+```
+
+## Quick Start
+
+Create a file called `hello.agency`:
 
 ```ts
 node main() {
-  result = llm("Say hello to world")
-  return result
+  const greeting = llm("Say hello to the world!");
+  print(greeting);
 }
 ```
 
-## Usage
-
-Add agency to a project:
+Compile and run it:
 
 ```bash
-pnpm add agency-lang zod
+pnpm run agency hello.agency
 ```
 
-You can then start using the agency script on your files:
-
-```bash
-# to compile
-agency compile infile.agency outfile.ts
-
-# to compile and run
-agency run infile.agency
-
-# or simply
-agency infile.agency
-```
-
-## troubleshooting
-### Weird undefined error
-
-A couple of times, I have tried to import a parser, and even though it exists, when I import it, the value that is `undefined`. This is due to a circular dependency issue. If I move that parser to its own file and then import it, it works.
+Now read [the docs](https://agency-lang.com) to learn more about the language and how to use it!
 
 ## License
 [FSL](https://fsl.software).

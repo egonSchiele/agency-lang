@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "sample(1) returns single-element array",
+      "input": "",
+      "expectedOutput": "[42]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

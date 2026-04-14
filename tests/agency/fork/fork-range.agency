@@ -1,0 +1,10 @@
+def double(n: number): number {
+  return n * 2
+}
+
+node main() {
+  let results = fork(range(4)) as i {
+    return double(i)
+  }
+  return results
+}

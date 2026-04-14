@@ -6,7 +6,7 @@ import {
   messageThreadParser,
   _messageThreadParser,
   _submessageThreadParser,
-} from "./function.js";
+} from "./parsers.js";
 import { normalizeCode } from "@/parser.js";
 
 describe("docStringParser", () => {
@@ -945,7 +945,7 @@ describe("functionParser", () => {
             {
               type: "functionParameter",
               name: "obj",
-              typeHint: { type: "typeAliasVariable", aliasName: "object" },
+              typeHint: { type: "primitiveType", value: "object" },
             },
           ],
           returnType: null,
@@ -1813,6 +1813,78 @@ describe("functionParser", () => {
       input: "def bad(a: number = 5, b: string) { b }",
       expected: { success: false },
     },
+    // Default value: null
+    {
+      input: "def foo(x: string = null) { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "foo",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: { type: "primitiveType", value: "string" },
+              defaultValue: { type: "null" },
+            },
+          ],
+          returnType: null,
+          docString: undefined,
+          body: [{ type: "variableName", value: "x" }],
+        },
+      },
+    },
+    // Default value: empty array
+    {
+      input: "def foo(items = []) { items }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "foo",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "items",
+              defaultValue: { type: "agencyArray", items: [] },
+            },
+          ],
+          returnType: null,
+          docString: undefined,
+          body: [{ type: "variableName", value: "items" }],
+        },
+      },
+    },
+    // Default value: object
+    {
+      input: 'def foo(config = {model: "gpt-4"}) { config }',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "foo",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "config",
+              defaultValue: {
+                type: "agencyObject",
+                entries: [
+                  {
+                    key: "model",
+                    value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] },
+                  },
+                ],
+              },
+            },
+          ],
+          returnType: null,
+          docString: undefined,
+          body: [{ type: "variableName", value: "config" }],
+        },
+      },
+    },
   ];
 
   testCases.forEach(({ input, expected, throws }) => {
@@ -1861,52 +1933,6 @@ describe("functionParser with safe keyword", () => {
         },
       },
     },
-    // Safe async function
-    {
-      input: "safe async def bar() { x = 1 }",
-      expected: {
-        success: true,
-        result: {
-          type: "function",
-          functionName: "bar",
-          parameters: [],
-          returnType: null,
-          docString: undefined,
-          body: [
-            {
-              type: "assignment",
-              variableName: "x",
-              value: { type: "number", value: "1" },
-            },
-          ],
-          safe: true,
-          async: true,
-        },
-      },
-    },
-    // Safe sync function
-    {
-      input: "safe sync def baz() { x = 1 }",
-      expected: {
-        success: true,
-        result: {
-          type: "function",
-          functionName: "baz",
-          parameters: [],
-          returnType: null,
-          docString: undefined,
-          body: [
-            {
-              type: "assignment",
-              variableName: "x",
-              value: { type: "number", value: "1" },
-            },
-          ],
-          safe: true,
-          async: false,
-        },
-      },
-    },
     // Safe function with parameters and return type
     {
       input: "safe def add(x: number, y: number): number { x }",
@@ -1947,151 +1973,43 @@ describe("functionParser with safe keyword", () => {
   });
 });
 
-describe("functionParser with async/sync keywords", () => {
-  const testCases = [
-    // async def goes through functionParser
-    {
-      input: "async def foo() { x = 1 }",
-      expected: {
-        success: true,
-        result: {
-          type: "function",
-          functionName: "foo",
-          parameters: [],
-          returnType: null,
-          docString: undefined,
-          body: [
-            {
-              type: "assignment",
-              variableName: "x",
-              value: { type: "number", value: "1" },
-            },
-          ],
-          async: true,
-        },
-      },
-    },
-    // sync def goes through functionParser
-    {
-      input: "sync def foo() { x = 1 }",
-      expected: {
-        success: true,
-        result: {
-          type: "function",
-          functionName: "foo",
-          parameters: [],
-          returnType: null,
-          docString: undefined,
-          body: [
-            {
-              type: "assignment",
-              variableName: "x",
-              value: { type: "number", value: "1" },
-            },
-          ],
-          async: false,
-        },
-      },
-    },
-    // plain def goes through functionParser (no async field)
-    {
-      input: "def foo() { x = 1 }",
-      expected: {
-        success: true,
-        result: {
-          type: "function",
-          functionName: "foo",
-          parameters: [],
-          returnType: null,
-          docString: undefined,
-          body: [
-            {
-              type: "assignment",
-              variableName: "x",
-              value: { type: "number", value: "1" },
-            },
-          ],
-        },
-      },
-    },
-    // async with params, return type, and docstring
-    {
-      input:
-        'async def calculate(x: number, y: number): number {\n  """Calculates result"""\n  x\n}',
-      expected: {
-        success: true,
-        result: {
-          type: "function",
-          functionName: "calculate",
-          parameters: [
-            {
-              type: "functionParameter",
-              name: "x",
-              typeHint: { type: "primitiveType", value: "number" },
-            },
-            {
-              type: "functionParameter",
-              name: "y",
-              typeHint: { type: "primitiveType", value: "number" },
-            },
-          ],
-          returnType: { type: "primitiveType", value: "number" },
-          docString: {
-            type: "docString",
-            value: "Calculates result",
+describe("functionParser with export keyword", () => {
+  it("parses export def", () => {
+    const result = functionParser("export def foo() { x = 1 }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqualWithoutLoc({
+        type: "function",
+        functionName: "foo",
+        parameters: [],
+        returnType: null,
+        docString: undefined,
+        body: [
+          {
+            type: "assignment",
+            variableName: "x",
+            value: { type: "number", value: "1" },
           },
-          body: [{ type: "variableName", value: "x" }, { type: "newLine" }],
-          async: true,
-        },
-      },
-    },
-    // sync with params, return type, and docstring
-    {
-      input:
-        'sync def calculate(x: number, y: number): number {\n  """Calculates result"""\n  x\n}',
-      expected: {
-        success: true,
-        result: {
-          type: "function",
-          functionName: "calculate",
-          parameters: [
-            {
-              type: "functionParameter",
-              name: "x",
-              typeHint: { type: "primitiveType", value: "number" },
-            },
-            {
-              type: "functionParameter",
-              name: "y",
-              typeHint: { type: "primitiveType", value: "number" },
-            },
-          ],
-          returnType: { type: "primitiveType", value: "number" },
-          docString: {
-            type: "docString",
-            value: "Calculates result",
-          },
-          body: [{ type: "variableName", value: "x" }, { type: "newLine" }],
-          async: false,
-        },
-      },
-    },
-  ];
+        ],
+        exported: true,
+      });
+    }
+  });
 
-  testCases.forEach(({ input, expected }) => {
-    if (expected.success) {
-      it(`should parse "${input.replace(/\n/g, "\\n")}" successfully`, () => {
-        const result = functionParser(input);
-        expect(result.success).toBe(true);
-        if (result.success) {
-          expect(result.result).toEqualWithoutLoc(expected.result);
-        }
-      });
-    } else {
-      it(`should fail to parse "${input.replace(/\n/g, "\\n")}"`, () => {
-        const result = functionParser(input);
-        expect(result.success).toBe(false);
-      });
+  it("parses export safe def", () => {
+    const result = functionParser("export safe def foo() { x = 1 }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.exported).toBe(true);
+      expect(result.result.safe).toBe(true);
+    }
+  });
+
+  it("does not set exported on plain def", () => {
+    const result = functionParser("def foo() { x = 1 }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.exported).toBeUndefined();
     }
   });
 });

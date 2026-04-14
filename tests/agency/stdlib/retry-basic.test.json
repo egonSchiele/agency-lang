@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "retry returns first result that passes the test (counter starts at -2, first positive is 1 on 4th call)",
+      "input": "",
+      "expectedOutput": "1",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

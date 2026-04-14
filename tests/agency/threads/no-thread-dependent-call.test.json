@@ -1,5 +1,4 @@
 {
-  "sourceFile": "no-thread-dependent-call.agency",
   "tests": [
     {
       "nodeName": "main",

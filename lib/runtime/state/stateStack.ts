@@ -64,6 +64,10 @@ export class State {
     this.clearLocalsWithPrefix(`__iteration_${subKey}_`);
   }
 
+  removeDebugFlags(): void {
+    this.clearLocalsWithPrefix("__dbg_");
+  }
+
   toJSON(): StateJSON {
     const json: StateJSON = {
       args: deepClone(this.args),

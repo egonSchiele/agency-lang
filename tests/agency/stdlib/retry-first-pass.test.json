@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "retry returns immediately when first attempt passes",
+      "input": "",
+      "expectedOutput": "99",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

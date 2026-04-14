@@ -92,6 +92,20 @@ describe("prettyPrint", () => {
     expect(printTs(ts.binOp(ts.id("a"), "+", ts.id("b")))).toBe("a + b");
   });
 
+  it("TsBinOp unary not", () => {
+    expect(printTs(ts.binOp(ts.bool(true), "!", ts.id("x")))).toBe("!x");
+  });
+
+  it("TsBinOp unary not with parens", () => {
+    expect(
+      printTs(
+        ts.binOp(ts.bool(true), "!", ts.binOp(ts.id("a"), "&&", ts.id("b")), {
+          parenRight: true,
+        }),
+      ),
+    ).toBe("!(a && b)");
+  });
+
   it("TsPropertyAccess dot", () => {
     expect(printTs(ts.prop(ts.id("obj"), "foo"))).toBe("obj.foo");
   });
@@ -384,110 +398,4 @@ describe("prettyPrint", () => {
     expect(printTs(ts.scopedVar("helper", "imported"))).toBe("helper");
   });
 
-  describe("TsIfSteps", () => {
-    it("should emit condbranch tracking and substep guards", () => {
-      const node = ts.ifSteps(
-        [3],
-        [
-          {
-            condition: ts.raw("__stack.locals.x > 5"),
-            body: [ts.raw("await print('big');")],
-          },
-        ],
-        [ts.raw("await print('small');")],
-      );
-      const result = printTs(node);
-      expect(result).toContain("__stack.locals.__condbranch_3 === undefined");
-      expect(result).toContain("__stack.locals.__condbranch_3 = 0");
-      expect(result).toContain("__stack.locals.__condbranch_3 = 1");
-      expect(result).toContain("const __condbranch_3 = __stack.locals.__condbranch_3");
-      expect(result).toContain("const __sub_3 = __stack.locals.__substep_3 ?? 0");
-      expect(result).toContain("__condbranch_3 === 0");
-      expect(result).toContain("__sub_3 <= 0");
-      expect(result).toContain("await print('big');");
-      expect(result).toContain("__stack.locals.__substep_3 = 1");
-      expect(result).toContain("__condbranch_3 === 1");
-      expect(result).toContain("await print('small');");
-    });
-
-    it("should emit condbranch with else-if chains", () => {
-      const node = ts.ifSteps(
-        [3],
-        [
-          {
-            condition: ts.raw("__stack.locals.x > 10"),
-            body: [ts.raw("await print('very big');")],
-          },
-          {
-            condition: ts.raw("__stack.locals.x > 5"),
-            body: [ts.raw("await print('big');")],
-          },
-        ],
-        [ts.raw("await print('small');")],
-      );
-      const result = printTs(node);
-      expect(result).toContain("__stack.locals.__condbranch_3 = 0");
-      expect(result).toContain("__stack.locals.__condbranch_3 = 1");
-      expect(result).toContain("__stack.locals.__condbranch_3 = 2");
-      expect(result).toContain("__condbranch_3 === 0");
-      expect(result).toContain("__condbranch_3 === 1");
-      expect(result).toContain("__condbranch_3 === 2");
-    });
-
-    it("should emit condbranch -1 when there is no else branch", () => {
-      const node = ts.ifSteps(
-        [3],
-        [
-          {
-            condition: ts.raw("__stack.locals.x > 5"),
-            body: [ts.raw("await print('big');")],
-          },
-        ],
-      );
-      const result = printTs(node);
-      expect(result).toContain("__stack.locals.__condbranch_3 = -1");
-      expect(result).not.toContain("__condbranch_3 === -1");
-    });
-
-    it("should use nested variable names for nested subStepPath", () => {
-      const node = ts.ifSteps(
-        [2, 1],
-        [
-          {
-            condition: ts.raw("condition"),
-            body: [ts.raw("await doSomething();")],
-          },
-        ],
-      );
-      const result = printTs(node);
-      expect(result).toContain("__condbranch_2_1");
-      expect(result).toContain("__substep_2_1");
-      expect(result).toContain("__sub_2_1");
-    });
-  });
-
-  it("TsStepBlock with subStep emits substep guards", () => {
-    const node = ts.stepBlock(
-      0,
-      ts.raw("await print('hello');"),
-      undefined,
-      [3],
-    );
-    const result = printTs(node);
-    expect(result).toContain("__sub_3 <= 0");
-    expect(result).toContain("__stack.locals.__substep_3");
-    expect(result).not.toContain("__stack.step++");
-  });
-
-  it("TsStepBlock with nested subStep path", () => {
-    const node = ts.stepBlock(
-      0,
-      ts.raw("await print('hello');"),
-      undefined,
-      [3, 1],
-    );
-    const result = printTs(node);
-    expect(result).toContain("__sub_3_1 <= 0");
-    expect(result).toContain("__stack.locals.__substep_3_1");
-  });
 });

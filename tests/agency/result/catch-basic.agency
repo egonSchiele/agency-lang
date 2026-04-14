@@ -1,0 +1,13 @@
+def riskyFunc(): Result {
+  return success(42)
+}
+
+def failingFunc(): Result {
+  return failure("failed")
+}
+
+node main() {
+  let value1 = try riskyFunc() catch -1
+  let value2 = try failingFunc() catch -1
+  return { value1: value1, value2: value2 }
+}

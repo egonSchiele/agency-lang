@@ -1,14 +1,15 @@
+const log = []
+
 node main() {
-  let result = ""
   for (i in range(4)) {
     if (i == 0) {
-      result = result + "a"
+      log.push("a")
     } else if (i == 2) {
       const y = interrupt("i is 2")
-      result = result + y
+      log.push(y)
     } else {
-      result = result + "x"
+      log.push("x")
     }
   }
-  return result
+  return log
 }

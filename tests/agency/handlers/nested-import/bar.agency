@@ -8,14 +8,18 @@ def logWithAssign() {
   return "log return"
 }
 
-def getLog() {
+export def getLog() {
   return log
 }
 
-def barHandler() {
+export def barHandler() {
   handle {
     const result = logWithAssign()
-    log.push(result)
+    if (isFailure(result)) {
+      log.push(result.error)
+    } else {
+      log.push(result)
+    }
   } with (data) {
     return approve()
   }

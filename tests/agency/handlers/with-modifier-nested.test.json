@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "with approve nested inside handle with approve — both approve, interrupt handled",
+      "input": "",
+      "expectedOutput": "\"check\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

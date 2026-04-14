@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "sample(0) returns empty array",
+      "input": "",
+      "expectedOutput": "[]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

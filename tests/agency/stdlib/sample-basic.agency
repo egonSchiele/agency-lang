@@ -1,0 +1,12 @@
+import { sample } from "std::sample"
+
+def double(n: number): number {
+  return n * 2
+}
+
+node main() {
+  let results = sample(3) as {
+    return double(1)
+  }
+  return results
+}

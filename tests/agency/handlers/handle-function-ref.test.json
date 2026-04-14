@@ -1,5 +1,4 @@
 {
-  "sourceFile": "handle-function-ref.agency",
   "tests": [
     {
       "nodeName": "testApprovePolicy",
@@ -14,7 +13,7 @@
     {
       "nodeName": "testRejectPolicy",
       "input": "",
-      "expectedOutput": "[\"foo start\",null]",
+      "expectedOutput": "[\"foo start\",\"interrupt rejected\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -54,7 +53,7 @@
     {
       "nodeName": "testRejectPolicyWithAssign",
       "input": "",
-      "expectedOutput": "[\"foo start\",null]",
+      "expectedOutput": "[\"foo start\",\"interrupt rejected\"]",
       "evaluationCriteria": [
         {
           "type": "exact"

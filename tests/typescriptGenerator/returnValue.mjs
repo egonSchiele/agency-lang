@@ -1,13 +1,13 @@
 import { fileURLToPath } from "url";
-import process from "process";
+import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
-import * as smoltalk from "agency-lang";
+import { goToNode, color, nanoid } from "agency-lang";
+import { smoltalk } from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -18,11 +18,11 @@ import {
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
   rewindFrom as _rewindFrom,
-  ToolCallError,
   RestoreSignal,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
+  success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
@@ -31,26 +31,26 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const __cwd = process.cwd();
+const __cwd = __process.cwd();
 
 const getDirname = () => __dirname;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
-    host: "https://agency-lang.com",
-    apiKey: process.env["STATELOG_API_KEY"] || "",
+    host: "https://statelog.adit.io",
+    apiKey: __process.env["STATELOG_API_KEY"] || "",
     projectId: "",
     debugMode: false
   },
   smoltalkDefaults: {
-    openAiApiKey: process.env["OPENAI_API_KEY"] || "",
-    googleApiKey: process.env["GEMINI_API_KEY"] || "",
+    openAiApiKey: __process.env["OPENAI_API_KEY"] || "",
+    googleApiKey: __process.env["GEMINI_API_KEY"] || "",
     model: "gpt-4o-mini",
     logLevel: "warn",
     statelog: {
-      host: "https://agency-lang.com",
+      host: "https://statelog.adit.io",
       projectId: "smoltalk",
-      apiKey: process.env["STATELOG_SMOLTALK_API_KEY"] || "",
+      apiKey: __process.env["STATELOG_SMOLTALK_API_KEY"] || "",
       traceId: nanoid()
     }
   },
@@ -84,7 +84,7 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
-function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("returnValue.agency")
 }
 const __toolRegistry = {
@@ -118,43 +118,40 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  if (__step <= 0) {
-      
-          __stack.step++;
-  }
-  if (__step <= 1) {
-          __stack.locals.x = 42;
-    await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.x",
-      value: __stack.locals.x
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "returnValue.agency", scopeName: "main" });
+  try {
+    await runner.step(0, async (runner) => {
+__stack.locals.x = 42;
+    });
+    await runner.step(1, async (runner) => {
+runner.halt({
+        messages: __threads,
+        data: __stack.locals.x
+      })
+return;
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "main",
+        data: undefined
+      }
     })
-          __stack.step++;
-  }
-  if (__step <= 2) {
-          const __auditReturnValue = {
+    return {
       messages: __threads,
-      data: __stack.locals.x
-    };
-await __ctx.audit({
-      type: "return",
-      value: __auditReturnValue
-    })
-return __auditReturnValue;
-          __stack.step++;
-  }
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "main",
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+    };
+  }
 })
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
@@ -167,7 +164,7 @@ export async function main({ messages, callbacks }: { messages?: any; callbacks?
   });
 }
 export const __mainNodeParams = [];
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const initialState = {
       messages: new ThreadStore(),
@@ -180,4 +177,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"returnValue.agency:main":{"1":{"line":-1,"col":2},"2":{"line":0,"col":2}}};
+export const __sourceMap = {"returnValue.agency:main":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2}}};

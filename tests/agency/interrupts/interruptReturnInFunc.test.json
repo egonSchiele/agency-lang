@@ -1,5 +1,4 @@
 {
-  "sourceFile": "interruptReturnInFunc.agency",
   "tests": [
     {
       "nodeName": "bar",

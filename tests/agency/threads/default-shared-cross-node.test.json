@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"nums\":[2,3,5,7,11],\"sum\":28}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Message history persists across node transitions — process node sees setup node history"
+    }
+  ]
+}

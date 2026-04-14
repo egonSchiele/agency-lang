@@ -1,12 +1,15 @@
 {
-  "sourceFile": "interrupt-in-while.agency",
   "tests": [
     {
       "nodeName": "main",
       "description": "Interrupt at iteration 3 resumes and completes remaining iterations",
       "input": "",
-      "expectedOutput": "10",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "expectedOutput": "[0,1,2,3,4]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "interruptHandlers": [
         {
           "action": "approve",

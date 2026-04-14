@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "foo",
+      "description": "Test that rejecting an interrupt assigned to a variable returns null",
+      "input": "",
+      "expectedOutput": "{\"success\":false,\"error\":\"interrupt rejected\",\"checkpoint\":null,\"retryable\":false,\"functionName\":null,\"args\":null}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Who do you want to say hi to?"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+import { sample } from "std::sample"
+
+export def consensus(n: number, block: () => any): any {
+  """
+  Run a block n times in parallel and return the most common result (majority vote).
+  """
+  let results = sample(n, block)
+  return mostCommon(results)
+}

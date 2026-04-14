@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Rejecting an interrupt assigned to a variable in a block returns null",
+      "input": "",
+      "expectedOutput": "\"interrupt rejected\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "what is your name?"
+        }
+      ]
+    }
+  ]
+}

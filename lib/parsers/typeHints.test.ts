@@ -3,6 +3,7 @@ import {
   primitiveTypeParser,
   arrayTypeParser,
   angleBracketsArrayTypeParser,
+  blockTypeParser,
   stringLiteralTypeParser,
   numberLiteralTypeParser,
   booleanLiteralTypeParser,
@@ -10,11 +11,12 @@ import {
   objectPropertyDescriptionParser,
   objectPropertyWithDescriptionParser,
   objectTypeParser,
+  resultTypeParser,
   typeAliasParser,
   typeAliasVariableParser,
   variableTypeParser,
   unionTypeParser,
-} from "./typeHints.js";
+} from "./parsers.js";
 
 describe("primitiveTypeParser", () => {
   const testCases = [
@@ -2331,6 +2333,93 @@ describe("unionTypeParser", () => {
   });
 });
 
+describe("resultTypeParser", () => {
+  it("parses bare Result as resultType with any/any", () => {
+    const result = resultTypeParser("Result");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "resultType",
+        successType: { type: "primitiveType", value: "any" },
+        failureType: { type: "primitiveType", value: "any" },
+      });
+    }
+  });
+
+  it("parses Result<string, number> with explicit type params", () => {
+    const result = resultTypeParser("Result<string, number>");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "resultType",
+        successType: { type: "primitiveType", value: "string" },
+        failureType: { type: "primitiveType", value: "number" },
+      });
+    }
+  });
+
+  it("parses Result with object failure type", () => {
+    const result = variableTypeParser("Result<string, { message: string }>");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "resultType",
+        successType: { type: "primitiveType", value: "string" },
+        failureType: {
+          type: "objectType",
+          properties: [{ key: "message", value: { type: "primitiveType", value: "string" } }],
+        },
+      });
+    }
+  });
+
+  it("parses Result with type alias params", () => {
+    const result = resultTypeParser("Result<MySuccess, MyError>");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "resultType",
+        successType: { type: "typeAliasVariable", aliasName: "MySuccess" },
+        failureType: { type: "typeAliasVariable", aliasName: "MyError" },
+      });
+    }
+  });
+
+  it("Result<string> with one param throws a parse error", () => {
+    expect(() => resultTypeParser("Result<string>")).toThrow(
+      "expected two type parameters separated by comma",
+    );
+  });
+
+  it("does not match ResultFoo as bare Result", () => {
+    const result = resultTypeParser("ResultFoo");
+    expect(result.success).toBe(false);
+  });
+
+  it("parses bare Result via variableTypeParser", () => {
+    const result = variableTypeParser("Result");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "resultType",
+        successType: { type: "primitiveType", value: "any" },
+        failureType: { type: "primitiveType", value: "any" },
+      });
+    }
+  });
+
+  it("parses ResultFoo as a type alias via variableTypeParser", () => {
+    const result = variableTypeParser("ResultFoo");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "typeAliasVariable",
+        aliasName: "ResultFoo",
+      });
+    }
+  });
+});
+
 describe("variableTypeParser", () => {
   const testCases = [
     {
@@ -2447,6 +2536,65 @@ describe("variableTypeParser", () => {
           expect(result.success).toBe(false);
         });
     }
+  });
+});
+
+describe("blockTypeParser", () => {
+  it("parses () => string", () => {
+    const result = blockTypeParser("() => string");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "blockType",
+        params: [],
+        returnType: { type: "primitiveType", value: "string" },
+      });
+    }
+  });
+
+  it("parses (number) => any", () => {
+    const result = blockTypeParser("(number) => any");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "blockType",
+        params: [{ name: "", typeAnnotation: { type: "primitiveType", value: "number" } }],
+        returnType: { type: "primitiveType", value: "any" },
+      });
+    }
+  });
+
+  it("parses (string, number) => boolean", () => {
+    const result = blockTypeParser("(string, number) => boolean");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "blockType",
+        params: [
+          { name: "", typeAnnotation: { type: "primitiveType", value: "string" } },
+          { name: "", typeAnnotation: { type: "primitiveType", value: "number" } },
+        ],
+        returnType: { type: "primitiveType", value: "boolean" },
+      });
+    }
+  });
+
+  it("parses block type via variableTypeParser", () => {
+    const result = variableTypeParser("() => string");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.type).toBe("blockType");
+    }
+  });
+
+  it("fails on missing arrow", () => {
+    const result = blockTypeParser("(number) string");
+    expect(result.success).toBe(false);
+  });
+
+  it("fails on empty input", () => {
+    const result = blockTypeParser("");
+    expect(result.success).toBe(false);
   });
 });
 

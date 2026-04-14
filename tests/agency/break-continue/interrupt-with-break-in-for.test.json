@@ -1,12 +1,15 @@
 {
-  "sourceFile": "interrupt-with-break-in-for.agency",
   "tests": [
     {
       "nodeName": "main",
-      "description": "Interrupt fires at i=3, then break exits loop. Result is 0+1+2=3",
+      "description": "Interrupt fires at i=3, then break exits loop. Only iterations 0,1,2 logged",
       "input": "",
-      "expectedOutput": "3",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "expectedOutput": "[0,1,2]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "interruptHandlers": [
         {
           "action": "approve",

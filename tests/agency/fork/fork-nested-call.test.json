@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork with nested function calls — addTen calls double internally, each branch must have isolated state",
+      "input": "",
+      "expectedOutput": "[12,14,16]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

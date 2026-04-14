@@ -1,13 +1,13 @@
 import { fileURLToPath } from "url";
-import process from "process";
+import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
-import * as smoltalk from "agency-lang";
+import { goToNode, color, nanoid } from "agency-lang";
+import { smoltalk } from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -18,11 +18,11 @@ import {
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
   rewindFrom as _rewindFrom,
-  ToolCallError,
   RestoreSignal,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
+  success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
@@ -31,26 +31,26 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const __cwd = process.cwd();
+const __cwd = __process.cwd();
 
 const getDirname = () => __dirname;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
-    host: "https://agency-lang.com",
-    apiKey: process.env["STATELOG_API_KEY"] || "",
+    host: "https://statelog.adit.io",
+    apiKey: __process.env["STATELOG_API_KEY"] || "",
     projectId: "",
     debugMode: false
   },
   smoltalkDefaults: {
-    openAiApiKey: process.env["OPENAI_API_KEY"] || "",
-    googleApiKey: process.env["GEMINI_API_KEY"] || "",
+    openAiApiKey: __process.env["OPENAI_API_KEY"] || "",
+    googleApiKey: __process.env["GEMINI_API_KEY"] || "",
     model: "gpt-4o-mini",
     logLevel: "warn",
     statelog: {
-      host: "https://agency-lang.com",
+      host: "https://statelog.adit.io",
       projectId: "smoltalk",
-      apiKey: process.env["STATELOG_SMOLTALK_API_KEY"] || "",
+      apiKey: __process.env["STATELOG_SMOLTALK_API_KEY"] || "",
       traceId: nanoid()
     }
   },
@@ -84,7 +84,7 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
-function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("asyncKeyword.agency")
 }
 export const __openaiTool = {
@@ -143,7 +143,7 @@ const __toolRegistry = {
     }
   }
 };
-export async function openai(msg: string, __state: InternalFunctionState | undefined = undefined) {
+async function openai(msg: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -158,7 +158,7 @@ const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("asyncKeyword.agency")) {
-    __initializeGlobals(__ctx)
+    await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
   await callHook({
@@ -172,23 +172,26 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "openai",
-    args: {
-      msg: msg
-    },
-    result: undefined
-  })
   __stack.args["msg"] = msg;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "asyncKeyword.agency", scopeName: "openai" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "asyncKeyword.agency", scopeName: "openai", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  if ("msg" in __overrides) {
+    msg = __overrides["msg"];
+    __stack.args["msg"] = msg;
+  }
+
+}
+
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            __self.__removedTools = __self.__removedTools || [];
+    await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt({
         ctx: __ctx,
         prompt: `Respond to this user message: ${__stack.args.msg}`,
@@ -198,64 +201,33 @@ __stack.locals.response = await runPrompt({
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
       });
-// return early from node if this is an interrupt
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.response)) {
         await __ctx.pendingPromises.awaitAll()
-        return __stack.locals.response;
+        runner.halt(__stack.locals.response)
+        return;
       }
-      await __ctx.audit({
-        type: "assignment",
-        variable: "__self.__removedTools",
-        value: __self.__removedTools
-      })
-            __stack.step++;
-    }
-    if (__step <= 2) {
-            if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "asyncKeyword.agency", scopeName: "openai", stepPath: "2" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "response",
-          prompt: `Respond to this user message: ${__stack.args.msg}`,
-          response: __stack.locals.response,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
     });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-            __stack.step++;
-    }
-    if (__step <= 3) {
-            const __auditReturnValue = `OpenAI response: ${__stack.locals.response}`;
-await __ctx.audit({
-        type: "return",
-        value: __auditReturnValue
-      })
+    await runner.step(1, async (runner) => {
 __functionCompleted = true;
-return __auditReturnValue
-            __stack.step++;
-    }
+runner.halt(`OpenAI response: ${__stack.locals.response}`)
+return;
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
-      throw __error
-    }
-    if (__error instanceof ToolCallError) {
-      __error.retryable = __error.retryable && __self.__retryable
-      throw __error
-    }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "openai",
+    args: __stack.args,
+  }
+);
+
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -270,7 +242,7 @@ return __auditReturnValue
     }
   }
 }
-export async function google(msg: string, __state: InternalFunctionState | undefined = undefined) {
+async function google(msg: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -285,7 +257,7 @@ const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("asyncKeyword.agency")) {
-    __initializeGlobals(__ctx)
+    await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
   await callHook({
@@ -299,27 +271,29 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "google",
-    args: {
-      msg: msg
-    },
-    result: undefined
-  })
   __stack.args["msg"] = msg;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "asyncKeyword.agency", scopeName: "google" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "asyncKeyword.agency", scopeName: "google", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  if ("msg" in __overrides) {
+    msg = __overrides["msg"];
+    __stack.args["msg"] = msg;
+  }
+
+}
+
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            __threads.active().setMessages([])
-            __stack.step++;
-    }
-    if (__step <= 2) {
-            __self.__removedTools = __self.__removedTools || [];
+    await runner.step(0, async (runner) => {
+__threads.active().setMessages([])
+    });
+    await runner.step(1, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt({
         ctx: __ctx,
         prompt: `Respond to this user message: ${__stack.args.msg}`,
@@ -331,64 +305,33 @@ __stack.locals.response = await runPrompt({
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
       });
-// return early from node if this is an interrupt
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.response)) {
         await __ctx.pendingPromises.awaitAll()
-        return __stack.locals.response;
+        runner.halt(__stack.locals.response)
+        return;
       }
-      await __ctx.audit({
-        type: "assignment",
-        variable: "__self.__removedTools",
-        value: __self.__removedTools
-      })
-            __stack.step++;
-    }
-    if (__step <= 3) {
-            if (__ctx.callbacks.onCheckpoint) {
-  if (__ctx._skipNextCheckpoint) {
-    __ctx._skipNextCheckpoint = false;
-  } else {
-    const __cpId = __ctx.checkpoints.create(__ctx, { moduleId: "asyncKeyword.agency", scopeName: "google", stepPath: "3" });
-    const __cp = __ctx.checkpoints.get(__cpId);
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onCheckpoint",
-      data: {
-        checkpoint: __cp,
-        llmCall: {
-          step: __stack.step,
-          targetVariable: "response",
-          prompt: `Respond to this user message: ${__stack.args.msg}`,
-          response: __stack.locals.response,
-          model: __ctx.getSmoltalkConfig().model || "unknown",
-        },
-      },
     });
-    __ctx.checkpoints.delete(__cpId);
-  }
-}
-
-            __stack.step++;
-    }
-    if (__step <= 4) {
-            const __auditReturnValue = `Google response: ${__stack.locals.response}`;
-await __ctx.audit({
-        type: "return",
-        value: __auditReturnValue
-      })
+    await runner.step(2, async (runner) => {
 __functionCompleted = true;
-return __auditReturnValue
-            __stack.step++;
-    }
+runner.halt(`Google response: ${__stack.locals.response}`)
+return;
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
-      throw __error
-    }
-    if (__error instanceof ToolCallError) {
-      __error.retryable = __error.retryable && __self.__retryable
-      throw __error
-    }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "google",
+    args: __stack.args,
+  }
+);
+
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -403,7 +346,7 @@ return __auditReturnValue
     }
   }
 }
-export async function fibs(__state: InternalFunctionState | undefined = undefined) {
+async function fibs(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -418,7 +361,7 @@ const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("asyncKeyword.agency")) {
-    __initializeGlobals(__ctx)
+    await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
   await callHook({
@@ -430,20 +373,21 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "fibs",
-    args: {},
-    result: undefined
-  })
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "asyncKeyword.agency", scopeName: "fibs" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "asyncKeyword.agency", scopeName: "fibs", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+
+}
+
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            __self.__removedTools = __self.__removedTools || [];
+    await runner.step(0, async (runner) => {
+__self.__removedTools = __self.__removedTools || [];
 __stack.locals.__promptVar = await runPrompt({
         ctx: __ctx,
         prompt: `Generate the first 10 Fibonacci numbers`,
@@ -456,29 +400,31 @@ __stack.locals.__promptVar = await runPrompt({
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools
       });
-// return early from node if this is an interrupt
+// halt if this is an interrupt
 if (isInterrupt(__stack.locals.__promptVar)) {
         await __ctx.pendingPromises.awaitAll()
-        return __stack.locals.__promptVar;
+        runner.halt(__stack.locals.__promptVar)
+        return;
       }
 __functionCompleted = true;
-return __self.__promptVar
-      await __ctx.audit({
-        type: "assignment",
-        variable: "__self.__removedTools",
-        value: __self.__removedTools
-      })
-            __stack.step++;
-    }
+runner.halt(__self.__promptVar)
+return;
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
-      throw __error
-    }
-    if (__error instanceof ToolCallError) {
-      __error.retryable = __error.retryable && __self.__retryable
-      throw __error
-    }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "fibs",
+    args: __stack.args,
+  }
+);
+
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -513,107 +459,90 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  if (__step <= 0) {
-      
-          __stack.step++;
-  }
-  if (__step <= 1) {
-          __stack.locals.msg = await input(`> `);
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "asyncKeyword.agency", scopeName: "main" });
+  try {
+    await runner.step(0, async (runner) => {
+__stack.locals.msg = await input(`> `);
 if (isInterrupt(__stack.locals.msg)) {
-      await __ctx.pendingPromises.awaitAll()
-      return {
-        ...__state,
-        data: __stack.locals.msg
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __stack.locals.msg
+        })
+        return;
+      }
+    });
+    await runner.branchStep(1, "1", async (runner) => {
+if ((__stack.branches && __stack.branches["1"])) {
+        __forked = __stack.branches["1"].stack;
+        __forked.deserializeMode()
+      } else {
+        __forked = __ctx.forkStack();
+      }
+__stack.branches = (__stack.branches || {});
+__stack.branches["1"] = {
+        stack: __forked
       };
-    }
-    await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.msg",
-      value: __stack.locals.msg
-    })
-          __stack.step++;
-  }
-  if (__step <= 2 || (__stack.branches && __stack.branches["2"])) {
-          if ((__stack.branches && __stack.branches["2"])) {
-      __forked = __stack.branches["2"].stack;
-      __forked.deserializeMode()
-    } else {
-      __forked = __ctx.forkStack();
-    }
+__stack.locals.res2 = google(__stack.locals.msg, {
+        ctx: __ctx,
+        threads: __threads,
+        interruptData: __state?.interruptData,
+        stateStack: __forked,
+        isForked: true
+      });
+__self.__pendingKey_res2 = __ctx.pendingPromises.add(__stack.locals.res2, (val) => { __stack.locals.res2 = val; });
+    });
+    await runner.branchStep(2, "2", async (runner) => {
+if ((__stack.branches && __stack.branches["2"])) {
+        __forked = __stack.branches["2"].stack;
+        __forked.deserializeMode()
+      } else {
+        __forked = __ctx.forkStack();
+      }
 __stack.branches = (__stack.branches || {});
 __stack.branches["2"] = {
-      stack: __forked
-    };
-__stack.locals.res2 = google(__stack.locals.msg, {
-      ctx: __ctx,
-      threads: new ThreadStore(),
-      interruptData: __state?.interruptData,
-      stateStack: __forked,
-      isForked: true
-    });
-__self.__pendingKey_res2 = __ctx.pendingPromises.add(__stack.locals.res2, (val) => { __stack.locals.res2 = val; });
-    await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.branches",
-      value: __stack.branches
-    })
-          __stack.step++;
-  }
-  if (__step <= 3 || (__stack.branches && __stack.branches["3"])) {
-          if ((__stack.branches && __stack.branches["3"])) {
-      __forked = __stack.branches["3"].stack;
-      __forked.deserializeMode()
-    } else {
-      __forked = __ctx.forkStack();
-    }
-__stack.branches = (__stack.branches || {});
-__stack.branches["3"] = {
-      stack: __forked
-    };
+        stack: __forked
+      };
 __stack.locals.res1 = openai(__stack.locals.msg, {
-      ctx: __ctx,
-      threads: new ThreadStore(),
-      interruptData: __state?.interruptData,
-      stateStack: __forked,
-      isForked: true
-    });
+        ctx: __ctx,
+        threads: __threads,
+        interruptData: __state?.interruptData,
+        stateStack: __forked,
+        isForked: true
+      });
 __self.__pendingKey_res1 = __ctx.pendingPromises.add(__stack.locals.res1, (val) => { __stack.locals.res1 = val; });
-    await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.branches",
-      value: __stack.branches
+    });
+    await runner.step(3, async (runner) => {
+await __ctx.pendingPromises.awaitPending([__self.__pendingKey_res2, __self.__pendingKey_res1]);
+    });
+    await runner.step(4, async (runner) => {
+__stack.locals.results = Promise.race([__stack.locals.res1, __stack.locals.res2]);
+    });
+    await runner.step(5, async (runner) => {
+await printJSON(__stack.locals.results)
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "main",
+        data: undefined
+      }
     })
-          __stack.step++;
-  }
-  if (__step <= 4) {
-          await __ctx.pendingPromises.awaitPending([__self.__pendingKey_res2, __self.__pendingKey_res1]);
-          __stack.step++;
-  }
-  if (__step <= 5) {
-          __stack.locals.results = Promise.race([__stack.locals.res1, __stack.locals.res2]);
-    await __ctx.audit({
-      type: "assignment",
-      variable: "__stack.locals.results",
-      value: __stack.locals.results
-    })
-          __stack.step++;
-  }
-  if (__step <= 6) {
-          await printJSON(__stack.locals.results)
-          __stack.step++;
-  }
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeEnd",
-    data: {
-      nodeName: "main",
+    return {
+      messages: __threads,
       data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
     }
-  })
-  return {
-    messages: __threads,
-    data: undefined
-  };
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+    };
+  }
 })
 export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
   return runNode({
@@ -626,7 +555,7 @@ export async function main({ messages, callbacks }: { messages?: any; callbacks?
   });
 }
 export const __mainNodeParams = [];
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const initialState = {
       messages: new ThreadStore(),
@@ -639,4 +568,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"asyncKeyword.agency:openai":{"1":{"line":-1,"col":2},"3":{"line":0,"col":2}},"asyncKeyword.agency:google":{"2":{"line":5,"col":2},"4":{"line":8,"col":2}},"asyncKeyword.agency:fibs":{"1":{"line":12,"col":2}},"asyncKeyword.agency:main":{"1":{"line":16,"col":2},"2":{"line":17,"col":2},"3":{"line":18,"col":2},"5":{"line":19,"col":2},"6":{"line":20,"col":2}}};
+export const __sourceMap = {"asyncKeyword.agency:openai":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2}},"asyncKeyword.agency:google":{"1":{"line":5,"col":2},"2":{"line":8,"col":2}},"asyncKeyword.agency:fibs":{"0":{"line":12,"col":2}},"asyncKeyword.agency:main":{"0":{"line":16,"col":2},"1":{"line":17,"col":2},"2":{"line":18,"col":2},"4":{"line":19,"col":2},"5":{"line":20,"col":2}}};

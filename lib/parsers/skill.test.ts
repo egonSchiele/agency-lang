@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { skillParser } from "./skill.js";
+import { skillParser } from "./parsers.js";
 import { eof, seqC, seqR } from "tarsec";
 
 describe("skillParser", () => {

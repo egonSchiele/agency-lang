@@ -1,0 +1,12 @@
+def greet(name: string): string {
+  return interrupt("Are you sure you want to greet someone?")
+  return "Kya chal raha jai, ${name}!"
+}
+
+node foo() {
+  const greeting = greet("AI World")
+  if (isFailure(greeting)) {
+    return { greeting: greeting.error }
+  }
+  return { greeting: greeting }
+}

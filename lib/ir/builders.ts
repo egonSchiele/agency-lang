@@ -36,19 +36,22 @@ import type {
   TsExport,
   TsNewExpr,
   TsScopedVar,
-  TsFunctionReturn,
-  TsStepBlock,
-  TsIfSteps,
-  TsIfStepsBranch,
-  TsThreadSteps,
-  TsWhileSteps,
-  TsForSteps,
-  TsHandleSteps,
+  // TsFunctionReturn is no longer produced but kept in tsIR.ts for now
+  TsRunnerStep,
+  TsRunnerThread,
+  TsRunnerHandle,
+  TsRunnerIfElse,
+  TsRunnerLoop,
+  TsRunnerWhileLoop,
+  TsRunnerBranchStep,
+  TsRunnerPipe,
   TsEmpty,
   TsBreak,
   TsContinue,
   TsPostfixOp,
   TsTernary,
+  TsRunnerDebugger,
+  TsWithHandler,
 } from "./tsIR.js";
 
 export { $, TsChain } from "./fluent.js";
@@ -354,62 +357,54 @@ export const ts = {
     return { kind: "scopedVar", name, scope, moduleId };
   },
 
-  functionReturn(value: TsNode): TsFunctionReturn {
-    return { kind: "functionReturn", value };
+  functionReturn(value: TsNode): TsStatements {
+    return ts.statements([
+      ts.assign(ts.id("__functionCompleted"), ts.bool(true)),
+      ts.runnerHalt(value),
+    ]);
   },
 
-  stepBlock(
-    stepIndex: number,
-    body: TsNode,
-    _branchKey?: string,
-    _subStep?: number[],
-  ): TsStepBlock {
-    return { kind: "stepBlock", stepIndex, body, branchKey: _branchKey, subStep: _subStep };
+  // ── Runner-based step builders ──
+
+  runnerStep(opts: { id: number; body: TsNode[] }): TsRunnerStep {
+    return { kind: "runnerStep", ...opts };
   },
 
-  ifSteps(
-    subStepPath: number[],
-    branches: TsIfStepsBranch[],
-    elseBranch?: TsNode[],
-  ): TsIfSteps {
-    return { kind: "ifSteps", subStepPath, branches, elseBranch };
+  runnerThread(opts: { id: number; method: "create" | "createSubthread"; body: TsNode[] }): TsRunnerThread {
+    const res = { kind: "runnerThread" as const, ...opts };
+    return res;
   },
 
-  threadSteps(
-    subStepPath: number[],
-    createMethod: string,
-    setup: TsNode[],
-    body: TsNode[],
-    cleanup: TsNode[],
-  ): TsThreadSteps {
-    return { kind: "threadSteps", subStepPath, createMethod, setup, body, cleanup };
+  runnerHandle(opts: { id: number; handler: TsNode; body: TsNode[] }): TsRunnerHandle {
+    return { kind: "runnerHandle", ...opts };
   },
 
-  whileSteps(
-    subStepPath: number[],
-    condition: TsNode,
-    body: TsNode[],
-  ): TsWhileSteps {
-    return { kind: "whileSteps", subStepPath, condition, body };
+  withHandler(handler: TsNode, body: TsNode): TsWithHandler {
+    return { kind: "withHandler", handler, body };
   },
 
-  forSteps(opts: {
-    subStepPath: number[];
-    init: TsNode;
-    condition: TsNode;
-    update: TsNode;
-    body: TsNode[];
-    itemDecl?: TsNode;
-  }): TsForSteps {
-    return { kind: "forSteps", ...opts };
+  runnerIfElse(opts: { id: number; branches: { condition: TsNode; body: TsNode[] }[]; elseBranch?: TsNode[] }): TsRunnerIfElse {
+    return { kind: "runnerIfElse", ...opts };
   },
 
-  handleSteps(
-    subStepPath: number[],
-    handler: TsNode,
-    body: TsNode[],
-  ): TsHandleSteps {
-    return { kind: "handleSteps", subStepPath, handler, body };
+  runnerLoop(opts: { id: number; items: TsNode; itemVar: string; body: TsNode[]; indexVar?: string }): TsRunnerLoop {
+    return { kind: "runnerLoop", ...opts };
+  },
+
+  runnerWhileLoop(opts: { id: number; condition: TsNode; body: TsNode[] }): TsRunnerWhileLoop {
+    return { kind: "runnerWhileLoop", ...opts };
+  },
+
+  runnerBranchStep(opts: { id: number; branchKey: string; body: TsNode[] }): TsRunnerBranchStep {
+    return { kind: "runnerBranchStep", ...opts };
+  },
+
+  runnerDebugger(opts: { id: number; label: string }): TsRunnerDebugger {
+    return { kind: "runnerDebugger", ...opts };
+  },
+
+  runnerPipe(opts: { id: number; target: TsNode; input: TsNode; fn: TsNode }): TsRunnerPipe {
+    return { kind: "runnerPipe", ...opts };
   },
 
   empty(): TsEmpty {
@@ -430,13 +425,21 @@ export const ts = {
 
   // --- Semantic convenience builders (no new IR types) ---
 
-  /** Return { messages: __threads, data: value } from a graph node */
-  nodeResult(value: TsNode): TsReturn {
-    return ts.return(ts.obj({ messages: ts.runtime.threads, data: value }));
+  /** Call runner.halt(value) and return from the current callback */
+  runnerHalt(value: TsNode): TsStatements {
+    return ts.statements([
+      $(ts.id("runner")).prop("halt").call([value]).done(),
+      ts.return(),
+    ]);
+  },
+
+  /** Halt with { messages: __threads, data: value } and return from a graph node callback */
+  nodeResult(value: TsNode): TsStatements {
+    return ts.runnerHalt(ts.obj({ messages: ts.runtime.threads, data: value }));
   },
 
   env(varName: string): TsRaw {
-    return ts.raw(`process.env[${JSON.stringify(varName)}]`);
+    return ts.raw(`__process.env[${JSON.stringify(varName)}]`);
   },
 
   callHook(hookName: string, data: Record<string, TsNode>): TsNode {
@@ -529,16 +532,20 @@ export const ts = {
     isForked,
   }: {
     ctx: TsNode;
-    threads: TsNode;
-    interruptData: TsNode;
+    threads?: TsNode;
+    interruptData?: TsNode;
     stateStack?: TsNode;
     isForked?: boolean;
   }): TsNode {
     const entries: Record<string, TsNode> = {
       ctx,
-      threads,
-      interruptData,
     };
+    if (threads) {
+      entries.threads = threads;
+    }
+    if (interruptData) {
+      entries.interruptData = interruptData;
+    }
     if (stateStack) {
       entries.stateStack = stateStack;
     }
@@ -569,8 +576,14 @@ export const ts = {
       .done();
   },
 
-  nodeReturn({ messages, data }: { messages: TsNode; data: TsNode }): TsReturn {
-    return ts.return(ts.obj({ messages, data }));
+  nodeReturn({ messages, data }: { messages: TsNode; data: TsNode }): TsStatements {
+    return ts.statements([
+      $(ts.id("runner"))
+        .prop("halt")
+        .call([ts.obj({ messages, data })])
+        .done(),
+      ts.raw("return"),
+    ]);
   },
 
   jsonStringify(value: TsNode): TsNode {
@@ -646,6 +659,9 @@ export const ts = {
     },
     createSubthread(): TsCall {
       return ts.call(ts.prop(ts.runtime.threads, "createSubthread"));
+    },
+    createAndReturnSubthread(): TsCall {
+      return ts.call(ts.prop(ts.runtime.threads, "createAndReturnSubthread"));
     },
     get(id: TsNode): TsCall {
       return ts.call(ts.prop(ts.runtime.threads, "get"), [id]);

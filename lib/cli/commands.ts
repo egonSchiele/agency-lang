@@ -4,7 +4,7 @@ import { AgencyProgram, generateTypeScript } from "@/index.js";
 import { transformSync } from "esbuild";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { collectProgramInfo } from "@/programInfo.js";
-import { typeCheck, formatErrors } from "@/typeChecker.js";
+import { typeCheck, formatErrors } from "@/typeChecker/index.js";
 import { ImportStatement } from "@/types/importStatement.js";
 import { buildSymbolTable, type SymbolTable } from "@/symbolTable.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
@@ -14,7 +14,6 @@ import {
   isPkgImport,
   getStdlibDir,
 } from "../importPaths.js";
-import { renderMermaidAscii } from "beautiful-mermaid";
 import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
@@ -102,23 +101,6 @@ export function readFile(inputFile: string): string {
   return contents;
 }
 
-export function renderGraph(contents: string, config: AgencyConfig): void {
-  const parsedProgram = parse(contents, config);
-  const info = collectProgramInfo(parsedProgram);
-  const preprocessor = new TypescriptPreprocessor(parsedProgram, config, info);
-  preprocessor.preprocess();
-  const mermaid = preprocessor.renderMermaid();
-  console.log("Program Mermaid Diagram:\n");
-  mermaid.forEach((subgraph) => {
-    const ascii = renderMermaidAscii(subgraph);
-    console.log(ascii);
-  });
-  console.log("==========");
-  mermaid.forEach((subgraph) => {
-    console.log(subgraph);
-  });
-}
-
 const compiledFiles: Set<string> = new Set();
 
 export function resetCompilationCache(): void {
@@ -162,8 +144,8 @@ export function compile(
   compiledFiles.add(absoluteInputFile);
 
   const contents = readFile(inputFile);
-  const isStdlibFile = absoluteInputFile.startsWith(getStdlibDir());
-  const parsedProgram = parse(contents, config, !isStdlibFile);
+  const isStdlibIndex = absoluteInputFile === path.join(getStdlibDir(), "index.agency");
+  const parsedProgram = parse(contents, config, !isStdlibIndex);
 
   // Build symbol table once at the top level, reuse for recursive calls
   const symbolTable =
@@ -229,6 +211,7 @@ export function compile(
     const result = transformSync(generatedCode, {
       loader: "ts",
       format: "esm",
+      supported: { "top-level-await": true },
     });
     fs.writeFileSync(outputFile, result.code, "utf-8");
   }

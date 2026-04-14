@@ -180,23 +180,6 @@
           "scope": "local"
         },
         {
-          "type": "sentinel",
-          "value": "checkpoint",
-          "data": {
-            "targetVariable": "forecast",
-            "prompt": {
-              "type": "string",
-              "segments": [
-                {
-                  "type": "text",
-                  "value": "What is the weather in NYC?"
-                }
-              ]
-            },
-            "scope": "local"
-          }
-        },
-        {
           "type": "assignment",
           "declKind": "const",
           "typeHint": {
@@ -236,23 +219,6 @@
             "end": 326
           },
           "scope": "local"
-        },
-        {
-          "type": "sentinel",
-          "value": "checkpoint",
-          "data": {
-            "targetVariable": "summary",
-            "prompt": {
-              "type": "string",
-              "segments": [
-                {
-                  "type": "text",
-                  "value": "Summarize the forecast"
-                }
-              ]
-            },
-            "scope": "local"
-          }
         }
       ],
       "loc": {

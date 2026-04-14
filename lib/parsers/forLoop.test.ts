@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { forLoopParser } from "./forLoop.js";
+import { forLoopParser } from "./parsers.js";
 
 describe("forLoopParser", () => {
   const testCases = [

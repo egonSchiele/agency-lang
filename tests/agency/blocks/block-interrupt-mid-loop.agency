@@ -1,0 +1,23 @@
+const log = []
+
+def map(items: any[], block: (any) => any): any[] {
+  const results: any[] = []
+  for (item in items) {
+    let result = block(item)
+    results.push(result)
+  }
+  return results
+}
+
+node main() {
+  map([1, 2, 3, 4, 5]) as num {
+    if (num == 3) {
+      const check = interrupt("Are you sure?")
+      if (isFailure(check)) {
+        return null
+      }
+    }
+    log.push(num)
+  }
+  return log
+}

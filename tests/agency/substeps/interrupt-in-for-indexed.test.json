@@ -1,12 +1,15 @@
 {
-  "sourceFile": "interrupt-in-for-indexed.agency",
   "tests": [
     {
       "nodeName": "main",
       "description": "Interrupt in indexed for loop at index 2, completes all items",
       "input": "",
-      "expectedOutput": "\"abcd\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "expectedOutput": "[\"a\",\"b\",\"c\",\"d\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "interruptHandlers": [
         {
           "action": "approve",

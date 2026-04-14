@@ -1,12 +1,15 @@
 {
-  "sourceFile": "handle-approve.agency",
   "tests": [
     {
       "nodeName": "main",
       "description": "Handler approves interrupt, execution continues past it",
       "input": "",
       "expectedOutput": "\"after interrupt\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

@@ -107,7 +107,7 @@ describe("debugStep()", () => {
     expect(result).toBeUndefined();
   });
 
-  it("respects stepTarget: does NOT pause when callDepth < targetDepth", async () => {
+  it("respects stepTarget: DOES pause when callDepth < targetDepth", async () => {
     const dbg = new DebuggerState(10);
     // Set targetDepth=3 by entering 3 calls then calling stepNext
     for (let i = 0; i < 3; i++) dbg.enterCall();
@@ -116,7 +116,8 @@ describe("debugStep()", () => {
     dbg.exitCall();
     const ctx = makeMockCtx(dbg);
     const result = await debugStep(ctx, makeState(ctx), baseInfo);
-    expect(result).toBeUndefined();
+    expect(result).toBeDefined();
+    expect(result!.type).toBe("interrupt");
   });
 
   it("respects stepTarget: DOES pause when callDepth === targetDepth", async () => {

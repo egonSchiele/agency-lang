@@ -1,13 +1,13 @@
 import { _copy, _paste } from "./lib/clipboard.js"
 
-def copy(text: string) {
+export def copy(text: string) {
   """
   A tool for copying text to the system clipboard.
   """
   _copy(text)
 }
 
-def paste(): string {
+export def paste(): string {
   """
   A tool for reading text from the system clipboard.
   """

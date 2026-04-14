@@ -1,11 +1,11 @@
 // https://www.asciitable.com
 // also tests returning an llm call
 // from a function
-def ascii(str: string): number[] {
+export def ascii(str: string): number[] {
   return llm("Return the given string as a series of ascii codes: ${str}")
 }
 
-async def greet(name: string) {
+def greet(name: string) {
   return llm("Say hello to ${name}!")
 }
 
@@ -19,10 +19,10 @@ node bar(name: string) {
 
 let globalVar = 0
 
-def increment() {
+export def increment() {
   globalVar = globalVar + 1
 }
 
-def getGlobal() {
+export def getGlobal() {
   return globalVar
 }

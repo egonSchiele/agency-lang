@@ -40,6 +40,8 @@ export function mapTypeToZodSchema(
         return "z.any()";
       case "unknown":
         return "z.unknown()";
+      case "object":
+        return "z.record(z.string(), z.any())";
       default:
         // Default to string for unknown types
         return DEFAULT_SCHEMA;
@@ -76,6 +78,8 @@ export function mapTypeToZodSchema(
       })
       .join(", ");
     return `z.object({ ${props} })`;
+  } else if (variableType.type === "resultType") {
+    return mapTypeToZodSchema(variableType.successType, typeAliases);
   } else if (variableType.type === "typeAliasVariable") {
     if (!typeAliases || !typeAliases[variableType.aliasName]) {
       throw new Error(

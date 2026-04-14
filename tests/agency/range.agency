@@ -1,0 +1,6 @@
+node main() {
+  let a = range(5)
+  let b = range(2, 5)
+  let c = range(0)
+  return a + " | " + b + " | " + c
+}

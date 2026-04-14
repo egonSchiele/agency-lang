@@ -3,7 +3,7 @@ import {
   importStatmentParser,
   importNodeStatmentParser,
   importToolStatmentParser,
-} from "./importStatement.js";
+} from "./parsers.js";
 
 describe("importStatmentParser", () => {
   // Default imports

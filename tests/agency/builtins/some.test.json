@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"hasNegative\":true,\"hasBig\":false}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "some returns true when at least one matches, false otherwise"
+    }
+  ]
+}

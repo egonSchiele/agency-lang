@@ -19,6 +19,12 @@ export class ThreadStore {
     this.activeStack = [];
   }
 
+  static withDefaultActive(): ThreadStore {
+    const store = new ThreadStore();
+    store.getOrCreateActive();
+    return store;
+  }
+
   // Create a new empty thread, return its ID
   create(): MessageThreadID {
     const id = (this.counter++).toString();
@@ -37,6 +43,12 @@ export class ThreadStore {
     const id = (this.counter++).toString();
     this.threads[id] = this.threads[parentId!].newSubthreadChild();
     return id;
+  }
+
+  // Create a subthread that inherits from the current active thread and return it
+  createAndReturnSubthread(): MessageThread {
+    const id = this.createSubthread();
+    return this.get(id);
   }
 
   // Get a thread by ID

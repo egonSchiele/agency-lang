@@ -1,0 +1,13 @@
+const log = []
+
+def foo() {
+  log.push("before interrupt")
+  return interrupt("check")
+  log.push("after interrupt")
+  return "done"
+}
+
+node main() {
+  foo() with approve
+  return log
+}

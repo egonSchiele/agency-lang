@@ -21,7 +21,6 @@ import { MatchBlock } from "./types/matchBlock.js";
 import { MessageThread } from "./types/messageThread.js";
 import { ReturnStatement } from "./types/returnStatement.js";
 import { Skill } from "./types/skill.js";
-import { SpecialVar } from "./types/specialVar.js";
 import { UsesTool } from "./types/tools.js";
 import { TypeAlias, VariableType } from "./types/typeHints.js";
 import { WhileLoop } from "./types/whileLoop.js";
@@ -29,6 +28,10 @@ import { AwaitPending } from "./types/awaitPending.js";
 import { HandleBlock } from "./types/handleBlock.js";
 import { Sentinel } from "./types/sentinel.js";
 import { DebuggerStatement } from "./types/debuggerStatement.js";
+import { Placeholder } from "./types/placeholder.js";
+import { WithModifier } from "./types/withModifier.js";
+import { Tag } from "./types/tag.js";
+import { TryExpression } from "./types/tryExpression.js";
 export * from "./types/access.js";
 export * from "./types/awaitPending.js";
 export * from "./types/dataStructures.js";
@@ -39,7 +42,6 @@ export * from "./types/importStatement.js";
 export * from "./types/literals.js";
 export * from "./types/matchBlock.js";
 export * from "./types/returnStatement.js";
-export * from "./types/specialVar.js";
 export * from "./types/tools.js";
 export * from "./types/typeHints.js";
 export * from "./types/whileLoop.js";
@@ -48,7 +50,12 @@ export * from "./types/handleBlock.js";
 export * from "./types/keyword.js";
 export * from "./types/sentinel.js";
 export * from "./types/debuggerStatement.js";
-export * from "./types/base.js"
+export * from "./types/blockArgument.js";
+export * from "./types/placeholder.js";
+export * from "./types/withModifier.js";
+export * from "./types/base.js";
+export * from "./types/tag.js";
+export type { TryExpression } from "./types/tryExpression.js";
 
 export type Expression =
   | ValueAccess
@@ -56,7 +63,9 @@ export type Expression =
   | FunctionCall
   | BinOpExpression
   | AgencyArray
-  | AgencyObject;
+  | AgencyObject
+  | Placeholder
+  | TryExpression;
 
 /**
  * Scope types for variable resolution.
@@ -108,14 +117,20 @@ each call will get its own copy of `globalVar`.
  * shared const foo = fetch("https://example.com/api/data");
  * ```
  */
+export type BlockScope = {
+  type: "block";
+  blockName: string;
+};
+
 export type Scope =
   | GlobalScope
   | FunctionScope
   | NodeScope
   | ImportedScope
   | SharedScope
-  | LocalScope;
-export type ScopeType = Scope["type"] | "args";
+  | LocalScope
+  | BlockScope;
+export type ScopeType = Scope["type"] | "args" | "blockArgs";
 export type GlobalScope = {
   type: "global";
 };
@@ -155,6 +170,7 @@ export type Assignment = BaseNode & {
   shared?: boolean;
   declKind?: "let" | "const";
   value: Expression | MessageThread;
+  tags?: Tag[];
 };
 
 export function globalScope(): Scope {
@@ -203,7 +219,6 @@ export type AgencyNode =
   | ImportToolStatement
   | WhileLoop
   | IfElse
-  | SpecialVar
   | NewLine
   | RawCode
   | MessageThread
@@ -213,8 +228,12 @@ export type AgencyNode =
   | ForLoop
   | AwaitPending
   | HandleBlock
+  | WithModifier
   | Sentinel
-  | DebuggerStatement;
+  | DebuggerStatement
+  | Placeholder
+  | Tag
+  | TryExpression;
 
 export type AgencyProgram = {
   type: "agencyProgram";

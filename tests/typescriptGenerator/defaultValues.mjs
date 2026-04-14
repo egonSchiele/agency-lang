@@ -1,13 +1,13 @@
 import { fileURLToPath } from "url";
-import process from "process";
+import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "zod";
-import { goToNode, color, nanoid, registerProvider, registerTextModel } from "agency-lang";
-import * as smoltalk from "agency-lang";
+import { goToNode, color, nanoid } from "agency-lang";
+import { smoltalk } from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore,
+  RuntimeContext, MessageThread, ThreadStore, Runner,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -18,11 +18,11 @@ import {
   modifyInterrupt as _modifyInterrupt,
   resumeFromState as _resumeFromState,
   rewindFrom as _rewindFrom,
-  ToolCallError,
   RestoreSignal,
   deepClone as __deepClone,
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
+  success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
@@ -31,26 +31,26 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const __cwd = process.cwd();
+const __cwd = __process.cwd();
 
 const getDirname = () => __dirname;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
-    host: "https://agency-lang.com",
-    apiKey: process.env["STATELOG_API_KEY"] || "",
+    host: "https://statelog.adit.io",
+    apiKey: __process.env["STATELOG_API_KEY"] || "",
     projectId: "",
     debugMode: false
   },
   smoltalkDefaults: {
-    openAiApiKey: process.env["OPENAI_API_KEY"] || "",
-    googleApiKey: process.env["GEMINI_API_KEY"] || "",
+    openAiApiKey: __process.env["OPENAI_API_KEY"] || "",
+    googleApiKey: __process.env["GEMINI_API_KEY"] || "",
     model: "gpt-4o-mini",
     logLevel: "warn",
     statelog: {
-      host: "https://agency-lang.com",
+      host: "https://statelog.adit.io",
       projectId: "smoltalk",
-      apiKey: process.env["STATELOG_SMOLTALK_API_KEY"] || "",
+      apiKey: __process.env["STATELOG_SMOLTALK_API_KEY"] || "",
       traceId: nanoid()
     }
   },
@@ -84,7 +84,7 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
-function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("defaultValues.agency")
 }
 export const __greetTool = {
@@ -113,7 +113,7 @@ const __toolRegistry = {
     }
   }
 };
-export async function greet(name: string, greeting: string | null = null, __state: InternalFunctionState | undefined = undefined) {
+async function greet(name: string, greeting: string | null = null, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -128,7 +128,7 @@ const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("defaultValues.agency")) {
-    __initializeGlobals(__ctx)
+    await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
   await callHook({
@@ -143,36 +143,47 @@ let __functionCompleted = false;
       isBuiltin: false
     }
   })
-  await __ctx.audit({
-    type: "functionCall",
-    functionName: "greet",
-    args: {
-      name: name,
-      greeting: greeting
-    },
-    result: undefined
-  })
   __stack.args["name"] = name;
   __stack.args["greeting"] = greeting ?? `Hello`;
   __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "defaultValues.agency", scopeName: "greet" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "defaultValues.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  if ("name" in __overrides) {
+    name = __overrides["name"];
+    __stack.args["name"] = name;
+  }
+  if ("greeting" in __overrides) {
+    greeting = __overrides["greeting"];
+    __stack.args["greeting"] = greeting;
+  }
+
+}
+
   try {
-    if (__step <= 0) {
-      
-            __stack.step++;
-    }
-    if (__step <= 1) {
-            await print(__stack.args.greeting, __stack.args.name)
-            __stack.step++;
-    }
+    await runner.step(0, async (runner) => {
+await print(__stack.args.greeting, __stack.args.name)
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
-      throw __error
-    }
-    if (__error instanceof ToolCallError) {
-      __error.retryable = __error.retryable && __self.__retryable
-      throw __error
-    }
-    throw new ToolCallError(__error, { retryable: __self.__retryable })
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "greet",
+    args: __stack.args,
+  }
+);
+
   } finally {
     if (!__state?.isForked) { __ctx.stateStack.pop() }
     if (__functionCompleted) {
@@ -189,13 +200,13 @@ let __functionCompleted = false;
 }
 await greet(`world`, null, {
   ctx: __ctx,
-  threads: new ThreadStore(),
+  threads: __threads,
   interruptData: __state?.interruptData
 })
 await greet(`world`, `Hi`, {
   ctx: __ctx,
-  threads: new ThreadStore(),
+  threads: __threads,
   interruptData: __state?.interruptData
 })
 export default graph
-export const __sourceMap = {"defaultValues.agency:greet":{"1":{"line":-1,"col":2}}};
+export const __sourceMap = {"defaultValues.agency:greet":{"0":{"line":-1,"col":2}}};

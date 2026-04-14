@@ -1,0 +1,26 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Two async branches both interrupt; on resume, neither replays pre-interrupt statements",
+      "skip": true,
+      "input": "",
+      "expectedOutput": "[\"before\",\"h1-start\",\"h2-start\",\"h1-end\",\"h2-end\",\"after:h1-done,h2-done\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "approve h1"
+        },
+        {
+          "action": "approve",
+          "expectedMessage": "approve h2"
+        }
+      ]
+    }
+  ]
+}

@@ -4,8 +4,12 @@
     "result": true
   },
   "reject": {
-    "x": 99,
-    "result": false
+    "success": false,
+    "error": "interrupt rejected",
+    "checkpoint": null,
+    "retryable": false,
+    "functionName": null,
+    "args": null
   },
   "resolve": {
     "x": 77,

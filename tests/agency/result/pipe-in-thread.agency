@@ -1,0 +1,29 @@
+def askFirst(num = 0): Result {
+  const nums: number[] = llm("What are the first 3 prime numbers > ${num}?")
+  return success(nums)
+}
+
+def askNext(prev: number[]): Result {
+  const nums: number[] = llm("What are the next 3 prime numbers after those?")
+  return success(nums)
+}
+
+node main() {
+  thread {
+    let r = success(100) |> askFirst |> askNext
+  }
+  if (isSuccess(r)) {
+    return r.value
+  }
+  return "failed"
+}
+
+node funcFirst() {
+  thread {
+    let r = askFirst() |> askNext
+  }
+  if (isSuccess(r)) {
+    return r.value
+  }
+  return "failed"
+}

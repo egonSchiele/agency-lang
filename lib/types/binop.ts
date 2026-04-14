@@ -8,7 +8,9 @@ export type Operator =
   | "-"
   | "*"
   | "/"
+  | "%"
   | "=="
+  | "==="
   | "!="
   | "+="
   | "-="
@@ -20,12 +22,17 @@ export type Operator =
   | ">="
   | "&&"
   | "||"
-  | "!";
+  | "!"
+  | "|>"
+  | "catch";
 
 export const PRECEDENCE: Record<string, number> = {
+  "|>": -1,
+  "catch": 0,
   "||": 1,
   "&&": 2,
   "==": 3,
+  "===": 3,
   "!=": 3,
   "<": 4,
   ">": 4,
@@ -35,6 +42,7 @@ export const PRECEDENCE: Record<string, number> = {
   "-": 5,
   "*": 6,
   "/": 6,
+  "%": 6,
   "+=": 0,
   "-=": 0,
   "*=": 0,

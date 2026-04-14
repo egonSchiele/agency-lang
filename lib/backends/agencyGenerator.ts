@@ -1,4 +1,3 @@
-import { SpecialVar } from "@/types/specialVar.js";
 import {
   AgencyComment,
   AgencyMultiLineComment,
@@ -47,6 +46,7 @@ import {
 import { expressionToString } from "@/utils/node.js";
 import { Keyword } from "@/types/keyword.js";
 import { HandleBlock } from "@/types/handleBlock.js";
+import { Tag } from "@/types/tag.js";
 
 export class AgencyGenerator {
   protected graphNodes: GraphNodeDefinition[] = [];
@@ -118,7 +118,7 @@ export class AgencyGenerator {
       "graphNode", "function", "typeAlias",
     ]);
     const NO_SPACE_TYPES = new Set([
-      "comment", "multiLineComment"
+      "comment", "multiLineComment", "tag"
     ]);
 
     // Pass 5: Process all nodes and generate code
@@ -188,7 +188,7 @@ export class AgencyGenerator {
 
   protected processGraphNodeName(node: GraphNodeDefinition): void { }
 
-  protected processNode(node: AgencyNode): string {
+  public processNode(node: AgencyNode): string {
     switch (node.type) {
       case "typeAlias":
         return this.processTypeAlias(node);
@@ -211,6 +211,7 @@ export class AgencyGenerator {
       case "string":
       case "variableName":
       case "boolean":
+      case "null":
         return this.generateLiteral(node);
       case "returnStatement":
         return this.processReturnStatement(node);
@@ -239,8 +240,6 @@ export class AgencyGenerator {
         return this.processWhileLoop(node);
       case "ifElse":
         return this.processIfElse(node);
-      case "specialVar":
-        return this.processSpecialVar(node);
       case "newLine":
         return this.processNewLine(node);
       case "rawCode":
@@ -249,12 +248,20 @@ export class AgencyGenerator {
         return this.processMessageThread(node);
       case "handleBlock":
         return this.processHandleBlock(node);
+      case "withModifier":
+        return `${this.processNode(node.statement)} with ${node.handlerName}`;
       case "skill":
         return this.processSkill(node);
       case "binOpExpression":
         return this.processBinOpExpression(node);
       case "keyword":
         return this.processKeyword(node);
+      case "tag":
+        return this.formatTag(node);
+      case "placeholder":
+        return "?";
+      case "tryExpression":
+        return `try ${this.processNode(node.call)}`;
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
@@ -384,6 +391,7 @@ export class AgencyGenerator {
   // Assignment and literals
 
   protected processAssignment(node: Assignment): string {
+    const tags = this.formatAttachedTags(node);
     const chainStr =
       node.accessChain
         ?.map((ce) => this.processAccessChainElement(ce))
@@ -394,7 +402,7 @@ export class AgencyGenerator {
     const sharedPrefix = node.shared ? "shared " : "";
     const declPrefix = node.declKind ? `${node.declKind} ` : "";
     let valueCode = this.processNode(node.value).trim();
-    return this.indentStr(`${sharedPrefix}${declPrefix}${varName} = ${valueCode}`);
+    return tags + this.indentStr(`${sharedPrefix}${declPrefix}${varName} = ${valueCode}`);
   }
 
   protected generateLiteral(literal: Literal): string {
@@ -409,6 +417,8 @@ export class AgencyGenerator {
         return this.generateMultiLineStringLiteral(literal);
       case "boolean":
         return literal.value ? "true" : "false";
+      case "null":
+        return "null";
       default:
         return "";
     }
@@ -448,13 +458,14 @@ export class AgencyGenerator {
   // Function methods
 
   protected processFunctionDefinition(node: FunctionDefinition): string {
+    const tags = this.formatAttachedTags(node);
     const { functionName, body, parameters } = node;
 
     const params = parameters
       .map((p) => {
         const prefix = p.variadic ? "..." : "";
         const defaultSuffix = p.defaultValue
-          ? ` = ${this.generateLiteral(p.defaultValue)}`
+          ? ` = ${this.processNode(p.defaultValue).trim()}`
           : "";
         if (p.typeHint) {
           const typeStr = variableTypeToString(p.typeHint, this.typeAliases);
@@ -470,15 +481,11 @@ export class AgencyGenerator {
       : "";
 
     let safePrefix = node.safe ? "safe " : "";
-    let asyncPrefix = "";
-    if (node.async === true) {
-      asyncPrefix = "async ";
-    } else if (node.async === false) {
-      asyncPrefix = "sync ";
-    }
+
+    const exportPrefix = node.exported ? "export " : "";
 
     let result = this.indentStr(
-      `${safePrefix}${asyncPrefix}def ${functionName}(${params})${returnTypeStr} {\n`,
+      `${exportPrefix}${safePrefix}def ${functionName}(${params})${returnTypeStr} {\n`,
     );
 
     this.increaseIndent();
@@ -500,12 +507,13 @@ export class AgencyGenerator {
 
     result += this.indentStr(`}`);
 
-    return result;
+    return tags + result;
   }
 
   protected processFunctionCall(node: FunctionCall): string {
+    const tags = this.formatAttachedTags(node);
     const expr = this.generateFunctionCallExpression(node, "topLevelStatement");
-    return this.indentStr(`${expr}`);
+    return tags + this.indentStr(`${expr}`);
   }
 
   protected generateFunctionCallExpression(
@@ -528,7 +536,29 @@ export class AgencyGenerator {
       asyncPrefix = "await ";
     }
 
-    return `${asyncPrefix}${node.functionName}(${args.join(", ")})`;
+    let result = `${asyncPrefix}${node.functionName}(${args.join(", ")})`;
+
+    if (node.block) {
+      const block = node.block;
+      let asClause = "as ";
+      if (block.params.length === 1) {
+        asClause = `as ${block.params[0].name} `;
+      } else if (block.params.length > 1) {
+        asClause = `as (${block.params.map((p) => p.name).join(", ")}) `;
+      }
+
+      this.increaseIndent();
+      const bodyLines: string[] = [];
+      for (const stmt of block.body) {
+        bodyLines.push(this.processNode(stmt));
+      }
+      this.decreaseIndent();
+      const bodyStr = bodyLines.filter((s) => s !== "").join("\n").trimEnd() + "\n";
+
+      result += ` ${asClause}{\n${bodyStr}${this.indentStr("}")}`;
+    }
+
+    return result;
   }
 
   // Data structures
@@ -761,6 +791,7 @@ export class AgencyGenerator {
   }
 
   protected processGraphNode(node: GraphNodeDefinition): string {
+    const tags = this.formatAttachedTags(node);
     const { nodeName, body, parameters } = node;
     const params = parameters
       .map((p) =>
@@ -789,7 +820,7 @@ export class AgencyGenerator {
     this.decreaseIndent();
 
     result += this.indentStr(`}`);
-    return result;
+    return tags + result;
   }
 
   protected processTool(node: FunctionDefinition): string {
@@ -798,12 +829,6 @@ export class AgencyGenerator {
 
   protected processUsesTool(node: UsesTool): string {
     return this.indentStr(`uses ${node.toolNames.join(", ")}`);
-  }
-
-  protected processSpecialVar(node: SpecialVar): string {
-    return this.indentStr(
-      `@${node.name} = ${this.processNode(node.value).trim()}`,
-    );
   }
 
   protected processNewLine(_node: NewLine): string {
@@ -860,15 +885,22 @@ export class AgencyGenerator {
   }
 
   protected processBinOpExpression(node: BinOpExpression): string {
-    const left = this.processNode(node.left).trim();
-    const right = this.processNode(node.right).trim();
-    const wrappedLeft = this.needsParensLeft(node.left, node.operator)
-      ? `(${left})`
-      : left;
-    const wrappedRight = this.needsParensRight(node.right, node.operator)
-      ? `(${right})`
-      : right;
-    return this.indentStr(`${wrappedLeft} ${node.operator} ${wrappedRight}`);
+    // Collect a chain of the same operator (e.g. a |> b |> c)
+    const op = node.operator;
+    const parts: string[] = [];
+    let current: AgencyNode = node;
+    while (current.type === "binOpExpression" && current.operator === op) {
+      parts.push(this.processNode(current.right).trim());
+      current = current.left;
+    }
+    parts.push(this.processNode(current).trim());
+    parts.reverse();
+
+    const oneLine = parts.join(` ${op} `);
+    if (oneLine.length <= 60) {
+      return oneLine;
+    }
+    return parts[0] + "\n" + parts.slice(1).map((p) => this.indentStr(`${op} ${p}`)).join("\n");
   }
 
   protected processAccessChainElement(node: AccessChainElement): string {
@@ -884,6 +916,24 @@ export class AgencyGenerator {
           `Unknown access chain element kind: ${(node as any).kind}`,
         );
     }
+  }
+
+  protected formatTag(tag: Tag): string {
+    if (tag.arguments.length === 0) {
+      return this.indentStr(`@${tag.name}`);
+    }
+    const args = tag.arguments.map((arg: string) => {
+      if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(arg)) {
+        return arg;
+      }
+      return JSON.stringify(arg);
+    });
+    return this.indentStr(`@${tag.name}(${args.join(", ")})`);
+  }
+
+  protected formatAttachedTags(node: { tags?: Tag[] }): string {
+    if (!node.tags?.length) return "";
+    return node.tags.map((tag: Tag) => this.formatTag(tag)).join("\n") + "\n";
   }
 
   protected processKeyword(node: Keyword): string {

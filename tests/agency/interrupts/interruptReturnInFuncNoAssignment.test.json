@@ -1,5 +1,4 @@
 {
-  "sourceFile": "interruptReturnInFuncNoAssignment.agency",
   "tests": [
     {
       "nodeName": "foo",

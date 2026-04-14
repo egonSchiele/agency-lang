@@ -1,5 +1,4 @@
 {
-  "sourceFile": "nested-threads.agency",
   "tests": [
     {
       "nodeName": "main",

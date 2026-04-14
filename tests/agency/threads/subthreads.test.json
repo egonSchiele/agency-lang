@@ -1,5 +1,4 @@
 {
-  "sourceFile": "subthreads.agency",
   "tests": [
     {
       "nodeName": "main",

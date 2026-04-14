@@ -1,5 +1,4 @@
 {
-  "sourceFile": "graphNodeWithParam.agency",
   "tests": [
     {
       "nodeName": "main",

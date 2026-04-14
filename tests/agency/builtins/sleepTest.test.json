@@ -1,5 +1,4 @@
 {
-  "sourceFile": "sleepTest.agency",
   "tests": [
     {
       "nodeName": "main",

@@ -3,6 +3,11 @@ import type { MessageJSON } from "smoltalk";
 
 export type RestoreOptions = {
   messages?: MessageJSON[];
+  args?: Record<string, any>;
+  /** Override global variables on restore. Applied to the checkpoint's module.
+   * Only affects globals defined in the same file as the checkpoint.
+   * Globals in other imported files are restored from checkpoint state. */
+  globals?: Record<string, any>;
 };
 
 export class CheckpointError extends Error {
@@ -28,19 +33,5 @@ export class ConcurrentInterruptError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ConcurrentInterruptError";
-  }
-}
-
-export class ToolCallError extends Error {
-  retryable: boolean;
-  originalError: unknown;
-
-  constructor(error: unknown, opts: { retryable: boolean }) {
-    super(error instanceof Error ? error.message : String(error));
-    this.originalError = error;
-    this.retryable = opts.retryable;
-    if (error instanceof Error && error.stack) {
-      this.stack = error.stack;
-    }
   }
 }

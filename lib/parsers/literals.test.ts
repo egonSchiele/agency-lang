@@ -7,7 +7,7 @@ import {
   variableNameParser,
   booleanParser,
   literalParser,
-} from "./literals.js";
+} from "./parsers.js";
 
 describe("literals parsers", () => {
   describe("interpolationSegmentParser", () => {

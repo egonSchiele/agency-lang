@@ -7,6 +7,7 @@ import { Checkpoint, resetGlobalCheckpointCounter } from "../runtime/state/check
 import type { FunctionParameter } from "../types.js";
 import { getTestDir } from "../importPaths.js";
 import { isInterrupt } from "@/runtime/interrupts.js";
+import { color } from "termcolors";
 
 export const fixtureDir = path.join(getTestDir(), "debugger");
 
@@ -28,12 +29,15 @@ export class TestDebuggerIO implements DebuggerIO {
       const checkpoint = Checkpoint.fromJSON(_checkpoint);
       if (checkpoint) {
         this.renderCalls.push(checkpoint);
+        // console.log(JSON.stringify(checkpoint, null, 2));
+        // console.log(color.green("[DBG]"), checkpoint.getLocation());
       }
     }
   }
 
   async waitForCommand(): Promise<DebuggerCommand> {
     const cmd = this.commands[this.commandIndex++];
+    // console.log(color.green("[DBG]"), "Command", cmd);
     if (!cmd) {
       return { type: "quit" };
     }

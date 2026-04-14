@@ -1,12 +1,13 @@
+const log = []
+
 node main() {
   let x = 0
-  let total = 0
   while (x < 5) {
     if (x == 3) {
       const y = interrupt("x is 3")
     }
-    total = total + x
+    log.push(x)
     x = x + 1
   }
-  return total
+  return log
 }

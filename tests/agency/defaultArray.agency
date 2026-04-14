@@ -1,0 +1,10 @@
+safe def appendItem(item: string, items: string[] = []): string[] {
+  items.push(item)
+  return items
+}
+
+node main() {
+  let a = appendItem("x")
+  let b = appendItem("y")
+  return {first: a, second: b}
+}

@@ -1,12 +1,15 @@
 {
-  "sourceFile": "checkpoint-mid-loop.agency",
   "tests": [
     {
       "nodeName": "main",
       "description": "Checkpoint mid-loop at iteration 2, restore resumes from checkpoint and completes remaining iterations",
       "input": "",
       "expectedOutput": "\"01233\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

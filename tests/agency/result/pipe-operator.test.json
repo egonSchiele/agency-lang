@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"r1\":{\"success\":true,\"value\":10},\"r2\":{\"success\":true,\"value\":50},\"r3\":{\"success\":true,\"value\":60},\"r4\":{\"success\":false,\"error\":\"nope\",\"checkpoint\":null,\"retryable\":false,\"functionName\":null,\"args\":null}}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

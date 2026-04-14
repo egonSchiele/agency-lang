@@ -1,15 +1,14 @@
 import { StateStack } from "../state/stateStack.js";
 import { GlobalStore } from "../state/globalStore.js";
 import { PendingPromiseStore } from "./pendingPromiseStore.js";
-import { CheckpointStore } from "./checkpointStore.js";
+import { CheckpointStore, RESULT_ENTRY_LABEL } from "./checkpointStore.js";
 import type { Checkpoint } from "./checkpointStore.js";
 import { StatelogClient, StatelogConfig } from "../../statelogClient.js";
 import { SimpleMachine } from "../../simplemachine/index.js";
 import { nanoid } from "nanoid";
-import { SmolPromptConfig } from "@/index.js";
+import { SmolPromptConfig } from "smoltalk";
 import { callHook } from "../hooks.js";
 import type { AgencyCallbacks } from "../hooks.js";
-import type { AuditEntry, AuditEntryInput } from "../audit.js";
 import type { HandlerFn } from "../types.js";
 import type { DebuggerState } from "../../debugger/debuggerState.js";
 import type { TraceWriter } from "../trace/traceWriter.js";
@@ -28,6 +27,8 @@ export class RuntimeContext<T> {
   pendingPromises: PendingPromiseStore;
   graph: SimpleMachine<T>;
   _skipNextCheckpoint: boolean;
+  _pendingArgOverrides?: Record<string, any>;
+  _restoreCount: number;
   debuggerState: DebuggerState | null;
   traceWriter: TraceWriter | null;
 
@@ -41,7 +42,7 @@ export class RuntimeContext<T> {
 
   // stored so createExecutionContext can create new StatelogClients
   private statelogConfig: StatelogConfig;
-  private maxRestores: number;
+  maxRestores: number;
 
   constructor(args: {
     statelogConfig: StatelogConfig;
@@ -67,6 +68,7 @@ export class RuntimeContext<T> {
     // On restore, the sentinel re-runs and would emit a duplicate checkpoint.
     // rewindFrom sets this flag so the first sentinel skips, then clears it.
     this._skipNextCheckpoint = false;
+    this._restoreCount = 0;
     this.pendingPromises = new PendingPromiseStore();
     this.debuggerState = null;
     this.traceWriter = null;
@@ -100,6 +102,7 @@ export class RuntimeContext<T> {
     execCtx.callbacks = {};
     execCtx.onStreamLock = false;
     execCtx._skipNextCheckpoint = false;
+    execCtx._restoreCount = 0;
     execCtx.debuggerState = this.debuggerState;
     execCtx.traceWriter = this.traceWriter;
     execCtx.pendingPromises = new PendingPromiseStore();
@@ -164,6 +167,17 @@ export class RuntimeContext<T> {
     this.traceWriter = null;
   }
 
+  /** Get the most recent result-entry checkpoint for the current function. */
+  getResultCheckpoint(): Checkpoint | undefined {
+    const sorted = this.checkpoints.getSorted();
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      if (sorted[i].pinned && sorted[i].label === RESULT_ENTRY_LABEL) {
+        return sorted[i];
+      }
+    }
+    return undefined;
+  }
+
   restoreState(checkpoint: Checkpoint): void {
     const currentTokenStats = this.globals.getTokenStats();
     this.stateStack = StateStack.fromJSON(checkpoint.stack);
@@ -209,12 +223,4 @@ export class RuntimeContext<T> {
     return { ...this.smoltalkDefaults, ...config };
   }
 
-  async audit(entry: AuditEntryInput): Promise<void> {
-    const fullEntry = { ...entry, timestamp: Date.now() };
-    await callHook({
-      callbacks: this.callbacks,
-      name: "onAuditLog",
-      data: fullEntry as AuditEntry,
-    });
-  }
 }

@@ -5,15 +5,17 @@ import {
   VariableType,
 } from "../types.js";
 import { BaseNode } from "./base.js";
-import { NamedArgument, SplatExpression } from "./dataStructures.js";
+import { BlockArgument } from "./blockArgument.js";
+import { AgencyArray, AgencyObject, NamedArgument, SplatExpression } from "./dataStructures.js";
 import { UsesTool } from "./tools.js";
+import { Tag } from "./tag.js";
 
 export type FunctionParameter = {
   type: "functionParameter";
   name: string;
   typeHint?: VariableType;
   variadic?: boolean;
-  defaultValue?: Literal;
+  defaultValue?: Literal | AgencyArray | AgencyObject;
 };
 
 export type FunctionDefinition = BaseNode & {
@@ -25,14 +27,18 @@ export type FunctionDefinition = BaseNode & {
   docString?: DocString;
   async?: boolean;
   safe?: boolean;
+  exported?: boolean;
+  tags?: Tag[];
 };
 
 export type FunctionCall = BaseNode & {
   type: "functionCall";
   functionName: string;
   arguments: (Expression | SplatExpression | NamedArgument)[];
+  block?: BlockArgument;
   async?: boolean;
   tools?: UsesTool;
+  tags?: Tag[];
 };
 
 export type DocString = {

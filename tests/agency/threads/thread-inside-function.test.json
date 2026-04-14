@@ -1,5 +1,4 @@
 {
-  "sourceFile": "thread-inside-function.agency",
   "tests": [
     {
       "nodeName": "main",

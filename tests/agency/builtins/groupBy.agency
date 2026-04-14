@@ -1,0 +1,10 @@
+node main() {
+  const numbers = [1, 2, 3, 4, 5, 6]
+  const grouped = groupBy(numbers) as n {
+    if (n > 3) {
+      return "big"
+    }
+    return "small"
+  }
+  return grouped
+}

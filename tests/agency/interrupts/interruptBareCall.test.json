@@ -1,0 +1,38 @@
+{
+  "tests": [
+    {
+      "nodeName": "foo",
+      "description": "Test that a bare interrupt() call pauses execution and continues on approve",
+      "input": "",
+      "expectedOutput": "{\"greeting\":\"Kya chal raha jai, AI World!\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to greet AI World?"
+        }
+      ]
+    },
+    {
+      "nodeName": "foo",
+      "description": "Test that a bare interrupt() call returns null on reject",
+      "input": "",
+      "expectedOutput": "{\"greeting\":\"interrupt rejected\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Are you sure you want to greet AI World?"
+        }
+      ]
+    }
+  ]
+}

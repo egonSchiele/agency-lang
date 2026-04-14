@@ -1,12 +1,15 @@
 {
-  "sourceFile": "continue-in-while.agency",
   "tests": [
     {
       "nodeName": "main",
       "description": "Continue skips i=3, summing 1+2+4+5=12",
       "input": "",
       "expectedOutput": "12",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

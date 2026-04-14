@@ -14,19 +14,26 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
   __state.interruptData.interruptResponse = null;
 } else if (__state.interruptData?.interruptResponse?.type === "reject") {
   // reject for tool calls handled separately
-  {{{assignReject}}};
   __state.interruptData.interruptResponse = null;
+  {{#nodeContext}}
+  runner.halt({ messages: __threads, data: failure("interrupt rejected", { retryable: false }) });
+  {{/nodeContext}}
+  {{^nodeContext}}
+  runner.halt(failure("interrupt rejected", { retryable: false, checkpoint: __ctx.getResultCheckpoint() }));
+  {{/nodeContext}}
+  return;
 } else if (__state.interruptData?.interruptResponse?.type === "modify") {
   throw new Error("Interrupt response of type 'modify' is used for modifying tool call args. Use resolve instead.");
 } else {
   const __handlerResult = await interruptWithHandlers({{{interruptArgs}}}, __ctx);
   if (isRejected(__handlerResult)) {
     {{#nodeContext}}
-    return { messages: __threads, data: __handlerResult.value };
+    runner.halt({ messages: __threads, data: failure(__handlerResult.value ?? "interrupt rejected", { retryable: false }) });
     {{/nodeContext}}
     {{^nodeContext}}
-    return __handlerResult.value;
+    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { retryable: false, checkpoint: __ctx.checkpoints.get(__resultCheckpointId) }));
     {{/nodeContext}}
+    return;
   }
   if (isApproved(__handlerResult)) {
     {{{handlerApprove}}};
@@ -36,11 +43,12 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
     __handlerResult.checkpointId = __checkpointId;
     __handlerResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
     {{#nodeContext}}
-    return { messages: __threads, data: __handlerResult };
+    runner.halt({ messages: __threads, data: __handlerResult });
     {{/nodeContext}}
     {{^nodeContext}}
-    return __handlerResult;
+    runner.halt(__handlerResult);
     {{/nodeContext}}
+    return;
   }
 }
 `;
@@ -48,9 +56,8 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
 export type TemplateType = {
   assignResolve: string | boolean | number;
   assignApprove: string | boolean | number;
-  assignReject: string | boolean | number;
-  interruptArgs: string | boolean | number;
   nodeContext: boolean;
+  interruptArgs: string | boolean | number;
   handlerApprove: string | boolean | number;
   moduleId: string | boolean | number;
   scopeName: string | boolean | number;

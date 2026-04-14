@@ -43,6 +43,8 @@ export function scopeKey(scope: Scope): string {
       return "imported";
     case "shared":
       return "shared";
+    case "block":
+      return `block:${scope.blockName}`;
   }
 }
 

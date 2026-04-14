@@ -230,6 +230,8 @@ export function* getAllVariablesInBody(
       }
     } else if (node.type === "withModifier") {
       yield* getAllVariablesInBody([node.statement]);
+    } else if (node.type === "tryExpression") {
+      yield* getAllVariablesInBody([node.call as AgencyNode]);
     }
   }
 }

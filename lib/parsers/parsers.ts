@@ -1294,10 +1294,9 @@ const placeholderParser: Parser<Placeholder> = (input: string) => {
 };
 
 // --- try keyword ---
-// Parses: try functionCall(args)
-// Uses valueAccessParser since bare function calls parse as value accesses.
+// Parses: try functionCall(args) or try obj.method(args)
 const tryExpressionParser: Parser<TryExpression> =
-  seqC(set("type", "tryExpression"), str("try"), spaces, capture(functionCallParser, "call"));
+  seqC(set("type", "tryExpression"), str("try"), spaces, capture(or(lazy(() => valueAccessParser), functionCallParser) as Parser<TryExpression["call"]>, "call"));
 
 // Parses: new ClassName(args)
 export const newExpressionParser: Parser<NewExpression> = (input: string) => {

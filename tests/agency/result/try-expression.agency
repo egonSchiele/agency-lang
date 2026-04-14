@@ -5,13 +5,31 @@ def riskyDouble(x: number): number {
   return x * 2
 }
 
+class Doubler {
+  factor: number
+
+  riskyMultiply(x: number): number {
+    if (x < 0) {
+      throw("negative number")
+    }
+    return x * this.factor
+  }
+}
+
 node main() {
   let good = try riskyDouble(5)
   let bad = try riskyDouble(-1)
+  let d = new Doubler(3)
+  let methodGood = try d.riskyMultiply(5)
+  let methodBad = try d.riskyMultiply(-1)
   return {
     goodSuccess: isSuccess(good),
     goodValue: good.value,
     badSuccess: isSuccess(bad),
-    badError: bad.error
+    badError: bad.error,
+    methodGoodSuccess: isSuccess(methodGood),
+    methodGoodValue: methodGood.value,
+    methodBadSuccess: isSuccess(methodBad),
+    methodBadError: methodBad.error
   }
 }

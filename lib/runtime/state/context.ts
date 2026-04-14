@@ -12,6 +12,7 @@ import type { AgencyCallbacks } from "../hooks.js";
 import type { HandlerFn } from "../types.js";
 import type { DebuggerState } from "../../debugger/debuggerState.js";
 import type { TraceWriter } from "../trace/traceWriter.js";
+import { reviveWithClasses, type ClassRegistry } from "../classReviver.js";
 
 /* bunch of stuff that every node/function in the runtime needs access to,
 that we don't want to pass as individual arguments everywhere */
@@ -41,7 +42,7 @@ export class RuntimeContext<T> {
   dirname: string;
 
   // class registry for serialization/deserialization of Agency class instances
-  classRegistry: Record<string, { fromJSON: (data: any) => any }> = {};
+  classRegistry: ClassRegistry = {};
 
   // stored so createExecutionContext can create new StatelogClients
   private statelogConfig: StatelogConfig;
@@ -156,7 +157,7 @@ export class RuntimeContext<T> {
     this.handlers.pop();
   }
 
-  registerClass(name: string, cls: { fromJSON: (data: any) => any }): void {
+  registerClass(name: string, cls: ClassRegistry[string]): void {
     this.classRegistry[name] = cls;
   }
 
@@ -194,16 +195,8 @@ export class RuntimeContext<T> {
     let stack = checkpoint.stack;
     let globals = checkpoint.globals;
     if (Object.keys(this.classRegistry).length > 0) {
-      const registry = this.classRegistry;
-      const reviver = (_key: string, value: any) => {
-        if (value && typeof value === "object" && "__class" in value) {
-          const cls = registry[value.__class];
-          if (cls) return cls.fromJSON(value);
-        }
-        return value;
-      };
-      stack = JSON.parse(JSON.stringify(stack), reviver);
-      globals = JSON.parse(JSON.stringify(globals), reviver);
+      stack = reviveWithClasses(stack, this.classRegistry);
+      globals = reviveWithClasses(globals, this.classRegistry);
     }
 
     this.stateStack = StateStack.fromJSON(stack);

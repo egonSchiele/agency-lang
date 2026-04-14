@@ -804,19 +804,15 @@ export class TypeScriptBuilder {
             callNode.kind === "call" &&
             callNode.callee.kind === "identifier"
           ) {
-            // Inject __state config for class method calls (Option C: all method calls get it)
-            const methodCallConfig = this.insideGlobalInit
-              ? ts.functionCallConfig({ ctx: ts.runtime.ctx })
-              : ts.functionCallConfig({
-                  ctx: ts.runtime.ctx,
-                  threads: ts.runtime.threads,
-                  interruptData: ts.raw("__state?.interruptData"),
-                });
-            const call = $(result)
+            const isClassMethod = this.isKnownClassMethod(callNode.callee.name);
+            const args = isClassMethod
+              ? [...callNode.arguments, this.buildMethodCallConfig()]
+              : callNode.arguments;
+            const callExpr = $(result)
               .prop(callNode.callee.name)
-              .call([...callNode.arguments, methodCallConfig])
+              .call(args)
               .done();
-            result = ts.await(call);
+            result = isClassMethod ? ts.await(callExpr) : callExpr;
           } else {
             // Fallback for complex cases (e.g. await-wrapped)
             result = ts.raw(`${this.str(result)}.${this.str(callNode)}`);
@@ -885,6 +881,32 @@ export class TypeScriptBuilder {
   private processNewExpression(node: NewExpression): TsNode {
     const args = node.arguments.map((a) => this.processNode(a as AgencyNode));
     return ts.new(ts.id(node.className), args);
+  }
+
+  /**
+   * Check if a method name matches any method defined on any known Agency class.
+   * Used to decide whether to inject __state into method calls.
+   */
+  private isKnownClassMethod(methodName: string): boolean {
+    for (const classDef of Object.values(this.programInfo.classDefinitions)) {
+      if (classDef.methods.some((m) => m.name === methodName)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Build the __state config object for method calls on Agency class instances.
+   */
+  private buildMethodCallConfig(): TsNode {
+    return this.insideGlobalInit
+      ? ts.functionCallConfig({ ctx: ts.runtime.ctx })
+      : ts.functionCallConfig({
+          ctx: ts.runtime.ctx,
+          threads: ts.runtime.threads,
+          interruptData: ts.raw("__state?.interruptData"),
+        });
   }
 
   /**
@@ -2226,18 +2248,15 @@ export class TypeScriptBuilder {
             callNode.kind === "call" &&
             callNode.callee.kind === "identifier"
           ) {
-            const methodCallConfig = this.insideGlobalInit
-              ? ts.functionCallConfig({ ctx: ts.runtime.ctx })
-              : ts.functionCallConfig({
-                  ctx: ts.runtime.ctx,
-                  threads: ts.runtime.threads,
-                  interruptData: ts.raw("__state?.interruptData"),
-                });
+            const isClassMethod = this.isKnownClassMethod(callNode.callee.name);
+            const args = isClassMethod
+              ? [...callNode.arguments, this.buildMethodCallConfig()]
+              : callNode.arguments;
             const call2 = $(result)
               .prop(callNode.callee.name)
-              .call([...callNode.arguments, methodCallConfig])
+              .call(args)
               .done();
-            result = ts.await(call2);
+            result = isClassMethod ? ts.await(call2) : call2;
           } else {
             result = ts.raw(`${this.str(result)}.${this.str(callNode)}`);
           }

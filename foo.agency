@@ -1,13 +1,8 @@
-const prompt = "Please categorize this user message. If the message is about remembering something, return 'reminder'. If the message is about a to-do, return 'todo'."
+import { nanoid } from "nanoid"
+node foo() {
 
-type Category = "reminder" | "todo"
-
-node categorize(message: string) {
-  const category: Category = llm("${prompt}. Here's the user message: '${message}'")
-  print(category)
 }
 
 node main() {
-  const userMessage = "Remind me to buy milk tomorrow"
-  return categorize(userMessage)
+  print(nanoid())
 }

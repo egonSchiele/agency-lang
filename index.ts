@@ -82,4 +82,8 @@ async function main() {
   console.log("\nFinal result:", JSON.stringify(result, null, 2));
 }
 
-main();
+// main();
+
+export function hi() {
+  console.log("hi");
+}

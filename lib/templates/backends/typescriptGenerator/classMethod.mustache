@@ -1,0 +1,29 @@
+  async {{{methodName}}}({{{params}}}__state: any = undefined) {
+    const __setupData = setupFunction({ state: __state });
+    const __stack = __setupData.stack;
+    const __step = __setupData.step;
+    const __self = __setupData.self;
+    const __threads = __setupData.threads;
+    const __ctx = __state?.ctx || __globalCtx;
+    const statelogClient = __ctx.statelogClient;
+    const __graph = __ctx.graph;
+    let __forked;
+    let __functionCompleted = false;
+    if (!__ctx.globals.isInitialized({{{moduleId}}})) {
+      await __initializeGlobals(__ctx);
+    }
+    const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}} });
+{{#paramAssignments}}
+    __stack.args[{{{this.nameQuoted}}}] = {{{this.name}}};
+{{/paramAssignments}}
+    try {
+{{{body}}}
+      if (runner.halted) { return runner.haltResult; }
+      __functionCompleted = true;
+    } catch (__error) {
+      if (__error instanceof RestoreSignal) { throw __error; }
+      throw __error;
+    } finally {
+      if (!__state?.isForked) { __ctx.stateStack.pop() }
+    }
+  }

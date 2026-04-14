@@ -99,11 +99,14 @@ const __toolRegistry = {
   }
 };
 class Animal {
+
   name: string;
+
 
   constructor(name: string) {
     this.name = name;
   }
+
 
   async speak(__state: any = undefined) {
     const __setupData = setupFunction({ state: __state });
@@ -120,11 +123,12 @@ class Animal {
       await __initializeGlobals(__ctx);
     }
     const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-inheritance.agency", scopeName: "Animal.speak" });
+
     try {
-      await runner.step(0, async (runner) => {
+await runner.step(0, async (runner) => {
 __ctx.globals.set("class-inheritance.agency", "n", this.name)
       });
-      await runner.step(1, async (runner) => {
+await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(__ctx.globals.get("class-inheritance.agency", "n") + ` makes a sound`)
 return;
@@ -139,28 +143,37 @@ return;
     }
   }
 
+
   toJSON(): object {
     return {
+
       __class: "class-inheritance.agency::Animal",
+
       name: this.name,
+
     };
   }
 
   static fromJSON(data: any): Animal {
     const instance = Object.create(Animal.prototype);
+
     instance.name = data.name;
+
     return instance;
   }
 }
 
 __globalCtx.registerClass("class-inheritance.agency::Animal", Animal);
 class Dog extends Animal {
+
   breed: string;
+
 
   constructor(name: string, breed: string) {
     super(name);
     this.breed = breed;
   }
+
 
   async speak(__state: any = undefined) {
     const __setupData = setupFunction({ state: __state });
@@ -177,11 +190,12 @@ class Dog extends Animal {
       await __initializeGlobals(__ctx);
     }
     const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-inheritance.agency", scopeName: "Dog.speak" });
+
     try {
-      await runner.step(0, async (runner) => {
+await runner.step(0, async (runner) => {
 __ctx.globals.set("class-inheritance.agency", "n", this.name)
       });
-      await runner.step(1, async (runner) => {
+await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(__ctx.globals.get("class-inheritance.agency", "n") + ` barks`)
 return;
@@ -196,18 +210,26 @@ return;
     }
   }
 
+
   toJSON(): object {
     return {
+
       ...super.toJSON(),
+
       __class: "class-inheritance.agency::Dog",
+
       breed: this.breed,
+
     };
   }
 
   static fromJSON(data: any): Dog {
     const instance = Object.create(Dog.prototype);
+
     instance.name = data.name;
+
     instance.breed = data.breed;
+
     return instance;
   }
 }

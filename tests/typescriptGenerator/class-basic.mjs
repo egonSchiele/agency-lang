@@ -99,11 +99,14 @@ const __toolRegistry = {
   }
 };
 class Counter {
+
   value: number;
+
 
   constructor(start: number) {
     this.value = start;
   }
+
 
   async increment(__state: any = undefined) {
     const __setupData = setupFunction({ state: __state });
@@ -120,11 +123,12 @@ class Counter {
       await __initializeGlobals(__ctx);
     }
     const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-basic.agency", scopeName: "Counter.increment" });
+
     try {
-      await runner.step(0, async (runner) => {
+await runner.step(0, async (runner) => {
 this.value = this.value + 1;
       });
-      await runner.step(1, async (runner) => {
+await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(this.value)
 return;
@@ -139,16 +143,22 @@ return;
     }
   }
 
+
   toJSON(): object {
     return {
+
       __class: "class-basic.agency::Counter",
+
       value: this.value,
+
     };
   }
 
   static fromJSON(data: any): Counter {
     const instance = Object.create(Counter.prototype);
+
     instance.value = data.value;
+
     return instance;
   }
 }

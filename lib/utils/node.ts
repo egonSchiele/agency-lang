@@ -273,6 +273,8 @@ export function* walkNodes(
         [...ancestors, node],
         [...scopes, nodeScope(node.nodeName)],
       );
+    } else if (node.type === "newExpression") {
+      yield* walkNodes(node.arguments as AgencyNode[], [...ancestors, node], scopes);
     } else if (node.type === "classDefinition") {
       if (node.ctor) {
         yield* walkNodes(node.ctor.body, [...ancestors, node], scopes);

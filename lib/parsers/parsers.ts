@@ -2488,6 +2488,7 @@ const _classParserInner: Parser<ClassDefinition> = (input: string) => {
     if (member.type === "classField") {
       fields.push(member);
     } else if (member.type === "classConstructor") {
+      if (ctor) return failure("multiple constructors are not allowed in a class", input);
       ctor = member;
     } else if (member.type === "classMethod") {
       methods.push(member);

@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      tarsec:
+        specifier: ^0.2.1
+        version: 0.2.1
     devDependencies:
       shiki:
         specifier: ^4.0.2
@@ -761,6 +765,9 @@ packages:
 
   tabbable@6.4.0:
     resolution: {integrity: sha512-05PUHKSNE8ou2dwIxTngl4EzcnsCDZGJ/iCLtDflR/SHB/ny14rXc+qU5P4mG9JkusiV7EivzY9Mhm55AzAvCg==}
+
+  tarsec@0.2.1:
+    resolution: {integrity: sha512-AgnfIAGcPlgQpemw1mMyEhTGOhxx5FAavBkERthETguzOnX2X+3FwIKW7Gv7Zft3EZJLxn6DousDgYa2/0jyiA==}
 
   trim-lines@3.0.1:
     resolution: {integrity: sha512-kRj8B+YHZCc9kQYdWfJB2/oUl9rA99qbowYYBtr4ui4mZyAQ2JpvVBd/6U2YloATfqBhBTSMhTpgBHtU0Mf3Rg==}
@@ -1604,6 +1611,8 @@ snapshots:
       copy-anything: 4.0.5
 
   tabbable@6.4.0: {}
+
+  tarsec@0.2.1: {}
 
   trim-lines@3.0.1: {}
 

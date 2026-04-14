@@ -840,27 +840,7 @@ export class AgencyGenerator {
       );
     }
 
-    // Constructor
-    if (node.ctor) {
-      const params = node.ctor.parameters
-        .map((p) =>
-          p.typeHint
-            ? `${p.name}: ${variableTypeToString(p.typeHint, this.typeAliases)}`
-            : p.name,
-        )
-        .join(", ");
-      result += "\n" + this.indentStr(`constructor(${params}) {\n`);
-      this.increaseIndent();
-      const ctorLines: string[] = [];
-      for (const stmt of node.ctor.body) {
-        ctorLines.push(this.processNode(stmt));
-      }
-      result += ctorLines.filter(s => s !== "").join("\n").trimEnd() + "\n";
-      this.decreaseIndent();
-      result += this.indentStr(`}\n`);
-    }
-
-    // Methods
+    // Methods (constructor is auto-generated, not formatted)
     for (const method of node.methods) {
       const params = method.parameters
         .map((p) =>

@@ -228,20 +228,15 @@ describe("AgencyGenerator - Class Definitions", () => {
     expect(output).toContain("    return b\n");
   });
 
-  it("should format a class with a constructor", () => {
+  it("should reject user-defined constructors", () => {
     const input = `class User {
   name: string
-  age: number
-
-  constructor(name: string, age: number) {
+  constructor(name: string) {
     this.name = name
-    this.age = age
   }
 }`;
-    const output = formatAgency(input);
-    expect(output).toContain("  constructor(name: string, age: number) {");
-    expect(output).toContain("    this.name = name\n");
-    expect(output).toContain("    this.age = age\n");
+    const parseResult = parseAgency(input, {}, false);
+    expect(parseResult.success).toBe(false);
   });
 
   it("should format a class with inheritance", () => {

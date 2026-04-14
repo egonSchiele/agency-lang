@@ -8,7 +8,14 @@ export const template = `class {{{className}}}{{#hasParent}} extends {{{parentCl
   {{{this.name}}}: {{{this.typeStr}}};
 {{/fields}}
 
-{{{constructorCode}}}
+  constructor({{{constructorParamsStr}}}) {
+{{#hasParent}}
+    super({{{superArgsStr}}});
+{{/hasParent}}
+{{#fields}}
+    this.{{{this.name}}} = {{{this.name}}};
+{{/fields}}
+  }
 {{#methods}}
 
 {{{this}}}
@@ -45,7 +52,8 @@ export type TemplateType = {
     name: string | boolean | number;
     typeStr: string | boolean | number;
   }[];
-  constructorCode: string | boolean | number;
+  constructorParamsStr: string | boolean | number;
+  superArgsStr: string | boolean | number;
   methods: {
   }[];
   classKey: string | boolean | number;

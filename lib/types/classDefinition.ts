@@ -2,13 +2,13 @@ import { AgencyNode, Expression, VariableType } from "../types.js";
 import { BaseNode } from "./base.js";
 import { FunctionParameter } from "./function.js";
 
-export type ClassField = {
+export type ClassField = BaseNode & {
   type: "classField";
   name: string;
   typeHint: VariableType;
 };
 
-export type ClassMethod = {
+export type ClassMethod = BaseNode & {
   type: "classMethod";
   name: string;
   parameters: FunctionParameter[];
@@ -16,17 +16,10 @@ export type ClassMethod = {
   returnType: VariableType;
 };
 
-export type ClassConstructor = {
-  type: "classConstructor";
-  parameters: FunctionParameter[];
-  body: AgencyNode[];
-};
-
 export type ClassDefinition = BaseNode & {
   type: "classDefinition";
   className: string;
   fields: ClassField[];
-  ctor?: ClassConstructor;
   methods: ClassMethod[];
   parentClass?: string;
 };

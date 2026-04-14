@@ -931,28 +931,6 @@ export class TypeScriptBuilder {
     return p.typeHint ? `${p.name}: ${formatTypeHint(p.typeHint)}` : p.name;
   }
 
-  private buildConstructorCode(node: ClassDefinition): string {
-    if (node.ctor) {
-      const params = node.ctor.parameters.map((p) => this.formatParam(p)).join(", ");
-      const bodyLines = node.ctor.body
-        .map((stmt) => printTs(this.processNode(stmt), 2).trim())
-        .filter(Boolean)
-        .map((line) => `    ${line}`);
-      return [`  constructor(${params}) {`, ...bodyLines, "  }"].join("\n");
-    }
-
-    // Default constructor: parent fields first, then own fields
-    const parentFields = node.parentClass
-      ? this.collectAllClassFields(this.programInfo.classDefinitions[node.parentClass])
-      : [];
-    const allParams = [...parentFields, ...node.fields];
-    const params = allParams.map((f) => this.formatParam(f)).join(", ");
-    const superCall = parentFields.length > 0
-      ? `    super(${parentFields.map((f) => f.name).join(", ")});\n`
-      : "";
-    const fieldAssigns = node.fields.map((f) => `    this.${f.name} = ${f.name};`).join("\n");
-    return [`  constructor(${params}) {`, superCall + fieldAssigns, "  }"].join("\n");
-  }
 
   private buildMethodCode(method: ClassMethod, className: string): string {
     const methodScopeName = `${className}.${method.name}`;
@@ -1002,7 +980,10 @@ export class TypeScriptBuilder {
       classKey,
       fields: fields.map((f) => ({ name: f.name, typeStr: formatTypeHint(f.typeHint) })),
       allFields: allFields.map((f) => ({ name: f.name })),
-      constructorCode: this.buildConstructorCode(node),
+      constructorParamsStr: allFields.map((f) => `${f.name}: ${formatTypeHint(f.typeHint)}`).join(", "),
+      superArgsStr: parentClass
+        ? this.collectAllClassFields(this.programInfo.classDefinitions[parentClass]).map((f) => f.name).join(", ")
+        : "",
       methods: methods.map((m) => this.buildMethodCode(m, className)),
     }));
   }

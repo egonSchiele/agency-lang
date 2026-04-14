@@ -103,8 +103,11 @@ class Counter {
   value: number;
 
 
-  constructor(start: number) {
-    this.value = start;
+  constructor(value: number) {
+
+
+    this.value = value;
+
   }
 
 
@@ -297,4 +300,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"class-basic.agency:Counter.increment":{"0":{"line":6,"col":4},"1":{"line":7,"col":4}},"class-basic.agency:main":{"0":{"line":12,"col":2},"1":{"line":13,"col":2},"2":{"line":14,"col":2}}};
+export const __sourceMap = {"class-basic.agency:Counter.increment":{"0":{"line":2,"col":4},"1":{"line":3,"col":4}},"class-basic.agency:main":{"0":{"line":8,"col":2},"1":{"line":9,"col":2},"2":{"line":10,"col":2}}};

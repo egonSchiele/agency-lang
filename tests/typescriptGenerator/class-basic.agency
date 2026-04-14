@@ -1,10 +1,6 @@
 class Counter {
   value: number
 
-  constructor(start: number) {
-    this.value = start
-  }
-
   increment(): number {
     this.value = this.value + 1
     return this.value

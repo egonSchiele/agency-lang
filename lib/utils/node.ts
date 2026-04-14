@@ -276,11 +276,14 @@ export function* walkNodes(
     } else if (node.type === "newExpression") {
       yield* walkNodes(node.arguments as AgencyNode[], [...ancestors, node], scopes);
     } else if (node.type === "classDefinition") {
-      if (node.ctor) {
-        yield* walkNodes(node.ctor.body, [...ancestors, node], scopes);
+      for (const field of node.fields) {
+        yield { node: field, ancestors: [...ancestors, node], scopes };
       }
       for (const method of node.methods) {
-        yield* walkNodes(method.body, [...ancestors, node], scopes);
+        const methodScopeName = `${node.className}.${method.name}`;
+        const methodScopes = [...scopes, functionScope(methodScopeName)];
+        yield { node: method, ancestors: [...ancestors, node], scopes: methodScopes };
+        yield* walkNodes(method.body, [...ancestors, node, method], methodScopes);
       }
     } else if (node.type === "ifElse") {
       yield* walkNodes([node.condition], [...ancestors, node], scopes);

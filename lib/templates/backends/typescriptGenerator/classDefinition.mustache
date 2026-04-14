@@ -3,7 +3,14 @@ class {{{className}}}{{#hasParent}} extends {{{parentClassName}}}{{/hasParent}} 
   {{{this.name}}}: {{{this.typeStr}}};
 {{/fields}}
 
-{{{constructorCode}}}
+  constructor({{{constructorParamsStr}}}) {
+{{#hasParent}}
+    super({{{superArgsStr}}});
+{{/hasParent}}
+{{#fields}}
+    this.{{{this.name}}} = {{{this.name}}};
+{{/fields}}
+  }
 {{#methods}}
 
 {{{this}}}

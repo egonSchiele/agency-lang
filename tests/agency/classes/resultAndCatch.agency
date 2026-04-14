@@ -1,10 +1,6 @@
 class Validator {
   threshold: number
 
-  constructor(threshold: number) {
-    this.threshold = threshold
-  }
-
   check(value: number): Result {
     if (value >= this.threshold) {
       return success(value)

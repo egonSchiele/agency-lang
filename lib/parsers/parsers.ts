@@ -101,7 +101,7 @@ import { BlockArgument } from "../types/blockArgument.js";
 import { BinOpExpression, Operator } from "../types/binop.js";
 import { Placeholder } from "../types/placeholder.js";
 import { TryExpression } from "../types/tryExpression.js";
-import { ClassConstructor, ClassDefinition, ClassField, ClassMethod, NewExpression } from "../types/classDefinition.js";
+import { ClassDefinition, ClassField, ClassMethod, NewExpression } from "../types/classDefinition.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { DebuggerStatement } from "../types/debuggerStatement.js";
 import { Keyword, keywords, createKeyword } from "@/types/keyword.js";
@@ -2368,28 +2368,13 @@ const classFieldParser: Parser<ClassField> = (input: string) => {
   return parser(input);
 };
 
-// Parses: constructor(params) { body }
-const classConstructorParser: Parser<ClassConstructor> = (input: string) => {
-  const parser = seqC(
-    set("type", "classConstructor"),
-    str("constructor"),
-    char("("),
-    optionalSpaces,
-    capture(
-      sepBy(comma, or(variadicParameterParser, functionParameterParser)),
-      "parameters",
-    ),
-    optionalSpaces,
-    char(")"),
-    optionalSpacesOrNewline,
-    char("{"),
-    optionalSpacesOrNewline,
-    capture(bodyParser, "body"),
-    optionalSpacesOrNewline,
-    char("}"),
-    optionalSpacesOrNewline,
-  );
-  return parser(input);
+// Detects constructor keyword and returns an error — constructors are auto-generated
+const rejectConstructorParser: Parser<never> = (input: string) => {
+  const result = str("constructor")(input);
+  if (result.success) {
+    return failure("custom constructors are not supported — constructors are auto-generated from field declarations", input);
+  }
+  return failure("", input);
 };
 
 // Parses: name(params): returnType { body }
@@ -2424,7 +2409,7 @@ const classMethodParser: Parser<ClassMethod> = map(
 // Fields are tried first (name: type), then constructor, then methods (name(...): type { ... }).
 // To distinguish fields from methods, we use a lookahead: if we see `name(`, it's a method.
 const classBodyMemberParser = or(
-  classConstructorParser,
+  rejectConstructorParser,
   classMethodParser,
   classFieldParser,
 );
@@ -2459,17 +2444,13 @@ const _classParserInner: Parser<ClassDefinition> = (input: string) => {
   const result = parser(input);
   if (!result.success) return failure("expected class definition", input);
 
-  // Separate fields, constructor, and methods
+  // Separate fields and methods
   const fields: ClassField[] = [];
-  let ctor: ClassConstructor | undefined;
   const methods: ClassMethod[] = [];
 
   for (const member of result.result.members) {
     if (member.type === "classField") {
       fields.push(member);
-    } else if (member.type === "classConstructor") {
-      if (ctor) return failure("multiple constructors are not allowed in a class", input);
-      ctor = member;
     } else if (member.type === "classMethod") {
       methods.push(member);
     }
@@ -2481,7 +2462,6 @@ const _classParserInner: Parser<ClassDefinition> = (input: string) => {
     className: result.result.className,
     fields,
     methods,
-    ...(ctor ? { ctor } : {}),
     ...(parentClass ? { parentClass } : {}),
   };
 

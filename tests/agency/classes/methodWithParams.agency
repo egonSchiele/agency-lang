@@ -1,10 +1,6 @@
 class Calculator {
   value: number
 
-  constructor(start: number) {
-    this.value = start
-  }
-
   add(n: number): number {
     this.value = this.value + n
     return this.value

@@ -32,7 +32,7 @@ import { Placeholder } from "./types/placeholder.js";
 import { WithModifier } from "./types/withModifier.js";
 import { Tag } from "./types/tag.js";
 import { TryExpression } from "./types/tryExpression.js";
-import { ClassDefinition, NewExpression } from "./types/classDefinition.js";
+import { ClassDefinition, ClassField, ClassMethod, NewExpression } from "./types/classDefinition.js";
 export * from "./types/access.js";
 export * from "./types/awaitPending.js";
 export * from "./types/dataStructures.js";
@@ -238,6 +238,8 @@ export type AgencyNode =
   | Tag
   | TryExpression
   | ClassDefinition
+  | ClassMethod
+  | ClassField
   | NewExpression;
 
 export type AgencyProgram = {

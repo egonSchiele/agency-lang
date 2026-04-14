@@ -1,12 +1,24 @@
+class Parser {
+  prefix: string
+
+  parse(input: string): Result {
+    if (input == "") {
+      return failure("empty input")
+    }    let p = this.prefix    return success(p + input)  }
+}
+
+def exclaim(s: string): string {
+  return s + "!"
+}
+
 node main() {
-  const giftIdea = input("Tell me about a person you want to get a gift for: ")
-  const prompt = """
-    This person is looking for a gift for a special someone. Based on the gift recipient's description and interests, please suggest some keyword searches on Etsy for finding them a gift. The gift recipient is: ${giftIdea}
-    """
-  const searches: string[] = llm(prompt)
-  const results = fork(searches) as search {
-    print("Searching for ${search}...")
+  let p = new Parser(>>)
+  let r1 = try
+p.parse("hello") |> exclaim
+  let r2 = try
+p.parse("") |> exclaim
+  return { 
+    r1: r1,
+    r2: r2
   }
-  print("Here are some gift ideas based on your description:")
-  print(results)
 }

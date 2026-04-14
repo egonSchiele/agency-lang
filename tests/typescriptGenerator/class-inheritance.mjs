@@ -104,7 +104,10 @@ class Animal {
 
 
   constructor(name: string) {
+
+
     this.name = name;
+
   }
 
 
@@ -149,11 +152,11 @@ if (__ctx._pendingArgOverrides) {
 
 try {
       await runner.step(0, async (runner) => {
-__ctx.globals.set("class-inheritance.agency", "n", this.name)
+__stack.locals.n = this.name;
       });
       await runner.step(1, async (runner) => {
 __functionCompleted = true;
-runner.halt(__ctx.globals.get("class-inheritance.agency", "n") + ` makes a sound`)
+runner.halt(__stack.locals.n + ` makes a sound`)
 return;
       });
       if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
@@ -213,8 +216,12 @@ class Dog extends Animal {
 
 
   constructor(name: string, breed: string) {
+
     super(name);
+
+
     this.breed = breed;
+
   }
 
 
@@ -259,11 +266,11 @@ if (__ctx._pendingArgOverrides) {
 
 try {
       await runner.step(0, async (runner) => {
-__ctx.globals.set("class-inheritance.agency", "n", this.name)
+__stack.locals.n = this.name;
       });
       await runner.step(1, async (runner) => {
 __functionCompleted = true;
-runner.halt(__ctx.globals.get("class-inheritance.agency", "n") + ` barks`)
+runner.halt(__stack.locals.n + ` barks`)
 return;
       });
       if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }

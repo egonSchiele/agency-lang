@@ -101,6 +101,7 @@ import { BlockArgument } from "../types/blockArgument.js";
 import { BinOpExpression, Operator } from "../types/binop.js";
 import { Placeholder } from "../types/placeholder.js";
 import { TryExpression } from "../types/tryExpression.js";
+import { NewExpression } from "../types/classDefinition.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { DebuggerStatement } from "../types/debuggerStatement.js";
 import { Keyword, keywords, createKeyword } from "@/types/keyword.js";
@@ -1298,10 +1299,35 @@ const placeholderParser: Parser<Placeholder> = (input: string) => {
 const tryExpressionParser: Parser<TryExpression> =
   seqC(set("type", "tryExpression"), str("try"), spaces, capture(functionCallParser, "call"));
 
+// Parses: new ClassName(args)
+export const newExpressionParser: Parser<NewExpression> = (input: string) => {
+  const parser = seqC(
+    set("type", "newExpression"),
+    str("new"),
+    spaces,
+    capture(many1WithJoin(varNameChar), "className"),
+    char("("),
+    optionalSpaces,
+    capture(
+      sepBy(comma, lazy(() => exprParser)),
+      "arguments",
+    ),
+    optionalSpaces,
+    char(")"),
+  );
+  const result = parser(input);
+  if (!result.success) return failure("expected 'new ClassName(args)'", input);
+  return success(
+    { type: "newExpression" as const, className: result.result.className, arguments: result.result.arguments },
+    result.rest,
+  );
+};
+
 // The atom parser: the smallest unit of an expression.
 const atom: Parser<Expression> = or(
   unaryNotParser,
   tryExpressionParser,
+  newExpressionParser,
   placeholderParser,
   lazy(() => agencyArrayParser),
   lazy(() => agencyObjectParser),

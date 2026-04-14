@@ -2500,7 +2500,7 @@ const _classParserInner: Parser<ClassDefinition> = (input: string) => {
     className: headerResult.result.className,
     fields,
     methods,
-    ...(ctor ? { constructor: ctor } : {}),
+    ...(ctor ? { ctor } : {}),
     ...(parentClass ? { parentClass } : {}),
   };
 

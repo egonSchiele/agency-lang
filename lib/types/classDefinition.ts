@@ -26,7 +26,7 @@ export type ClassDefinition = BaseNode & {
   type: "classDefinition";
   className: string;
   fields: ClassField[];
-  constructor?: ClassConstructor;
+  ctor?: ClassConstructor;
   methods: ClassMethod[];
   parentClass?: string;
 };

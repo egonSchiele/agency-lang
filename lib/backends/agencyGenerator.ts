@@ -841,8 +841,8 @@ export class AgencyGenerator {
     }
 
     // Constructor
-    if (node.constructor) {
-      const params = node.constructor.parameters
+    if (node.ctor) {
+      const params = node.ctor.parameters
         .map((p) =>
           p.typeHint
             ? `${p.name}: ${variableTypeToString(p.typeHint, this.typeAliases)}`
@@ -851,7 +851,7 @@ export class AgencyGenerator {
         .join(", ");
       result += "\n" + this.indentStr(`constructor(${params}) {\n`);
       this.increaseIndent();
-      for (const stmt of node.constructor.body) {
+      for (const stmt of node.ctor.body) {
         result += this.processNode(stmt);
       }
       this.decreaseIndent();

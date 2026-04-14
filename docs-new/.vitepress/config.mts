@@ -19,6 +19,7 @@ export default defineConfig({
           { text: "LLMs", link: "/guide/llm" },
           { text: "Interrupts", link: "/guide/interrupts" },
           { text: "Handlers", link: "/guide/handlers" },
+          { text: "Testing", link: "/guide/testing" },
           { text: "TypeScript Interoperability", link: "/guide/ts-interop" },
           {
             text: "Message History and Threads",
@@ -33,6 +34,12 @@ export default defineConfig({
           { text: "Imports and Packages", link: "/guide/imports-and-packages" },
           { text: "Classes", link: "/guide/classes" },
           { text: "Checkpointing", link: "/guide/checkpointing" },
+        ],
+      },
+      {
+        text: "Appendix",
+        items: [
+          { text: "VSCode Extension", link: "/appendix/vscode-extension" },
         ],
       },
     ],

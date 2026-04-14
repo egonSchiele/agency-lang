@@ -36,5 +36,20 @@
       "unsafeChainTool"
     ],
     "hasResult": true
+  },
+  "safeMethodRetry": {
+    "toolCallCount": 2,
+    "toolCalls": [
+      "safeMethodTool",
+      "safeMethodTool"
+    ],
+    "succeeded": true
+  },
+  "unsafeMethodNoRetry": {
+    "toolCallCount": 1,
+    "toolCalls": [
+      "unsafeMethodTool"
+    ],
+    "hasResult": true
   }
 }

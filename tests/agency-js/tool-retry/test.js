@@ -4,6 +4,8 @@ import {
   testSafeDefRetry,
   testDerivedSafeRetry,
   testUnsafeChainNoRetry,
+  testSafeMethodRetry,
+  testUnsafeMethodNoRetry,
 } from "./agent.js";
 import { writeFileSync } from "fs";
 
@@ -107,6 +109,48 @@ const results = {};
     };
   } catch (e) {
     results.unsafeChainNoRetry = {
+      toolCallCount: toolCalls.length,
+      toolCalls,
+      error: e.message,
+    };
+  }
+}
+
+// Test 6: Safe method retry — safeMethodTool calls a safe class method.
+// The method is marked safe, so the tool remains retryable.
+{
+  const toolCalls = [];
+  const callbacks = {
+    onToolCallStart: ({ toolName }) => {
+      toolCalls.push(toolName);
+    },
+  };
+  const result = await testSafeMethodRetry({ callbacks });
+  results.safeMethodRetry = {
+    toolCallCount: toolCalls.length,
+    toolCalls,
+    succeeded: result.data !== undefined && result.data !== null,
+  };
+}
+
+// Test 7: Unsafe method no retry — unsafeMethodTool calls a non-safe class method.
+// The method calls saveItem (unsafe), so the tool is not retryable.
+{
+  const toolCalls = [];
+  const callbacks = {
+    onToolCallStart: ({ toolName }) => {
+      toolCalls.push(toolName);
+    },
+  };
+  try {
+    const result = await testUnsafeMethodNoRetry({ callbacks });
+    results.unsafeMethodNoRetry = {
+      toolCallCount: toolCalls.length,
+      toolCalls,
+      hasResult: result.data !== undefined,
+    };
+  } catch (e) {
+    results.unsafeMethodNoRetry = {
       toolCallCount: toolCalls.length,
       toolCalls,
       error: e.message,

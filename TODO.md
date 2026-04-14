@@ -145,3 +145,8 @@ llm statement doesn't work correctly in debugger
 make llm() work with pipe operator
   - create a generic llm interface
   - allow for tool call etc hooks from llm lib
+
+need to make method calls on objects work in the following places: with the try keyword, with the pipe operator, and as a tool.
+
+need to add an option so that every time a node function is called from TypeScript code, it generates a timestamped trace file in a specific directory.
+

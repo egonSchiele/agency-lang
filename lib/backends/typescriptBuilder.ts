@@ -2695,10 +2695,45 @@ export class TypeScriptBuilder {
   private buildPipeLambda(stage: Expression): TsNode {
     const pipeArg = ts.raw("__pipeArg");
 
-    if (stage.type === "valueAccess" || stage.type === "variableName") {
-      const funcName = stage.type === "variableName" ? stage.value : "";
+    // Method call with placeholder: obj.method(?, args) or obj.foo.method(?, args)
+    if (stage.type === "valueAccess") {
+      const lastElement = stage.chain[stage.chain.length - 1];
+      if (lastElement?.kind === "methodCall") {
+        const methodArgs = lastElement.functionCall.arguments;
+        const placeholderCount = methodArgs.filter(
+          (a) => a.type === "placeholder",
+        ).length;
+
+        if (placeholderCount > 0) {
+          if (placeholderCount !== 1) {
+            throw new Error(
+              `Method call on right side of |> must contain exactly one ? placeholder, got ${placeholderCount}`,
+            );
+          }
+          // Build the receiver: base + all chain elements except the last method call
+          const receiver = this.processValueAccessPartial(stage);
+          const args = methodArgs.map((a) =>
+            a.type === "placeholder" ? pipeArg : this.processNode(a as AgencyNode),
+          );
+          const methodName = lastElement.functionCall.functionName;
+          const callExpr = $(receiver).prop(methodName).call(args).done();
+          return ts.arrowFn([{ name: "__pipeArg" }], callExpr, {
+            async: true,
+          });
+        }
+      }
+
+      // No placeholder: treat as a bare method/property reference
       const callee = this.processNode(stage);
-      const args = [pipeArg, ...this.buildPipeStateArgs(funcName)];
+      const args = [pipeArg];
+      return ts.arrowFn([{ name: "__pipeArg" }], ts.call(callee, args), {
+        async: true,
+      });
+    }
+
+    if (stage.type === "variableName") {
+      const callee = this.processNode(stage);
+      const args = [pipeArg, ...this.buildPipeStateArgs(stage.value)];
       return ts.arrowFn([{ name: "__pipeArg" }], ts.call(callee, args), {
         async: true,
       });
@@ -2728,6 +2763,44 @@ export class TypeScriptBuilder {
     }
 
     throw new Error(`Invalid pipe stage type: ${stage.type}`);
+  }
+
+  /**
+   * Process a valueAccess up to but not including the last chain element.
+   * Used by pipe to get the receiver for a method call.
+   */
+  private processValueAccessPartial(node: ValueAccess): TsNode {
+    let result = this.processNode(node.base);
+    for (let i = 0; i < node.chain.length - 1; i++) {
+      const element = node.chain[i];
+      switch (element.kind) {
+        case "property":
+          result = ts.prop(result, element.name);
+          break;
+        case "index":
+          result = ts.index(result, this.processNode(element.index));
+          break;
+        case "methodCall": {
+          const callNode = this.generateFunctionCallExpression(
+            element.functionCall,
+            "valueAccess",
+          );
+          if (
+            callNode.kind === "call" &&
+            callNode.callee.kind === "identifier"
+          ) {
+            result = $(result)
+              .prop(callNode.callee.name)
+              .call(callNode.arguments)
+              .done();
+          } else {
+            result = ts.raw(`${this.str(result)}.${this.str(callNode)}`);
+          }
+          break;
+        }
+      }
+    }
+    return result;
   }
 
   private buildPipeStateArgs(funcName: string): TsNode[] {

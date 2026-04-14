@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"fromMethod\":\"local\",\"fromGlobal\":\"global\"}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Variables inside class methods are local, not global"
+    }
+  ]
+}

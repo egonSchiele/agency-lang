@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"result\":\"local\",\"x\":\"global\"}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Regular function local var shadows global - pre-existing behavior check"
+    }
+  ]
+}

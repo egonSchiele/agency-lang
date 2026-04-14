@@ -1,0 +1,16 @@
+let x = "global"
+
+class Foo {
+  value: number
+
+  doStuff(): string {
+    let x = "local"
+    return x
+  }
+}
+
+node main() {
+  let foo = new Foo(1)
+  let fromMethod = foo.doStuff()
+  return { fromMethod: fromMethod, fromGlobal: x }
+}

@@ -1,0 +1,11 @@
+let x = "global"
+
+def foo(): string {
+  let x = "local"
+  return x
+}
+
+node main() {
+  let result = foo()
+  return { result: result, x: x }
+}

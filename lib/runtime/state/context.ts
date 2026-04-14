@@ -40,6 +40,9 @@ export class RuntimeContext<T> {
   // this is the directory that the runtime is running in. We need this to be able to read files relative to the runtime.
   dirname: string;
 
+  // class registry for serialization/deserialization of Agency class instances
+  classRegistry: Record<string, { fromJSON: (data: any) => any }> = {};
+
   // stored so createExecutionContext can create new StatelogClients
   private statelogConfig: StatelogConfig;
   maxRestores: number;
@@ -84,6 +87,7 @@ export class RuntimeContext<T> {
     this.graph = new SimpleMachine<T>(graphConfig);
 
     this.smoltalkDefaults = args.smoltalkDefaults;
+    this.classRegistry = {};
   }
 
   createExecutionContext(): RuntimeContext<T> {
@@ -106,6 +110,7 @@ export class RuntimeContext<T> {
     execCtx.debuggerState = this.debuggerState;
     execCtx.traceWriter = this.traceWriter;
     execCtx.pendingPromises = new PendingPromiseStore();
+    execCtx.classRegistry = this.classRegistry;
     execCtx.statelogClient = new StatelogClient({
       ...this.statelogConfig,
       traceId: nanoid(),
@@ -149,6 +154,10 @@ export class RuntimeContext<T> {
   }
   popHandler(): void {
     this.handlers.pop();
+  }
+
+  registerClass(name: string, cls: { fromJSON: (data: any) => any }): void {
+    this.classRegistry[name] = cls;
   }
 
   forkStack(): StateStack {

@@ -851,9 +851,11 @@ export class AgencyGenerator {
         .join(", ");
       result += "\n" + this.indentStr(`constructor(${params}) {\n`);
       this.increaseIndent();
+      const ctorLines: string[] = [];
       for (const stmt of node.ctor.body) {
-        result += this.processNode(stmt);
+        ctorLines.push(this.processNode(stmt));
       }
+      result += ctorLines.filter(s => s !== "").join("\n").trimEnd() + "\n";
       this.decreaseIndent();
       result += this.indentStr(`}\n`);
     }
@@ -870,9 +872,11 @@ export class AgencyGenerator {
       const returnTypeStr = `: ${variableTypeToString(method.returnType, this.typeAliases)}`;
       result += "\n" + this.indentStr(`${method.name}(${params})${returnTypeStr} {\n`);
       this.increaseIndent();
+      const methodLines: string[] = [];
       for (const stmt of method.body) {
-        result += this.processNode(stmt);
+        methodLines.push(this.processNode(stmt));
       }
+      result += methodLines.filter(s => s !== "").join("\n").trimEnd() + "\n";
       this.decreaseIndent();
       result += this.indentStr(`}\n`);
     }

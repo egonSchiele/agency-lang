@@ -1,0 +1,17 @@
+class Checker {
+  label: string
+
+  verify(): string {
+    let l = this.label
+    const approved = interrupt("Approve " + l + "?")
+    if (approved) {
+      return "approved"
+    }
+    return "not approved"
+  }
+}
+
+node main() {
+  let checker = new Checker("action")
+  return checker.verify()
+}

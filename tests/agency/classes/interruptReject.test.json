@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Return interrupt in class method, rejected",
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Allow test?"
+        }
+      ]
+    }
+  ]
+}

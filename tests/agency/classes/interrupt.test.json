@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"Hello, Alice!\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Class method that throws an interrupt, approved",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Allow greeting for Alice?"
+        }
+      ]
+    }
+  ]
+}

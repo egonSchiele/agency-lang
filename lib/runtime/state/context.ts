@@ -12,6 +12,7 @@ import type { AgencyCallbacks } from "../hooks.js";
 import type { HandlerFn } from "../types.js";
 import type { DebuggerState } from "../../debugger/debuggerState.js";
 import type { TraceWriter } from "../trace/traceWriter.js";
+import { reviveWithClasses, type ClassRegistry } from "../classReviver.js";
 
 /* bunch of stuff that every node/function in the runtime needs access to,
 that we don't want to pass as individual arguments everywhere */
@@ -39,6 +40,9 @@ export class RuntimeContext<T> {
 
   // this is the directory that the runtime is running in. We need this to be able to read files relative to the runtime.
   dirname: string;
+
+  // class registry for serialization/deserialization of Agency class instances
+  classRegistry: ClassRegistry = {};
 
   // stored so createExecutionContext can create new StatelogClients
   private statelogConfig: StatelogConfig;
@@ -84,6 +88,7 @@ export class RuntimeContext<T> {
     this.graph = new SimpleMachine<T>(graphConfig);
 
     this.smoltalkDefaults = args.smoltalkDefaults;
+    this.classRegistry = {};
   }
 
   createExecutionContext(): RuntimeContext<T> {
@@ -106,6 +111,7 @@ export class RuntimeContext<T> {
     execCtx.debuggerState = this.debuggerState;
     execCtx.traceWriter = this.traceWriter;
     execCtx.pendingPromises = new PendingPromiseStore();
+    execCtx.classRegistry = this.classRegistry;
     execCtx.statelogClient = new StatelogClient({
       ...this.statelogConfig,
       traceId: nanoid(),
@@ -151,6 +157,10 @@ export class RuntimeContext<T> {
     this.handlers.pop();
   }
 
+  registerClass(name: string, cls: ClassRegistry[string]): void {
+    this.classRegistry[name] = cls;
+  }
+
   forkStack(): StateStack {
     return new StateStack();
   }
@@ -180,19 +190,14 @@ export class RuntimeContext<T> {
 
   restoreState(checkpoint: Checkpoint): void {
     const currentTokenStats = this.globals.getTokenStats();
-    this.stateStack = StateStack.fromJSON(checkpoint.stack);
+
+    const stack = reviveWithClasses(checkpoint.stack, this.classRegistry);
+    const globals = reviveWithClasses(checkpoint.globals, this.classRegistry);
+
+    this.stateStack = StateStack.fromJSON(stack);
     this.stateStack.deserializeMode();
 
-    // The checkpoint stack has frames for all nodes traversed (e.g. bar → foo),
-    // but we resume only at the last node. Strip frames from earlier nodes so
-    // deserialization hands the correct frame to each setupNode/setupFunction.
-    // const staleNodeCount = this.stateStack.nodesTraversed.length - 1;
-    // if (staleNodeCount > 0) {
-    //   this.stateStack.stack.splice(0, staleNodeCount);
-    //   this.stateStack.deserializeStackLength -= staleNodeCount;
-    // }
-
-    this.globals = GlobalStore.fromJSON(checkpoint.globals);
+    this.globals = GlobalStore.fromJSON(globals);
     this.globals.restoreTokenStats(currentTokenStats);
     this.pendingPromises.clear();
   }

@@ -9,10 +9,12 @@ import {
   getImportedNames,
   IfElse,
   RawCode,
+  Scope,
   ScopeType,
   Sentinel,
   Tag,
   WhileLoop,
+  isClassKeyword,
 } from "@/types.js";
 import { MessageThread } from "@/types/messageThread.js";
 // import { Skill } from "@/types/skill.js"; // Unused after llm() refactor
@@ -51,6 +53,10 @@ function walkBody(
       node.body = walkBody(node.body, fn);
       if (node.handler.kind === "inline") {
         node.handler.body = walkBody(node.handler.body, fn);
+      }
+    } else if (node.type === "classDefinition") {
+      for (const method of node.methods) {
+        method.body = walkBody(method.body, fn);
       }
     } else if (node.type === "withModifier") {
       node.statement = walkBody([node.statement], fn)[0];
@@ -1313,6 +1319,18 @@ export class TypescriptPreprocessor {
   }
 
   /**
+   * Get the scope name for a function-like node (function, graphNode, classMethod, classConstructor).
+   */
+  private getScopeName(node: AgencyNode, scopes: Scope[]): string {
+    if (node.type === "function") return node.functionName;
+    if (node.type === "graphNode") return node.nodeName;
+    // For class methods/constructors, the scope was set by walkNodes
+    const lastScope = scopes.at(-1);
+    if (lastScope?.type === "function") return lastScope.functionName;
+    return "unknown";
+  }
+
+  /**
    * Resolve variable scopes by annotating AST nodes with their scope.
    * After this pass, every VariableNameLiteral, InterpolationSegment, and Assignment
    * will have a `scope` property indicating whether the variable is global, local, or args.
@@ -1391,9 +1409,10 @@ export class TypescriptPreprocessor {
           `Top-level nodes should have at least the global scope in their scopes array. Node: ${JSON.stringify({ node })}, scopes: ${JSON.stringify({ scopes })}`,
         );
       }
-      if (node.type === "function" || node.type === "graphNode") {
-        const nodeName =
-          node.type === "function" ? node.functionName : node.nodeName;
+      const isFunctionLike = node.type === "function" || node.type === "graphNode"
+        || node.type === "classMethod";
+      if (isFunctionLike) {
+        const nodeName = this.getScopeName(node, scopes);
         // Parameters are in the function's scope
         funcArgs[nodeName] = [...node.parameters.map((p) => p.name)];
         localVarsInFunction[nodeName] = new Set();
@@ -1451,6 +1470,7 @@ export class TypescriptPreprocessor {
         for (const { node: varNode } of varsDefinedInFunction) {
           if (varNode.type === "assignment") {
             if (varNode.scope) continue; // already resolved in block Phase 1
+            if (isClassKeyword(varNode.variableName)) continue;
             let scope = lookupScope(nodeName, varNode.variableName);
             if (scope === null) {
               scope = "local";
@@ -1459,6 +1479,7 @@ export class TypescriptPreprocessor {
             varNode.scope = scope;
           } else if (varNode.type === "variableName") {
             if (varNode.scope) continue; // already resolved in block Phase 1
+            if (isClassKeyword(varNode.value)) continue;
             varNode.scope = lookupScope(nodeName, varNode.value) || "imported";
           }
         }
@@ -1471,6 +1492,7 @@ export class TypescriptPreprocessor {
         if (!node.scope) {
           const name =
             node.type === "variableName" ? node.value : node.variableName;
+          if (isClassKeyword(name)) continue;
           const scope = lookupScope("", name);
           node.scope = scope || "imported";
         }

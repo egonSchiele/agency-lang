@@ -6,7 +6,7 @@ import type { AgencyProgram, FunctionParameter } from "./types.js";
 import { walkNodes } from "./utils/node.js";
 import { resolveAgencyImportPath, isAgencyImport, getStdlibDir } from "./importPaths.js";
 
-export type SymbolKind = "node" | "function" | "type";
+export type SymbolKind = "node" | "function" | "type" | "class";
 
 export type SymbolInfo = {
   kind: SymbolKind;
@@ -45,6 +45,9 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
         break;
       case "typeAlias":
         symbols[node.aliasName] = { kind: "type", name: node.aliasName };
+        break;
+      case "classDefinition":
+        symbols[node.className] = { kind: "class", name: node.className };
         break;
     }
   }

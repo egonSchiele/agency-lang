@@ -1,0 +1,20 @@
+class User {
+  name: string
+  age: number
+
+  greet(): string {
+    let n = this.name
+    return "Hi, " + n
+  }
+}
+
+def describe(user): string {
+  let greeting = user.greet()
+  let a = user.age
+  return greeting + " (age " + a + ")"
+}
+
+node main() {
+  let user = new User("Alice", 30)
+  return describe(user)
+}

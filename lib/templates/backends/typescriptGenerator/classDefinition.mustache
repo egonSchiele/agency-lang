@@ -1,0 +1,40 @@
+class {{{className}}}{{#hasParent}} extends {{{parentClassName}}}{{/hasParent}} {
+{{#fields}}
+  {{{this.name}}}: {{{this.typeStr}}};
+{{/fields}}
+
+  constructor({{{constructorParamsStr}}}) {
+{{#hasParent}}
+    super({{{superArgsStr}}});
+{{/hasParent}}
+{{#fields}}
+    this.{{{this.name}}} = {{{this.name}}};
+{{/fields}}
+  }
+{{#methods}}
+
+{{{this}}}
+{{/methods}}
+
+  toJSON(): object {
+    return {
+{{#hasParent}}
+      ...super.toJSON(),
+{{/hasParent}}
+      __class: "{{{classKey}}}",
+{{#fields}}
+      {{{this.name}}}: this.{{{this.name}}},
+{{/fields}}
+    };
+  }
+
+  static fromJSON(data: any): {{{className}}} {
+    const instance = Object.create({{{className}}}.prototype);
+{{#allFields}}
+    instance.{{{this.name}}} = data.{{{this.name}}};
+{{/allFields}}
+    return instance;
+  }
+}
+
+__globalCtx.registerClass("{{{classKey}}}", {{{className}}});

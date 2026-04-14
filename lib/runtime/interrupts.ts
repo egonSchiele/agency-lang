@@ -7,6 +7,8 @@ import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { Approved, GraphState, Rejected } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
+import { reviveWithClasses } from "./classReviver.js";
+export { type ClassRegistry, createClassReviver, reviveWithClasses } from "./classReviver.js";
 
 export type InterruptApprove = {
   type: "approve";
@@ -343,9 +345,12 @@ export async function resumeFromState(args: {
   const { ctx, metadata = {} } = args;
 
   const execCtx = ctx.createExecutionContext();
-  execCtx.stateStack = StateStack.fromJSON(args.state.stack);
+
+  const state = reviveWithClasses(args.state, ctx.classRegistry);
+
+  execCtx.stateStack = StateStack.fromJSON(state.stack);
   execCtx.stateStack.deserializeMode();
-  execCtx.globals = GlobalStore.fromJSON(args.state.globals);
+  execCtx.globals = GlobalStore.fromJSON(state.globals);
 
   if (metadata.callbacks) {
     execCtx.callbacks = metadata.callbacks;

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"v1\":\">>hello!\",\"failed\":true}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Class method result piped through another function"
+    }
+  ]
+}

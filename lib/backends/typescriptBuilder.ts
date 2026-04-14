@@ -39,6 +39,8 @@ import * as renderBlockSetup from "../templates/backends/typescriptGenerator/blo
 import * as renderForkBlockSetup from "../templates/backends/typescriptGenerator/forkBlockSetup.js";
 import * as renderResultCheckpointSetup from "../templates/backends/typescriptGenerator/resultCheckpointSetup.js";
 import * as renderFunctionCatchFailure from "../templates/backends/typescriptGenerator/functionCatchFailure.js";
+import * as renderClassMethod from "../templates/backends/typescriptGenerator/classMethod.js";
+import * as renderClassDefinition from "../templates/backends/typescriptGenerator/classDefinition.js";
 
 import { AgencyConfig } from "@/config.js";
 import {
@@ -75,6 +77,7 @@ import { MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
+import { ClassDefinition, ClassField, ClassMethod, NewExpression, isClassKeyword } from "../types/classDefinition.js";
 import { escape, mergeDeep } from "../utils.js";
 import {
   generateBuiltinHelpers,
@@ -665,6 +668,10 @@ export class TypeScriptBuilder {
         );
       case "tryExpression":
         return this.processTryExpression(node);
+      case "classDefinition":
+        return this.processClassDefinition(node);
+      case "newExpression":
+        return this.processNewExpression(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
@@ -732,11 +739,12 @@ export class TypeScriptBuilder {
       case "multiLineString":
         return this.generateStringLiteralNode(literal.segments);
       case "variableName": {
+        const classKeyword = isClassKeyword(literal.value);
         const importedOrUnknownScope =
           literal.scope === "imported" || !literal.scope;
         const isBuiltinVar = BUILTIN_VARIABLES.includes(literal.value);
         const isLoopVar = this.loopVars.includes(literal.value);
-        if (importedOrUnknownScope || isBuiltinVar || isLoopVar) {
+        if (classKeyword || importedOrUnknownScope || isBuiltinVar || isLoopVar) {
           return ts.id(literal.value);
         }
         return ts.scopedVar(literal.value, literal.scope!, this.moduleId);
@@ -798,10 +806,15 @@ export class TypeScriptBuilder {
             callNode.kind === "call" &&
             callNode.callee.kind === "identifier"
           ) {
-            result = $(result)
+            const isClassMethod = this.isKnownClassMethod(callNode.callee.name);
+            const args = isClassMethod
+              ? [...callNode.arguments, this.buildMethodCallConfig()]
+              : callNode.arguments;
+            const callExpr = $(result)
               .prop(callNode.callee.name)
-              .call(callNode.arguments)
+              .call(args)
               .done();
+            result = isClassMethod ? ts.await(callExpr) : callExpr;
           } else {
             // Fallback for complex cases (e.g. await-wrapped)
             result = ts.raw(`${this.str(result)}.${this.str(callNode)}`);
@@ -863,6 +876,116 @@ export class TypeScriptBuilder {
       );
     }
     return ts.await(ts.call(ts.id("__tryCall"), args));
+  }
+
+  // ------- Class compilation -------
+
+  private processNewExpression(node: NewExpression): TsNode {
+    const args = node.arguments.map((a) => this.processNode(a as AgencyNode));
+    return ts.new(ts.id(node.className), args);
+  }
+
+  /**
+   * Check if a method name matches any method defined on any known Agency class.
+   * Used to decide whether to inject __state into method calls.
+   */
+  private isKnownClassMethod(methodName: string): boolean {
+    for (const classDef of Object.values(this.programInfo.classDefinitions)) {
+      if (classDef.methods.some((m) => m.name === methodName)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Build the __state config object for method calls on Agency class instances.
+   */
+  private buildMethodCallConfig(): TsNode {
+    return this.insideGlobalInit
+      ? ts.functionCallConfig({ ctx: ts.runtime.ctx })
+      : ts.functionCallConfig({
+          ctx: ts.runtime.ctx,
+          threads: ts.runtime.threads,
+          interruptData: ts.raw("__state?.interruptData"),
+        });
+  }
+
+  /**
+   * Collect all fields for a class, walking the inheritance chain.
+   * Returns parent fields first, then own fields.
+   */
+  private collectAllClassFields(node: ClassDefinition): ClassField[] {
+    const allFields: ClassField[] = [];
+    if (node.parentClass) {
+      const parent = this.programInfo.classDefinitions[node.parentClass];
+      if (parent) {
+        allFields.push(...this.collectAllClassFields(parent));
+      }
+    }
+    allFields.push(...node.fields);
+    return allFields;
+  }
+
+  private formatParam(p: { name: string; typeHint?: VariableType }): string {
+    return p.typeHint ? `${p.name}: ${formatTypeHint(p.typeHint)}` : p.name;
+  }
+
+
+  private buildMethodCode(method: ClassMethod, className: string): string {
+    const methodScopeName = `${className}.${method.name}`;
+    this.startScope({ type: "function", functionName: methodScopeName });
+    this._sourceMapBuilder.enterScope(this.moduleId, methodScopeName);
+    const bodyCode = this.processBodyAsParts(method.body);
+    this.endScope();
+
+    // Reuse the same function body logic as processFunctionDefinition
+    const setupStmts = this.buildFunctionBody({
+      functionName: methodScopeName,
+      parameters: method.parameters,
+      bodyCode,
+    });
+
+    // Build as an async method with __state as last param
+    const params = method.parameters.map((p) => this.formatParam(p)).join(", ");
+    const fnParams: TsParam[] = method.parameters.map((p) => {
+      const baseType = p.typeHint ? formatTypeHint(p.typeHint) : "any";
+      return { name: p.name, typeAnnotation: baseType };
+    });
+    fnParams.push({
+      name: "__state",
+      typeAnnotation: "any",
+      defaultValue: ts.id("undefined"),
+    });
+
+    // Use printTs on the IR body, then wrap as a method
+    const bodyStr = printTs(ts.statements(setupStmts), 2);
+    const paramStr = fnParams
+      .map((p) => p.defaultValue
+        ? `${p.name}: ${p.typeAnnotation} = ${printTs(p.defaultValue, 0)}`
+        : `${p.name}: ${p.typeAnnotation}`)
+      .join(", ");
+    return `  async ${method.name}(${paramStr}) {\n${bodyStr}\n  }`;
+  }
+
+  private processClassDefinition(node: ClassDefinition): TsNode {
+    const { className, fields, methods, parentClass } = node;
+    const allFields = this.collectAllClassFields(node);
+    const classKey = `${this.moduleId}::${className}`;
+
+    return ts.raw(renderClassDefinition.default({
+      className,
+      parentClassName: parentClass || "",
+      hasParent: !!parentClass,
+      classKey,
+      fields: fields.map((f) => ({ name: f.name, typeStr: formatTypeHint(f.typeHint) })),
+      allFields: allFields.map((f) => ({ name: f.name })),
+      constructorParamsStr: allFields.map((f) => `${f.name}: ${formatTypeHint(f.typeHint)}`).join(", "),
+      superArgsStr: parentClass
+        ? this.collectAllClassFields(this.programInfo.classDefinitions[parentClass]).map((f) => f.name).join(", ")
+        : "",
+      methods: methods.map((m) => this.buildMethodCode(m, className)),
+    }));
   }
 
   private processIfElseWithSteps(node: IfElse): TsNode {
@@ -1202,34 +1325,18 @@ export class TypeScriptBuilder {
     return ts.raw(str);
   }
 
-  private processFunctionDefinition(node: FunctionDefinition): TsNode {
-    this.startScope({ type: "function", functionName: node.functionName });
-    this._sourceMapBuilder.enterScope(this.moduleId, node.functionName);
-    const { functionName, body, parameters } = node;
+  /**
+   * Build the body statements for an Agency function or class method.
+   * Includes setup, runner, result checkpoint, try/catch/finally, hooks.
+   * Shared between processFunctionDefinition and class method compilation.
+   */
+  private buildFunctionBody(opts: {
+    functionName: string;
+    parameters: FunctionParameter[];
+    bodyCode: TsNode[];
+  }): TsNode[] {
+    const { functionName, parameters, bodyCode } = opts;
     const args = parameters.map((p) => p.name);
-
-    const bodyCode = this.processBodyAsParts(body, {
-      isInSafeFunction: !!node.safe,
-    });
-    this.endScope();
-
-    // Build function params: typed args + __state
-    const fnParams: TsParam[] = parameters.map((p) => {
-      const baseType = p.typeHint ? formatTypeHint(p.typeHint) : "any";
-      if (p.defaultValue) {
-        return {
-          name: p.name,
-          typeAnnotation: `${baseType} | null`,
-          defaultValue: ts.id("null"),
-        };
-      }
-      return { name: p.name, typeAnnotation: baseType };
-    });
-    fnParams.push({
-      name: "__state",
-      typeAnnotation: "InternalFunctionState | undefined",
-      defaultValue: ts.id("undefined"),
-    });
 
     // Build args object for hook data
     const argsObj: Record<string, TsNode> = {};
@@ -1260,8 +1367,6 @@ export class TypeScriptBuilder {
       }),
 
       // Ensure this module's globals are initialized on the current ctx.
-      // The isInitialized flag lives on the GlobalStore and is serialized,
-      // so on interrupt resume the restored store already has it set.
       ts.if(
         ts.raw(
           `!__ctx.globals.isInitialized(${JSON.stringify(this.moduleId)})`,
@@ -1308,7 +1413,7 @@ export class TypeScriptBuilder {
       ),
     );
 
-    // Pinned checkpoint at entry for all functions (enables result.retry and error-to-failure wrapping)
+    // Pinned checkpoint at entry (enables result.retry and error-to-failure wrapping)
     setupStmts.push(this.buildResultCheckpointSetup(functionName, parameters));
 
     // Try/catch wrapping the body, with finally to always pop the state stack
@@ -1327,11 +1432,6 @@ export class TypeScriptBuilder {
         ),
         "__error",
         // finally block: pop state stack and conditionally fire onFunctionEnd.
-        // onFunctionEnd must live here (not after the try/catch) because
-        // every code path inside the try block returns, making any code
-        // after try/catch/finally unreachable.
-        // The __functionCompleted flag ensures onFunctionEnd only fires on
-        // normal completion, not when a debug interrupt pauses the function.
         ts.statements([
           ts.raw("if (!__state?.isForked) { __ctx.stateStack.pop() }"),
           ts.if(
@@ -1348,6 +1448,39 @@ export class TypeScriptBuilder {
         ]),
       ),
     );
+
+    return setupStmts;
+  }
+
+  private processFunctionDefinition(node: FunctionDefinition): TsNode {
+    this.startScope({ type: "function", functionName: node.functionName });
+    this._sourceMapBuilder.enterScope(this.moduleId, node.functionName);
+    const { functionName, parameters } = node;
+
+    const bodyCode = this.processBodyAsParts(node.body, {
+      isInSafeFunction: !!node.safe,
+    });
+    this.endScope();
+
+    // Build function params: typed args + __state
+    const fnParams: TsParam[] = parameters.map((p) => {
+      const baseType = p.typeHint ? formatTypeHint(p.typeHint) : "any";
+      if (p.defaultValue) {
+        return {
+          name: p.name,
+          typeAnnotation: `${baseType} | null`,
+          defaultValue: ts.id("null"),
+        };
+      }
+      return { name: p.name, typeAnnotation: baseType };
+    });
+    fnParams.push({
+      name: "__state",
+      typeAnnotation: "InternalFunctionState | undefined",
+      defaultValue: ts.id("undefined"),
+    });
+
+    const setupStmts = this.buildFunctionBody({ functionName, parameters, bodyCode });
 
     return ts.functionDecl(functionName, fnParams, ts.statements(setupStmts), {
       async: true,
@@ -1889,6 +2022,12 @@ export class TypeScriptBuilder {
   private processAssignment(node: Assignment): TsNode {
     const { variableName, typeHint, value } = node;
 
+    // `this.field = value` and `super.field = value` — emit as direct property assignment
+    if (isClassKeyword(variableName)) {
+      const lhs = this.buildAccessChain(ts.id(variableName), node.accessChain);
+      return ts.assign(lhs, this.processNode(value));
+    }
+
     if (value.type === "functionCall" && value.functionName === "llm") {
       return this.processLlmCall(variableName, typeHint, value, node.scope!);
     } else if (
@@ -2015,10 +2154,15 @@ export class TypeScriptBuilder {
             callNode.kind === "call" &&
             callNode.callee.kind === "identifier"
           ) {
-            result = $(result)
+            const isClassMethod = this.isKnownClassMethod(callNode.callee.name);
+            const args = isClassMethod
+              ? [...callNode.arguments, this.buildMethodCallConfig()]
+              : callNode.arguments;
+            const call2 = $(result)
               .prop(callNode.callee.name)
-              .call(callNode.arguments)
+              .call(args)
               .done();
+            result = isClassMethod ? ts.await(call2) : call2;
           } else {
             result = ts.raw(`${this.str(result)}.${this.str(callNode)}`);
           }

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "103",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Multiple instances of same class with independent state"
+    }
+  ]
+}

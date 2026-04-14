@@ -1,5 +1,6 @@
 import type {
   AgencyProgram,
+  ClassDefinition,
   FunctionDefinition,
   FunctionParameter,
   GraphNodeDefinition,
@@ -27,6 +28,7 @@ export type ProgramInfo = {
   importStatements: ImportStatement[];
   safeFunctions: Record<string, boolean>;
   importedFunctions: Record<string, { parameters: FunctionParameter[] }>;
+  classDefinitions: Record<string, ClassDefinition>;
 };
 
 export function scopeKey(scope: Scope): string {
@@ -77,6 +79,7 @@ export function collectProgramInfo(
     importStatements: [],
     safeFunctions: {},
     importedFunctions: {},
+    classDefinitions: {},
   };
 
   // Top-level pass: collect functions, graph nodes, imports
@@ -104,6 +107,9 @@ export function collectProgramInfo(
             info.safeFunctions[safeName] = true;
           }
         }
+        break;
+      case "classDefinition":
+        info.classDefinitions[node.className] = node;
         break;
       case "importStatement":
         info.importStatements.push(node);

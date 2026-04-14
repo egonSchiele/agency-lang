@@ -1,0 +1,13 @@
+class Point {
+  x: number
+  y: number
+
+  sum(): number {
+    return this.x + this.y
+  }
+}
+
+node main() {
+  let p = new Point(3, 7)
+  return p.sum()
+}

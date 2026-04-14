@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"hi\",\"hi\",\"hi\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Class method that takes a block parameter"
+    }
+  ]
+}

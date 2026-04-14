@@ -1,0 +1,18 @@
+class Gate {
+  name: string
+
+  check(): string {
+    let n = this.name
+    const result = interrupt("Allow " + n + "?")
+    return "checked: " + result
+  }
+}
+
+node main() {
+  let gate = new Gate("test")
+  const result = gate.check() with reject
+  if (isFailure(result)) {
+    return "rejected"
+  }
+  return result
+}

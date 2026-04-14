@@ -101,6 +101,7 @@ import { BlockArgument } from "../types/blockArgument.js";
 import { BinOpExpression, Operator } from "../types/binop.js";
 import { Placeholder } from "../types/placeholder.js";
 import { TryExpression } from "../types/tryExpression.js";
+import { ClassDefinition, ClassField, ClassMethod, NewExpression } from "../types/classDefinition.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { DebuggerStatement } from "../types/debuggerStatement.js";
 import { Keyword, keywords, createKeyword } from "@/types/keyword.js";
@@ -1298,10 +1299,35 @@ const placeholderParser: Parser<Placeholder> = (input: string) => {
 const tryExpressionParser: Parser<TryExpression> =
   seqC(set("type", "tryExpression"), str("try"), spaces, capture(functionCallParser, "call"));
 
+// Parses: new ClassName(args)
+export const newExpressionParser: Parser<NewExpression> = (input: string) => {
+  const parser = seqC(
+    set("type", "newExpression"),
+    str("new"),
+    spaces,
+    capture(many1WithJoin(varNameChar), "className"),
+    char("("),
+    optionalSpaces,
+    capture(
+      sepBy(comma, lazy(() => exprParser)),
+      "arguments",
+    ),
+    optionalSpaces,
+    char(")"),
+  );
+  const result = parser(input);
+  if (!result.success) return failure("expected 'new ClassName(args)'", input);
+  return success(
+    { type: "newExpression" as const, className: result.result.className, arguments: result.result.arguments },
+    result.rest,
+  );
+};
+
 // The atom parser: the smallest unit of an expression.
 const atom: Parser<Expression> = or(
   unaryNotParser,
   tryExpressionParser,
+  newExpressionParser,
   placeholderParser,
   lazy(() => agencyArrayParser),
   lazy(() => agencyObjectParser),
@@ -2322,3 +2348,124 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = label("a node defini
     ),
   ),
 )));
+
+// =============================================================================
+// classDefinition parser
+// =============================================================================
+
+// Parses: name: type
+const classFieldParser: Parser<ClassField> = (input: string) => {
+  const parser = seqC(
+    set("type", "classField"),
+    capture(many1WithJoin(varNameChar), "name"),
+    optionalSpaces,
+    char(":"),
+    optionalSpaces,
+    capture(variableTypeParser, "typeHint"),
+    optionalSemicolon,
+    optionalSpacesOrNewline,
+  );
+  return parser(input);
+};
+
+// Detects constructor keyword and returns an error — constructors are auto-generated
+const rejectConstructorParser: Parser<never> = (input: string) => {
+  const result = str("constructor")(input);
+  if (result.success) {
+    return failure("custom constructors are not supported — constructors are auto-generated from field declarations", input);
+  }
+  return failure("", input);
+};
+
+// Parses: name(params): returnType { body }
+const classMethodParser: Parser<ClassMethod> = map(
+  seqC(
+    set("type", "classMethod"),
+    capture(many1WithJoin(varNameChar), "name"),
+    char("("),
+    optionalSpaces,
+    capture(
+      sepBy(comma, or(variadicParameterParser, functionParameterParser)),
+      "parameters",
+    ),
+    optionalSpaces,
+    char(")"),
+    optionalSpaces,
+    char(":"),
+    optionalSpaces,
+    capture(variableTypeParser, "returnType"),
+    optionalSpacesOrNewline,
+    char("{"),
+    optionalSpacesOrNewline,
+    capture(bodyParser, "body"),
+    optionalSpacesOrNewline,
+    char("}"),
+    optionalSpacesOrNewline,
+  ),
+  (result) => result as ClassMethod,
+);
+
+// Class body member: field, constructor, or method.
+// Fields are tried first (name: type), then constructor, then methods (name(...): type { ... }).
+// To distinguish fields from methods, we use a lookahead: if we see `name(`, it's a method.
+const classBodyMemberParser = or(
+  rejectConstructorParser,
+  classMethodParser,
+  classFieldParser,
+);
+
+const _classParserInner: Parser<ClassDefinition> = (input: string) => {
+  const parser = seqC(
+    str("class"),
+    spaces,
+    capture(many1WithJoin(varNameChar), "className"),
+    optionalSpaces,
+    capture(
+      optional(
+        seqC(
+          str("extends"),
+          spaces,
+          captureCaptures(
+            seqC(capture(many1WithJoin(varNameChar), "parentClass")),
+          ),
+          optionalSpaces,
+        ),
+      ),
+      "_extends",
+    ),
+    char("{"),
+    optionalSpacesOrNewline,
+    capture(many(classBodyMemberParser), "members"),
+    optionalSpacesOrNewline,
+    char("}"),
+    optionalSpacesOrNewline,
+  );
+
+  const result = parser(input);
+  if (!result.success) return failure("expected class definition", input);
+
+  // Separate fields and methods
+  const fields: ClassField[] = [];
+  const methods: ClassMethod[] = [];
+
+  for (const member of result.result.members) {
+    if (member.type === "classField") {
+      fields.push(member);
+    } else if (member.type === "classMethod") {
+      methods.push(member);
+    }
+  }
+
+  const parentClass = result.result._extends?.parentClass;
+  const def: ClassDefinition = {
+    type: "classDefinition",
+    className: result.result.className,
+    fields,
+    methods,
+    ...(parentClass ? { parentClass } : {}),
+  };
+
+  return success(def, result.rest);
+};
+
+export const classParser: Parser<ClassDefinition> = label("a class definition", withLoc(_classParserInner));

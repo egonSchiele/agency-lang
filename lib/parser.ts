@@ -50,6 +50,7 @@ import {
   valueAccessParser,
   whileLoopParser,
   withModifierParser,
+  classParser,
 } from "./parsers/parsers.js";
 import { AgencyNode, AgencyProgram } from "./types.js";
 
@@ -60,6 +61,7 @@ const nodeParser = or(
   importToolStatmentParser,
   importStatmentParser,
   graphNodeParser,
+  classParser,
   typeAliasParser,
   ifParser,
   forLoopParser,

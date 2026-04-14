@@ -1,0 +1,30 @@
+class Animal {
+  name: string
+
+  speak(): string {
+    let n = this.name
+    return n + " makes a sound"
+  }
+}
+
+class Dog extends Animal {
+  breed: string
+
+  speak(): string {
+    let n = this.name
+    return n + " barks"
+  }
+
+  describe(): string {
+    let n = this.name
+    let b = this.breed
+    return n + " is a " + b
+  }
+}
+
+node main() {
+  let dog = new Dog("Rex", "Labrador")
+  let speech = dog.speak()
+  let desc = dog.describe()
+  return speech + " | " + desc
+}

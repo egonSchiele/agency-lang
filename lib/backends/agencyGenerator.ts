@@ -47,6 +47,7 @@ import { expressionToString } from "@/utils/node.js";
 import { Keyword } from "@/types/keyword.js";
 import { HandleBlock } from "@/types/handleBlock.js";
 import { Tag } from "@/types/tag.js";
+import { ClassDefinition, NewExpression } from "@/types/classDefinition.js";
 
 export class AgencyGenerator {
   protected graphNodes: GraphNodeDefinition[] = [];
@@ -262,6 +263,10 @@ export class AgencyGenerator {
         return "?";
       case "tryExpression":
         return `try ${this.processNode(node.call)}`;
+      case "classDefinition":
+        return this.processClassDefinition(node);
+      case "newExpression":
+        return this.processNewExpression(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
@@ -821,6 +826,49 @@ export class AgencyGenerator {
 
     result += this.indentStr(`}`);
     return tags + result;
+  }
+
+  protected processClassDefinition(node: ClassDefinition): string {
+    const extendsStr = node.parentClass ? ` extends ${node.parentClass}` : "";
+    let result = this.indentStr(`class ${node.className}${extendsStr} {\n`);
+    this.increaseIndent();
+
+    // Fields
+    for (const field of node.fields) {
+      result += this.indentStr(
+        `${field.name}: ${variableTypeToString(field.typeHint, this.typeAliases)}\n`,
+      );
+    }
+
+    // Methods (constructor is auto-generated, not formatted)
+    for (const method of node.methods) {
+      const params = method.parameters
+        .map((p) =>
+          p.typeHint
+            ? `${p.name}: ${variableTypeToString(p.typeHint, this.typeAliases)}`
+            : p.name,
+        )
+        .join(", ");
+      const returnTypeStr = `: ${variableTypeToString(method.returnType, this.typeAliases)}`;
+      result += "\n" + this.indentStr(`${method.name}(${params})${returnTypeStr} {\n`);
+      this.increaseIndent();
+      const methodLines: string[] = [];
+      for (const stmt of method.body) {
+        methodLines.push(this.processNode(stmt));
+      }
+      result += methodLines.filter(s => s !== "").join("\n").trimEnd() + "\n";
+      this.decreaseIndent();
+      result += this.indentStr(`}\n`);
+    }
+
+    this.decreaseIndent();
+    result += this.indentStr(`}`);
+    return result;
+  }
+
+  protected processNewExpression(node: NewExpression): string {
+    const args = node.arguments.map((a) => expressionToString(a)).join(", ");
+    return `new ${node.className}(${args})`;
   }
 
   protected processTool(node: FunctionDefinition): string {

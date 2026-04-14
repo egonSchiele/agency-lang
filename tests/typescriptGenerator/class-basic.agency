@@ -1,0 +1,14 @@
+class Counter {
+  value: number
+
+  increment(): number {
+    this.value = this.value + 1
+    return this.value
+  }
+}
+
+node main() {
+  let c = new Counter(0)
+  c.increment()
+  return c.increment()
+}

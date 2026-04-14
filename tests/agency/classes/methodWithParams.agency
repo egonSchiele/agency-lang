@@ -1,0 +1,20 @@
+class Calculator {
+  value: number
+
+  add(n: number): number {
+    this.value = this.value + n
+    return this.value
+  }
+
+  multiply(n: number): number {
+    this.value = this.value * n
+    return this.value
+  }
+}
+
+node main() {
+  let calc = new Calculator(10)
+  calc.add(5)
+  calc.multiply(3)
+  return calc.value
+}

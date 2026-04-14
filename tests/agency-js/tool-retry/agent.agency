@@ -52,6 +52,32 @@ def resetCountersTool() {
   return resetCounters()
 }
 
+// --- Class with safe and non-safe methods ---
+
+class ItemService {
+  prefix: string
+
+  safe safeLookup(id: string): any {
+    return lookupItem("${this.prefix}-${id}")
+  }
+
+  unsafeSaveAndLookup(id: string): any {
+    saveItem(id)
+    return lookupItem("${this.prefix}-${id}")
+  }
+}
+
+// Tool wrappers for class methods
+def safeMethodTool(id: string) {
+  let svc = new ItemService("svc")
+  return svc.safeLookup(id)
+}
+
+def unsafeMethodTool(id: string) {
+  let svc = new ItemService("svc")
+  return svc.unsafeSaveAndLookup(id)
+}
+
 // --- Test nodes ---
 
 // Test 1: A tool that directly calls a safe imported function.
@@ -100,5 +126,23 @@ node testUnsafeChainNoRetry() {
   resetCountersTool()
   uses unsafeChainTool
   const result = llm("Save and look up item 'jkl'. Use the unsafeChainTool.")
+  return result
+}
+
+// Test 6: A tool that calls a safe class method.
+// The method is marked safe, so the tool remains retryable.
+node testSafeMethodRetry() {
+  resetCountersTool()
+  uses safeMethodTool
+  const result = llm("Look up item with id 'mno'. Use the safeMethodTool. If you get a temporary error, retry the same tool call.")
+  return result
+}
+
+// Test 7: A tool that calls a non-safe class method (calls saveItem internally).
+// The method is not marked safe, so the tool is not retryable.
+node testUnsafeMethodNoRetry() {
+  resetCountersTool()
+  uses unsafeMethodTool
+  const result = llm("Save and look up item 'pqr'. Use the unsafeMethodTool.")
   return result
 }

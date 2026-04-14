@@ -7,7 +7,7 @@ import {
   _messageThreadParser,
   _submessageThreadParser,
 } from "./parsers.js";
-import { normalizeCode } from "@/parser.js";
+import { normalizeCode, parseAgency } from "@/parser.js";
 
 describe("docStringParser", () => {
   const testCases = [
@@ -3238,5 +3238,59 @@ x=1
         );
       }
     });
+  });
+});
+
+describe("classMethodParser with safe keyword", () => {
+  function parseClass(code: string) {
+    const result = parseAgency(code, {}, false);
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error("parse failed");
+    const classDef = result.result.nodes.find((n: any) => n.type === "classDefinition");
+    expect(classDef).toBeDefined();
+    return classDef as any;
+  }
+
+  it("parses safe method on a class", () => {
+    const classDef = parseClass(`class Foo {
+  x: number
+
+  safe add(y: number): number {
+    return this.x + y
+  }
+}`);
+    expect(classDef.methods).toHaveLength(1);
+    expect(classDef.methods[0].name).toBe("add");
+    expect(classDef.methods[0].safe).toBe(true);
+  });
+
+  it("does not set safe on a non-safe method", () => {
+    const classDef = parseClass(`class Foo {
+  x: number
+
+  add(y: number): number {
+    return this.x + y
+  }
+}`);
+    expect(classDef.methods[0].safe).toBeUndefined();
+  });
+
+  it("parses class with both safe and non-safe methods", () => {
+    const classDef = parseClass(`class Foo {
+  x: number
+
+  safe pureMethod(): number {
+    return this.x
+  }
+
+  impureMethod(): number {
+    return this.x
+  }
+}`);
+    expect(classDef.methods).toHaveLength(2);
+    expect(classDef.methods[0].name).toBe("pureMethod");
+    expect(classDef.methods[0].safe).toBe(true);
+    expect(classDef.methods[1].name).toBe("impureMethod");
+    expect(classDef.methods[1].safe).toBeUndefined();
   });
 });

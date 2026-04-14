@@ -110,6 +110,11 @@ export function collectProgramInfo(
         break;
       case "classDefinition":
         info.classDefinitions[node.className] = node;
+        for (const method of node.methods) {
+          if (method.safe) {
+            info.safeFunctions[`${node.className}.${method.name}`] = true;
+          }
+        }
         break;
       case "importStatement":
         info.importStatements.push(node);

@@ -14,6 +14,7 @@ export type ClassMethod = BaseNode & {
   parameters: FunctionParameter[];
   body: AgencyNode[];
   returnType: VariableType;
+  safe?: boolean;
 };
 
 export type ClassDefinition = BaseNode & {

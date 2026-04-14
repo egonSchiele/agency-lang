@@ -162,3 +162,31 @@ greet(name: "world", greeting: "Hi")
     ).not.toThrow();
   });
 });
+
+describe("Safe class methods", () => {
+  it.each([
+    { safe: true, methodName: "lookup", emitsRetryableFalse: false },
+    { safe: false, methodName: "doSave", emitsRetryableFalse: true },
+  ])("$methodName (safe=$safe) emitsRetryableFalse=$emitsRetryableFalse", ({ safe, methodName, emitsRetryableFalse }) => {
+    const safeKeyword = safe ? "safe " : "";
+    const code = `
+import { saveItem } from "./tools.js"
+
+class Svc {
+  x: number
+
+  ${safeKeyword}${methodName}(id: string): string {
+    return saveItem(id)
+  }
+}
+`;
+    const output = generateWithBuilder(code);
+    const methodMatch = output.match(new RegExp(`async ${methodName}\\([\\s\\S]*?finally`));
+    expect(methodMatch).toBeTruthy();
+    if (emitsRetryableFalse) {
+      expect(methodMatch![0]).toContain("__retryable = false");
+    } else {
+      expect(methodMatch![0]).not.toContain("__retryable = false");
+    }
+  });
+});

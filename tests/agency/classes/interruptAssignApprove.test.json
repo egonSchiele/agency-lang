@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"approved\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Assign interrupt in class method, approved (value is true)",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Approve action?"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+class Checker {
+  label: string
+
+  verify(): string {
+    let l = this.label
+    const result = interrupt("Approve " + l + "?")
+    return "got: " + result
+  }
+}
+
+node main() {
+  let checker = new Checker("action")
+  return checker.verify()
+}

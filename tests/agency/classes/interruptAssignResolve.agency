@@ -1,0 +1,14 @@
+class Prompter {
+  prefix: string
+
+  ask(): string {
+    let p = this.prefix
+    const answer = interrupt(p + ": what value?")
+    return p + " got " + answer
+  }
+}
+
+node main() {
+  let prompter = new Prompter("test")
+  return prompter.ask()
+}

@@ -49,28 +49,3 @@ for (const name of names) {
   print(name)
 }
 ```
-
-So far so good. Now let's talk about what problems Agency is designed to solve, and how it solves them.
-
-Before that though, we need to quickly cover nodes. We won't spend a ton of time on nodes right now, but you should know that a node defines an entry point into your agent. You'll need a node to write a hello world script, like this:
-
-```ts
-node main() {
-  const greeting = llm("Say hello to world!")
-  print(greeting)
-}
-```
-
-If you're coming from Python, you might be familiar with the `if __name__ == "__main__"` pattern...`node main` is the same thing in Agency.
-
-Save the "Hello World" code in `test.agency`, and then run:
-
-```
-npm run agency test.agency
-```
-
-You should see a hello world message get printed.
-
-> If you get an error, make sure you have your OpenAI API key set up correctly. You can set it as an environment variable called `OPENAI_API_KEY`, or you can create a `.env` file in the root of your project with the line `OPENAI_API_KEY=your_api_key_here`. Or just remove the `llm` call and replace it with a string, like `const greeting = "Hello, World!"` for now.
-
-Now we're ready to dive into the more exciting features of the Agency.

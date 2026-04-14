@@ -1,4 +1,4 @@
-# # Message history and threads
+# Message history and threads
 
 A critical part of an agent is the message history. You want the agent to remember everything that's been said so far. Let's see how message history works in Agency.
 

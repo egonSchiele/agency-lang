@@ -17,6 +17,8 @@ node main() {
 }
 ```
 
+Try running this code! If you get an error, make sure you have your OpenAI API key set up correctly. You can set it as an environment variable called `OPENAI_API_KEY`, or you can create a `.env` file in the root of your project with the line `OPENAI_API_KEY=your_api_key_here`.
+
 There are a couple important benefits to this. This means that you can break up your agent, sort of like a state machine, and start at a state that makes sense for you. It also means that nodes behave a little differently than functions.
 
 When a function call finishes, it returns back to the caller. But when you go to a new node, that marks a permanent transition. In this code snippet, the `main` node is calling the `categorize` node, which means that `categorize` is now the active node. Once it's finished, the program ends, unless it redirects to another node. `categorize` won't return back to the `main` node once it is done.

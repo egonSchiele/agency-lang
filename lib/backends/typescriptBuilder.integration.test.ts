@@ -164,41 +164,29 @@ greet(name: "world", greeting: "Hi")
 });
 
 describe("Safe class methods", () => {
-  it("safe method does not emit __retryable = false for impure calls", () => {
+  it.each([
+    { safe: true, methodName: "lookup", emitsRetryableFalse: false },
+    { safe: false, methodName: "doSave", emitsRetryableFalse: true },
+  ])("$methodName (safe=$safe) emitsRetryableFalse=$emitsRetryableFalse", ({ safe, methodName, emitsRetryableFalse }) => {
+    const safeKeyword = safe ? "safe " : "";
     const code = `
 import { saveItem } from "./tools.js"
 
 class Svc {
   x: number
 
-  safe lookup(id: string): string {
+  ${safeKeyword}${methodName}(id: string): string {
     return saveItem(id)
   }
 }
 `;
     const output = generateWithBuilder(code);
-    // The method body should NOT contain __retryable = false
-    // Extract just the lookup method body
-    const methodMatch = output.match(/async lookup\([\s\S]*?finally/);
+    const methodMatch = output.match(new RegExp(`async ${methodName}\\([\\s\\S]*?finally`));
     expect(methodMatch).toBeTruthy();
-    expect(methodMatch![0]).not.toContain("__retryable = false");
-  });
-
-  it("non-safe method emits __retryable = false for impure calls", () => {
-    const code = `
-import { saveItem } from "./tools.js"
-
-class Svc {
-  x: number
-
-  doSave(id: string): string {
-    return saveItem(id)
-  }
-}
-`;
-    const output = generateWithBuilder(code);
-    const methodMatch = output.match(/async doSave\([\s\S]*?finally/);
-    expect(methodMatch).toBeTruthy();
-    expect(methodMatch![0]).toContain("__retryable = false");
+    if (emitsRetryableFalse) {
+      expect(methodMatch![0]).toContain("__retryable = false");
+    } else {
+      expect(methodMatch![0]).not.toContain("__retryable = false");
+    }
   });
 });

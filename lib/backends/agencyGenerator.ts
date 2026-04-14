@@ -47,6 +47,7 @@ import { expressionToString } from "@/utils/node.js";
 import { Keyword } from "@/types/keyword.js";
 import { HandleBlock } from "@/types/handleBlock.js";
 import { Tag } from "@/types/tag.js";
+import { ClassDefinition, NewExpression } from "@/types/classDefinition.js";
 
 export class AgencyGenerator {
   protected graphNodes: GraphNodeDefinition[] = [];
@@ -262,6 +263,10 @@ export class AgencyGenerator {
         return "?";
       case "tryExpression":
         return `try ${this.processNode(node.call)}`;
+      case "classDefinition":
+        return this.processClassDefinition(node);
+      case "newExpression":
+        return this.processNewExpression(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
@@ -821,6 +826,65 @@ export class AgencyGenerator {
 
     result += this.indentStr(`}`);
     return tags + result;
+  }
+
+  protected processClassDefinition(node: ClassDefinition): string {
+    const extendsStr = node.parentClass ? ` extends ${node.parentClass}` : "";
+    let result = this.indentStr(`class ${node.className}${extendsStr} {\n`);
+    this.increaseIndent();
+
+    // Fields
+    for (const field of node.fields) {
+      result += this.indentStr(
+        `${field.name}: ${variableTypeToString(field.typeHint, this.typeAliases)}\n`,
+      );
+    }
+
+    // Constructor
+    if (node.constructor) {
+      const params = node.constructor.parameters
+        .map((p) =>
+          p.typeHint
+            ? `${p.name}: ${variableTypeToString(p.typeHint, this.typeAliases)}`
+            : p.name,
+        )
+        .join(", ");
+      result += "\n" + this.indentStr(`constructor(${params}) {\n`);
+      this.increaseIndent();
+      for (const stmt of node.constructor.body) {
+        result += this.processNode(stmt);
+      }
+      this.decreaseIndent();
+      result += this.indentStr(`}\n`);
+    }
+
+    // Methods
+    for (const method of node.methods) {
+      const params = method.parameters
+        .map((p) =>
+          p.typeHint
+            ? `${p.name}: ${variableTypeToString(p.typeHint, this.typeAliases)}`
+            : p.name,
+        )
+        .join(", ");
+      const returnTypeStr = `: ${variableTypeToString(method.returnType, this.typeAliases)}`;
+      result += "\n" + this.indentStr(`${method.name}(${params})${returnTypeStr} {\n`);
+      this.increaseIndent();
+      for (const stmt of method.body) {
+        result += this.processNode(stmt);
+      }
+      this.decreaseIndent();
+      result += this.indentStr(`}\n`);
+    }
+
+    this.decreaseIndent();
+    result += this.indentStr(`}`);
+    return result;
+  }
+
+  protected processNewExpression(node: NewExpression): string {
+    const args = node.arguments.map((a) => expressionToString(a)).join(", ");
+    return `new ${node.className}(${args})`;
   }
 
   protected processTool(node: FunctionDefinition): string {

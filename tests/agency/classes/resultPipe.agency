@@ -1,0 +1,24 @@
+class Parser {
+  prefix: string
+
+  parse(input: string): Result {
+    if (input == "") {
+      return failure("empty input")
+    }
+    let pfx = this.prefix
+    return success(pfx + input)
+  }
+}
+
+def exclaim(s: string): string {
+  return s + "!"
+}
+
+node main() {
+  let parser = new Parser(">>")
+  let r1 = parser.parse("hello") |> exclaim
+  let r2 = parser.parse("") |> exclaim
+  let v1 = r1.value
+  let failed = isFailure(r2)
+  return { v1: v1, failed: failed }
+}

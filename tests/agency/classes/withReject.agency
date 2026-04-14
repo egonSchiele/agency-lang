@@ -3,14 +3,14 @@ class Gate {
 
   check(): string {
     let n = this.name
-    return interrupt("Allow " + n + "?")
-    return "allowed"
+    const result = interrupt("Allow " + n + "?")
+    return "checked: " + result
   }
 }
 
 node main() {
   let gate = new Gate("test")
-  let result = gate.check()
+  const result = gate.check() with reject
   if (isFailure(result)) {
     return "rejected"
   }

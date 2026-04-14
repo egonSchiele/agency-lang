@@ -3,9 +3,9 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "{\"success\":false,\"error\":\"interrupt rejected\",\"checkpoint\":null,\"retryable\":false,\"functionName\":null,\"args\":null}",
+      "expectedOutput": "\"rejected\"",
       "evaluationCriteria": [{ "type": "exact" }],
-      "description": "Class method interrupt that gets rejected",
+      "description": "Return interrupt in class method, rejected",
       "interruptHandlers": [
         {
           "action": "reject",

@@ -109,37 +109,80 @@ class Counter {
 
 
   async increment(__state: any = undefined) {
-    const __setupData = setupFunction({ state: __state });
-    const __stack = __setupData.stack;
-    const __step = __setupData.step;
-    const __self = __setupData.self;
-    const __threads = __setupData.threads;
-    const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    let __forked;
-    let __functionCompleted = false;
-    if (!__ctx.globals.isInitialized("class-basic.agency")) {
-      await __initializeGlobals(__ctx);
+const __setupData = setupFunction({
+      state: __state
+    });
+// __state will be undefined if this function is being called as a tool by an llm
+const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+let __forked;
+let __functionCompleted = false;
+if (!__ctx.globals.isInitialized("class-basic.agency")) {
+      await __initializeGlobals(__ctx)
     }
-    const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-basic.agency", scopeName: "Counter.increment" });
+let __funcStartTime: number = performance.now();
+await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onFunctionStart",
+      data: {
+        functionName: "Counter.increment",
+        args: {},
+        isBuiltin: false
+      }
+    })
+__self.__retryable = __self.__retryable ?? true;
+const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-basic.agency", scopeName: "Counter.increment" });
+let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "class-basic.agency", scopeName: "Counter.increment", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
 
-    try {
-await runner.step(0, async (runner) => {
+}
+
+try {
+      await runner.step(0, async (runner) => {
 this.value = this.value + 1;
       });
-await runner.step(1, async (runner) => {
+      await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(this.value)
 return;
       });
-      if (runner.halted) { return runner.haltResult; }
-      __functionCompleted = true;
+      if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     } catch (__error) {
-      if (__error instanceof RestoreSignal) { throw __error; }
-      throw __error;
+      if (__error instanceof RestoreSignal) {
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "Counter.increment",
+    args: __stack.args,
+  }
+);
+
     } finally {
       if (!__state?.isForked) { __ctx.stateStack.pop() }
+      if (__functionCompleted) {
+        await callHook({
+          callbacks: __ctx.callbacks,
+          name: "onFunctionEnd",
+          data: {
+            functionName: "Counter.increment",
+            timeTaken: performance.now() - __funcStartTime
+          }
+        })
+      }
     }
   }
 

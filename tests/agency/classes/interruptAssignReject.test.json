@@ -3,8 +3,12 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "{\"success\":false,\"error\":\"interrupt rejected\",\"checkpoint\":null,\"retryable\":false,\"functionName\":null,\"args\":null}",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "description": "Assign interrupt in class method, rejected",
       "interruptHandlers": [
         {

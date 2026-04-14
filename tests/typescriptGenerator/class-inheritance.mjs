@@ -109,37 +109,80 @@ class Animal {
 
 
   async speak(__state: any = undefined) {
-    const __setupData = setupFunction({ state: __state });
-    const __stack = __setupData.stack;
-    const __step = __setupData.step;
-    const __self = __setupData.self;
-    const __threads = __setupData.threads;
-    const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    let __forked;
-    let __functionCompleted = false;
-    if (!__ctx.globals.isInitialized("class-inheritance.agency")) {
-      await __initializeGlobals(__ctx);
+const __setupData = setupFunction({
+      state: __state
+    });
+// __state will be undefined if this function is being called as a tool by an llm
+const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+let __forked;
+let __functionCompleted = false;
+if (!__ctx.globals.isInitialized("class-inheritance.agency")) {
+      await __initializeGlobals(__ctx)
     }
-    const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-inheritance.agency", scopeName: "Animal.speak" });
+let __funcStartTime: number = performance.now();
+await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onFunctionStart",
+      data: {
+        functionName: "Animal.speak",
+        args: {},
+        isBuiltin: false
+      }
+    })
+__self.__retryable = __self.__retryable ?? true;
+const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-inheritance.agency", scopeName: "Animal.speak" });
+let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "class-inheritance.agency", scopeName: "Animal.speak", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
 
-    try {
-await runner.step(0, async (runner) => {
+}
+
+try {
+      await runner.step(0, async (runner) => {
 __ctx.globals.set("class-inheritance.agency", "n", this.name)
       });
-await runner.step(1, async (runner) => {
+      await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(__ctx.globals.get("class-inheritance.agency", "n") + ` makes a sound`)
 return;
       });
-      if (runner.halted) { return runner.haltResult; }
-      __functionCompleted = true;
+      if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     } catch (__error) {
-      if (__error instanceof RestoreSignal) { throw __error; }
-      throw __error;
+      if (__error instanceof RestoreSignal) {
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "Animal.speak",
+    args: __stack.args,
+  }
+);
+
     } finally {
       if (!__state?.isForked) { __ctx.stateStack.pop() }
+      if (__functionCompleted) {
+        await callHook({
+          callbacks: __ctx.callbacks,
+          name: "onFunctionEnd",
+          data: {
+            functionName: "Animal.speak",
+            timeTaken: performance.now() - __funcStartTime
+          }
+        })
+      }
     }
   }
 
@@ -176,37 +219,80 @@ class Dog extends Animal {
 
 
   async speak(__state: any = undefined) {
-    const __setupData = setupFunction({ state: __state });
-    const __stack = __setupData.stack;
-    const __step = __setupData.step;
-    const __self = __setupData.self;
-    const __threads = __setupData.threads;
-    const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
-    let __forked;
-    let __functionCompleted = false;
-    if (!__ctx.globals.isInitialized("class-inheritance.agency")) {
-      await __initializeGlobals(__ctx);
+const __setupData = setupFunction({
+      state: __state
+    });
+// __state will be undefined if this function is being called as a tool by an llm
+const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+let __forked;
+let __functionCompleted = false;
+if (!__ctx.globals.isInitialized("class-inheritance.agency")) {
+      await __initializeGlobals(__ctx)
     }
-    const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-inheritance.agency", scopeName: "Dog.speak" });
+let __funcStartTime: number = performance.now();
+await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onFunctionStart",
+      data: {
+        functionName: "Dog.speak",
+        args: {},
+        isBuiltin: false
+      }
+    })
+__self.__retryable = __self.__retryable ?? true;
+const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-inheritance.agency", scopeName: "Dog.speak" });
+let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "class-inheritance.agency", scopeName: "Dog.speak", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
 
-    try {
-await runner.step(0, async (runner) => {
+}
+
+try {
+      await runner.step(0, async (runner) => {
 __ctx.globals.set("class-inheritance.agency", "n", this.name)
       });
-await runner.step(1, async (runner) => {
+      await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(__ctx.globals.get("class-inheritance.agency", "n") + ` barks`)
 return;
       });
-      if (runner.halted) { return runner.haltResult; }
-      __functionCompleted = true;
+      if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     } catch (__error) {
-      if (__error instanceof RestoreSignal) { throw __error; }
-      throw __error;
+      if (__error instanceof RestoreSignal) {
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "Dog.speak",
+    args: __stack.args,
+  }
+);
+
     } finally {
       if (!__state?.isForked) { __ctx.stateStack.pop() }
+      if (__functionCompleted) {
+        await callHook({
+          callbacks: __ctx.callbacks,
+          name: "onFunctionEnd",
+          data: {
+            functionName: "Dog.speak",
+            timeTaken: performance.now() - __funcStartTime
+          }
+        })
+      }
     }
   }
 

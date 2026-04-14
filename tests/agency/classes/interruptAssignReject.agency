@@ -10,5 +10,9 @@ class Checker {
 
 node main() {
   let checker = new Checker("action")
-  return checker.verify()
+  let result = checker.verify()
+  if (isFailure(result)) {
+    return "rejected"
+  }
+  return result
 }

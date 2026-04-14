@@ -1,0 +1,21 @@
+class Validator {
+  threshold: number
+
+  constructor(threshold: number) {
+    this.threshold = threshold
+  }
+
+  check(value: number): Result {
+    if (value >= this.threshold) {
+      return success(value)
+    }
+    return failure("too low")
+  }
+}
+
+node main() {
+  let v = new Validator(10)
+  let a = v.check(15) catch -1
+  let b = v.check(5) catch -1
+  return { a: a, b: b }
+}

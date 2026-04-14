@@ -1,0 +1,22 @@
+class Repeater {
+  times: number
+
+  run(block: () => string): string[] {
+    let results: string[] = []
+    let i = 0
+    while (i < this.times) {
+      let val: string = block()
+      results = [...results, val]
+      i = i + 1
+    }
+    return results
+  }
+}
+
+node main() {
+  let r = new Repeater(3)
+  let results = r.run() as {
+    return "hi"
+  }
+  return results
+}

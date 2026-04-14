@@ -961,19 +961,33 @@ export class TypeScriptBuilder {
     const bodyCode = this.processBodyAsParts(method.body);
     this.endScope();
 
-    const params = method.parameters.map((p) => this.formatParam(p)).join(", ");
-
-    return renderClassMethod.default({
-      methodName: method.name,
-      params: params ? `${params}, ` : "",
-      moduleId: JSON.stringify(this.moduleId),
-      scopeName: JSON.stringify(methodScopeName),
-      paramAssignments: method.parameters.map((p) => ({
-        name: p.name,
-        nameQuoted: JSON.stringify(p.name),
-      })),
-      body: bodyCode.map((n) => printTs(n, 3)).join("\n"),
+    // Reuse the same function body logic as processFunctionDefinition
+    const setupStmts = this.buildFunctionBody({
+      functionName: methodScopeName,
+      parameters: method.parameters,
+      bodyCode,
     });
+
+    // Build as an async method with __state as last param
+    const params = method.parameters.map((p) => this.formatParam(p)).join(", ");
+    const fnParams: TsParam[] = method.parameters.map((p) => {
+      const baseType = p.typeHint ? formatTypeHint(p.typeHint) : "any";
+      return { name: p.name, typeAnnotation: baseType };
+    });
+    fnParams.push({
+      name: "__state",
+      typeAnnotation: "any",
+      defaultValue: ts.id("undefined"),
+    });
+
+    // Use printTs on the IR body, then wrap as a method
+    const bodyStr = printTs(ts.statements(setupStmts), 2);
+    const paramStr = fnParams
+      .map((p) => p.defaultValue
+        ? `${p.name}: ${p.typeAnnotation} = ${printTs(p.defaultValue, 0)}`
+        : `${p.name}: ${p.typeAnnotation}`)
+      .join(", ");
+    return `  async ${method.name}(${paramStr}) {\n${bodyStr}\n  }`;
   }
 
   private processClassDefinition(node: ClassDefinition): TsNode {
@@ -1330,34 +1344,18 @@ export class TypeScriptBuilder {
     return ts.raw(str);
   }
 
-  private processFunctionDefinition(node: FunctionDefinition): TsNode {
-    this.startScope({ type: "function", functionName: node.functionName });
-    this._sourceMapBuilder.enterScope(this.moduleId, node.functionName);
-    const { functionName, body, parameters } = node;
+  /**
+   * Build the body statements for an Agency function or class method.
+   * Includes setup, runner, result checkpoint, try/catch/finally, hooks.
+   * Shared between processFunctionDefinition and class method compilation.
+   */
+  private buildFunctionBody(opts: {
+    functionName: string;
+    parameters: FunctionParameter[];
+    bodyCode: TsNode[];
+  }): TsNode[] {
+    const { functionName, parameters, bodyCode } = opts;
     const args = parameters.map((p) => p.name);
-
-    const bodyCode = this.processBodyAsParts(body, {
-      isInSafeFunction: !!node.safe,
-    });
-    this.endScope();
-
-    // Build function params: typed args + __state
-    const fnParams: TsParam[] = parameters.map((p) => {
-      const baseType = p.typeHint ? formatTypeHint(p.typeHint) : "any";
-      if (p.defaultValue) {
-        return {
-          name: p.name,
-          typeAnnotation: `${baseType} | null`,
-          defaultValue: ts.id("null"),
-        };
-      }
-      return { name: p.name, typeAnnotation: baseType };
-    });
-    fnParams.push({
-      name: "__state",
-      typeAnnotation: "InternalFunctionState | undefined",
-      defaultValue: ts.id("undefined"),
-    });
 
     // Build args object for hook data
     const argsObj: Record<string, TsNode> = {};
@@ -1388,8 +1386,6 @@ export class TypeScriptBuilder {
       }),
 
       // Ensure this module's globals are initialized on the current ctx.
-      // The isInitialized flag lives on the GlobalStore and is serialized,
-      // so on interrupt resume the restored store already has it set.
       ts.if(
         ts.raw(
           `!__ctx.globals.isInitialized(${JSON.stringify(this.moduleId)})`,
@@ -1436,7 +1432,7 @@ export class TypeScriptBuilder {
       ),
     );
 
-    // Pinned checkpoint at entry for all functions (enables result.retry and error-to-failure wrapping)
+    // Pinned checkpoint at entry (enables result.retry and error-to-failure wrapping)
     setupStmts.push(this.buildResultCheckpointSetup(functionName, parameters));
 
     // Try/catch wrapping the body, with finally to always pop the state stack
@@ -1455,11 +1451,6 @@ export class TypeScriptBuilder {
         ),
         "__error",
         // finally block: pop state stack and conditionally fire onFunctionEnd.
-        // onFunctionEnd must live here (not after the try/catch) because
-        // every code path inside the try block returns, making any code
-        // after try/catch/finally unreachable.
-        // The __functionCompleted flag ensures onFunctionEnd only fires on
-        // normal completion, not when a debug interrupt pauses the function.
         ts.statements([
           ts.raw("if (!__state?.isForked) { __ctx.stateStack.pop() }"),
           ts.if(
@@ -1476,6 +1467,39 @@ export class TypeScriptBuilder {
         ]),
       ),
     );
+
+    return setupStmts;
+  }
+
+  private processFunctionDefinition(node: FunctionDefinition): TsNode {
+    this.startScope({ type: "function", functionName: node.functionName });
+    this._sourceMapBuilder.enterScope(this.moduleId, node.functionName);
+    const { functionName, parameters } = node;
+
+    const bodyCode = this.processBodyAsParts(node.body, {
+      isInSafeFunction: !!node.safe,
+    });
+    this.endScope();
+
+    // Build function params: typed args + __state
+    const fnParams: TsParam[] = parameters.map((p) => {
+      const baseType = p.typeHint ? formatTypeHint(p.typeHint) : "any";
+      if (p.defaultValue) {
+        return {
+          name: p.name,
+          typeAnnotation: `${baseType} | null`,
+          defaultValue: ts.id("null"),
+        };
+      }
+      return { name: p.name, typeAnnotation: baseType };
+    });
+    fnParams.push({
+      name: "__state",
+      typeAnnotation: "InternalFunctionState | undefined",
+      defaultValue: ts.id("undefined"),
+    });
+
+    const setupStmts = this.buildFunctionBody({ functionName, parameters, bodyCode });
 
     return ts.functionDecl(functionName, fnParams, ts.statements(setupStmts), {
       async: true,

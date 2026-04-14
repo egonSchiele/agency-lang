@@ -1,0 +1,15 @@
+class Greeter {
+  name: string
+
+  greet(): string {
+    let n = this.name
+    return interrupt("Allow greeting for " + n + "?")
+    return "Hello, " + n + "!"
+  }
+}
+
+node main() {
+  let greeter = new Greeter("Alice")
+  let result = greeter.greet()
+  return result
+}

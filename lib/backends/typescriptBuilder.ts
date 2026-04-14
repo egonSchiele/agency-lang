@@ -1064,7 +1064,7 @@ export class TypeScriptBuilder {
     // Class registration
     lines.push("");
     lines.push(
-      `__ctx.registerClass("${classKey}", ${className});`,
+      `__globalCtx.registerClass("${classKey}", ${className});`,
     );
 
     return ts.raw(lines.join("\n"));

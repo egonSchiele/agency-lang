@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"Rex barks | Rex is a Labrador\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Inheritance with method override and default constructor"
+    }
+  ]
+}

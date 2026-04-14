@@ -32,6 +32,7 @@ import { Placeholder } from "./types/placeholder.js";
 import { WithModifier } from "./types/withModifier.js";
 import { Tag } from "./types/tag.js";
 import { TryExpression } from "./types/tryExpression.js";
+import { ClassDefinition, NewExpression } from "./types/classDefinition.js";
 export * from "./types/access.js";
 export * from "./types/awaitPending.js";
 export * from "./types/dataStructures.js";
@@ -56,6 +57,7 @@ export * from "./types/withModifier.js";
 export * from "./types/base.js";
 export * from "./types/tag.js";
 export type { TryExpression } from "./types/tryExpression.js";
+export * from "./types/classDefinition.js";
 
 export type Expression =
   | ValueAccess
@@ -65,7 +67,8 @@ export type Expression =
   | AgencyArray
   | AgencyObject
   | Placeholder
-  | TryExpression;
+  | TryExpression
+  | NewExpression;
 
 /**
  * Scope types for variable resolution.
@@ -233,7 +236,9 @@ export type AgencyNode =
   | DebuggerStatement
   | Placeholder
   | Tag
-  | TryExpression;
+  | TryExpression
+  | ClassDefinition
+  | NewExpression;
 
 export type AgencyProgram = {
   type: "agencyProgram";

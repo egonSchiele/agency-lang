@@ -111,6 +111,10 @@ export function expressionToString(expr: Expression): string {
       return "?";
     case "tryExpression":
       return `try ${expressionToString(expr.call)}`;
+    case "newExpression": {
+      const args = expr.arguments.map(a => expressionToString(a)).join(", ");
+      return `new ${expr.className}(${args})`;
+    }
   }
 }
 

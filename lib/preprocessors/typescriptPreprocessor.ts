@@ -1379,6 +1379,17 @@ export class TypescriptPreprocessor {
       funcName: string,
       varName: string,
     ): ScopeType | null => {
+      // Local scopes (args, locals) take precedence over global scopes,
+      // so that `let x` inside a function shadows a global `x`.
+      if (funcArgs[funcName] && funcArgs[funcName].includes(varName)) {
+        return "args";
+      }
+      if (
+        localVarsInFunction[funcName] &&
+        localVarsInFunction[funcName].has(varName)
+      ) {
+        return "local";
+      }
       // imported takes precedence over global
       if (importedVars.has(varName)) {
         return "imported";
@@ -1388,15 +1399,6 @@ export class TypescriptPreprocessor {
       }
       if (globalVars.has(varName)) {
         return "global";
-      }
-      if (funcArgs[funcName] && funcArgs[funcName].includes(varName)) {
-        return "args";
-      }
-      if (
-        localVarsInFunction[funcName] &&
-        localVarsInFunction[funcName].has(varName)
-      ) {
-        return "local";
       }
       return null;
     };
@@ -1471,10 +1473,17 @@ export class TypescriptPreprocessor {
           if (varNode.type === "assignment") {
             if (varNode.scope) continue; // already resolved in block Phase 1
             if (isClassKeyword(varNode.variableName)) continue;
-            let scope = lookupScope(nodeName, varNode.variableName);
-            if (scope === null) {
+            let scope: ScopeType;
+            if (varNode.declKind) {
+              // `let` or `const` declarations always create a new local variable,
+              // even if a global with the same name exists.
               scope = "local";
               localVarsInFunction[nodeName].add(varNode.variableName);
+            } else {
+              scope = lookupScope(nodeName, varNode.variableName) ?? "local";
+              if (scope === "local") {
+                localVarsInFunction[nodeName].add(varNode.variableName);
+              }
             }
             varNode.scope = scope;
           } else if (varNode.type === "variableName") {

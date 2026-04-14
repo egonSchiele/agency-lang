@@ -1,3 +1,9 @@
+# The Agency Programming Language
+
+Welcome! This guide will teach you all the major features of the Agency language, starting with the basics like syntax and how to execute an Agency program, and building up to more powerful features.
+
+A quick note before you start: since syntax highlighting libraries don't know about Agency, all the Agency code blocks are set to have the TypeScript as the language in order to get syntax highlighting. Just a heads up so you don't get confused if you see `ts` in the code block.
+
 # Getting Started
 
 Agency is a language for building agents that compiles to TypeScript.
@@ -24,7 +30,3 @@ Compile and run it:
 ```bash
 pnpm run agency hello.agency
 ```
-
-Next, you should check out the [basic syntax](./basic-syntax.html) and tour the [use cases](/use-cases/intro.html) that make Agency great for building agents.
-
-Or if you would like, jump right in and [start learning the language](/book/index.html).

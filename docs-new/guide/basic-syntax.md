@@ -4,6 +4,8 @@ Hello and welcome! Agency is a language for building agents, or any other type o
 
 Agency is a language that compiles down to TypeScript or JavaScript. It borrows its syntax from these languages, if you have used either JS or TS before, a lot of Agency will be familiar to you.
 
+> Note: I'll just say TypeScript everywhere, because writing "TypeScript or JavaScript" gets really boring, but you'll know that I mean both.
+
 You've got primitives: strings, numbers, booleans:
 
 ```ts

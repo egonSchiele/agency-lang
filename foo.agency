@@ -1,8 +1,15 @@
-import { nanoid } from "nanoid"
-node foo() {
-
-}
-
 node main() {
-  print(nanoid())
+  handle {
+    handle {
+      const aMillion = 1000000
+      deleteEmail(aMillion)
+    } with (data) {
+      // 1. inner handler approves
+      return approve()
+    }
+  } with (data) {
+    // 2. but outer handler rejects,
+    // so the interrupt is rejected
+    return reject()
+  }
 }

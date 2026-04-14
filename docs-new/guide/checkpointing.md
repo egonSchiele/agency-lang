@@ -52,3 +52,13 @@ node main() {
   return attempts  // returns 3
 }
 ```
+
+## Inspecting checkpoints
+
+You can inspect a checkpoint saved to disk using the debugger, like so:
+
+```
+agency debugger foo.agency --checkpoint <checkpoint-file>
+```
+
+Note that you have to additionally give the source file.

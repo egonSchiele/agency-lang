@@ -189,19 +189,27 @@ export class RuntimeContext<T> {
 
   restoreState(checkpoint: Checkpoint): void {
     const currentTokenStats = this.globals.getTokenStats();
-    this.stateStack = StateStack.fromJSON(checkpoint.stack);
+
+    // Revive class instances in serialized checkpoint data
+    let stack = checkpoint.stack;
+    let globals = checkpoint.globals;
+    if (Object.keys(this.classRegistry).length > 0) {
+      const registry = this.classRegistry;
+      const reviver = (_key: string, value: any) => {
+        if (value && typeof value === "object" && "__class" in value) {
+          const cls = registry[value.__class];
+          if (cls) return cls.fromJSON(value);
+        }
+        return value;
+      };
+      stack = JSON.parse(JSON.stringify(stack), reviver);
+      globals = JSON.parse(JSON.stringify(globals), reviver);
+    }
+
+    this.stateStack = StateStack.fromJSON(stack);
     this.stateStack.deserializeMode();
 
-    // The checkpoint stack has frames for all nodes traversed (e.g. bar → foo),
-    // but we resume only at the last node. Strip frames from earlier nodes so
-    // deserialization hands the correct frame to each setupNode/setupFunction.
-    // const staleNodeCount = this.stateStack.nodesTraversed.length - 1;
-    // if (staleNodeCount > 0) {
-    //   this.stateStack.stack.splice(0, staleNodeCount);
-    //   this.stateStack.deserializeStackLength -= staleNodeCount;
-    // }
-
-    this.globals = GlobalStore.fromJSON(checkpoint.globals);
+    this.globals = GlobalStore.fromJSON(globals);
     this.globals.restoreTokenStats(currentTokenStats);
     this.pendingPromises.clear();
   }

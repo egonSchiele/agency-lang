@@ -53,6 +53,35 @@ export type InterruptState = {
   globals: GlobalStoreJSON;
 };
 
+export type ClassRegistry = Record<string, { fromJSON: (data: any) => any }>;
+
+/**
+ * Create a JSON reviver that reconstructs Agency class instances.
+ * When deserializing interrupt state, objects with a `__class` field
+ * are looked up in the registry and reconstructed via `fromJSON()`.
+ * JSON revivers process bottom-up, so nested instances are handled correctly.
+ */
+export function createClassReviver(classRegistry: ClassRegistry) {
+  return function reviver(_key: string, value: any): any {
+    if (value && typeof value === "object" && "__class" in value) {
+      const cls = classRegistry[value.__class];
+      if (cls) return cls.fromJSON(value);
+    }
+    return value;
+  };
+}
+
+/**
+ * Revive class instances in a pre-parsed InterruptState object.
+ * Re-serializes and re-parses with the class reviver so that
+ * objects with `__class` fields are reconstructed as class instances.
+ */
+function reviveState(state: InterruptState, classRegistry: ClassRegistry): InterruptState {
+  const reviver = createClassReviver(classRegistry);
+  const json = JSON.stringify(state);
+  return JSON.parse(json, reviver);
+}
+
 export type Interrupt<T = any> = {
   type: "interrupt";
   //interruptId: string; // nanoid — globally unique
@@ -343,9 +372,15 @@ export async function resumeFromState(args: {
   const { ctx, metadata = {} } = args;
 
   const execCtx = ctx.createExecutionContext();
-  execCtx.stateStack = StateStack.fromJSON(args.state.stack);
+
+  // Revive class instances in the serialized state if any classes are registered
+  const state = Object.keys(ctx.classRegistry).length > 0
+    ? reviveState(args.state, ctx.classRegistry)
+    : args.state;
+
+  execCtx.stateStack = StateStack.fromJSON(state.stack);
   execCtx.stateStack.deserializeMode();
-  execCtx.globals = GlobalStore.fromJSON(args.state.globals);
+  execCtx.globals = GlobalStore.fromJSON(state.globals);
 
   if (metadata.callbacks) {
     execCtx.callbacks = metadata.callbacks;

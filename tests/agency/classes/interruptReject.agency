@@ -1,0 +1,15 @@
+class Gate {
+  name: string
+
+  check(): string {
+    let n = this.name
+    return interrupt("Allow " + n + "?")
+    return "allowed"
+  }
+}
+
+node main() {
+  let gate = new Gate("test")
+  let result = gate.check()
+  return result
+}

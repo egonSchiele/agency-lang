@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "45",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Class methods with parameters"
+    }
+  ]
+}

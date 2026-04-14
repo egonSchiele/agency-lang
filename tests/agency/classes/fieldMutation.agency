@@ -1,0 +1,13 @@
+class User {
+  name: string
+  age: number
+}
+
+node main() {
+  let user = new User("Alice", 30)
+  user.age = 31
+  user.name = "Bob"
+  let n = user.name
+  let a = user.age
+  return n + " is " + a
+}

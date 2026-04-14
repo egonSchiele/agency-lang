@@ -1,0 +1,21 @@
+class Counter {
+  value: number
+
+  constructor(start: number) {
+    this.value = start
+  }
+
+  increment(): number {
+    this.value = this.value + 1
+    return this.value
+  }
+}
+
+node main() {
+  let a = new Counter(0)
+  let b = new Counter(100)
+  a.increment()
+  a.increment()
+  b.increment()
+  return a.value + b.value
+}

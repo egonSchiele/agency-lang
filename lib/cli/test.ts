@@ -16,6 +16,7 @@ import {
   promptForTarget,
 } from "./util.js";
 import { color } from "@/utils/termcolors.js";
+import { formatDiff } from "@/utils/diff.js";
 import { AgencyConfig } from "@/config.js";
 import path from "path";
 import { compile, loadConfig } from "./commands.js";
@@ -431,8 +432,7 @@ async function runSingleTest(
         log(color.green("  ✓ Exact match passed"));
       } else {
         log(color.red("  ✗ Exact match failed"));
-        log("    Expected: " + testCase.expectedOutput);
-        log("    Actual:   " + actual);
+        log(formatDiff(testCase.expectedOutput, actual));
         testPassed = false;
       }
     } else if (criterion.type === "llmJudge") {
@@ -718,8 +718,10 @@ async function runTsTestDir(
       return { success: true, dir };
     } else {
       log(color.red(`  ✗ Fixture match failed`));
-      log("    Expected: " + JSON.stringify(expectedParsed, null, 2));
-      log("    Actual:   " + JSON.stringify(resultParsed, null, 2));
+      log(formatDiff(
+        JSON.stringify(expectedParsed, null, 2),
+        JSON.stringify(resultParsed, null, 2),
+      ));
       return { success: false, dir };
     }
   } finally {

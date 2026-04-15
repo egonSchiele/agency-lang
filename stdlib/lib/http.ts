@@ -1,7 +1,39 @@
+const MAX_BODY_BYTES = 10 * 1024 * 1024;
+
+async function readBodyCapped(response: Response, url: string): Promise<string> {
+  if (!response.body) {
+    return "";
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  const chunks: string[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_BODY_BYTES) {
+        await reader.cancel().catch(() => {});
+        throw new Error(
+          `Response from ${url} exceeds ${MAX_BODY_BYTES} bytes`,
+        );
+      }
+      chunks.push(decoder.decode(value, { stream: true }));
+    }
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {}
+  }
+  chunks.push(decoder.decode());
+  return chunks.join("");
+}
+
 export async function _fetch(url: string): Promise<string> {
   const result = await fetch(url);
   try {
-    return await result.text();
+    return await readBodyCapped(result, url);
   } catch (e) {
     throw new Error(`Failed to get text from ${url}: ${e}`);
   }
@@ -9,8 +41,9 @@ export async function _fetch(url: string): Promise<string> {
 
 export async function _fetchJSON(url: string): Promise<any> {
   const result = await fetch(url);
+  const text = await readBodyCapped(result, url);
   try {
-    return await result.json();
+    return JSON.parse(text);
   } catch (e) {
     throw new Error(`Failed to parse JSON from ${url}: ${e}`);
   }
@@ -19,7 +52,7 @@ export async function _fetchJSON(url: string): Promise<any> {
 export async function _webfetch(url: string): Promise<string> {
   const result = await fetch(url);
   const contentType = result.headers.get("content-type") ?? "";
-  const body = await result.text();
+  const body = await readBodyCapped(result, url);
   if (contentType.includes("text/html")) {
     return htmlToMarkdown(body);
   }

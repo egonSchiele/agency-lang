@@ -1,23 +1,24 @@
-import { _todoWrite, _todoList } from "./lib/agent.js"
-
 type Todo = {
   id: string;
   text: string;
   status: "pending" | "in_progress" | "completed"
 }
 
+let _todos: Todo[] = []
+
 export safe def todoWrite(todos: Todo[]): Todo[] {
   """
   Replace the current todo list. Each todo has an id, text, and status (one of 'pending', 'in_progress', 'completed'). Use this to track multi-step work as you go: mark a todo 'in_progress' before starting it and 'completed' when done. Returns the new list.
   """
-  return _todoWrite(todos)
+  _todos = todos
+  return _todos
 }
 
 export safe def todoList(): Todo[] {
   """
   Return the current todo list.
   """
-  return _todoList()
+  return _todos
 }
 
 export def question(prompt: string): string {

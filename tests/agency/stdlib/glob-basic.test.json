@@ -3,7 +3,7 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "[\"tests/agency/stdlib/glob-fixtures/a.md\",\"tests/agency/stdlib/glob-fixtures/d.ts\",\"tests/agency/stdlib/glob-fixtures/sub/nested.ts\"]",
+      "expectedOutput": "[\"tests/agency/stdlib/glob-fixtures/a.md\",\"tests/agency/stdlib/glob-fixtures/ab.md\",\"tests/agency/stdlib/glob-fixtures/d.ts\",\"tests/agency/stdlib/glob-fixtures/sub/nested.md\",\"tests/agency/stdlib/glob-fixtures/sub/nested.ts\"]",
       "evaluationCriteria": [
         {
           "type": "exact"

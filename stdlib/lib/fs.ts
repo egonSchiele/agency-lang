@@ -21,12 +21,16 @@ export function _edit(
   const before = fs.readFileSync(full, "utf8");
 
   if (replaceAll) {
-    const pieces = before.split(oldText);
-    if (pieces.length === 1) {
+    if (before.indexOf(oldText) === -1) {
       throw new Error(`edit: oldText not found in ${filename}.`);
     }
-    fs.writeFileSync(full, pieces.join(newText), "utf8");
-    return { replacements: pieces.length - 1, path: filename };
+    let count = 0;
+    const after = before.replaceAll(oldText, () => {
+      count++;
+      return newText;
+    });
+    fs.writeFileSync(full, after, "utf8");
+    return { replacements: count, path: filename };
   }
 
   const first = before.indexOf(oldText);
@@ -73,14 +77,17 @@ export function _multiedit(
       throw new Error(`multiedit: edit #${i + 1} has empty oldText`);
     }
     if (replaceAll) {
-      const pieces = contents.split(oldText);
-      if (pieces.length === 1) {
+      if (contents.indexOf(oldText) === -1) {
         throw new Error(
           `multiedit: edit #${i + 1} oldText not found in ${filename}`,
         );
       }
-      contents = pieces.join(newText);
-      total += pieces.length - 1;
+      let count = 0;
+      contents = contents.replaceAll(oldText, () => {
+        count++;
+        return newText;
+      });
+      total += count;
     } else {
       const first = contents.indexOf(oldText);
       if (first === -1) {
@@ -202,10 +209,9 @@ function firstToken(s: string): string {
 
 function applyHunks(original: string, hunks: Hunk[], filePath: string): string {
   const dmp = new diff_match_patch();
-  let current = original;
+  const allPatches: Array<typeof diff_match_patch.patch_obj> = [];
 
-  for (let i = 0; i < hunks.length; i++) {
-    const h = hunks[i];
+  for (const h of hunks) {
     const before: string[] = [];
     const after: string[] = [];
     for (const line of h.lines) {
@@ -220,16 +226,17 @@ function applyHunks(original: string, hunks: Hunk[], filePath: string): string {
         after.push(content);
       }
     }
-
-    const patches = dmp.patch_make(before.join("\n"), after.join("\n"));
-    const [updated, applied] = dmp.patch_apply(patches, current);
-    if (applied.some((ok) => !ok)) {
-      throw new Error(
-        `applyPatch: hunk #${i + 1} could not be applied to ${filePath}; the surrounding context does not match the current file contents`,
-      );
-    }
-    current = updated;
+    allPatches.push(
+      ...dmp.patch_make(before.join("\n"), after.join("\n")),
+    );
   }
 
-  return current;
+  const [updated, applied] = dmp.patch_apply(allPatches, original);
+  const firstFailed = applied.findIndex((ok) => !ok);
+  if (firstFailed !== -1) {
+    throw new Error(
+      `applyPatch: hunk #${firstFailed + 1} could not be applied to ${filePath}; the surrounding context does not match the current file contents`,
+    );
+  }
+  return updated;
 }

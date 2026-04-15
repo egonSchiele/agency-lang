@@ -6,5 +6,8 @@ node main() {
   } with (data) {
     return approve()
   }
-  return results
+  let sorted = sortBy(results) as r {
+    return r
+  }
+  return sorted
 }

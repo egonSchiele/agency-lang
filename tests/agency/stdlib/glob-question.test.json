@@ -9,7 +9,7 @@
           "type": "exact"
         }
       ],
-      "description": "glob ? matches exactly one non-slash character"
+      "description": "glob ? matches exactly one character (a.md matches, ab.md does not)"
     }
   ]
 }

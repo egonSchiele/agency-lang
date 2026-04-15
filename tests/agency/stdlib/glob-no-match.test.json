@@ -3,13 +3,13 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "[]",
+      "expectedOutput": "{\"ok\":true,\"count\":0}",
       "evaluationCriteria": [
         {
           "type": "exact"
         }
       ],
-      "description": "glob returns an empty array when nothing matches"
+      "description": "glob returns a successful empty result when nothing matches (distinguishes from a crash)"
     }
   ]
 }

@@ -1,7 +1,12 @@
-import type { TsNode, TsParam, TsScopedVar } from "./tsIR.js";
+import type { TsNode, TsParam, TsScopedVar, TsImportName } from "./tsIR.js";
 import renderRunnerIfElse from "../templates/backends/typescriptGenerator/runnerIfElse.js";
 
 const INDENT = "  ";
+
+function formatImportName(name: TsImportName): string {
+  if (typeof name === "string") return name;
+  return `${name.name} as ${name.alias}`;
+}
 
 function scopeToPrefix(scope: TsScopedVar["scope"]): string {
   switch (scope) {
@@ -56,10 +61,10 @@ export function printTs(node: TsNode, indent = 0): string {
         case "namespace":
           return `import * as ${node.namespaceName} from ${from};`;
         case "type":
-          return `import type { ${node.names.join(", ")} } from ${from};`;
+          return `import type { ${node.names.map(formatImportName).join(", ")} } from ${from};`;
         case "named":
         default:
-          return `import { ${node.names.join(", ")} } from ${from};`;
+          return `import { ${node.names.map(formatImportName).join(", ")} } from ${from};`;
       }
     }
 

@@ -101,10 +101,12 @@ export function collectProgramInfo(
         info.importedTools.push(node);
         for (const namedImport of node.importedTools) {
           for (const name of namedImport.importedNames) {
-            info.importedFunctions[name] = { parameters: [] };
+            const localName = namedImport.aliases[name] ?? name;
+            info.importedFunctions[localName] = { parameters: [] };
           }
           for (const safeName of namedImport.safeNames) {
-            info.safeFunctions[safeName] = true;
+            const localSafe = namedImport.aliases[safeName] ?? safeName;
+            info.safeFunctions[localSafe] = true;
           }
         }
         break;
@@ -121,10 +123,12 @@ export function collectProgramInfo(
         for (const nameType of node.importedNames) {
           if (nameType.type === "namedImport") {
             for (const name of nameType.importedNames) {
-              info.importedFunctions[name] = { parameters: [] };
+              const localName = nameType.aliases[name] ?? name;
+              info.importedFunctions[localName] = { parameters: [] };
             }
             for (const safeName of nameType.safeNames) {
-              info.safeFunctions[safeName] = true;
+              const localSafe = nameType.aliases[safeName] ?? safeName;
+              info.safeFunctions[localSafe] = true;
             }
           }
         }
@@ -134,10 +138,32 @@ export function collectProgramInfo(
 
   // Enrich imported function info with parameter data from the symbol table
   if (symbolTable) {
+    // Build a reverse map: originalName → localName for aliased imports
+    const originalToLocal: Record<string, string> = {};
+    for (const toolImport of info.importedTools) {
+      for (const ni of toolImport.importedTools) {
+        for (const [orig, alias] of Object.entries(ni.aliases)) {
+          originalToLocal[orig] = alias;
+        }
+      }
+    }
+    for (const importStmt of info.importStatements) {
+      for (const nameType of importStmt.importedNames) {
+        if (nameType.type === "namedImport") {
+          for (const [orig, alias] of Object.entries(nameType.aliases)) {
+            originalToLocal[orig] = alias;
+          }
+        }
+      }
+    }
+
     for (const fileSymbols of Object.values(symbolTable)) {
       for (const [name, symbol] of Object.entries(fileSymbols)) {
-        if (symbol.parameters && info.importedFunctions[name]) {
-          info.importedFunctions[name].parameters = symbol.parameters;
+        if (symbol.parameters) {
+          const localName = originalToLocal[name] ?? name;
+          if (info.importedFunctions[localName]) {
+            info.importedFunctions[localName].parameters = symbol.parameters;
+          }
         }
       }
     }

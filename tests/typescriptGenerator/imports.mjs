@@ -11,6 +11,8 @@ import foo from "./foo.js";
 import { foo } from "./foo.js";
 
 import { foo, __fooTool, __fooToolParams } from "./foo.js";
+import { foo as bar } from "./baz.ts";
+import { foo as bar, baz } from "./qux.ts";
 import { fileURLToPath } from "url";
 import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -120,6 +122,8 @@ const __toolRegistry = {
     }
   }
 };
+
+
 
 
 

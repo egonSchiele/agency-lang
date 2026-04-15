@@ -27,7 +27,7 @@ describe("importStatmentParser", () => {
       expect(result.result).toEqualWithoutLoc({
         type: "importStatement",
         importedNames: [
-          { type: "namedImport", importedNames: ["foo"], safeNames: [] },
+          { type: "namedImport", importedNames: ["foo"], safeNames: [], aliases: {} },
         ],
         modulePath: "./foo.ts",
       });
@@ -43,7 +43,7 @@ describe("importStatmentParser", () => {
         type: "importStatement",
         importedNames: [
           { type: "defaultImport", importedNames: "foo" },
-          { type: "namedImport", importedNames: ["bar"], safeNames: [] },
+          { type: "namedImport", importedNames: ["bar"], safeNames: [], aliases: {} },
         ],
         modulePath: "./foo.ts",
       });
@@ -101,7 +101,7 @@ describe("importStatmentParser", () => {
       expect(result.result).toEqualWithoutLoc({
         type: "importStatement",
         importedNames: [
-          { type: "namedImport", importedNames: ["foo"], safeNames: [] },
+          { type: "namedImport", importedNames: ["foo"], safeNames: [], aliases: {} },
         ],
         modulePath: "./foo.agency",
       });
@@ -135,6 +135,7 @@ describe("importStatmentParser", () => {
             type: "namedImport",
             importedNames: ["foo", "bar", "baz"],
             safeNames: [],
+            aliases: {},
           },
         ],
         modulePath: "myModule",
@@ -156,6 +157,7 @@ describe("importStatmentParser", () => {
             type: "namedImport",
             importedNames: ["foo", "bar"],
             safeNames: ["foo"],
+            aliases: {},
           },
         ],
         modulePath: "./tools.js",
@@ -176,6 +178,7 @@ describe("importStatmentParser", () => {
             type: "namedImport",
             importedNames: ["foo", "bar", "baz"],
             safeNames: ["foo", "bar"],
+            aliases: {},
           },
         ],
         modulePath: "./tools.js",
@@ -196,6 +199,71 @@ describe("importStatmentParser", () => {
             type: "namedImport",
             importedNames: ["foo"],
             safeNames: ["foo"],
+            aliases: {},
+          },
+        ],
+        modulePath: "./tools.js",
+      });
+    }
+  });
+
+  // Aliased imports
+  it('should parse: import { foo as bar } from "./foo.ts"', () => {
+    const result = importStatmentParser(
+      'import { foo as bar } from "./foo.ts"',
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqualWithoutLoc({
+        type: "importStatement",
+        importedNames: [
+          {
+            type: "namedImport",
+            importedNames: ["foo"],
+            safeNames: [],
+            aliases: { foo: "bar" },
+          },
+        ],
+        modulePath: "./foo.ts",
+      });
+    }
+  });
+
+  it('should parse: import { foo as f, bar as b, baz } from "./mod.js"', () => {
+    const result = importStatmentParser(
+      'import { foo as f, bar as b, baz } from "./mod.js"',
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqualWithoutLoc({
+        type: "importStatement",
+        importedNames: [
+          {
+            type: "namedImport",
+            importedNames: ["foo", "bar", "baz"],
+            safeNames: [],
+            aliases: { foo: "f", bar: "b" },
+          },
+        ],
+        modulePath: "./mod.js",
+      });
+    }
+  });
+
+  it('should parse: import { safe foo as f } from "./tools.js"', () => {
+    const result = importStatmentParser(
+      'import { safe foo as f } from "./tools.js"',
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqualWithoutLoc({
+        type: "importStatement",
+        importedNames: [
+          {
+            type: "namedImport",
+            importedNames: ["foo"],
+            safeNames: ["foo"],
+            aliases: { foo: "f" },
           },
         ],
         modulePath: "./tools.js",
@@ -521,7 +589,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["myTool"], safeNames: [] }],
+          importedTools: [{ type: "namedImport", importedNames: ["myTool"], safeNames: [], aliases: {} }],
           agencyFile: "file.agency",
         },
       },
@@ -532,7 +600,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["tool1"], safeNames: [] }],
+          importedTools: [{ type: "namedImport", importedNames: ["tool1"], safeNames: [], aliases: {} }],
           agencyFile: "./path/to/file.agency",
         },
       },
@@ -545,7 +613,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["myTool"], safeNames: [] }],
+          importedTools: [{ type: "namedImport", importedNames: ["myTool"], safeNames: [], aliases: {} }],
           agencyFile: "file.agency",
         },
       },
@@ -558,7 +626,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2"], safeNames: [] }],
+          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2"], safeNames: [], aliases: {} }],
           agencyFile: "file.agency",
         },
       },
@@ -569,7 +637,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2", "tool3"], safeNames: [] }],
+          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2", "tool3"], safeNames: [], aliases: {} }],
           agencyFile: "multi.agency",
         },
       },
@@ -582,7 +650,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["myTool"], safeNames: [] }],
+          importedTools: [{ type: "namedImport", importedNames: ["myTool"], safeNames: [], aliases: {} }],
           agencyFile: "file.agency",
         },
       },
@@ -593,7 +661,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2"], safeNames: [] }],
+          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2"], safeNames: [], aliases: {} }],
           agencyFile: "../other.agency",
         },
       },
@@ -606,7 +674,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["myTool"], safeNames: [] }],
+          importedTools: [{ type: "namedImport", importedNames: ["myTool"], safeNames: [], aliases: {} }],
           agencyFile: "file.agency",
         },
       },
@@ -619,7 +687,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["tool1"], safeNames: [] }],
+          importedTools: [{ type: "namedImport", importedNames: ["tool1"], safeNames: [], aliases: {} }],
           agencyFile: "file.agency",
         },
       },
@@ -630,7 +698,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2", "tool3"], safeNames: [] }],
+          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2", "tool3"], safeNames: [], aliases: {} }],
           agencyFile: "file.agency",
         },
       },
@@ -643,7 +711,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2"], safeNames: [] }],
+          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2"], safeNames: [], aliases: {} }],
           agencyFile: "file.agency",
         },
       },
@@ -656,7 +724,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["tool1"], safeNames: [] }],
+          importedTools: [{ type: "namedImport", importedNames: ["tool1"], safeNames: [], aliases: {} }],
           agencyFile: "../../../utils/tools.agency",
         },
       },
@@ -667,7 +735,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["tool1"], safeNames: [] }],
+          importedTools: [{ type: "namedImport", importedNames: ["tool1"], safeNames: [], aliases: {} }],
           agencyFile: "/absolute/path/file.agency",
         },
       },
@@ -680,7 +748,7 @@ describe("importToolStatmentParser", () => {
         success: true,
         result: {
           type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2abc", "test123"], safeNames: [] }],
+          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2abc", "test123"], safeNames: [], aliases: {} }],
           agencyFile: "file.agency",
         },
       },

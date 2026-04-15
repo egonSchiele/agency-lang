@@ -12,6 +12,9 @@ import foo from "./foo.ts"
 // named import
 import { foo } from "./foo.ts"
 
+// alias import
+import { foo as bar } from "./foo.ts"
+
 // namespace import
 import * as foo from "./foo.ts"
 

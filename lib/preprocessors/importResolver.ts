@@ -70,6 +70,7 @@ export function resolveImports(
     const functionNames: string[] = [];
     const safeFunctionNames: string[] = [];
     const typeNames: string[] = [];
+    const aliases: Record<string, string> = {};
 
     for (const nameType of node.importedNames) {
       if (nameType.type !== "namedImport") {
@@ -84,6 +85,10 @@ export function resolveImports(
           throw new Error(
             `Symbol '${name}' is not defined in '${node.modulePath}'`,
           );
+        }
+        // Carry forward any alias from the original import
+        if (nameType.aliases[name]) {
+          aliases[name] = nameType.aliases[name];
         }
         switch (symbol.kind) {
           case "node":
@@ -115,12 +120,18 @@ export function resolveImports(
     }
 
     if (functionNames.length > 0) {
+      // Filter aliases to only include function names
+      const funcAliases: Record<string, string> = {};
+      for (const name of functionNames) {
+        if (aliases[name]) funcAliases[name] = aliases[name];
+      }
       const toolImport: ImportToolStatement = {
         type: "importToolStatement",
         importedTools: [{
           type: "namedImport",
           importedNames: functionNames,
           safeNames: safeFunctionNames,
+          aliases: funcAliases,
         }],
         agencyFile: node.modulePath,
       };
@@ -128,10 +139,15 @@ export function resolveImports(
     }
 
     if (typeNames.length > 0) {
+      // Filter aliases to only include type names
+      const typeAliases: Record<string, string> = {};
+      for (const name of typeNames) {
+        if (aliases[name]) typeAliases[name] = aliases[name];
+      }
       const typeImport: ImportStatement = {
         type: "importStatement",
         importedNames: [
-          { type: "namedImport", importedNames: typeNames, safeNames: [] },
+          { type: "namedImport", importedNames: typeNames, safeNames: [], aliases: typeAliases },
         ],
         modulePath: node.modulePath,
       };

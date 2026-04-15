@@ -16,6 +16,7 @@ import {
   WhileLoop,
   isClassKeyword,
 } from "@/types.js";
+import { getImportedToolNames } from "@/types/importStatement.js";
 import { MessageThread } from "@/types/messageThread.js";
 // import { Skill } from "@/types/skill.js"; // Unused after llm() refactor
 import {
@@ -164,7 +165,7 @@ export class TypescriptPreprocessor {
       this.graphNodeDefinitions = Object.fromEntries(
         info.graphNodes.map((n) => [n.nodeName, n]),
       );
-      this.importedTools = info.importedTools.flatMap((s) => s.importedTools).flatMap((n) => n.importedNames);
+      this.importedTools = info.importedTools.flatMap(getImportedToolNames);
     }
   }
 
@@ -321,7 +322,7 @@ export class TypescriptPreprocessor {
   protected getImportedTools() {
     for (const node of this.program.nodes) {
       if (node.type === "importToolStatement") {
-        this.importedTools.push(...node.importedTools.flatMap((n) => n.importedNames));
+        this.importedTools.push(...getImportedToolNames(node));
       }
     }
   }
@@ -1369,7 +1370,7 @@ export class TypescriptPreprocessor {
           importedVars.add(n);
         });
       } else if (node.type === "importToolStatement") {
-        node.importedTools.flatMap((n) => n.importedNames).forEach((t) => {
+        getImportedToolNames(node).forEach((t) => {
           importedVars.add(t);
         });
       }

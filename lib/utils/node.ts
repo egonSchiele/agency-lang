@@ -8,6 +8,7 @@ import {
   VariableNameLiteral,
   functionScope,
   getImportedNames,
+  getImportedToolNames,
   globalScope,
   nodeScope,
   Scope,
@@ -167,10 +168,8 @@ export function* getAllVariablesInBody(
         yield { name, node };
       }
     } else if (node.type === "importToolStatement") {
-      for (const namedImport of node.importedTools) {
-        for (const name of namedImport.importedNames) {
-          yield { name, node };
-        }
+      for (const name of getImportedToolNames(node)) {
+        yield { name, node };
       }
     } else if (node.type === "matchBlock") {
       for (const caseItem of node.cases) {

@@ -4,6 +4,8 @@ import * as strUtils from "./stringHelpers.js"
 import exclaim, { upper } from "./stringHelpers.js"
 import len, * as listHelpers from "./listHelpers.js"
 import { add, multiply } from "./agencyHelpers.agency"
+import { double as dbl } from "./mathHelpers.js"
+import { add as plus, multiply as times } from "./agencyHelpers.agency"
 
 node testDefaultImport() {
   return square(5)
@@ -32,4 +34,12 @@ node testAgencyMultipleNamedImports() {
 node testMixedDefaultNamespace() {
   const items = [10, 20, 30]
   return len(items) + listHelpers.first(items)
+}
+
+node testAliasedJsImport() {
+  return dbl(8)
+}
+
+node testAliasedAgencyImport() {
+  return times(plus(2, 3), 4)
 }

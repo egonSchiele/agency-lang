@@ -5,6 +5,7 @@ import type {
   TsStatements,
   TsImport,
   TsImportKind,
+  TsImportName,
   TsVarDecl,
   TsAssign,
   TsFunctionDecl,
@@ -71,7 +72,7 @@ export const ts = {
 
   importDecl(opts: {
     importKind: TsImportKind;
-    names?: string[];
+    names?: TsImportName[];
     defaultName?: string;
     namespaceName?: string;
     from: string;

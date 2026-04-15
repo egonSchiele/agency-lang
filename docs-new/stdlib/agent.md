@@ -46,7 +46,7 @@ Return the current todo list.
 question(prompt: string): string
 ```
 
-Ask the user a question and wait for their reply. Unlike input(), this raises an interrupt so the host (CLI, web UI, etc.) can present the prompt in its own way.
+Ask the user a question and wait for their reply. Unlike input(), this raises an interrupt so the host (CLI, web UI, etc.) can present the prompt in its own way; the host resolves the interrupt with the answer string.
 
 **Parameters:**
 

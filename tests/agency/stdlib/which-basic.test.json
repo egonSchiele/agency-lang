@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"foundNode\":true,\"bogusIsEmpty\":true}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "which returns a path for a real command and an empty string for a nonexistent one"
+    }
+  ]
+}

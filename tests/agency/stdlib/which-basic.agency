@@ -1,0 +1,10 @@
+import { which } from "std::shell"
+
+node main() {
+  let nodeBin = which("node")
+  let bogus = which("definitely-not-a-real-command-xyz")
+  return {
+    foundNode: nodeBin != "",
+    bogusIsEmpty: bogus == ""
+  }
+}

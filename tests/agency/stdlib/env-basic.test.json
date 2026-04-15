@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"pathSet\":true,\"pathNonEmpty\":true,\"bogusIsNull\":true}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "env returns the value for set vars and null for unset vars"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"emptyValue\":\"\",\"emptyIsString\":true,\"neverIsNull\":true}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "env distinguishes a var set to empty string (returns \"\") from a var that was never set (returns null)"
+    }
+  ]
+}

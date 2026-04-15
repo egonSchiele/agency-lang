@@ -283,3 +283,32 @@ export function _exists(filename: string): boolean {
   const full = path.resolve(process.cwd(), filename);
   return fs.existsSync(full);
 }
+
+export function _which(command: string): string {
+  if (command.length === 0) return "";
+  if (command.includes("/") || command.includes("\\") || command.includes("\0")) {
+    throw new Error(
+      `which: command name must not contain path separators or NUL bytes (got '${command}')`,
+    );
+  }
+  const pathEnv = process.env.PATH ?? "";
+  const dirs = pathEnv.split(path.delimiter).filter((d) => d.length > 0);
+  const isWindows = process.platform === "win32";
+  const extensions = isWindows
+    ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").split(";")
+    : [""];
+  for (const dir of dirs) {
+    for (const ext of extensions) {
+      const candidate = path.resolve(dir, command + ext);
+      try {
+        const st = fs.statSync(candidate);
+        if (!st.isFile()) continue;
+        if (!isWindows) {
+          fs.accessSync(candidate, fs.constants.X_OK);
+        }
+        return candidate;
+      } catch {}
+    }
+  }
+  return "";
+}

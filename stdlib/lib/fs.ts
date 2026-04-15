@@ -1,4 +1,5 @@
 import fs from "fs";
+import os from "os";
 import path from "path";
 import process from "process";
 import diff_match_patch from "diff-match-patch";
@@ -239,4 +240,109 @@ function applyHunks(original: string, hunks: Hunk[], filePath: string): string {
     );
   }
   return updated;
+}
+
+export function _mkdir(dir: string): void {
+  const full = path.resolve(process.cwd(), dir);
+  fs.mkdirSync(full, { recursive: true });
+}
+
+export function _copy(src: string, dest: string): void {
+  const srcFull = path.resolve(process.cwd(), src);
+  const destFull = path.resolve(process.cwd(), dest);
+  fs.cpSync(srcFull, destFull, { recursive: true });
+}
+
+export function _move(src: string, dest: string): void {
+  rejectDangerousPath(src, "move", "source");
+  const srcFull = path.resolve(process.cwd(), src);
+  const destFull = path.resolve(process.cwd(), dest);
+  try {
+    fs.renameSync(srcFull, destFull);
+  } catch (e: any) {
+    if (e?.code === "EXDEV") {
+      fs.cpSync(srcFull, destFull, { recursive: true });
+      fs.rmSync(srcFull, { recursive: true, force: true });
+      return;
+    }
+    throw e;
+  }
+}
+
+export function _remove(target: string): void {
+  rejectDangerousPath(target, "remove", "target");
+  const full = path.resolve(process.cwd(), target);
+  fs.rmSync(full, { recursive: true, force: true });
+}
+
+export function rejectDangerousPath(
+  p: string,
+  op: string,
+  role: string,
+): void {
+  const trimmed = p.trim();
+  if (trimmed === "") {
+    throw new Error(`${op}: ${role} must not be empty`);
+  }
+  const lexical = path.resolve(process.cwd(), trimmed);
+  const real = realpathOrResolve(lexical);
+  const homeReal = realpathOrResolve(os.homedir());
+  const cwdReal = realpathOrResolve(process.cwd());
+
+  for (const candidate of new Set([lexical, real])) {
+    const root = path.parse(candidate).root;
+
+    if (samePath(candidate, root)) {
+      throw new Error(
+        `${op}: refusing to use the filesystem root as ${role} (got '${p}')`,
+      );
+    }
+
+    if (homeReal && samePath(candidate, homeReal)) {
+      throw new Error(
+        `${op}: refusing to use the home directory as ${role} (got '${p}')`,
+      );
+    }
+
+    const segments = candidate
+      .slice(root.length)
+      .split(path.sep)
+      .filter((s) => s.length > 0);
+    if (segments.length <= 1) {
+      throw new Error(
+        `${op}: refusing to use the top-level path '${candidate}' as ${role} (got '${p}'); operations on a single segment under root could destroy critical system directories`,
+      );
+    }
+
+    if (
+      samePath(cwdReal, candidate) ||
+      cwdStartsWith(cwdReal, candidate + path.sep)
+    ) {
+      throw new Error(
+        `${op}: refusing to use the current working directory or one of its ancestors '${candidate}' as ${role} (got '${p}')`,
+      );
+    }
+  }
+}
+
+function realpathOrResolve(p: string): string {
+  try {
+    return fs.realpathSync.native(p);
+  } catch {
+    return p;
+  }
+}
+
+function samePath(a: string, b: string): boolean {
+  if (process.platform === "win32") {
+    return a.toLowerCase() === b.toLowerCase();
+  }
+  return a === b;
+}
+
+function cwdStartsWith(cwd: string, prefix: string): boolean {
+  if (process.platform === "win32") {
+    return cwd.toLowerCase().startsWith(prefix.toLowerCase());
+  }
+  return cwd.startsWith(prefix);
 }

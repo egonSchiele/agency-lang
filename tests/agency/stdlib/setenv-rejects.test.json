@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"emptyRefused\":true,\"equalsRefused\":true,\"nulRefused\":true}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "setEnv refuses invalid names: empty, containing '=', containing NUL"
+    }
+  ]
+}

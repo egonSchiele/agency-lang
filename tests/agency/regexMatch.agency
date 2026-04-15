@@ -1,0 +1,9 @@
+node main(input: string) {
+  if (input =~ /^hello/) {
+    return "matched"
+  }
+  if (input !~ /world$/) {
+    return "no world"
+  }
+  return "has world"
+}

@@ -16,7 +16,7 @@ import {
 } from "./types/importStatement.js";
 import { ForLoop } from "./types/forLoop.js";
 import { Keyword } from "./types/keyword.js";
-import { Literal, RawCode } from "./types/literals.js";
+import { Literal, RawCode, RegexLiteral } from "./types/literals.js";
 import { MatchBlock } from "./types/matchBlock.js";
 import { MessageThread } from "./types/messageThread.js";
 import { ReturnStatement } from "./types/returnStatement.js";
@@ -68,7 +68,8 @@ export type Expression =
   | AgencyObject
   | Placeholder
   | TryExpression
-  | NewExpression;
+  | NewExpression
+  | RegexLiteral;
 
 /**
  * Scope types for variable resolution.
@@ -240,7 +241,8 @@ export type AgencyNode =
   | ClassDefinition
   | ClassMethod
   | ClassField
-  | NewExpression;
+  | NewExpression
+  | RegexLiteral;
 
 export type AgencyProgram = {
   type: "agencyProgram";

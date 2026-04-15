@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   interpolationSegmentParser,
   numberParser,
+  regexLiteralParser,
   stringParser,
   multiLineStringParser,
   variableNameParser,
@@ -278,6 +279,48 @@ describe("literals parsers", () => {
       } else {
         it(`should fail to parse "${input}"`, () => {
           const result = numberParser(input);
+          expect(result.success).toBe(false);
+        });
+      }
+    });
+  });
+
+  describe("regexLiteralParser", () => {
+    const testCases = [
+      {
+        input: "/hello/",
+        expected: { success: true, result: { type: "regex", pattern: "hello", flags: "" } },
+      },
+      {
+        input: "/hello/gi",
+        expected: { success: true, result: { type: "regex", pattern: "hello", flags: "gi" } },
+      },
+      {
+        input: "/^\\d+$/",
+        expected: { success: true, result: { type: "regex", pattern: "^\\d+$", flags: "" } },
+      },
+      {
+        input: "/foo\\/bar/",
+        expected: { success: true, result: { type: "regex", pattern: "foo\\/bar", flags: "" } },
+      },
+      // Failure cases
+      { input: "//", expected: { success: false } },
+      { input: "abc", expected: { success: false } },
+      { input: "", expected: { success: false } },
+    ];
+
+    testCases.forEach(({ input, expected }) => {
+      if (expected.success) {
+        it(`should parse "${input}" successfully`, () => {
+          const result = regexLiteralParser(input);
+          expect(result.success).toBe(true);
+          if (result.success) {
+            expect(result.result).toEqualWithoutLoc(expected.result);
+          }
+        });
+      } else {
+        it(`should fail to parse "${input}"`, () => {
+          const result = regexLiteralParser(input);
           expect(result.success).toBe(false);
         });
       }

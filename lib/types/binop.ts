@@ -23,6 +23,8 @@ export type Operator =
   | "&&"
   | "||"
   | "!"
+  | "=~"
+  | "!~"
   | "|>"
   | "catch";
 
@@ -34,6 +36,8 @@ export const PRECEDENCE: Record<string, number> = {
   "==": 3,
   "===": 3,
   "!=": 3,
+  "=~": 3,
+  "!~": 3,
   "<": 4,
   ">": 4,
   "<=": 4,

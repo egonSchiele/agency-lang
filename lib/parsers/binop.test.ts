@@ -551,6 +551,57 @@ describe("binOpParser", () => {
   });
 
   // Failure cases
+  describe("regex match operators", () => {
+    const testCases = [
+      {
+        input: 'foo =~ /bar/',
+        expected: {
+          success: true,
+          result: {
+            type: "binOpExpression",
+            operator: "=~",
+            left: { type: "variableName", value: "foo" },
+            right: { type: "regex", pattern: "bar", flags: "" },
+          },
+        },
+      },
+      {
+        input: 'foo !~ /bar/i',
+        expected: {
+          success: true,
+          result: {
+            type: "binOpExpression",
+            operator: "!~",
+            left: { type: "variableName", value: "foo" },
+            right: { type: "regex", pattern: "bar", flags: "i" },
+          },
+        },
+      },
+      {
+        input: 'name =~ /^hello/',
+        expected: {
+          success: true,
+          result: {
+            type: "binOpExpression",
+            operator: "=~",
+            left: { type: "variableName", value: "name" },
+            right: { type: "regex", pattern: "^hello", flags: "" },
+          },
+        },
+      },
+    ];
+
+    testCases.forEach(({ input, expected }) => {
+      it(`should parse "${input}" successfully`, () => {
+        const result = binOpParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result).toEqualWithoutLoc(expected.result);
+        }
+      });
+    });
+  });
+
   describe("failure cases", () => {
     const failureCases = [
       { input: "", description: "empty string" },

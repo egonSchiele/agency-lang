@@ -336,6 +336,12 @@ export function printTs(node: TsNode, indent = 0): string {
       return `(${node.operands.map((o) => printTs(o, indent)).join(" || ")})`;
     case "not":
       return `!${printTs(node.operand, indent)}`;
+    case "unaryOp": {
+      const operand = node.paren
+        ? `(${printTs(node.operand, indent)})`
+        : printTs(node.operand, indent);
+      return `${node.op}${operand}`;
+    }
     case "ternary": {
       const condition = printTs(node.condition, indent);
       const trueExpr = printTs(node.trueExpr, indent);

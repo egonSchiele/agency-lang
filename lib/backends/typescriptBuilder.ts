@@ -766,6 +766,8 @@ export class TypeScriptBuilder {
         return this.processClassDefinition(node);
       case "newExpression":
         return this.processNewExpression(node);
+      case "regex":
+        return ts.raw(`/${node.pattern}/${node.flags}`);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
@@ -927,12 +929,27 @@ export class TypeScriptBuilder {
     if (node.operator === "catch") {
       return this.processCatchExpression(node);
     }
+    if (node.operator === "=~" || node.operator === "!~") {
+      return this.processRegexMatchExpression(node);
+    }
     const leftNode = this.processNode(node.left);
     const rightNode = this.processNode(node.right);
     return ts.binOp(leftNode, node.operator, rightNode, {
       parenLeft: this.needsParensLeft(node.left, node.operator),
       parenRight: this.needsParensRight(node.right, node.operator),
     });
+  }
+
+  private processRegexMatchExpression(node: BinOpExpression): TsNode {
+    const leftNode = this.processNode(node.left);
+    const rightNode = this.processNode(node.right);
+    // foo =~ /bar/ → /bar/.test(foo)
+    // foo !~ /bar/ → !(/bar/.test(foo))
+    const testCall = ts.call(ts.prop(rightNode, "test"), [leftNode]);
+    if (node.operator === "!~") {
+      return ts.unaryOp("!", testCall, { paren: true });
+    }
+    return testCall;
   }
 
   private processCatchExpression(node: BinOpExpression): TsNode {

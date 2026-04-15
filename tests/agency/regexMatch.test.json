@@ -1,0 +1,34 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "\"hello world\"",
+      "expectedOutput": "\"matched\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "main",
+      "input": "\"goodbye world\"",
+      "expectedOutput": "\"has world\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "main",
+      "input": "\"goodbye friend\"",
+      "expectedOutput": "\"no world\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

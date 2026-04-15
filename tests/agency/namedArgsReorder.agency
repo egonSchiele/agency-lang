@@ -8,7 +8,7 @@ node main() {
   // Skip middle optional param
   let b = greet(name: "world", punctuation: "?")
   // Mixed positional + named (positional first)
-  let c = greet("world", punctuation: "!")
+  let c = greet("world", punctuation: "...")
   // All named, same order (regression)
   let d = greet(name: "world", greeting: "Hey", punctuation: "!")
   // Skip trailing optional params

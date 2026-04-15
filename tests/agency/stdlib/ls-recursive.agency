@@ -1,11 +1,7 @@
 import { ls } from "std::shell"
 
 node main() {
-  handle {
-    const entries = ls("tests/agency/stdlib/glob-fixtures", true) catch []
-  } with (data) {
-    return approve()
-  }
+  const entries = ls("tests/agency/stdlib/glob-fixtures", true) catch [] with approve
   let sorted = sortBy(entries) as e {
     return e.path
   }

@@ -1,20 +1,12 @@
 import { edit } from "std::fs"
 
 node writeFixture(filename: string, content: string) {
-  handle {
-    write(filename, content)
-  } with (data) {
-    return approve()
-  }
+  write(filename, content) with approve
   return true
 }
 
 node readBack(filename: string) {
-  handle {
-    const result = read(filename)
-  } with (data) {
-    return approve()
-  }
+  const result = read(filename) with approve
   return result
 }
 

@@ -1,11 +1,7 @@
 import { glob } from "std::shell"
 
 node main() {
-  handle {
-    let result = glob("*.xyz", "tests/agency/stdlib/glob-fixtures")
-  } with (data) {
-    return approve()
-  }
+  let result = glob("*.xyz", "tests/agency/stdlib/glob-fixtures") with approve
   if (isSuccess(result)) {
     return { ok: true, count: result.value.length }
   }

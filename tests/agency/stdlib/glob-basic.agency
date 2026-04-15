@@ -1,11 +1,7 @@
 import { glob } from "std::shell"
 
 node main() {
-  handle {
-    const results = glob("**/*.{md,ts}", "tests/agency/stdlib/glob-fixtures") catch []
-  } with (data) {
-    return approve()
-  }
+  const results = glob("**/*.{md,ts}", "tests/agency/stdlib/glob-fixtures") catch [] with approve
   let sorted = sortBy(results) as r {
     return r
   }

@@ -1856,6 +1856,87 @@ describe("functionParser", () => {
         },
       },
     },
+    // Optional parameter with ? syntax
+    {
+      input: "def foo(x: string, y?: number) { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "foo",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: { type: "primitiveType", value: "string" },
+            },
+            {
+              type: "functionParameter",
+              name: "y",
+              typeHint: { type: "primitiveType", value: "number" },
+              defaultValue: { type: "null" },
+            },
+          ],
+          returnType: null,
+          docString: undefined,
+          body: [{ type: "variableName", value: "x" }],
+        },
+      },
+    },
+    // Optional parameter with ? syntax (no type hint)
+    {
+      input: "def foo(x, y?) { x }",
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "foo",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+            },
+            {
+              type: "functionParameter",
+              name: "y",
+              defaultValue: { type: "null" },
+            },
+          ],
+          returnType: null,
+          docString: undefined,
+          body: [{ type: "variableName", value: "x" }],
+        },
+      },
+    },
+    // Optional param with ? should not conflict with explicit default
+    {
+      input: 'def foo(x?: string = "hi") { x }',
+      expected: {
+        success: true,
+        result: {
+          type: "function",
+          functionName: "foo",
+          parameters: [
+            {
+              type: "functionParameter",
+              name: "x",
+              typeHint: { type: "primitiveType", value: "string" },
+              defaultValue: { type: "string", segments: [{ type: "text", value: "hi" }] },
+            },
+          ],
+          returnType: null,
+          docString: undefined,
+          body: [{ type: "variableName", value: "x" }],
+        },
+      },
+    },
+    // Required param after optional ? param should fail
+    {
+      input: "def bad(a?: number, b: string) { b }",
+      expected: {
+        success: false,
+      },
+    },
     // Default value: object
     {
       input: 'def foo(config = {model: "gpt-4"}) { config }',

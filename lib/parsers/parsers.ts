@@ -2154,32 +2154,42 @@ export const forLoopParser: Parser<ForLoop> = label("a for loop", withLoc(trace(
   ),
 )));
 
-// Parses: name, name: type, name = default, name: type = default
-export const functionParameterParser = trace(
+// Parses: name, name: type, name = default, name: type = default, name?: type
+export const functionParameterParser: Parser<FunctionParameter> = trace(
   "functionParameterParser",
-  seqC(
-    set("type", "functionParameter"),
-    capture(many1WithJoin(varNameChar), "name"),
-    optional(
-      captureCaptures(
-        seqC(
-          optionalSpaces,
-          char(":"),
-          optionalSpaces,
-          capture(variableTypeParser, "typeHint"),
+  map(
+    seqC(
+      set("type", "functionParameter"),
+      capture(many1WithJoin(varNameChar), "name"),
+      capture(optional(char("?")), "__optional"),
+      optional(
+        captureCaptures(
+          seqC(
+            optionalSpaces,
+            char(":"),
+            optionalSpaces,
+            capture(variableTypeParser, "typeHint"),
+          ),
+        ),
+      ),
+      optional(
+        captureCaptures(
+          seqC(
+            optionalSpaces,
+            str("="),
+            optionalSpaces,
+            capture(or(agencyArrayParser, agencyObjectParser, literalParserNoVarName), "defaultValue"),
+          ),
         ),
       ),
     ),
-    optional(
-      captureCaptures(
-        seqC(
-          optionalSpaces,
-          str("="),
-          optionalSpaces,
-          capture(or(agencyArrayParser, agencyObjectParser, literalParserNoVarName), "defaultValue"),
-        ),
-      ),
-    ),
+    (result: any) => {
+      const { __optional, ...rest } = result;
+      if (__optional && !rest.defaultValue) {
+        rest.defaultValue = { type: "null" };
+      }
+      return rest as FunctionParameter;
+    },
   ),
 );
 

@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "2",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "grep stops returning results once maxResults is reached (fixtures contain 3 case-insensitive matches for 'hello', maxResults=2)"
+    }
+  ]
+}

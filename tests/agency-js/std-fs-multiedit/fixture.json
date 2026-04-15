@@ -1,0 +1,18 @@
+{
+  "sequential": {
+    "ok": true,
+    "replacements": 2,
+    "contents": "X Y C\n"
+  },
+  "atomic": {
+    "ok": false,
+    "mentionsNotFound": true,
+    "contentsUnchanged": true
+  },
+  "empty": {
+    "ok": true,
+    "replacements": 0,
+    "edits": 0,
+    "contentsUnchanged": true
+  }
+}

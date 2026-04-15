@@ -1,0 +1,9 @@
+import { ls } from "std::shell"
+
+node main() {
+  let result = ls("tests/agency/stdlib/does-not-exist", false) with approve
+  return {
+    ok: isSuccess(result),
+    hasError: isFailure(result)
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "stdout": {
+    "stdout": "hello\n",
+    "exitCode": 0
+  },
+  "exit": {
+    "exitCode": 3,
+    "stdout": ""
+  },
+  "cwd": {
+    "matches": true,
+    "exitCode": 0
+  },
+  "stdin": {
+    "stdout": "piped-input",
+    "exitCode": 0
+  }
+}

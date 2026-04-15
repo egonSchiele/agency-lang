@@ -1,0 +1,9 @@
+import { stat } from "std::shell"
+
+node main() {
+  let info = stat("tests/agency/stdlib/glob-fixtures")
+  return {
+    exists: info.exists,
+    type: info.type
+  }
+}

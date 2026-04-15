@@ -1,0 +1,14 @@
+import { todoWrite, todoList } from "std::agent"
+
+node main() {
+  todoWrite([
+    { id: "1", text: "initial", status: "pending" }
+  ])
+  const before = todoList()
+  todoWrite([])
+  const after = todoList()
+  return {
+    beforeCount: before.length,
+    afterCount: after.length
+  }
+}

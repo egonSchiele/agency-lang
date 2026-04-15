@@ -1,0 +1,9 @@
+import { glob } from "std::shell"
+
+node main() {
+  let result = glob("{ts", "tests/agency/stdlib/glob-fixtures") with approve
+  return {
+    ok: isSuccess(result),
+    hasError: result.error != null
+  }
+}

@@ -49,7 +49,7 @@ export function _edit(
 export type MultiEdit = {
   oldText: string;
   newText: string;
-  replaceAll?: boolean;
+  replaceAll: boolean;
 };
 
 export type MultiEditResult = {
@@ -159,8 +159,8 @@ function parseUnifiedDiff(patch: string): DiffFile[] {
       if (!nextLine.startsWith("+++ ")) {
         throw new Error("applyPatch: malformed diff, missing +++ after ---");
       }
-      const newFile = nextLine.slice(4).trim();
-      const oldFile = line.slice(4).trim();
+      const newFile = firstToken(nextLine.slice(4));
+      const oldFile = firstToken(line.slice(4));
       const target = stripPathPrefix(newFile === "/dev/null" ? oldFile : newFile);
       current = {
         path: target,
@@ -192,6 +192,11 @@ function parseUnifiedDiff(patch: string): DiffFile[] {
 function stripPathPrefix(p: string): string {
   if (p.startsWith("a/") || p.startsWith("b/")) return p.slice(2);
   return p;
+}
+
+function firstToken(s: string): string {
+  const m = s.match(/^\S+/);
+  return m ? m[0] : "";
 }
 
 function applyHunks(original: string, hunks: Hunk[], filePath: string): string {

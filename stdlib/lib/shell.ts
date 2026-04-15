@@ -72,7 +72,7 @@ export function _ls(dir: string, recursive: boolean): LsEntry[] {
       else if (st.isFile()) type = "file";
       out.push({
         name,
-        path: path.relative(process.cwd(), full),
+        path: toPosix(path.relative(process.cwd(), full)),
         type,
         size: st.size,
       });
@@ -84,6 +84,10 @@ export function _ls(dir: string, recursive: boolean): LsEntry[] {
 
   walk(root);
   return out;
+}
+
+function toPosix(p: string): string {
+  return path.sep === "\\" ? p.replace(/\\/g, "/") : p;
 }
 
 export type GrepMatch = {
@@ -151,7 +155,7 @@ export function _grep(
     for (let i = 0; i < lines.length; i++) {
       if (re.test(lines[i])) {
         results.push({
-          file: path.relative(process.cwd(), full),
+          file: toPosix(path.relative(process.cwd(), full)),
           line: i + 1,
           text: lines[i],
         });
@@ -175,9 +179,9 @@ export function _glob(
   const results: string[] = [];
 
   walkDir(root, (full) => {
-    const rel = path.relative(root, full);
+    const rel = toPosix(path.relative(root, full));
     if (re.test(rel)) {
-      results.push(path.relative(process.cwd(), full));
+      results.push(toPosix(path.relative(process.cwd(), full)));
       if (results.length >= maxResults) return false;
     }
     return true;

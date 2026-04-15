@@ -29,9 +29,9 @@ type LsEntry = {
   size: number
 }
 
-export def ls(dir: string = ".", recursive: boolean = false): LsEntry[] {
+export def ls(dir: string = ".", recursive: boolean = false): Result {
   """
-  List entries in a directory. Each entry includes name, path, type ("file", "dir", "symlink", "other"), and size. Set recursive to true to walk subdirectories.
+  List entries in a directory. Each entry includes name, path, type ("file", "dir", "symlink", "other"), and size. Set recursive to true to walk subdirectories. Fails if the directory cannot be read (missing, not a directory, permission denied).
   """
   return interrupt({
     type: "std::ls",
@@ -40,7 +40,7 @@ export def ls(dir: string = ".", recursive: boolean = false): LsEntry[] {
     recursive: recursive
   })
 
-  return _ls(dir, recursive)
+  return try _ls(dir, recursive)
 }
 
 type GrepMatch = {
@@ -49,9 +49,9 @@ type GrepMatch = {
   text: string
 }
 
-export def grep(pattern: string, dir: string = ".", flags: string = "", maxResults: number = 200): GrepMatch[] {
+export def grep(pattern: string, dir: string = ".", flags: string = "", maxResults: number = 200): Result {
   """
-  Search for a regex pattern in files under a directory. Returns matches with file path, line number, and matched line. Skips node_modules, .git, dist, build. Stops at maxResults.
+  Search for a regex pattern in files under a directory. Returns matches with file path, line number, and matched line. Skips node_modules, .git, dist, build. Stops at maxResults. Fails if the pattern is not a valid regex or the directory cannot be read.
   """
   return interrupt({
     type: "std::grep",
@@ -62,12 +62,12 @@ export def grep(pattern: string, dir: string = ".", flags: string = "", maxResul
     maxResults: maxResults
   })
 
-  return _grep(pattern, dir, flags, maxResults)
+  return try _grep(pattern, dir, flags, maxResults)
 }
 
-export def glob(pattern: string, dir: string = ".", maxResults: number = 500): string[] {
+export def glob(pattern: string, dir: string = ".", maxResults: number = 500): Result {
   """
-  Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Returns paths relative to the current working directory. Stops at maxResults.
+  Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Returns paths relative to the current working directory. Stops at maxResults. Fails if the pattern is not valid glob syntax or the directory cannot be read.
   """
   return interrupt({
     type: "std::glob",
@@ -77,7 +77,7 @@ export def glob(pattern: string, dir: string = ".", maxResults: number = 500): s
     maxResults: maxResults
   })
 
-  return _glob(pattern, dir, maxResults)
+  return try _glob(pattern, dir, maxResults)
 }
 
 type StatInfo = {

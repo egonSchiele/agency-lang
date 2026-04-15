@@ -8,10 +8,11 @@ mkdirSync(TMP, { recursive: true });
 
 async function tryApply(patch) {
   const r = await runApply(patch);
-  if (r.data && r.data.success === false) {
-    return { ok: false, error: String(r.data.error ?? "") };
+  const result = r.data;
+  if (result && result.success === false) {
+    return { ok: false, error: String(result.error ?? "") };
   }
-  return { ok: true, applied: r.data.applied, files: r.data.files };
+  return { ok: true, applied: result.value.applied, files: result.value.files };
 }
 
 // --- Case 1: single-file edit patch ---

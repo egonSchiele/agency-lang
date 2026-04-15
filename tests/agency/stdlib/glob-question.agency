@@ -2,7 +2,7 @@ import { glob } from "std::shell"
 
 node main() {
   handle {
-    const results = glob("?.md", "tests/agency/stdlib/glob-fixtures")
+    const results = glob("?.md", "tests/agency/stdlib/glob-fixtures") catch []
   } with (data) {
     return approve()
   }

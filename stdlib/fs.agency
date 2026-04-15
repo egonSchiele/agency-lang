@@ -5,9 +5,9 @@ type EditResult = {
   path: string
 }
 
-export def edit(filename: string, oldText: string, newText: string, replaceAll: boolean = false): EditResult {
+export def edit(filename: string, oldText: string, newText: string, replaceAll: boolean = false): Result {
   """
-  Edit a file by replacing oldText with newText. By default oldText must match exactly once in the file; pass replaceAll=true to replace every occurrence. Fails if oldText is not found.
+  Edit a file by replacing oldText with newText. By default oldText must match exactly once in the file; pass replaceAll=true to replace every occurrence. Fails if oldText is not found or appears multiple times (unless replaceAll is set).
   """
   return interrupt({
     type: "std::edit",
@@ -18,7 +18,7 @@ export def edit(filename: string, oldText: string, newText: string, replaceAll: 
     replaceAll: replaceAll
   })
 
-  return _edit(filename, oldText, newText, replaceAll)
+  return try _edit(filename, oldText, newText, replaceAll)
 }
 
 type Edit = {
@@ -33,9 +33,9 @@ type MultiEditResult = {
   edits: number
 }
 
-export def multiedit(filename: string, edits: Edit[]): MultiEditResult {
+export def multiedit(filename: string, edits: Edit[]): Result {
   """
-  Apply a sequence of edits to a single file atomically. Each edit has oldText, newText, and optional replaceAll. If any edit fails, nothing is written.
+  Apply a sequence of edits to a single file atomically. Each edit has oldText, newText, and replaceAll. Fails if any edit's oldText is not found or is ambiguous; when any edit fails, nothing is written.
   """
   return interrupt({
     type: "std::multiedit",
@@ -44,7 +44,7 @@ export def multiedit(filename: string, edits: Edit[]): MultiEditResult {
     edits: edits
   })
 
-  return _multiedit(filename, edits)
+  return try _multiedit(filename, edits)
 }
 
 type PatchResult = {
@@ -52,9 +52,9 @@ type PatchResult = {
   files: string[]
 }
 
-export def applyPatch(patch: string): PatchResult {
+export def applyPatch(patch: string): Result {
   """
-  Apply a unified diff to the working tree. Supports file creation (--- /dev/null), line additions, deletions, and context. Returns the list of files changed.
+  Apply a unified diff to the working tree. Supports file creation (--- /dev/null), line additions, deletions, and context. Fails on a malformed diff or on a context-line mismatch against the current file contents.
   """
   return interrupt({
     type: "std::applyPatch",
@@ -62,5 +62,5 @@ export def applyPatch(patch: string): PatchResult {
     patch: patch
   })
 
-  return _applyPatch(patch)
+  return try _applyPatch(patch)
 }

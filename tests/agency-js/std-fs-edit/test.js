@@ -10,10 +10,11 @@ mkdirSync(TMP, { recursive: true });
 
 async function tryEdit(args) {
   const r = await runEdit(...args);
-  if (r.data && r.data.success === false) {
-    return { ok: false, error: String(r.data.error ?? "") };
+  const result = r.data;
+  if (result && result.success === false) {
+    return { ok: false, error: String(result.error ?? "") };
   }
-  return { ok: true, replacements: r.data.replacements };
+  return { ok: true, replacements: result.value.replacements };
 }
 
 // --- Case 1: unique-match happy path ---

@@ -1652,7 +1652,7 @@ export const importNodeStatmentParser: Parser<ImportNodeStatement> = trace(
 
 const nameWithOptionalAlias = or(
   map(
-    seqC(capture(many1WithJoin(varNameChar), "name"), str(" as "), capture(many1WithJoin(varNameChar), "alias")),
+    seqC(capture(many1WithJoin(varNameChar), "name"), spaces, str("as"), spaces, capture(many1WithJoin(varNameChar), "alias")),
     (r) => ({ name: r.name, alias: r.alias as string }),
   ),
   map(

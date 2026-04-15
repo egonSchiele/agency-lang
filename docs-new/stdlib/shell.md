@@ -150,3 +150,19 @@ Return true if a file or directory exists at the given path.
 | filename | string |  |
 
 **Returns:** boolean
+
+### which
+
+```ts
+which(command: string): string
+```
+
+Locate an executable in PATH and return its absolute path. Returns an empty string if the command is not found. On Windows, also tries PATHEXT extensions.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| command | string |  |
+
+**Returns:** string

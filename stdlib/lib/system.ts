@@ -3,6 +3,10 @@ import path from "path";
 import process from "process";
 import { detectPlatform } from "./utils.js";
 
+export function _cwd(): string {
+  return process.cwd();
+}
+
 export function _env(name: string): string | null {
   const v = process.env[name];
   return v === undefined ? null : v;

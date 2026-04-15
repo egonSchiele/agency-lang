@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"nonEmpty\":true,\"exists\":true}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "cwd returns a non-empty path that exists on the filesystem"
+    }
+  ]
+}

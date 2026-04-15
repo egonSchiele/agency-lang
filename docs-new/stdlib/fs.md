@@ -93,3 +93,69 @@ Apply a unified diff to the working tree. Supports file creation (--- /dev/null)
 | patch | string |  |
 
 **Returns:** Result
+
+### mkdir
+
+```ts
+mkdir(dir: string): Result
+```
+
+Create a directory, including any missing parent directories. Idempotent: succeeds if the directory already exists. Fails if a non-directory entry already occupies the path, or on permission errors.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| dir | string |  |
+
+**Returns:** Result
+
+### copy
+
+```ts
+copy(src: string, dest: string): Result
+```
+
+Copy a file or directory. Directories are copied recursively. Fails if src does not exist or dest cannot be written.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| src | string |  |
+| dest | string |  |
+
+**Returns:** Result
+
+### move
+
+```ts
+move(src: string, dest: string): Result
+```
+
+Move or rename a file or directory. Falls back to copy+remove if src and dest are on different filesystems. Fails if src does not exist.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| src | string |  |
+| dest | string |  |
+
+**Returns:** Result
+
+### remove
+
+```ts
+remove(target: string): Result
+```
+
+Delete a file or directory. Directories are removed recursively. Does not fail if the target does not exist.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| target | string |  |
+
+**Returns:** Result

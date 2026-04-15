@@ -1,0 +1,10 @@
+import { cwd } from "std::system"
+import { exists } from "std::shell"
+
+node main() {
+  let dir = cwd()
+  return {
+    nonEmpty: dir != "",
+    exists: exists(dir)
+  }
+}

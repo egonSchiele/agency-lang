@@ -332,7 +332,7 @@ const objectParser = (input: string): ParserResult<Record<string, any>> => {
 export const numberParser: Parser<NumberLiteral> = label("a number", (input: string): ParserResult<NumberLiteral> => {
   const parser = seqC(
     set("type", "number"),
-    capture(many1WithJoin(or(char("-"), char("."), digit)), "value"),
+    capture(map(many1WithJoin(or(char("-"), char("."), char("_"), digit)), (v) => v.replace(/_/g, "")), "value"),
   );
   return parser(input);
 });
@@ -562,7 +562,7 @@ export const numberLiteralTypeParser: Parser<NumberLiteralType> = trace(
   "numberLiteralTypeParser",
   seqC(
     set("type", "numberLiteralType"),
-    capture(many1WithJoin(or(char("-"), char("."), digit)), "value"),
+    capture(map(many1WithJoin(or(char("-"), char("."), char("_"), digit)), (v) => v.replace(/_/g, "")), "value"),
   ),
 );
 

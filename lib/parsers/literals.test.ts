@@ -246,6 +246,20 @@ describe("literals parsers", () => {
         expected: { success: true, result: { type: "number", value: "." } },
       },
 
+      // Underscores as separators
+      {
+        input: "1_000_000",
+        expected: { success: true, result: { type: "number", value: "1000000" } },
+      },
+      {
+        input: "1_000.50",
+        expected: { success: true, result: { type: "number", value: "1000.50" } },
+      },
+      {
+        input: "-1_000",
+        expected: { success: true, result: { type: "number", value: "-1000" } },
+      },
+
       // Failure cases
       { input: "abc", expected: { success: false } },
       { input: "", expected: { success: false } },

@@ -2,94 +2,9 @@
 
 ## Overview
 
-Agency is a domain-specific language for defining AI agent workflows. It compiles Agency code to executable TypeScript that calls OpenAI's structured output API. See `DOCS.md` for the full language reference.
+Agency is a domain-specific language for defining AI agent workflows. It compiles Agency code to executable TypeScript that calls OpenAI's structured output API.
 
-## Directory Structure
-
-```
-agency-lang/
-├── lib/
-│   ├── types.ts                   # Re-exports all AST node types
-│   ├── types/                     # AST node type definitions (one file per node type)
-│   ├── parsers/                   # Parsers for Agency code (uses tarsec library)
-│   ├── parser.ts                  # Main parser entry point (parseAgency)
-│   ├── symbolTable.ts             # Symbol table builder (buildSymbolTable)
-│   ├── programInfo.ts             # Program info collector (collectProgramInfo)
-│   ├── typeChecker.ts             # Type checker
-│   ├── config.ts                  # Configuration handling
-│   ├── index.ts                   # Main library entry point
-│   ├── utils.ts                   # Shared utilities
-│   ├── statelogClient.ts          # Statelog integration for tracing
-│   ├── ir/                        # TypeScript intermediate representation
-│   │   ├── tsIR.ts                # IR node type definitions (TsNode union type)
-│   │   ├── builders.ts            # Factory functions for creating IR nodes (ts.raw, ts.call, etc.)
-│   │   ├── fluent.ts              # Fluent API for building IR nodes
-│   │   └── prettyPrint.ts         # IR to TypeScript string (printTs)
-│   ├── backends/
-│   │   ├── typescriptGenerator.ts # Simple TypeScript code generation function, uses the builder and pretty printer
-│   │   ├── typescriptBuilder.ts   # Agency AST → TsNode IR
-│   │   ├── typescriptGenerator/   # Generator helper modules (builtins, typeToString, typeToZodSchema)
-│   │   ├── agencyGenerator.ts     # Agency code formatter
-│   │   ├── utils.ts               # Shared backend utilities
-│   │   └── index.ts               # Backend exports
-│   ├── cli/                       # CLI command implementations
-│   │   ├── commands.ts            # Core commands (compile, run, parse, format, etc.)
-│   │   ├── evaluate.ts            # Evaluate command
-│   │   ├── test.ts                # Test and fixtures commands
-│   │   ├── agent.ts               # Agent-related CLI commands
-│   │   ├── help.ts                # Help command
-│   │   └── util.ts                # Shared CLI utilities (parseTarget, pickANode, executeNode, etc.)
-│   ├── runtime/                   # Runtime library used by compiled Agency code
-│   │   ├── index.ts               # Runtime exports
-│   │   ├── node.ts                # Node setup and execution (setupNode, setupFunction, runNode)
-│   │   ├── prompt.ts              # LLM prompt execution (runPrompt)
-│   │   ├── interrupts.ts          # Interrupt handling and state resumption
-│   │   ├── hooks.ts               # Lifecycle hook/callback execution
-│   │   ├── builtins.ts            # Built-in function implementations
-│   │   ├── builtinTools.ts        # Built-in tool definitions for LLM tool use
-│   │   ├── streaming.ts           # Streaming response handling
-│   │   ├── errors.ts              # Runtime error types
-│   │   ├── types.ts               # Runtime type definitions (GraphState, InternalFunctionState)
-│   │   ├── utils.ts               # Runtime utilities (deepClone, extractResponse, etc.)
-│   │   └── state/                 # State management
-│   │       ├── context.ts         # RuntimeContext class (shared context for all nodes/functions)
-│   │       ├── stateStack.ts      # StateStack class (call stack serialization/deserialization)
-│   │       ├── globalStore.ts     # GlobalStore class (cross-module global variable storage)
-│   │       ├── messageThread.ts   # MessageThread class
-│   │       └── threadStore.ts     # ThreadStore class
-│   ├── simplemachine/             # Graph execution engine
-│   │   ├── index.ts               # SimpleMachine class
-│   │   ├── graph.ts               # Graph definition and traversal
-│   │   ├── types.ts               # Graph types
-│   │   ├── error.ts               # Graph error types
-│   │   └── util.ts                # Graph utilities
-│   ├── agents/                    # Built-in Agency agents
-│   │   └── agency-agent/          # The agent built into Agency, to help write Agency code
-│   ├── templates/                 # Mustache templates compiled to TypeScript via typestache
-│   │   ├── backends/              # Templates used by code generators
-│   │   ├── cli/                   # Templates used by CLI commands
-│   │   └── prompts/               # Prompt templates
-│   ├── preprocessors/             # AST preprocessors (run before code generation)
-│   │   ├── typescriptPreprocessor.ts  # Main preprocessor
-│   │   └── importResolver.ts      # Import resolution
-│   └── utils/                     # Additional utilities
-│       ├── agentUtils.ts          # Agent utilities
-│       ├── envfile.ts             # .env file handling
-│       ├── node.ts                # Node utilities
-│       └── termcolors.ts          # Terminal color helpers
-├── scripts/
-│   ├── agency.ts                  # CLI entry point (uses commander)
-│   ├── regenerate-fixtures.ts     # Regenerate TypeScript generator + builder fixtures
-│   └── hooks/                     # Install hooks (e.g. postinstall)
-├── tests/
-│   ├── typescriptGenerator/       # Integration test fixtures (.agency + .mjs pairs)
-│   ├── typescriptBuilder/         # Integration test fixtures for the builder
-│   ├── typescriptPreprocessor/    # Preprocessor test fixtures
-│   ├── agency/                    # End-to-end Agency test fixtures
-│   └── agency-js/                 # JavaScript interop test fixtures
-├── examples/                      # Example Agency programs
-└── dist/                          # Compiled JavaScript output
-```
+Please read the guide at docs-new/guide/ to get up to speed on the language.
 
 ## Key Commands
 
@@ -131,7 +46,7 @@ Transforms the agency AST into the TypeScript IR, which is one step above simple
 We use the `printTs()` function in `lib/ir/prettyPrint.ts` to convert the TypeScript IR AST into TypeScript code. See `lib/backends/typescriptGenerator.ts` and `lib/ir/prettyPrint.ts`.
 
 ## Language design and features
-See `DOCS.md` for the full language reference and design docs.
+See `docs-new/guide/` for the full language reference and design docs.
 
 ## Code generation and backends
 The code that gets written and executed from an agency program comes from two places.
@@ -163,45 +78,6 @@ Lines that start with a cross ( ❌) mean that the parser failed.
 You can see that the lines have different levels of indentation. The indentation indicates parsers that were nested within other parsers.
 
 Each line will also contain the name of the parser as well as the full input string being tried. You can use this to narrow down the relevant sections where the parser is trying to parse the input that is failing. Then, look at lines with a cross to figure out which parser is failing.
-
-## Core features of Agency
-
-### Message threads
-Message threads are a core feature of Agency, and it's how we store and use message history. By default, every LLM call in Agency is isolated, but message threads can combine them. For usage, see DOCS.md. For implementation notes, see docs/dev/threads.md.
-Message threads are quite complicated, and agency includes tests for a lot of different test cases. See docs/dev/message-thread-tests.md for a full list of test cases.
-
-### Interrupts and state serialization
-
-A core feature of Agency is the ability to pause and resume execution. This allows us to support a feature called Interrupts. Interrupts allow an Agency program to pause execution, return control to the caller, and resume later. This enables human-in-the-loop workflows where a user can approve, reject, modify, or resolve an interrupted operation.
-
-All the Runtime state lives in the RuntimeContext object (lib/runtime/state/context.ts). Some of this needs to get serialized when parsing, and some of this does not. The `stateToJSON` method on RuntimeContext shows what gets serialized: StateStack and GlobalStore.
-
-StateStack stores the state for every frame in an execution. It stores the arguments to a function or node, any local variables, any message threads. The GlobalStore stores global variables per module. This means that the global variables for each file get their own isolated context. This is to support another core feature of agency: execution isolation. More on this below.
-
-When an interrupt is triggered, the runtime serializes the full execution state — the `StateStack` (call stack frames with local variables, arguments, and step counters) and the `GlobalStore` (cross-module global variables) — into a JSON-serializable `InterruptState`. This state is returned to the caller along with the interrupt data.
-
-To resume, the caller passes the serialized state and an `InterruptResponse` (one of `approve`, `reject`, `modify`, or `resolve`) back to one of the response functions (`approveInterrupt`, `rejectInterrupt`, `modifyInterrupt`, `resolveInterrupt`). The runtime deserializes the state, puts the `StateStack` into deserialize mode, and re-runs from the last graph node visited. As each function/node is re-entered, its frame is shifted off the front of the stack and pushed to the back, restoring local state without re-executing side effects.
-
-A couple of things to note here:
-1. this means that none of the state in previous nodes is serialized. Nodes are different from functions because while functions return, nodes represent different states in a state machine. So when you transition to another node, you never return to the first one. This means we only need to serialize any state relevant to the current node.
-2. How do we return, when resuming from an interrupt, how do we resume at the exact line where we left off? There's a variety of ways to do this. Services like Temporal write and replay logs. However, since we have language level control with Agency, we can do something much simpler and dumber. Every statement in the generated TypeScript code has its own step, wrapped with an if statement that looks something like this:
-
-```ts
-  if (__step <= 3) {
-    // actual code for the statement
-    __stack.step++;
-  }
-```
-
-Every time we go to the next statement, we increment the step counter (`__stack.step++`). The step value gets saved on the state stack just like all the other local variables. Then, execution continues as normal. Since all statements are wrapped in these if statements, we won't execute any statements that are lower than the current step value. This lets us easily and cleanly return to the exact statement we were at. It avoids the overhead that replay logs provide, and gives us a guarantee that nothing else will get executed, which is harder to do with replay logs.
-
-See `lib/runtime/interrupts.ts` for the implementation, `docs/stateStack.md` for how the state stack serialization/deserialization works, and `docs/INTERRUPT_TESTING.md` for interrupt test cases.
-
-### Execution isolation
-Since agency is designed to be used in the web context, it's possible that multiple threads will be using the agent concurrently. In this case, global state would be shared across all of those calls. Importantly, this would include the StateStack. Even if you're okay with sharing global variables across all calls, sharing the StateStack would mean that the call stacks for all the calls would get mixed together, which would be chaos. So agency provides runtime execution isolation for each call. Each call gets its own StateStack and its own global variables.
-
-If you do want to share state between calls, use the `shared` keyword. Because each call gets its own copy of the global variables, that means global variables are initialized fresh for each call. If the initialization is expensive, that can add extra performance cost. That's when it's important to use the shared keyword. Shared variables are only initialized once. They don't get serialized or deserialized. Shared variables are good for creating caches, reading files, etc.
-For more information about shared and all the other scope types, see the comment in lib/types.ts.
 
 ## Implementation details
 
@@ -288,7 +164,7 @@ Users can also set `audit.logFile` in `agency.json` (or use `agency run -l <file
 Handlers (`handle` blocks) are a crucial part of what makes Agency safe. They must NEVER be accidentally skipped or left unregistered. Any feature that affects execution flow (rewind, interrupts, checkpoints, state restoration) must ensure handlers are correctly registered and invoked. If there is any risk of a handler being skipped, treat it as a critical issue and flag it immediately. Handlers are registered on `__ctx.handlers` via `pushHandler()` in the generated code and are NOT serialized as part of checkpoint state — be aware of this when working on state restoration features.
 
 ## VERY IMPORTANT: Agency syntax rules
-When writing Agency code (in plans, specs, tests, or examples), you MUST use the correct syntax. Verify against `DOCS.md` and existing test fixtures when unsure.
+When writing Agency code (in plans, specs, tests, or examples), you MUST use the correct syntax. Verify against `docs-new/guide/basic-syntax.md` and existing test fixtures when unsure.
 
 **Correct syntax:**
 - Functions use `def`, curly braces, and optional `: ReturnType` after params: `def foo(x: number): string { ... }`
@@ -304,7 +180,7 @@ When writing Agency code (in plans, specs, tests, or examples), you MUST use the
 - `result = foo()` without `let`/`const` — WRONG unless already declared.
 - Using Python-style colon+indentation for blocks — WRONG. Always use `{ ... }`
 
-**When writing plans or specs:** Always verify Agency code snippets by checking DOCS.md and existing test fixtures (tests/agency/, tests/typescriptGenerator/). If unsure about syntax, run `pnpm run ast` on a test file to confirm it parses.
+**When writing plans or specs:** Always verify Agency code snippets by checking docs-new/guide/basic-syntax.md and existing test fixtures (tests/agency/, tests/typescriptGenerator/). If unsure about syntax, run `pnpm run ast` on a test file to confirm it parses.
 
 ## General code Guidelines
 - NEVER use dynamic imports
@@ -316,8 +192,9 @@ When writing Agency code (in plans, specs, tests, or examples), you MUST use the
 ## Things that often confuse you
 Tools and functions are the same thing in the agency. Functions are tools. So there is no point in treating tools and functions separately because they're the same thing.
 
+Please note that you cannot write and run agency files in the `/tmp` directory or any directory outside of the current directory, because certain node modules are needed for the files to run and the `/tmp` directory does not have those node modules.
+
 ## Other docs and resources:
-- `DOCS.md` — language reference and design docs
 - `docs/envFiles.md` — documentation on environment variables and .env files
 - `docs/config.md` — documentation on the `agency.json` configuration file
 - `docs/lifecycleHooks.md` — documentation on lifecycle hooks and callbacks
@@ -348,5 +225,3 @@ There are plenty of files that dive into implementation details on specific feat
 - `docs/dev/trace.md` — execution traces capturing checkpoints at every step
 - `docs/dev/typechecker.md` — bidirectional type checking to catch errors before compilation
 - `docs/dev/typescript-ir.md` — structured TsNode tree representation of generated TypeScript
-
-Important! Please note that you cannot write and run agency files in the `/tmp` directory or any directory outside of the current directory, because certain node modules are needed for the files to run and the `/tmp` directory does not have those node modules.

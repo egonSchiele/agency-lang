@@ -17,6 +17,7 @@ export default defineConfig({
           { text: "Types", link: "/guide/types" },
           { text: "Nodes", link: "/guide/nodes" },
           { text: "LLMs", link: "/guide/llm" },
+          { text: "Functions", link: "/guide/functions" },
           { text: "Interrupts", link: "/guide/interrupts" },
           { text: "Handlers", link: "/guide/handlers" },
           { text: "Testing", link: "/guide/testing" },

@@ -194,6 +194,19 @@ greet(name: "world", name: "other")
 `),
     ).toThrow("Duplicate named argument 'name' in call to 'greet'");
   });
+
+  it("should accept named args with block parameters", () => {
+    expect(() =>
+      generateWithBuilder(`
+def twice(label: string, block: () => string): string {
+  return block() + block()
+}
+twice(label: "test") as {
+  return "hi"
+}
+`),
+    ).not.toThrow();
+  });
 });
 
 describe("Safe functions and methods", () => {

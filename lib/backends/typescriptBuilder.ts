@@ -555,7 +555,9 @@ export class TypeScriptBuilder {
     }
 
     // Collect named args, checking for duplicates and unknown names
-    const nonVariadicParams = paramList.filter((p) => !p.variadic);
+    const nonVariadicParams = paramList.filter(
+      (p) => !p.variadic && p.typeHint?.type !== "blockType",
+    );
     const namedArgMap = new Map<string, Expression>();
     for (let i = namedStartIdx; i < args.length; i++) {
       const arg = args[i] as NamedArgument;

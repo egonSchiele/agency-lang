@@ -5,14 +5,15 @@ const DIFF_DELETE = -1;
 const DIFF_INSERT = 1;
 const DIFF_EQUAL = 0;
 
+const dmp = new DiffMatchPatch();
+
 /**
  * Formats a colored, line-based diff between two strings.
  * Deletions (expected) are shown in red with a "-" prefix.
  * Insertions (actual) are shown in green with a "+" prefix.
- * Equal lines are shown dimmed with a " " prefix.
+ * Equal lines are shown dimmed with a "  " prefix.
  */
 export function formatDiff(expected: string, actual: string): string {
-  const dmp = new DiffMatchPatch();
   const diffs = dmp.diff_main(expected, actual);
   dmp.diff_cleanupSemantic(diffs);
 
@@ -28,10 +29,6 @@ export function formatDiff(expected: string, actual: string): string {
         lines.push(color.green(`+ ${part}`));
       } else {
         lines.push(color.dim(`  ${part}`));
-      }
-      // Add a newline marker between parts (but not after the last one)
-      if (i < parts.length - 1) {
-        lines.push("");
       }
     }
   }

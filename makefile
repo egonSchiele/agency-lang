@@ -4,7 +4,7 @@ all:
 	pnpm run templates && pnpm run build && $(MAKE) stdlib
 
 stdlib:
-	tsc -p tsconfig.stdlib.json
+	pnpm exec tsc -p tsconfig.stdlib.json
 
 test:
 	pnpm run test

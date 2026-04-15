@@ -611,6 +611,7 @@ export class TypeScriptBuilder {
       case "string":
       case "variableName":
       case "boolean":
+      case "null":
         return this.generateLiteral(node);
       case "returnStatement":
         return this.processReturnStatement(node);

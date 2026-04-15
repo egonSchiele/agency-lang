@@ -4,11 +4,7 @@ import * as strUtils from "./stringHelpers.js"
 import exclaim, { upper } from "./stringHelpers.js"
 import len, * as listHelpers from "./listHelpers.js"
 import { add, multiply } from "./agencyHelpers.agency"
-// default import from JS
-// named imports from JS
-// namespace import from JS
-// mixed: default + named import from JS
-// named import from agency file
+
 node testDefaultImport() {
   return square(5)
 }

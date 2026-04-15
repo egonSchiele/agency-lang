@@ -852,31 +852,7 @@ export const variableTypeParser: Parser<VariableType> = trace(
   ),
 );
 
-const exportedTypeAliasParser: Parser<TypeAlias> = withLoc(trace(
-  "exportedTypeAliasParser",
-  seqC(
-    set("type", "typeAlias"),
-    set("exported", true),
-    str("export"),
-    spaces,
-    str("type"),
-    spaces,
-    captureCaptures(
-      parseError(
-        "expected a statement of the form `export type Foo = X'`",
-        capture(many1WithJoin(varNameChar), "aliasName"),
-        optionalSpaces,
-        str("="),
-        optionalSpaces,
-        capture(variableTypeParser, "aliasedType"),
-        optionalSemicolon,
-        optionalSpacesOrNewline,
-      ),
-    ),
-  ),
-));
-
-const plainTypeAliasParser: Parser<TypeAlias> = withLoc(trace(
+const baseTypeAliasParser: Parser<TypeAlias> = withLoc(trace(
   "typeAliasParser",
   seqC(
     set("type", "typeAlias"),
@@ -898,7 +874,18 @@ const plainTypeAliasParser: Parser<TypeAlias> = withLoc(trace(
 ));
 
 export const typeAliasParser: Parser<TypeAlias> = label("a type alias",
-  or(exportedTypeAliasParser, plainTypeAliasParser),
+  (input: string) => {
+    const exportResult = exportKeywordParser(input);
+    if (!exportResult.success) return exportResult;
+    const isExported = exportResult.result;
+
+    const baseResult = baseTypeAliasParser(exportResult.rest);
+    if (!baseResult.success) return baseResult;
+
+    const result = { ...baseResult.result };
+    if (isExported) result.exported = true;
+    return { ...baseResult, result };
+  },
 );
 
 // =============================================================================

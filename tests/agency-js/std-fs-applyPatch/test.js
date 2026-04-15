@@ -82,7 +82,7 @@ writeFileSync(
       },
       mismatch: {
         ok: mismatchResult.ok,
-        mentionsContextMismatch: /context mismatch|cannot remove/.test(
+        mentionsContextMismatch: /context does not match|context mismatch|could not be applied/.test(
           mismatchResult.error ?? "",
         ),
         contentsUnchanged: mismatchContents === "one\ntwo\nthree\n",

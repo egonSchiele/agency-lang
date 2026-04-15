@@ -69,6 +69,7 @@
     "chalk": "^5.6.2",
     "cli-highlight": "^2.1.11",
     "commander": "^14.0.3",
+    "diff-match-patch": "^1.0.5",
     "egonlog": "^0.0.2",
     "esbuild": "^0.27.4",
     "nanoid": "^5.1.6",
@@ -82,6 +83,7 @@
   },
   "devDependencies": {
     "@types/blessed": "^0.1.27",
+    "@types/diff-match-patch": "^1.0.36",
     "@types/node": "^25.0.3",
     "@types/prompts": "^2.4.9",
     "tsc-alias": "^1.8.16",

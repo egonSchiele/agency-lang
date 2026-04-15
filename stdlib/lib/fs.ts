@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import process from "process";
+import diff_match_patch from "diff-match-patch";
 
 export type EditResult = {
   replacements: number;
@@ -200,46 +201,35 @@ function firstToken(s: string): string {
 }
 
 function applyHunks(original: string, hunks: Hunk[], filePath: string): string {
-  const origLines = original === "" ? [] : original.split("\n");
-  const hadTrailingNewline = original.endsWith("\n");
-  const out: string[] = [];
-  let cursor = 0;
+  const dmp = new diff_match_patch();
+  let current = original;
 
-  for (const h of hunks) {
-    const targetStart = h.oldStart - 1;
-    while (cursor < targetStart) {
-      out.push(origLines[cursor]);
-      cursor++;
-    }
-    for (const hl of h.lines) {
-      const tag = hl[0];
-      const content = hl.slice(1);
+  for (let i = 0; i < hunks.length; i++) {
+    const h = hunks[i];
+    const before: string[] = [];
+    const after: string[] = [];
+    for (const line of h.lines) {
+      const tag = line[0];
+      const content = line.slice(1);
       if (tag === " ") {
-        if (origLines[cursor] !== content) {
-          throw new Error(
-            `applyPatch: context mismatch in ${filePath} at line ${cursor + 1}. Expected "${content}", got "${origLines[cursor] ?? ""}"`,
-          );
-        }
-        out.push(content);
-        cursor++;
+        before.push(content);
+        after.push(content);
       } else if (tag === "-") {
-        if (origLines[cursor] !== content) {
-          throw new Error(
-            `applyPatch: cannot remove line in ${filePath} at line ${cursor + 1}. Expected "${content}", got "${origLines[cursor] ?? ""}"`,
-          );
-        }
-        cursor++;
+        before.push(content);
       } else if (tag === "+") {
-        out.push(content);
+        after.push(content);
       }
     }
-  }
-  while (cursor < origLines.length) {
-    out.push(origLines[cursor]);
-    cursor++;
+
+    const patches = dmp.patch_make(before.join("\n"), after.join("\n"));
+    const [updated, applied] = dmp.patch_apply(patches, current);
+    if (applied.some((ok) => !ok)) {
+      throw new Error(
+        `applyPatch: hunk #${i + 1} could not be applied to ${filePath}; the surrounding context does not match the current file contents`,
+      );
+    }
+    current = updated;
   }
 
-  let result = out.join("\n");
-  if (hadTrailingNewline && !result.endsWith("\n")) result += "\n";
-  return result;
+  return current;
 }

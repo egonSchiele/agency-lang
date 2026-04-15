@@ -1,0 +1,17 @@
+safe def greet(name: string, greeting: string = "Hello", punctuation: string = "!"): string {
+  return greeting + " " + name + punctuation
+}
+
+node main() {
+  // Basic reordering: all named, reversed order
+  let a = greet(punctuation: ".", greeting: "Hi", name: "world")
+  // Skip middle optional param
+  let b = greet(name: "world", punctuation: "?")
+  // Mixed positional + named (positional first)
+  let c = greet("world", punctuation: "!")
+  // All named, same order (regression)
+  let d = greet(name: "world", greeting: "Hey", punctuation: "!")
+  // Skip trailing optional params
+  let e = greet(name: "world")
+  return a + " | " + b + " | " + c + " | " + d + " | " + e
+}

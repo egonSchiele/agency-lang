@@ -1,0 +1,13 @@
+def greet(name: string, greeting: string = "Hello", punctuation: string = "!"): string {
+  return greeting + " " + name + punctuation
+}
+
+node main() {
+  // Reordered named args
+  let a = greet(greeting: "Hi", name: "world")
+  // Skip middle param with named args
+  let b = greet(name: "world", punctuation: ".")
+  // Mixed positional + named
+  let c = greet("world", punctuation: "?")
+  return a + " | " + b + " | " + c
+}

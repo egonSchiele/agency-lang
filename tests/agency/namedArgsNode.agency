@@ -1,0 +1,7 @@
+node main() {
+  return other(b: "world", a: "hello")
+}
+
+node other(a: string, b: string) {
+  return a + " " + b
+}

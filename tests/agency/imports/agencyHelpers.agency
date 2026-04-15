@@ -5,3 +5,7 @@ export def add(a: number, b: number): number {
 export def multiply(a: number, b: number): number {
   return a * b
 }
+
+export type MathResult = {
+  answer: number
+}

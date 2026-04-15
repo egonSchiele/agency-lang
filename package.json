@@ -6,8 +6,8 @@
   "scripts": {
     "test": "vitest",
     "test:run": "vitest run",
-    "test:agency": "time node ./dist/scripts/agency.js test tests/agency -p 8",
-    "test:agency-js": "time node ./dist/scripts/agency.js test js tests/agency-js -p 8",
+    "test:agency": "time node ./dist/scripts/agency.js test tests/agency -p 12",
+    "test:agency-js": "time node ./dist/scripts/agency.js test js tests/agency-js -p 12",
     "build": "rm -rf dist/ && tsc && tsc-alias && cp -r lib/agents dist/lib",
     "start": "node dist/index.js",
     "templates": "typestache ./lib/templates",

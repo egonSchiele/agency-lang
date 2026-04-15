@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "testTypeImport",
+      "input": "",
+      "expectedOutput": "{\"answer\":5}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "imported type used as structured LLM response"
+    }
+  ]
+}

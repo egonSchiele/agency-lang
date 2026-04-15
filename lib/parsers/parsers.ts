@@ -852,7 +852,7 @@ export const variableTypeParser: Parser<VariableType> = trace(
   ),
 );
 
-export const typeAliasParser: Parser<TypeAlias> = label("a type alias", withLoc(trace(
+const baseTypeAliasParser: Parser<TypeAlias> = withLoc(trace(
   "typeAliasParser",
   seqC(
     set("type", "typeAlias"),
@@ -871,7 +871,22 @@ export const typeAliasParser: Parser<TypeAlias> = label("a type alias", withLoc(
       ),
     ),
   ),
-)));
+));
+
+export const typeAliasParser: Parser<TypeAlias> = label("a type alias",
+  (input: string) => {
+    const exportResult = exportKeywordParser(input);
+    if (!exportResult.success) return exportResult;
+    const isExported = exportResult.result;
+
+    const baseResult = baseTypeAliasParser(exportResult.rest);
+    if (!baseResult.success) return baseResult;
+
+    const result = { ...baseResult.result };
+    if (isExported) result.exported = true;
+    return { ...baseResult, result };
+  },
+);
 
 // =============================================================================
 // keyword.ts

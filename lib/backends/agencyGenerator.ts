@@ -392,7 +392,8 @@ export class AgencyGenerator {
   protected processTypeAlias(node: TypeAlias): string {
     this.typeAliases[node.aliasName] = node.aliasedType;
     const aliasedTypeStr = this.aliasedTypeToString(node.aliasedType);
-    return this.indentStr(`type ${node.aliasName} = ${aliasedTypeStr}`);
+    const exportPrefix = node.exported ? "export " : "";
+    return this.indentStr(`${exportPrefix}type ${node.aliasName} = ${aliasedTypeStr}`);
   }
 
   // Assignment and literals

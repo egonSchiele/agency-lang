@@ -17,10 +17,10 @@ import { resolveAgencyImportPath, isAgencyImport } from "../importPaths.js";
  * (.agency files, std:: imports, or pkg:: imports).
  * Leaves import node / import tool statements and non-Agency imports untouched.
  */
-function assertExported(name: string, modulePath: string, exported?: boolean): void {
+function assertExported(name: string, modulePath: string, exported?: boolean, symbolKind = "Function"): void {
   if (!exported) {
     throw new Error(
-      `Function '${name}' in '${modulePath}' is not exported. Add the 'export' keyword to its definition.`,
+      `${symbolKind} '${name}' in '${modulePath}' is not exported. Add the 'export' keyword to its definition.`,
     );
   }
 }
@@ -104,6 +104,7 @@ export function resolveImports(
             }
             break;
           case "type":
+            assertExported(name, node.modulePath, symbol.exported, "Type");
             typeNames.push(name);
             break;
         }

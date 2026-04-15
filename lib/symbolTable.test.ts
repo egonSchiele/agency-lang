@@ -32,7 +32,7 @@ def add(a: number, b: number) {
     const symbols = parseAndClassify(`
 type Greeting = string
 `);
-    expect(symbols.Greeting).toEqual({ kind: "type", name: "Greeting" });
+    expect(symbols.Greeting).toMatchObject({ kind: "type", name: "Greeting" });
   });
 
   it("classifies multiple symbols from one file", () => {
@@ -47,7 +47,7 @@ node main() {
   return helper()
 }
 `);
-    expect(symbols.Config).toEqual({ kind: "type", name: "Config" });
+    expect(symbols.Config).toMatchObject({ kind: "type", name: "Config" });
     expect(symbols.helper).toMatchObject({ kind: "function", name: "helper" });
     expect(symbols.main).toEqual({ kind: "node", name: "main" });
   });
@@ -59,7 +59,7 @@ def myFunc() {
   return 1
 }
 `);
-    expect(symbols.Inner).toEqual({ kind: "type", name: "Inner" });
+    expect(symbols.Inner).toMatchObject({ kind: "type", name: "Inner" });
     expect(symbols.myFunc).toMatchObject({ kind: "function", name: "myFunc" });
   });
 });

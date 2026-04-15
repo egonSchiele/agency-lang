@@ -193,8 +193,14 @@ export function _glob(
 function globToRegExp(glob: string): RegExp {
   let depth = 0;
   for (const c of glob) {
-    if (c === "{") depth++;
-    else if (c === "}") {
+    if (c === "{") {
+      depth++;
+      if (depth > 1) {
+        throw new Error(
+          `invalid glob pattern: nested braces are not supported in ${glob}`,
+        );
+      }
+    } else if (c === "}") {
       depth--;
       if (depth < 0) {
         throw new Error(`invalid glob pattern: unmatched '}' in ${glob}`);

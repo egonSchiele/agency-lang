@@ -5,8 +5,6 @@ import { runEdit, rejectInterrupt } from "./agent.js";
 
 const TMP = mkdtempSync(join(tmpdir(), "agency-edit-reject-"));
 
-// Reject should short-circuit the edit: the failure comes back as a Result
-// and the file is never written to.
 const path = join(TMP, "reject.txt");
 writeFileSync(path, "alpha\n");
 const r = await runEdit(path, "alpha", "OMEGA", false);

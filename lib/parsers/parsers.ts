@@ -2154,7 +2154,7 @@ export const forLoopParser: Parser<ForLoop> = label("a for loop", withLoc(trace(
   ),
 )));
 
-// Parses: name, name: type, name = default, name: type = default, name?: type
+// Parses: name, name?, name: type, name?: type, name = default, name? = default, name: type = default
 export const functionParameterParser: Parser<FunctionParameter> = trace(
   "functionParameterParser",
   map(

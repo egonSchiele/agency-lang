@@ -2,21 +2,33 @@
   "tests": [
     {
       "nodeName": "main",
-      "input": "hello world",
+      "input": "\"hello world\"",
       "expectedOutput": "\"matched\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "main",
-      "input": "goodbye world",
+      "input": "\"goodbye world\"",
       "expectedOutput": "\"has world\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "main",
-      "input": "goodbye friend",
+      "input": "\"goodbye friend\"",
       "expectedOutput": "\"no world\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

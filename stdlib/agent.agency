@@ -1,0 +1,33 @@
+import { _todoWrite, _todoList } from "./lib/agent.js"
+
+type Todo = {
+  id: string;
+  text: string;
+  status: string
+}
+
+export safe def todoWrite(todos: Todo[]): Todo[] {
+  """
+  Replace the current todo list. Each todo has an id, text, and status (one of 'pending', 'in_progress', 'completed'). Use this to track multi-step work as you go: mark a todo 'in_progress' before starting it and 'completed' when done. Returns the new list.
+  """
+  return _todoWrite(todos)
+}
+
+export safe def todoList(): Todo[] {
+  """
+  Return the current todo list.
+  """
+  return _todoList()
+}
+
+export def question(prompt: string): string {
+  """
+  Ask the user a question and wait for their reply. Unlike input(), this raises an interrupt so the host (CLI, web UI, etc.) can present the prompt in its own way.
+  """
+  return interrupt({
+    type: "std::question",
+    message: prompt,
+    prompt: prompt
+  })
+  return ""
+}

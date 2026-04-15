@@ -55,7 +55,9 @@ export function restore(
     return;
   }
 
-  ctx.checkpoints.trackLocationRestore(location);
+  if (options.maxRestores !== undefined) {
+    ctx.checkpoints.trackLocationRestore(location);
+  }
   ctx.checkpoints.trackRestore(cp.id);
   ctx.checkpoints.deleteAfterCheckpoint(cp.id);
   ctx.pendingPromises.clear();

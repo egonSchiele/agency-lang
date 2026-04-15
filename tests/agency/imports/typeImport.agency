@@ -1,0 +1,6 @@
+import { MathResult } from "./agencyHelpers.agency"
+
+node testTypeImport() {
+  const response: MathResult = llm("What is 2 + 3? Return the answer as a number.")
+  return response
+}

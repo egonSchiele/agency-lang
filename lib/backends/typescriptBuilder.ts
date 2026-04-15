@@ -793,8 +793,9 @@ export class TypeScriptBuilder {
   // ------- Type system (side effects only) -------
 
   private processTypeAlias(node: TypeAlias): TsNode {
+    const exportPrefix = node.exported ? "export " : "";
     return ts.raw(
-      `type ${node.aliasName} = ${formatTypeHint(node.aliasedType)};`,
+      `${exportPrefix}type ${node.aliasName} = ${formatTypeHint(node.aliasedType)};`,
     );
   }
 

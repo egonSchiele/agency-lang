@@ -64,7 +64,7 @@ describe("resolveImports", () => {
     };
     const symbolTable: SymbolTable = {
       "/project/types.agency": {
-        Config: { kind: "type", name: "Config" },
+        Config: { kind: "type", name: "Config", exported: true },
       },
     };
     const result = resolveImports(program, symbolTable, "/project/main.agency");
@@ -88,7 +88,7 @@ describe("resolveImports", () => {
       "/project/mixed.agency": {
         greet: { kind: "node", name: "greet" },
         add: { kind: "function", name: "add", exported: true },
-        Config: { kind: "type", name: "Config" },
+        Config: { kind: "type", name: "Config", exported: true },
       },
     };
     const result = resolveImports(program, symbolTable, "/project/main.agency");
@@ -163,7 +163,7 @@ describe("resolveImports", () => {
     };
     const symbolTable: SymbolTable = {
       "/project/types.agency": {
-        Config: { kind: "type", name: "Config" },
+        Config: { kind: "type", name: "Config", exported: true },
       },
     };
     const result = resolveImports(program, symbolTable, "/project/main.agency");
@@ -199,7 +199,7 @@ describe("resolveImports", () => {
     const symbolTable: SymbolTable = {
       "/project/mixed.agency": {
         add: { kind: "function", name: "add", exported: true },
-        Config: { kind: "type", name: "Config" },
+        Config: { kind: "type", name: "Config", exported: true },
       },
     };
     const result = resolveImports(program, symbolTable, "/project/main.agency");

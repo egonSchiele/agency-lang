@@ -852,7 +852,31 @@ export const variableTypeParser: Parser<VariableType> = trace(
   ),
 );
 
-export const typeAliasParser: Parser<TypeAlias> = label("a type alias", withLoc(trace(
+const exportedTypeAliasParser: Parser<TypeAlias> = withLoc(trace(
+  "exportedTypeAliasParser",
+  seqC(
+    set("type", "typeAlias"),
+    set("exported", true),
+    str("export"),
+    spaces,
+    str("type"),
+    spaces,
+    captureCaptures(
+      parseError(
+        "expected a statement of the form `export type Foo = X'`",
+        capture(many1WithJoin(varNameChar), "aliasName"),
+        optionalSpaces,
+        str("="),
+        optionalSpaces,
+        capture(variableTypeParser, "aliasedType"),
+        optionalSemicolon,
+        optionalSpacesOrNewline,
+      ),
+    ),
+  ),
+));
+
+const plainTypeAliasParser: Parser<TypeAlias> = withLoc(trace(
   "typeAliasParser",
   seqC(
     set("type", "typeAlias"),
@@ -871,7 +895,11 @@ export const typeAliasParser: Parser<TypeAlias> = label("a type alias", withLoc(
       ),
     ),
   ),
-)));
+));
+
+export const typeAliasParser: Parser<TypeAlias> = label("a type alias",
+  or(exportedTypeAliasParser, plainTypeAliasParser),
+);
 
 // =============================================================================
 // keyword.ts

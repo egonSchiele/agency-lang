@@ -69,6 +69,7 @@ export type TypeAlias = BaseNode & {
   type: "typeAlias";
   aliasName: string;
   aliasedType: VariableType;
+  exported?: boolean;
 };
 
 export type TypeAliasVariable = {

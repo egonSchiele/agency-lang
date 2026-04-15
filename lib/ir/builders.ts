@@ -524,6 +524,10 @@ export const ts = {
     return { kind: "not", operand: condition };
   },
 
+  unaryOp(op: string, operand: TsNode, opts?: { paren?: boolean }): TsNode {
+    return { kind: "unaryOp", op, operand, paren: opts?.paren };
+  },
+
   functionCallConfig({
     ctx,
     threads,

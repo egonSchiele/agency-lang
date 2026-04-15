@@ -342,8 +342,8 @@ export const regexLiteralParser: Parser<RegexLiteral> = label("a regex", (input:
   const parser = seqC(
     set("type", "regex"),
     char("/"),
-    capture(manyWithJoin(or(
-      map(str("\\/"), () => "/"),
+    capture(many1WithJoin(or(
+      str("\\/"),
       noneOf("/\n"),
     )), "pattern"),
     char("/"),

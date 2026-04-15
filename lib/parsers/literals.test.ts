@@ -301,13 +301,10 @@ describe("literals parsers", () => {
       },
       {
         input: "/foo\\/bar/",
-        expected: { success: true, result: { type: "regex", pattern: "foo/bar", flags: "" } },
-      },
-      {
-        input: "//",
-        expected: { success: true, result: { type: "regex", pattern: "", flags: "" } },
+        expected: { success: true, result: { type: "regex", pattern: "foo\\/bar", flags: "" } },
       },
       // Failure cases
+      { input: "//", expected: { success: false } },
       { input: "abc", expected: { success: false } },
       { input: "", expected: { success: false } },
     ];

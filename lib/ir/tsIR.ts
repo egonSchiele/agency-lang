@@ -48,6 +48,7 @@ export type TsNode =
   | TsAnd
   | TsOr
   | TsNot
+  | TsUnaryOp
   | TsWithHandler
   | TsTernary;
 
@@ -404,6 +405,13 @@ export interface TsOr {
 export interface TsNot {
   kind: "not";
   operand: TsNode;
+}
+
+export interface TsUnaryOp {
+  kind: "unaryOp";
+  op: string;
+  operand: TsNode;
+  paren?: boolean;
 }
 
 export interface TsTernary {

@@ -947,7 +947,7 @@ export class TypeScriptBuilder {
     // foo !~ /bar/ → !(/bar/.test(foo))
     const testCall = ts.call(ts.prop(rightNode, "test"), [leftNode]);
     if (node.operator === "!~") {
-      return ts.binOp(ts.empty(), "!", testCall, { parenRight: true });
+      return ts.unaryOp("!", testCall, { paren: true });
     }
     return testCall;
   }

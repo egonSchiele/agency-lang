@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"ok\":true,\"count\":0}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "glob returns a successful empty result when nothing matches (distinguishes from a crash)"
+    }
+  ]
+}

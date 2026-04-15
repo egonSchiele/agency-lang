@@ -1,0 +1,8 @@
+import { exists } from "std::shell"
+
+node main() {
+  return {
+    present: exists("tests/agency/stdlib/glob-fixtures/a.md"),
+    missing: exists("tests/agency/stdlib/glob-fixtures/no-such-file")
+  }
+}

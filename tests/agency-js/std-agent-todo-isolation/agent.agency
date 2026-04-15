@@ -1,0 +1,12 @@
+import { todoWrite, todoList } from "std::agent"
+
+node writeAndList(label: string) {
+  todoWrite([
+    { id: "1", text: label, status: "pending" }
+  ])
+  return todoList()
+}
+
+node justList() {
+  return todoList()
+}

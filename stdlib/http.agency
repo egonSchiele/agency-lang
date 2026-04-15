@@ -1,0 +1,37 @@
+import { _fetch, _fetchJSON, _webfetch } from "./lib/http.js"
+
+export def fetch(url: string): Result {
+  """
+  Fetch a URL and return the response body as text. Fails on network errors or if the response body exceeds 10 MB.
+  """
+  return interrupt({
+    type: "std::http.fetch",
+    message: "Are you sure you want to fetch this URL?",
+    url: url
+  })
+  return try _fetch(url)
+}
+
+export def fetchJSON(url: string): Result {
+  """
+  Fetch a URL and parse the response body as JSON. Fails on network errors, invalid JSON, or if the response body exceeds 10 MB.
+  """
+  return interrupt({
+    type: "std::http.fetchJSON",
+    message: "Are you sure you want to fetch this URL as JSON?",
+    url: url
+  })
+  return try _fetchJSON(url)
+}
+
+export def webfetch(url: string): Result {
+  """
+  Fetch a URL and return the body as readable markdown when the response is HTML, or as plain text otherwise. Useful for extracting page content for an LLM. Fails on network errors or if the response body exceeds 10 MB.
+  """
+  return interrupt({
+    type: "std::http.webfetch",
+    message: "Are you sure you want to fetch this URL?",
+    url: url
+  })
+  return try _webfetch(url)
+}

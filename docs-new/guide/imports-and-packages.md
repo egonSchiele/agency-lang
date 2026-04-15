@@ -33,7 +33,7 @@ import tool { foo } from "./foo.agency"
 Agency also has a standard library. You can import from the standard library using the `std::` prefix.
 
 ```ts
-import { bash } from "std::process"
+import { bash } from "std::shell"
 ```
 
 ## TypeScript Packages

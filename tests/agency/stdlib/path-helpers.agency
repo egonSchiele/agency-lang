@@ -1,0 +1,12 @@
+import { join, basename, dirname, extname } from "std::path"
+
+node main() {
+  return {
+    join: join("a", "b", "c.ts"),
+    basename: basename("/foo/bar/baz.ts"),
+    basenameNoExt: basename("/foo/bar/baz.ts", ".ts"),
+    dirname: dirname("/foo/bar/baz.ts"),
+    extname: extname("/foo/bar/baz.ts"),
+    noExt: extname("/foo/bar/baz")
+  }
+}

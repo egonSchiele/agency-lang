@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"presentExists\":true,\"presentType\":\"file\",\"missingExists\":false,\"missingType\":\"missing\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "stat returns type=file for an existing file and type=missing for a non-existent path"
+    }
+  ]
+}

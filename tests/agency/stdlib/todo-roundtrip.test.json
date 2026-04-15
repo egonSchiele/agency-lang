@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[{\"id\":\"1\",\"text\":\"read the spec\",\"status\":\"completed\"},{\"id\":\"2\",\"text\":\"implement feature\",\"status\":\"in_progress\"},{\"id\":\"3\",\"text\":\"write tests\",\"status\":\"pending\"}]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "todoWrite followed by todoList returns the same list"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[{\"file\":\"tests/agency/stdlib/grep-fixtures/one.txt\",\"line\":1},{\"file\":\"tests/agency/stdlib/grep-fixtures/one.txt\",\"line\":3},{\"file\":\"tests/agency/stdlib/grep-fixtures/two.txt\",\"line\":2}]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "grep finds 'hello' case-insensitively across fixture files"
+    }
+  ]
+}

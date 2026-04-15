@@ -12,5 +12,5 @@
     "types": ["node"]
   },
   "include": ["stdlib/**/*.ts"],
-  "exclude": []
+  "exclude": ["node_modules", "stdlib/index.ts"]
 }

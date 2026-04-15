@@ -1,0 +1,66 @@
+import { _edit, _multiedit, _applyPatch } from "./lib/fs.js"
+
+type EditResult = {
+  replacements: number;
+  path: string
+}
+
+export def edit(filename: string, oldText: string, newText: string, replaceAll: boolean = false): Result {
+  """
+  Edit a file by replacing oldText with newText. By default oldText must match exactly once in the file; pass replaceAll=true to replace every occurrence. Fails if oldText is not found or appears multiple times (unless replaceAll is set).
+  """
+  return interrupt({
+    type: "std::edit",
+    message: "Are you sure you want to edit this file?",
+    filename: filename,
+    oldText: oldText,
+    newText: newText,
+    replaceAll: replaceAll
+  })
+
+  return try _edit(filename, oldText, newText, replaceAll)
+}
+
+type Edit = {
+  oldText: string;
+  newText: string;
+  replaceAll: boolean
+}
+
+type MultiEditResult = {
+  replacements: number;
+  path: string;
+  edits: number
+}
+
+export def multiedit(filename: string, edits: Edit[]): Result {
+  """
+  Apply a sequence of edits to a single file atomically. Each edit has oldText, newText, and replaceAll. Fails if any edit's oldText is not found or is ambiguous; when any edit fails, nothing is written.
+  """
+  return interrupt({
+    type: "std::multiedit",
+    message: "Are you sure you want to apply these edits?",
+    filename: filename,
+    edits: edits
+  })
+
+  return try _multiedit(filename, edits)
+}
+
+type PatchResult = {
+  applied: number;
+  files: string[]
+}
+
+export def applyPatch(patch: string): Result {
+  """
+  Apply a unified diff to the working tree. Supports file creation (--- /dev/null), line additions, deletions, and context. Fails on a malformed diff or on a context-line mismatch against the current file contents.
+  """
+  return interrupt({
+    type: "std::applyPatch",
+    message: "Are you sure you want to apply this patch?",
+    patch: patch
+  })
+
+  return try _applyPatch(patch)
+}

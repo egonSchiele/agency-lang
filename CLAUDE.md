@@ -348,3 +348,5 @@ There are plenty of files that dive into implementation details on specific feat
 - `docs/dev/trace.md` — execution traces capturing checkpoints at every step
 - `docs/dev/typechecker.md` — bidirectional type checking to catch errors before compilation
 - `docs/dev/typescript-ir.md` — structured TsNode tree representation of generated TypeScript
+
+Important! Please note that you cannot write and run agency files in the `/tmp` directory or any directory outside of the current directory, because certain node modules are needed for the files to run and the `/tmp` directory does not have those node modules.

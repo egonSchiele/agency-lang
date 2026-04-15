@@ -1,0 +1,19 @@
+import { grep } from "std::shell"
+
+node main() {
+  handle {
+    const hits = grep("hello", "tests/agency/stdlib/grep-fixtures", "i", 100) catch []
+  } with (data) {
+    return approve()
+  }
+  let sorted = sortBy(hits) as h {
+    return "${h.file}:${h.line}"
+  }
+  let names = map(sorted) as h {
+    return {
+      file: h.file,
+      line: h.line
+    }
+  }
+  return names
+}

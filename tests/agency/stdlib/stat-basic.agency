@@ -1,0 +1,12 @@
+import { stat } from "std::shell"
+
+node main() {
+  let present = stat("tests/agency/stdlib/glob-fixtures/a.md")
+  let missing = stat("tests/agency/stdlib/glob-fixtures/no-such-file")
+  return {
+    presentExists: present.exists,
+    presentType: present.type,
+    missingExists: missing.exists,
+    missingType: missing.type
+  }
+}

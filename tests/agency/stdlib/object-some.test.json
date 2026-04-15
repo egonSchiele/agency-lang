@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "some returns true when any entry passes, false when none do",
+      "input": "",
+      "expectedOutput": "{\"hasNegative\":true,\"allPositive\":false}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

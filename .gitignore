@@ -16,6 +16,9 @@ skills/*
 docs/local/
 docs-new/node_modules/*
 stdlib/index.ts
+stdlib/array.ts
+stdlib/object.ts
+stdlib/strategy.ts
 
 # Allow test fixture files for pkg:: import tests
 !tests/pkg-imports/node_modules/

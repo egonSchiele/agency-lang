@@ -1,0 +1,10 @@
+import { filterEntries } from "std::object"
+
+def isPositive(v: number, k: string): boolean {
+  return v > 0
+}
+
+node main() {
+  const obj = { a: 1, b: -2, c: 3, d: -4 }
+  return filterEntries(obj, isPositive)
+}

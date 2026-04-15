@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "mapValues doubles each value",
+      "input": "",
+      "expectedOutput": "{\"a\":2,\"b\":4,\"c\":6}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "mapEntries transforms both keys and values",
+      "input": "",
+      "expectedOutput": "{\"KEY_a\":2,\"KEY_b\":3}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

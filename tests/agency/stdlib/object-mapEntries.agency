@@ -1,0 +1,10 @@
+import { mapEntries } from "std::object"
+
+def upperKey(v: number, k: string) {
+  return { key: "KEY_${k}", value: v + 1 }
+}
+
+node main() {
+  const obj = { a: 1, b: 2 }
+  return mapEntries(obj, upperKey)
+}

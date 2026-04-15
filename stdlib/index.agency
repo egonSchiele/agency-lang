@@ -1,4 +1,4 @@
-import { _print, _printJSON, _input, _sleep, _round, _fetch, _fetchJSON, _read, _write, _readImage, _notify, _range, _mostCommon } from "./_builtins.js"
+import { _print, _printJSON, _input, _sleep, _round, _fetch, _fetchJSON, _read, _write, _readImage, _notify, _range, _mostCommon, _keys, _values, _entries } from "./_builtins.js"
 export safe def print(...messages) {
   """
   A tool for printing a message to the console.
@@ -123,5 +123,26 @@ export safe def mostCommon(items: any[]): any {
   Return the most common element in an array. Uses JSON serialization for comparison.
   """
   return _mostCommon(items)
+}
+
+export safe def keys(obj: any): string[] {
+  """
+  Return an array of an object's own enumerable property names.
+  """
+  return _keys(obj)
+}
+
+export safe def values(obj: any): any[] {
+  """
+  Return an array of an object's own enumerable property values.
+  """
+  return _values(obj)
+}
+
+export safe def entries(obj: any): any[] {
+  """
+  Return an array of an object's own enumerable entries, each as { key, value }.
+  """
+  return _entries(obj)
 }
 

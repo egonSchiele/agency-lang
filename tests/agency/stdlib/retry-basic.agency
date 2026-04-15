@@ -1,4 +1,4 @@
-import { retry } from "std::retry"
+import { retry } from "std::strategy"
 
 def isPositive(n: number): boolean {
   return n > 0

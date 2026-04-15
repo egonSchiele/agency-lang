@@ -1,4 +1,4 @@
-import { sample } from "std::sample"
+import { sample } from "std::strategy"
 
 node main() {
   let results = sample(0) as {

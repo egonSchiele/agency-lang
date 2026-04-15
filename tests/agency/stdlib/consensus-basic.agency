@@ -1,4 +1,4 @@
-import { consensus } from "std::consensus"
+import { consensus } from "std::strategy"
 
 let counter = 0
 

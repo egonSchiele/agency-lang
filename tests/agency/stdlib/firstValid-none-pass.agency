@@ -1,4 +1,4 @@
-import { firstValid } from "std::firstValid"
+import { firstValid } from "std::strategy"
 
 def alwaysFalse(n: number): boolean {
   return false

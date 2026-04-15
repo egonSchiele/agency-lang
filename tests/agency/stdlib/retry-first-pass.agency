@@ -1,4 +1,4 @@
-import { retry } from "std::retry"
+import { retry } from "std::strategy"
 
 def alwaysTrue(n: number): boolean {
   return true

@@ -1,3 +1,20 @@
+export def sample(n: number, block: () => any): any[] {
+  """
+  Run a block n times in parallel. Returns an array of all results.
+  """
+  return fork(range(n)) as _ {
+    return block()
+  }
+}
+
+export def consensus(n: number, block: () => any): any {
+  """
+  Run a block n times in parallel and return the most common result (majority vote).
+  """
+  let results = sample(n, block)
+  return mostCommon(results)
+}
+
 export def retry(n: number, test: (any) => boolean, block: () => any): any {
   """
   Run a block up to n times. Returns the first result that passes the test function. Returns null if all attempts fail.
@@ -26,4 +43,20 @@ export def retryWithFeedback(n: number, test: (any) => boolean, block: (any, num
     prev = result
   }
   return prev
+}
+
+export def firstValid(variants: any[], test: (any) => boolean, block: (any) => any): any {
+  """
+  Run a block for each variant in parallel, then return the first result that passes the test. Returns null if none pass.
+  """
+  let results = fork(variants) as v {
+    return block(v)
+  }
+  for (r in results) {
+    let passed = test(r)
+    if (passed) {
+      return r
+    }
+  }
+  return null
 }

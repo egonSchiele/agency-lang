@@ -27,7 +27,6 @@ export type DefaultImport = {
 
 /**
  * Returns the local names for an import (i.e. the alias if present, otherwise the original name).
- * Use `getImportedOriginalNames` when you need the original (source module) names.
  */
 export function getImportedNames(importNameType: ImportNameType): string[] {
   switch (importNameType.type) {
@@ -60,12 +59,6 @@ export function getImportedToolNames(node: ImportToolStatement): string[] {
   );
 }
 
-/** Returns original (source module) names, ignoring aliases. */
-export function getImportedOriginalToolNames(
-  node: ImportToolStatement,
-): string[] {
-  return node.importedTools.flatMap((n) => n.importedNames);
-}
 
 export function getImportedSafeToolNames(node: ImportToolStatement): string[] {
   return node.importedTools.flatMap((n) => n.safeNames);

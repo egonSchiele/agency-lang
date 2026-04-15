@@ -26,6 +26,7 @@ import {
   ImportNodeStatement,
   ImportStatement,
   ImportToolStatement,
+  getImportedToolNames,
 } from "../types/importStatement.js";
 import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
@@ -302,8 +303,7 @@ export class AgencyGenerator {
 
   protected isImportedTool(functionName: string): boolean {
     return this.importedTools
-      .flatMap((node) => node.importedTools)
-      .flatMap((n) => n.importedNames.map((name) => n.aliases[name] ?? name))
+      .flatMap(getImportedToolNames)
       .includes(functionName);
   }
 

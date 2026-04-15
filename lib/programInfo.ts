@@ -140,19 +140,18 @@ export function collectProgramInfo(
   if (symbolTable) {
     // Build a reverse map: originalName → localName for aliased imports
     const originalToLocal: Record<string, string> = {};
-    for (const node of program.nodes) {
-      if (node.type === "importToolStatement") {
-        for (const ni of node.importedTools) {
-          for (const [orig, alias] of Object.entries(ni.aliases)) {
-            originalToLocal[orig] = alias;
-          }
+    for (const toolImport of info.importedTools) {
+      for (const ni of toolImport.importedTools) {
+        for (const [orig, alias] of Object.entries(ni.aliases)) {
+          originalToLocal[orig] = alias;
         }
-      } else if (node.type === "importStatement") {
-        for (const nameType of node.importedNames) {
-          if (nameType.type === "namedImport") {
-            for (const [orig, alias] of Object.entries(nameType.aliases)) {
-              originalToLocal[orig] = alias;
-            }
+      }
+    }
+    for (const importStmt of info.importStatements) {
+      for (const nameType of importStmt.importedNames) {
+        if (nameType.type === "namedImport") {
+          for (const [orig, alias] of Object.entries(nameType.aliases)) {
+            originalToLocal[orig] = alias;
           }
         }
       }

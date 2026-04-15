@@ -72,6 +72,7 @@ import {
   ImportNodeStatement,
   ImportStatement,
   ImportToolStatement,
+  getImportedToolNames,
 } from "../types/importStatement.js";
 import { MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
@@ -289,8 +290,7 @@ export class TypeScriptBuilder {
 
   private isImportedTool(functionName: string): boolean {
     return this.programInfo.importedTools
-      .flatMap((node) => node.importedTools)
-      .flatMap((n) => n.importedNames.map((name) => n.aliases[name] ?? name))
+      .flatMap(getImportedToolNames)
       .includes(functionName);
   }
 

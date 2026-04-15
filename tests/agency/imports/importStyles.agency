@@ -1,0 +1,39 @@
+import square from "./mathHelpers.js"
+import { double, triple } from "./mathHelpers.js"
+import * as strUtils from "./stringHelpers.js"
+import exclaim, { upper } from "./stringHelpers.js"
+import len, * as listHelpers from "./listHelpers.js"
+import { add, multiply } from "./agencyHelpers.agency"
+// default import from JS
+// named imports from JS
+// namespace import from JS
+// mixed: default + named import from JS
+// named import from agency file
+node testDefaultImport() {
+  return square(5)
+}
+
+node testNamedImport() {
+  return double(7) + triple(3)
+}
+
+node testNamespaceImport() {
+  return strUtils.lower("HELLO")
+}
+
+node testMixedDefaultNamed() {
+  return exclaim(upper("hello"))
+}
+
+node testAgencyNamedImport() {
+  return add(3, 4)
+}
+
+node testAgencyMultipleNamedImports() {
+  return multiply(add(2, 3), 4)
+}
+
+node testMixedDefaultNamespace() {
+  const items = [10, 20, 30]
+  return len(items) + listHelpers.first(items)
+}

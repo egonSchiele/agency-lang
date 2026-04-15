@@ -1,0 +1,81 @@
+{
+  "tests": [
+    {
+      "nodeName": "testDefaultImport",
+      "input": "",
+      "expectedOutput": "25",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "default import from JS file"
+    },
+    {
+      "nodeName": "testNamedImport",
+      "input": "",
+      "expectedOutput": "23",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "named imports from JS file"
+    },
+    {
+      "nodeName": "testNamespaceImport",
+      "input": "",
+      "expectedOutput": "\"hello\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "namespace import from JS file"
+    },
+    {
+      "nodeName": "testMixedDefaultNamed",
+      "input": "",
+      "expectedOutput": "\"HELLO!\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "mixed default + named import from JS file"
+    },
+    {
+      "nodeName": "testAgencyNamedImport",
+      "input": "",
+      "expectedOutput": "7",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "named import from agency file"
+    },
+    {
+      "nodeName": "testAgencyMultipleNamedImports",
+      "input": "",
+      "expectedOutput": "20",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "multiple named imports from agency file used together"
+    },
+    {
+      "nodeName": "testMixedDefaultNamespace",
+      "input": "",
+      "expectedOutput": "13",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "mixed default + namespace import from JS file"
+    }
+  ]
+}

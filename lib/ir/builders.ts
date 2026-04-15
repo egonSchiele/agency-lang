@@ -530,12 +530,18 @@ export const ts = {
     interruptData,
     stateStack,
     isForked,
+    moduleId,
+    scopeName,
+    stepPath,
   }: {
     ctx: TsNode;
     threads?: TsNode;
     interruptData?: TsNode;
     stateStack?: TsNode;
     isForked?: boolean;
+    moduleId?: TsNode;
+    scopeName?: TsNode;
+    stepPath?: TsNode;
   }): TsNode {
     const entries: Record<string, TsNode> = {
       ctx,
@@ -551,6 +557,15 @@ export const ts = {
     }
     if (isForked) {
       entries.isForked = ts.bool(true);
+    }
+    if (moduleId) {
+      entries.moduleId = moduleId;
+    }
+    if (scopeName) {
+      entries.scopeName = scopeName;
+    }
+    if (stepPath) {
+      entries.stepPath = stepPath;
     }
     return ts.obj(entries);
   },

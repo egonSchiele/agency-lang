@@ -9,9 +9,9 @@ export async function checkpoint(
   const ctx = __state.ctx;
   await ctx.pendingPromises.awaitAll();
   return ctx.checkpoints.create(ctx, {
-    moduleId: "",
-    scopeName: "",
-    stepPath: "",
+    moduleId: __state.moduleId ?? "",
+    scopeName: __state.scopeName ?? "",
+    stepPath: __state.stepPath ?? "",
   });
 }
 
@@ -32,7 +32,7 @@ export function restore(
   checkpointIdOrCheckpoint: number | Checkpoint,
   options: RestoreOptions,
   __state?: InternalFunctionState,
-): never {
+): void {
   const ctx = __state!.ctx;
   let cp: Checkpoint;
   if (typeof checkpointIdOrCheckpoint === "number") {
@@ -45,6 +45,17 @@ export function restore(
   } else {
     cp = checkpointIdOrCheckpoint;
   }
+
+  const location = cp.getLocation();
+
+  if (
+    options.maxRestores !== undefined &&
+    ctx.checkpoints.getLocationRestoreCount(location) >= options.maxRestores
+  ) {
+    return;
+  }
+
+  ctx.checkpoints.trackLocationRestore(location);
   ctx.checkpoints.trackRestore(cp.id);
   ctx.checkpoints.deleteAfterCheckpoint(cp.id);
   ctx.pendingPromises.clear();

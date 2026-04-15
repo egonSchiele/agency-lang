@@ -8,6 +8,11 @@ export type RestoreOptions = {
    * Only affects globals defined in the same file as the checkpoint.
    * Globals in other imported files are restored from checkpoint state. */
   globals?: Record<string, any>;
+  /** Maximum number of times this specific restore call may fire.
+   * Once the limit is reached, the restore is skipped (returns instead of throwing).
+   * Unlike the global per-checkpoint limit on CheckpointStore, this limit is
+   * scoped to a single call site. */
+  maxRestores?: number;
 };
 
 export class CheckpointError extends Error {

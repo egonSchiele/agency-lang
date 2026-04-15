@@ -29,6 +29,9 @@ export type InternalFunctionState = {
   interruptData?: InterruptData;
   isToolCall?: boolean;
   stateStack?: StateStack;  // per-thread stack for async calls
+  moduleId?: string;
+  scopeName?: string;
+  stepPath?: string;
 };
 
 export type NodeReturnValue<T> = {

@@ -1735,6 +1735,11 @@ export class TypeScriptBuilder {
           interruptData: ts.raw("__state?.interruptData"),
           stateStack: options?.stateStack,
           isForked: node.async,
+          ...(node.functionName === "checkpoint" ? {
+            moduleId: ts.str(this.moduleId),
+            scopeName: ts.str(this.currentScopeName()),
+            stepPath: ts.str(this._subStepPath.join(".")),
+          } : {}),
         });
       const call = ts.call(ts.id(functionName), [...argNodes, configObj]);
       return shouldAwait ? ts.await(call) : call;

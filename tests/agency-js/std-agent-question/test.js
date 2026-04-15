@@ -1,14 +1,17 @@
 import { writeFileSync } from "fs";
-import { ask, resolveInterrupt } from "./agent.js";
+import { ask, isInterrupt, resolveInterrupt } from "./agent.js";
 
 const r = await ask("What is your favorite color?");
-const resumed = await resolveInterrupt(r.data, "blue");
+const interrupted = isInterrupt(r.data);
+const resumed = interrupted
+  ? await resolveInterrupt(r.data, "blue")
+  : { data: undefined };
 
 writeFileSync(
   "__result.json",
   JSON.stringify(
     {
-      interrupted: r.isInterrupt === true || r.data?.success === undefined,
+      interrupted,
       resumedValue: resumed.data,
     },
     null,

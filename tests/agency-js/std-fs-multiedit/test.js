@@ -1,7 +1,7 @@
-import { mkdtempSync, writeFileSync, readFileSync } from "fs";
+import { mkdtempSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { writeFixture, readBack, runMultiedit } from "./agent.js";
+import { readBack, runMultiedit } from "./agent.js";
 
 const TMP = mkdtempSync(join(tmpdir(), "agency-multiedit-"));
 

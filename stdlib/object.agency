@@ -34,24 +34,24 @@ export def filterEntries(obj: any, func: (any, string) => boolean): any {
   return result
 }
 
-export def every(obj: any, func: (any, string) => boolean): boolean {
+export def everyEntry(obj: any, func: (any, string) => boolean): boolean {
   """
   Return true if the function returns true for every entry in the object. The function receives (value, key).
   """
-  for (entry in entries(obj)) {
-    if (func(entry.value, entry.key) == false) {
+  for (k in keys(obj)) {
+    if (!func(obj[k], k)) {
       return false
     }
   }
   return true
 }
 
-export def some(obj: any, func: (any, string) => boolean): boolean {
+export def someEntry(obj: any, func: (any, string) => boolean): boolean {
   """
   Return true if the function returns true for at least one entry in the object. The function receives (value, key).
   """
-  for (entry in entries(obj)) {
-    if (func(entry.value, entry.key)) {
+  for (k in keys(obj)) {
+    if (func(obj[k], k)) {
       return true
     }
   }

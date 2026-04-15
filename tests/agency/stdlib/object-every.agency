@@ -1,4 +1,4 @@
-import { every } from "std::object"
+import { everyEntry } from "std::object"
 
 def isPositive(v: number, k: string): boolean {
   return v > 0
@@ -7,7 +7,7 @@ def isPositive(v: number, k: string): boolean {
 node main() {
   const allPos = { a: 1, b: 2, c: 3 }
   const mixed = { a: 1, b: -2, c: 3 }
-  const r1 = every(allPos, isPositive)
-  const r2 = every(mixed, isPositive)
+  const r1 = everyEntry(allPos, isPositive)
+  const r2 = everyEntry(mixed, isPositive)
   return { allPositive: r1, mixedPositive: r2 }
 }

@@ -53,10 +53,10 @@ Return a new object containing only the entries for which the function returns t
 
 **Returns:** any
 
-### every
+### everyEntry
 
 ```ts
-every(obj: any, func: (any, string) => boolean): boolean
+everyEntry(obj: any, func: (any, string) => boolean): boolean
 ```
 
 Return true if the function returns true for every entry in the object. The function receives (value, key).
@@ -70,10 +70,10 @@ Return true if the function returns true for every entry in the object. The func
 
 **Returns:** boolean
 
-### some
+### someEntry
 
 ```ts
-some(obj: any, func: (any, string) => boolean): boolean
+someEntry(obj: any, func: (any, string) => boolean): boolean
 ```
 
 Return true if the function returns true for at least one entry in the object. The function receives (value, key).

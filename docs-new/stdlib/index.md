@@ -203,3 +203,51 @@ Return the most common element in an array. Uses JSON serialization for comparis
 | items | any[] |  |
 
 **Returns:** any
+
+### keys
+
+```ts
+keys(obj: any): string[]
+```
+
+Return an array of an object's own enumerable property names.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| obj | any |  |
+
+**Returns:** string[]
+
+### values
+
+```ts
+values(obj: any): any[]
+```
+
+Return an array of an object's own enumerable property values.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| obj | any |  |
+
+**Returns:** any[]
+
+### entries
+
+```ts
+entries(obj: any): any[]
+```
+
+Return an array of an object's own enumerable entries, each as { key, value }.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| obj | any |  |
+
+**Returns:** any[]

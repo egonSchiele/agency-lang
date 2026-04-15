@@ -1,0 +1,10 @@
+import { mapValues } from "std::object"
+
+def double(v: number, k: string): number {
+  return v * 2
+}
+
+node main() {
+  const obj = { a: 1, b: 2, c: 3 }
+  return mapValues(obj, double)
+}

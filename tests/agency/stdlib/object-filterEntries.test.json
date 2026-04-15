@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "filterEntries keeps only entries with positive values",
+      "input": "",
+      "expectedOutput": "{\"a\":1,\"c\":3}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "entries returns array of { key, value } objects",
+      "input": "",
+      "expectedOutput": "[{\"key\":\"x\",\"value\":10},{\"key\":\"y\",\"value\":20}]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

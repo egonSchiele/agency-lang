@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "keys returns array of property names",
+      "input": "",
+      "expectedOutput": "[\"a\",\"b\",\"c\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

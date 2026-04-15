@@ -131,6 +131,18 @@ export function _mostCommon(items: any[]): any {
   return best;
 }
 
+export function _keys(obj: any): string[] {
+  return Object.keys(obj);
+}
+
+export function _values(obj: any): any[] {
+  return Object.values(obj);
+}
+
+export function _entries(obj: any): { key: string; value: any }[] {
+  return Object.entries(obj).map(([key, value]) => ({ key, value }));
+}
+
 export function _range(startOrN: number, end?: number): number[] {
   if (end === undefined) {
     return Array.from({ length: startOrN }, (_, i) => i);

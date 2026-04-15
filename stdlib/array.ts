@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { print, __printTool, __printToolParams, printJSON, __printJSONTool, __printJSONToolParams, input, __inputTool, __inputToolParams, sleep, __sleepTool, __sleepToolParams, round, __roundTool, __roundToolParams, fetch, __fetchTool, __fetchToolParams, fetchJSON, __fetchJSONTool, __fetchJSONToolParams, read, __readTool, __readToolParams, write, __writeTool, __writeToolParams, readImage, __readImageTool, __readImageToolParams, notify, __notifyTool, __notifyToolParams, range, __rangeTool, __rangeToolParams, mostCommon, __mostCommonTool, __mostCommonToolParams } from "/Users/adityabhargava/worktrees/agency-lang/stdlib/index.js";
+import { print, __printTool, __printToolParams, printJSON, __printJSONTool, __printJSONToolParams, input, __inputTool, __inputToolParams, sleep, __sleepTool, __sleepToolParams, round, __roundTool, __roundToolParams, fetch, __fetchTool, __fetchToolParams, fetchJSON, __fetchJSONTool, __fetchJSONToolParams, read, __readTool, __readToolParams, write, __writeTool, __writeToolParams, readImage, __readImageTool, __readImageToolParams, notify, __notifyTool, __notifyToolParams, range, __rangeTool, __rangeToolParams, mostCommon, __mostCommonTool, __mostCommonToolParams, keys, __keysTool, __keysToolParams, values, __valuesTool, __valuesToolParams, entries, __entriesTool, __entriesToolParams } from "/Users/adityabhargava/worktrees/agency-lang/stdlib/index.js";
 import { map, __mapTool, __mapToolParams, filter, __filterTool, __filterToolParams, exclude, __excludeTool, __excludeToolParams, find, __findTool, __findToolParams, findIndex, __findIndexTool, __findIndexToolParams, reduce, __reduceTool, __reduceToolParams, flatMap, __flatMapTool, __flatMapToolParams, every, __everyTool, __everyToolParams, some, __someTool, __someToolParams, count, __countTool, __countToolParams, sortBy, __sortByTool, __sortByToolParams, unique, __uniqueTool, __uniqueToolParams, groupBy, __groupByTool, __groupByToolParams } from "/Users/adityabhargava/worktrees/agency-lang/stdlib/array.js";
 import { fileURLToPath } from "url";
 import __process from "process";
@@ -400,6 +400,33 @@ const __toolRegistry = {
       name: "mostCommon",
       params: __mostCommonToolParams,
       execute: mostCommon,
+      isBuiltin: false
+    }
+  },
+  keys: {
+    definition: __keysTool,
+    handler: {
+      name: "keys",
+      params: __keysToolParams,
+      execute: keys,
+      isBuiltin: false
+    }
+  },
+  values: {
+    definition: __valuesTool,
+    handler: {
+      name: "values",
+      params: __valuesToolParams,
+      execute: values,
+      isBuiltin: false
+    }
+  },
+  entries: {
+    definition: __entriesTool,
+    handler: {
+      name: "entries",
+      params: __entriesToolParams,
+      execute: entries,
       isBuiltin: false
     }
   },

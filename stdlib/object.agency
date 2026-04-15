@@ -1,0 +1,59 @@
+export def mapValues(obj: any, func: (any, string) => any): any {
+  """
+  Return a new object with the same keys, but with each value transformed by the function. The function receives (value, key).
+  """
+  const result = {}
+  for (entry in entries(obj)) {
+    result[entry.key] = func(entry.value, entry.key)
+  }
+  return result
+}
+
+export def mapEntries(obj: any, func: (any, string) => any): any {
+  """
+  Return a new object by applying the function to each entry. The function receives (value, key) and should return { key, value }.
+  """
+  const result = {}
+  for (entry in entries(obj)) {
+    const mapped = func(entry.value, entry.key)
+    result[mapped.key] = mapped.value
+  }
+  return result
+}
+
+export def filterEntries(obj: any, func: (any, string) => boolean): any {
+  """
+  Return a new object containing only the entries for which the function returns true. The function receives (value, key).
+  """
+  const result = {}
+  for (entry in entries(obj)) {
+    if (func(entry.value, entry.key)) {
+      result[entry.key] = entry.value
+    }
+  }
+  return result
+}
+
+export def every(obj: any, func: (any, string) => boolean): boolean {
+  """
+  Return true if the function returns true for every entry in the object. The function receives (value, key).
+  """
+  for (entry in entries(obj)) {
+    if (func(entry.value, entry.key) == false) {
+      return false
+    }
+  }
+  return true
+}
+
+export def some(obj: any, func: (any, string) => boolean): boolean {
+  """
+  Return true if the function returns true for at least one entry in the object. The function receives (value, key).
+  """
+  for (entry in entries(obj)) {
+    if (func(entry.value, entry.key)) {
+      return true
+    }
+  }
+  return false
+}

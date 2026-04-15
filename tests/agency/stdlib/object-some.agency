@@ -1,0 +1,13 @@
+import { some } from "std::object"
+
+def isNegative(v: number, k: string): boolean {
+  return v < 0
+}
+
+node main() {
+  const mixed = { a: 1, b: -2, c: 3 }
+  const allPos = { a: 1, b: 2, c: 3 }
+  const r1 = some(mixed, isNegative)
+  const r2 = some(allPos, isNegative)
+  return { hasNegative: r1, allPositive: r2 }
+}

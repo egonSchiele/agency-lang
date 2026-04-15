@@ -1,0 +1,10 @@
+import { bash } from "std::shell"
+
+node runBash(command: string, cwd: string, stdin: string) {
+  handle {
+    const result = bash(command, cwd, 0, stdin)
+  } with (data) {
+    return approve()
+  }
+  return result
+}

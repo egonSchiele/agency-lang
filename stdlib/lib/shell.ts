@@ -191,6 +191,20 @@ export function _glob(
 }
 
 function globToRegExp(glob: string): RegExp {
+  let depth = 0;
+  for (const c of glob) {
+    if (c === "{") depth++;
+    else if (c === "}") {
+      depth--;
+      if (depth < 0) {
+        throw new Error(`invalid glob pattern: unmatched '}' in ${glob}`);
+      }
+    }
+  }
+  if (depth !== 0) {
+    throw new Error(`invalid glob pattern: unmatched '{' in ${glob}`);
+  }
+
   const result = globParser(glob);
   if (!result.success || (result.rest ?? "") !== "") {
     throw new Error(`invalid glob pattern: ${glob}`);

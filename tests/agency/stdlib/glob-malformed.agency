@@ -1,0 +1,13 @@
+import { glob } from "std::shell"
+
+node main() {
+  handle {
+    let result = glob("{ts", "tests/agency/stdlib/glob-fixtures")
+  } with (data) {
+    return approve()
+  }
+  return {
+    ok: isSuccess(result),
+    hasError: result.error != null
+  }
+}

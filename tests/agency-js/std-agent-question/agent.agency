@@ -1,0 +1,6 @@
+import { question } from "std::agent"
+
+node ask(prompt: string) {
+  const answer = question(prompt)
+  return answer
+}

@@ -1,0 +1,24 @@
+import { edit } from "std::fs"
+
+node writeFixture(filename: string, content: string) {
+  handle {
+    write(filename, content)
+  } with (data) {
+    return approve()
+  }
+  return true
+}
+
+node readBack(filename: string) {
+  handle {
+    const result = read(filename)
+  } with (data) {
+    return approve()
+  }
+  return result
+}
+
+node runEdit(filename: string, oldText: string, newText: string, replaceAll: boolean) {
+  const result = edit(filename, oldText, newText, replaceAll)
+  return result
+}

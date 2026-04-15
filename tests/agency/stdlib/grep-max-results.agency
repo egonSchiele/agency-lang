@@ -1,0 +1,10 @@
+import { grep } from "std::shell"
+
+node main() {
+  handle {
+    const hits = grep("hello", "tests/agency/stdlib/grep-fixtures", "i", 2) catch []
+  } with (data) {
+    return approve()
+  }
+  return hits.length
+}

@@ -1,0 +1,34 @@
+import { multiedit } from "std::fs"
+
+node writeFixture(filename: string, content: string) {
+  handle {
+    write(filename, content)
+  } with (data) {
+    return approve()
+  }
+  return true
+}
+
+node readBack(filename: string) {
+  handle {
+    const result = read(filename)
+  } with (data) {
+    return approve()
+  }
+  return result
+}
+
+type Edit = {
+  oldText: string;
+  newText: string;
+  replaceAll: boolean
+}
+
+node runMultiedit(filename: string, edits: Edit[]) {
+  handle {
+    const result = multiedit(filename, edits)
+  } with (data) {
+    return approve()
+  }
+  return result
+}

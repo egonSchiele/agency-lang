@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"beforeCount\":1,\"afterCount\":0}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "todoWrite with an empty array resets the todo list"
+    }
+  ]
+}

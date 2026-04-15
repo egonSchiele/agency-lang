@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"tests/agency/stdlib/glob-fixtures/a.md\",\"tests/agency/stdlib/glob-fixtures/ab.md\",\"tests/agency/stdlib/glob-fixtures/b.txt\",\"tests/agency/stdlib/glob-fixtures/c.js\",\"tests/agency/stdlib/glob-fixtures/d.ts\",\"tests/agency/stdlib/glob-fixtures/sub\",\"tests/agency/stdlib/glob-fixtures/sub/nested.md\",\"tests/agency/stdlib/glob-fixtures/sub/nested.ts\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "ls with recursive=true walks into subdirectories"
+    }
+  ]
+}

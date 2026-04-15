@@ -305,12 +305,18 @@ export async function fixtures(config: AgencyConfig, target?: string) {
   console.log(`Test case saved to ${testFilePath}`);
 }
 
+export type SlowTest = {
+  name: string;
+  durationMs: number;
+};
+
 export type TestStats = {
   passed: number;
   failed: number;
   filesPassed: number;
   filesFailed: number;
   failedFiles: string[];
+  slowTests: SlowTest[];
 };
 
 function emptyStats(): TestStats {
@@ -320,6 +326,7 @@ function emptyStats(): TestStats {
     filesPassed: 0,
     filesFailed: 0,
     failedFiles: [],
+    slowTests: [],
   };
 }
 
@@ -330,6 +337,7 @@ export function mergeStats(a: TestStats, b: TestStats): TestStats {
     filesPassed: a.filesPassed + b.filesPassed,
     filesFailed: a.filesFailed + b.filesFailed,
     failedFiles: [...a.failedFiles, ...b.failedFiles],
+    slowTests: [...a.slowTests, ...b.slowTests],
   };
 }
 
@@ -499,6 +507,7 @@ async function runTestFile(
     const total = tests.tests.length;
 
     let skipped = 0;
+    const slowTests: SlowTest[] = [];
 
     for (let i = 0; i < total; i++) {
       const testCase = tests.tests[i];
@@ -522,6 +531,7 @@ async function runTestFile(
       const maxAttempts = (testCase.retry ?? 0) + 1;
       let testPassed = false;
 
+      const startTime = performance.now();
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         if (attempt > 1) {
           log(color.yellow(`  Retry ${attempt - 1}/${testCase.retry}...`));
@@ -535,6 +545,12 @@ async function runTestFile(
           testPassed = false;
         }
       }
+      const durationMs = performance.now() - startTime;
+
+      const testName = testCase.description
+        ? `${testFile} > ${testCase.nodeName} > ${testCase.description}`
+        : `${testFile} > ${testCase.nodeName}(${testCase.input || ""})`;
+      slowTests.push({ name: testName, durationMs });
 
       if (testPassed) passed++;
     }
@@ -550,6 +566,7 @@ async function runTestFile(
       filesPassed: failed === 0 ? 1 : 0,
       filesFailed: failed === 0 ? 0 : 1,
       failedFiles: failed > 0 ? [testFile] : [],
+      slowTests,
     };
   } finally {
     logger.flush();
@@ -578,6 +595,7 @@ export async function test(
         filesPassed: 0,
         filesFailed: 1,
         failedFiles: [testFile],
+        slowTests: [],
       };
     },
   );

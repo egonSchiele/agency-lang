@@ -10,7 +10,7 @@ import {
   run,
 } from "@/cli/commands.js";
 import { evaluate } from "@/cli/evaluate.js";
-import { fixtures, test, testTs } from "@/cli/test.js";
+import { fixtures, test, testTs, SlowTest } from "@/cli/test.js";
 import { createBundle, extractBundle } from "@/cli/bundle.js";
 import { AgencyConfig } from "@/config.js";
 import * as path from "path";
@@ -175,6 +175,21 @@ program
     }
   });
 
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(2)}s`;
+}
+
+function printSlowestTests(slowTests: SlowTest[], count: number = 10): void {
+  if (slowTests.length === 0) return;
+  const sorted = [...slowTests].sort((a, b) => b.durationMs - a.durationMs);
+  const top = sorted.slice(0, count);
+  console.log(color.yellow(`\n Slowest ${Math.min(count, top.length)} tests:`));
+  for (const t of top) {
+    console.log(`   ${color.yellow(formatDuration(t.durationMs))}  ${t.name}`);
+  }
+}
+
 // --- test command group ---
 const testCmd = program
   .command("test")
@@ -218,6 +233,7 @@ testCmd
         console.log(colorFn(`\n Test Files  ${filesStatus} (${totalFiles})`));
         console.log(colorFn(`      Tests  ${testsStatus} (${totalTests})`));
       }
+      printSlowestTests(totals.slowTests);
       if (totals.failed > 0) {
         process.exit(1);
       }

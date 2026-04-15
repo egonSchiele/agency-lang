@@ -6,6 +6,10 @@ import {
   testUnsafeChainNoRetry,
   testSafeMethodRetry,
   testUnsafeMethodNoRetry,
+  testSafeNestedRetry,
+  testSafeNestedMethodRetry,
+  testSafeForLoopRetry,
+  testSafeWhileLoopRetry,
 } from "./agent.js";
 import { writeFileSync } from "fs";
 
@@ -156,6 +160,75 @@ const results = {};
       error: e.message,
     };
   }
+}
+
+// Test 8: Safe nested retry — safeNestedTool calls a safe def function
+// with an impure call inside an if block. The safe flag propagates into
+// nested blocks, so the tool remains retryable.
+{
+  const toolCalls = [];
+  const callbacks = {
+    onToolCallStart: ({ toolName }) => {
+      toolCalls.push(toolName);
+    },
+  };
+  const result = await testSafeNestedRetry({ callbacks });
+  results.safeNestedRetry = {
+    toolCallCount: toolCalls.length,
+    toolCalls,
+    succeeded: result.data !== undefined && result.data !== null,
+  };
+}
+
+// Test 9: Safe nested method retry — safeNestedMethodTool calls a safe class
+// method with an impure call inside an if block. Same as test 8 but for methods.
+{
+  const toolCalls = [];
+  const callbacks = {
+    onToolCallStart: ({ toolName }) => {
+      toolCalls.push(toolName);
+    },
+  };
+  const result = await testSafeNestedMethodRetry({ callbacks });
+  results.safeNestedMethodRetry = {
+    toolCallCount: toolCalls.length,
+    toolCalls,
+    succeeded: result.data !== undefined && result.data !== null,
+  };
+}
+
+// Test 10: Safe for loop retry — safeForLoopTool calls a safe def function
+// with an impure call inside a for loop. The safe flag propagates into loop bodies.
+{
+  const toolCalls = [];
+  const callbacks = {
+    onToolCallStart: ({ toolName }) => {
+      toolCalls.push(toolName);
+    },
+  };
+  const result = await testSafeForLoopRetry({ callbacks });
+  results.safeForLoopRetry = {
+    toolCallCount: toolCalls.length,
+    toolCalls,
+    succeeded: result.data !== undefined && result.data !== null,
+  };
+}
+
+// Test 11: Safe while loop retry — safeWhileLoopTool calls a safe def function
+// with an impure call inside a while loop. The safe flag propagates into loop bodies.
+{
+  const toolCalls = [];
+  const callbacks = {
+    onToolCallStart: ({ toolName }) => {
+      toolCalls.push(toolName);
+    },
+  };
+  const result = await testSafeWhileLoopRetry({ callbacks });
+  results.safeWhileLoopRetry = {
+    toolCallCount: toolCalls.length,
+    toolCalls,
+    succeeded: result.data !== undefined && result.data !== null,
+  };
 }
 
 writeFileSync("__result.json", JSON.stringify(results, null, 2));

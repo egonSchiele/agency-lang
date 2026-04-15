@@ -51,5 +51,37 @@
       "unsafeMethodTool"
     ],
     "hasResult": true
+  },
+  "safeNestedRetry": {
+    "toolCallCount": 2,
+    "toolCalls": [
+      "safeNestedTool",
+      "safeNestedTool"
+    ],
+    "succeeded": true
+  },
+  "safeNestedMethodRetry": {
+    "toolCallCount": 2,
+    "toolCalls": [
+      "safeNestedMethodTool",
+      "safeNestedMethodTool"
+    ],
+    "succeeded": true
+  },
+  "safeForLoopRetry": {
+    "toolCallCount": 2,
+    "toolCalls": [
+      "safeForLoopTool",
+      "safeForLoopTool"
+    ],
+    "succeeded": true
+  },
+  "safeWhileLoopRetry": {
+    "toolCallCount": 2,
+    "toolCalls": [
+      "safeWhileLoopTool",
+      "safeWhileLoopTool"
+    ],
+    "succeeded": true
   }
 }

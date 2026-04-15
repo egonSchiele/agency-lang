@@ -163,11 +163,11 @@ greet(name: "world", greeting: "Hi")
   });
 });
 
-describe("Safe class methods", () => {
+describe("Safe functions and methods", () => {
   it.each([
     { safe: true, methodName: "lookup", emitsRetryableFalse: false },
     { safe: false, methodName: "doSave", emitsRetryableFalse: true },
-  ])("$methodName (safe=$safe) emitsRetryableFalse=$emitsRetryableFalse", ({ safe, methodName, emitsRetryableFalse }) => {
+  ])("class method $methodName (safe=$safe) emitsRetryableFalse=$emitsRetryableFalse", ({ safe, methodName, emitsRetryableFalse }) => {
     const safeKeyword = safe ? "safe " : "";
     const code = `
 import { saveItem } from "./tools.js"
@@ -187,6 +187,38 @@ class Svc {
       expect(methodMatch![0]).toContain("__retryable = false");
     } else {
       expect(methodMatch![0]).not.toContain("__retryable = false");
+    }
+  });
+
+  it.each([
+    { safe: true, funcName: "safeFnIf", emitsRetryableFalse: false, block: "if" },
+    { safe: false, funcName: "unsafeFnIf", emitsRetryableFalse: true, block: "if" },
+    { safe: true, funcName: "safeFnFor", emitsRetryableFalse: false, block: "for" },
+    { safe: false, funcName: "unsafeFnFor", emitsRetryableFalse: true, block: "for" },
+    { safe: true, funcName: "safeFnWhile", emitsRetryableFalse: false, block: "while" },
+    { safe: false, funcName: "unsafeFnWhile", emitsRetryableFalse: true, block: "while" },
+  ])("function $funcName with impure call in $block block (safe=$safe) emitsRetryableFalse=$emitsRetryableFalse", ({ safe, funcName, emitsRetryableFalse, block }) => {
+    const safeKeyword = safe ? "safe " : "";
+    const blocks: Record<string, string> = {
+      "if": `if (shouldSave) {\n    return saveItem(id)\n  }`,
+      "for": `for (item in items) {\n    saveItem(item)\n  }`,
+      "while": `while (shouldSave) {\n    return saveItem(id)\n  }`,
+    };
+    const code = `
+import { saveItem } from "./tools.js"
+
+${safeKeyword}def ${funcName}(id: string, shouldSave: boolean, items: string[]): string {
+  ${blocks[block]}
+  return id
+}
+`;
+    const output = generateWithBuilder(code);
+    const funcMatch = output.match(new RegExp(`async function ${funcName}\\([\\s\\S]*?finally`));
+    expect(funcMatch).toBeTruthy();
+    if (emitsRetryableFalse) {
+      expect(funcMatch![0]).toContain("__retryable = false");
+    } else {
+      expect(funcMatch![0]).not.toContain("__retryable = false");
     }
   });
 });

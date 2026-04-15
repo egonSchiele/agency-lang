@@ -1,4 +1,4 @@
-import { safe lookupItem, saveItem, resetCounters } from "./tools.js"
+import { safe lookupItem, saveItem, flakyWrite, resetCounters } from "./tools.js"
 
 // --- Helper functions ---
 
@@ -78,6 +78,72 @@ def unsafeMethodTool(id: string) {
   return svc.unsafeSaveAndLookup(id)
 }
 
+// --- Nested impure calls inside safe functions/methods ---
+
+// A safe def function with an impure call (flakyWrite, not marked safe)
+// inside an if block. Without the fix, the nested block would emit
+// __retryable = false because flakyWrite is impure, making the tool
+// non-retryable despite the safe keyword. With the fix, the safe flag
+// propagates into nested blocks, so the tool stays retryable.
+safe def safeNestedWrite(id: string) {
+  if (id != "") {
+    return flakyWrite(id)
+  }
+  return id
+}
+
+def safeNestedTool(id: string) {
+  return safeNestedWrite(id)
+}
+
+// A class with a safe method that has an impure call (flakyWrite)
+// inside an if block. Same scenario as above but for class methods.
+class NestedService {
+  prefix: string
+
+  safe nestedWrite(id: string): any {
+    if (id != "") {
+      return flakyWrite("${this.prefix}-${id}")
+    }
+    return id
+  }
+}
+
+def safeNestedMethodTool(id: string) {
+  let svc = new NestedService("nsvc")
+  return svc.nestedWrite(id)
+}
+
+// --- Nested impure calls inside for/while loops ---
+
+// A safe def function with an impure call inside a for loop.
+safe def safeForLoopWrite(ids: string[]) {
+  let result = ""
+  for (id in ids) {
+    result = flakyWrite(id)
+  }
+  return result
+}
+
+def safeForLoopTool(id: string) {
+  return safeForLoopWrite([id])
+}
+
+// A safe def function with an impure call inside a while loop.
+safe def safeWhileLoopWrite(id: string) {
+  let done = false
+  while (!done) {
+    let result = flakyWrite(id)
+    done = true
+    return result
+  }
+  return id
+}
+
+def safeWhileLoopTool(id: string) {
+  return safeWhileLoopWrite(id)
+}
+
 // --- Test nodes ---
 
 // Test 1: A tool that directly calls a safe imported function.
@@ -144,5 +210,41 @@ node testUnsafeMethodNoRetry() {
   resetCountersTool()
   uses unsafeMethodTool
   const result = llm("Save and look up item 'pqr'. Use the unsafeMethodTool.")
+  return result
+}
+
+// Test 8: A safe def function with an impure call inside a nested if block.
+// The safe flag should propagate into nested blocks, keeping the tool retryable.
+node testSafeNestedRetry() {
+  resetCountersTool()
+  uses safeNestedTool
+  const result = llm("Look up item with id 'stu'. Use the safeNestedTool. If you get a temporary error, retry the same tool call.")
+  return result
+}
+
+// Test 9: A safe class method with an impure call inside a nested if block.
+// The safe flag should propagate into nested blocks, keeping the tool retryable.
+node testSafeNestedMethodRetry() {
+  resetCountersTool()
+  uses safeNestedMethodTool
+  const result = llm("Look up item with id 'vwx'. Use the safeNestedMethodTool. If you get a temporary error, retry the same tool call.")
+  return result
+}
+
+// Test 10: A safe def function with an impure call inside a for loop.
+// The safe flag propagates into loop bodies.
+node testSafeForLoopRetry() {
+  resetCountersTool()
+  uses safeForLoopTool
+  const result = llm("Look up item with id 'for1'. Use the safeForLoopTool. If you get a temporary error, retry the same tool call.")
+  return result
+}
+
+// Test 11: A safe def function with an impure call inside a while loop.
+// The safe flag propagates into loop bodies.
+node testSafeWhileLoopRetry() {
+  resetCountersTool()
+  uses safeWhileLoopTool
+  const result = llm("Look up item with id 'whl1'. Use the safeWhileLoopTool. If you get a temporary error, retry the same tool call.")
   return result
 }

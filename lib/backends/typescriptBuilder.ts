@@ -128,6 +128,7 @@ export class TypeScriptBuilder {
   private loopVars: string[] = [];
   private insideHandlerBody: boolean = false;
   private insideGlobalInit: boolean = false;
+  private _isInSafeFunction: boolean = false;
   private _blockCounter: number = 0;
 
   /** Stack of loop subKeys for generating break/continue cleanup code.
@@ -936,9 +937,10 @@ export class TypeScriptBuilder {
     const methodScopeName = `${className}.${method.name}`;
     this.startScope({ type: "function", functionName: methodScopeName });
     this._sourceMapBuilder.enterScope(this.moduleId, methodScopeName);
-    const bodyCode = this.processBodyAsParts(method.body, {
-      isInSafeFunction: !!method.safe,
-    });
+    const prevSafe = this._isInSafeFunction;
+    this._isInSafeFunction = !!method.safe;
+    const bodyCode = this.processBodyAsParts(method.body);
+    this._isInSafeFunction = prevSafe;
     this.endScope();
 
     // Reuse the same function body logic as processFunctionDefinition
@@ -1459,9 +1461,10 @@ export class TypeScriptBuilder {
     this._sourceMapBuilder.enterScope(this.moduleId, node.functionName);
     const { functionName, parameters } = node;
 
-    const bodyCode = this.processBodyAsParts(node.body, {
-      isInSafeFunction: !!node.safe,
-    });
+    const prevSafe = this._isInSafeFunction;
+    this._isInSafeFunction = !!node.safe;
+    const bodyCode = this.processBodyAsParts(node.body);
+    this._isInSafeFunction = prevSafe;
     this.endScope();
 
     // Build function params: typed args + __state
@@ -2820,7 +2823,6 @@ export class TypeScriptBuilder {
 
   private processBodyAsParts(
     body: AgencyNode[],
-    opts: { isInSafeFunction?: boolean } = {},
   ): TsNode[] {
     const result: TsNode[] = [];
     const branchKeys: Record<number, string> = {};
@@ -2873,7 +2875,7 @@ export class TypeScriptBuilder {
 
       const stepIndex = result.length;
       this._subStepPath.push(stepIndex);
-      if (!opts.isInSafeFunction && this.containsImpureCall(stmt)) {
+      if (!this._isInSafeFunction && this.containsImpureCall(stmt)) {
         if (!currentPart) currentPart = [];
         currentPart.push(ts.assign(ts.self("__retryable"), ts.bool(false)));
       }

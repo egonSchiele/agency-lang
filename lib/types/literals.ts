@@ -53,6 +53,12 @@ export type InterpolationSegment = {
   expression: Expression;
 };
 
+export type RegexLiteral = BaseNode & {
+  type: "regex";
+  pattern: string;
+  flags: string;
+};
+
 export type RawCode = BaseNode & {
   type: "rawCode";
   value: string;

@@ -115,6 +115,8 @@ export function expressionToString(expr: Expression): string {
       const args = expr.arguments.map(a => expressionToString(a)).join(", ");
       return `new ${expr.className}(${args})`;
     }
+    case "regex":
+      return `/${expr.pattern}/${expr.flags}`;
   }
 }
 

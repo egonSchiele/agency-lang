@@ -72,6 +72,7 @@ import {
   NullLiteral,
   NumberLiteral,
   PromptSegment,
+  RegexLiteral,
   StringLiteral,
   TextSegment,
   VariableNameLiteral,
@@ -333,6 +334,20 @@ export const numberParser: Parser<NumberLiteral> = label("a number", (input: str
   const parser = seqC(
     set("type", "number"),
     capture(map(many1WithJoin(or(char("-"), char("."), char("_"), digit)), (v) => v.replace(/_/g, "")), "value"),
+  );
+  return parser(input);
+});
+
+export const regexLiteralParser: Parser<RegexLiteral> = label("a regex", (input: string): ParserResult<RegexLiteral> => {
+  const parser = seqC(
+    set("type", "regex"),
+    char("/"),
+    capture(manyWithJoin(or(
+      map(str("\\/"), () => "/"),
+      noneOf("/\n"),
+    )), "pattern"),
+    char("/"),
+    capture(manyWithJoin(or(letter)), "flags"),
   );
   return parser(input);
 });
@@ -1332,6 +1347,7 @@ const atom: Parser<Expression> = or(
   lazy(() => agencyObjectParser),
   lazy(() => booleanParser),
   lazy(() => valueAccessParser),
+  lazy(() => regexLiteralParser),
   lazy(() => literalParser),
 );
 
@@ -1414,7 +1430,9 @@ export const exprParser: Parser<Expression> = label("an expression", buildExpres
     // Precedence 3: equality
     [
       { op: wsOp("==="), assoc: "left" as const, apply: makeBinOp("===") },
+      { op: wsOp("=~"), assoc: "left" as const, apply: makeBinOp("=~") },
       { op: wsOp("=="), assoc: "left" as const, apply: makeBinOp("==") },
+      { op: wsOp("!~"), assoc: "left" as const, apply: makeBinOp("!~") },
       { op: wsOp("!="), assoc: "left" as const, apply: makeBinOp("!=") },
     ],
     // Precedence 2: logical AND

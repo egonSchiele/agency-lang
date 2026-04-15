@@ -267,6 +267,8 @@ export class AgencyGenerator {
         return this.processClassDefinition(node);
       case "newExpression":
         return this.processNewExpression(node);
+      case "regex":
+        return `/${node.pattern}/${node.flags}`;
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }

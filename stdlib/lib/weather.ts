@@ -52,6 +52,11 @@ export async function _geocode(location: string): Promise<GeoResult> {
     );
   }
   const place = results[0];
+  if (typeof place.latitude !== "number" || typeof place.longitude !== "number") {
+    throw new Error(
+      `Geocoding returned invalid coordinates for "${location}".`,
+    );
+  }
   return {
     name: place.name ?? location,
     country: place.country ?? "",
@@ -107,6 +112,11 @@ export async function _weather(
   }
   const data = await response.json();
   const current = data.current;
+  if (!current) {
+    throw new Error(
+      `Weather API returned no current data for "${location}".`,
+    );
+  }
 
   const weatherCode: number = current.weather_code ?? 0;
   const description = WMO_DESCRIPTIONS[weatherCode] ?? "Unknown";

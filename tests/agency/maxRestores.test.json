@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "4",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "restore with maxRestores: 3 should retry 3 times then continue, resulting in 4 total attempts"
+    }
+  ]
+}

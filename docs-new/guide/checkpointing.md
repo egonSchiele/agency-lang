@@ -36,6 +36,14 @@ Or local variables:
 restore(result.checkpoint, { locals: { x: 8 } })
 ```
 
+Max restores:
+
+```ts
+restore(result.checkpoint, { maxRestores: 3 })
+```
+
+Limit the number of times you restore a checkpoint. This is useful if you are retrying flaky LLM calls but don't want to retry too many times.
+
 ## Example usage
 
 Retry loop with 3 attempts:

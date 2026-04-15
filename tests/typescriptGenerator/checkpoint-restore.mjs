@@ -124,7 +124,10 @@ let __functionCompleted = false;
 __stack.locals.cp = await checkpoint({
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData
+        interruptData: __state?.interruptData,
+        moduleId: "checkpoint-restore.agency",
+        scopeName: "main",
+        stepPath: "0"
       });
 if (isInterrupt(__stack.locals.cp)) {
         await __ctx.pendingPromises.awaitAll()

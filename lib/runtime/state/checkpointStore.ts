@@ -185,6 +185,7 @@ export type CheckpointStoreJSON = {
 export class CheckpointStore {
   private checkpoints: Record<number, Checkpoint> = {};
   private restoreCounts: Record<number, number> = {};
+  private locationRestoreCounts: Record<string, number> = {};
   private maxRestores: number;
   private maxSize: number;
 
@@ -339,6 +340,14 @@ export class CheckpointStore {
         delete this.restoreCounts[numericKey];
       }
     }
+  }
+
+  getLocationRestoreCount(location: string): number {
+    return this.locationRestoreCounts[location] || 0;
+  }
+
+  trackLocationRestore(location: string): void {
+    this.locationRestoreCounts[location] = (this.locationRestoreCounts[location] || 0) + 1;
   }
 
   trackRestore(id: number): void {

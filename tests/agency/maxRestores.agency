@@ -1,0 +1,8 @@
+shared let attempts = 0
+
+node main() {
+  const cp = checkpoint()
+  attempts = attempts + 1
+  restore(cp, { maxRestores: 3 })
+  return attempts
+}

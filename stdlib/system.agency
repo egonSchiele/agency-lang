@@ -1,8 +1,28 @@
-import { _screenshot } from "./lib/system.js"
+import { _screenshot, _env, _setEnv } from "./lib/system.js"
 
 export def screenshot(filepath: string, x: number = -1, y: number = -1, width: number = -1, height: number = -1) {
   """
   A tool for taking a screenshot and saving it to a file. Optionally specify x, y, width, and height to capture a specific region.
   """
   _screenshot(filepath, x, y, width, height)
+}
+
+export safe def env(name: string): string | null {
+  """
+  Read an environment variable. Returns null if the variable is not set.
+  """
+  return _env(name)
+}
+
+export def setEnv(name: string, value: string): Result {
+  """
+  Set an environment variable in the current process. Fails if the name is empty or contains '='. The change is visible to child processes spawned afterward but does not persist outside the current process.
+  """
+  return interrupt({
+    type: "std::system.setEnv",
+    message: "Are you sure you want to set this environment variable?",
+    name: name,
+    value: value
+  })
+  return try _setEnv(name, value)
 }

@@ -1,0 +1,11 @@
+import { env } from "std::system"
+
+node main() {
+  let pathVar = env("PATH")
+  let bogus = env("AGENCY_TEST_NEVER_SET_VAR_XYZ")
+  return {
+    pathSet: pathVar != null,
+    pathNonEmpty: pathVar != null && pathVar != "",
+    bogusIsNull: bogus == null
+  }
+}

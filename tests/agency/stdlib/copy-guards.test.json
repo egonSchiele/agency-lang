@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"rootDestRefused\":true,\"topDestRefused\":true}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "copy refuses dangerous destinations (root, top-level path)"
+    }
+  ]
+}

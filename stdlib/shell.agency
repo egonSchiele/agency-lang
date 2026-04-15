@@ -1,4 +1,4 @@
-import { _bash, _ls, _grep, _glob, _stat, _exists } from "./lib/shell.js"
+import { _bash, _ls, _grep, _glob, _stat, _exists, _which } from "./lib/shell.js"
 
 type BashResult = {
   stdout: string;
@@ -99,4 +99,11 @@ export safe def exists(filename: string): boolean {
   Return true if a file or directory exists at the given path.
   """
   return _exists(filename)
+}
+
+export safe def which(command: string): string {
+  """
+  Locate an executable in PATH and return its absolute path. Returns an empty string if the command is not found. On Windows, also tries PATHEXT extensions.
+  """
+  return _which(command)
 }

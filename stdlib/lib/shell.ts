@@ -283,3 +283,25 @@ export function _exists(filename: string): boolean {
   const full = path.resolve(process.cwd(), filename);
   return fs.existsSync(full);
 }
+
+export function _which(command: string): string {
+  if (command.length === 0) return "";
+  const pathEnv = process.env.PATH ?? "";
+  const dirs = pathEnv.split(path.delimiter).filter((d) => d.length > 0);
+  const isWindows = process.platform === "win32";
+  const extensions = isWindows
+    ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").split(";")
+    : [""];
+  for (const dir of dirs) {
+    for (const ext of extensions) {
+      const candidate = path.join(dir, command + ext);
+      try {
+        const st = fs.statSync(candidate);
+        if (st.isFile()) {
+          return candidate;
+        }
+      } catch {}
+    }
+  }
+  return "";
+}

@@ -1,0 +1,17 @@
+{
+  "mkdir": { "ok": true, "exists": true },
+  "copy": {
+    "ok": true,
+    "srcExists": true,
+    "destExists": true,
+    "contents": "hello\n"
+  },
+  "move": {
+    "ok": true,
+    "srcExists": false,
+    "destExists": true,
+    "contents": "moved\n"
+  },
+  "remove": { "ok": true, "exists": false },
+  "removeMissing": { "ok": true, "exists": false }
+}

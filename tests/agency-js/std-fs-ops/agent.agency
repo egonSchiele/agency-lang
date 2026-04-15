@@ -1,0 +1,36 @@
+import { mkdir, copy, move, remove } from "std::fs"
+import { exists } from "std::shell"
+
+node runMkdir(dir: string) {
+  const result = mkdir(dir) with approve
+  return {
+    ok: isSuccess(result),
+    exists: exists(dir)
+  }
+}
+
+node runCopy(src: string, dest: string) {
+  const result = copy(src, dest) with approve
+  return {
+    ok: isSuccess(result),
+    srcExists: exists(src),
+    destExists: exists(dest)
+  }
+}
+
+node runMove(src: string, dest: string) {
+  const result = move(src, dest) with approve
+  return {
+    ok: isSuccess(result),
+    srcExists: exists(src),
+    destExists: exists(dest)
+  }
+}
+
+node runRemove(target: string) {
+  const result = remove(target) with approve
+  return {
+    ok: isSuccess(result),
+    exists: exists(target)
+  }
+}

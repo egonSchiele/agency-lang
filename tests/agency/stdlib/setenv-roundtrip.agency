@@ -1,0 +1,10 @@
+import { env, setEnv } from "std::system"
+
+node main() {
+  let result = setEnv("AGENCY_TEST_VAR", "hello") with approve
+  let after = env("AGENCY_TEST_VAR")
+  return {
+    setOk: isSuccess(result),
+    readBack: after
+  }
+}

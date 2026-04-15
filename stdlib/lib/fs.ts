@@ -1,4 +1,5 @@
 import fs from "fs";
+import os from "os";
 import path from "path";
 import process from "process";
 import diff_match_patch from "diff-match-patch";
@@ -239,4 +240,78 @@ function applyHunks(original: string, hunks: Hunk[], filePath: string): string {
     );
   }
   return updated;
+}
+
+export function _mkdir(dir: string): void {
+  const full = path.resolve(process.cwd(), dir);
+  fs.mkdirSync(full, { recursive: true });
+}
+
+export function _copy(src: string, dest: string): void {
+  rejectDangerousPath(dest, "copy", "destination");
+  const srcFull = path.resolve(process.cwd(), src);
+  const destFull = path.resolve(process.cwd(), dest);
+  fs.cpSync(srcFull, destFull, { recursive: true });
+}
+
+export function _move(src: string, dest: string): void {
+  rejectDangerousPath(src, "move", "source");
+  rejectDangerousPath(dest, "move", "destination");
+  const srcFull = path.resolve(process.cwd(), src);
+  const destFull = path.resolve(process.cwd(), dest);
+  try {
+    fs.renameSync(srcFull, destFull);
+  } catch (e: any) {
+    if (e?.code === "EXDEV") {
+      fs.cpSync(srcFull, destFull, { recursive: true });
+      fs.rmSync(srcFull, { recursive: true, force: true });
+      return;
+    }
+    throw e;
+  }
+}
+
+export function _remove(target: string): void {
+  rejectDangerousPath(target, "remove", "target");
+  const full = path.resolve(process.cwd(), target);
+  fs.rmSync(full, { recursive: true, force: true });
+}
+
+function rejectDangerousPath(p: string, op: string, role: string): void {
+  const trimmed = p.trim();
+  if (trimmed === "") {
+    throw new Error(`${op}: ${role} must not be empty`);
+  }
+  const resolved = path.resolve(process.cwd(), trimmed);
+  const root = path.parse(resolved).root;
+
+  if (resolved === root) {
+    throw new Error(
+      `${op}: refusing to use the filesystem root as ${role} (got '${p}')`,
+    );
+  }
+
+  const home = os.homedir();
+  if (home && resolved === home) {
+    throw new Error(
+      `${op}: refusing to use the home directory as ${role} (got '${p}')`,
+    );
+  }
+
+  const segments = resolved
+    .slice(root.length)
+    .split(path.sep)
+    .filter((s) => s.length > 0);
+  if (segments.length <= 1) {
+    throw new Error(
+      `${op}: refusing to use the top-level path '${resolved}' as ${role} (got '${p}'); operations on a single segment under root could destroy critical system directories`,
+    );
+  }
+
+  const cwd = process.cwd();
+  if (cwd === resolved || cwd.startsWith(resolved + path.sep)) {
+    throw new Error(
+      `${op}: refusing to use the current working directory or one of its ancestors '${resolved}' as ${role} (got '${p}')`,
+    );
+  }
 }

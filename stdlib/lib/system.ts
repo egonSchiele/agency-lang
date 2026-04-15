@@ -3,6 +3,21 @@ import path from "path";
 import process from "process";
 import { detectPlatform } from "./utils.js";
 
+export function _env(name: string): string | null {
+  const v = process.env[name];
+  return v === undefined ? null : v;
+}
+
+export function _setEnv(name: string, value: string): void {
+  if (name.length === 0) {
+    throw new Error("setEnv: name must not be empty");
+  }
+  if (name.includes("=")) {
+    throw new Error(`setEnv: name must not contain '=' (got ${name})`);
+  }
+  process.env[name] = value;
+}
+
 export function _screenshot(
   filepath: string,
   x: number,

@@ -1,0 +1,16 @@
+import { remove } from "std::fs"
+
+node main() {
+  let empty = remove("") with approve
+  let root = remove("/") with approve
+  let topLevel = remove("/tmp") with approve
+  let cwd = remove(".") with approve
+  let parent = remove("..") with approve
+  return {
+    emptyRefused: isFailure(empty),
+    rootRefused: isFailure(root),
+    topLevelRefused: isFailure(topLevel),
+    cwdRefused: isFailure(cwd),
+    parentRefused: isFailure(parent)
+  }
+}

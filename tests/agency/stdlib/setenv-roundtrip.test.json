@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"setOk\":true,\"readBack\":\"hello\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "setEnv writes a value that env then reads back"
+    }
+  ]
+}

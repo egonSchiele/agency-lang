@@ -347,7 +347,7 @@ export const regexLiteralParser: Parser<RegexLiteral> = label("a regex", (input:
       noneOf("/\n"),
     )), "pattern"),
     char("/"),
-    capture(manyWithJoin(or(letter)), "flags"),
+    capture(manyWithJoin(oneOf("dgimsuy")), "flags"),
   );
   return parser(input);
 });

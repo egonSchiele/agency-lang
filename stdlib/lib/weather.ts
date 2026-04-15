@@ -73,12 +73,14 @@ export type WeatherResult = {
   windDirection: number;
   precipitation: number;
   cloudCover: number;
-  units: string;
+  units: "metric" | "imperial";
 };
+
+const CURRENT_VARS = "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,cloud_cover";
 
 export async function _weather(
   location: string,
-  units: string,
+  units: "metric" | "imperial",
 ): Promise<WeatherResult> {
   const geo = await _geocode(location);
 
@@ -87,22 +89,11 @@ export async function _weather(
   const windUnit = isImperial ? "mph" : "kmh";
   const precipUnit = isImperial ? "inch" : "mm";
 
-  const currentVars = [
-    "temperature_2m",
-    "relative_humidity_2m",
-    "apparent_temperature",
-    "precipitation",
-    "weather_code",
-    "wind_speed_10m",
-    "wind_direction_10m",
-    "cloud_cover",
-  ].join(",");
-
   const url =
     `https://api.open-meteo.com/v1/forecast` +
     `?latitude=${geo.latitude}` +
     `&longitude=${geo.longitude}` +
-    `&current=${currentVars}` +
+    `&current=${CURRENT_VARS}` +
     `&temperature_unit=${tempUnit}` +
     `&wind_speed_unit=${windUnit}` +
     `&precipitation_unit=${precipUnit}` +

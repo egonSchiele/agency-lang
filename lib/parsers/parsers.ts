@@ -1650,15 +1650,34 @@ export const importNodeStatmentParser: Parser<ImportNodeStatement> = trace(
   ),
 );
 
+const nameWithOptionalAlias = or(
+  map(
+    seqC(capture(many1WithJoin(varNameChar), "name"), str(" as "), capture(many1WithJoin(varNameChar), "alias")),
+    (r) => ({ name: r.name, alias: r.alias as string }),
+  ),
+  map(
+    seqC(capture(many1WithJoin(varNameChar), "name")),
+    (r) => ({ name: r.name, alias: undefined as string | undefined }),
+  ),
+);
+
 const safeNameItem = or(
-  map(seqC(str("safe "), capture(many1WithJoin(varNameChar), "name")), (r) => ({
-    name: r.name,
-    isSafe: true,
-  })),
-  map(seqC(capture(many1WithJoin(varNameChar), "name")), (r) => ({
-    name: r.name,
-    isSafe: false,
-  })),
+  map(
+    seqC(str("safe "), captureCaptures(nameWithOptionalAlias)),
+    (r) => ({
+      name: r.name,
+      alias: r.alias as string | undefined,
+      isSafe: true,
+    }),
+  ),
+  map(
+    nameWithOptionalAlias,
+    (r) => ({
+      name: r.name,
+      alias: r.alias,
+      isSafe: false,
+    }),
+  ),
 );
 
 export const importToolStatmentParser: Parser<ImportToolStatement> = trace(
@@ -1690,15 +1709,19 @@ export const importToolStatmentParser: Parser<ImportToolStatement> = trace(
     (result) => {
       const importedNames: string[] = [];
       const safeNames: string[] = [];
+      const aliases: Record<string, string> = {};
       for (const item of result.items) {
         importedNames.push(item.name);
+        if (item.alias) {
+          aliases[item.name] = item.alias;
+        }
         if (item.isSafe) {
           safeNames.push(item.name);
         }
       }
       return {
         type: "importToolStatement" as const,
-        importedTools: [{ type: "namedImport" as const, importedNames, safeNames }],
+        importedTools: [{ type: "namedImport" as const, importedNames, safeNames, aliases }],
         agencyFile: result.agencyFile,
       };
     },
@@ -1718,13 +1741,17 @@ const namedImportParser: Parser<NamedImport> = trace(
     (result) => {
       const importedNames: string[] = [];
       const safeNames: string[] = [];
+      const aliases: Record<string, string> = {};
       for (const item of result.items) {
         importedNames.push(item.name);
+        if (item.alias) {
+          aliases[item.name] = item.alias;
+        }
         if (item.isSafe) {
           safeNames.push(item.name);
         }
       }
-      return { type: "namedImport" as const, importedNames, safeNames };
+      return { type: "namedImport" as const, importedNames, safeNames, aliases };
     },
   ),
 );

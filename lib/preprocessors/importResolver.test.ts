@@ -15,7 +15,7 @@ function makeImportStatement(
   return {
     type: "importStatement",
     importedNames: [
-      { type: "namedImport", importedNames: names, safeNames: [] },
+      { type: "namedImport", importedNames: names, safeNames: [], aliases: {} },
     ],
     modulePath,
   };
@@ -54,7 +54,7 @@ describe("resolveImports", () => {
     expect(result.nodes).toHaveLength(1);
     const node = result.nodes[0] as ImportToolStatement;
     expect(node.type).toBe("importToolStatement");
-    expect(node.importedTools).toEqual([{ type: "namedImport", importedNames: ["add"], safeNames: [] }]);
+    expect(node.importedTools).toEqual([{ type: "namedImport", importedNames: ["add"], safeNames: [], aliases: {} }]);
   });
 
   it("keeps type imports as ImportStatement", () => {
@@ -100,7 +100,7 @@ describe("resolveImports", () => {
 
     const toolImport = result.nodes[1] as ImportToolStatement;
     expect(toolImport.type).toBe("importToolStatement");
-    expect(toolImport.importedTools).toEqual([{ type: "namedImport", importedNames: ["add"], safeNames: [] }]);
+    expect(toolImport.importedTools).toEqual([{ type: "namedImport", importedNames: ["add"], safeNames: [], aliases: {} }]);
 
     const typeImport = result.nodes[2] as ImportStatement;
     expect(typeImport.type).toBe("importStatement");
@@ -138,7 +138,7 @@ describe("resolveImports", () => {
     const tsImport: ImportStatement = {
       type: "importStatement",
       importedNames: [
-        { type: "namedImport", importedNames: ["foo"], safeNames: [] },
+        { type: "namedImport", importedNames: ["foo"], safeNames: [], aliases: {} },
       ],
       modulePath: "./utils.js",
     };
@@ -158,7 +158,7 @@ describe("resolveImports", () => {
     };
     const toolImport: ImportToolStatement = {
       type: "importToolStatement",
-      importedTools: [{ type: "namedImport", importedNames: ["add"], safeNames: [] }],
+      importedTools: [{ type: "namedImport", importedNames: ["add"], safeNames: [], aliases: {} }],
       agencyFile: "./utils.agency",
     };
     const program: AgencyProgram = {

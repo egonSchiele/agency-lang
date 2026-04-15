@@ -121,7 +121,7 @@ describe("collectProgramInfo", () => {
         {
           type: "importToolStatement",
           agencyFile: "./tools.ts",
-          importedTools: [{ type: "namedImport", importedNames: ["myTool"], safeNames: [] }],
+          importedTools: [{ type: "namedImport", importedNames: ["myTool"], safeNames: [], aliases: {} }],
         },
         {
           type: "importStatement",
@@ -131,6 +131,7 @@ describe("collectProgramInfo", () => {
               type: "namedImport",
               importedNames: ["helper"],
               safeNames: ["helper"],
+              aliases: {},
             },
           ],
         },

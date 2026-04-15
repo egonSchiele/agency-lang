@@ -303,7 +303,7 @@ export class AgencyGenerator {
   protected isImportedTool(functionName: string): boolean {
     return this.importedTools
       .flatMap((node) => node.importedTools)
-      .flatMap((n) => n.importedNames)
+      .flatMap((n) => n.importedNames.map((name) => n.aliases[name] ?? name))
       .includes(functionName);
   }
 
@@ -765,9 +765,11 @@ export class AgencyGenerator {
   protected processImportNameType(node: ImportNameType): string {
     switch (node.type) {
       case "namedImport": {
-        const names = node.importedNames.map((name) =>
-          node.safeNames?.includes(name) ? `safe ${name}` : name,
-        );
+        const names = node.importedNames.map((name) => {
+          const alias = node.aliases[name];
+          const base = alias ? `${name} as ${alias}` : name;
+          return node.safeNames?.includes(name) ? `safe ${base}` : base;
+        });
         return `{ ${names.join(", ")} }`;
       }
       case "namespaceImport":
@@ -782,7 +784,12 @@ export class AgencyGenerator {
   }
 
   protected processImportToolStatement(node: ImportToolStatement): string {
-    const toolNames = node.importedTools.flatMap((n) => n.importedNames);
+    const toolNames = node.importedTools.flatMap((n) =>
+      n.importedNames.map((name) => {
+        const alias = n.aliases[name];
+        return alias ? `${name} as ${alias}` : name;
+      }),
+    );
     return `import tool { ${toolNames.join(", ")} } from "${node.agencyFile}"`;
   }
 

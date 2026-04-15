@@ -164,7 +164,7 @@ export class TypescriptPreprocessor {
       this.graphNodeDefinitions = Object.fromEntries(
         info.graphNodes.map((n) => [n.nodeName, n]),
       );
-      this.importedTools = info.importedTools.flatMap((s) => s.importedTools).flatMap((n) => n.importedNames);
+      this.importedTools = info.importedTools.flatMap((s) => s.importedTools).flatMap((n) => n.importedNames.map((name) => n.aliases[name] ?? name));
     }
   }
 
@@ -321,7 +321,7 @@ export class TypescriptPreprocessor {
   protected getImportedTools() {
     for (const node of this.program.nodes) {
       if (node.type === "importToolStatement") {
-        this.importedTools.push(...node.importedTools.flatMap((n) => n.importedNames));
+        this.importedTools.push(...node.importedTools.flatMap((n) => n.importedNames.map((name) => n.aliases[name] ?? name)));
       }
     }
   }
@@ -1369,7 +1369,7 @@ export class TypescriptPreprocessor {
           importedVars.add(n);
         });
       } else if (node.type === "importToolStatement") {
-        node.importedTools.flatMap((n) => n.importedNames).forEach((t) => {
+        node.importedTools.flatMap((n) => n.importedNames.map((name) => n.aliases[name] ?? name)).forEach((t) => {
           importedVars.add(t);
         });
       }

@@ -12,6 +12,7 @@ export type NamedImport = {
   type: "namedImport";
   importedNames: string[];
   safeNames: string[];
+  aliases: Record<string, string>;
 };
 
 export type NamespaceImport = {
@@ -24,10 +25,16 @@ export type DefaultImport = {
   importedNames: string;
 };
 
+/**
+ * Returns the local names for an import (i.e. the alias if present, otherwise the original name).
+ * Use `getImportedOriginalNames` when you need the original (source module) names.
+ */
 export function getImportedNames(importNameType: ImportNameType): string[] {
   switch (importNameType.type) {
     case "namedImport":
-      return importNameType.importedNames;
+      return importNameType.importedNames.map(
+        (n) => importNameType.aliases[n] ?? n,
+      );
     case "namespaceImport":
       return [importNameType.importedNames];
     case "defaultImport":
@@ -48,6 +55,15 @@ export type ImportToolStatement = BaseNode & {
 };
 
 export function getImportedToolNames(node: ImportToolStatement): string[] {
+  return node.importedTools.flatMap((n) =>
+    n.importedNames.map((name) => n.aliases[name] ?? name),
+  );
+}
+
+/** Returns original (source module) names, ignoring aliases. */
+export function getImportedOriginalToolNames(
+  node: ImportToolStatement,
+): string[] {
   return node.importedTools.flatMap((n) => n.importedNames);
 }
 

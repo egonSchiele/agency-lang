@@ -169,7 +169,7 @@ export function* getAllVariablesInBody(
     } else if (node.type === "importToolStatement") {
       for (const namedImport of node.importedTools) {
         for (const name of namedImport.importedNames) {
-          yield { name, node };
+          yield { name: namedImport.aliases[name] ?? name, node };
         }
       }
     } else if (node.type === "matchBlock") {

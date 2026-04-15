@@ -76,6 +76,28 @@
         }
       ],
       "description": "mixed default + namespace import from JS file"
+    },
+    {
+      "nodeName": "testAliasedJsImport",
+      "input": "",
+      "expectedOutput": "16",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "aliased named import from JS file"
+    },
+    {
+      "nodeName": "testAliasedAgencyImport",
+      "input": "",
+      "expectedOutput": "20",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "aliased named imports from agency file"
     }
   ]
 }

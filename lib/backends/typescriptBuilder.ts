@@ -290,7 +290,7 @@ export class TypeScriptBuilder {
   private isImportedTool(functionName: string): boolean {
     return this.programInfo.importedTools
       .flatMap((node) => node.importedTools)
-      .flatMap((n) => n.importedNames)
+      .flatMap((n) => n.importedNames.map((name) => n.aliases[name] ?? name))
       .includes(functionName);
   }
 
@@ -1248,7 +1248,10 @@ export class TypeScriptBuilder {
         case "namedImport":
           return ts.importDecl({
             importKind: "named",
-            names: nameType.importedNames,
+            names: nameType.importedNames.map((name) => {
+              const alias = nameType.aliases[name];
+              return alias ? { name, alias } : name;
+            }),
             from,
           });
         case "namespaceImport":
@@ -1273,12 +1276,21 @@ export class TypeScriptBuilder {
   }
 
   private processImportToolStatement(node: ImportToolStatement): TsNode {
-    const toolNames = node.importedTools.flatMap((n) => n.importedNames);
-    const importNames = toolNames.flatMap((toolName) => [
-      toolName,
-      `__${toolName}Tool`,
-      `__${toolName}ToolParams`,
-    ]);
+    const importNames: (string | { name: string; alias: string })[] = [];
+    for (const namedImport of node.importedTools) {
+      for (const toolName of namedImport.importedNames) {
+        const alias = namedImport.aliases[toolName];
+        if (alias) {
+          importNames.push({ name: toolName, alias });
+          importNames.push({ name: `__${toolName}Tool`, alias: `__${alias}Tool` });
+          importNames.push({ name: `__${toolName}ToolParams`, alias: `__${alias}ToolParams` });
+        } else {
+          importNames.push(toolName);
+          importNames.push(`__${toolName}Tool`);
+          importNames.push(`__${toolName}ToolParams`);
+        }
+      }
+    }
     return ts.importDecl({
       importKind: "named",
       names: importNames,
@@ -1391,15 +1403,17 @@ export class TypeScriptBuilder {
     }
 
     // Add imported tools (they import __toolNameTool and __toolNameToolParams)
-    const importedToolNames = this.programInfo.importedTools
-      .flatMap((node) => node.importedTools)
-      .flatMap((n) => n.importedNames);
-    for (const toolName of importedToolNames) {
-      entries[toolName] = this.buildToolRegistryEntry(
-        toolName,
-        toolName,
-        false,
-      );
+    for (const toolImport of this.programInfo.importedTools) {
+      for (const namedImport of toolImport.importedTools) {
+        for (const originalName of namedImport.importedNames) {
+          const localName = namedImport.aliases[originalName] ?? originalName;
+          entries[localName] = this.buildToolRegistryEntry(
+            localName,
+            localName,
+            false,
+          );
+        }
+      }
     }
 
     for (const toolName of BUILTIN_TOOLS) {

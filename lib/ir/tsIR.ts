@@ -73,10 +73,12 @@ export interface TsStatements {
 
 export type TsImportKind = "named" | "default" | "namespace" | "type";
 
+export type TsImportName = string | { name: string; alias: string };
+
 export interface TsImport {
   kind: "import";
   importKind: TsImportKind;
-  names: string[];
+  names: TsImportName[];
   defaultName?: string;
   namespaceName?: string;
   from: string;

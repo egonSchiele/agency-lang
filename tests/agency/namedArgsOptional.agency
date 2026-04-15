@@ -1,0 +1,22 @@
+safe def format(value: string, prefix?: string, suffix?: string): string {
+  let result = value
+  if (prefix != null) {
+    result = prefix + result
+  }
+  if (suffix != null) {
+    result = result + suffix
+  }
+  return result
+}
+
+node main() {
+  // Skip both optional params
+  let a = format(value: "hello")
+  // Provide only suffix, skip prefix
+  let b = format(value: "hello", suffix: "!")
+  // Provide only prefix, skip suffix
+  let c = format(value: "hello", prefix: ">")
+  // Provide both, reversed
+  let d = format(suffix: "!", prefix: ">", value: "hello")
+  return a + " | " + b + " | " + c + " | " + d
+}

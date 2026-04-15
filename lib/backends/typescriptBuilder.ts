@@ -512,33 +512,108 @@ export class TypeScriptBuilder {
 
   // ------- Node dispatch -------
 
-  /** Named args are cosmetic/positional — validate name matches the param at that index. */
-  private validateNamedArgs(
+  /**
+   * Resolve named arguments: reorder them to match the parameter list,
+   * inserting null for skipped optional params. Returns unwrapped args
+   * (no NamedArgument wrappers) in the correct positional order.
+   *
+   * Rules (Python-style):
+   * - Positional args must come before named args
+   * - Named args can be in any order
+   * - Named args can skip optional params (those with defaults)
+   * - Named args are only supported for Agency-defined functions
+   */
+  private resolveNamedArgs(
     node: FunctionCall,
     paramList: FunctionParameter[] | undefined,
-  ): void {
-    if (!paramList) return;
-    const lastParam = paramList[paramList.length - 1];
-    const hasVariadic = lastParam?.variadic;
-    for (let i = 0; i < node.arguments.length; i++) {
-      const arg = node.arguments[i];
-      if (arg.type !== "namedArgument") continue;
-      let expectedName: string;
-      if (i < paramList.length) {
-        expectedName = paramList[i].name;
-      } else if (hasVariadic) {
-        expectedName = lastParam.name;
-      } else {
+    isAgencyFunction: boolean,
+  ): (Expression | SplatExpression)[] {
+    const args = node.arguments;
+    const hasNamedArgs = args.some((a) => a.type === "namedArgument");
+
+    if (!hasNamedArgs) {
+      return args as (Expression | SplatExpression)[];
+    }
+
+    // Named args require a known Agency function
+    if (!isAgencyFunction || !paramList || paramList.length === 0) {
+      throw new Error(
+        `Named arguments can only be used with Agency-defined functions, not '${node.functionName}'`,
+      );
+    }
+
+    // Find where named args start
+    const namedStartIdx = args.findIndex((a) => a.type === "namedArgument");
+
+    // Validate no positional after named
+    for (let i = namedStartIdx + 1; i < args.length; i++) {
+      if (args[i].type !== "namedArgument") {
         throw new Error(
-          `Named argument '${arg.name}' at position ${i + 1} is beyond the parameter list in call to '${node.functionName}'`,
-        );
-      }
-      if (arg.name !== expectedName) {
-        throw new Error(
-          `Named argument '${arg.name}' does not match parameter '${expectedName}' at position ${i + 1} in call to '${node.functionName}'`,
+          `Positional argument cannot follow a named argument in call to '${node.functionName}'`,
         );
       }
     }
+
+    // Collect named args, checking for duplicates and unknown names
+    const nonVariadicParams = paramList.filter(
+      (p) => !p.variadic && p.typeHint?.type !== "blockType",
+    );
+    const namedArgMap = new Map<string, Expression>();
+    for (let i = namedStartIdx; i < args.length; i++) {
+      const arg = args[i] as NamedArgument;
+      if (namedArgMap.has(arg.name)) {
+        throw new Error(
+          `Duplicate named argument '${arg.name}' in call to '${node.functionName}'`,
+        );
+      }
+      const paramIdx = nonVariadicParams.findIndex((p) => p.name === arg.name);
+      if (paramIdx === -1) {
+        throw new Error(
+          `Unknown named argument '${arg.name}' in call to '${node.functionName}'`,
+        );
+      }
+      if (paramIdx < namedStartIdx) {
+        throw new Error(
+          `Named argument '${arg.name}' conflicts with positional argument at position ${paramIdx + 1} in call to '${node.functionName}'`,
+        );
+      }
+      namedArgMap.set(arg.name, arg.value);
+    }
+
+    // Build result: positional args first, then fill from named args in parameter order
+    const result: (Expression | SplatExpression)[] = [];
+
+    // Positional args stay in their positions (unwrapped)
+    for (let i = 0; i < namedStartIdx; i++) {
+      const a = args[i];
+      result.push(a.type === "namedArgument" ? a.value : a);
+    }
+
+    // Fill remaining parameter slots from named args
+    for (let i = namedStartIdx; i < nonVariadicParams.length; i++) {
+      const param = nonVariadicParams[i];
+      if (namedArgMap.has(param.name)) {
+        result.push(namedArgMap.get(param.name)!);
+        namedArgMap.delete(param.name);
+      } else if (param.defaultValue) {
+        // Check if any later param has a named arg — if so, insert null placeholder
+        const hasLaterNamedArg = nonVariadicParams
+          .slice(i + 1)
+          .some((p) => namedArgMap.has(p.name));
+        if (hasLaterNamedArg) {
+          result.push({ type: "null" } as Expression);
+        } else {
+          // Trailing skipped params — stop here, adjustCallArgs will pad
+          break;
+        }
+      } else {
+        throw new Error(
+          `Missing required argument '${param.name}' in call to '${node.functionName}'`,
+        );
+      }
+    }
+
+    return result;
   }
 
   /** Process a function call argument, unwrapping NamedArgument and SplatExpression. */
@@ -552,6 +627,23 @@ export class TypeScriptBuilder {
       return ts.spread(this.processNode(arg.value as AgencyNode));
     }
     return this.processNode(arg as AgencyNode);
+  }
+
+  /** Process resolved arguments into TsNodes, tracking function usage. */
+  private processResolvedArgs(
+    args: (Expression | SplatExpression)[],
+  ): TsNode[] {
+    return args.map((arg) => {
+      if (arg.type === "functionCall") {
+        this.functionsUsed.add(arg.functionName);
+        return this.generateFunctionCallExpression(
+          arg as FunctionCall,
+          "functionArg",
+        );
+      } else {
+        return this.processCallArg(arg);
+      }
+    });
   }
 
   /**
@@ -1662,18 +1754,10 @@ export class TypeScriptBuilder {
     const fnDef = this.programInfo.functionDefinitions[node.functionName];
     const imported = this.programInfo.importedFunctions[node.functionName];
     const paramList = fnDef?.parameters ?? imported?.parameters;
+    const isAgencyFunction = !!fnDef || (!!imported && imported.parameters.length > 0);
 
-    this.validateNamedArgs(node, paramList);
-
-    const rawArgNodes: TsNode[] = node.arguments.map((rawArg) => {
-      const arg = rawArg.type === "namedArgument" ? rawArg.value : rawArg;
-      if (arg.type === "functionCall") {
-        this.functionsUsed.add(arg.functionName);
-        return this.generateFunctionCallExpression(arg, "functionArg");
-      } else {
-        return this.processCallArg(arg);
-      }
-    });
+    const resolvedArgs = this.resolveNamedArgs(node, paramList, isAgencyFunction);
+    const rawArgNodes = this.processResolvedArgs(resolvedArgs);
 
     const nonBlockParams = paramList?.filter(
       (p) => !p.typeHint || p.typeHint.type !== "blockType",
@@ -1807,17 +1891,8 @@ export class TypeScriptBuilder {
     const targetNode = this.programInfo.graphNodes.find(
       (n) => n.nodeName === functionName,
     );
-    this.validateNamedArgs(node, targetNode?.parameters);
-
-    const argNodes: TsNode[] = node.arguments.map((rawArg) => {
-      const arg = rawArg.type === "namedArgument" ? rawArg.value : rawArg;
-      if (arg.type === "functionCall") {
-        this.functionsUsed.add(arg.functionName);
-        return this.generateFunctionCallExpression(arg, "functionArg");
-      } else {
-        return this.processCallArg(arg);
-      }
-    });
+    const resolvedArgs = this.resolveNamedArgs(node, targetNode?.parameters, true);
+    const argNodes = this.processResolvedArgs(resolvedArgs);
 
     let dataNode: TsNode;
     if (targetNode && targetNode.parameters.length > 0) {

@@ -129,7 +129,7 @@ describe("TypeScript Builder Integration Tests", () => {
 });
 
 describe("Named argument validation", () => {
-  it("should throw on mismatched named argument", () => {
+  it("should throw when skipping a required argument", () => {
     expect(() =>
       generateWithBuilder(`
 def greet(name: string, greeting: string = "Hello") {
@@ -137,10 +137,10 @@ def greet(name: string, greeting: string = "Hello") {
 }
 greet(greeting: "Hi")
 `),
-    ).toThrow("Named argument 'greeting' does not match parameter 'name' at position 1");
+    ).toThrow("Missing required argument 'name' in call to 'greet'");
   });
 
-  it("should throw on named argument beyond parameter list", () => {
+  it("should throw on unknown named argument", () => {
     expect(() =>
       generateWithBuilder(`
 def foo(a: string) {
@@ -148,7 +148,7 @@ def foo(a: string) {
 }
 foo(a: "hi", extra: "oops")
 `),
-    ).toThrow("Named argument 'extra' at position 2 is beyond the parameter list");
+    ).toThrow("Unknown named argument 'extra' in call to 'foo'");
   });
 
   it("should accept correct named arguments", () => {
@@ -158,6 +158,52 @@ def greet(name: string, greeting: string = "Hello") {
   print(name)
 }
 greet(name: "world", greeting: "Hi")
+`),
+    ).not.toThrow();
+  });
+
+  it("should accept reordered named arguments", () => {
+    expect(() =>
+      generateWithBuilder(`
+def greet(name: string, greeting: string = "Hello") {
+  print(name)
+}
+greet(greeting: "Hi", name: "world")
+`),
+    ).not.toThrow();
+  });
+
+  it("should throw on positional after named", () => {
+    expect(() =>
+      generateWithBuilder(`
+def greet(name: string, greeting: string = "Hello") {
+  print(name)
+}
+greet(name: "world", "Hi")
+`),
+    ).toThrow("Positional argument cannot follow a named argument");
+  });
+
+  it("should throw on duplicate named argument", () => {
+    expect(() =>
+      generateWithBuilder(`
+def greet(name: string, greeting: string = "Hello") {
+  print(name)
+}
+greet(name: "world", name: "other")
+`),
+    ).toThrow("Duplicate named argument 'name' in call to 'greet'");
+  });
+
+  it("should accept named args with block parameters", () => {
+    expect(() =>
+      generateWithBuilder(`
+def twice(label: string, block: () => string): string {
+  return block() + block()
+}
+twice(label: "test") as {
+  return "hi"
+}
 `),
     ).not.toThrow();
   });

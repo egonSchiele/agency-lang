@@ -2,6 +2,19 @@ import { spawnSync, SpawnSyncOptions } from "child_process";
 import process from "process";
 import fs from "fs";
 import path from "path";
+import {
+  anyChar,
+  capture,
+  char,
+  many,
+  map,
+  noneOf,
+  or,
+  Parser,
+  sepBy,
+  seqC,
+  str,
+} from "tarsec";
 
 export function _bash(
   command: string,
@@ -88,6 +101,33 @@ const SKIP_DIRS = new Set([
   ".cache",
 ]);
 
+type Visitor = (fullPath: string, stat: fs.Stats) => boolean;
+
+function walkDir(root: string, visit: Visitor): void {
+  function walk(current: string): boolean {
+    let entries: string[];
+    try {
+      entries = fs.readdirSync(current);
+    } catch {
+      return true;
+    }
+    for (const name of entries) {
+      if (SKIP_DIRS.has(name)) continue;
+      const full = path.join(current, name);
+      let st: fs.Stats;
+      try {
+        st = fs.lstatSync(full);
+      } catch {
+        continue;
+      }
+      if (!visit(full, st)) return false;
+      if (st.isDirectory() && !walk(full)) return false;
+    }
+    return true;
+  }
+  walk(root);
+}
+
 export function _grep(
   pattern: string,
   dir: string,
@@ -98,51 +138,30 @@ export function _grep(
   const re = new RegExp(pattern, flags || undefined);
   const results: GrepMatch[] = [];
 
-  function walk(current: string): boolean {
-    let entries: string[];
+  walkDir(root, (full, st) => {
+    if (!st.isFile()) return true;
+    if (st.size > 5_000_000) return true;
+    let text: string;
     try {
-      entries = fs.readdirSync(current);
+      text = fs.readFileSync(full, "utf8");
     } catch {
       return true;
     }
-    for (const name of entries) {
-      if (results.length >= maxResults) return false;
-      if (SKIP_DIRS.has(name)) continue;
-      const full = path.join(current, name);
-      let st: fs.Stats;
-      try {
-        st = fs.lstatSync(full);
-      } catch {
-        continue;
+    const lines = text.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      if (re.test(lines[i])) {
+        results.push({
+          file: path.relative(process.cwd(), full),
+          line: i + 1,
+          text: lines[i],
+        });
+        if (results.length >= maxResults) return false;
       }
-      if (st.isDirectory()) {
-        if (!walk(full)) return false;
-      } else if (st.isFile()) {
-        if (st.size > 5_000_000) continue;
-        let text: string;
-        try {
-          text = fs.readFileSync(full, "utf8");
-        } catch {
-          continue;
-        }
-        const lines = text.split("\n");
-        for (let i = 0; i < lines.length; i++) {
-          if (re.test(lines[i])) {
-            results.push({
-              file: path.relative(process.cwd(), full),
-              line: i + 1,
-              text: lines[i],
-            });
-            if (results.length >= maxResults) return false;
-          }
-          re.lastIndex = 0;
-        }
-      }
+      re.lastIndex = 0;
     }
     return true;
-  }
+  });
 
-  walk(root);
   return results;
 }
 
@@ -155,66 +174,60 @@ export function _glob(
   const re = globToRegExp(pattern);
   const results: string[] = [];
 
-  function walk(current: string): boolean {
-    let entries: string[];
-    try {
-      entries = fs.readdirSync(current);
-    } catch {
-      return true;
-    }
-    for (const name of entries) {
+  walkDir(root, (full) => {
+    const rel = path.relative(root, full);
+    if (re.test(rel)) {
+      results.push(path.relative(process.cwd(), full));
       if (results.length >= maxResults) return false;
-      if (SKIP_DIRS.has(name)) continue;
-      const full = path.join(current, name);
-      let st: fs.Stats;
-      try {
-        st = fs.lstatSync(full);
-      } catch {
-        continue;
-      }
-      const rel = path.relative(root, full);
-      if (re.test(rel)) {
-        results.push(path.relative(process.cwd(), full));
-        if (results.length >= maxResults) return false;
-      }
-      if (st.isDirectory()) {
-        if (!walk(full)) return false;
-      }
     }
     return true;
-  }
+  });
 
-  walk(root);
   return results;
 }
 
 function globToRegExp(glob: string): RegExp {
-  let re = "";
-  let i = 0;
-  while (i < glob.length) {
-    const c = glob[i];
-    if (c === "*") {
-      if (glob[i + 1] === "*") {
-        re += ".*";
-        i += 2;
-        if (glob[i] === "/") i++;
-      } else {
-        re += "[^/]*";
-        i++;
-      }
-    } else if (c === "?") {
-      re += "[^/]";
-      i++;
-    } else if (".+()|^$[]{}\\".includes(c)) {
-      re += "\\" + c;
-      i++;
-    } else {
-      re += c;
-      i++;
-    }
+  const result = globParser(glob);
+  if (!result.success || (result.rest ?? "") !== "") {
+    throw new Error(`invalid glob pattern: ${glob}`);
   }
-  return new RegExp("^" + re + "$");
+  return new RegExp("^" + result.result + "$");
 }
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.+()|^$\[\]{}\\*?]/g, "\\$&");
+}
+
+const doubleStar: Parser<string> = map(or(str("**/"), str("**")), () => ".*");
+const singleStar: Parser<string> = map(char("*"), () => "[^/]*");
+const questionMark: Parser<string> = map(char("?"), () => "[^/]");
+
+const braceAlt: Parser<string> = map(many(noneOf(",}")), (chars: string[]) =>
+  chars.join(""),
+);
+
+const braceGroup: Parser<string> = map(
+  seqC(
+    char("{"),
+    capture(sepBy(char(","), braceAlt), "alts"),
+    char("}"),
+  ),
+  ({ alts }) => "(?:" + alts.map(escapeRegex).join("|") + ")",
+);
+
+const literalChar: Parser<string> = map(anyChar, escapeRegex);
+
+const globElement: Parser<string> = or(
+  doubleStar,
+  singleStar,
+  questionMark,
+  braceGroup,
+  literalChar,
+);
+
+const globParser: Parser<string> = map(many(globElement), (parts: string[]) =>
+  parts.join(""),
+);
 
 export type StatInfo = {
   exists: boolean;

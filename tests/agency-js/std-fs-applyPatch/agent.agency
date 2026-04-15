@@ -1,0 +1,19 @@
+import { applyPatch } from "std::fs"
+
+node runApply(patch: string) {
+  handle {
+    const result = applyPatch(patch)
+  } with (data) {
+    return approve()
+  }
+  return result
+}
+
+node readBack(filename: string) {
+  handle {
+    const result = read(filename)
+  } with (data) {
+    return approve()
+  }
+  return result
+}

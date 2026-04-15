@@ -1,0 +1,18 @@
+{
+  "modify": {
+    "ok": true,
+    "applied": 1,
+    "contents": "one\nTWO\nthree\n"
+  },
+  "newFile": {
+    "ok": true,
+    "applied": 1,
+    "exists": true,
+    "contents": "hello\nworld"
+  },
+  "mismatch": {
+    "ok": false,
+    "mentionsContextMismatch": true,
+    "contentsUnchanged": true
+  }
+}

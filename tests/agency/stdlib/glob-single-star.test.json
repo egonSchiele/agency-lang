@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"tests/agency/stdlib/glob-fixtures/a.md\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "glob with single * does not cross directory boundaries"
+    }
+  ]
+}

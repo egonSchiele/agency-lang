@@ -3,7 +3,7 @@ import { _todoWrite, _todoList } from "./lib/agent.js"
 type Todo = {
   id: string;
   text: string;
-  status: string
+  status: "pending" | "in_progress" | "completed"
 }
 
 export safe def todoWrite(todos: Todo[]): Todo[] {
@@ -29,5 +29,4 @@ export def question(prompt: string): string {
     message: prompt,
     prompt: prompt
   })
-  return ""
 }

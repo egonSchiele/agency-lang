@@ -19,28 +19,31 @@ export function _edit(
   const full = path.resolve(process.cwd(), filename);
   const before = fs.readFileSync(full, "utf8");
 
-  const occurrences = countOccurrences(before, oldText);
-  if (occurrences === 0) {
+  if (replaceAll) {
+    const pieces = before.split(oldText);
+    if (pieces.length === 1) {
+      throw new Error(`edit: oldText not found in ${filename}.`);
+    }
+    fs.writeFileSync(full, pieces.join(newText), "utf8");
+    return { replacements: pieces.length - 1, path: filename };
+  }
+
+  const first = before.indexOf(oldText);
+  if (first === -1) {
     throw new Error(
       `edit: oldText not found in ${filename}. The text to replace must appear exactly once (or use replaceAll=true).`,
     );
   }
-  if (!replaceAll && occurrences > 1) {
+  const second = before.indexOf(oldText, first + oldText.length);
+  if (second !== -1) {
     throw new Error(
-      `edit: oldText appears ${occurrences} times in ${filename}. Provide more surrounding context to make it unique, or set replaceAll=true.`,
+      `edit: oldText appears multiple times in ${filename}. Provide more surrounding context to make it unique, or set replaceAll=true.`,
     );
   }
-
-  let after: string;
-  if (replaceAll) {
-    after = before.split(oldText).join(newText);
-  } else {
-    const idx = before.indexOf(oldText);
-    after = before.slice(0, idx) + newText + before.slice(idx + oldText.length);
-  }
-
+  const after =
+    before.slice(0, first) + newText + before.slice(first + oldText.length);
   fs.writeFileSync(full, after, "utf8");
-  return { replacements: occurrences, path: filename };
+  return { replacements: 1, path: filename };
 }
 
 export type MultiEdit = {
@@ -55,7 +58,10 @@ export type MultiEditResult = {
   edits: number;
 };
 
-export function _multiedit(filename: string, edits: MultiEdit[]): MultiEditResult {
+export function _multiedit(
+  filename: string,
+  edits: MultiEdit[],
+): MultiEditResult {
   const full = path.resolve(process.cwd(), filename);
   let contents = fs.readFileSync(full, "utf8");
   let total = 0;
@@ -65,24 +71,32 @@ export function _multiedit(filename: string, edits: MultiEdit[]): MultiEditResul
     if (!oldText) {
       throw new Error(`multiedit: edit #${i + 1} has empty oldText`);
     }
-    const occurrences = countOccurrences(contents, oldText);
-    if (occurrences === 0) {
-      throw new Error(
-        `multiedit: edit #${i + 1} oldText not found in ${filename}`,
-      );
-    }
-    if (!replaceAll && occurrences > 1) {
-      throw new Error(
-        `multiedit: edit #${i + 1} oldText appears ${occurrences} times in ${filename}. Provide more context or set replaceAll.`,
-      );
-    }
     if (replaceAll) {
-      contents = contents.split(oldText).join(newText);
-      total += occurrences;
+      const pieces = contents.split(oldText);
+      if (pieces.length === 1) {
+        throw new Error(
+          `multiedit: edit #${i + 1} oldText not found in ${filename}`,
+        );
+      }
+      contents = pieces.join(newText);
+      total += pieces.length - 1;
     } else {
-      const idx = contents.indexOf(oldText);
+      const first = contents.indexOf(oldText);
+      if (first === -1) {
+        throw new Error(
+          `multiedit: edit #${i + 1} oldText not found in ${filename}`,
+        );
+      }
+      const second = contents.indexOf(oldText, first + oldText.length);
+      if (second !== -1) {
+        throw new Error(
+          `multiedit: edit #${i + 1} oldText appears multiple times in ${filename}. Provide more context or set replaceAll.`,
+        );
+      }
       contents =
-        contents.slice(0, idx) + newText + contents.slice(idx + oldText.length);
+        contents.slice(0, first) +
+        newText +
+        contents.slice(first + oldText.length);
       total += 1;
     }
   }
@@ -115,18 +129,6 @@ export function _applyPatch(patch: string): PatchResult {
   }
 
   return { applied: files.length, files: touched };
-}
-
-function countOccurrences(haystack: string, needle: string): number {
-  let n = 0;
-  let i = 0;
-  while (true) {
-    const idx = haystack.indexOf(needle, i);
-    if (idx === -1) break;
-    n++;
-    i = idx + needle.length;
-  }
-  return n;
 }
 
 type Hunk = {

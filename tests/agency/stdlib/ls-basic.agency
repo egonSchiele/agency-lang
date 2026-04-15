@@ -1,0 +1,16 @@
+import { ls } from "std::shell"
+
+node main() {
+  handle {
+    const entries = ls("tests/agency/stdlib/glob-fixtures", false)
+  } with (data) {
+    return approve()
+  }
+  let sortedNames = sortBy(entries) as e {
+    return e.name
+  }
+  let names = map(sortedNames) as e {
+    return e.name
+  }
+  return names
+}

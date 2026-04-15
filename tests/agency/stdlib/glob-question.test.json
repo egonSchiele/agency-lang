@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"tests/agency/stdlib/glob-fixtures/a.md\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "glob ? matches exactly one non-slash character"
+    }
+  ]
+}

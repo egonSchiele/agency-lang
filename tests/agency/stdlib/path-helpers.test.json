@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"join\":\"a/b/c.ts\",\"basename\":\"baz.ts\",\"basenameNoExt\":\"baz\",\"dirname\":\"/foo/bar\",\"extname\":\".ts\",\"noExt\":\"\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "path helpers return expected values for a representative path"
+    }
+  ]
+}

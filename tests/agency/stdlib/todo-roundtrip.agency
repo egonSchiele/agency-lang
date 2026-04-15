@@ -1,0 +1,10 @@
+import { todoWrite, todoList } from "std::agent"
+
+node main() {
+  todoWrite([
+    { id: "1", text: "read the spec", status: "completed" },
+    { id: "2", text: "implement feature", status: "in_progress" },
+    { id: "3", text: "write tests", status: "pending" }
+  ])
+  return todoList()
+}

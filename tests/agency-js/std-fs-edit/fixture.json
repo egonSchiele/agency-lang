@@ -1,0 +1,18 @@
+{
+  "unique": {
+    "replacements": 1,
+    "contents": "alpha BETA gamma\n"
+  },
+  "replaceAll": {
+    "replacements": 3,
+    "contents": "Y Y Y\n"
+  },
+  "zeroMatch": {
+    "ok": false,
+    "mentionsNotFound": true
+  },
+  "multiMatch": {
+    "ok": false,
+    "contentsUnchanged": true
+  }
+}

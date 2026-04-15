@@ -61,17 +61,19 @@ function htmlToMarkdown(html: string): string {
   s = s.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, "`$1`");
 
   s = stripTags(s);
-
-  s = s.replace(/&nbsp;/g, " ");
-  s = s.replace(/&amp;/g, "&");
-  s = s.replace(/&lt;/g, "<");
-  s = s.replace(/&gt;/g, ">");
-  s = s.replace(/&quot;/g, '"');
-  s = s.replace(/&#39;/g, "'");
-
+  s = s.replace(/&nbsp;|&amp;|&lt;|&gt;|&quot;|&#39;/g, (m) => ENTITIES[m]);
   s = s.replace(/\n{3,}/g, "\n\n");
   return s.trim();
 }
+
+const ENTITIES: Record<string, string> = {
+  "&nbsp;": " ",
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&#39;": "'",
+};
 
 function stripTags(s: string): string {
   return s.replace(/<[^>]+>/g, "");

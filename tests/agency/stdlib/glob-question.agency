@@ -1,0 +1,10 @@
+import { glob } from "std::shell"
+
+node main() {
+  handle {
+    const results = glob("?.md", "tests/agency/stdlib/glob-fixtures")
+  } with (data) {
+    return approve()
+  }
+  return results
+}

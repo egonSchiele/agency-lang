@@ -25,7 +25,7 @@ export def bash(command: string, cwd: string = "", timeout: number = 0, stdin: s
 type LsEntry = {
   name: string;
   path: string;
-  type: string;
+  type: "file" | "dir" | "symlink" | "other";
   size: number
 }
 
@@ -82,7 +82,7 @@ export def glob(pattern: string, dir: string = ".", maxResults: number = 500): s
 
 type StatInfo = {
   exists: boolean;
-  type: string;
+  type: "file" | "dir" | "symlink" | "other" | "missing";
   size: number;
   modifiedMs: number
 }

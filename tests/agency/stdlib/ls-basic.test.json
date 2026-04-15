@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"a.md\",\"b.txt\",\"c.js\",\"d.ts\",\"sub\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "ls returns all entries in a directory (flat)"
+    }
+  ]
+}

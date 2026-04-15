@@ -532,9 +532,7 @@ export class TypeScriptBuilder {
     const hasNamedArgs = args.some((a) => a.type === "namedArgument");
 
     if (!hasNamedArgs) {
-      return args.map((a) =>
-        a.type === "namedArgument" ? a.value : a,
-      ) as (Expression | SplatExpression)[];
+      return args as (Expression | SplatExpression)[];
     }
 
     // Named args require a known Agency function
@@ -627,6 +625,23 @@ export class TypeScriptBuilder {
       return ts.spread(this.processNode(arg.value as AgencyNode));
     }
     return this.processNode(arg as AgencyNode);
+  }
+
+  /** Process resolved arguments into TsNodes, tracking function usage. */
+  private processResolvedArgs(
+    args: (Expression | SplatExpression)[],
+  ): TsNode[] {
+    return args.map((arg) => {
+      if (arg.type === "functionCall") {
+        this.functionsUsed.add(arg.functionName);
+        return this.generateFunctionCallExpression(
+          arg as FunctionCall,
+          "functionArg",
+        );
+      } else {
+        return this.processCallArg(arg);
+      }
+    });
   }
 
   /**
@@ -1740,14 +1755,7 @@ export class TypeScriptBuilder {
     const isAgencyFunction = !!fnDef || (!!imported && imported.parameters.length > 0);
 
     const resolvedArgs = this.resolveNamedArgs(node, paramList, isAgencyFunction);
-    const rawArgNodes: TsNode[] = resolvedArgs.map((arg) => {
-      if (arg.type === "functionCall") {
-        this.functionsUsed.add(arg.functionName);
-        return this.generateFunctionCallExpression(arg as FunctionCall, "functionArg");
-      } else {
-        return this.processCallArg(arg);
-      }
-    });
+    const rawArgNodes = this.processResolvedArgs(resolvedArgs);
 
     const nonBlockParams = paramList?.filter(
       (p) => !p.typeHint || p.typeHint.type !== "blockType",
@@ -1882,14 +1890,7 @@ export class TypeScriptBuilder {
       (n) => n.nodeName === functionName,
     );
     const resolvedArgs = this.resolveNamedArgs(node, targetNode?.parameters, true);
-    const argNodes: TsNode[] = resolvedArgs.map((arg) => {
-      if (arg.type === "functionCall") {
-        this.functionsUsed.add(arg.functionName);
-        return this.generateFunctionCallExpression(arg as FunctionCall, "functionArg");
-      } else {
-        return this.processCallArg(arg);
-      }
-    });
+    const argNodes = this.processResolvedArgs(resolvedArgs);
 
     let dataNode: TsNode;
     if (targetNode && targetNode.parameters.length > 0) {

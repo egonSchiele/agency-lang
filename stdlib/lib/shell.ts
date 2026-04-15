@@ -286,6 +286,11 @@ export function _exists(filename: string): boolean {
 
 export function _which(command: string): string {
   if (command.length === 0) return "";
+  if (command.includes("/") || command.includes("\\") || command.includes("\0")) {
+    throw new Error(
+      `which: command name must not contain path separators or NUL bytes (got '${command}')`,
+    );
+  }
   const pathEnv = process.env.PATH ?? "";
   const dirs = pathEnv.split(path.delimiter).filter((d) => d.length > 0);
   const isWindows = process.platform === "win32";
@@ -294,12 +299,14 @@ export function _which(command: string): string {
     : [""];
   for (const dir of dirs) {
     for (const ext of extensions) {
-      const candidate = path.join(dir, command + ext);
+      const candidate = path.resolve(dir, command + ext);
       try {
         const st = fs.statSync(candidate);
-        if (st.isFile()) {
-          return candidate;
+        if (!st.isFile()) continue;
+        if (!isWindows) {
+          fs.accessSync(candidate, fs.constants.X_OK);
         }
+        return candidate;
       } catch {}
     }
   }

@@ -249,7 +249,7 @@ export const multiLineCommentParser: Parser<AgencyMultiLineComment> = (
 // =============================================================================
 
 export const stringTextSegmentParser: Parser<TextSegment> = map(
-  many1Till(oneOf('"`$')),
+  many1Till(or(char('"'), char("`"), str("${"))),
   (text) => ({
     type: "text",
     value: text,
@@ -257,7 +257,7 @@ export const stringTextSegmentParser: Parser<TextSegment> = map(
 );
 
 export const multiLineStringTextSegmentParser: Parser<TextSegment> = map(
-  many1Till(or(str('"""'), char("$"))),
+  many1Till(or(str('"""'), str("${"))),
   (text) => ({
     type: "text",
     value: text,

@@ -3,13 +3,13 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "{\"rootDestRefused\":true,\"topDestRefused\":true}",
+      "expectedOutput": "\"from-parent\\n\"",
       "evaluationCriteria": [
         {
           "type": "exact"
         }
       ],
-      "description": "copy refuses dangerous destinations (root, top-level path)"
+      "description": "setEnv writes a variable that is visible to spawned subprocesses"
     }
   ]
 }

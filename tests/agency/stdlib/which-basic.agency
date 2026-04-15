@@ -1,10 +1,10 @@
 import { which } from "std::shell"
 
 node main() {
-  let sh = which("sh")
+  let nodeBin = which("node")
   let bogus = which("definitely-not-a-real-command-xyz")
   return {
-    foundSh: sh != "",
+    foundNode: nodeBin != "",
     bogusIsEmpty: bogus == ""
   }
 }

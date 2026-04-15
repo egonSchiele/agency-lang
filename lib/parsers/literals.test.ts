@@ -479,6 +479,29 @@ describe("literals parsers", () => {
         },
       },
 
+      // Bare $ that is not followed by { is a literal text character
+      // (interpolation is only triggered by ${...}).
+      {
+        input: '"echo $X"',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [{ type: "text", value: "echo $X" }],
+          },
+        },
+      },
+      {
+        input: '"$at end"',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [{ type: "text", value: "$at end" }],
+          },
+        },
+      },
+
       // Failure cases
       { input: '"hello', expected: { success: false } },
       { input: 'hello"', expected: { success: false } },

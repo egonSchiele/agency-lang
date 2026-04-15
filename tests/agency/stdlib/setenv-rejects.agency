@@ -1,0 +1,12 @@
+import { setEnv } from "std::system"
+
+node main() {
+  let empty = setEnv("", "value") with approve
+  let withEquals = setEnv("BAD=NAME", "value") with approve
+  let withNul = setEnv("BAD\u0000NAME", "value") with approve
+  return {
+    emptyRefused: isFailure(empty),
+    equalsRefused: isFailure(withEquals),
+    nulRefused: isFailure(withNul)
+  }
+}

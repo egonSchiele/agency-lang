@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"traversalRefused\":true,\"absoluteRefused\":true}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "which refuses command names containing path separators (prevents file-existence probing via PATH-relative ..)"
+    }
+  ]
+}

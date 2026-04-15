@@ -248,7 +248,6 @@ export function _mkdir(dir: string): void {
 }
 
 export function _copy(src: string, dest: string): void {
-  rejectDangerousPath(dest, "copy", "destination");
   const srcFull = path.resolve(process.cwd(), src);
   const destFull = path.resolve(process.cwd(), dest);
   fs.cpSync(srcFull, destFull, { recursive: true });
@@ -256,7 +255,6 @@ export function _copy(src: string, dest: string): void {
 
 export function _move(src: string, dest: string): void {
   rejectDangerousPath(src, "move", "source");
-  rejectDangerousPath(dest, "move", "destination");
   const srcFull = path.resolve(process.cwd(), src);
   const destFull = path.resolve(process.cwd(), dest);
   try {
@@ -277,41 +275,74 @@ export function _remove(target: string): void {
   fs.rmSync(full, { recursive: true, force: true });
 }
 
-function rejectDangerousPath(p: string, op: string, role: string): void {
+export function rejectDangerousPath(
+  p: string,
+  op: string,
+  role: string,
+): void {
   const trimmed = p.trim();
   if (trimmed === "") {
     throw new Error(`${op}: ${role} must not be empty`);
   }
-  const resolved = path.resolve(process.cwd(), trimmed);
-  const root = path.parse(resolved).root;
+  const lexical = path.resolve(process.cwd(), trimmed);
+  const real = realpathOrResolve(lexical);
+  const homeReal = realpathOrResolve(os.homedir());
+  const cwdReal = realpathOrResolve(process.cwd());
 
-  if (resolved === root) {
-    throw new Error(
-      `${op}: refusing to use the filesystem root as ${role} (got '${p}')`,
-    );
-  }
+  for (const candidate of new Set([lexical, real])) {
+    const root = path.parse(candidate).root;
 
-  const home = os.homedir();
-  if (home && resolved === home) {
-    throw new Error(
-      `${op}: refusing to use the home directory as ${role} (got '${p}')`,
-    );
-  }
+    if (samePath(candidate, root)) {
+      throw new Error(
+        `${op}: refusing to use the filesystem root as ${role} (got '${p}')`,
+      );
+    }
 
-  const segments = resolved
-    .slice(root.length)
-    .split(path.sep)
-    .filter((s) => s.length > 0);
-  if (segments.length <= 1) {
-    throw new Error(
-      `${op}: refusing to use the top-level path '${resolved}' as ${role} (got '${p}'); operations on a single segment under root could destroy critical system directories`,
-    );
-  }
+    if (homeReal && samePath(candidate, homeReal)) {
+      throw new Error(
+        `${op}: refusing to use the home directory as ${role} (got '${p}')`,
+      );
+    }
 
-  const cwd = process.cwd();
-  if (cwd === resolved || cwd.startsWith(resolved + path.sep)) {
-    throw new Error(
-      `${op}: refusing to use the current working directory or one of its ancestors '${resolved}' as ${role} (got '${p}')`,
-    );
+    const segments = candidate
+      .slice(root.length)
+      .split(path.sep)
+      .filter((s) => s.length > 0);
+    if (segments.length <= 1) {
+      throw new Error(
+        `${op}: refusing to use the top-level path '${candidate}' as ${role} (got '${p}'); operations on a single segment under root could destroy critical system directories`,
+      );
+    }
+
+    if (
+      samePath(cwdReal, candidate) ||
+      cwdStartsWith(cwdReal, candidate + path.sep)
+    ) {
+      throw new Error(
+        `${op}: refusing to use the current working directory or one of its ancestors '${candidate}' as ${role} (got '${p}')`,
+      );
+    }
   }
+}
+
+function realpathOrResolve(p: string): string {
+  try {
+    return fs.realpathSync.native(p);
+  } catch {
+    return p;
+  }
+}
+
+function samePath(a: string, b: string): boolean {
+  if (process.platform === "win32") {
+    return a.toLowerCase() === b.toLowerCase();
+  }
+  return a === b;
+}
+
+function cwdStartsWith(cwd: string, prefix: string): boolean {
+  if (process.platform === "win32") {
+    return cwd.toLowerCase().startsWith(prefix.toLowerCase());
+  }
+  return cwd.startsWith(prefix);
 }

@@ -1,0 +1,8 @@
+import { setEnv } from "std::system"
+import { bash } from "std::shell"
+
+node main() {
+  let setResult = setEnv("AGENCY_TEST_CHILD_VAR", "from-parent") with approve
+  let result = bash("echo $AGENCY_TEST_CHILD_VAR", "", 0, "") with approve
+  return result.stdout
+}

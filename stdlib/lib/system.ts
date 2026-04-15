@@ -12,8 +12,13 @@ export function _setEnv(name: string, value: string): void {
   if (name.length === 0) {
     throw new Error("setEnv: name must not be empty");
   }
-  if (name.includes("=")) {
-    throw new Error(`setEnv: name must not contain '=' (got ${name})`);
+  if (name.includes("=") || name.includes("\0")) {
+    throw new Error(
+      `setEnv: name must not contain '=' or NUL bytes (got ${JSON.stringify(name)})`,
+    );
+  }
+  if (value.includes("\0")) {
+    throw new Error("setEnv: value must not contain NUL bytes");
   }
   process.env[name] = value;
 }

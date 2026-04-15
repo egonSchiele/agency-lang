@@ -1,0 +1,10 @@
+import { which } from "std::shell"
+
+node main() {
+  let traversal = try which("../../etc/passwd")
+  let absolute = try which("/usr/bin/sh")
+  return {
+    traversalRefused: isFailure(traversal),
+    absoluteRefused: isFailure(absolute)
+  }
+}

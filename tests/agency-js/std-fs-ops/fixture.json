@@ -1,10 +1,17 @@
 {
   "mkdir": { "ok": true, "exists": true },
+  "mkdirIdempotent": { "ok": true, "exists": true },
   "copy": {
     "ok": true,
     "srcExists": true,
     "destExists": true,
     "contents": "hello\n"
+  },
+  "copyDir": {
+    "ok": true,
+    "srcExists": true,
+    "destExists": true,
+    "innerContents": "B\n"
   },
   "move": {
     "ok": true,
@@ -12,6 +19,13 @@
     "destExists": true,
     "contents": "moved\n"
   },
+  "moveDir": {
+    "ok": true,
+    "srcExists": false,
+    "destExists": true,
+    "childContents": "X\n"
+  },
   "remove": { "ok": true, "exists": false },
+  "removeDir": { "ok": true, "exists": false },
   "removeMissing": { "ok": true, "exists": false }
 }

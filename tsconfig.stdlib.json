@@ -12,5 +12,10 @@
     "types": ["node"]
   },
   "include": ["stdlib/**/*.ts"],
-  "exclude": ["node_modules", "stdlib/index.ts"]
+  "exclude": [
+    "node_modules",
+    "stdlib/index.ts",
+    "stdlib/**/*.test.ts",
+    "stdlib/**/__tests__/**"
+  ]
 }

@@ -3,7 +3,7 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "{\"foundSh\":true,\"bogusIsEmpty\":true}",
+      "expectedOutput": "{\"foundNode\":true,\"bogusIsEmpty\":true}",
       "evaluationCriteria": [
         {
           "type": "exact"

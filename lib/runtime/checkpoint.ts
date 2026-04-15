@@ -55,10 +55,10 @@ export function restore(
     return;
   }
 
+  ctx.checkpoints.trackRestore(cp.id);
   if (options.maxRestores !== undefined) {
     ctx.checkpoints.trackLocationRestore(location);
   }
-  ctx.checkpoints.trackRestore(cp.id);
   ctx.checkpoints.deleteAfterCheckpoint(cp.id);
   ctx.pendingPromises.clear();
   throw new RestoreSignal(cp, options);

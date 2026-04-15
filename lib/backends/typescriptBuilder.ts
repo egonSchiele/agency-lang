@@ -1725,6 +1725,11 @@ export class TypeScriptBuilder {
 
     if (this.isAgencyFunction(node.functionName, context)) {
       // In global init scope, __threads and __state don't exist — pass only ctx
+      const locationOpts = node.functionName === "checkpoint" ? {
+        moduleId: ts.str(this.moduleId),
+        scopeName: ts.str(this.currentScopeName()),
+        stepPath: ts.str(this._subStepPath.join(".")),
+      } : {};
       const configObj = this.insideGlobalInit
         ? ts.functionCallConfig({
           ctx: ts.runtime.ctx,
@@ -1735,11 +1740,7 @@ export class TypeScriptBuilder {
           interruptData: ts.raw("__state?.interruptData"),
           stateStack: options?.stateStack,
           isForked: node.async,
-          ...(node.functionName === "checkpoint" ? {
-            moduleId: ts.str(this.moduleId),
-            scopeName: ts.str(this.currentScopeName()),
-            stepPath: ts.str(this._subStepPath.join(".")),
-          } : {}),
+          ...locationOpts,
         });
       const call = ts.call(ts.id(functionName), [...argNodes, configObj]);
       return shouldAwait ? ts.await(call) : call;

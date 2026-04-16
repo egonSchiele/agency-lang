@@ -29,7 +29,7 @@ export class ErrorReviver implements BaseReviver<Error> {
   }
 
   validate(value: Record<string, unknown>): boolean {
-    return typeof value.message === "string";
+    return typeof value.name === "string" && typeof value.message === "string";
   }
 
   revive(value: Record<string, unknown>): Error {

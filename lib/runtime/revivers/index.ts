@@ -25,6 +25,7 @@ for (const r of revivers) {
 // the value, so we check the raw value via this[key] instead.
 export function nativeTypeReplacer(this: any, key: string, value: unknown): unknown {
   const raw = key === "" ? value : this[key];
+  if (typeof raw !== "object" || raw === null) return value;
   for (const r of revivers) {
     if (r.isInstance(raw)) {
       return r.serialize(raw);

@@ -3,8 +3,27 @@ import { GlobalStore } from "./state/globalStore.js";
 import { ThreadStore } from "./index.js";
 import { RunNodeResult } from "./types.js";
 
+function nativeTypeReplacer(_key: string, value: unknown): unknown {
+  if (value instanceof Set) {
+    return { __nativeType: "Set", values: Array.from(value) };
+  }
+  if (value instanceof Map) {
+    return { __nativeType: "Map", entries: Array.from((value as Map<unknown, unknown>).entries()) };
+  }
+  return value;
+}
+
+function nativeTypeReviver(_key: string, value: unknown): unknown {
+  if (value && typeof value === "object" && "__nativeType" in value) {
+    const v = value as Record<string, unknown>;
+    if (v.__nativeType === "Set") return new Set(v.values as unknown[]);
+    if (v.__nativeType === "Map") return new Map(v.entries as [unknown, unknown][]);
+  }
+  return value;
+}
+
 export function deepClone<T>(obj: T): T {
-  return JSON.parse(JSON.stringify(obj));
+  return JSON.parse(JSON.stringify(obj, nativeTypeReplacer), nativeTypeReviver);
 }
 
 // not as necessary, smoltalk does this, though only when strict = true

@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Map survives serialization through an interrupt",
+      "input": "",
+      "expectedOutput": "[[\"a\",1],[\"b\",2],[\"c\",3]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

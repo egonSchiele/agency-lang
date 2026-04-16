@@ -1,0 +1,12 @@
+shared let runs = 0
+
+node main() {
+  const s = new Set([1, 2, 3])
+  const cp = checkpoint()
+  runs = runs + 1
+  s.add(runs + 3)
+  if (runs == 1) {
+    restore(cp, {})
+  }
+  return Array.from(s)
+}

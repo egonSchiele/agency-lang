@@ -1,0 +1,15 @@
+def check() {
+  return interrupt("confirm")
+}
+
+node main() {
+  const s = new Set([1, 2, 3])
+  s.add(4)
+  handle {
+    check()
+  } with (data) {
+    return approve()
+  }
+  s.add(5)
+  return Array.from(s)
+}

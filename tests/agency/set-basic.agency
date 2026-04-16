@@ -1,0 +1,6 @@
+node main() {
+  const s = new Set([1, 2, 3])
+  s.add(4)
+  s.add(2)
+  return Array.from(s)
+}

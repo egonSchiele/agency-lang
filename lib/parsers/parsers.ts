@@ -1547,33 +1547,26 @@ export const exprParser: Parser<Expression> = label("an expression", buildExpres
 // Wire up the circular reference for parenParser
 _exprParser = exprParser;
 
+const returnPrefix = seqC(set("type", "returnStatement"), str("return"));
+const returnWordBoundary = not(varNameChar);
+const returnValueParser = seqC(optionalSpaces, capture(exprParser, "value"), optionalSemicolon, optionalSpacesOrNewline);
+const returnTrailing = seqC(optionalSemicolon, optionalSpacesOrNewline);
+
 export const returnStatementParser: Parser<ReturnStatement> = label("a return statement", withLoc((input: string) => {
-  const prefixParser = seqC(
-    set("type", "returnStatement"),
-    str("return"),
-  );
-  const prefixResult = prefixParser(input);
+  const prefixResult = returnPrefix(input);
   if (!prefixResult.success) return prefixResult;
 
   // Require word boundary so "returnValue" isn't parsed as "return" + "Value"
-  if (!not(varNameChar)(prefixResult.rest).success) {
+  if (!returnWordBoundary(prefixResult.rest).success) {
     return failure("expected whitespace after return", input);
   }
 
-  // Try to parse a return value; if none, bare "return" is valid
-  const withValue = seqC(
-    optionalSpaces,
-    capture(exprParser, "value"),
-    optionalSemicolon,
-    optionalSpacesOrNewline,
-  )(prefixResult.rest);
-
+  const withValue = returnValueParser(prefixResult.rest);
   if (withValue.success) {
     return success({ ...prefixResult.result, ...withValue.result }, withValue.rest);
   }
 
-  // Bare return (no value)
-  const trailing = seqC(optionalSemicolon, optionalSpacesOrNewline)(prefixResult.rest);
+  const trailing = returnTrailing(prefixResult.rest);
   return success(prefixResult.result, trailing.success ? trailing.rest : prefixResult.rest);
 }));
 

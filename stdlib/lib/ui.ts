@@ -49,6 +49,10 @@ const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", 
 let spinnerIdx = 0;
 let spinnerText = "";
 
+let resizeHandler: (() => void) | null = null;
+let exitHandler: (() => void) | null = null;
+let sigintHandler: (() => void) | null = null;
+
 function getTermSize(): { rows: number; cols: number } {
   return {
     rows: process.stdout.rows || 24,
@@ -128,6 +132,27 @@ function writeInScrollRegion(text: string) {
   );
 }
 
+function writeBox(
+  filename: string,
+  lines: string[],
+  renderLine: (line: string, index: number) => string,
+): void {
+  writeInScrollRegion(color.dim(`┌─ ${filename} ${"─".repeat(Math.max(0, cols - filename.length - 6))}`));
+  for (let i = 0; i < lines.length; i++) {
+    writeInScrollRegion(renderLine(lines[i], i));
+  }
+  writeInScrollRegion(color.dim(`└${"─".repeat(Math.max(0, cols - 2))}`));
+  renderStatusBar();
+}
+
+function resetState() {
+  config = { title: "", statusRight: "" };
+  currentStatusLeft = "";
+  currentStatusRight = "";
+  spinnerIdx = 0;
+  spinnerText = "";
+}
+
 export function _initUI(title: string): void {
   if (initialized) return;
   initialized = true;
@@ -139,22 +164,22 @@ export function _initUI(title: string): void {
   renderInputPrompt("");
   renderHintBar("");
 
-  process.stdout.on("resize", () => {
+  resizeHandler = () => {
     updateLayout();
     process.stdout.write(setScrollRegion(1, statusBarRow - 1));
     renderStatusBar();
-  });
-
-  const cleanup = () => {
-    if (initialized) {
-      _destroyUI();
-    }
   };
-  process.on("exit", cleanup);
-  process.on("SIGINT", () => {
-    cleanup();
+  exitHandler = () => {
+    if (initialized) _destroyUI();
+  };
+  sigintHandler = () => {
+    if (initialized) _destroyUI();
     process.exit(0);
-  });
+  };
+
+  process.stdout.on("resize", resizeHandler);
+  process.on("exit", exitHandler);
+  process.on("SIGINT", sigintHandler);
 }
 
 export function _destroyUI(): void {
@@ -168,9 +193,22 @@ export function _destroyUI(): void {
     activeRl.close();
     activeRl = null;
   }
+  if (resizeHandler) {
+    process.stdout.removeListener("resize", resizeHandler);
+    resizeHandler = null;
+  }
+  if (exitHandler) {
+    process.removeListener("exit", exitHandler);
+    exitHandler = null;
+  }
+  if (sigintHandler) {
+    process.removeListener("SIGINT", sigintHandler);
+    sigintHandler = null;
+  }
   process.stdout.write(resetScrollRegion());
   clearBottomArea();
   process.stdout.write(moveTo(rows, 1) + "\n");
+  resetState();
 }
 
 export function _log(message: string): void {
@@ -200,31 +238,22 @@ export function _chat(role: string, message: string): void {
 
 export function _code(filename: string, content: string): void {
   if (!initialized) return;
-  writeInScrollRegion(color.dim(`┌─ ${filename} ${"─".repeat(Math.max(0, cols - filename.length - 6))}`));
-  const lines = content.split("\n");
-  for (let i = 0; i < lines.length; i++) {
+  writeBox(filename, content.split("\n"), (line, i) => {
     const lineNum = String(i + 1).padStart(4, " ");
-    writeInScrollRegion(`${color.dim(`│${lineNum}`)} ${lines[i]}`);
-  }
-  writeInScrollRegion(color.dim(`└${"─".repeat(Math.max(0, cols - 2))}`));
-  renderStatusBar();
+    return `${color.dim(`│${lineNum}`)} ${line}`;
+  });
 }
 
 export function _diff(filename: string, content: string): void {
   if (!initialized) return;
-  writeInScrollRegion(color.dim(`┌─ ${filename} ${"─".repeat(Math.max(0, cols - filename.length - 6))}`));
-  const lines = content.split("\n");
-  for (const line of lines) {
+  writeBox(filename, content.split("\n"), (line) => {
     if (line.startsWith("+")) {
-      writeInScrollRegion(color.green(`│ ${line}`));
+      return color.green(`│ ${line}`);
     } else if (line.startsWith("-")) {
-      writeInScrollRegion(color.red(`│ ${line}`));
-    } else {
-      writeInScrollRegion(`${color.dim("│")} ${line}`);
+      return color.red(`│ ${line}`);
     }
-  }
-  writeInScrollRegion(color.dim(`└${"─".repeat(Math.max(0, cols - 2))}`));
-  renderStatusBar();
+    return `${color.dim("│")} ${line}`;
+  });
 }
 
 export function _separator(label: string): void {

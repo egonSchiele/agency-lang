@@ -206,11 +206,11 @@ export function printTs(node: TsNode, indent = 0): string {
 
     case "propertyAccess": {
       const obj = printTs(node.object, indent);
-      const dot = node.optional ? "?." : ".";
       if (node.computed) {
-        const bracket = node.optional ? "?.[" : "[";
-        return `${obj}${bracket}${printTs(node.property as TsNode, indent)}]`;
+        const prefix = node.optional ? "?." : "";
+        return `${obj}${prefix}[${printTs(node.property as TsNode, indent)}]`;
       }
+      const dot = node.optional ? "?." : ".";
       return `${obj}${dot}${node.property as string}`;
     }
 

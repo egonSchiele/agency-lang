@@ -311,11 +311,11 @@ export const ts = {
   },
 
   prop(object: TsNode, property: string, opts?: { optional?: boolean }): TsPropertyAccess {
-    return { kind: "propertyAccess", object, property, computed: false, optional: opts?.optional };
+    return { kind: "propertyAccess", object, property, computed: false, ...(opts?.optional && { optional: true }) };
   },
 
   index(object: TsNode, property: TsNode, opts?: { optional?: boolean }): TsPropertyAccess {
-    return { kind: "propertyAccess", object, property, computed: true, optional: opts?.optional };
+    return { kind: "propertyAccess", object, property, computed: true, ...(opts?.optional && { optional: true }) };
   },
 
   spread(expr: TsNode): TsSpread {

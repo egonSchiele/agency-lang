@@ -1219,11 +1219,9 @@ const indexChainParser = (input: string): ParserResult<AccessChainElement> => {
   }
 
   const ws1 = optionalSpaces(rest);
-  if (!ws1.success) return failure("expected expression", input);
-  const exprResult = lazy(() => exprParser)(ws1.rest);
+  const exprResult = exprParser(ws1.rest);
   if (!exprResult.success) return failure("expected expression inside brackets", input);
   const ws2 = optionalSpaces(exprResult.rest);
-  if (!ws2.success) return failure("expected ]", input);
   const closeResult = char("]")(ws2.rest);
   if (!closeResult.success) return failure("expected closing bracket", input);
 

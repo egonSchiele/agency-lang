@@ -1029,8 +1029,10 @@ export class AgencyGenerator {
     switch (node.kind) {
       case "property":
         return `${dot}${node.name}`;
-      case "index":
-        return node.optional ? `?.[${this.processNode(node.index).trim()}]` : `[${this.processNode(node.index).trim()}]`;
+      case "index": {
+        const inner = this.processNode(node.index).trim();
+        return node.optional ? `?.[${inner}]` : `[${inner}]`;
+      }
       case "methodCall":
         return `${dot}${this.generateFunctionCallExpression(node.functionCall, "valueAccess")}`;
       default:

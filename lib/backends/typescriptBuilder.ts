@@ -907,7 +907,6 @@ export class TypeScriptBuilder {
             element.functionCall,
             "valueAccess",
           );
-          const dot = element.optional ? "?." : ".";
           // The call node is ts.call(ts.id(name), args) — extract callee name and args
           if (
             callNode.kind === "call" &&
@@ -922,6 +921,7 @@ export class TypeScriptBuilder {
             result = isClassMethod ? ts.await(callExpr) : callExpr;
           } else {
             // Fallback for complex cases (e.g. await-wrapped)
+            const dot = element.optional ? "?." : ".";
             result = ts.raw(`${this.str(result)}${dot}${this.str(callNode)}`);
           }
           break;

@@ -8,8 +8,9 @@ node main() {
     let response: Response | null = null
     while (response == null || response.action == "continue") {
       msg = input("> ")
-      uses read, write
-      response: Response = llm("Respond to the users message: ${msg}")
+      response: Response = llm("Respond to the users message: ${msg}", { 
+        tools: [read, write]
+      })
       print(color.blue(response.message))
     }
   } with (data) {

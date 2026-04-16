@@ -1,0 +1,4 @@
+node main() {
+  const response = llm("Say hello to world")
+  print(response)
+}

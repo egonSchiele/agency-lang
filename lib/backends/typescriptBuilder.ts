@@ -1635,7 +1635,7 @@ export class TypeScriptBuilder {
       defaultValue: ts.id("undefined"),
     });
 
-    const setupStmts = this.buildFunctionBody({ functionName, parameters, bodyCode, skipHooks: !!node.callback });
+    const setupStmts = this.buildFunctionBody({ functionName, parameters, bodyCode, skipHooks: node.callback });
 
     const funcDecl = ts.functionDecl(functionName, fnParams, ts.statements(setupStmts), {
       async: true,

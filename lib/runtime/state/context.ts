@@ -60,7 +60,7 @@ export class RuntimeContext<T> {
   // etc.), but at registration time only __globalCtx exists. External TypeScript
   // callers pass callbacks via runNode's `callbacks` option and should NOT receive
   // the execution context — wrapping at execution time keeps that boundary clean.
-  _registeredCallbacks: Record<string, Function> = {};
+  _registeredCallbacks: Partial<Record<keyof AgencyCallbacks, (...args: any[]) => any>> = {};
 
   // class registry for serialization/deserialization of Agency class instances
   classRegistry: ClassRegistry = {};

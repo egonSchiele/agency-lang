@@ -2424,9 +2424,9 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   const baseResult = _baseFunctionParser(safeResult.rest);
   if (!baseResult.success) return baseResult;
 
-  const result = { ...baseResult.result };
-  const isCallback = (result as any).keyword === "callback";
-  delete (result as any).keyword;
+  const { keyword, ...rest } = baseResult.result as FunctionDefinition & { keyword?: string };
+  const result = { ...rest };
+  const isCallback = keyword === "callback";
   if (isExported) result.exported = true;
   if (isSafe) result.safe = true;
   if (isCallback) {
@@ -2437,7 +2437,8 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
     if (isSafe) {
       return failure(`Callback '${result.functionName}' cannot be marked safe`, input);
     }
-    if (!VALID_CALLBACK_NAMES.includes(result.functionName as any)) {
+    const validNames: ReadonlySet<string> = new Set(VALID_CALLBACK_NAMES);
+    if (!validNames.has(result.functionName)) {
       return failure(
         `Unknown callback '${result.functionName}'. Valid callbacks: ${VALID_CALLBACK_NAMES.join(", ")}`,
         input,

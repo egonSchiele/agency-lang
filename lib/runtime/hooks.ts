@@ -10,6 +10,7 @@ import type {
 } from "smoltalk";
 import type { RunNodeResult } from "./types.js";
 import type { RewindCheckpoint } from "./rewind.js";
+import type { CallbackName } from "../types/function.js";
 
 export type CallbackMap = {
   onAgentStart: {
@@ -50,6 +51,10 @@ export type CallbackMap = {
     | { type: "error"; error: any };
   onCheckpoint: RewindCheckpoint;
 };
+
+// Compile-time guard: ensures VALID_CALLBACK_NAMES stays in sync with CallbackMap.
+type _AssertNamesMatchMap = CallbackName extends keyof CallbackMap ? keyof CallbackMap extends CallbackName ? true : false : false;
+const _callbackNamesInSync: _AssertNamesMatchMap = true;
 
 export type CallbackReturn<K extends keyof CallbackMap> = K extends
   | "onLLMCallStart"

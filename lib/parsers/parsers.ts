@@ -1168,66 +1168,62 @@ export const functionCallParser: Parser<FunctionCall> = label("a function call",
 // access.ts
 // =============================================================================
 
-// Parse a single chain element: .method(), .property, or [index]
+// Parse "?." or "." — returns true for optional, false for regular
+const dotParser: Parser<boolean> = or(
+  map(str("?."), () => true),
+  map(char("."), () => false),
+);
+
+// Parse a single chain element: .method(), ?.method(), .property, ?.property, [index], ?.[index]
 const dotMethodCallParser = (
   input: string,
 ): ParserResult<AccessChainElement> => {
-  // Try ?. (optional chaining) first, then . (regular)
-  let optional = false;
-  let afterDot: string;
-  const optDotResult = str("?.")(input);
-  if (optDotResult.success) {
-    optional = true;
-    afterDot = optDotResult.rest;
-  } else {
-    const dotResult = char(".")(input);
-    if (!dotResult.success) return failure("expected dot", input);
-    afterDot = dotResult.rest;
-  }
+  const dotResult = dotParser(input);
+  if (!dotResult.success) return failure("expected dot", input);
+  const optional = dotResult.result;
+  const afterDot = dotResult.rest;
 
   // First try: functionCall (name + parens)
   const fcResult = _functionCallParser(afterDot);
   if (fcResult.success) {
-    const element: AccessChainElement = { kind: "methodCall" as const, functionCall: fcResult.result };
-    if (optional) element.optional = true;
-    return success(element, fcResult.rest);
+    return success(
+      { kind: "methodCall" as const, functionCall: fcResult.result, ...(optional && { optional: true }) },
+      fcResult.rest,
+    );
   }
 
   // Second try: just a property name
   const nameResult = variableNameParser(afterDot);
   if (nameResult.success) {
-    const element: AccessChainElement = { kind: "property" as const, name: nameResult.result.value };
-    if (optional) element.optional = true;
-    return success(element, nameResult.rest);
+    return success(
+      { kind: "property" as const, name: nameResult.result.value, ...(optional && { optional: true }) },
+      nameResult.rest,
+    );
   }
 
   return failure("expected property name or method call after dot", input);
 };
 
-const indexChainParser = (input: string): ParserResult<AccessChainElement> => {
-  // Try ?.[ (optional index access) first, then [ (regular)
-  let optional = false;
-  let rest: string;
-  const optBracketResult = str("?.[")(input);
-  if (optBracketResult.success) {
-    optional = true;
-    rest = optBracketResult.rest;
-  } else {
-    const bracketResult = char("[")(input);
-    if (!bracketResult.success) return failure("expected [", input);
-    rest = bracketResult.rest;
-  }
+// Parse "?.[" or "[" — returns true for optional, false for regular
+const bracketParser: Parser<boolean> = or(
+  map(str("?.["), () => true),
+  map(char("["), () => false),
+);
 
-  const ws1 = optionalSpaces(rest);
-  const exprResult = exprParser(ws1.rest);
-  if (!exprResult.success) return failure("expected expression inside brackets", input);
-  const ws2 = optionalSpaces(exprResult.rest);
-  const closeResult = char("]")(ws2.rest);
-  if (!closeResult.success) return failure("expected closing bracket", input);
-
-  const element: AccessChainElement = { kind: "index" as const, index: exprResult.result };
-  if (optional) element.optional = true;
-  return success(element, closeResult.rest);
+const indexChainParser: Parser<AccessChainElement> = (input: string) => {
+  const parser = seqC(
+    capture(bracketParser, "optional"),
+    optionalSpaces,
+    capture(lazy(() => exprParser), "index"),
+    optionalSpaces,
+    char("]"),
+  );
+  const result = parser(input);
+  if (!result.success) return result;
+  return success(
+    { kind: "index" as const, index: result.result.index, ...(result.result.optional && { optional: true }) },
+    result.rest,
+  );
 };
 
 const chainElementParser: Parser<AccessChainElement> = or(

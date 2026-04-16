@@ -2,9 +2,9 @@
   "tests": [
     {
       "nodeName": "main",
-      "description": "Local Map survives serialization through an externally-resolved interrupt",
+      "description": "Set inside a class field survives serialization through an externally-resolved interrupt (exercises reviveWithClasses)",
       "input": "",
-      "expectedOutput": "[[\"a\",1],[\"b\",2],[\"c\",3]]",
+      "expectedOutput": "[\"apple\",\"banana\",\"cherry\",\"date\"]",
       "evaluationCriteria": [
         {
           "type": "exact"

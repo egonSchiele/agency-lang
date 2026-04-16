@@ -2,9 +2,9 @@
   "tests": [
     {
       "nodeName": "main",
-      "description": "Local Map survives serialization through an externally-resolved interrupt",
+      "description": "Global Set survives serialization through an externally-resolved interrupt (exercises GlobalStore.toJSON)",
       "input": "",
-      "expectedOutput": "[[\"a\",1],[\"b\",2],[\"c\",3]]",
+      "expectedOutput": "[1,2,3,4,5]",
       "evaluationCriteria": [
         {
           "type": "exact"

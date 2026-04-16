@@ -1,0 +1,39 @@
+{
+  "tests": [
+    {
+      "nodeName": "testNullishCoalescing",
+      "input": "",
+      "expectedOutput": "{\"a\":\"hello\",\"b\":\"fallback\",\"c\":\"last\"}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "?? returns left if non-null, right if null, and chains correctly"
+    },
+    {
+      "nodeName": "testOptionalChaining",
+      "input": "",
+      "expectedOutput": "{\"a\":\"hello\",\"b\":42}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "?. works on non-null objects (same as regular dot access)"
+    },
+    {
+      "nodeName": "testOptionalChainingOnNull",
+      "input": "",
+      "expectedOutput": "{}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "?. on null returns undefined (dropped from JSON)"
+    },
+    {
+      "nodeName": "testOptionalIndex",
+      "input": "",
+      "expectedOutput": "{\"a\":20}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "?.[] works for index access on arrays and null"
+    },
+    {
+      "nodeName": "testCombined",
+      "input": "",
+      "expectedOutput": "\"default\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "?. combined with ?? provides a default for null chains"
+    }
+  ]
+}

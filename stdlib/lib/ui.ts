@@ -60,18 +60,30 @@ function getTermSize(): { rows: number; cols: number } {
   };
 }
 
+const MIN_ROWS = 6;
+
 function updateLayout() {
   const size = getTermSize();
-  rows = size.rows;
+  rows = Math.max(size.rows, MIN_ROWS);
   cols = size.cols;
   statusBarRow = rows - 2;
   inputRow = rows - 1;
   hintRow = rows;
 }
 
+function truncate(str: string, maxLen: number): string {
+  if (str.length <= maxLen) return str;
+  return str.slice(0, maxLen - 1) + "…";
+}
+
 function renderStatusBar() {
-  const left = currentStatusLeft || config.title;
-  const right = currentStatusRight || config.statusRight;
+  const rawLeft = currentStatusLeft || config.title;
+  const rawRight = currentStatusRight || config.statusRight;
+  const maxContent = cols - 4;
+  const rightLen = Math.min(rawRight.length, Math.floor(maxContent / 3));
+  const leftLen = Math.min(rawLeft.length, maxContent - rightLen);
+  const left = truncate(rawLeft, leftLen);
+  const right = truncate(rawRight, rightLen);
   const padding = Math.max(0, cols - left.length - right.length - 2);
   const bar = color.cyan(` ${left}${"─".repeat(padding)} ${right}`);
   process.stdout.write(

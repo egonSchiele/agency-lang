@@ -81,8 +81,8 @@ export def getConfirmation(question: string): boolean {
   """
   Ask the user a yes/no question in the input bar. Returns true if the user answers yes (y/yes), false otherwise. Useful inside handler blocks to approve or reject interrupts interactively.
   """
-  let answer = _prompt(question + " (y/n)")
-  if (answer == "y" || answer == "yes" || answer == "Y" || answer == "YES") {
+  let answer = _prompt(question + " (y/n)").trim().toLowerCase()
+  if (answer == "y" || answer == "yes") {
     return true
   }
   return false

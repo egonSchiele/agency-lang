@@ -2,16 +2,16 @@ import { initUI, destroyUI, log, chat, code, diff, separator, status, startSpinn
 import { bash } from "std::shell"
 import { edit } from "std::fs"
 import { cwd } from "std::system"
-def onLLMCallStart(data) {
+callback onLLMCallStart(data) {
   startSpinner("thinking")
 }
 
-def onLLMCallEnd(data) {
+callback onLLMCallEnd(data) {
   stopSpinner()
 }
 
-def onToolCallStart(data) {
-  log("\x1b[90m  tool: ${data.toolName}\x1b[0m")
+callback onToolCallStart(data) {
+  log("  tool: ${data.toolName}")
 }
 
 type NextAction = 

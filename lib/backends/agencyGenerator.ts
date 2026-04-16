@@ -190,7 +190,7 @@ export class AgencyGenerator {
 
   protected processGraphNodeName(node: GraphNodeDefinition): void { }
 
-  public processNode(node: AgencyNode): string {
+  public processNode(node: AgencyNode, opts: { assigned?: boolean } = {}): string {
     switch (node.type) {
       case "typeAlias":
         return this.processTypeAlias(node);
@@ -255,7 +255,7 @@ export class AgencyGenerator {
       case "skill":
         return this.processSkill(node);
       case "binOpExpression":
-        return this.processBinOpExpression(node);
+        return this.processBinOpExpression(node, opts.assigned ?? false);
       case "keyword":
         return this.processKeyword(node);
       case "tag":
@@ -409,7 +409,7 @@ export class AgencyGenerator {
       : `${node.variableName}${chainStr}`;
     const sharedPrefix = node.shared ? "shared " : "";
     const declPrefix = node.declKind ? `${node.declKind} ` : "";
-    let valueCode = this.processNode(node.value).trim();
+    let valueCode = this.processNode(node.value, { assigned: true }).trim();
     return tags + this.indentStr(`${sharedPrefix}${declPrefix}${varName} = ${valueCode}`);
   }
 
@@ -942,7 +942,7 @@ export class AgencyGenerator {
     return this.indentStr(`skill "${node.filepath}"`);
   }
 
-  protected processBinOpExpression(node: BinOpExpression): string {
+  protected processBinOpExpression(node: BinOpExpression, assigned: boolean = false): string {
     // Collect a chain of the same operator (e.g. a |> b |> c)
     const op = node.operator;
     const parts: string[] = [];
@@ -955,10 +955,11 @@ export class AgencyGenerator {
     parts.reverse();
 
     const oneLine = parts.join(` ${op} `);
-    if (oneLine.length <= 60) {
-      return oneLine;
-    }
-    return parts[0] + "\n" + parts.slice(1).map((p) => this.indentStr(`${op} ${p}`)).join("\n");
+    const multiLine =
+      oneLine.length <= 60
+        ? oneLine
+        : parts[0] + "\n" + parts.slice(1).map((p) => this.indentStr(`${op} ${p}`)).join("\n");
+    return assigned ? multiLine : this.indentStr(multiLine);
   }
 
   protected processAccessChainElement(node: AccessChainElement): string {

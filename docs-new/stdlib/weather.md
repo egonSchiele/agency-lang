@@ -37,6 +37,34 @@ Get current weather for a city name or zip code. Returns temperature, feels-like
 | Name | Type | Default |
 |---|---|---|
 | location | string |  |
-| units | string | "metric" |
+| units | string | "imperial" |
 
 **Returns:** Result
+
+### celsiusToFahrenheit
+
+```ts
+celsiusToFahrenheit(celsius: number): number
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| celsius | number |  |
+
+**Returns:** number
+
+### fahrenheitToCelsius
+
+```ts
+fahrenheitToCelsius(fahrenheit: number): number
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| fahrenheit | number |  |
+
+**Returns:** number

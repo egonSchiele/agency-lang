@@ -24,9 +24,17 @@ type WeatherResult = {
     print(w)
   }
 */
-export safe def weather(location: string, units: string = "metric"): Result {
+export safe def weather(location: string, units: string = "imperial"): Result {
   """
   Get current weather for a city name or zip code. Returns temperature, feels-like temperature, humidity, wind speed/direction, precipitation, cloud cover, and a weather description. Set units to "imperial" for Fahrenheit/mph or "metric" (default) for Celsius/km/h. Weather data provided by Open-Meteo (https://open-meteo.com), licensed under CC BY 4.0. Free API usage is for non-commercial purposes only.
   """
-  return try _weather(location, units)
+  return try   _weather(location, units)
+}
+
+export safe def celsiusToFahrenheit(celsius: number): number {
+  return celsius * 9 / 5 + 32
+}
+
+export safe def fahrenheitToCelsius(fahrenheit: number): number {
+  return fahrenheit - 32 * 5 / 9
 }

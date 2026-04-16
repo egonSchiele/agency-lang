@@ -1,0 +1,13 @@
+const s = new Set([1, 2, 3])
+
+def check() {
+  return interrupt("confirm")
+  return "ok"
+}
+
+node main() {
+  s.add(4)
+  const r = check()
+  s.add(5)
+  return Array.from(s)
+}

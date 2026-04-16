@@ -1,0 +1,13 @@
+const m = new Map()
+
+def check() {
+  return interrupt("confirm")
+  return "ok"
+}
+
+node main() {
+  m.set("a", 1)
+  const r = check()
+  m.set("b", 2)
+  return Array.from(m.entries())
+}

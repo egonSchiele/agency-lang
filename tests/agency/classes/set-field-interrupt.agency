@@ -1,0 +1,16 @@
+def check() {
+  return interrupt("confirm")
+  return "ok"
+}
+
+class Holder {
+  data: object
+}
+
+node main() {
+  let holder = new Holder(new Set(["apple", "banana"]))
+  holder.data.add("cherry")
+  const r = check()
+  holder.data.add("date")
+  return Array.from(holder.data)
+}

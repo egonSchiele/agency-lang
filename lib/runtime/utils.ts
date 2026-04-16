@@ -2,9 +2,10 @@ import { color } from "termcolors";
 import { GlobalStore } from "./state/globalStore.js";
 import { ThreadStore } from "./index.js";
 import { RunNodeResult } from "./types.js";
+import { nativeTypeReplacer, nativeTypeReviver } from "./revivers/index.js";
 
 export function deepClone<T>(obj: T): T {
-  return JSON.parse(JSON.stringify(obj));
+  return JSON.parse(JSON.stringify(obj, nativeTypeReplacer), nativeTypeReviver);
 }
 
 // not as necessary, smoltalk does this, though only when strict = true
@@ -83,7 +84,8 @@ export function createReturnObject<T>({
       messages: result.messages,
       data: result.data,
       tokens: globals.get(GlobalStore.INTERNAL_MODULE, "__tokenStats"),
-    }),
+    }, nativeTypeReplacer),
+    nativeTypeReviver,
   );
 }
 

@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Global Set survives serialization through an externally-resolved interrupt (exercises GlobalStore.toJSON)",
+      "input": "",
+      "expectedOutput": "[1,2,3,4,5]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "confirm"
+        }
+      ]
+    }
+  ]
+}

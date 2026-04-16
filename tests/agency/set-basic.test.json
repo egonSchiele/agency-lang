@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Set basic operations: add, deduplicate, convert to array",
+      "input": "",
+      "expectedOutput": "[1,2,3,4]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

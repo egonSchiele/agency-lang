@@ -155,7 +155,7 @@ export const varNameChar: Parser<string> = oneOf(
 However, because every agency code gets rendered in a template that imports some standard functions,
 the line numbers would be off if we didn't account for the template lines.
 */
-const AGENCY_TEMPLATE_OFFSET = 2;
+const AGENCY_TEMPLATE_OFFSET = 3;
 
 /**
  * Wraps a parser to add a `loc` field from tarsec's withSpan.

@@ -110,6 +110,7 @@ export class Runner {
    */
   private async maybeDebugHook(id: number, label: string | null = null, isUserAdded: boolean = false): Promise<boolean> {
     if (!this.ctx.debuggerState && !this.ctx.traceWriter) return false;
+    if (this.ctx._insideToolCall) return false;
 
 
     // On resume after a debug pause, skip the hook.

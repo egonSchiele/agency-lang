@@ -30,6 +30,18 @@ export class RuntimeContext<T> {
   _skipNextCheckpoint: boolean;
   _pendingArgOverrides?: Record<string, any>;
   _restoreCount: number;
+
+  /* Here is why this is needed: When you're stepping through the code,
+  every step emits a checkpoint and halts execution. When you execute an
+  LLM call that then calls a tool, that tool will also emit a checkpoint
+  and halt execution. At that point, that interrupt is going to bubble up
+  to run prompt, and it's going to look like the tool call threw an
+  interrupt, and then everything's going to get messed up from there.
+  Longer term, it would be great for the debugger to show what's happening
+  as the tool call is getting executed, but for now, we just use this flag
+  so that if we're inside a tool call, we don't halt execution and we don't
+  emit a checkpoint.*/
+  _insideToolCall: boolean;
   debuggerState: DebuggerState | null;
   traceWriter: TraceWriter | null;
 
@@ -73,6 +85,7 @@ export class RuntimeContext<T> {
     // rewindFrom sets this flag so the first sentinel skips, then clears it.
     this._skipNextCheckpoint = false;
     this._restoreCount = 0;
+    this._insideToolCall = false;
     this.pendingPromises = new PendingPromiseStore();
     this.debuggerState = null;
     this.traceWriter = null;
@@ -108,6 +121,7 @@ export class RuntimeContext<T> {
     execCtx.onStreamLock = false;
     execCtx._skipNextCheckpoint = false;
     execCtx._restoreCount = 0;
+    execCtx._insideToolCall = false;
     execCtx.debuggerState = this.debuggerState;
     execCtx.traceWriter = this.traceWriter;
     execCtx.pendingPromises = new PendingPromiseStore();
@@ -155,6 +169,10 @@ export class RuntimeContext<T> {
   }
   popHandler(): void {
     this.handlers.pop();
+  }
+
+  setInsideToolCall(value: boolean): void {
+    this._insideToolCall = value;
   }
 
   registerClass(name: string, cls: ClassRegistry[string]): void {

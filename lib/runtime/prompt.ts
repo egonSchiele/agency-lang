@@ -254,6 +254,7 @@ async function executeToolCalls({
       });
 
       const toolCallStartTime = performance.now();
+      ctx.setInsideToolCall(true);
       try {
         result = await handler.execute(...params);
       } catch (error: unknown) {
@@ -297,6 +298,8 @@ async function executeToolCalls({
           removedTools.push(handler.name);
         }
         continue;
+      } finally {
+        ctx.setInsideToolCall(false);
       }
       // Tool returned a failure Result — handle retry logic
       if (isFailure(result)) {

@@ -550,6 +550,72 @@ describe("binOpParser", () => {
     });
   });
 
+  // Nullish coalescing operator
+  describe("nullish coalescing operator", () => {
+    it('should parse "a ?? b"', () => {
+      const result = binOpParser("a ?? b");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "??",
+          left: { type: "variableName", value: "a" },
+          right: { type: "variableName", value: "b" },
+        });
+      }
+    });
+
+    it('should parse "a ?? b ?? c" as left-associative', () => {
+      const result = binOpParser("a ?? b ?? c");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "??",
+          left: {
+            type: "binOpExpression",
+            operator: "??",
+            left: { type: "variableName", value: "a" },
+            right: { type: "variableName", value: "b" },
+          },
+          right: { type: "variableName", value: "c" },
+        });
+      }
+    });
+
+    it('should parse "a ?? 42"', () => {
+      const result = binOpParser("a ?? 42");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "??",
+          left: { type: "variableName", value: "a" },
+          right: { type: "number", value: "42" },
+        });
+      }
+    });
+
+    it('should parse ?? with lower precedence than comparison', () => {
+      const result = binOpParser("a == b ?? c");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Should parse as (a == b) ?? c
+        expect(result.result).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "??",
+          left: {
+            type: "binOpExpression",
+            operator: "==",
+            left: { type: "variableName", value: "a" },
+            right: { type: "variableName", value: "b" },
+          },
+          right: { type: "variableName", value: "c" },
+        });
+      }
+    });
+  });
+
   // Failure cases
   describe("regex match operators", () => {
     const testCases = [

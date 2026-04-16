@@ -1454,8 +1454,9 @@ export const exprParser: Parser<Expression> = label("an expression", buildExpres
     [
       { op: wsOp("&&"), assoc: "left" as const, apply: makeBinOp("&&") },
     ],
-    // Precedence 1: logical OR
+    // Precedence 1: logical OR, nullish coalescing
     [
+      { op: wsOp("??"), assoc: "left" as const, apply: makeBinOp("??") },
       { op: wsOp("||"), assoc: "left" as const, apply: makeBinOp("||") },
     ],
     // Precedence 0: catch (unwrap Result with fallback)

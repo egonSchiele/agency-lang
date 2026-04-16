@@ -25,12 +25,14 @@ export type Operator =
   | "!"
   | "=~"
   | "!~"
+  | "??"
   | "|>"
   | "catch";
 
 export const PRECEDENCE: Record<string, number> = {
   "|>": -1,
   "catch": 0,
+  "??": 1,
   "||": 1,
   "&&": 2,
   "==": 3,

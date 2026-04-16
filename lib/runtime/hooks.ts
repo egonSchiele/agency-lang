@@ -38,6 +38,7 @@ export type CallbackMap = {
     functionName: string;
     args: Record<string, any>;
     isBuiltin: boolean;
+    moduleId: string;
   };
   onFunctionEnd: { functionName: string; timeTaken: number };
   onToolCallStart: { toolName: string; args: any[] };

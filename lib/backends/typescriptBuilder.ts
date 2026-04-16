@@ -1517,6 +1517,7 @@ export class TypeScriptBuilder {
         functionName: ts.str(functionName),
         args: ts.obj(argsObj),
         isBuiltin: ts.bool(false),
+        moduleId: ts.str(this.moduleId),
       }),
     ];
 

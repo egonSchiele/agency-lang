@@ -117,20 +117,22 @@ export class DebuggerDriver {
   getCallbacks(): AgencyCallbacks {
     return {
       onFunctionStart: (data) => {
-        const isInSource = this.isInSourceMap(data.functionName);
+        const isAgency = data.moduleId?.endsWith(".agency");
         this.debuggerState.enterCall();
         this.ui.state.pushCallStackEntry({
           functionName: data.functionName,
-          moduleId: isInSource ? data.functionName : "(ts)",
+          moduleId: isAgency ? data.moduleId : "(ts)",
           line: 0,
         });
-        if (!isInSource) {
+        if (!isAgency) {
           this.ui.state.log(`[ts] ${data.functionName}()`);
         }
+        this.ui.render();
       },
       onFunctionEnd: (data) => {
         this.debuggerState.exitCall();
         this.ui.state.removeWithFuncName(data.functionName);
+        this.ui.render();
       },
       onNodeStart: (data) => {
         // gets triggered on every statement, as debugger resumes node execution.
@@ -138,10 +140,12 @@ export class DebuggerDriver {
       },
       onNodeEnd: (data) => {
         this.ui.state.log(`<- node: ${data.nodeName}`);
+        this.ui.render();
       },
       onLLMCallStart: (data) => {
         const model = typeof data.model === "string" ? data.model : "unknown";
         this.ui.state.log(`Calling LLM: ${model}...`);
+        this.ui.render();
       },
       onLLMCallEnd: (data) => {
         const tokens = data.usage
@@ -149,12 +153,15 @@ export class DebuggerDriver {
           : "unknown tokens";
         const time = `${round(data.timeTaken)}ms`;
         this.ui.state.log(`LLM returned (${tokens}, ${time})`);
+        this.ui.render();
       },
       onToolCallStart: (data) => {
         this.ui.state.log(`Tool call: ${data.toolName}()`);
+        this.ui.render();
       },
       onToolCallEnd: (data) => {
         this.ui.state.log(`Tool done: ${data.toolName} (${round(data.timeTaken)}ms)`);
+        this.ui.render();
       },
     };
   }

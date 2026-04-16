@@ -1,0 +1,10 @@
+def check() {
+  return interrupt("confirm")
+  return "ok"
+}
+
+node main() {
+  const pattern = re/^hello/i
+  const r = check()
+  return "Hello world" =~ pattern
+}

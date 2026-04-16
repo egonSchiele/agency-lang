@@ -1,0 +1,10 @@
+def check() {
+  return interrupt("confirm")
+  return "ok"
+}
+
+node main() {
+  const e = new Error("something went wrong")
+  const r = check()
+  return e.message
+}

@@ -243,7 +243,7 @@ __stack.locals.x = 1;
 await runner.ifElse(1, [
 
   {
-    condition: async () => __stack.locals.x == 1,
+    condition: async () => __stack.locals.x === 1,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.y = 2;

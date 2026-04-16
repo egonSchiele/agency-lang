@@ -616,6 +616,117 @@ describe("binOpParser", () => {
     });
   });
 
+  // Strict inequality operator
+  describe("strict inequality operator", () => {
+    it('should parse "a !== b"', () => {
+      const result = binOpParser("a !== b");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "!==",
+          left: { type: "variableName", value: "a" },
+          right: { type: "variableName", value: "b" },
+        });
+      }
+    });
+  });
+
+  // Exponentiation operator
+  describe("exponentiation operator", () => {
+    it('should parse "2 ** 3"', () => {
+      const result = binOpParser("2 ** 3");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "**",
+          left: { type: "number", value: "2" },
+          right: { type: "number", value: "3" },
+        });
+      }
+    });
+
+    it('should parse "2 ** 3 ** 4" as right-associative', () => {
+      const result = binOpParser("2 ** 3 ** 4");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "**",
+          left: { type: "number", value: "2" },
+          right: {
+            type: "binOpExpression",
+            operator: "**",
+            left: { type: "number", value: "3" },
+            right: { type: "number", value: "4" },
+          },
+        });
+      }
+    });
+
+    it('should parse ** with higher precedence than *', () => {
+      const result = binOpParser("2 * 3 ** 4");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Should parse as 2 * (3 ** 4)
+        expect(result.result).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "*",
+          left: { type: "number", value: "2" },
+          right: {
+            type: "binOpExpression",
+            operator: "**",
+            left: { type: "number", value: "3" },
+            right: { type: "number", value: "4" },
+          },
+        });
+      }
+    });
+  });
+
+  // Compound assignment operators
+  describe("compound assignment operators", () => {
+    it('should parse "x ??= 5"', () => {
+      const result = binOpParser("x ??= 5");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "??=",
+          left: { type: "variableName", value: "x" },
+          right: { type: "number", value: "5" },
+        });
+      }
+    });
+
+    it('should parse "x ||= 5"', () => {
+      const result = binOpParser("x ||= 5");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "||=",
+          left: { type: "variableName", value: "x" },
+          right: { type: "number", value: "5" },
+        });
+      }
+    });
+
+    it('should parse "x &&= true"', () => {
+      const result = binOpParser("x &&= true");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "&&=",
+          left: { type: "variableName", value: "x" },
+          right: { type: "boolean", value: true },
+        });
+      }
+    });
+  });
+
   // Failure cases
   describe("regex match operators", () => {
     const testCases = [

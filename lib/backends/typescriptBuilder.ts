@@ -943,7 +943,10 @@ export class TypeScriptBuilder {
     }
     const leftNode = this.processNode(node.left);
     const rightNode = this.processNode(node.right);
-    return ts.binOp(leftNode, node.operator, rightNode, {
+    // Agency uses strict equality/inequality: == → ===, != → !==
+    const emitOp = node.operator === "==" ? "===" :
+                   node.operator === "!=" ? "!==" : node.operator;
+    return ts.binOp(leftNode, emitOp, rightNode, {
       parenLeft: this.needsParensLeft(node.left, node.operator),
       parenRight: this.needsParensRight(node.right, node.operator),
     });

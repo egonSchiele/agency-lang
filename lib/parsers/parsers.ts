@@ -1433,6 +1433,10 @@ const parenParser: Parser<Expression> = (input: string) => {
 export const exprParser: Parser<Expression> = label("an expression", buildExpressionParser<Expression>(
   atom,
   [
+    // Precedence 7: exponentiation
+    [
+      { op: wsOp("**"), assoc: "right" as const, apply: makeBinOp("**") },
+    ],
     // Precedence 6: multiplicative (and *=, /=)
     [
       { op: wsOp("*="), assoc: "right" as const, apply: makeBinOp("*=") },
@@ -1458,6 +1462,7 @@ export const exprParser: Parser<Expression> = label("an expression", buildExpres
     // Precedence 3: equality
     [
       { op: wsOp("==="), assoc: "left" as const, apply: makeBinOp("===") },
+      { op: wsOp("!=="), assoc: "left" as const, apply: makeBinOp("!==") },
       { op: wsOp("=~"), assoc: "left" as const, apply: makeBinOp("=~") },
       { op: wsOp("=="), assoc: "left" as const, apply: makeBinOp("==") },
       { op: wsOp("!~"), assoc: "left" as const, apply: makeBinOp("!~") },
@@ -1465,11 +1470,14 @@ export const exprParser: Parser<Expression> = label("an expression", buildExpres
     ],
     // Precedence 2: logical AND
     [
+      { op: wsOp("&&="), assoc: "right" as const, apply: makeBinOp("&&=") },
       { op: wsOp("&&"), assoc: "left" as const, apply: makeBinOp("&&") },
     ],
     // Precedence 1: logical OR, nullish coalescing
     [
+      { op: wsOp("??="), assoc: "right" as const, apply: makeBinOp("??=") },
       { op: wsOp("??"), assoc: "left" as const, apply: makeBinOp("??") },
+      { op: wsOp("||="), assoc: "right" as const, apply: makeBinOp("||=") },
       { op: wsOp("||"), assoc: "left" as const, apply: makeBinOp("||") },
     ],
     // Precedence 0: catch (unwrap Result with fallback)

@@ -371,7 +371,7 @@ if (__ctx._pendingArgOverrides) {
 await runner.ifElse(0, [
 
   {
-    condition: async () => __stack.args.b == 0,
+    condition: async () => __stack.args.b === 0,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __functionCompleted = true;

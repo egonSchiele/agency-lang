@@ -132,7 +132,8 @@ __stack.locals.result = await runPrompt({
         clientConfig: {},
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
+        removedTools: __self.__removedTools,
+        checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.result)) {
@@ -181,4 +182,4 @@ export async function analyzeData(input: string, { messages, callbacks }: { mess
 }
 export const __analyzeDataNodeParams = ["input"];
 export default graph
-export const __sourceMap = {"skill.agency:analyzeData":{"0":{"line":0,"col":2}}};
+export const __sourceMap = {"skill.agency:analyzeData":{"0":{"line":-1,"col":2}}};

@@ -156,7 +156,8 @@ let __functionCompleted = false;
       args: {
         id: id
       },
-      isBuiltin: false
+      isBuiltin: false,
+      moduleId: "safe-function.agency"
     }
   })
   __stack.args["id"] = id;
@@ -237,7 +238,8 @@ let __functionCompleted = false;
       args: {
         id: id
       },
-      isBuiltin: false
+      isBuiltin: false,
+      moduleId: "safe-function.agency"
     }
   })
   __stack.args["id"] = id;
@@ -330,7 +332,8 @@ __stack.locals.result = await runPrompt({
         },
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
+        removedTools: __self.__removedTools,
+        checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.result)) {
@@ -396,4 +399,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"safe-function.agency:safeLookup":{"0":{"line":1,"col":2}},"safe-function.agency:unsafeSave":{"0":{"line":5,"col":2},"1":{"line":6,"col":2}},"safe-function.agency:main":{"0":{"line":11,"col":2},"1":{"line":12,"col":2}}};
+export const __sourceMap = {"safe-function.agency:safeLookup":{"0":{"line":0,"col":2}},"safe-function.agency:unsafeSave":{"0":{"line":4,"col":2},"1":{"line":5,"col":2}},"safe-function.agency:main":{"0":{"line":10,"col":2},"1":{"line":11,"col":2}}};

@@ -193,7 +193,8 @@ let __functionCompleted = false;
         a: a,
         b: b
       },
-      isBuiltin: false
+      isBuiltin: false,
+      moduleId: "docstrings.agency"
     }
   })
   __stack.args["a"] = a;
@@ -274,7 +275,8 @@ let __functionCompleted = false;
       args: {
         name: name
       },
-      isBuiltin: false
+      isBuiltin: false,
+      moduleId: "docstrings.agency"
     }
   })
   __stack.args["name"] = name;
@@ -351,7 +353,8 @@ let __functionCompleted = false;
         width: width,
         height: height
       },
-      isBuiltin: false
+      isBuiltin: false,
+      moduleId: "docstrings.agency"
     }
   })
   __stack.args["width"] = width;
@@ -430,7 +433,8 @@ let __functionCompleted = false;
     data: {
       functionName: "processData",
       args: {},
-      isBuiltin: false
+      isBuiltin: false,
+      moduleId: "docstrings.agency"
     }
   })
   __self.__retryable = __self.__retryable ?? true;

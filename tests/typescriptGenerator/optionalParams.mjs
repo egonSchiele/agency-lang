@@ -140,7 +140,8 @@ let __functionCompleted = false;
         name: name,
         greeting: greeting
       },
-      isBuiltin: false
+      isBuiltin: false,
+      moduleId: "optionalParams.agency"
     }
   })
   __stack.args["name"] = name;
@@ -209,4 +210,4 @@ await greet(`world`, `Hi`, {
   interruptData: __state?.interruptData
 })
 export default graph
-export const __sourceMap = {"optionalParams.agency:greet":{"0":{"line":-1,"col":2}}};
+export const __sourceMap = {"optionalParams.agency:greet":{"0":{"line":-2,"col":2}}};

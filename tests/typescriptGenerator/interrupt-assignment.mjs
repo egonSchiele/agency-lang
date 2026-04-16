@@ -174,7 +174,8 @@ __stack.locals.greeting = await runPrompt({
         clientConfig: {},
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
+        removedTools: __self.__removedTools,
+        checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.greeting)) {
@@ -240,4 +241,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"interrupt-assignment.agency:main":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2},"2":{"line":1,"col":2}}};
+export const __sourceMap = {"interrupt-assignment.agency:main":{"0":{"line":-2,"col":2},"1":{"line":-1,"col":2},"2":{"line":0,"col":2}}};

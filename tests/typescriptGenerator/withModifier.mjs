@@ -137,7 +137,8 @@ let __functionCompleted = false;
     data: {
       functionName: "foo",
       args: {},
-      isBuiltin: false
+      isBuiltin: false,
+      moduleId: "withModifier.agency"
     }
   })
   __self.__retryable = __self.__retryable ?? true;
@@ -325,4 +326,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"withModifier.agency:foo":{"0":{"line":-1,"col":2}},"withModifier.agency:main":{"1":{"line":4,"col":2},"0.0":{"line":3,"col":2}}};
+export const __sourceMap = {"withModifier.agency:foo":{"0":{"line":-2,"col":2}},"withModifier.agency:main":{"1":{"line":3,"col":2},"0.0":{"line":2,"col":2}}};

@@ -140,7 +140,8 @@ let __functionCompleted = false;
         name: name,
         age: age
       },
-      isBuiltin: false
+      isBuiltin: false,
+      moduleId: "interrupt-in-node.agency"
     }
   })
   __stack.args["name"] = name;
@@ -286,7 +287,8 @@ __stack.locals.response = await runPrompt({
         clientConfig: {},
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
+        removedTools: __self.__removedTools,
+        checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.response)) {
@@ -426,4 +428,4 @@ export async function sayHi(name: any, { messages, callbacks }: { messages?: any
 }
 export const __sayHiNodeParams = ["name"];
 export default graph
-export const __sourceMap = {"interrupt-in-node.agency:greet":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2}},"interrupt-in-node.agency:foo2":{"1":{"line":6,"col":2},"2":{"line":7,"col":2},"3":{"line":8,"col":2}},"interrupt-in-node.agency:sayHi":{"0":{"line":12,"col":2},"1":{"line":13,"col":2},"2":{"line":14,"col":2}}};
+export const __sourceMap = {"interrupt-in-node.agency:greet":{"0":{"line":-2,"col":2},"1":{"line":-1,"col":2}},"interrupt-in-node.agency:foo2":{"1":{"line":5,"col":2},"2":{"line":6,"col":2},"3":{"line":7,"col":2}},"interrupt-in-node.agency:sayHi":{"0":{"line":11,"col":2},"1":{"line":12,"col":2},"2":{"line":13,"col":2}}};

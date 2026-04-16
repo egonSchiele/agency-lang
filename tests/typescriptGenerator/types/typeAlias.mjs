@@ -133,7 +133,8 @@ __stack.locals.foo = await runPrompt({
         clientConfig: {},
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
+        removedTools: __self.__removedTools,
+        checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.foo)) {
@@ -195,4 +196,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"typeAlias.agency:main":{"0":{"line":3,"col":2},"1":{"line":4,"col":2}}};
+export const __sourceMap = {"typeAlias.agency:main":{"0":{"line":2,"col":2},"1":{"line":3,"col":2}}};

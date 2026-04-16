@@ -135,7 +135,8 @@ await callHook({
       data: {
         functionName: "Animal.speak",
         args: {},
-        isBuiltin: false
+        isBuiltin: false,
+        moduleId: "class-inheritance.agency"
       }
     })
 __self.__retryable = __self.__retryable ?? true;
@@ -249,7 +250,8 @@ await callHook({
       data: {
         functionName: "Dog.speak",
         args: {},
-        isBuiltin: false
+        isBuiltin: false,
+        moduleId: "class-inheritance.agency"
       }
     })
 __self.__retryable = __self.__retryable ?? true;
@@ -414,4 +416,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"class-inheritance.agency:Animal.speak":{"0":{"line":2,"col":4},"1":{"line":3,"col":4}},"class-inheritance.agency:Dog.speak":{"0":{"line":11,"col":4},"1":{"line":12,"col":4}},"class-inheritance.agency:main":{"0":{"line":17,"col":2},"1":{"line":18,"col":2},"2":{"line":19,"col":2}}};
+export const __sourceMap = {"class-inheritance.agency:Animal.speak":{"0":{"line":1,"col":4},"1":{"line":2,"col":4}},"class-inheritance.agency:Dog.speak":{"0":{"line":10,"col":4},"1":{"line":11,"col":4}},"class-inheritance.agency:main":{"0":{"line":16,"col":2},"1":{"line":17,"col":2},"2":{"line":18,"col":2}}};

@@ -131,7 +131,8 @@ __stack.locals.response = await runPrompt({
         },
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
+        removedTools: __self.__removedTools,
+        checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.response)) {
@@ -158,7 +159,8 @@ __stack.locals.response2 = await runPrompt({
         },
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
+        removedTools: __self.__removedTools,
+        checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.response2)) {
@@ -208,4 +210,4 @@ export async function foo({ messages, callbacks }: { messages?: any; callbacks?:
 }
 export const __fooNodeParams = [];
 export default graph
-export const __sourceMap = {"streaming.agency:foo":{"0":{"line":-1,"col":2},"1":{"line":2,"col":2},"2":{"line":4,"col":2},"3":{"line":8,"col":2}}};
+export const __sourceMap = {"streaming.agency:foo":{"0":{"line":-2,"col":2},"1":{"line":1,"col":2},"2":{"line":3,"col":2},"3":{"line":7,"col":2}}};

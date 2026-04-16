@@ -135,7 +135,8 @@ __stack.locals.foo = await runPrompt({
         clientConfig: __ctx.globals.get("llmConfigParam.agency", "config"),
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
+        removedTools: __self.__removedTools,
+        checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.foo)) {
@@ -161,7 +162,8 @@ __stack.locals.foo2 = await runPrompt({
         },
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
+        removedTools: __self.__removedTools,
+        checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.foo2)) {
@@ -223,4 +225,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"llmConfigParam.agency:main":{"0":{"line":2,"col":2},"1":{"line":3,"col":2},"2":{"line":6,"col":2}}};
+export const __sourceMap = {"llmConfigParam.agency:main":{"0":{"line":1,"col":2},"1":{"line":2,"col":2},"2":{"line":5,"col":2}}};

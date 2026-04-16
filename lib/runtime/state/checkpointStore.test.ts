@@ -286,7 +286,7 @@ describe("Checkpoint", () => {
       });
       const result = cp.getThreadMessages();
       expect(result!.messages).toEqual([
-        { role: "assistant", content: "" },
+        { role: "assistant", content: "(no content)" },
       ]);
     });
 

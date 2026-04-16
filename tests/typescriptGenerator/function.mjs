@@ -152,7 +152,8 @@ let __functionCompleted = false;
     data: {
       functionName: "test",
       args: {},
-      isBuiltin: false
+      isBuiltin: false,
+      moduleId: "function.agency"
     }
   })
   __self.__retryable = __self.__retryable ?? true;
@@ -227,7 +228,8 @@ let __functionCompleted = false;
         a: a,
         b: b
       },
-      isBuiltin: false
+      isBuiltin: false,
+      moduleId: "function.agency"
     }
   })
   __stack.args["a"] = a;
@@ -361,4 +363,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"function.agency:test":{"0":{"line":-1,"col":2}},"function.agency:add":{},"function.agency:main":{"0":{"line":7,"col":2}}};
+export const __sourceMap = {"function.agency:test":{"0":{"line":-2,"col":2}},"function.agency:add":{},"function.agency:main":{"0":{"line":6,"col":2}}};

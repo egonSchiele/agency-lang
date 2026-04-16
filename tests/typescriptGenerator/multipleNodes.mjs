@@ -129,7 +129,8 @@ __stack.locals.greeting = await runPrompt({
         clientConfig: {},
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
+        removedTools: __self.__removedTools,
+        checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.greeting)) {
@@ -209,7 +210,8 @@ __stack.locals.result = await runPrompt({
         clientConfig: {},
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
+        removedTools: __self.__removedTools,
+        checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.result)) {
@@ -351,4 +353,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"multipleNodes.agency:greet":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2}},"multipleNodes.agency:processGreeting":{"0":{"line":4,"col":2},"1":{"line":5,"col":2}},"multipleNodes.agency:main":{"0":{"line":9,"col":2}}};
+export const __sourceMap = {"multipleNodes.agency:greet":{"0":{"line":-2,"col":2},"1":{"line":-1,"col":2}},"multipleNodes.agency:processGreeting":{"0":{"line":3,"col":2},"1":{"line":4,"col":2}},"multipleNodes.agency:main":{"0":{"line":8,"col":2}}};

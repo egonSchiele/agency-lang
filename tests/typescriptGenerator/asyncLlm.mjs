@@ -129,7 +129,8 @@ __stack.locals.x = runPrompt({
         clientConfig: {},
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
+        removedTools: __self.__removedTools,
+        checkpointInfo: runner.getCheckpointInfo()
       });
 __self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
     });
@@ -142,7 +143,8 @@ __stack.locals.y = runPrompt({
         clientConfig: {},
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
+        removedTools: __self.__removedTools,
+        checkpointInfo: runner.getCheckpointInfo()
       });
 __self.__pendingKey_y = __ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });
     });
@@ -203,4 +205,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"asyncLlm.agency:main":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2},"3":{"line":1,"col":2}}};
+export const __sourceMap = {"asyncLlm.agency:main":{"0":{"line":-2,"col":2},"1":{"line":-1,"col":2},"3":{"line":0,"col":2}}};

@@ -140,7 +140,8 @@ let __functionCompleted = false;
     data: {
       functionName: "greet",
       args: {},
-      isBuiltin: false
+      isBuiltin: false,
+      moduleId: "multiLineComment.agency"
     }
   })
   __self.__retryable = __self.__retryable ?? true;
@@ -191,4 +192,4 @@ return failure(
   }
 }
 export default graph
-export const __sourceMap = {"multiLineComment.agency:greet":{"0":{"line":6,"col":2}}};
+export const __sourceMap = {"multiLineComment.agency:greet":{"0":{"line":5,"col":2}}};

@@ -133,7 +133,8 @@ __stack.locals.greeting = await runPrompt({
         clientConfig: {},
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools
+        removedTools: __self.__removedTools,
+        checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.greeting)) {
@@ -185,4 +186,4 @@ export async function greet(name: string, { messages, callbacks }: { messages?: 
 }
 export const __greetNodeParams = ["name"];
 export default graph
-export const __sourceMap = {"graph-node-with-types.agency:greet":{"0":{"line":1,"col":2},"1":{"line":2,"col":2}}};
+export const __sourceMap = {"graph-node-with-types.agency:greet":{"0":{"line":0,"col":2},"1":{"line":1,"col":2}}};

@@ -139,7 +139,8 @@ let __functionCompleted = false;
       args: {
         age: age
       },
-      isBuiltin: false
+      isBuiltin: false,
+      moduleId: "result-basic.agency"
     }
   })
   __stack.args["age"] = age;
@@ -211,4 +212,4 @@ return failure(
   }
 }
 export default graph
-export const __sourceMap = {"result-basic.agency:checkAge":{"0":{"line":-1,"col":2},"1":{"line":2,"col":2},"0.0":{"line":0,"col":4}}};
+export const __sourceMap = {"result-basic.agency:checkAge":{"0":{"line":-2,"col":2},"1":{"line":1,"col":2},"0.0":{"line":-1,"col":4}}};

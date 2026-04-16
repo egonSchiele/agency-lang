@@ -145,7 +145,8 @@ let __functionCompleted = false;
     data: {
       functionName: "greet",
       args: {},
-      isBuiltin: false
+      isBuiltin: false,
+      moduleId: "comments.agency"
     }
   })
   __self.__retryable = __self.__retryable ?? true;
@@ -313,4 +314,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"comments.agency:greet":{"1":{"line":11,"col":2},"2":{"line":13,"col":2}},"comments.agency:main":{"1":{"line":18,"col":2},"2":{"line":19,"col":2},"3":{"line":22,"col":2},"4":{"line":25,"col":2}}};
+export const __sourceMap = {"comments.agency:greet":{"1":{"line":10,"col":2},"2":{"line":12,"col":2}},"comments.agency:main":{"1":{"line":17,"col":2},"2":{"line":18,"col":2},"3":{"line":21,"col":2},"4":{"line":24,"col":2}}};

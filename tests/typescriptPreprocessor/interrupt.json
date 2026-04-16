@@ -38,7 +38,7 @@
                       "type": "variableName",
                       "value": "action",
                       "loc": {
-                        "line": -1,
+                        "line": -2,
                         "col": 46,
                         "start": 88,
                         "end": 94
@@ -50,14 +50,14 @@
               }
             ],
             "loc": {
-              "line": -1,
+              "line": -2,
               "col": 9,
               "start": 51,
               "end": 100
             }
           },
           "loc": {
-            "line": -1,
+            "line": -2,
             "col": 2,
             "start": 44,
             "end": 100
@@ -78,7 +78,7 @@
                   "type": "variableName",
                   "value": "action",
                   "loc": {
-                    "line": 0,
+                    "line": -1,
                     "col": 23,
                     "start": 121,
                     "end": 127
@@ -89,7 +89,7 @@
             ]
           },
           "loc": {
-            "line": 0,
+            "line": -1,
             "col": 2,
             "start": 100,
             "end": 130
@@ -97,7 +97,7 @@
         }
       ],
       "loc": {
-        "line": -2,
+        "line": -3,
         "col": 0,
         "start": 0,
         "end": 131
@@ -132,7 +132,7 @@
                   "type": "variableName",
                   "value": "x",
                   "loc": {
-                    "line": 4,
+                    "line": 3,
                     "col": 12,
                     "start": 181,
                     "end": 182
@@ -147,7 +147,7 @@
             ]
           },
           "loc": {
-            "line": 4,
+            "line": 3,
             "col": 2,
             "start": 171,
             "end": 190
@@ -155,7 +155,7 @@
         }
       ],
       "loc": {
-        "line": 3,
+        "line": 2,
         "col": 0,
         "start": 133,
         "end": 191
@@ -190,7 +190,7 @@
               }
             ],
             "loc": {
-              "line": 9,
+              "line": 8,
               "col": 25,
               "start": 263,
               "end": 310
@@ -204,7 +204,7 @@
             }
           },
           "loc": {
-            "line": 9,
+            "line": 8,
             "col": 2,
             "start": 240,
             "end": 310
@@ -219,7 +219,7 @@
               "type": "variableName",
               "value": "result",
               "loc": {
-                "line": 10,
+                "line": 9,
                 "col": 8,
                 "start": 316,
                 "end": 322
@@ -228,7 +228,7 @@
             }
           ],
           "loc": {
-            "line": 10,
+            "line": 9,
             "col": 2,
             "start": 310,
             "end": 324
@@ -236,7 +236,7 @@
         }
       ],
       "loc": {
-        "line": 7,
+        "line": 6,
         "col": 0,
         "start": 193,
         "end": 325

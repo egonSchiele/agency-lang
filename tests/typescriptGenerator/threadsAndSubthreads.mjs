@@ -137,7 +137,8 @@ let __functionCompleted = false;
     data: {
       functionName: "foo",
       args: {},
-      isBuiltin: false
+      isBuiltin: false,
+      moduleId: "threadsAndSubthreads.agency"
     }
   })
   __self.__retryable = __self.__retryable ?? true;
@@ -167,7 +168,8 @@ __stack.locals.res1 = await runPrompt({
             clientConfig: {},
             maxToolCallRounds: 10,
             interruptData: __state?.interruptData,
-            removedTools: __self.__removedTools
+            removedTools: __self.__removedTools,
+            checkpointInfo: runner.getCheckpointInfo()
           });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.res1)) {
@@ -190,7 +192,8 @@ __stack.locals.res2 = await runPrompt({
                 clientConfig: {},
                 maxToolCallRounds: 10,
                 interruptData: __state?.interruptData,
-                removedTools: __self.__removedTools
+                removedTools: __self.__removedTools,
+                checkpointInfo: runner.getCheckpointInfo()
               });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.res2)) {
@@ -213,7 +216,8 @@ __stack.locals.res3 = await runPrompt({
                     clientConfig: {},
                     maxToolCallRounds: 10,
                     interruptData: __state?.interruptData,
-                    removedTools: __self.__removedTools
+                    removedTools: __self.__removedTools,
+                    checkpointInfo: runner.getCheckpointInfo()
                   });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.res3)) {
@@ -238,7 +242,8 @@ __stack.locals.res5 = await runPrompt({
                     clientConfig: {},
                     maxToolCallRounds: 10,
                     interruptData: __state?.interruptData,
-                    removedTools: __self.__removedTools
+                    removedTools: __self.__removedTools,
+                    checkpointInfo: runner.getCheckpointInfo()
                   });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.res5)) {
@@ -265,7 +270,8 @@ __stack.locals.res4 = await runPrompt({
                 clientConfig: {},
                 maxToolCallRounds: 10,
                 interruptData: __state?.interruptData,
-                removedTools: __self.__removedTools
+                removedTools: __self.__removedTools,
+                checkpointInfo: runner.getCheckpointInfo()
               });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.res4)) {
@@ -358,7 +364,8 @@ __stack.locals.res1 = await runPrompt({
             clientConfig: {},
             maxToolCallRounds: 10,
             interruptData: __state?.interruptData,
-            removedTools: __self.__removedTools
+            removedTools: __self.__removedTools,
+            checkpointInfo: runner.getCheckpointInfo()
           });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.res1)) {
@@ -384,7 +391,8 @@ __stack.locals.res2 = await runPrompt({
                 clientConfig: {},
                 maxToolCallRounds: 10,
                 interruptData: __state?.interruptData,
-                removedTools: __self.__removedTools
+                removedTools: __self.__removedTools,
+                checkpointInfo: runner.getCheckpointInfo()
               });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.res2)) {
@@ -410,7 +418,8 @@ __stack.locals.res3 = await runPrompt({
                     clientConfig: {},
                     maxToolCallRounds: 10,
                     interruptData: __state?.interruptData,
-                    removedTools: __self.__removedTools
+                    removedTools: __self.__removedTools,
+                    checkpointInfo: runner.getCheckpointInfo()
                   });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.res3)) {
@@ -438,7 +447,8 @@ __stack.locals.res5 = await runPrompt({
                     clientConfig: {},
                     maxToolCallRounds: 10,
                     interruptData: __state?.interruptData,
-                    removedTools: __self.__removedTools
+                    removedTools: __self.__removedTools,
+                    checkpointInfo: runner.getCheckpointInfo()
                   });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.res5)) {
@@ -468,7 +478,8 @@ __stack.locals.res4 = await runPrompt({
                 clientConfig: {},
                 maxToolCallRounds: 10,
                 interruptData: __state?.interruptData,
-                removedTools: __self.__removedTools
+                removedTools: __self.__removedTools,
+                checkpointInfo: runner.getCheckpointInfo()
               });
 // halt if this is an interrupt
 if (isInterrupt(__stack.locals.res4)) {
@@ -546,4 +557,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"threadsAndSubthreads.agency:foo":{"1":{"line":14,"col":2},"2":{"line":15,"col":2},"3":{"line":16,"col":2},"4":{"line":17,"col":2},"5":{"line":18,"col":2},"0.0":{"line":0,"col":4},"0.1.0":{"line":2,"col":6},"0.1.1.0":{"line":4,"col":8},"0.1.2.0":{"line":7,"col":8},"0.2.0":{"line":11,"col":6}},"threadsAndSubthreads.agency:main":{"1":{"line":37,"col":2},"2":{"line":38,"col":2},"3":{"line":39,"col":2},"4":{"line":40,"col":2},"5":{"line":41,"col":2},"0.0":{"line":23,"col":4},"0.1.0":{"line":25,"col":6},"0.1.1.0":{"line":27,"col":8},"0.1.2.0":{"line":30,"col":8},"0.2.0":{"line":34,"col":6}}};
+export const __sourceMap = {"threadsAndSubthreads.agency:foo":{"1":{"line":13,"col":2},"2":{"line":14,"col":2},"3":{"line":15,"col":2},"4":{"line":16,"col":2},"5":{"line":17,"col":2},"0.0":{"line":-1,"col":4},"0.1.0":{"line":1,"col":6},"0.1.1.0":{"line":3,"col":8},"0.1.2.0":{"line":6,"col":8},"0.2.0":{"line":10,"col":6}},"threadsAndSubthreads.agency:main":{"1":{"line":36,"col":2},"2":{"line":37,"col":2},"3":{"line":38,"col":2},"4":{"line":39,"col":2},"5":{"line":40,"col":2},"0.0":{"line":22,"col":4},"0.1.0":{"line":24,"col":6},"0.1.1.0":{"line":26,"col":8},"0.1.2.0":{"line":29,"col":8},"0.2.0":{"line":33,"col":6}}};

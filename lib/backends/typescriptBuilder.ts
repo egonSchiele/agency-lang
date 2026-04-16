@@ -941,9 +941,18 @@ export class TypeScriptBuilder {
     if (node.operator === "=~" || node.operator === "!~") {
       return this.processRegexMatchExpression(node);
     }
+    if (node.operator === "++" || node.operator === "--") {
+      return ts.postfix(this.processNode(node.left), node.operator);
+    }
+    if (node.operator === "typeof" || node.operator === "void") {
+      return ts.unaryOp(node.operator, this.processNode(node.right));
+    }
     const leftNode = this.processNode(node.left);
     const rightNode = this.processNode(node.right);
-    return ts.binOp(leftNode, node.operator, rightNode, {
+    // Agency uses strict equality/inequality: == → ===, != → !==
+    const emitOp = node.operator === "==" ? "===" :
+                   node.operator === "!=" ? "!==" : node.operator;
+    return ts.binOp(leftNode, emitOp, rightNode, {
       parenLeft: this.needsParensLeft(node.left, node.operator),
       parenRight: this.needsParensRight(node.right, node.operator),
     });

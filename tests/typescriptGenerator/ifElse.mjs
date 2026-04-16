@@ -281,7 +281,7 @@ __stack.locals.result = `no`;
 await runner.ifElse(13, [
 
   {
-    condition: async () => __stack.locals.a == 1,
+    condition: async () => __stack.locals.a === 1,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `one`;
@@ -290,7 +290,7 @@ __stack.locals.result = `one`;
   },
 
   {
-    condition: async () => __stack.locals.a == 2,
+    condition: async () => __stack.locals.a === 2,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `two`;

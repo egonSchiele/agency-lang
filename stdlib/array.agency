@@ -174,9 +174,7 @@ export def groupBy(arr: any[], func: (any) => any): any {
   const groups = {}
   for (item in arr) {
     const key = func(item)
-    if (groups[key] == null) {
-      groups[key] = []
-    }
+    groups[key] ??= []
     groups[key].push(item)
   }
   return groups

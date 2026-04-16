@@ -1000,8 +1000,24 @@ export class AgencyGenerator {
     node: BinOpExpression,
     assigned: boolean = false,
   ): string {
-    // Collect a chain of the same operator (e.g. a |> b |> c)
     const op = node.operator;
+
+    // Unary prefix operators: !x, typeof x, void x
+    if (op === "!" || op === "typeof" || op === "void") {
+      const operand = this.processNode(node.right).trim();
+      const sep = op === "!" ? "" : " ";
+      const result = `${op}${sep}${operand}`;
+      return assigned ? result : this.indentStr(result);
+    }
+
+    // Postfix operators: x++, x--
+    if (op === "++" || op === "--") {
+      const operand = this.processNode(node.left).trim();
+      const result = `${operand}${op}`;
+      return assigned ? result : this.indentStr(result);
+    }
+
+    // Collect a chain of the same operator (e.g. a |> b |> c)
     const parts: string[] = [];
     let current: AgencyNode = node;
     while (current.type === "binOpExpression" && current.operator === op) {

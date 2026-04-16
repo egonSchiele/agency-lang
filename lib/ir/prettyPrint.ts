@@ -347,7 +347,9 @@ export function printTs(node: TsNode, indent = 0): string {
       const operand = node.paren
         ? `(${printTs(node.operand, indent)})`
         : printTs(node.operand, indent);
-      return `${node.op}${operand}`;
+      // Keyword operators (typeof, void) need a space; symbol operators (!) don't
+      const sep = /^[a-z]/i.test(node.op) ? " " : "";
+      return `${node.op}${sep}${operand}`;
     }
     case "ternary": {
       const condition = printTs(node.condition, indent);

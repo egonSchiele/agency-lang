@@ -1326,6 +1326,35 @@ const unaryNotParser: Parser<Expression> = (input: string) => {
   );
 };
 
+// --- Unary keyword operators (typeof, void) ---
+// Same desugaring as !: typeof x → { op: "typeof", left: true, right: x }
+function unaryKeywordParser(keyword: string): Parser<Expression> {
+  return (input: string) => {
+    const kwResult = str(keyword)(input);
+    if (!kwResult.success) return kwResult;
+    // Require word boundary (so "typeof" doesn't match inside "typeofFoo")
+    if (!not(varNameChar)(kwResult.rest).success) {
+      return failure(`expected whitespace after ${keyword}`, input);
+    }
+    const wsResult = spaces(kwResult.rest);
+    if (!wsResult.success) return failure(`expected expression after ${keyword}`, input);
+    const atomResult = atom(wsResult.rest);
+    if (!atomResult.success) return failure(`expected expression after ${keyword}`, input);
+    return success(
+      {
+        type: "binOpExpression" as const,
+        operator: keyword as Operator,
+        left: { type: "boolean" as const, value: true },
+        right: atomResult.result,
+      } as BinOpExpression,
+      atomResult.rest,
+    );
+  };
+}
+
+const unaryTypeofParser = unaryKeywordParser("typeof");
+const unaryVoidParser = unaryKeywordParser("void");
+
 // Placeholder parser for `?` in pipe partial application
 const placeholderParser: Parser<Placeholder> = (input: string) => {
   const result = char("?")(input);
@@ -1365,8 +1394,10 @@ export const newExpressionParser: Parser<NewExpression> = (input: string) => {
   );
 };
 
-// The atom parser: the smallest unit of an expression.
-const atom: Parser<Expression> = or(
+// The base atom parser: the smallest unit of an expression.
+const baseAtom: Parser<Expression> = or(
+  unaryTypeofParser,
+  unaryVoidParser,
   unaryNotParser,
   tryExpressionParser,
   newExpressionParser,
@@ -1378,6 +1409,25 @@ const atom: Parser<Expression> = or(
   lazy(() => regexLiteralParser),
   lazy(() => literalParser),
 );
+
+// Wrap atom to handle postfix ++ and -- operators.
+// Desugared to BinOpExpression: x++ → { op: "++", left: x, right: true }
+const postfixOpParser = or(str("++"), str("--"));
+const atom: Parser<Expression> = (input: string) => {
+  const result = baseAtom(input);
+  if (!result.success) return result;
+  const ppResult = postfixOpParser(result.rest);
+  if (!ppResult.success) return result;
+  return success(
+    {
+      type: "binOpExpression" as const,
+      operator: ppResult.result as Operator,
+      left: result.result,
+      right: { type: "boolean" as const, value: true },
+    } as BinOpExpression,
+    ppResult.rest,
+  );
+};
 
 // Operator helper: parse an operator with optional surrounding whitespace.
 // Allows a newline before the operator so expressions can continue on the next line:
@@ -1433,6 +1483,10 @@ const parenParser: Parser<Expression> = (input: string) => {
 export const exprParser: Parser<Expression> = label("an expression", buildExpressionParser<Expression>(
   atom,
   [
+    // Precedence 7: exponentiation
+    [
+      { op: wsOp("**"), assoc: "right" as const, apply: makeBinOp("**") },
+    ],
     // Precedence 6: multiplicative (and *=, /=)
     [
       { op: wsOp("*="), assoc: "right" as const, apply: makeBinOp("*=") },
@@ -1450,6 +1504,8 @@ export const exprParser: Parser<Expression> = label("an expression", buildExpres
     ],
     // Precedence 4: relational
     [
+      { op: wsKeyword("instanceof"), assoc: "left" as const, apply: makeBinOp("instanceof") },
+      { op: wsKeyword("in"), assoc: "left" as const, apply: makeBinOp("in") },
       { op: wsOp("<="), assoc: "left" as const, apply: makeBinOp("<=") },
       { op: wsOp(">="), assoc: "left" as const, apply: makeBinOp(">=") },
       { op: wsOp("<"), assoc: "left" as const, apply: makeBinOp("<") },
@@ -1458,6 +1514,7 @@ export const exprParser: Parser<Expression> = label("an expression", buildExpres
     // Precedence 3: equality
     [
       { op: wsOp("==="), assoc: "left" as const, apply: makeBinOp("===") },
+      { op: wsOp("!=="), assoc: "left" as const, apply: makeBinOp("!==") },
       { op: wsOp("=~"), assoc: "left" as const, apply: makeBinOp("=~") },
       { op: wsOp("=="), assoc: "left" as const, apply: makeBinOp("==") },
       { op: wsOp("!~"), assoc: "left" as const, apply: makeBinOp("!~") },
@@ -1465,11 +1522,14 @@ export const exprParser: Parser<Expression> = label("an expression", buildExpres
     ],
     // Precedence 2: logical AND
     [
+      { op: wsOp("&&="), assoc: "right" as const, apply: makeBinOp("&&=") },
       { op: wsOp("&&"), assoc: "left" as const, apply: makeBinOp("&&") },
     ],
     // Precedence 1: logical OR, nullish coalescing
     [
+      { op: wsOp("??="), assoc: "right" as const, apply: makeBinOp("??=") },
       { op: wsOp("??"), assoc: "left" as const, apply: makeBinOp("??") },
+      { op: wsOp("||="), assoc: "right" as const, apply: makeBinOp("||=") },
       { op: wsOp("||"), assoc: "left" as const, apply: makeBinOp("||") },
     ],
     // Precedence 0: catch (unwrap Result with fallback)

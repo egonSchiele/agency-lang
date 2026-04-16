@@ -897,16 +897,17 @@ export class TypeScriptBuilder {
     for (const element of node.chain) {
       switch (element.kind) {
         case "property":
-          result = ts.prop(result, element.name);
+          result = ts.prop(result, element.name, { optional: element.optional });
           break;
         case "index":
-          result = ts.index(result, this.processNode(element.index));
+          result = ts.index(result, this.processNode(element.index), { optional: element.optional });
           break;
         case "methodCall": {
           const callNode = this.generateFunctionCallExpression(
             element.functionCall,
             "valueAccess",
           );
+          const dot = element.optional ? "?." : ".";
           // The call node is ts.call(ts.id(name), args) — extract callee name and args
           if (
             callNode.kind === "call" &&
@@ -916,14 +917,12 @@ export class TypeScriptBuilder {
             const args = isClassMethod
               ? [...callNode.arguments, this.buildMethodCallConfig()]
               : callNode.arguments;
-            const callExpr = $(result)
-              .prop(callNode.callee.name)
-              .call(args)
-              .done();
+            const propNode = ts.prop(result, callNode.callee.name, { optional: element.optional });
+            const callExpr = ts.call(propNode, args);
             result = isClassMethod ? ts.await(callExpr) : callExpr;
           } else {
             // Fallback for complex cases (e.g. await-wrapped)
-            result = ts.raw(`${this.str(result)}.${this.str(callNode)}`);
+            result = ts.raw(`${this.str(result)}${dot}${this.str(callNode)}`);
           }
           break;
         }

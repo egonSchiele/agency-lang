@@ -1172,45 +1172,64 @@ export const functionCallParser: Parser<FunctionCall> = label("a function call",
 const dotMethodCallParser = (
   input: string,
 ): ParserResult<AccessChainElement> => {
-  // First try: . followed by functionCall (name + parens)
-  const dotResult = char(".")(input);
-  if (!dotResult.success) return failure("expected dot", input);
-
-  const fcResult = _functionCallParser(dotResult.rest);
-  if (fcResult.success) {
-    return success(
-      { kind: "methodCall" as const, functionCall: fcResult.result },
-      fcResult.rest,
-    );
+  // Try ?. (optional chaining) first, then . (regular)
+  let optional = false;
+  let afterDot: string;
+  const optDotResult = str("?.")(input);
+  if (optDotResult.success) {
+    optional = true;
+    afterDot = optDotResult.rest;
+  } else {
+    const dotResult = char(".")(input);
+    if (!dotResult.success) return failure("expected dot", input);
+    afterDot = dotResult.rest;
   }
 
-  // Second try: . followed by just a property name
-  const nameResult = variableNameParser(dotResult.rest);
+  // First try: functionCall (name + parens)
+  const fcResult = _functionCallParser(afterDot);
+  if (fcResult.success) {
+    const element: AccessChainElement = { kind: "methodCall" as const, functionCall: fcResult.result };
+    if (optional) element.optional = true;
+    return success(element, fcResult.rest);
+  }
+
+  // Second try: just a property name
+  const nameResult = variableNameParser(afterDot);
   if (nameResult.success) {
-    return success(
-      { kind: "property" as const, name: nameResult.result.value },
-      nameResult.rest,
-    );
+    const element: AccessChainElement = { kind: "property" as const, name: nameResult.result.value };
+    if (optional) element.optional = true;
+    return success(element, nameResult.rest);
   }
 
   return failure("expected property name or method call after dot", input);
 };
 
 const indexChainParser = (input: string): ParserResult<AccessChainElement> => {
-  const parser = seqC(
-    set("kind", "index" as const),
-    char("["),
-    optionalSpaces,
-    capture(
-      lazy(() => exprParser),
-      "index",
-    ),
-    optionalSpaces,
-    char("]"),
-  );
+  // Try ?.[ (optional index access) first, then [ (regular)
+  let optional = false;
+  let rest: string;
+  const optBracketResult = str("?.[")(input);
+  if (optBracketResult.success) {
+    optional = true;
+    rest = optBracketResult.rest;
+  } else {
+    const bracketResult = char("[")(input);
+    if (!bracketResult.success) return failure("expected [", input);
+    rest = bracketResult.rest;
+  }
 
-  const result = parser(input);
-  return result;
+  const ws1 = optionalSpaces(rest);
+  if (!ws1.success) return failure("expected expression", input);
+  const exprResult = lazy(() => exprParser)(ws1.rest);
+  if (!exprResult.success) return failure("expected expression inside brackets", input);
+  const ws2 = optionalSpaces(exprResult.rest);
+  if (!ws2.success) return failure("expected ]", input);
+  const closeResult = char("]")(ws2.rest);
+  if (!closeResult.success) return failure("expected closing bracket", input);
+
+  const element: AccessChainElement = { kind: "index" as const, index: exprResult.result };
+  if (optional) element.optional = true;
+  return success(element, closeResult.rest);
 };
 
 const chainElementParser: Parser<AccessChainElement> = or(

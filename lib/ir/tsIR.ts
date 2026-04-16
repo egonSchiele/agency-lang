@@ -227,6 +227,7 @@ export interface TsPropertyAccess {
   object: TsNode;
   property: string | TsNode;
   computed: boolean;
+  optional?: boolean;
 }
 
 export interface TsSpread {

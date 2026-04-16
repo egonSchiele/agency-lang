@@ -401,6 +401,7 @@ export async function runPrompt(args: {
   maxToolCallRounds?: number;
   interruptData?: InterruptData;
   removedTools?: string[];
+  checkpointInfo?: { moduleId: string; scopeName: string; stepPath: string };
 }): Promise<any> {
   const {
     ctx,
@@ -408,6 +409,7 @@ export async function runPrompt(args: {
     responseFormat,
     maxToolCallRounds = 10,
     removedTools = [],
+    checkpointInfo,
   } = args;
 
   // Extract tool registry entries from clientConfig.tools and split into
@@ -504,9 +506,9 @@ export async function runPrompt(args: {
       });
 
       const checkpointId = ctx.checkpoints.create(ctx, {
-        moduleId: "",
-        scopeName: "",
-        stepPath: "",
+        moduleId: checkpointInfo?.moduleId ?? "",
+        scopeName: checkpointInfo?.scopeName ?? "",
+        stepPath: checkpointInfo?.stepPath ?? "",
       });
       interrupt.checkpointId = checkpointId;
       interrupt.checkpoint = ctx.checkpoints.get(checkpointId);

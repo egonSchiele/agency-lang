@@ -47,6 +47,15 @@ export class Runner {
     return this.path.join("_");
   }
 
+  /** Return checkpoint metadata for the current step. */
+  getCheckpointInfo(): { moduleId: string; scopeName: string; stepPath: string } {
+    return {
+      moduleId: this.moduleId,
+      scopeName: this.scopeName,
+      stepPath: this.key(),
+    };
+  }
+
   private getCounter(): number {
     if (this.path.length === 0) return this.frame.step;
     return this.frame.locals[`__substep_${this.key()}`] ?? 0;

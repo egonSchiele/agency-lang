@@ -252,6 +252,7 @@ describe("returnStatementParser", () => {
     { input: "return", expected: { success: true, result: { type: "returnStatement" } } },
     { input: "return;", expected: { success: true, result: { type: "returnStatement" } } },
     { input: "return ", expected: { success: true, result: { type: "returnStatement" } } },
+    { input: "return ;", expected: { success: true, result: { type: "returnStatement" } } },
 
     // Failure cases
     { input: "retur 5", expected: { success: false } },

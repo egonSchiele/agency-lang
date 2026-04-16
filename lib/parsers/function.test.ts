@@ -3389,19 +3389,28 @@ describe("callback declarations", () => {
     }
   });
 
-  it("rejects unknown callback names", () => {
-    const result = functionParser(`callback onFoo(data) { log(data) }`);
-    expect(result.success).toBe(false);
+  it("throws on unknown callback names", () => {
+    expect(() => functionParser(`callback onFoo(data) { log(data) }`)).toThrow("Unknown callback 'onFoo'");
   });
 
-  it("rejects exported callbacks", () => {
-    const result = functionParser(`export callback onLLMCallEnd(data) { log(data) }`);
-    expect(result.success).toBe(false);
+  it("throws on exported callbacks", () => {
+    expect(() => functionParser(`export callback onLLMCallEnd(data) { log(data) }`)).toThrow("cannot be exported");
   });
 
-  it("rejects safe callbacks", () => {
-    const result = functionParser(`safe callback onLLMCallEnd(data) { log(data) }`);
-    expect(result.success).toBe(false);
+  it("throws on safe callbacks", () => {
+    expect(() => functionParser(`safe callback onLLMCallEnd(data) { log(data) }`)).toThrow("cannot be marked safe");
+  });
+
+  it("throws when callback has no parameters", () => {
+    expect(() => functionParser(`callback onNodeStart() { log("hi") }`)).toThrow("must declare exactly one parameter");
+  });
+
+  it("throws when callback has multiple parameters", () => {
+    expect(() => functionParser(`callback onNodeStart(a, b) { log(a) }`)).toThrow("must declare exactly one parameter");
+  });
+
+  it("throws when callback parameter is variadic", () => {
+    expect(() => functionParser(`callback onNodeStart(...data) { log(data) }`)).toThrow("cannot be variadic");
   });
 
   it("parses all valid callback names", () => {

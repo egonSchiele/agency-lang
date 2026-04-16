@@ -68,6 +68,10 @@ export type AgencyCallbacks = {
   ) => CallbackReturn<K> | Promise<CallbackReturn<K>>;
 };
 
+// Tracks which hooks are currently executing to prevent infinite recursion
+// when a callback calls a helper function that would re-trigger the same hook.
+const _activeHooks = new Set<string>();
+
 export async function callHook<K extends keyof CallbackMap>(args: {
   callbacks: AgencyCallbacks;
   name: K;
@@ -75,11 +79,14 @@ export async function callHook<K extends keyof CallbackMap>(args: {
 }): Promise<CallbackReturn<K> | undefined> {
   const { callbacks, name, data } = args;
   const hook = callbacks[name];
-  if (hook) {
+  if (hook && !_activeHooks.has(name)) {
+    _activeHooks.add(name);
     try {
       return (await hook(data)) as CallbackReturn<K>;
     } catch (error) {
       console.error(`[agency] ${name} callback error:`, error);
+    } finally {
+      _activeHooks.delete(name);
     }
   }
   return undefined;

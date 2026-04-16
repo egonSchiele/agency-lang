@@ -397,7 +397,7 @@ export class TypeScriptBuilder {
     // Pass 5: Generate code for tools
     const functionDefs: FunctionDefinition[] = [];
     for (const node of program.nodes) {
-      if (node.type === "function") {
+      if (node.type === "function" && !node.callback) {
         functionDefs.push(node);
         this.generatedStatements.push(this.processTool(node));
       }

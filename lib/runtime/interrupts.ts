@@ -197,8 +197,9 @@ export async function respondToInterrupt(args: {
   const execCtx = ctx.createExecutionContext();
   execCtx.restoreState(checkpoint);
 
+  execCtx.installRegisteredCallbacks(ctx);
   if (metadata.callbacks) {
-    execCtx.callbacks = metadata.callbacks;
+    Object.assign(execCtx.callbacks, metadata.callbacks);
   }
 
   if (metadata.debugger) {
@@ -354,8 +355,9 @@ export async function resumeFromState(args: {
   execCtx.stateStack.deserializeMode();
   execCtx.globals = GlobalStore.fromJSON(state.globals);
 
+  execCtx.installRegisteredCallbacks(ctx);
   if (metadata.callbacks) {
-    execCtx.callbacks = metadata.callbacks;
+    Object.assign(execCtx.callbacks, metadata.callbacks);
   }
 
   if (metadata.debugger) {

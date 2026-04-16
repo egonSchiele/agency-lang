@@ -2432,16 +2432,30 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   if (isCallback) {
     result.callback = true;
     if (isExported) {
-      return failure(`Callback '${result.functionName}' cannot be exported`, input);
+      throw new Error(`Callback '${result.functionName}' cannot be exported`);
     }
     if (isSafe) {
-      return failure(`Callback '${result.functionName}' cannot be marked safe`, input);
+      throw new Error(`Callback '${result.functionName}' cannot be marked safe`);
     }
     const validNames: ReadonlySet<string> = new Set(VALID_CALLBACK_NAMES);
     if (!validNames.has(result.functionName)) {
-      return failure(
+      throw new Error(
         `Unknown callback '${result.functionName}'. Valid callbacks: ${VALID_CALLBACK_NAMES.join(", ")}`,
-        input,
+      );
+    }
+    if (result.parameters.length !== 1) {
+      throw new Error(
+        `Callback '${result.functionName}' must declare exactly one parameter`,
+      );
+    }
+    if (result.parameters[0].variadic) {
+      throw new Error(
+        `Callback '${result.functionName}' parameter '${result.parameters[0].name}' cannot be variadic`,
+      );
+    }
+    if (result.parameters[0].defaultValue) {
+      throw new Error(
+        `Callback '${result.functionName}' parameter '${result.parameters[0].name}' cannot have a default value`,
       );
     }
   }

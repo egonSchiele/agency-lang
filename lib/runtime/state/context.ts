@@ -127,6 +127,7 @@ export class RuntimeContext<T> {
     execCtx.checkpoints = new CheckpointStore(this.maxRestores);
     execCtx.handlers = [];
     execCtx.callbacks = {};
+    execCtx._registeredCallbacks = {};
     execCtx.onStreamLock = false;
     execCtx._skipNextCheckpoint = false;
     execCtx._restoreCount = 0;
@@ -173,6 +174,19 @@ export class RuntimeContext<T> {
   async threads. But we could just replace all calls to `forkStack`
   with `new StateStack()`.
   */
+  /**
+   * Install Agency-defined callbacks (from `callback` declarations) onto this
+   * execution context, wrapping each one to inject ctx so it accesses the
+   * correct per-execution globals/state.
+   */
+  installRegisteredCallbacks(source: RuntimeContext<T>): void {
+    for (const name in source._registeredCallbacks) {
+      const fn = source._registeredCallbacks[name as keyof AgencyCallbacks]!;
+      (this.callbacks as any)[name] =
+        (data: any) => fn(data, { ctx: this });
+    }
+  }
+
   pushHandler(fn: HandlerFn): void {
     this.handlers.push(fn);
   }

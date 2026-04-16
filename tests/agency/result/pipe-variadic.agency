@@ -1,0 +1,27 @@
+def joinAll(...parts: string[]): string {
+  let result = ""
+  for (part in parts) {
+    if (result != "") {
+      result = result + ", "
+    }
+    result = result + part
+  }
+  return result
+}
+
+def joinWithSep(sep: string, ...parts: string[]): string {
+  let result = ""
+  for (part in parts) {
+    if (result != "") {
+      result = result + sep
+    }
+    result = result + part
+  }
+  return result
+}
+
+node main() {
+  let r1 = success("hello") |> joinAll
+  let r2 = success("world") |> joinWithSep("-", ?)
+  return { r1: r1, r2: r2 }
+}

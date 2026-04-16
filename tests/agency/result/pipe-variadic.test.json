@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"r1\":{\"success\":true,\"value\":\"hello\"},\"r2\":{\"success\":true,\"value\":\"world\"}}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

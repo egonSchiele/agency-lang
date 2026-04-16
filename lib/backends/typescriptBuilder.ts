@@ -651,6 +651,15 @@ export class TypeScriptBuilder {
    * 1. Pad omitted optional args (those with defaults) with null
    * 2. Wrap extra args into an array for variadic params
    */
+  private getCalleeParams(name: string): FunctionParameter[] | undefined {
+    const fnDef = this.programInfo.functionDefinitions[name];
+    const imported = this.programInfo.importedFunctions[name];
+    const params = fnDef?.parameters ?? imported?.parameters;
+    return params?.filter(
+      (p) => !p.typeHint || p.typeHint.type !== "blockType",
+    );
+  }
+
   private adjustCallArgs(
     argNodes: TsNode[],
     parameters: FunctionParameter[] | undefined,
@@ -2852,7 +2861,9 @@ export class TypeScriptBuilder {
 
     if (stage.type === "variableName") {
       const callee = this.processNode(stage);
-      const args = [pipeArg, ...this.buildPipeStateArgs(stage.value)];
+      const params = this.getCalleeParams(stage.value);
+      const adjusted = this.adjustCallArgs([pipeArg], params);
+      const args = [...adjusted, ...this.buildPipeStateArgs(stage.value)];
       return ts.arrowFn([{ name: "__pipeArg" }], ts.call(callee, args), {
         async: true,
       });
@@ -2867,9 +2878,11 @@ export class TypeScriptBuilder {
           `Function call on right side of |> must contain exactly one ? placeholder, got ${placeholderCount}`,
         );
       }
-      const args = stage.arguments.map((a) =>
+      const rawArgs = stage.arguments.map((a) =>
         a.type === "placeholder" ? pipeArg : this.processNode(a as AgencyNode),
       );
+      const params = this.getCalleeParams(stage.functionName);
+      const args = this.adjustCallArgs(rawArgs, params);
       const callee = ts.raw(mapFunctionName(stage.functionName));
       return ts.arrowFn(
         [{ name: "__pipeArg" }],

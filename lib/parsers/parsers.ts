@@ -341,7 +341,7 @@ export const numberParser: Parser<NumberLiteral> = label("a number", (input: str
 export const regexLiteralParser: Parser<RegexLiteral> = label("a regex", (input: string): ParserResult<RegexLiteral> => {
   const parser = seqC(
     set("type", "regex"),
-    char("/"),
+    str("re/"),
     capture(many1WithJoin(or(
       str("\\/"),
       noneOf("/\n"),
@@ -1405,8 +1405,8 @@ const baseAtom: Parser<Expression> = or(
   lazy(() => agencyArrayParser),
   lazy(() => agencyObjectParser),
   lazy(() => booleanParser),
-  lazy(() => valueAccessParser),
   lazy(() => regexLiteralParser),
+  lazy(() => valueAccessParser),
   lazy(() => literalParser),
 );
 
@@ -2004,6 +2004,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
     handleBlockParser,
     debuggerParser,
     multiLineCommentParser,
+    commentParser,
     skillParser,
     withModifierParser,
     assignmentParser,
@@ -2011,7 +2012,6 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
     booleanParser,
     valueAccessParser,
     literalParser,
-    commentParser,
     newLineParser,
   );
   const parser = trace(

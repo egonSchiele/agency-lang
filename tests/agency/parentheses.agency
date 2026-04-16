@@ -1,0 +1,49 @@
+// Tests for correct parenthesization in expressions
+
+node testBasicPrecedence() {
+  // Without parens: 4 * 2 + 3 = 11
+  const a = 4 * 2 + 3
+  // With parens: 4 * (2 + 3) = 20
+  const b = 4 * (2 + 3)
+  return { a: a, b: b }
+}
+
+node testNestedParens() {
+  // (4 * (2 + 3)) / 5 = 4
+  const a = (4 * (2 + 3)) / 5
+  // 4 * 2 + 3 = 11
+  const b = 4 * 2 + 3
+  return { a: a, b: b }
+}
+
+node testExponentiationAssociativity() {
+  // Right-associative: 2 ** 3 ** 2 = 2 ** 9 = 512
+  const a = 2 ** 3 ** 2
+  // Left-override with parens: (2 ** 3) ** 2 = 8 ** 2 = 64
+  const b = (2 ** 3) ** 2
+  return { a: a, b: b }
+}
+
+node testLogicalPrecedence() {
+  // && binds tighter than ||: true || false && false = true
+  const a = true || false && false
+  // Parens override: (true || false) && false = false
+  const b = (true || false) && false
+  return { a: a, b: b }
+}
+
+node testArithmeticPrecedence() {
+  // (2 + 3) * 4 = 20
+  const a = (2 + 3) * 4
+  // 2 + 3 * 4 = 14
+  const b = 2 + 3 * 4
+  return { a: a, b: b }
+}
+
+node testDivisionGrouping() {
+  // 12 / (2 * 3) = 2
+  const a = 12 / (2 * 3)
+  // 12 / 2 * 3 = 18 (left-to-right)
+  const b = 12 / 2 * 3
+  return { a: a, b: b }
+}

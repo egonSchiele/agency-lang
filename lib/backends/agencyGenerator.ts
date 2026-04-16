@@ -273,7 +273,7 @@ export class AgencyGenerator {
       case "newExpression":
         return this.processNewExpression(node);
       case "regex":
-        return `/${node.pattern}/${node.flags}`;
+        return `re/${node.pattern}/${node.flags}`;
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
@@ -281,6 +281,8 @@ export class AgencyGenerator {
 
   protected needsParensLeft(child: BinOpArgument, parentOp: Operator): boolean {
     if (child.type !== "binOpExpression") return false;
+    // For right-associative ops like **, (2 ** 3) ** 4 needs parens on the left
+    if (parentOp === "**") return PRECEDENCE[child.operator] <= PRECEDENCE[parentOp];
     return PRECEDENCE[child.operator] < PRECEDENCE[parentOp];
   }
 
@@ -1017,27 +1019,12 @@ export class AgencyGenerator {
       return assigned ? result : this.indentStr(result);
     }
 
-    // Collect a chain of the same operator (e.g. a |> b |> c)
-    const parts: string[] = [];
-    let current: AgencyNode = node;
-    while (current.type === "binOpExpression" && current.operator === op) {
-      parts.push(this.processNode(current.right).trim());
-      current = current.left;
-    }
-    parts.push(this.processNode(current).trim());
-    parts.reverse();
-
-    const oneLine = parts.join(` ${op} `);
-    const multiLine =
-      oneLine.length <= 60
-        ? oneLine
-        : parts[0] +
-          "\n" +
-          parts
-            .slice(1)
-            .map((p) => this.indentStr(`${op} ${p}`))
-            .join("\n");
-    return assigned ? multiLine : this.indentStr(multiLine);
+    const leftStr = this.processNode(node.left).trim();
+    const rightStr = this.processNode(node.right).trim();
+    const left = this.needsParensLeft(node.left, op) ? `(${leftStr})` : leftStr;
+    const right = this.needsParensRight(node.right, op) ? `(${rightStr})` : rightStr;
+    const result = `${left} ${op} ${right}`;
+    return assigned ? result : this.indentStr(result);
   }
 
   protected processAccessChainElement(node: AccessChainElement): string {

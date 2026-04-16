@@ -288,23 +288,24 @@ describe("literals parsers", () => {
   describe("regexLiteralParser", () => {
     const testCases = [
       {
-        input: "/hello/",
+        input: "re/hello/",
         expected: { success: true, result: { type: "regex", pattern: "hello", flags: "" } },
       },
       {
-        input: "/hello/gi",
+        input: "re/hello/gi",
         expected: { success: true, result: { type: "regex", pattern: "hello", flags: "gi" } },
       },
       {
-        input: "/^\\d+$/",
+        input: "re/^\\d+$/",
         expected: { success: true, result: { type: "regex", pattern: "^\\d+$", flags: "" } },
       },
       {
-        input: "/foo\\/bar/",
+        input: "re/foo\\/bar/",
         expected: { success: true, result: { type: "regex", pattern: "foo\\/bar", flags: "" } },
       },
       // Failure cases
       { input: "//", expected: { success: false } },
+      { input: "/hello/", expected: { success: false } },
       { input: "abc", expected: { success: false } },
       { input: "", expected: { success: false } },
     ];

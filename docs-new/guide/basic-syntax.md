@@ -61,6 +61,23 @@ This is a multi-line comment
 
 > Note: comments must be on their own line, they cannot be at the end of a line containing code.
 
+Regexes are also supported as a primitive:
+
+```ts
+// you must use the `re` prefix:
+const regex = re/(foo|bar)/
+
+// Use the =~ operator to test if a string matches a regex:
+if (name =~ re/^A/) {
+  print("Your name starts with A!")
+}
+
+// or !~ to test if it doesn't match:
+if (str !~ regex) {
+  print("The string does not match the regex.")
+}
+```
+
 ### JavaScript features that don't exist in Agency
 - lambdas
 - async/await. Everything is awaited by default, and there are specific constructs for async, such as [fork](/guide/fork)

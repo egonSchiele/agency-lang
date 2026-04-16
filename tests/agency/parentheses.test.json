@@ -1,0 +1,46 @@
+{
+  "tests": [
+    {
+      "nodeName": "testBasicPrecedence",
+      "input": "",
+      "expectedOutput": "{\"a\":11,\"b\":20}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "4 * 2 + 3 = 11 vs 4 * (2 + 3) = 20"
+    },
+    {
+      "nodeName": "testNestedParens",
+      "input": "",
+      "expectedOutput": "{\"a\":4,\"b\":11}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "(4 * (2 + 3)) / 5 = 4 with nested parens"
+    },
+    {
+      "nodeName": "testExponentiationAssociativity",
+      "input": "",
+      "expectedOutput": "{\"a\":512,\"b\":64}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "2 ** 3 ** 2 = 512 (right-assoc) vs (2 ** 3) ** 2 = 64 (left-override)"
+    },
+    {
+      "nodeName": "testLogicalPrecedence",
+      "input": "",
+      "expectedOutput": "{\"a\":true,\"b\":false}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "&& binds tighter than ||; parens can override"
+    },
+    {
+      "nodeName": "testArithmeticPrecedence",
+      "input": "",
+      "expectedOutput": "{\"a\":20,\"b\":14}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "(2 + 3) * 4 = 20 vs 2 + 3 * 4 = 14"
+    },
+    {
+      "nodeName": "testDivisionGrouping",
+      "input": "",
+      "expectedOutput": "{\"a\":2,\"b\":18}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "12 / (2 * 3) = 2 vs 12 / 2 * 3 = 18 (left-to-right)"
+    }
+  ]
+}

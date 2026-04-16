@@ -1,22 +1,21 @@
 import { generateAgency } from "@/backends/agencyGenerator.js";
 import { AgencyConfig } from "@/config.js";
 import { AgencyProgram, generateTypeScript } from "@/index.js";
-import { transformSync } from "esbuild";
-import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
-import { collectProgramInfo } from "@/programInfo.js";
-import { typeCheck, formatErrors } from "@/typeChecker/index.js";
-import { ImportStatement } from "@/types/importStatement.js";
-import { buildSymbolTable, type SymbolTable } from "@/symbolTable.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
-import {
-  resolveAgencyImportPath,
-  isStdlibImport,
-  isPkgImport,
-  getStdlibDir,
-} from "../importPaths.js";
+import { collectProgramInfo } from "@/programInfo.js";
+import { buildSymbolTable, type SymbolTable } from "@/symbolTable.js";
+import { formatErrors, typeCheck } from "@/typeChecker/index.js";
 import { spawn } from "child_process";
+import { transformSync } from "esbuild";
 import * as fs from "fs";
 import * as path from "path";
+import { exit } from "process";
+import {
+  getStdlibDir,
+  isPkgImport,
+  isStdlibImport,
+  resolveAgencyImportPath,
+} from "../importPaths.js";
 import { parseAgency } from "../parser.js";
 import { findRecursively, getImports } from "./util.js";
 
@@ -81,9 +80,10 @@ export function parse(
 
   // Check if parsing was successful
   if (!parseResult.success) {
-    console.error("Parse error:");
-    console.error(parseResult);
-    throw new Error("Failed to parse Agency program");
+    console.error("Failed to parse Agency program.");
+    // console.error(parseResult);
+    // throw new Error("Failed to parse Agency program");
+    exit(1);
   }
 
   return parseResult.result;

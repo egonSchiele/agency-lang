@@ -1,8 +1,8 @@
 node main(input: string) {
-  if (input =~ /^hello/) {
+  if (input =~ re/^hello/) {
     return "matched"
   }
-  if (input !~ /world$/) {
+  if (input !~ re/world$/) {
     return "no world"
   }
   return "has world"

@@ -381,6 +381,8 @@ export class TypeScriptBuilder {
 
   private needsParensLeft(child: BinOpArgument, parentOp: Operator): boolean {
     if (child.type !== "binOpExpression") return false;
+    // For right-associative ops like **, (2 ** 3) ** 4 needs parens on the left
+    if (parentOp === "**") return PRECEDENCE[child.operator] <= PRECEDENCE[parentOp];
     return PRECEDENCE[child.operator] < PRECEDENCE[parentOp];
   }
 

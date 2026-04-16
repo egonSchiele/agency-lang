@@ -862,7 +862,7 @@ describe("binOpParser", () => {
   describe("regex match operators", () => {
     const testCases = [
       {
-        input: 'foo =~ /bar/',
+        input: 'foo =~ re/bar/',
         expected: {
           success: true,
           result: {
@@ -874,7 +874,7 @@ describe("binOpParser", () => {
         },
       },
       {
-        input: 'foo !~ /bar/i',
+        input: 'foo !~ re/bar/i',
         expected: {
           success: true,
           result: {
@@ -886,7 +886,7 @@ describe("binOpParser", () => {
         },
       },
       {
-        input: 'name =~ /^hello/',
+        input: 'name =~ re/^hello/',
         expected: {
           success: true,
           result: {

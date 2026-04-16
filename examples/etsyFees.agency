@@ -1,0 +1,54 @@
+const SYSTEM_PROMPT = """
+    You are a helpful assistant that can calculate Etsy seller fees.
+    When a user asks about Etsy fees or wants to know how much they'll pay in fees
+    for selling an item on Etsy, use the etsyFeesCalculator function.
+    Be friendly and conversational. You can answer general questions, but your
+    specialty is helping with Etsy fee calculations.
+"""
+
+type EtsyFees = {
+  listingFee: number;
+  transactionFee: number;
+  paymentProcessingFee: number;
+  offsiteAdsFee: number
+}
+
+def etsyFeesCalculator(itemPrice: number, offsiteAds: boolean = false): EtsyFees {
+  const listingFee = 0.20
+  const transactionFeeRate = 0.065
+  const paymentProcessingFeeRate = 0.03
+  const paymentProcessingFixedFee = 0.25
+  const offsiteAdsFeeRate = 0.0
+  if (offsiteAds) {
+    offsiteAdsFeeRate = 0.12
+  }
+  const transactionFee = itemPrice * transactionFeeRate
+  const paymentProcessingFee = itemPrice * paymentProcessingFeeRate
+  + paymentProcessingFixedFee
+  const offsiteAdsFee = itemPrice * offsiteAdsFeeRate
+  return { 
+    listingFee: listingFee,
+    transactionFee: transactionFee,
+    paymentProcessingFee: paymentProcessingFee,
+    offsiteAdsFee: offsiteAdsFee
+  }
+}
+
+node main() {
+  print("Welcome to the Etsy Fees Calculator Agent!")
+  print("I can help you calculate Etsy seller fees for your products.")
+  print("What is the price of the item you want to sell on Etsy?")
+  print("Type 'exit' or 'quit' to end the conversation.\n")
+  system(SYSTEM_PROMPT)
+  while (true) {
+    const msg = input("> ")
+    if (msg.toLowerCase() === "exit" || msg.toLowerCase() === "quit") {
+      print("Goodbye!")
+      return null
+    }
+    const response = llm("User: ${msg} ", { 
+      tools: [etsyFeesCalculator]
+    })
+    print(color.blue(response))
+  }
+}

@@ -4,6 +4,7 @@ import { MapReviver } from "./mapReviver.js";
 import { DateReviver } from "./dateReviver.js";
 import { RegExpReviver } from "./regExpReviver.js";
 import { URLReviver } from "./urlReviver.js";
+import { ErrorReviver } from "./errorReviver.js";
 
 const revivers: BaseReviver<any>[] = [
   new SetReviver(),
@@ -11,6 +12,7 @@ const revivers: BaseReviver<any>[] = [
   new DateReviver(),
   new RegExpReviver(),
   new URLReviver(),
+  new ErrorReviver(),
 ];
 
 const reviversByName: Record<string, BaseReviver<any>> = {};

@@ -1,0 +1,10 @@
+def check() {
+  return interrupt("confirm")
+  return "ok"
+}
+
+node main() {
+  const u = new URL("https://example.com/path?q=test")
+  const r = check()
+  return u.hostname
+}

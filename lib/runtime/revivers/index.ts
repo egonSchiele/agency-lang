@@ -1,10 +1,16 @@
 import { BaseReviver } from "./baseReviver.js";
 import { SetReviver } from "./setReviver.js";
 import { MapReviver } from "./mapReviver.js";
+import { DateReviver } from "./dateReviver.js";
+import { RegExpReviver } from "./regExpReviver.js";
+import { URLReviver } from "./urlReviver.js";
 
 const revivers: BaseReviver<any>[] = [
   new SetReviver(),
   new MapReviver(),
+  new DateReviver(),
+  new RegExpReviver(),
+  new URLReviver(),
 ];
 
 const reviversByName: Record<string, BaseReviver<any>> = {};
@@ -12,10 +18,14 @@ for (const r of revivers) {
   reviversByName[r.nativeTypeName()] = r;
 }
 
-export function nativeTypeReplacer(_key: string, value: unknown): unknown {
+// Must be a regular function (not arrow) so `this` is the parent object.
+// JSON.stringify calls toJSON() on Date/URL/etc before the replacer sees
+// the value, so we check the raw value via this[key] instead.
+export function nativeTypeReplacer(this: any, key: string, value: unknown): unknown {
+  const raw = key === "" ? value : this[key];
   for (const r of revivers) {
-    if (r.isInstance(value)) {
-      return r.serialize(value);
+    if (r.isInstance(raw)) {
+      return r.serialize(raw);
     }
   }
   return value;

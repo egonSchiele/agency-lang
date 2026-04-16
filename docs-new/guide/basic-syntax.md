@@ -63,5 +63,5 @@ This is a multi-line comment
 
 ### JavaScript features that don't exist in Agency
 - lambdas
-- async/await. Everything is awaited by default, and there are specific constructs for async, such as [fork](./fork/)
-- custom constructors for [classes](./classes/). A default constructor is generated for you.
+- async/await. Everything is awaited by default, and there are specific constructs for async, such as [fork](/guide/fork)
+- custom constructors for [classes](/guide/classes). A default constructor is generated for you.

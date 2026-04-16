@@ -1,0 +1,65 @@
+import { initUI, destroyUI, log, chat, code, diff, separator, status, startSpinner, stopSpinner, prompt, getConfirmation } from "std::ui"
+import { bash } from "std::shell"
+import { edit } from "std::fs"
+import { cwd } from "std::system"
+def onLLMCallStart(data) {
+  startSpinner("thinking")
+}
+
+def onLLMCallEnd(data) {
+  stopSpinner()
+}
+
+def onToolCallStart(data) {
+  log("\x1b[90m  tool: ${data.toolName}\x1b[0m")
+}
+
+type NextAction = 
+  | { type: "respond"; message: string }
+  | { type: "done"; summary: string }
+
+node main() {
+  initUI("Coding Agent")
+  status("Coding Agent", cwd())
+  separator("Welcome")
+  log("I can help you read, search, and edit code.")
+  log("Type your request below, or 'quit' to exit.")
+  separator()
+  let userMessage = prompt("What would you like to do?")
+  handle {
+    thread {
+      system("""
+                                You are a helpful coding assistant. You have tools to run shell commands,
+                                read and edit files. Use the bash tool to explore the codebase (ls, cat, grep, etc).
+                                Use the edit tool to make changes to files.
+                                Always explain what you're doing before and after using tools.
+                                When you're done with the user's request, set type to "done" with a summary.
+                                When you need to ask the user something or show results, set type to "respond".
+                              """)
+      let nextAction: NextAction = { 
+        type: "respond",
+        message: "How can I help?"
+      }
+      while (nextAction.type != "done") {
+        chat("user", userMessage)
+        nextAction: NextAction = llm(userMessage, { 
+          tools: [bash, edit, cwd]
+        })
+        if (nextAction.type == "respond") {
+          chat("agent", nextAction.message)
+          userMessage = prompt("Your reply?")
+        }
+      }
+    }
+    separator("Done")
+    chat("agent", nextAction.summary)
+  } with (data) {
+    log("\x1b[33m> ${JSON.stringify(data)}\x1b[0m")
+    if (getConfirmation("Approve?")) {
+      return approve()
+    }
+    return reject()
+  }
+  prompt("Press enter to exit")
+  destroyUI()
+}

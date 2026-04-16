@@ -59,6 +59,7 @@ export default defineConfig({
           { text: "speech", link: "/stdlib/speech" },
           { text: "strategy", link: "/stdlib/strategy" },
           { text: "system", link: "/stdlib/system" },
+          { text: "ui", link: "/stdlib/ui" },
           { text: "weather", link: "/stdlib/weather" },
           { text: "wikipedia", link: "/stdlib/wikipedia" },
         ],

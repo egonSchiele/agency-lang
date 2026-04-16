@@ -1,0 +1,89 @@
+import { _initUI, _destroyUI, _log, _status, _chat, _code, _diff, _separator, _startSpinner, _stopSpinner, _prompt } from "./lib/ui.js"
+
+export def initUI(title: string) {
+  """
+  Initialize a terminal UI with a scrollable output area and a fixed input bar at the bottom. Call this once at the start of your agent. The title appears in the status bar.
+  """
+  _initUI(title)
+}
+
+export def destroyUI() {
+  """
+  Tear down the terminal UI and restore normal terminal behavior. Called automatically on exit, but you can call it early if needed.
+  """
+  _destroyUI()
+}
+
+export safe def log(message: string) {
+  """
+  Print a message to the scrollable output area. Supports ANSI colors.
+  """
+  _log(message)
+}
+
+export safe def status(left: string, right: string = "") {
+  """
+  Update the status bar. The left text appears on the left side, the right text on the right.
+  """
+  _status(left, right)
+}
+
+export safe def chat(role: string, message: string) {
+  """
+  Print a chat message with a colored role prefix. Built-in colors: "user" (blue), "agent" (green). Other roles appear in yellow.
+  """
+  _chat(role, message)
+}
+
+export safe def code(filename: string, content: string) {
+  """
+  Display a code block with a filename header and line numbers, inside a bordered box.
+  """
+  _code(filename, content)
+}
+
+export safe def diff(filename: string, content: string) {
+  """
+  Display a diff with colored +/- lines, inside a bordered box with the filename as a header.
+  """
+  _diff(filename, content)
+}
+
+export safe def separator(label: string = "") {
+  """
+  Print a horizontal line with an optional label. Useful for visually grouping output sections.
+  """
+  _separator(label)
+}
+
+export safe def startSpinner(text: string = "working") {
+  """
+  Show an animated spinner in the input bar with a label. Useful while the agent is thinking or running a long operation.
+  """
+  _startSpinner(text)
+}
+
+export safe def stopSpinner() {
+  """
+  Stop the spinner and clear the input bar.
+  """
+  _stopSpinner()
+}
+
+export def prompt(question: string): string {
+  """
+  Prompt the user for text input in the fixed input bar at the bottom of the screen. The question appears as a hint. Returns the user's input as a string.
+  """
+  return _prompt(question)
+}
+
+export def getConfirmation(question: string): boolean {
+  """
+  Ask the user a yes/no question in the input bar. Returns true if the user answers yes (y/yes), false otherwise. Useful inside handler blocks to approve or reject interrupts interactively.
+  """
+  let answer = _prompt(question + " (y/n)")
+  if (answer == "y" || answer == "yes" || answer == "Y" || answer == "YES") {
+    return true
+  }
+  return false
+}

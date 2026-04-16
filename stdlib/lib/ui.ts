@@ -1,0 +1,293 @@
+import * as readline from "readline";
+import { color } from "termcolors";
+
+const ESC = "\x1b";
+const CSI = `${ESC}[`;
+
+function moveTo(row: number, col: number): string {
+  return `${CSI}${row};${col}H`;
+}
+
+function clearLine(): string {
+  return `${CSI}2K`;
+}
+
+function saveCursor(): string {
+  return `${CSI}s`;
+}
+
+function restoreCursor(): string {
+  return `${CSI}u`;
+}
+
+function setScrollRegion(top: number, bottom: number): string {
+  return `${CSI}${top};${bottom}r`;
+}
+
+function resetScrollRegion(): string {
+  return `${CSI}r`;
+}
+
+type UIConfig = {
+  title: string;
+  statusRight: string;
+};
+
+let config: UIConfig = { title: "", statusRight: "" };
+let initialized = false;
+let statusBarRow = 0;
+let inputRow = 0;
+let hintRow = 0;
+let cols = 80;
+let rows = 24;
+let currentStatusLeft = "";
+let currentStatusRight = "";
+let activeRl: readline.Interface | null = null;
+let spinnerInterval: ReturnType<typeof setInterval> | null = null;
+
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+let spinnerIdx = 0;
+let spinnerText = "";
+
+function getTermSize(): { rows: number; cols: number } {
+  return {
+    rows: process.stdout.rows || 24,
+    cols: process.stdout.columns || 80,
+  };
+}
+
+function updateLayout() {
+  const size = getTermSize();
+  rows = size.rows;
+  cols = size.cols;
+  statusBarRow = rows - 2;
+  inputRow = rows - 1;
+  hintRow = rows;
+}
+
+function renderStatusBar() {
+  const left = currentStatusLeft || config.title;
+  const right = currentStatusRight || config.statusRight;
+  const padding = Math.max(0, cols - left.length - right.length - 2);
+  const bar = color.cyan(` ${left}${"─".repeat(padding)} ${right}`);
+  process.stdout.write(
+    saveCursor() +
+      moveTo(statusBarRow, 1) +
+      clearLine() +
+      bar +
+      restoreCursor(),
+  );
+}
+
+function renderInputPrompt(prompt: string) {
+  process.stdout.write(
+    saveCursor() +
+      moveTo(inputRow, 1) +
+      clearLine() +
+      color.bold("❯") + ` ${prompt}` +
+      restoreCursor(),
+  );
+}
+
+function renderHintBar(hint: string) {
+  process.stdout.write(
+    saveCursor() +
+      moveTo(hintRow, 1) +
+      clearLine() +
+      color.dim(`  ${hint}`) +
+      restoreCursor(),
+  );
+}
+
+function clearBottomArea() {
+  process.stdout.write(
+    saveCursor() +
+      moveTo(statusBarRow, 1) +
+      clearLine() +
+      moveTo(inputRow, 1) +
+      clearLine() +
+      moveTo(hintRow, 1) +
+      clearLine() +
+      restoreCursor(),
+  );
+}
+
+function setupScrollRegion() {
+  updateLayout();
+  process.stdout.write(setScrollRegion(1, statusBarRow - 1));
+  process.stdout.write(moveTo(1, 1));
+}
+
+function writeInScrollRegion(text: string) {
+  process.stdout.write(
+    saveCursor() +
+      moveTo(statusBarRow - 1, 1) +
+      "\n" +
+      text +
+      restoreCursor(),
+  );
+}
+
+export function _initUI(title: string): void {
+  if (initialized) return;
+  initialized = true;
+  config.title = title;
+  config.statusRight = "";
+
+  setupScrollRegion();
+  renderStatusBar();
+  renderInputPrompt("");
+  renderHintBar("");
+
+  process.stdout.on("resize", () => {
+    updateLayout();
+    process.stdout.write(setScrollRegion(1, statusBarRow - 1));
+    renderStatusBar();
+  });
+
+  const cleanup = () => {
+    if (initialized) {
+      _destroyUI();
+    }
+  };
+  process.on("exit", cleanup);
+  process.on("SIGINT", () => {
+    cleanup();
+    process.exit(0);
+  });
+}
+
+export function _destroyUI(): void {
+  if (!initialized) return;
+  initialized = false;
+  if (spinnerInterval) {
+    clearInterval(spinnerInterval);
+    spinnerInterval = null;
+  }
+  if (activeRl) {
+    activeRl.close();
+    activeRl = null;
+  }
+  process.stdout.write(resetScrollRegion());
+  clearBottomArea();
+  process.stdout.write(moveTo(rows, 1) + "\n");
+}
+
+export function _log(message: string): void {
+  if (!initialized) return;
+  writeInScrollRegion(message);
+  renderStatusBar();
+}
+
+export function _status(left: string, right: string): void {
+  if (!initialized) return;
+  currentStatusLeft = left;
+  currentStatusRight = right;
+  renderStatusBar();
+}
+
+export function _chat(role: string, message: string): void {
+  if (!initialized) return;
+  const colorFn = role === "user" ? color.blue.bold : role === "agent" ? color.green.bold : color.yellow.bold;
+  const prefix = colorFn(role);
+  const lines = message.split("\n");
+  writeInScrollRegion(`${prefix}: ${lines[0]}`);
+  for (let i = 1; i < lines.length; i++) {
+    writeInScrollRegion(`  ${lines[i]}`);
+  }
+  renderStatusBar();
+}
+
+export function _code(filename: string, content: string): void {
+  if (!initialized) return;
+  writeInScrollRegion(color.dim(`┌─ ${filename} ${"─".repeat(Math.max(0, cols - filename.length - 6))}`));
+  const lines = content.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const lineNum = String(i + 1).padStart(4, " ");
+    writeInScrollRegion(`${color.dim(`│${lineNum}`)} ${lines[i]}`);
+  }
+  writeInScrollRegion(color.dim(`└${"─".repeat(Math.max(0, cols - 2))}`));
+  renderStatusBar();
+}
+
+export function _diff(filename: string, content: string): void {
+  if (!initialized) return;
+  writeInScrollRegion(color.dim(`┌─ ${filename} ${"─".repeat(Math.max(0, cols - filename.length - 6))}`));
+  const lines = content.split("\n");
+  for (const line of lines) {
+    if (line.startsWith("+")) {
+      writeInScrollRegion(color.green(`│ ${line}`));
+    } else if (line.startsWith("-")) {
+      writeInScrollRegion(color.red(`│ ${line}`));
+    } else {
+      writeInScrollRegion(`${color.dim("│")} ${line}`);
+    }
+  }
+  writeInScrollRegion(color.dim(`└${"─".repeat(Math.max(0, cols - 2))}`));
+  renderStatusBar();
+}
+
+export function _separator(label: string): void {
+  if (!initialized) return;
+  const padding = Math.max(0, cols - label.length - 4);
+  writeInScrollRegion(color.dim(`── ${label} ${"─".repeat(padding)}`));
+  renderStatusBar();
+}
+
+export function _startSpinner(text: string): void {
+  if (!initialized || spinnerInterval) return;
+  spinnerText = text;
+  spinnerIdx = 0;
+  const update = () => {
+    const frame = SPINNER_FRAMES[spinnerIdx % SPINNER_FRAMES.length];
+    renderInputPrompt(`${color.cyan(frame)} ${spinnerText}`);
+    spinnerIdx++;
+  };
+  update();
+  spinnerInterval = setInterval(update, 80);
+}
+
+export function _stopSpinner(): void {
+  if (spinnerInterval) {
+    clearInterval(spinnerInterval);
+    spinnerInterval = null;
+  }
+  if (initialized) {
+    renderInputPrompt("");
+  }
+}
+
+export function _prompt(question: string): Promise<string> {
+  if (!initialized) {
+    return Promise.resolve("");
+  }
+  _stopSpinner();
+
+  return new Promise<string>((resolve) => {
+    process.stdout.write(
+      moveTo(inputRow, 1) + clearLine() + color.bold("❯") + " ",
+    );
+    renderHintBar(question);
+
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      terminal: true,
+      prompt: "",
+    });
+    activeRl = rl;
+
+    process.stdout.write(moveTo(inputRow, 4));
+
+    rl.on("line", (answer: string) => {
+      rl.close();
+      activeRl = null;
+      process.stdout.write(
+        moveTo(inputRow, 1) + clearLine() + moveTo(hintRow, 1) + clearLine(),
+      );
+      renderInputPrompt("");
+      renderHintBar("");
+      resolve(answer);
+    });
+  });
+}

@@ -1550,15 +1550,18 @@ _exprParser = exprParser;
 export const returnStatementParser: Parser<ReturnStatement> = label("a return statement", withLoc(seqC(
   set("type", "returnStatement"),
   str("return"),
-  captureCaptures(
-    parseError(
-      "expected a return value (expression, prompt, or literal)",
-      optionalSpaces,
-      capture(exprParser, "value"),
-      optionalSemicolon,
-      optionalSpacesOrNewline,
+  not(varNameChar),
+  optional(
+    captureCaptures(
+      seqC(
+        optionalSpaces,
+        capture(exprParser, "value"),
+      ),
     ),
   ),
+  optionalSpaces,
+  optionalSemicolon,
+  optionalSpacesOrNewline,
 )));
 
 // =============================================================================

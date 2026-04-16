@@ -248,10 +248,13 @@ describe("returnStatementParser", () => {
       },
     },
 
+    // Bare return (no value)
+    { input: "return", expected: { success: true, result: { type: "returnStatement" } } },
+    { input: "return;", expected: { success: true, result: { type: "returnStatement" } } },
+    { input: "return ", expected: { success: true, result: { type: "returnStatement" } } },
+    { input: "return ;", expected: { success: true, result: { type: "returnStatement" } } },
+
     // Failure cases
-    { input: "return", expected: { success: false }, throws: true },
-    { input: "return;", expected: { success: false }, throws: true },
-    { input: "return ", expected: { success: false }, throws: true },
     { input: "retur 5", expected: { success: false } },
     { input: "", expected: { success: false } },
     { input: "42", expected: { success: false } },

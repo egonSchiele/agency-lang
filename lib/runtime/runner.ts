@@ -1,6 +1,7 @@
 import type { State, BranchState } from "./state/stateStack.js";
 import { StateStack } from "./state/stateStack.js";
 import type { RuntimeContext } from "./state/context.js";
+import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { HandlerFn } from "./types.js";
 import { isInterrupt } from "./interrupts.js";
 import { __pipeBind } from "./result.js";
@@ -48,11 +49,11 @@ export class Runner {
   }
 
   /** Return checkpoint metadata for the current step. */
-  getCheckpointInfo(): { moduleId: string; scopeName: string; stepPath: string } {
+  getCheckpointInfo(): SourceLocationOpts {
     return {
       moduleId: this.moduleId,
       scopeName: this.scopeName,
-      stepPath: this.key(),
+      stepPath: this.path.join("."),
     };
   }
 
@@ -110,8 +111,7 @@ export class Runner {
    */
   private async maybeDebugHook(id: number, label: string | null = null, isUserAdded: boolean = false): Promise<boolean> {
     if (!this.ctx.debuggerState && !this.ctx.traceWriter) return false;
-    if (this.ctx._insideToolCall) return false;
-
+    if (this.ctx.isInsideToolCall()) return false;
 
     // On resume after a debug pause, skip the hook.
     // Don't delete the flag yet — step() will clean it up after the

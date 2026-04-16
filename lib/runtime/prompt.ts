@@ -11,6 +11,7 @@ import { updateTokenStats, extractResponse } from "./utils.js";
 import { callHook } from "./hooks.js";
 import { handleStreamingResponse, isGenerator } from "./streaming.js";
 import type { RuntimeContext } from "./state/context.js";
+import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import { color } from "@/utils/termcolors.js";
 import { GraphState } from "./types.js";
 import { PromptResult, Result, StreamChunk, ToolCallJSON } from "smoltalk";
@@ -254,7 +255,7 @@ async function executeToolCalls({
       });
 
       const toolCallStartTime = performance.now();
-      ctx.setInsideToolCall(true);
+      ctx.enterToolCall();
       try {
         result = await handler.execute(...params);
       } catch (error: unknown) {
@@ -299,7 +300,7 @@ async function executeToolCalls({
         }
         continue;
       } finally {
-        ctx.setInsideToolCall(false);
+        ctx.exitToolCall();
       }
       // Tool returned a failure Result — handle retry logic
       if (isFailure(result)) {
@@ -404,7 +405,7 @@ export async function runPrompt(args: {
   maxToolCallRounds?: number;
   interruptData?: InterruptData;
   removedTools?: string[];
-  checkpointInfo?: { moduleId: string; scopeName: string; stepPath: string };
+  checkpointInfo?: SourceLocationOpts;
 }): Promise<any> {
   const {
     ctx,

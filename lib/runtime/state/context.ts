@@ -41,7 +41,7 @@ export class RuntimeContext<T> {
   as the tool call is getting executed, but for now, we just use this flag
   so that if we're inside a tool call, we don't halt execution and we don't
   emit a checkpoint.*/
-  _insideToolCall: boolean;
+  _toolCallDepth: number;
   debuggerState: DebuggerState | null;
   traceWriter: TraceWriter | null;
 
@@ -85,7 +85,7 @@ export class RuntimeContext<T> {
     // rewindFrom sets this flag so the first sentinel skips, then clears it.
     this._skipNextCheckpoint = false;
     this._restoreCount = 0;
-    this._insideToolCall = false;
+    this._toolCallDepth = 0;
     this.pendingPromises = new PendingPromiseStore();
     this.debuggerState = null;
     this.traceWriter = null;
@@ -121,7 +121,7 @@ export class RuntimeContext<T> {
     execCtx.onStreamLock = false;
     execCtx._skipNextCheckpoint = false;
     execCtx._restoreCount = 0;
-    execCtx._insideToolCall = false;
+    execCtx._toolCallDepth = 0;
     execCtx.debuggerState = this.debuggerState;
     execCtx.traceWriter = this.traceWriter;
     execCtx.pendingPromises = new PendingPromiseStore();
@@ -171,8 +171,16 @@ export class RuntimeContext<T> {
     this.handlers.pop();
   }
 
-  setInsideToolCall(value: boolean): void {
-    this._insideToolCall = value;
+  enterToolCall(): void {
+    this._toolCallDepth++;
+  }
+
+  exitToolCall(): void {
+    if (this._toolCallDepth > 0) this._toolCallDepth--;
+  }
+
+  isInsideToolCall(): boolean {
+    return this._toolCallDepth > 0;
   }
 
   registerClass(name: string, cls: ClassRegistry[string]): void {

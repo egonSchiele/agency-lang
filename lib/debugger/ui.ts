@@ -448,6 +448,7 @@ export class DebuggerUI implements DebuggerIO {
     // Format messages
     const content = threadData.messages
       .map((m) => {
+        // if its not a string,call json.strinfigy
         const truncated =
           m.content.length > 200 ? m.content.slice(0, 197) + "..." : m.content;
         return `  ${this.bold(`[${this.fmt(m.role)}]`)} ${this.fmt(truncated)}`;

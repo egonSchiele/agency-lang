@@ -1,4 +1,4 @@
-import { nativeTypeReplacer, nativeTypeReviver } from "../utils.js";
+import { nativeTypeReplacer, nativeTypeReviver } from "../revivers/index.js";
 
 export type GlobalStoreJSON = {
   store: Record<string, Record<string, any>>;

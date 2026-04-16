@@ -21,10 +21,10 @@ for (const r of revivers) {
 }
 
 // Must be a regular function (not arrow) so `this` is the parent object.
-// JSON.stringify calls toJSON() on Date/URL/etc before the replacer sees
-// the value, so we check the raw value via this[key] instead.
+// When value is a primitive but this[key] is an object, it means toJSON()
+// was called (Date, URL). Fall back to this[key] to get the raw value.
 export function nativeTypeReplacer(this: any, key: string, value: unknown): unknown {
-  const raw = key === "" ? value : this[key];
+  const raw = typeof value === "object" && value !== null ? value : (key === "" ? value : this[key]);
   if (typeof raw !== "object" || raw === null) return value;
   for (const r of revivers) {
     if (r.isInstance(raw)) {

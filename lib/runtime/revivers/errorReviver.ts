@@ -35,6 +35,7 @@ export class ErrorReviver implements BaseReviver<Error> {
   revive(value: Record<string, unknown>): Error {
     const Ctor = errorConstructors[value.name as string] ?? Error;
     const error = new Ctor(value.message as string);
+    error.name = value.name as string;
     if (typeof value.stack === "string") {
       error.stack = value.stack;
     }

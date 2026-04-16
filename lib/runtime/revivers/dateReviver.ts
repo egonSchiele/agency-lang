@@ -10,14 +10,18 @@ export class DateReviver implements BaseReviver<Date> {
   }
 
   serialize(value: Date): Record<string, unknown> {
-    return { __nativeType: this.nativeTypeName(), iso: value.toISOString() };
+    const time = value.getTime();
+    return {
+      __nativeType: this.nativeTypeName(),
+      iso: Number.isNaN(time) ? null : value.toISOString(),
+    };
   }
 
   validate(value: Record<string, unknown>): boolean {
-    return typeof value.iso === "string";
+    return typeof value.iso === "string" || value.iso === null;
   }
 
   revive(value: Record<string, unknown>): Date {
-    return new Date(value.iso as string);
+    return value.iso === null ? new Date(NaN) : new Date(value.iso as string);
   }
 }

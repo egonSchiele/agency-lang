@@ -4,6 +4,7 @@ import {
   interrupt,
   Interrupt,
   InterruptData,
+  isDebugger,
   isInterrupt,
   isRejected,
 } from "./interrupts.js";
@@ -151,10 +152,10 @@ async function _runPrompt({
 
 type ExecuteToolCallsResult =
   | {
-      isInterrupt: true;
-      interrupt: Interrupt;
-      messages: MessageThread;
-    }
+    isInterrupt: true;
+    interrupt: Interrupt;
+    messages: MessageThread;
+  }
   | { isInterrupt: false; messages: MessageThread };
 
 async function executeToolCalls({
@@ -509,13 +510,18 @@ export async function runPrompt(args: {
         model: clientConfig.model,
       });
 
-      const checkpointId = ctx.checkpoints.create(ctx, {
-        moduleId: checkpointInfo?.moduleId ?? "",
-        scopeName: checkpointInfo?.scopeName ?? "",
-        stepPath: checkpointInfo?.stepPath ?? "",
-      });
-      interrupt.checkpointId = checkpointId;
-      interrupt.checkpoint = ctx.checkpoints.get(checkpointId);
+      if (interrupt.debugger === false) {
+        // For real user interrupts, create a checkpoint at the LLM call site
+        // so we can resume the conversation. Debug interrupts keep their
+        // original checkpoint from debugStep (pointing to the tool's source).
+        const checkpointId = ctx.checkpoints.create(ctx, {
+          moduleId: checkpointInfo?.moduleId ?? "",
+          scopeName: checkpointInfo?.scopeName ?? "",
+          stepPath: checkpointInfo?.stepPath ?? "",
+        });
+        interrupt.checkpointId = checkpointId;
+        interrupt.checkpoint = ctx.checkpoints.get(checkpointId);
+      }
       return interrupt;
     }
 

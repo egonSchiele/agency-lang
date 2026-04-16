@@ -207,8 +207,10 @@ export async function respondToInterrupt(args: {
 
   let interruptData: InterruptData | undefined = interrupt.interruptData || {};
 
-  if (interrupt.debugger) {
-    // Debugger-generated interrupts don't carry tool-call data
+  if (interrupt.debugger && !interrupt.interruptData?.toolCall) {
+    // Debugger-generated interrupts don't carry tool-call data,
+    // unless the debug pause happened inside a tool call during an LLM call —
+    // in that case, keep interruptData so runPrompt can resume mid-conversation.
     interruptData = undefined;
   } else {
     interruptData.interruptResponse = interruptResponse;

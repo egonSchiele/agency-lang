@@ -1,9 +1,0 @@
-foo = [1, 2, 3]
-bar = {
-  name:"agency",
-  version:foo
-}
-
-node start() {
-  llm("hello world")
-}

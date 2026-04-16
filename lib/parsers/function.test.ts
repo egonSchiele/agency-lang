@@ -3375,3 +3375,65 @@ describe("classMethodParser with safe keyword", () => {
     expect(classDef.methods[1].safe).toBeUndefined();
   });
 });
+
+describe("callback declarations", () => {
+  it("parses a basic callback", () => {
+    const result = functionParser(`callback onLLMCallEnd(data) { log(data) }`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.type).toBe("function");
+      expect(result.result.callback).toBe(true);
+      expect(result.result.functionName).toBe("onLLMCallEnd");
+      expect(result.result.parameters).toHaveLength(1);
+      expect(result.result.parameters[0].name).toBe("data");
+    }
+  });
+
+  it("throws on unknown callback names", () => {
+    expect(() => functionParser(`callback onFoo(data) { log(data) }`)).toThrow("Unknown callback 'onFoo'");
+  });
+
+  it("throws on exported callbacks", () => {
+    expect(() => functionParser(`export callback onLLMCallEnd(data) { log(data) }`)).toThrow("cannot be exported");
+  });
+
+  it("throws on safe callbacks", () => {
+    expect(() => functionParser(`safe callback onLLMCallEnd(data) { log(data) }`)).toThrow("cannot be marked safe");
+  });
+
+  it("throws when callback has no parameters", () => {
+    expect(() => functionParser(`callback onNodeStart() { log("hi") }`)).toThrow("must declare exactly one parameter");
+  });
+
+  it("throws when callback has multiple parameters", () => {
+    expect(() => functionParser(`callback onNodeStart(a, b) { log(a) }`)).toThrow("must declare exactly one parameter");
+  });
+
+  it("throws when callback parameter is variadic", () => {
+    expect(() => functionParser(`callback onNodeStart(...data) { log(data) }`)).toThrow("cannot be variadic");
+  });
+
+  it("parses all valid callback names", () => {
+    const validNames = [
+      "onAgentStart", "onAgentEnd", "onNodeStart", "onNodeEnd",
+      "onLLMCallStart", "onLLMCallEnd", "onFunctionStart", "onFunctionEnd",
+      "onToolCallStart", "onToolCallEnd", "onStream", "onCheckpoint",
+    ];
+    for (const name of validNames) {
+      const result = functionParser(`callback ${name}(data) { log(data) }`);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.callback).toBe(true);
+        expect(result.result.functionName).toBe(name);
+      }
+    }
+  });
+
+  it("def functions do not have callback set", () => {
+    const result = functionParser(`def test() { log("hi") }`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.callback).toBeUndefined();
+    }
+  });
+});

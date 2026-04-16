@@ -397,7 +397,7 @@ export class TypeScriptBuilder {
     // Pass 5: Generate code for tools
     const functionDefs: FunctionDefinition[] = [];
     for (const node of program.nodes) {
-      if (node.type === "function") {
+      if (node.type === "function" && !node.callback) {
         functionDefs.push(node);
         this.generatedStatements.push(this.processTool(node));
       }
@@ -1482,8 +1482,9 @@ export class TypeScriptBuilder {
     functionName: string;
     parameters: FunctionParameter[];
     bodyCode: TsNode[];
+    skipHooks?: boolean;
   }): TsNode[] {
-    const { functionName, parameters, bodyCode } = opts;
+    const { functionName, parameters, bodyCode, skipHooks } = opts;
     const args = parameters.map((p) => p.name);
 
     // Build args object for hook data
@@ -1522,13 +1523,15 @@ export class TypeScriptBuilder {
         ts.await(ts.call(ts.id("__initializeGlobals"), [ts.runtime.ctx])),
       ),
 
-      ts.time("__funcStartTime"),
-      ts.callHook("onFunctionStart", {
-        functionName: ts.str(functionName),
-        args: ts.obj(argsObj),
-        isBuiltin: ts.bool(false),
-        moduleId: ts.str(this.moduleId),
-      }),
+      ...(skipHooks ? [] : [
+        ts.time("__funcStartTime"),
+        ts.callHook("onFunctionStart", {
+          functionName: ts.str(functionName),
+          args: ts.obj(argsObj),
+          isBuiltin: ts.bool(false),
+          moduleId: ts.str(this.moduleId),
+        }),
+      ]),
     ];
 
     // Param assignments to stack
@@ -1583,17 +1586,19 @@ export class TypeScriptBuilder {
         // finally block: pop state stack and conditionally fire onFunctionEnd.
         ts.statements([
           ts.raw("if (!__state?.isForked) { __ctx.stateStack.pop() }"),
-          ts.if(
-            ts.id("__functionCompleted"),
-            ts.callHook("onFunctionEnd", {
-              functionName: ts.str(functionName),
-              timeTaken: $(ts.id("performance"))
-                .prop("now")
-                .call()
-                .minus(ts.id("__funcStartTime"))
-                .done(),
-            }),
-          ),
+          ...(skipHooks ? [] : [
+            ts.if(
+              ts.id("__functionCompleted"),
+              ts.callHook("onFunctionEnd", {
+                functionName: ts.str(functionName),
+                timeTaken: $(ts.id("performance"))
+                  .prop("now")
+                  .call()
+                  .minus(ts.id("__funcStartTime"))
+                  .done(),
+              }),
+            ),
+          ]),
         ]),
       ),
     );
@@ -1630,12 +1635,21 @@ export class TypeScriptBuilder {
       defaultValue: ts.id("undefined"),
     });
 
-    const setupStmts = this.buildFunctionBody({ functionName, parameters, bodyCode });
+    const setupStmts = this.buildFunctionBody({ functionName, parameters, bodyCode, skipHooks: node.callback });
 
-    return ts.functionDecl(functionName, fnParams, ts.statements(setupStmts), {
+    const funcDecl = ts.functionDecl(functionName, fnParams, ts.statements(setupStmts), {
       async: true,
       export: !!node.exported,
     });
+
+    if (node.callback) {
+      return ts.statements([
+        funcDecl,
+        ts.raw(`__globalCtx._registeredCallbacks.${functionName} = ${functionName};`),
+      ]);
+    }
+
+    return funcDecl;
   }
 
   private processStatement(node: AgencyNode): TsNode {

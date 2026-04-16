@@ -63,6 +63,7 @@ import {
   Expression,
   FunctionCall,
   FunctionDefinition,
+  VALID_CALLBACK_NAMES,
   FunctionParameter,
   InterpolationSegment,
   Literal,
@@ -2368,7 +2369,7 @@ const _baseFunctionParser: Parser<FunctionDefinition> = trace(
   "_baseFunctionParser",
   seqC(
     set("type", "function"),
-    str("def"),
+    capture(or(str("callback"), str("def")), "keyword"),
     many1(space),
     capture(many1Till(char("(")), "functionName"),
     char("("),
@@ -2423,9 +2424,41 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   const baseResult = _baseFunctionParser(safeResult.rest);
   if (!baseResult.success) return baseResult;
 
-  const result = { ...baseResult.result };
+  const { keyword, ...rest } = baseResult.result as FunctionDefinition & { keyword?: string };
+  const result = { ...rest };
+  const isCallback = keyword === "callback";
   if (isExported) result.exported = true;
   if (isSafe) result.safe = true;
+  if (isCallback) {
+    result.callback = true;
+    if (isExported) {
+      throw new Error(`Callback '${result.functionName}' cannot be exported`);
+    }
+    if (isSafe) {
+      throw new Error(`Callback '${result.functionName}' cannot be marked safe`);
+    }
+    const validNames: ReadonlySet<string> = new Set(VALID_CALLBACK_NAMES);
+    if (!validNames.has(result.functionName)) {
+      throw new Error(
+        `Unknown callback '${result.functionName}'. Valid callbacks: ${VALID_CALLBACK_NAMES.join(", ")}`,
+      );
+    }
+    if (result.parameters.length !== 1) {
+      throw new Error(
+        `Callback '${result.functionName}' must declare exactly one parameter`,
+      );
+    }
+    if (result.parameters[0].variadic) {
+      throw new Error(
+        `Callback '${result.functionName}' parameter '${result.parameters[0].name}' cannot be variadic`,
+      );
+    }
+    if (result.parameters[0].defaultValue) {
+      throw new Error(
+        `Callback '${result.functionName}' parameter '${result.parameters[0].name}' cannot have a default value`,
+      );
+    }
+  }
 
   // Validate parameter ordering: required → optional (with defaults) → variadic
   const params = result.parameters;

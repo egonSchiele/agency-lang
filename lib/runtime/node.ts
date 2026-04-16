@@ -100,7 +100,11 @@ export async function runNode({
   if (initializeGlobals) {
     await initializeGlobals(execCtx);
   }
-  execCtx.callbacks = callbacks || {};
+  execCtx.installRegisteredCallbacks(ctx);
+  // Externally-passed callbacks override registered ones and receive only data.
+  if (callbacks) {
+    Object.assign(execCtx.callbacks, callbacks);
+  }
   await callHook({
     callbacks: execCtx.callbacks,
     name: "onAgentStart",

@@ -53,6 +53,15 @@ export class RuntimeContext<T> {
   // this is the directory that the runtime is running in. We need this to be able to read files relative to the runtime.
   dirname: string;
 
+  // Callback functions registered via the `callback` keyword in Agency code.
+  // Stored separately from `callbacks` so that runNode can wrap them with the
+  // current execution context. We can't register them directly on `callbacks`
+  // because they need access to the per-execution ctx (for globals, state stack,
+  // etc.), but at registration time only __globalCtx exists. External TypeScript
+  // callers pass callbacks via runNode's `callbacks` option and should NOT receive
+  // the execution context — wrapping at execution time keeps that boundary clean.
+  _registeredCallbacks: Partial<Record<keyof AgencyCallbacks, (...args: any[]) => any>> = {};
+
   // class registry for serialization/deserialization of Agency class instances
   classRegistry: ClassRegistry = {};
 
@@ -118,6 +127,7 @@ export class RuntimeContext<T> {
     execCtx.checkpoints = new CheckpointStore(this.maxRestores);
     execCtx.handlers = [];
     execCtx.callbacks = {};
+    execCtx._registeredCallbacks = {};
     execCtx.onStreamLock = false;
     execCtx._skipNextCheckpoint = false;
     execCtx._restoreCount = 0;
@@ -164,6 +174,19 @@ export class RuntimeContext<T> {
   async threads. But we could just replace all calls to `forkStack`
   with `new StateStack()`.
   */
+  /**
+   * Install Agency-defined callbacks (from `callback` declarations) onto this
+   * execution context, wrapping each one to inject ctx so it accesses the
+   * correct per-execution globals/state.
+   */
+  installRegisteredCallbacks(source: RuntimeContext<T>): void {
+    for (const name in source._registeredCallbacks) {
+      const fn = source._registeredCallbacks[name as keyof AgencyCallbacks]!;
+      (this.callbacks as any)[name] =
+        (data: any) => fn(data, { ctx: this });
+    }
+  }
+
   pushHandler(fn: HandlerFn): void {
     this.handlers.push(fn);
   }

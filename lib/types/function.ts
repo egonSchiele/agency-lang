@@ -18,6 +18,23 @@ export type FunctionParameter = {
   defaultValue?: Literal | AgencyArray | AgencyObject;
 };
 
+export const VALID_CALLBACK_NAMES = [
+  "onAgentStart",
+  "onAgentEnd",
+  "onNodeStart",
+  "onNodeEnd",
+  "onLLMCallStart",
+  "onLLMCallEnd",
+  "onFunctionStart",
+  "onFunctionEnd",
+  "onToolCallStart",
+  "onToolCallEnd",
+  "onStream",
+  "onCheckpoint",
+] as const;
+
+export type CallbackName = (typeof VALID_CALLBACK_NAMES)[number];
+
 export type FunctionDefinition = BaseNode & {
   type: "function";
   functionName: string;
@@ -28,6 +45,7 @@ export type FunctionDefinition = BaseNode & {
   async?: boolean;
   safe?: boolean;
   exported?: boolean;
+  callback?: boolean;
   tags?: Tag[];
 };
 

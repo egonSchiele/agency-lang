@@ -1,0 +1,14 @@
+let callbackFired: boolean = false
+
+def helper(): string {
+  return "hello"
+}
+
+callback onFunctionStart(data) {
+  callbackFired = true
+}
+
+node main() {
+  let result = helper()
+  return callbackFired
+}

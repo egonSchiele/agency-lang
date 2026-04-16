@@ -100,7 +100,17 @@ export async function runNode({
   if (initializeGlobals) {
     await initializeGlobals(execCtx);
   }
-  execCtx.callbacks = callbacks || {};
+  // Wrap Agency-defined callbacks (registered via the `callback` keyword) to
+  // inject the current execution context. This gives them access to the right
+  // globals/state without exposing ctx to external TypeScript callers.
+  for (const [name, fn] of Object.entries(ctx._registeredCallbacks)) {
+    execCtx.callbacks[name as keyof AgencyCallbacks] =
+      ((data: any) => fn(data, { ctx: execCtx })) as any;
+  }
+  // Externally-passed callbacks override registered ones and receive only data.
+  if (callbacks) {
+    Object.assign(execCtx.callbacks, callbacks);
+  }
   await callHook({
     callbacks: execCtx.callbacks,
     name: "onAgentStart",

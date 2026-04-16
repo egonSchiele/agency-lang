@@ -3375,3 +3375,56 @@ describe("classMethodParser with safe keyword", () => {
     expect(classDef.methods[1].safe).toBeUndefined();
   });
 });
+
+describe("callback declarations", () => {
+  it("parses a basic callback", () => {
+    const result = functionParser(`callback onLLMCallEnd(data) { log(data) }`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.type).toBe("function");
+      expect(result.result.callback).toBe(true);
+      expect(result.result.functionName).toBe("onLLMCallEnd");
+      expect(result.result.parameters).toHaveLength(1);
+      expect(result.result.parameters[0].name).toBe("data");
+    }
+  });
+
+  it("rejects unknown callback names", () => {
+    const result = functionParser(`callback onFoo(data) { log(data) }`);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects exported callbacks", () => {
+    const result = functionParser(`export callback onLLMCallEnd(data) { log(data) }`);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects safe callbacks", () => {
+    const result = functionParser(`safe callback onLLMCallEnd(data) { log(data) }`);
+    expect(result.success).toBe(false);
+  });
+
+  it("parses all valid callback names", () => {
+    const validNames = [
+      "onAgentStart", "onAgentEnd", "onNodeStart", "onNodeEnd",
+      "onLLMCallStart", "onLLMCallEnd", "onFunctionStart", "onFunctionEnd",
+      "onToolCallStart", "onToolCallEnd", "onStream", "onCheckpoint",
+    ];
+    for (const name of validNames) {
+      const result = functionParser(`callback ${name}(data) { log(data) }`);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.callback).toBe(true);
+        expect(result.result.functionName).toBe(name);
+      }
+    }
+  });
+
+  it("def functions do not have callback set", () => {
+    const result = functionParser(`def test() { log("hi") }`);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.callback).toBeUndefined();
+    }
+  });
+});

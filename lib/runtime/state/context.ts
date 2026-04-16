@@ -53,6 +53,15 @@ export class RuntimeContext<T> {
   // this is the directory that the runtime is running in. We need this to be able to read files relative to the runtime.
   dirname: string;
 
+  // Callback functions registered via the `callback` keyword in Agency code.
+  // Stored separately from `callbacks` so that runNode can wrap them with the
+  // current execution context. We can't register them directly on `callbacks`
+  // because they need access to the per-execution ctx (for globals, state stack,
+  // etc.), but at registration time only __globalCtx exists. External TypeScript
+  // callers pass callbacks via runNode's `callbacks` option and should NOT receive
+  // the execution context — wrapping at execution time keeps that boundary clean.
+  _registeredCallbacks: Record<string, Function> = {};
+
   // class registry for serialization/deserialization of Agency class instances
   classRegistry: ClassRegistry = {};
 

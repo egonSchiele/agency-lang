@@ -63,6 +63,7 @@ import {
   Expression,
   FunctionCall,
   FunctionDefinition,
+  VALID_CALLBACK_NAMES,
   FunctionParameter,
   InterpolationSegment,
   Literal,
@@ -2368,7 +2369,7 @@ const _baseFunctionParser: Parser<FunctionDefinition> = trace(
   "_baseFunctionParser",
   seqC(
     set("type", "function"),
-    str("def"),
+    capture(or(str("callback"), str("def")), "keyword"),
     many1(space),
     capture(many1Till(char("(")), "functionName"),
     char("("),
@@ -2424,8 +2425,25 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   if (!baseResult.success) return baseResult;
 
   const result = { ...baseResult.result };
+  const isCallback = (result as any).keyword === "callback";
+  delete (result as any).keyword;
   if (isExported) result.exported = true;
   if (isSafe) result.safe = true;
+  if (isCallback) {
+    result.callback = true;
+    if (isExported) {
+      return failure(`Callback '${result.functionName}' cannot be exported`, input);
+    }
+    if (isSafe) {
+      return failure(`Callback '${result.functionName}' cannot be marked safe`, input);
+    }
+    if (!VALID_CALLBACK_NAMES.includes(result.functionName as any)) {
+      return failure(
+        `Unknown callback '${result.functionName}'. Valid callbacks: ${VALID_CALLBACK_NAMES.join(", ")}`,
+        input,
+      );
+    }
+  }
 
   // Validate parameter ordering: required → optional (with defaults) → variadic
   const params = result.parameters;

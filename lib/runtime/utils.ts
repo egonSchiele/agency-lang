@@ -3,7 +3,7 @@ import { GlobalStore } from "./state/globalStore.js";
 import { ThreadStore } from "./index.js";
 import { RunNodeResult } from "./types.js";
 
-function nativeTypeReplacer(_key: string, value: unknown): unknown {
+export function nativeTypeReplacer(_key: string, value: unknown): unknown {
   if (value instanceof Set) {
     return { __nativeType: "Set", values: Array.from(value) };
   }
@@ -13,7 +13,7 @@ function nativeTypeReplacer(_key: string, value: unknown): unknown {
   return value;
 }
 
-function nativeTypeReviver(_key: string, value: unknown): unknown {
+export function nativeTypeReviver(_key: string, value: unknown): unknown {
   if (value && typeof value === "object" && "__nativeType" in value) {
     const v = value as Record<string, unknown>;
     if (v.__nativeType === "Set") return new Set(v.values as unknown[]);
@@ -102,7 +102,8 @@ export function createReturnObject<T>({
       messages: result.messages,
       data: result.data,
       tokens: globals.get(GlobalStore.INTERNAL_MODULE, "__tokenStats"),
-    }),
+    }, nativeTypeReplacer),
+    nativeTypeReviver,
   );
 }
 

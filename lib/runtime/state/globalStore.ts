@@ -1,3 +1,5 @@
+import { nativeTypeReplacer, nativeTypeReviver } from "../utils.js";
+
 export type GlobalStoreJSON = {
   store: Record<string, Record<string, any>>;
   initializedModules: string[];
@@ -28,7 +30,7 @@ export class GlobalStore {
     return JSON.parse(JSON.stringify({
       store: this.store,
       initializedModules: [...this.initializedModules],
-    }));
+    }, nativeTypeReplacer), nativeTypeReviver);
   }
 
   getTokenStats(): any {

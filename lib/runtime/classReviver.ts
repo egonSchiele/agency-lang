@@ -1,3 +1,5 @@
+import { nativeTypeReplacer, nativeTypeReviver } from "./utils.js";
+
 export type ClassRegistry = Record<string, { fromJSON: (data: any) => any }>;
 
 /**
@@ -22,6 +24,9 @@ export function createClassReviver(classRegistry: ClassRegistry) {
  */
 export function reviveWithClasses<T>(data: T, classRegistry: ClassRegistry): T {
   if (Object.keys(classRegistry).length === 0) return data;
-  const reviver = createClassReviver(classRegistry);
-  return JSON.parse(JSON.stringify(data), reviver);
+  const classReviver = createClassReviver(classRegistry);
+  return JSON.parse(JSON.stringify(data, nativeTypeReplacer), (key, value) => {
+    const revived = nativeTypeReviver(key, value);
+    return classReviver(key, revived);
+  });
 }

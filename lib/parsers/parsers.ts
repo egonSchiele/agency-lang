@@ -1547,19 +1547,35 @@ export const exprParser: Parser<Expression> = label("an expression", buildExpres
 // Wire up the circular reference for parenParser
 _exprParser = exprParser;
 
-export const returnStatementParser: Parser<ReturnStatement> = label("a return statement", withLoc(seqC(
-  set("type", "returnStatement"),
-  str("return"),
-  captureCaptures(
-    parseError(
-      "expected a return value (expression, prompt, or literal)",
-      optionalSpaces,
-      capture(exprParser, "value"),
-      optionalSemicolon,
-      optionalSpacesOrNewline,
-    ),
-  ),
-)));
+export const returnStatementParser: Parser<ReturnStatement> = label("a return statement", withLoc((input: string) => {
+  const prefixParser = seqC(
+    set("type", "returnStatement"),
+    str("return"),
+  );
+  const prefixResult = prefixParser(input);
+  if (!prefixResult.success) return prefixResult;
+
+  // Require word boundary so "returnValue" isn't parsed as "return" + "Value"
+  if (!not(varNameChar)(prefixResult.rest).success) {
+    return failure("expected whitespace after return", input);
+  }
+
+  // Try to parse a return value; if none, bare "return" is valid
+  const withValue = seqC(
+    optionalSpaces,
+    capture(exprParser, "value"),
+    optionalSemicolon,
+    optionalSpacesOrNewline,
+  )(prefixResult.rest);
+
+  if (withValue.success) {
+    return success({ ...prefixResult.result, ...withValue.result }, withValue.rest);
+  }
+
+  // Bare return (no value)
+  const trailing = seqC(optionalSemicolon, optionalSpacesOrNewline)(prefixResult.rest);
+  return success(prefixResult.result, trailing.success ? trailing.rest : prefixResult.rest);
+}));
 
 // =============================================================================
 // binop.ts

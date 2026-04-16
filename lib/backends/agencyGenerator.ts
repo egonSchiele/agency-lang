@@ -765,6 +765,7 @@ export class AgencyGenerator {
   }
 
   protected processReturnStatement(node: ReturnStatement): string {
+    if (!node.value) return this.indentStr("return");
     const valueCode = this.processNode(node.value).trim();
     return this.indentStr(`return ${valueCode}`);
   }

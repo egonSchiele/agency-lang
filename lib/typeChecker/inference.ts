@@ -59,7 +59,7 @@ export function inferReturnTypeFor(
 
     const returnValues: AgencyNode[] = [];
     for (const { node, ancestors } of walkNodes(def.body)) {
-      if (node.type === "returnStatement") {
+      if (node.type === "returnStatement" && node.value) {
         const insideNested = ancestors.some(
           (a) => a.type === "function" || a.type === "graphNode",
         );

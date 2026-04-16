@@ -216,7 +216,7 @@ export function* getAllVariablesInBody(
         }
       }
     } else if (node.type === "returnStatement") {
-      yield* getAllVariablesInBody([node.value]);
+      if (node.value) yield* getAllVariablesInBody([node.value]);
     } else if (node.type === "forLoop") {
       yield* getAllVariablesInBody([node.iterable]);
       yield* getAllVariablesInBody(node.body);
@@ -310,7 +310,7 @@ export function* walkNodes(
     } else if (node.type === "withModifier") {
       yield* walkNodes([node.statement], [...ancestors, node], scopes);
     } else if (node.type === "returnStatement") {
-      yield* walkNodes([node.value], [...ancestors, node], scopes);
+      if (node.value) yield* walkNodes([node.value], [...ancestors, node], scopes);
     } else if (node.type === "assignment") {
       /* console.log(
         color.red(

@@ -664,7 +664,7 @@ describe("TypescriptPreprocessor Core Functionality", () => {
         );
         expect(returnNode).toBeDefined();
         if (returnNode && returnNode.type === "returnStatement") {
-          expect(returnNode.value.type).toBe("functionCall");
+          expect(returnNode.value?.type).toBe("functionCall");
         }
       }
     });

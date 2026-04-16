@@ -116,7 +116,7 @@ function checkReturnTypesInScope(
   if (!scope.returnType) return;
 
   for (const { node } of walkNodes(scope.body)) {
-    if (node.type === "returnStatement") {
+    if (node.type === "returnStatement" && node.value) {
       checkType(
         node.value,
         scope.returnType,
@@ -135,7 +135,7 @@ function checkExpressionsInScope(
   for (const { node } of walkNodes(scope.body)) {
     if (node.type === "valueAccess") {
       synthType(node, scope.variableTypes, ctx);
-    } else if (node.type === "returnStatement") {
+    } else if (node.type === "returnStatement" && node.value) {
       synthType(node.value, scope.variableTypes, ctx);
     }
   }

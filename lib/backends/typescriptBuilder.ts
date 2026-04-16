@@ -2085,6 +2085,14 @@ export class TypeScriptBuilder {
   }
 
   private processReturnStatement(node: ReturnStatement): TsNode {
+    // Bare return (no value)
+    if (!node.value) {
+      if (this.insideHandlerBody) return ts.return();
+      if (this.getCurrentScope().type === "block") return ts.runnerHalt(ts.id("undefined"));
+      if (this.isInsideGraphNode) return ts.nodeResult(ts.id("undefined"));
+      return ts.functionReturn(ts.id("undefined"));
+    }
+
     // Handler bodies use plain returns — no node/function wrapping
     if (this.insideHandlerBody) {
       return ts.return(this.processNode(node.value));

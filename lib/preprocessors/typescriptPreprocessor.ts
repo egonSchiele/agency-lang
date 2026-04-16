@@ -78,7 +78,7 @@ function isLlmCall(node: AgencyNode): node is FunctionCall {
 function getLlmCall(node: AgencyNode): FunctionCall | null {
   if (isLlmCall(node)) return node;
   if (node.type === "assignment" && isLlmCall(node.value)) return node.value;
-  if (node.type === "returnStatement" && isLlmCall(node.value)) return node.value;
+  if (node.type === "returnStatement" && node.value && isLlmCall(node.value)) return node.value;
   return null;
 }
 
@@ -276,7 +276,7 @@ export class TypescriptPreprocessor {
         }
       } else if (
         node.type === "returnStatement" &&
-        node.value.type === "prompt"
+        node.value?.type === "prompt"
       ) {
         newBody.push(node);
       } else {

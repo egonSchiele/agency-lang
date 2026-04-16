@@ -30,6 +30,8 @@ export type Operator =
   | "!"
   | "typeof"
   | "void"
+  | "++"
+  | "--"
   | "instanceof"
   | "in"
   | "=~"
@@ -69,6 +71,8 @@ export const PRECEDENCE: Record<string, number> = {
   "??=": 0,
   "||=": 0,
   "&&=": 0,
+  "++": 9,
+  "--": 9,
   "!": 8,
   "typeof": 8,
   "void": 8,

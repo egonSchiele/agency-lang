@@ -941,6 +941,9 @@ export class TypeScriptBuilder {
     if (node.operator === "=~" || node.operator === "!~") {
       return this.processRegexMatchExpression(node);
     }
+    if (node.operator === "++" || node.operator === "--") {
+      return ts.postfix(this.processNode(node.left), node.operator);
+    }
     const leftNode = this.processNode(node.left);
     const rightNode = this.processNode(node.right);
     // Agency uses strict equality/inequality: == → ===, != → !==

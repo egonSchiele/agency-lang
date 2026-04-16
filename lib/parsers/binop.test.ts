@@ -727,6 +727,54 @@ describe("binOpParser", () => {
     });
   });
 
+  // Postfix increment/decrement operators
+  describe("postfix operators", () => {
+    it('should parse "a++"', () => {
+      const result = binOpParser("a++");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "++",
+          left: { type: "variableName", value: "a" },
+          right: { type: "boolean", value: true },
+        });
+      }
+    });
+
+    it('should parse "a--"', () => {
+      const result = binOpParser("a--");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "--",
+          left: { type: "variableName", value: "a" },
+          right: { type: "boolean", value: true },
+        });
+      }
+    });
+
+    it('should parse "a++ + b" with correct precedence', () => {
+      const result = binOpParser("a++ + b");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // ++ binds tighter than +: (a++) + b
+        expect(result.result).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "+",
+          left: {
+            type: "binOpExpression",
+            operator: "++",
+            left: { type: "variableName", value: "a" },
+            right: { type: "boolean", value: true },
+          },
+          right: { type: "variableName", value: "b" },
+        });
+      }
+    });
+  });
+
   // typeof operator (unary)
   describe("typeof operator", () => {
     it('should parse "typeof x"', () => {

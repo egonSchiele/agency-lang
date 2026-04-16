@@ -1394,8 +1394,8 @@ export const newExpressionParser: Parser<NewExpression> = (input: string) => {
   );
 };
 
-// The atom parser: the smallest unit of an expression.
-const atom: Parser<Expression> = or(
+// The base atom parser: the smallest unit of an expression.
+const baseAtom: Parser<Expression> = or(
   unaryTypeofParser,
   unaryVoidParser,
   unaryNotParser,
@@ -1409,6 +1409,24 @@ const atom: Parser<Expression> = or(
   lazy(() => regexLiteralParser),
   lazy(() => literalParser),
 );
+
+// Wrap atom to handle postfix ++ and -- operators.
+// Desugared to BinOpExpression: x++ → { op: "++", left: x, right: true }
+const atom: Parser<Expression> = (input: string) => {
+  const result = baseAtom(input);
+  if (!result.success) return result;
+  const ppResult = or(str("++"), str("--"))(result.rest);
+  if (!ppResult.success) return result;
+  return success(
+    {
+      type: "binOpExpression" as const,
+      operator: ppResult.result as Operator,
+      left: result.result,
+      right: { type: "boolean" as const, value: true },
+    } as BinOpExpression,
+    ppResult.rest,
+  );
+};
 
 // Operator helper: parse an operator with optional surrounding whitespace.
 // Allows a newline before the operator so expressions can continue on the next line:

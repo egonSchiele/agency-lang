@@ -201,6 +201,12 @@ export function printTs(node: TsNode, indent = 0): string {
           : printTs(node.right, indent);
         return `${node.op} ${right}`;
       }
+      if (node.op === "++" || node.op === "--") {
+        const left = node.parenLeft
+          ? `(${printTs(node.left, indent)})`
+          : printTs(node.left, indent);
+        return `${left}${node.op}`;
+      }
       const left = node.parenLeft
         ? `(${printTs(node.left, indent)})`
         : printTs(node.left, indent);

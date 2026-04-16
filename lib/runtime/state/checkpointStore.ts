@@ -1,3 +1,4 @@
+import { MessageJSON } from "smoltalk";
 import { CheckpointError } from "../errors.js";
 import { deepClone } from "../utils.js";
 import type { RuntimeContext } from "./context.js";
@@ -90,20 +91,31 @@ export class Checkpoint implements SourceLocation {
     const activeThread = threads[activeId];
     if (!activeThread) return null;
 
-    const messages = activeThread.messages.map((m: any) => ({
+    const messages = activeThread.messages.map((m: MessageJSON) => ({
       role: m.role ?? "unknown",
       // smoltalk content can be string, TextPart[], or null
-      content: typeof m.content === "string"
-        ? m.content
-        : Array.isArray(m.content)
-          ? m.content.map((p: any) => p.text ?? "").join("")
-          : m.content == null
-            ? ""
-            : String(m.content),
+      content: this.getContentFromMessage(m),
     }));
 
     return { threadId: activeId, messages };
   }
+
+  private getContentFromMessage(message: MessageJSON): string {
+    if (typeof message.content === "string") {
+      return message.content;
+    } else if (Array.isArray(message.content)) {
+      return message.content.map((part) => part.text ?? "").join("");
+    } else if (message.content == null) {
+      if (message.role === "assistant" && message.toolCalls) {
+        return message.toolCalls
+          .map((toolCall) => `Tool call: ${toolCall.name}(${JSON.stringify(toolCall.arguments)})`)
+          .join("\n");
+      }
+      return "(no content)";
+    }
+    return JSON.stringify(message.content);
+  }
+
 
   getGlobalsForModule(): Record<string, any> | null {
     return this.globals.store?.[this.moduleId] ?? null;

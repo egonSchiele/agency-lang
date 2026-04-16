@@ -2438,6 +2438,7 @@ export class TypeScriptBuilder {
     );
     runPromptEntries.interruptData = ts.raw("__state?.interruptData");
     runPromptEntries.removedTools = ts.self("__removedTools");
+    runPromptEntries.checkpointInfo = ts.raw("runner.getCheckpointInfo()");
 
     const runPromptCall = $(ts.id("runPrompt"))
       .call([ts.obj(runPromptEntries)])

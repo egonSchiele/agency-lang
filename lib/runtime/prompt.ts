@@ -11,6 +11,7 @@ import { updateTokenStats, extractResponse } from "./utils.js";
 import { callHook } from "./hooks.js";
 import { handleStreamingResponse, isGenerator } from "./streaming.js";
 import type { RuntimeContext } from "./state/context.js";
+import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import { color } from "@/utils/termcolors.js";
 import { GraphState } from "./types.js";
 import { PromptResult, Result, StreamChunk, ToolCallJSON } from "smoltalk";
@@ -254,6 +255,7 @@ async function executeToolCalls({
       });
 
       const toolCallStartTime = performance.now();
+      ctx.enterToolCall();
       try {
         result = await handler.execute(...params);
       } catch (error: unknown) {
@@ -297,6 +299,8 @@ async function executeToolCalls({
           removedTools.push(handler.name);
         }
         continue;
+      } finally {
+        ctx.exitToolCall();
       }
       // Tool returned a failure Result — handle retry logic
       if (isFailure(result)) {
@@ -401,6 +405,7 @@ export async function runPrompt(args: {
   maxToolCallRounds?: number;
   interruptData?: InterruptData;
   removedTools?: string[];
+  checkpointInfo?: SourceLocationOpts;
 }): Promise<any> {
   const {
     ctx,
@@ -408,6 +413,7 @@ export async function runPrompt(args: {
     responseFormat,
     maxToolCallRounds = 10,
     removedTools = [],
+    checkpointInfo,
   } = args;
 
   // Extract tool registry entries from clientConfig.tools and split into
@@ -504,9 +510,9 @@ export async function runPrompt(args: {
       });
 
       const checkpointId = ctx.checkpoints.create(ctx, {
-        moduleId: "",
-        scopeName: "",
-        stepPath: "",
+        moduleId: checkpointInfo?.moduleId ?? "",
+        scopeName: checkpointInfo?.scopeName ?? "",
+        stepPath: checkpointInfo?.stepPath ?? "",
       });
       interrupt.checkpointId = checkpointId;
       interrupt.checkpoint = ctx.checkpoints.get(checkpointId);

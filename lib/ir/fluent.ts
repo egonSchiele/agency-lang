@@ -11,8 +11,8 @@ export class TsChain {
   constructor(public readonly node: TsNode) {}
 
   /** Property access: .prop("foo") → ts.prop(this, "foo") */
-  prop(name: string): TsChain {
-    return new TsChain(ts.prop(this.node, name));
+  prop(name: string, opts?: { optional?: boolean }): TsChain {
+    return new TsChain(ts.prop(this.node, name, opts));
   }
 
   map(fn: TsNode): TsChain {

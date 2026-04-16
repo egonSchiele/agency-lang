@@ -49,3 +49,19 @@ for (const name of names) {
   print(name)
 }
 ```
+
+You can have single-line or multi-line comments.
+
+```ts
+// This is a single-line comment
+/*
+This is a multi-line comment
+*/
+```
+
+> Note: comments must be on their own line, they cannot be at the end of a line containing code.
+
+### JavaScript features that don't exist in Agency
+- lambdas
+- async/await. Everything is awaited by default, and there are specific constructs for async, such as [fork](./fork/)
+- custom constructors for [classes](./classes/). A default constructor is generated for you.

@@ -310,12 +310,12 @@ export const ts = {
     };
   },
 
-  prop(object: TsNode, property: string): TsPropertyAccess {
-    return { kind: "propertyAccess", object, property, computed: false };
+  prop(object: TsNode, property: string, opts?: { optional?: boolean }): TsPropertyAccess {
+    return { kind: "propertyAccess", object, property, computed: false, ...(opts?.optional && { optional: true }) };
   },
 
-  index(object: TsNode, property: TsNode): TsPropertyAccess {
-    return { kind: "propertyAccess", object, property, computed: true };
+  index(object: TsNode, property: TsNode, opts?: { optional?: boolean }): TsPropertyAccess {
+    return { kind: "propertyAccess", object, property, computed: true, ...(opts?.optional && { optional: true }) };
   },
 
   spread(expr: TsNode): TsSpread {

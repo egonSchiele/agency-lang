@@ -360,6 +360,78 @@ describe("valueAccessParser", () => {
     });
   });
 
+  describe("optional chaining", () => {
+    it('should parse "foo?.bar" with optional property access', () => {
+      const result = valueAccessParser("foo?.bar");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "valueAccess",
+          base: { type: "variableName", value: "foo" },
+          chain: [{ kind: "property", name: "bar", optional: true }],
+        });
+      }
+    });
+
+    it('should parse "foo?.bar?.baz" with chained optional access', () => {
+      const result = valueAccessParser("foo?.bar?.baz");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "valueAccess",
+          base: { type: "variableName", value: "foo" },
+          chain: [
+            { kind: "property", name: "bar", optional: true },
+            { kind: "property", name: "baz", optional: true },
+          ],
+        });
+      }
+    });
+
+    it('should parse "foo?.bar.baz" mixing optional and regular access', () => {
+      const result = valueAccessParser("foo?.bar.baz");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "valueAccess",
+          base: { type: "variableName", value: "foo" },
+          chain: [
+            { kind: "property", name: "bar", optional: true },
+            { kind: "property", name: "baz" },
+          ],
+        });
+      }
+    });
+
+    it('should parse "arr?.[0]" with optional index access', () => {
+      const result = valueAccessParser("arr?.[0]");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "valueAccess",
+          base: { type: "variableName", value: "arr" },
+          chain: [{ kind: "index", index: { type: "number", value: "0" }, optional: true }],
+        });
+      }
+    });
+
+    it('should parse "obj?.method()" with optional method call', () => {
+      const result = valueAccessParser("obj?.method()");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "valueAccess",
+          base: { type: "variableName", value: "obj" },
+          chain: [{
+            kind: "methodCall",
+            functionCall: { type: "functionCall", functionName: "method", arguments: [] },
+            optional: true,
+          }],
+        });
+      }
+    });
+  });
+
   describe("failure cases", () => {
     it('should fail to parse ""', () => {
       expect(valueAccessParser("").success).toBe(false);

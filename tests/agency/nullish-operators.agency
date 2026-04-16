@@ -1,0 +1,92 @@
+// Tests for ?? (nullish coalescing) and ?. (optional chaining)
+
+def makeObj(): { name: string, nested: { value: number } } {
+  return { name: "hello", nested: { value: 42 } }
+}
+
+def getNull() {
+  return null
+}
+
+node testNullishCoalescing() {
+  // ?? with non-null left side returns left
+  const a = "hello" ?? "default"
+
+  // ?? with null left side returns right
+  const b = null ?? "fallback"
+
+  // ?? chaining
+  const c = null ?? null ?? "last"
+
+  return { a: a, b: b, c: c }
+}
+
+node testOptionalChaining() {
+  const obj = makeObj()
+
+  // regular chaining still works
+  const a = obj.name
+  const b = obj.nested.value
+
+  return { a: a, b: b }
+}
+
+node testOptionalChainingOnNull() {
+  const obj = null
+
+  // ?. on null returns undefined
+  const a = obj?.name
+  const b = obj?.nested?.value
+
+  return { a: a, b: b }
+}
+
+node testOptionalIndex() {
+  const arr = [10, 20, 30]
+  const nothing = null
+
+  const a = arr?.[1]
+  const b = nothing?.[0]
+
+  return { a: a, b: b }
+}
+
+node testCombined() {
+  // ?. combined with ??
+  const obj = null
+  const result = obj?.name ?? "default"
+
+  return result
+}
+
+node testNullishWithFalsyValues() {
+  // ?? should NOT replace falsy-but-not-nullish values
+  // This is the key difference between ?? and ||
+  const a = 0 ?? "default"
+  const b = "" ?? "default"
+  const c = false ?? "default"
+
+  return { a: a, b: b, c: c }
+}
+
+node testNullishWithUndefined() {
+  // ?? should replace undefined, not just null
+  const a = undefined ?? "fallback"
+
+  // ?. returns undefined which ?? then replaces
+  const obj = null
+  const b = obj?.name ?? "got it"
+
+  return { a: a, b: b }
+}
+
+node testOptionalMethodCall() {
+  // ?. on method calls
+  const obj = makeObj()
+  const nothing = getNull()
+
+  const a = obj?.name
+  const b = nothing?.name
+
+  return { a: a, b: b }
+}

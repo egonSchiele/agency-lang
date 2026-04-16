@@ -28,6 +28,10 @@ export type Operator =
   | "&&"
   | "||"
   | "!"
+  | "typeof"
+  | "void"
+  | "instanceof"
+  | "in"
   | "=~"
   | "!~"
   | "??"
@@ -46,6 +50,8 @@ export const PRECEDENCE: Record<string, number> = {
   "!==": 3,
   "=~": 3,
   "!~": 3,
+  "instanceof": 4,
+  "in": 4,
   "<": 4,
   ">": 4,
   "<=": 4,
@@ -64,6 +70,8 @@ export const PRECEDENCE: Record<string, number> = {
   "||=": 0,
   "&&=": 0,
   "!": 8,
+  "typeof": 8,
+  "void": 8,
 };
 
 export type BinOpExpression = BaseNode & {

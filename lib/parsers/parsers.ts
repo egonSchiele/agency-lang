@@ -1326,6 +1326,35 @@ const unaryNotParser: Parser<Expression> = (input: string) => {
   );
 };
 
+// --- Unary keyword operators (typeof, void) ---
+// Same desugaring as !: typeof x → { op: "typeof", left: true, right: x }
+function unaryKeywordParser(keyword: string): Parser<Expression> {
+  return (input: string) => {
+    const kwResult = str(keyword)(input);
+    if (!kwResult.success) return kwResult;
+    // Require word boundary (so "typeof" doesn't match inside "typeofFoo")
+    if (kwResult.rest.length > 0 && /[a-zA-Z0-9_]/.test(kwResult.rest[0])) {
+      return failure(`expected whitespace after ${keyword}`, input);
+    }
+    const wsResult = spaces(kwResult.rest);
+    if (!wsResult.success) return failure(`expected expression after ${keyword}`, input);
+    const atomResult = atom(wsResult.rest);
+    if (!atomResult.success) return failure(`expected expression after ${keyword}`, input);
+    return success(
+      {
+        type: "binOpExpression" as const,
+        operator: keyword as Operator,
+        left: { type: "boolean" as const, value: true },
+        right: atomResult.result,
+      } as BinOpExpression,
+      atomResult.rest,
+    );
+  };
+}
+
+const unaryTypeofParser = unaryKeywordParser("typeof");
+const unaryVoidParser = unaryKeywordParser("void");
+
 // Placeholder parser for `?` in pipe partial application
 const placeholderParser: Parser<Placeholder> = (input: string) => {
   const result = char("?")(input);
@@ -1367,6 +1396,8 @@ export const newExpressionParser: Parser<NewExpression> = (input: string) => {
 
 // The atom parser: the smallest unit of an expression.
 const atom: Parser<Expression> = or(
+  unaryTypeofParser,
+  unaryVoidParser,
   unaryNotParser,
   tryExpressionParser,
   newExpressionParser,
@@ -1454,6 +1485,8 @@ export const exprParser: Parser<Expression> = label("an expression", buildExpres
     ],
     // Precedence 4: relational
     [
+      { op: wsKeyword("instanceof"), assoc: "left" as const, apply: makeBinOp("instanceof") },
+      { op: wsKeyword("in"), assoc: "left" as const, apply: makeBinOp("in") },
       { op: wsOp("<="), assoc: "left" as const, apply: makeBinOp("<=") },
       { op: wsOp(">="), assoc: "left" as const, apply: makeBinOp(">=") },
       { op: wsOp("<"), assoc: "left" as const, apply: makeBinOp("<") },

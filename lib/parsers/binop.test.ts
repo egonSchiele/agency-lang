@@ -727,6 +727,89 @@ describe("binOpParser", () => {
     });
   });
 
+  // typeof operator (unary)
+  describe("typeof operator", () => {
+    it('should parse "typeof x"', () => {
+      const result = binOpParser("typeof x");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "typeof",
+          left: { type: "boolean", value: true },
+          right: { type: "variableName", value: "x" },
+        });
+      }
+    });
+
+    it('should parse "typeof x == \\"string\\""', () => {
+      const result = binOpParser('typeof x == "string"');
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // typeof binds tighter: (typeof x) == "string"
+        expect(result.result).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "==",
+          left: {
+            type: "binOpExpression",
+            operator: "typeof",
+            left: { type: "boolean", value: true },
+            right: { type: "variableName", value: "x" },
+          },
+          right: { type: "string", segments: [{ type: "text", value: "string" }] },
+        });
+      }
+    });
+  });
+
+  // void operator (unary)
+  describe("void operator", () => {
+    it('should parse "void 0"', () => {
+      const result = binOpParser("void 0");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "void",
+          left: { type: "boolean", value: true },
+          right: { type: "number", value: "0" },
+        });
+      }
+    });
+  });
+
+  // instanceof operator (binary)
+  describe("instanceof operator", () => {
+    it('should parse "x instanceof Array"', () => {
+      const result = binOpParser("x instanceof Array");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "instanceof",
+          left: { type: "variableName", value: "x" },
+          right: { type: "variableName", value: "Array" },
+        });
+      }
+    });
+  });
+
+  // in operator (binary)
+  describe("in operator", () => {
+    it('should parse "\\"key\\" in obj"', () => {
+      const result = binOpParser('"key" in obj');
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "in",
+          left: { type: "string", segments: [{ type: "text", value: "key" }] },
+          right: { type: "variableName", value: "obj" },
+        });
+      }
+    });
+  });
+
   // Failure cases
   describe("regex match operators", () => {
     const testCases = [

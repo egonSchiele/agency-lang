@@ -195,18 +195,6 @@ export function printTs(node: TsNode, indent = 0): string {
           : printTs(node.right, indent);
         return `!${right}`;
       }
-      if (node.op === "typeof" || node.op === "void") {
-        const right = node.parenRight
-          ? `(${printTs(node.right, indent)})`
-          : printTs(node.right, indent);
-        return `${node.op} ${right}`;
-      }
-      if (node.op === "++" || node.op === "--") {
-        const left = node.parenLeft
-          ? `(${printTs(node.left, indent)})`
-          : printTs(node.left, indent);
-        return `${left}${node.op}`;
-      }
       const left = node.parenLeft
         ? `(${printTs(node.left, indent)})`
         : printTs(node.left, indent);
@@ -359,7 +347,9 @@ export function printTs(node: TsNode, indent = 0): string {
       const operand = node.paren
         ? `(${printTs(node.operand, indent)})`
         : printTs(node.operand, indent);
-      return `${node.op}${operand}`;
+      // Keyword operators (typeof, void) need a space; symbol operators (!) don't
+      const sep = /^[a-z]/i.test(node.op) ? " " : "";
+      return `${node.op}${sep}${operand}`;
     }
     case "ternary": {
       const condition = printTs(node.condition, indent);

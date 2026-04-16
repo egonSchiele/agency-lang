@@ -1333,7 +1333,7 @@ function unaryKeywordParser(keyword: string): Parser<Expression> {
     const kwResult = str(keyword)(input);
     if (!kwResult.success) return kwResult;
     // Require word boundary (so "typeof" doesn't match inside "typeofFoo")
-    if (kwResult.rest.length > 0 && /[a-zA-Z0-9_]/.test(kwResult.rest[0])) {
+    if (!not(varNameChar)(kwResult.rest).success) {
       return failure(`expected whitespace after ${keyword}`, input);
     }
     const wsResult = spaces(kwResult.rest);
@@ -1412,10 +1412,11 @@ const baseAtom: Parser<Expression> = or(
 
 // Wrap atom to handle postfix ++ and -- operators.
 // Desugared to BinOpExpression: x++ → { op: "++", left: x, right: true }
+const postfixOpParser = or(str("++"), str("--"));
 const atom: Parser<Expression> = (input: string) => {
   const result = baseAtom(input);
   if (!result.success) return result;
-  const ppResult = or(str("++"), str("--"))(result.rest);
+  const ppResult = postfixOpParser(result.rest);
   if (!ppResult.success) return result;
   return success(
     {

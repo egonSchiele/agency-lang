@@ -944,6 +944,9 @@ export class TypeScriptBuilder {
     if (node.operator === "++" || node.operator === "--") {
       return ts.postfix(this.processNode(node.left), node.operator);
     }
+    if (node.operator === "typeof" || node.operator === "void") {
+      return ts.unaryOp(node.operator, this.processNode(node.right));
+    }
     const leftNode = this.processNode(node.left);
     const rightNode = this.processNode(node.right);
     // Agency uses strict equality/inequality: == → ===, != → !==

@@ -24,14 +24,11 @@ const systemPrompt = read("./examples/coding-agent/systemPrompt.md") with approv
 node main() {
   ui.initUI("Coding Agent")
   ui.status("", cwd())
-  //ui.separator("Welcome")
-  //ui.emptyLine()
   ui.log("I can help you read, search, and edit code.")
   ui.log("Type your request below, or 'quit' to exit.")
   ui.emptyLine()
   ui.emptyLine()
   let userMessage = ui.prompt("What would you like to do?")
-  print("User: ${userMessage}")
   handle {
     thread {
       system(systemPrompt)

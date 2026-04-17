@@ -58,4 +58,53 @@ run();
 
 Other things like functions can't be imported and run, because Agency functions have a lot of extra functionality to make things like interrupts work.
 
-While we're on this topic, we should probably talk about Agency's execution model.
+## Cancelling an in-progress agent
+
+When you run an Agency agent from TypeScript, you can cancel it mid-execution. This tears down any in-flight LLM requests and throws an `AgencyCancelledError`. Here's how to abort an agent run.
+
+The `onAgentStart` callback receives a `cancel` function you can call at any time:
+
+```ts
+import { main } from "./main.js";
+
+let cancelAgent: (reason?: string) => void;
+
+const result = await main({
+  callbacks: {
+    onAgentStart: ({ cancel }) => {
+      cancelAgent = cancel;
+    },
+  },
+});
+
+// later, from a button handler, timeout, etc:
+cancelAgent("user clicked stop");
+```
+
+
+### What happens when you cancel
+
+When `cancel()` is called
+
+1. Any in-flight LLM request is aborted immediately.
+2. Any remaining tool calls in the current round are skipped.
+3. Any remaining interrupt handlers are skipped.
+4. An `AgencyCancelledError` is thrown, which propagates up to the caller.
+
+Cancellation is permanent for that execution. Once cancelled, no further LLM calls can be made on that particular agent run. However, you can start a new agent run. You can read more about Agency's [execution model](/guide/execution-model).
+
+To catch the abort in TypeScript, you can catch `AgencyCancelledError` (exported from `agency-lang/runtime`) or use the `isAbortError` helper:
+
+```ts
+import { AgencyCancelledError, isAbortError } from "agency-lang/runtime";
+
+try {
+  await main();
+} catch (error) {
+  if (isAbortError(error)) {
+    // handle cancellation
+  }
+}
+```
+
+Now let's talk about Agency's execution model.

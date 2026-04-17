@@ -70,6 +70,11 @@ async function _runPrompt({
     messages = MessageThread.fromJSON(startHookResult);
   }
 
+  // Re-check after hook — cancellation may have occurred during the callback
+  if (ctx.aborted) {
+    throw new AgencyCancelledError();
+  }
+
   let _completion: AsyncGenerator<StreamChunk> | Promise<Result<PromptResult>> =
     await (smoltalk.text as Function)({
       messages: messages.getMessages(),
@@ -184,6 +189,10 @@ async function executeToolCalls({
   toolErrorCounts: Record<string, number>;
 }): Promise<ExecuteToolCallsResult> {
   for (const toolCall of toolCalls) {
+    if (ctx.aborted) {
+      throw new AgencyCancelledError();
+    }
+
     const handler = toolHandlers.find((h) => h.name === toolCall.name);
     if (!handler) {
       console.error(
@@ -549,9 +558,12 @@ export async function runPrompt(args: {
       toolCalls = result.toolCalls;
     }
   } catch (error) {
-    if (!isAbortError(error)) {
-      ctx.cancel();
+    if (isAbortError(error)) {
+      // Abort errors propagate as-is — the context is already cancelled.
+      throw error;
     }
+    // Non-abort errors (network issues, malformed responses, etc.) propagate
+    // without cancelling the context. The caller may want to retry.
     throw error;
   }
 

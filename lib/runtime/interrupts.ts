@@ -1,5 +1,5 @@
 import * as smoltalk from "smoltalk";
-import { RestoreSignal } from "./errors.js";
+import { AgencyCancelledError, RestoreSignal } from "./errors.js";
 import { applyOverrides } from "./rewind.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 import { RuntimeContext } from "./state/context.js";
@@ -115,6 +115,9 @@ export async function interruptWithHandlers<T = any>(
   let hasApproval = false;
   let hasPropagation = false;
   for (let i = ctx.handlers.length - 1; i >= 0; i--) {
+    if (ctx.aborted) {
+      throw new AgencyCancelledError();
+    }
     const result = await ctx.handlers[i](data);
     if (result === undefined) {
       continue;

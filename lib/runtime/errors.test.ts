@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CheckpointError, RestoreSignal } from "./errors.js";
+import { CheckpointError, RestoreSignal, AgencyCancelledError, isAbortError } from "./errors.js";
 
 describe("CheckpointError", () => {
   it("should have correct name and message", () => {
@@ -25,5 +25,46 @@ describe("RestoreSignal", () => {
     const checkpoint = { id: 1, stack: {}, globals: {}, nodeId: "start" };
     const signal = new RestoreSignal(checkpoint as any);
     expect(signal.options).toBeUndefined();
+  });
+});
+
+describe("AgencyCancelledError", () => {
+  it("should have correct name and default message", () => {
+    const err = new AgencyCancelledError();
+    expect(err.name).toBe("AgencyCancelledError");
+    expect(err.message).toBe("Agent execution was cancelled");
+    expect(err instanceof Error).toBe(true);
+  });
+
+  it("should accept a custom reason", () => {
+    const err = new AgencyCancelledError("user clicked stop");
+    expect(err.message).toBe("user clicked stop");
+  });
+});
+
+describe("isAbortError", () => {
+  it("should detect AgencyCancelledError", () => {
+    expect(isAbortError(new AgencyCancelledError())).toBe(true);
+  });
+
+  it("should detect DOMException with name AbortError", () => {
+    const err = new DOMException("aborted", "AbortError");
+    expect(isAbortError(err)).toBe(true);
+  });
+
+  it("should detect Error with name AbortError", () => {
+    const err = new Error("aborted");
+    err.name = "AbortError";
+    expect(isAbortError(err)).toBe(true);
+  });
+
+  it("should return false for regular errors", () => {
+    expect(isAbortError(new Error("something else"))).toBe(false);
+  });
+
+  it("should return false for non-error values", () => {
+    expect(isAbortError(null)).toBe(false);
+    expect(isAbortError("string")).toBe(false);
+    expect(isAbortError(42)).toBe(false);
   });
 });

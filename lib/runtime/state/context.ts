@@ -13,6 +13,7 @@ import type { HandlerFn } from "../types.js";
 import type { DebuggerState } from "../../debugger/debuggerState.js";
 import type { TraceWriter } from "../trace/traceWriter.js";
 import { reviveWithClasses, type ClassRegistry } from "../classReviver.js";
+import { AgencyCancelledError } from "../errors.js";
 
 /* bunch of stuff that every node/function in the runtime needs access to,
 that we don't want to pass as individual arguments everywhere */
@@ -65,6 +66,8 @@ export class RuntimeContext<T> {
   // class registry for serialization/deserialization of Agency class instances
   classRegistry: ClassRegistry = {};
 
+  abortController: AbortController;
+
   // stored so createExecutionContext can create new StatelogClients
   private statelogConfig: StatelogConfig;
   maxRestores: number;
@@ -111,6 +114,7 @@ export class RuntimeContext<T> {
 
     this.smoltalkDefaults = args.smoltalkDefaults;
     this.classRegistry = {};
+    this.abortController = new AbortController();
   }
 
   createExecutionContext(): RuntimeContext<T> {
@@ -136,6 +140,7 @@ export class RuntimeContext<T> {
     execCtx.traceWriter = this.traceWriter;
     execCtx.pendingPromises = new PendingPromiseStore();
     execCtx.classRegistry = this.classRegistry;
+    execCtx.abortController = new AbortController();
     execCtx.statelogClient = new StatelogClient({
       ...this.statelogConfig,
       traceId: nanoid(),
@@ -206,6 +211,16 @@ export class RuntimeContext<T> {
     return this._toolCallDepth > 0;
   }
 
+  get aborted(): boolean {
+    return this.abortController.signal.aborted;
+  }
+
+  cancel(reason?: string): void {
+    if (!this.abortController.signal.aborted) {
+      this.abortController.abort(new AgencyCancelledError(reason));
+    }
+  }
+
   registerClass(name: string, cls: ClassRegistry[string]): void {
     this.classRegistry[name] = cls;
   }
@@ -216,6 +231,9 @@ export class RuntimeContext<T> {
 
   /** Sever references held by an execution context so GC can reclaim them. */
   cleanup(): void {
+    if (!this.abortController.signal.aborted) {
+      this.abortController.abort(new AgencyCancelledError("cleanup"));
+    }
     this.pendingPromises.clear();
     this.stateStack = null as any;
     this.globals = null as any;

@@ -68,6 +68,8 @@ export {
   ConcurrentInterruptError,
   CheckpointError,
   RestoreSignal,
+  AgencyCancelledError,
+  isAbortError,
 } from "./errors.js";
 export type { RestoreOptions } from "./errors.js";
 

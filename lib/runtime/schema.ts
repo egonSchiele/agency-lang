@@ -10,11 +10,7 @@ export class Schema {
   }
 
   parse(data: unknown): ResultValue {
-    const result = this.zodSchema.safeParse(data);
-    if (result.success) {
-      return success(result.data);
-    }
-    return failure(result.error.message);
+    return __validateType(data, this.zodSchema);
   }
 
   parseJSON(jsonString: string): ResultValue {

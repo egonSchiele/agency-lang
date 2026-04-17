@@ -7,6 +7,7 @@ import {
   Expression,
   Keyword,
   Literal,
+  VariableNameLiteral,
   NamedArgument,
   PromptSegment,
   FunctionScope,
@@ -949,7 +950,7 @@ export class TypeScriptBuilder {
       node.chain[0].kind === "property" &&
       node.chain[0].name === "schema"
     ) {
-      const baseName = (node.base as any).value;
+      const baseName = (node.base as VariableNameLiteral).value;
       const typeAliases = this.getVisibleTypeAliases();
       const builtinTypes = ["number", "string", "boolean", "null", "object"];
 

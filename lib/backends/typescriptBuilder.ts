@@ -222,11 +222,39 @@ export class TypeScriptBuilder {
     value: TsNode,
     accessChain?: AccessChainElement[],
   ): TsNode {
+    if (accessChain && accessChain.length > 0 && accessChain[accessChain.length - 1].kind === "slice") {
+      return this.buildSliceAssignment(scope, varName, value, accessChain);
+    }
     if (scope === "global" && (!accessChain || accessChain.length === 0)) {
       return ts.globalSet(this.moduleId, varName, value);
     }
     const lhs = this.buildAssignmentLhs(scope, varName, accessChain);
     return ts.assign(lhs, value);
+  }
+
+  /**
+   * arr[1:3] = [10, 20] → arr.splice(start, end - start, ...value)
+   * arr[2:] = [10]      → arr.splice(start, arr.length - start, ...value)
+   */
+  private buildSliceAssignment(
+    scope: ScopeType,
+    varName: string,
+    value: TsNode,
+    accessChain: AccessChainElement[],
+  ): TsNode {
+    const sliceEl = accessChain[accessChain.length - 1] as Extract<AccessChainElement, { kind: "slice" }>;
+    const baseChain = accessChain.length > 1 ? accessChain.slice(0, -1) : undefined;
+    const base = this.buildAssignmentLhs(scope, varName, baseChain);
+    const baseStr = this.str(base);
+
+    const startNode = sliceEl.start ? this.processNode(sliceEl.start) : ts.raw("0");
+    const startStr = this.str(startNode);
+
+    const deleteCountStr = sliceEl.end
+      ? `${this.str(this.processNode(sliceEl.end))} - ${startStr}`
+      : `${baseStr}.length - ${startStr}`;
+
+    return ts.raw(`${baseStr}.splice(${startStr}, ${deleteCountStr}, ...${this.str(value)})`);
   }
 
   // ------- Lookup helpers -------

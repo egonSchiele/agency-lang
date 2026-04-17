@@ -1,0 +1,7 @@
+type Category = "bug" | "feature" | "docs"
+
+node main() {
+  const schema = Category.schema
+  const result = schema.parse("bug")
+  print(result)
+}

@@ -942,6 +942,33 @@ export class TypeScriptBuilder {
   }
 
   private processValueAccess(node: ValueAccess): TsNode {
+    // Check for TypeName.schema pattern
+    if (
+      node.base.type === "variableName" &&
+      node.chain.length === 1 &&
+      node.chain[0].kind === "property" &&
+      node.chain[0].name === "schema"
+    ) {
+      const baseName = (node.base as any).value;
+      const typeAliases = this.getVisibleTypeAliases();
+      const builtinTypes = ["number", "string", "boolean", "null", "object"];
+
+      let zodSchema: string | null = null;
+
+      if (typeAliases[baseName]) {
+        zodSchema = mapTypeToZodSchema(typeAliases[baseName], typeAliases);
+      } else if (builtinTypes.includes(baseName)) {
+        zodSchema = mapTypeToZodSchema(
+          { type: "primitiveType" as const, value: baseName },
+          typeAliases,
+        );
+      }
+
+      if (zodSchema) {
+        return ts.new(ts.id("Schema"), [ts.raw(zodSchema)]);
+      }
+    }
+
     let result = this.processNode(node.base);
     // If the base is a function call, await it before accessing properties/methods
     // on the result. Without this, chaining like getGreeting().trim() would call

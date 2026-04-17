@@ -1,0 +1,7 @@
+node main() {
+  const x: number! = 42
+  if (isSuccess(x)) {
+    return "validated"
+  }
+  return "failed"
+}

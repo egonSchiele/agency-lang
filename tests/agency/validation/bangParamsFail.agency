@@ -1,0 +1,11 @@
+def double(x: number!) {
+  return x * 2
+}
+
+node main() {
+  const result = double("not a number")
+  if (isFailure(result)) {
+    return "validation failed"
+  }
+  return "unexpected success"
+}

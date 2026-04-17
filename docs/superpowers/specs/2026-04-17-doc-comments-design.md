@@ -249,4 +249,4 @@ Render doc comment above the type definition code block.
 ## Non-changes
 
 - **Type checker:** No changes needed. The type checker does not inspect doc comments or docstrings.
-- **Content trimming:** Doc comment `content` is stored as-is from the parser (the existing multi-line comment parser captures raw content between `/*` and `*/`). The doc generator renders this content directly. No additional trimming or normalization is applied — this matches how regular multi-line comments already work.
+- **Content trimming:** Doc comment `content` is stored as-is from the parser (the existing multi-line comment parser captures raw content between `/*` and `*/`). When rendering docs, the doc generator trims leading and trailing whitespace from this content before display. No other normalization is applied.

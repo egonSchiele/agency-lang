@@ -119,7 +119,7 @@ function generateDocForFile(
 
   // Page-level "View source" link
   if (ctx.baseUrl && ctx.sourceRelPath) {
-    sections.push(`[View source](${ctx.baseUrl}/${ctx.sourceRelPath})`);
+    sections.push(`[View source](${ctx.baseUrl}/${toPosixPath(ctx.sourceRelPath)})`);
   }
 
   if (program.docComment) {
@@ -138,6 +138,10 @@ function generateDocForFile(
   fs.writeFileSync(outputPath, sections.join("\n\n") + "\n");
 }
 
+
+function toPosixPath(p: string): string {
+  return p.split(path.sep).join("/");
+}
 
 function formatType(type: VariableType | undefined | null): string {
   if (!type) return "";
@@ -164,12 +168,12 @@ function formatTypeLinked(
   // Cross-file — relative link to the other doc page
   const from = path.dirname(ctx.currentMdPath || "");
   const rel = path.relative(from, targetMdPath);
-  return `[${name}](${rel}#${name.toLowerCase()})`;
+  return `[${name}](${toPosixPath(rel)}#${name.toLowerCase()})`;
 }
 
 function sourceLink(loc: { line: number } | undefined, ctx: DocContext): string {
   if (!ctx.baseUrl || !ctx.sourceRelPath || !loc) return "";
-  return ` [source](${ctx.baseUrl}/${ctx.sourceRelPath}#L${loc.line})`;
+  return ` [source](${ctx.baseUrl}/${toPosixPath(ctx.sourceRelPath)}#L${loc.line})`;
 }
 
 function formatSignature(

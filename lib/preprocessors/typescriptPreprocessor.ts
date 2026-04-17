@@ -188,7 +188,10 @@ export class TypescriptPreprocessor {
       if (node.type !== "multiLineComment" || !node.isDoc) continue;
 
       let nextIndex = i + 1;
-      while (nextIndex < nodes.length && nodes[nextIndex].type === "newLine") {
+      while (
+        nextIndex < nodes.length &&
+        (nodes[nextIndex].type === "newLine" || nodes[nextIndex].type === "tag")
+      ) {
         nextIndex++;
       }
 

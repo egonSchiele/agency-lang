@@ -2236,6 +2236,24 @@ export class TypeScriptBuilder {
   }
 
   private processAssignment(node: Assignment): TsNode {
+    const result = this._processAssignmentInner(node);
+    // If the type annotation has !, wrap the assigned value in __validateType
+    if (node.validated && node.typeHint) {
+      const zodSchema = mapTypeToZodSchema(
+        node.typeHint,
+        this.getVisibleTypeAliases(),
+      );
+      const varRef = ts.scopedVar(node.variableName, node.scope!, this.moduleId);
+      const validateStmt = ts.assign(varRef, ts.validateType(varRef, ts.raw(zodSchema)));
+      if (result.kind === "statements") {
+        return ts.statementsPush(result, validateStmt);
+      }
+      return ts.statements([result, validateStmt]);
+    }
+    return result;
+  }
+
+  private _processAssignmentInner(node: Assignment): TsNode {
     const { variableName, typeHint, value } = node;
 
     // `this.field = value` and `super.field = value` — emit as direct property assignment

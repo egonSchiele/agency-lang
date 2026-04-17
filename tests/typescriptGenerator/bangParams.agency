@@ -1,0 +1,9 @@
+def process(data: number!) {
+  print(data)
+  return data
+}
+
+node main() {
+  const result = process("not a number")
+  print(result)
+}

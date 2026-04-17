@@ -1605,6 +1605,23 @@ export class TypeScriptBuilder {
       }
     }
 
+    // Validation guards for parameters with ! (bang) syntax
+    for (const param of parameters) {
+      if (param.validated && param.typeHint) {
+        const zodSchema = mapTypeToZodSchema(param.typeHint, this.getVisibleTypeAliases());
+        const stackArg = $(ts.stack("args")).index(ts.str(param.name)).done();
+        const vrName = `__vr_${param.name}`;
+        setupStmts.push(
+          ts.constDecl(vrName, ts.validateType(stackArg, ts.raw(zodSchema))),
+          ts.if(
+            ts.raw(`!${vrName}.success`),
+            ts.return(ts.id(vrName)),
+          ),
+          ts.assign(stackArg, ts.raw(`${vrName}.value`)),
+        );
+      }
+    }
+
     // __self.__retryable
     setupStmts.push(
       ts.assign(

@@ -1,8 +1,10 @@
 # speech
 
+[View source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency)
+
 ## Functions
 
-### speak
+### speak [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L2)
 
 ```ts
 speak(text: string, voice: string, rate: number, outputFile: string)
@@ -19,7 +21,7 @@ A tool for speaking text aloud using text-to-speech. Optionally specify a voice 
 | rate | number | 0 |
 | outputFile | string | "" |
 
-### transcribe
+### transcribe [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L9)
 
 ```ts
 transcribe(filepath: string, language: string): string

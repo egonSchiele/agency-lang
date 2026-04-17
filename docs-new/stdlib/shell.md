@@ -1,8 +1,10 @@
 # shell
 
+[View source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency)
+
 ## Types
 
-### BashResult
+### BashResult [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L2)
 
 ```ts
 type BashResult = {
@@ -12,7 +14,7 @@ type BashResult = {
 }
 ```
 
-### LsEntry
+### LsEntry [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L24)
 
 ```ts
 type LsEntry = {
@@ -23,7 +25,7 @@ type LsEntry = {
 }
 ```
 
-### GrepMatch
+### GrepMatch [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L45)
 
 ```ts
 type GrepMatch = {
@@ -33,7 +35,7 @@ type GrepMatch = {
 }
 ```
 
-### StatInfo
+### StatInfo [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L82)
 
 ```ts
 type StatInfo = {
@@ -46,7 +48,7 @@ type StatInfo = {
 
 ## Functions
 
-### bash
+### bash [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L8)
 
 ```ts
 bash(command: string, cwd: string, timeout: number, stdin: string): BashResult
@@ -63,9 +65,9 @@ Run a shell command and return its stdout, stderr, and exit code. Pass cwd to ch
 | timeout | number | 0 |
 | stdin | string | "" |
 
-**Returns:** BashResult
+**Returns:** [BashResult](#bashresult)
 
-### ls
+### ls [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L31)
 
 ```ts
 ls(dir: string, recursive: boolean): Result
@@ -82,7 +84,7 @@ List entries in a directory. Each entry includes name, path, type ("file", "dir"
 
 **Returns:** Result
 
-### grep
+### grep [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L51)
 
 ```ts
 grep(pattern: string, dir: string, flags: string, maxResults: number): Result
@@ -101,7 +103,7 @@ Search for a regex pattern in files under a directory. Returns matches with file
 
 **Returns:** Result
 
-### glob
+### glob [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L67)
 
 ```ts
 glob(pattern: string, dir: string, maxResults: number): Result
@@ -119,7 +121,7 @@ Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Returns paths 
 
 **Returns:** Result
 
-### stat
+### stat [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L89)
 
 ```ts
 stat(filename: string): StatInfo
@@ -133,9 +135,9 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
 |---|---|---|
 | filename | string |  |
 
-**Returns:** StatInfo
+**Returns:** [StatInfo](#statinfo)
 
-### exists
+### exists [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L96)
 
 ```ts
 exists(filename: string): boolean
@@ -151,7 +153,7 @@ Return true if a file or directory exists at the given path.
 
 **Returns:** boolean
 
-### which
+### which [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L103)
 
 ```ts
 which(command: string): string

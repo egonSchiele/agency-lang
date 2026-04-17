@@ -1,8 +1,10 @@
 # array
 
+[View source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency)
+
 ## Functions
 
-### map
+### map [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L0)
 
 ```ts
 map(arr: any[], func: (any) => any): any[]
@@ -19,7 +21,7 @@ Map a function over an array, returning a new array of results.
 
 **Returns:** any[]
 
-### filter
+### filter [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L11)
 
 ```ts
 filter(arr: any[], func: (any) => any): any[]
@@ -36,7 +38,7 @@ Return a new array containing only the elements for which the function returns t
 
 **Returns:** any[]
 
-### exclude
+### exclude [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L24)
 
 ```ts
 exclude(arr: any[], func: (any) => any): any[]
@@ -53,7 +55,7 @@ Return a new array excluding elements for which the function returns true. Inver
 
 **Returns:** any[]
 
-### find
+### find [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L37)
 
 ```ts
 find(arr: any[], func: (any) => any): any
@@ -70,7 +72,7 @@ Return the first element for which the function returns true, or null if none ma
 
 **Returns:** any
 
-### findIndex
+### findIndex [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L49)
 
 ```ts
 findIndex(arr: any[], func: (any) => any): number
@@ -87,7 +89,7 @@ Return the index of the first element for which the function returns true, or -1
 
 **Returns:** number
 
-### reduce
+### reduce [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L61)
 
 ```ts
 reduce(arr: any[], initial: any, func: (any, any) => any): any
@@ -105,7 +107,7 @@ Reduce an array to a single value by applying a function to an accumulator and e
 
 **Returns:** any
 
-### flatMap
+### flatMap [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L72)
 
 ```ts
 flatMap(arr: any[], func: (any) => any): any[]
@@ -122,7 +124,7 @@ Map a function over an array and flatten the results by one level.
 
 **Returns:** any[]
 
-### every
+### every [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L86)
 
 ```ts
 every(arr: any[], func: (any) => any): boolean
@@ -139,7 +141,7 @@ Return true if the function returns true for every element in the array.
 
 **Returns:** boolean
 
-### some
+### some [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L98)
 
 ```ts
 some(arr: any[], func: (any) => any): boolean
@@ -156,7 +158,7 @@ Return true if the function returns true for at least one element in the array.
 
 **Returns:** boolean
 
-### count
+### count [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L110)
 
 ```ts
 count(arr: any[], func: (any) => any): number
@@ -173,7 +175,7 @@ Count the number of elements in the array for which the function returns true.
 
 **Returns:** number
 
-### sortBy
+### sortBy [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L123)
 
 ```ts
 sortBy(arr: any[], func: (any) => any): any[]
@@ -190,7 +192,7 @@ Return a new array sorted by the values returned by the function, in ascending o
 
 **Returns:** any[]
 
-### unique
+### unique [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L147)
 
 ```ts
 unique(arr: any[], func: (any) => any): any[]
@@ -207,7 +209,7 @@ Return a new array with duplicate elements removed, using the function to determ
 
 **Returns:** any[]
 
-### groupBy
+### groupBy [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L169)
 
 ```ts
 groupBy(arr: any[], func: (any) => any): any

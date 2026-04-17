@@ -1,8 +1,10 @@
 # strategy
 
+[View source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency)
+
 ## Functions
 
-### sample
+### sample [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L0)
 
 ```ts
 sample(n: number, block: () => any): any[]
@@ -19,7 +21,7 @@ Run a block n times in parallel. Returns an array of all results.
 
 **Returns:** any[]
 
-### consensus
+### consensus [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L9)
 
 ```ts
 consensus(n: number, block: () => any): any
@@ -36,7 +38,7 @@ Run a block n times in parallel and return the most common result (majority vote
 
 **Returns:** any
 
-### retry
+### retry [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L17)
 
 ```ts
 retry(n: number, test: (any) => boolean, block: () => any): any
@@ -54,7 +56,7 @@ Run a block up to n times. Returns the first result that passes the test functio
 
 **Returns:** any
 
-### retryWithFeedback
+### retryWithFeedback [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L31)
 
 ```ts
 retryWithFeedback(n: number, test: (any) => boolean, block: (any, number) => any): any
@@ -72,7 +74,7 @@ Run a block up to n times. Each attempt receives the previous result and the att
 
 **Returns:** any
 
-### firstValid
+### firstValid [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L47)
 
 ```ts
 firstValid(variants: any[], test: (any) => boolean, block: (any) => any): any

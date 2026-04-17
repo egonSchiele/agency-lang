@@ -1,8 +1,10 @@
 # http
 
+[View source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/http.agency)
+
 ## Functions
 
-### fetch
+### fetch [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/http.agency#L2)
 
 ```ts
 fetch(url: string): Result
@@ -18,7 +20,7 @@ Fetch a URL and return the response body as text. Fails on network errors or if 
 
 **Returns:** Result
 
-### fetchJSON
+### fetchJSON [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/http.agency#L14)
 
 ```ts
 fetchJSON(url: string): Result
@@ -34,7 +36,7 @@ Fetch a URL and parse the response body as JSON. Fails on network errors, invali
 
 **Returns:** Result
 
-### webfetch
+### webfetch [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/http.agency#L26)
 
 ```ts
 webfetch(url: string): Result

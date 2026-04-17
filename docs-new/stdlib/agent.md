@@ -1,8 +1,10 @@
 # agent
 
+[View source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency)
+
 ## Types
 
-### Todo
+### Todo [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L0)
 
 ```ts
 type Todo = {
@@ -14,7 +16,7 @@ type Todo = {
 
 ## Functions
 
-### todoWrite
+### todoWrite [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L8)
 
 ```ts
 todoWrite(todos: Todo[]): Todo[]
@@ -30,7 +32,7 @@ Replace the current todo list. Each todo has an id, text, and status (one of 'pe
 
 **Returns:** Todo[]
 
-### todoList
+### todoList [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L16)
 
 ```ts
 todoList(): Todo[]
@@ -40,7 +42,7 @@ Return the current todo list.
 
 **Returns:** Todo[]
 
-### question
+### question [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L23)
 
 ```ts
 question(prompt: string): string

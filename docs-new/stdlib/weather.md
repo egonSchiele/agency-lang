@@ -1,8 +1,10 @@
 # weather
 
+[View source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/weather.agency)
+
 ## Types
 
-### WeatherResult
+### WeatherResult [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/weather.agency#L1)
 
 ```ts
 type WeatherResult = {
@@ -24,7 +26,7 @@ type WeatherResult = {
 
 ## Functions
 
-### weather
+### weather [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/weather.agency#L26)
 
 ```ts
 weather(location: string, units: string): Result
@@ -41,7 +43,7 @@ Get current weather for a city name or zip code. Returns temperature, feels-like
 
 **Returns:** Result
 
-### celsiusToFahrenheit
+### celsiusToFahrenheit [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/weather.agency#L33)
 
 ```ts
 celsiusToFahrenheit(celsius: number): number
@@ -55,7 +57,7 @@ celsiusToFahrenheit(celsius: number): number
 
 **Returns:** number
 
-### fahrenheitToCelsius
+### fahrenheitToCelsius [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/weather.agency#L37)
 
 ```ts
 fahrenheitToCelsius(fahrenheit: number): number

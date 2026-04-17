@@ -1,8 +1,10 @@
 # clipboard
 
+[View source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/clipboard.agency)
+
 ## Functions
 
-### copy
+### copy [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/clipboard.agency#L2)
 
 ```ts
 copy(text: string)
@@ -16,7 +18,7 @@ A tool for copying text to the system clipboard.
 |---|---|---|
 | text | string |  |
 
-### paste
+### paste [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/clipboard.agency#L9)
 
 ```ts
 paste(): string

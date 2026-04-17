@@ -1,8 +1,10 @@
 # math
 
+[View source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/math.agency)
+
 ## Functions
 
-### add
+### add [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/math.agency#L2)
 
 ```ts
 add(a: number, b: number): number
@@ -17,7 +19,7 @@ add(a: number, b: number): number
 
 **Returns:** number
 
-### subtract
+### subtract [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/math.agency#L6)
 
 ```ts
 subtract(a: number, b: number): number
@@ -32,7 +34,7 @@ subtract(a: number, b: number): number
 
 **Returns:** number
 
-### multiply
+### multiply [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/math.agency#L10)
 
 ```ts
 multiply(a: number, b: number): number

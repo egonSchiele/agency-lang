@@ -8,5 +8,9 @@
     "logLevel": "warn",
     "defaultModel": "gpt-4o-mini"
   },
-  "typeCheck": true
+  "typeCheck": true,
+  "doc": {
+    "outDir": "docs-new/stdlib",
+    "baseUrl": "https://github.com/egonSchiele/agency-lang/tree/main/stdlib"
+  }
 }

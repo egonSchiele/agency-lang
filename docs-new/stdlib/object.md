@@ -1,8 +1,10 @@
 # object
 
+[View source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency)
+
 ## Functions
 
-### mapValues
+### mapValues [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L0)
 
 ```ts
 mapValues(obj: any, func: (any, string) => any): any
@@ -19,7 +21,7 @@ Return a new object with the same keys, but with each value transformed by the f
 
 **Returns:** any
 
-### mapEntries
+### mapEntries [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L11)
 
 ```ts
 mapEntries(obj: any, func: (any, string) => any): any
@@ -36,7 +38,7 @@ Return a new object by applying the function to each entry. The function receive
 
 **Returns:** any
 
-### filterEntries
+### filterEntries [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L23)
 
 ```ts
 filterEntries(obj: any, func: (any, string) => boolean): any
@@ -53,7 +55,7 @@ Return a new object containing only the entries for which the function returns t
 
 **Returns:** any
 
-### everyEntry
+### everyEntry [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L36)
 
 ```ts
 everyEntry(obj: any, func: (any, string) => boolean): boolean
@@ -70,7 +72,7 @@ Return true if the function returns true for every entry in the object. The func
 
 **Returns:** boolean
 
-### someEntry
+### someEntry [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L48)
 
 ```ts
 someEntry(obj: any, func: (any, string) => boolean): boolean

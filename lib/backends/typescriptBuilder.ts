@@ -920,11 +920,11 @@ export class TypeScriptBuilder {
               : callNode.arguments;
             const propNode = ts.prop(result, callNode.callee.name, { optional: element.optional });
             const callExpr = ts.call(propNode, args);
-            result = isClassMethod ? ts.await(callExpr) : callExpr;
+            result = ts.await(callExpr);
           } else {
             // Fallback for complex cases (e.g. await-wrapped)
             const dot = element.optional ? "?." : ".";
-            result = ts.raw(`${this.str(result)}${dot}${this.str(callNode)}`);
+            result = ts.raw(`await ${this.str(result)}${dot}${this.str(callNode)}`);
           }
           break;
         }

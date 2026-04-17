@@ -1,18 +1,22 @@
 import { AgencyConfig, BUILTIN_FUNCTIONS } from "@/config.js";
 import type { ProgramInfo } from "@/programInfo.js";
 import {
+  AgencyMultiLineComment,
   AgencyNode,
   AgencyProgram,
   Assignment,
   FunctionCall,
   FunctionDefinition,
+  GraphNodeDefinition,
   getImportedNames,
   IfElse,
+  ImportStatement,
   RawCode,
   Scope,
   ScopeType,
   Sentinel,
   Tag,
+  TypeAlias,
   WhileLoop,
   isClassKeyword,
 } from "@/types.js";
@@ -169,7 +173,68 @@ export class TypescriptPreprocessor {
     }
   }
 
+  attachDocComments(): void {
+    const nodes = this.program.nodes;
+    const DECLARATION_TYPES = ["function", "graphNode", "typeAlias"];
+    const SKIP_TYPES = ["newLine", "tag"];
+
+    const isStdlibImport = (node: AgencyNode): boolean =>
+      node.type === "importStatement" &&
+      (node as ImportStatement).modulePath.startsWith("std::");
+
+    // Build a new node list, attaching doc comments to declarations and dropping them from the list
+    const result: AgencyNode[] = [];
+    let pendingDocComment: AgencyMultiLineComment | null = null;
+
+    for (const node of nodes) {
+      if (node.type === "multiLineComment" && node.isDoc) {
+        pendingDocComment = node as AgencyMultiLineComment;
+        continue;
+      }
+
+      // Skip nodes that shouldn't break doc comment attachment
+      if (pendingDocComment && SKIP_TYPES.includes(node.type)) {
+        result.push(node);
+        continue;
+      }
+
+      if (pendingDocComment && DECLARATION_TYPES.includes(node.type)) {
+        const decl = node as FunctionDefinition | GraphNodeDefinition | TypeAlias;
+        decl.docComment = pendingDocComment;
+        pendingDocComment = null;
+      } else if (pendingDocComment) {
+        // Doc comment wasn't followed by a declaration — keep it as a regular comment
+        result.push(pendingDocComment);
+        pendingDocComment = null;
+      }
+
+      result.push(node);
+    }
+
+    // Handle trailing doc comment
+    if (pendingDocComment) {
+      result.push(pendingDocComment);
+    }
+
+    this.program.nodes = result;
+
+    // File-level doc comment: first unmatched doc comment before any user import/declaration
+    for (let i = 0; i < this.program.nodes.length; i++) {
+      const node = this.program.nodes[i];
+      if (node.type === "comment" || node.type === "newLine") continue;
+      if (node.type === "multiLineComment" && !node.isDoc) continue;
+      if (isStdlibImport(node)) continue;
+
+      if (node.type === "multiLineComment" && node.isDoc) {
+        this.program.docComment = node as AgencyMultiLineComment;
+        this.program.nodes.splice(i, 1);
+      }
+      break;
+    }
+  }
+
   preprocess(): AgencyProgram {
+    this.attachDocComments();
     this.program.nodes = collectTags(this.program.nodes);
     if (Object.keys(this.functionDefinitions).length === 0) {
       this.getFunctionDefinitions();

@@ -285,3 +285,40 @@ describe("AgencyGenerator - Class Definitions", () => {
   });
 });
 
+describe("AgencyGenerator - Doc Comments", () => {
+  function formatAgency(input: string): string {
+    const parseResult = parseAgency(input, {}, false);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return "";
+    const generator = new AgencyGenerator();
+    return generator.generate(parseResult.result).output.trim();
+  }
+
+  it("should preserve /** syntax for doc comments", () => {
+    const input = `/** This is a doc comment */\ndef foo() {\n  print("hi")\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("/** This is a doc comment */");
+  });
+
+  it("should preserve /* syntax for regular multi-line comments", () => {
+    const input = `/* This is a regular comment */\ndef foo() {\n  print("hi")\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("/* This is a regular comment */");
+    expect(output).not.toContain("/**");
+  });
+
+  it("should preserve multi-line doc comments", () => {
+    const input = `/**\nThis is a multi-line\ndoc comment\n*/\ndef foo() {\n  print("hi")\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("/**");
+    expect(output).toContain("This is a multi-line");
+  });
+
+  it("should round-trip node docstrings", () => {
+    const input = `node main() {\n  """Main entry point."""\n  print("hello")\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain('"""');
+    expect(output).toContain("Main entry point.");
+  });
+});
+

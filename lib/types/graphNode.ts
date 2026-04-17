@@ -1,7 +1,7 @@
-import { AgencyNode, FunctionCall, VariableType } from "../types.js";
+import { AgencyMultiLineComment, AgencyNode, FunctionCall, VariableType } from "../types.js";
 import { ValueAccess } from "./access.js";
 import { BaseNode } from "./base.js";
-import { FunctionParameter } from "./function.js";
+import { DocString, FunctionParameter } from "./function.js";
 import { Literal } from "./literals.js";
 import { Tag } from "./tag.js";
 
@@ -26,6 +26,8 @@ export type GraphNodeDefinition = BaseNode & {
   returnType?: VariableType | null;
   visibility?: Visibility;
   tags?: Tag[];
+  docComment?: AgencyMultiLineComment;
+  docString?: DocString;
 };
 
 export type NodeCall = {

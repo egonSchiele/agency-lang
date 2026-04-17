@@ -7,7 +7,7 @@ describe("multiLineCommentParser", () => {
       input: "/* this is a comment */",
       expected: {
         success: true,
-        result: { type: "multiLineComment", content: " this is a comment " },
+        result: { type: "multiLineComment", content: " this is a comment ", isDoc: false },
       },
     },
     {
@@ -17,6 +17,7 @@ describe("multiLineCommentParser", () => {
         result: {
           type: "multiLineComment",
           content: " multi\nline\ncomment ",
+          isDoc: false,
         },
       },
     },
@@ -24,7 +25,7 @@ describe("multiLineCommentParser", () => {
       input: "/*no spaces*/",
       expected: {
         success: true,
-        result: { type: "multiLineComment", content: "no spaces" },
+        result: { type: "multiLineComment", content: "no spaces", isDoc: false },
       },
     },
     {
@@ -34,6 +35,7 @@ describe("multiLineCommentParser", () => {
         result: {
           type: "multiLineComment",
           content: " comment with special chars !@# ",
+          isDoc: false,
         },
       },
     },
@@ -41,7 +43,33 @@ describe("multiLineCommentParser", () => {
       input: "/**/",
       expected: {
         success: true,
-        result: { type: "multiLineComment", content: "" },
+        result: { type: "multiLineComment", content: "", isDoc: false },
+      },
+    },
+    // Doc comment cases
+    {
+      input: "/** this is a doc comment */",
+      expected: {
+        success: true,
+        result: { type: "multiLineComment", content: " this is a doc comment ", isDoc: true },
+      },
+    },
+    {
+      input: "/** multi\nline\ndoc comment */",
+      expected: {
+        success: true,
+        result: {
+          type: "multiLineComment",
+          content: " multi\nline\ndoc comment ",
+          isDoc: true,
+        },
+      },
+    },
+    {
+      input: "/***/",
+      expected: {
+        success: true,
+        result: { type: "multiLineComment", content: "", isDoc: true },
       },
     },
     // Failure cases

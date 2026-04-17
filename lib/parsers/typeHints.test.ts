@@ -1645,6 +1645,49 @@ describe("objectTypeParser", () => {
         },
       },
     },
+    // Newline-delimited properties (no semicolons)
+    {
+      input: "{\n  name: string\n  age: number\n}",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "name",
+              value: { type: "primitiveType", value: "string" },
+            },
+            {
+              key: "age",
+              value: { type: "primitiveType", value: "number" },
+            },
+          ],
+        },
+      },
+    },
+    {
+      input: "{\n  name: string\n  age: number\n  active: boolean\n}",
+      expected: {
+        success: true,
+        result: {
+          type: "objectType",
+          properties: [
+            {
+              key: "name",
+              value: { type: "primitiveType", value: "string" },
+            },
+            {
+              key: "age",
+              value: { type: "primitiveType", value: "number" },
+            },
+            {
+              key: "active",
+              value: { type: "primitiveType", value: "boolean" },
+            },
+          ],
+        },
+      },
+    },
     // Failure cases
     {
       input: "{ x number }",

@@ -1,3 +1,4 @@
+import { AgencyMultiLineComment } from "../types.js";
 import { BaseNode } from "./base.js";
 
 export type VariableType =
@@ -70,6 +71,7 @@ export type TypeAlias = BaseNode & {
   aliasName: string;
   aliasedType: VariableType;
   exported?: boolean;
+  docComment?: AgencyMultiLineComment;
 };
 
 export type TypeAliasVariable = {

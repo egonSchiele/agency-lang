@@ -415,10 +415,11 @@ program
   .command("doc")
   .description("Generate Markdown documentation for .agency file(s)")
   .argument("<input>", "Path to .agency file or directory")
-  .requiredOption("-o, --output <dir>", "Output directory for generated docs")
-  .action((input: string, opts: { output: string }) => {
+  .option("-o, --output <dir>", "Output directory for generated docs")
+  .action((input: string, opts: { output?: string }) => {
     const config = getConfig();
-    generateDoc(config, input, opts.output);
+    const outputDir = opts.output || config.doc?.outDir || "docs";
+    generateDoc(config, input, outputDir);
   });
 
 program

@@ -174,6 +174,116 @@ def greet(name: string = "world"): string {
     expect(output).toContain('| name | string | "world" |');
   });
 
+  it("renders file-level doc comment after title", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "filedoc.agency"),
+      `/** This file implements email categorization. */
+
+import { helper } from "./helper.ts"
+
+node main() {
+  print("hello")
+}
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "filedoc.agency"), outputDir);
+    const output = fs.readFileSync(
+      path.join(outputDir, "filedoc.md"),
+      "utf-8",
+    );
+
+    expect(output).toContain("# filedoc");
+    expect(output).toContain("This file implements email categorization.");
+    // File doc should come before nodes section
+    const fileDocIndex = output.indexOf("This file implements email categorization.");
+    const nodesIndex = output.indexOf("## Nodes");
+    expect(fileDocIndex).toBeLessThan(nodesIndex);
+  });
+
+  it("renders doc comment and docstring on a function (docstring first)", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "funcdoc.agency"),
+      `/** Extra context for docs. */
+def add(a: number, b: number): number {
+  """Adds two numbers."""
+  return a + b
+}
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "funcdoc.agency"), outputDir);
+    const output = fs.readFileSync(
+      path.join(outputDir, "funcdoc.md"),
+      "utf-8",
+    );
+
+    expect(output).toContain("Adds two numbers.");
+    expect(output).toContain("Extra context for docs.");
+    // Docstring should come before doc comment
+    const docstringIndex = output.indexOf("Adds two numbers.");
+    const docCommentIndex = output.indexOf("Extra context for docs.");
+    expect(docstringIndex).toBeLessThan(docCommentIndex);
+  });
+
+  it("renders doc comment and docstring on a node (docstring first)", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "nodedoc.agency"),
+      `/** Extra node context. */
+node main() {
+  """Main entry point."""
+  print("hello")
+}
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "nodedoc.agency"), outputDir);
+    const output = fs.readFileSync(
+      path.join(outputDir, "nodedoc.md"),
+      "utf-8",
+    );
+
+    expect(output).toContain("Main entry point.");
+    expect(output).toContain("Extra node context.");
+    const docstringIndex = output.indexOf("Main entry point.");
+    const docCommentIndex = output.indexOf("Extra node context.");
+    expect(docstringIndex).toBeLessThan(docCommentIndex);
+  });
+
+  it("renders doc comment on a type alias", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "typedoc.agency"),
+      `/** Possible message categories. */
+type Category = "reminder" | "todo"
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "typedoc.agency"), outputDir);
+    const output = fs.readFileSync(
+      path.join(outputDir, "typedoc.md"),
+      "utf-8",
+    );
+
+    expect(output).toContain("Possible message categories.");
+    expect(output).toContain("### Category");
+  });
+
   it("handles type aliases that are not objects", () => {
     const inputDir = path.join(tmpDir, "input");
     const outputDir = path.join(tmpDir, "output");
@@ -194,5 +304,133 @@ type Status = "active" | "inactive"
 
     expect(output).toContain("### Status");
     expect(output).toContain('```ts\ntype Status = "active" | "inactive"\n```');
+  });
+
+  it("adds page-level View source link when baseUrl is configured", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "test.agency"),
+      `node main() {
+  print("hello")
+}
+`,
+    );
+
+    generateDoc(
+      { doc: { baseUrl: "https://example.com/src" } },
+      path.join(inputDir, "test.agency"),
+      outputDir,
+    );
+    const output = fs.readFileSync(
+      path.join(outputDir, "test.md"),
+      "utf-8",
+    );
+
+    expect(output).toContain("[View source](https://example.com/src/test.agency)");
+  });
+
+  it("adds item-level [source] links with line numbers", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "funcs.agency"),
+      `def greet(name: string): string {
+  return "Hello, " + name
+}
+
+node main() {
+  print("hello")
+}
+`,
+    );
+
+    generateDoc(
+      { doc: { baseUrl: "https://example.com/src" } },
+      path.join(inputDir, "funcs.agency"),
+      outputDir,
+    );
+    const output = fs.readFileSync(
+      path.join(outputDir, "funcs.md"),
+      "utf-8",
+    );
+
+    // Function and node headings should have [source] links with line numbers
+    expect(output).toMatch(/### greet \[source\]\(https:\/\/example\.com\/src\/funcs\.agency#L\d+\)/);
+    expect(output).toMatch(/### main \[source\]\(https:\/\/example\.com\/src\/funcs\.agency#L\d+\)/);
+  });
+
+  it("generates cross-file type links in directory mode", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "types.agency"),
+      `type User = {
+  name: string
+  age: number
+}
+`,
+    );
+
+    fs.writeFileSync(
+      path.join(inputDir, "funcs.agency"),
+      `type Category = "a" | "b"
+
+def getCategory(): Category {
+  return "a"
+}
+`,
+    );
+
+    generateDoc(
+      { doc: { baseUrl: "https://example.com/src" } },
+      inputDir,
+      outputDir,
+    );
+
+    const funcsOutput = fs.readFileSync(
+      path.join(outputDir, "funcs.md"),
+      "utf-8",
+    );
+
+    // Return type Category is defined in same file — anchor link
+    expect(funcsOutput).toContain("[Category](#category)");
+
+    const typesOutput = fs.readFileSync(
+      path.join(outputDir, "types.md"),
+      "utf-8",
+    );
+
+    // Types file should have User with source link
+    expect(typesOutput).toContain("### User");
+  });
+
+  it("does not add source links when baseUrl is not configured", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "test.agency"),
+      `def foo(): string {
+  return "bar"
+}
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "test.agency"), outputDir);
+    const output = fs.readFileSync(
+      path.join(outputDir, "test.md"),
+      "utf-8",
+    );
+
+    expect(output).not.toContain("[View source]");
+    expect(output).not.toContain("[source]");
   });
 });

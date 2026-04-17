@@ -36,8 +36,10 @@ function resetScrollRegion(): string {
   return `${CSI}r`;
 }
 
-export function _emptyLine(): string {
-  return " ".repeat(cols);
+export function _emptyLine(): void {
+  if (!initialized) return;
+  writeInScrollRegion("");
+  renderFixedArea();
 }
 
 // ---------------------------------------------------------------------------
@@ -85,9 +87,6 @@ let inputLineIndex = 0;
 function buildFixedLines(): string[] {
   const lines: string[] = [];
 
-  // const titlePadding = Math.max(0, cols - appTitle.length - 4);
-  // lines.push(color.green(`── ${appTitle} ${"─".repeat(titlePadding)}`));
-
   lines.push("");
   lines.push("");
   // prompt
@@ -97,7 +96,10 @@ function buildFixedLines(): string[] {
   lines.push(color.dim("─".repeat(cols)));
 
   // status bar
-  const left = truncate(statusLeft, Math.floor(((cols - 4) * 2) / 3));
+  const left = truncate(
+    statusLeft || hintContent,
+    Math.floor(((cols - 4) * 2) / 3),
+  );
   const right = truncate(statusRight, Math.floor((cols - 4) / 3));
   const padding = Math.max(0, cols - left.length - right.length - 2);
   lines.push(color.cyan(`${left} ${" ".repeat(padding)} ${right}`));

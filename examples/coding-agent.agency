@@ -2,14 +2,15 @@ import * as ui from "std::ui"
 import { bash } from "std::shell"
 import { edit, multiedit, applyPatch, mkdir, copy, move, remove } from "std::fs"
 import { cwd } from "std::system"
-/* callback onLLMCallStart(data) {
+callback onLLMCallStart(data) {
   ui.chat("", data)
   ui.startSpinner("thinking")
 }
 
 callback onLLMCallEnd(data) {
   ui.stopSpinner()
-} */
+}
+
 callback onToolCallStart(data) {
   ui.log("  tool: ${data.toolName}")
 }

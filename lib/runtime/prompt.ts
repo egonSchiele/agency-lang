@@ -19,6 +19,7 @@ import { PromptResult, Result, StreamChunk, ToolCallJSON } from "smoltalk";
 import { ZodType } from "zod/v3";
 import { ThreadStore } from "./state/threadStore.js";
 import { isFailure } from "./result.js";
+import { AgencyCancelledError, isAbortError } from "./errors.js";
 
 export interface ToolHandler {
   name: string;
@@ -48,6 +49,10 @@ async function _runPrompt({
   responseFormat?: any;
   clientConfig: Partial<smoltalk.SmolPromptConfig>;
 }): Promise<{ messages: MessageThread; toolCalls: smoltalk.ToolCallJSON[] }> {
+  if (ctx.aborted) {
+    throw new AgencyCancelledError();
+  }
+
   const stream = !!(clientConfig as any)?.stream;
   const startTime = performance.now();
 
@@ -71,6 +76,7 @@ async function _runPrompt({
       tools,
       responseFormat,
       stream,
+      abortSignal: ctx.abortController.signal,
       ...clientConfig,
     });
 
@@ -452,89 +458,101 @@ export async function runPrompt(args: {
   // Restore state after interrupt
   let toolCalls: smoltalk.ToolCallJSON[] = [];
 
-  if (args.interruptData === undefined) {
-    // not resuming after an interrupt
-    messages.push(smoltalk.userMessage(prompt));
+  try {
+    if (args.interruptData === undefined) {
+      // not resuming after an interrupt
+      messages.push(smoltalk.userMessage(prompt));
 
-    const result = await _runPrompt({
-      ctx,
-      messages,
-      tools: tools || [],
-      prompt,
-      responseFormat,
-      clientConfig,
-    });
-    messages = result.messages;
-    toolCalls = result.toolCalls;
-  } else {
-    if (!args.interruptData.toolCall) {
-      throw new Error(
-        `Interrupt data is present but no tool call found. This shouldn't happen: ${JSON.stringify(args.interruptData)}`,
-      );
-    }
-    toolCalls = [args.interruptData.toolCall];
-  }
-
-  // Handle tool calls
-  const toolErrorCounts: Record<string, number> = {};
-  let toolCallRound = 0;
-  while (toolCalls.length > 0) {
-    if (toolCallRound++ >= maxToolCallRounds) {
-      throw new Error(
-        `Exceeded maximum tool call rounds (${maxToolCallRounds})`,
-      );
+      const result = await _runPrompt({
+        ctx,
+        messages,
+        tools: tools || [],
+        prompt,
+        responseFormat,
+        clientConfig,
+      });
+      messages = result.messages;
+      toolCalls = result.toolCalls;
+    } else {
+      if (!args.interruptData.toolCall) {
+        throw new Error(
+          `Interrupt data is present but no tool call found. This shouldn't happen: ${JSON.stringify(args.interruptData)}`,
+        );
+      }
+      toolCalls = [args.interruptData.toolCall];
     }
 
-    const executeToolCallsResult = await executeToolCalls({
-      toolCalls,
-      toolHandlers,
-      messages,
-      ctx,
-      clientConfig,
-      interruptData: args.interruptData,
-      removedTools,
-      toolErrorCounts,
-    });
+    // Handle tool calls
+    const toolErrorCounts: Record<string, number> = {};
+    let toolCallRound = 0;
+    while (toolCalls.length > 0) {
+      if (ctx.aborted) {
+        throw new AgencyCancelledError();
+      }
+      if (toolCallRound++ >= maxToolCallRounds) {
+        throw new Error(
+          `Exceeded maximum tool call rounds (${maxToolCallRounds})`,
+        );
+      }
 
-    messages = executeToolCallsResult.messages;
-
-    // Filter out tools that failed after side effects
-    tools = tools.filter((t) => !removedTools.includes(t.name));
-    toolHandlers = toolHandlers.filter((h) => !removedTools.includes(h.name));
-
-    if (executeToolCallsResult.isInterrupt) {
-      const { interrupt } = executeToolCallsResult;
-
-      ctx.statelogClient.debug(`Tool call interrupted execution.`, {
-        messages: messages.getMessages(),
-        model: clientConfig.model,
+      const executeToolCallsResult = await executeToolCalls({
+        toolCalls,
+        toolHandlers,
+        messages,
+        ctx,
+        clientConfig,
+        interruptData: args.interruptData,
+        removedTools,
+        toolErrorCounts,
       });
 
-      if (interrupt.debugger === false) {
-        // For real user interrupts, create a checkpoint at the LLM call site
-        // so we can resume the conversation. Debug interrupts keep their
-        // original checkpoint from debugStep (pointing to the tool's source).
-        const checkpointId = ctx.checkpoints.create(ctx, {
-          moduleId: checkpointInfo?.moduleId ?? "",
-          scopeName: checkpointInfo?.scopeName ?? "",
-          stepPath: checkpointInfo?.stepPath ?? "",
-        });
-        interrupt.checkpointId = checkpointId;
-        interrupt.checkpoint = ctx.checkpoints.get(checkpointId);
-      }
-      return interrupt;
-    }
+      messages = executeToolCallsResult.messages;
 
-    const result = await _runPrompt({
-      ctx,
-      messages,
-      tools: tools || [],
-      prompt,
-      responseFormat,
-      clientConfig,
-    });
-    messages = result.messages;
-    toolCalls = result.toolCalls;
+      // Filter out tools that failed after side effects
+      tools = tools.filter((t) => !removedTools.includes(t.name));
+      toolHandlers = toolHandlers.filter(
+        (h) => !removedTools.includes(h.name),
+      );
+
+      if (executeToolCallsResult.isInterrupt) {
+        const { interrupt } = executeToolCallsResult;
+
+        ctx.statelogClient.debug(`Tool call interrupted execution.`, {
+          messages: messages.getMessages(),
+          model: clientConfig.model,
+        });
+
+        if (interrupt.debugger === false) {
+          // For real user interrupts, create a checkpoint at the LLM call site
+          // so we can resume the conversation. Debug interrupts keep their
+          // original checkpoint from debugStep (pointing to the tool's source).
+          const checkpointId = ctx.checkpoints.create(ctx, {
+            moduleId: checkpointInfo?.moduleId ?? "",
+            scopeName: checkpointInfo?.scopeName ?? "",
+            stepPath: checkpointInfo?.stepPath ?? "",
+          });
+          interrupt.checkpointId = checkpointId;
+          interrupt.checkpoint = ctx.checkpoints.get(checkpointId);
+        }
+        return interrupt;
+      }
+
+      const result = await _runPrompt({
+        ctx,
+        messages,
+        tools: tools || [],
+        prompt,
+        responseFormat,
+        clientConfig,
+      });
+      messages = result.messages;
+      toolCalls = result.toolCalls;
+    }
+  } catch (error) {
+    if (!isAbortError(error)) {
+      ctx.cancel();
+    }
+    throw error;
   }
 
   const responseMessage = messages.getMessages().at(-1);

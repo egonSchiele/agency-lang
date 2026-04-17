@@ -2,7 +2,7 @@ import { MessageJSON } from "smoltalk";
 import { callHook } from "./hooks.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
-import { CheckpointError, RestoreSignal } from "./errors.js";
+import { AgencyCancelledError, CheckpointError, RestoreSignal } from "./errors.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { GraphState, InternalFunctionState, RunNodeResult } from "./types.js";
@@ -77,6 +77,7 @@ export async function runNode({
   messages,
   callbacks,
   initializeGlobals,
+  abortSignal,
 }: {
   // global execution context
   ctx: RuntimeContext<GraphState>;
@@ -95,6 +96,10 @@ export async function runNode({
 
   // initializes global variables on the execution context
   initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
+
+  // An AbortSignal for cancelling the agent mid-execution.
+  // When aborted, in-flight LLM requests are torn down and a AgencyCancelledError is thrown.
+  abortSignal?: AbortSignal;
 }): Promise<RunNodeResult<any>> {
   const execCtx = ctx.createExecutionContext();
   if (initializeGlobals) {
@@ -105,10 +110,20 @@ export async function runNode({
   if (callbacks) {
     Object.assign(execCtx.callbacks, callbacks);
   }
+
+  // Wire external abort signal to the execution context
+  const cancel = (reason?: string) => execCtx.cancel(reason);
+  if (abortSignal) {
+    if (abortSignal.aborted) {
+      throw new AgencyCancelledError();
+    }
+    abortSignal.addEventListener("abort", () => execCtx.cancel(), { once: true });
+  }
+
   await callHook({
     callbacks: execCtx.callbacks,
     name: "onAgentStart",
-    data: { nodeName, args: data, messages: messages || [] },
+    data: { nodeName, args: data, messages: messages || [], cancel },
   });
   let isResume = false;
   let threadStore = ThreadStore.withDefaultActive();

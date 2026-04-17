@@ -17,6 +17,7 @@ export type CallbackMap = {
     nodeName: string;
     args: Record<string, any>;
     messages: MessageJSON[];
+    cancel: (reason?: string) => void;
   };
   onAgentEnd: { nodeName: string; result: RunNodeResult<any> };
   onNodeStart: { nodeName: string };

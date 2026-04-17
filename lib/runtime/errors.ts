@@ -40,3 +40,17 @@ export class ConcurrentInterruptError extends Error {
     this.name = "ConcurrentInterruptError";
   }
 }
+
+export class AgencyCancelledError extends Error {
+  constructor(reason?: string) {
+    super(reason ?? "Agent execution was cancelled");
+    this.name = "AgencyCancelledError";
+  }
+}
+
+export function isAbortError(error: unknown): boolean {
+  if (error instanceof AgencyCancelledError) return true;
+  if (error instanceof DOMException && error.name === "AbortError") return true;
+  if (error instanceof Error && error.name === "AbortError") return true;
+  return false;
+}

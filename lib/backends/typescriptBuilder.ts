@@ -896,6 +896,12 @@ export class TypeScriptBuilder {
 
   private processValueAccess(node: ValueAccess): TsNode {
     let result = this.processNode(node.base);
+    // If the base is a function call, await it before accessing properties/methods
+    // on the result. Without this, chaining like getGreeting().trim() would call
+    // .trim() on the Promise instead of the resolved value.
+    if (node.base.type === "functionCall" && node.chain.length > 0) {
+      result = ts.raw(`(${this.str(ts.await(result))})`);
+    }
     for (const element of node.chain) {
       switch (element.kind) {
         case "property":

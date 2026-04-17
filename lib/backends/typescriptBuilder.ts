@@ -401,6 +401,25 @@ export class TypeScriptBuilder {
     }
   }
 
+  private getScopeReturnTypeValidated(): boolean {
+    const currentScope = this.getCurrentScope();
+    switch (currentScope.type) {
+      case "function": {
+        const funcDef =
+          this.programInfo.functionDefinitions[currentScope.functionName];
+        return !!funcDef?.returnTypeValidated;
+      }
+      case "node": {
+        const graphNode = this.programInfo.graphNodes.find(
+          (n) => n.nodeName === currentScope.nodeName,
+        );
+        return !!graphNode?.returnTypeValidated;
+      }
+      default:
+        return false;
+    }
+  }
+
   private agencyFileToDefaultImportName(agencyFile: string): string {
     return `__graph_${agencyFile.replace(".agency", "").replace(/[^a-zA-Z0-9_]/g, "_")}`;
   }
@@ -2170,6 +2189,15 @@ export class TypeScriptBuilder {
       .done();
   }
 
+  /** If the enclosing function/node has returnTypeValidated, wrap value in __validateType */
+  private maybeWrapReturnValidation(valueNode: TsNode): TsNode {
+    if (!this.getScopeReturnTypeValidated()) return valueNode;
+    const returnType = this.getScopeReturnType();
+    if (!returnType) return valueNode;
+    const zodSchema = mapTypeToZodSchema(returnType, this.getVisibleTypeAliases());
+    return ts.validateType(valueNode, ts.raw(zodSchema));
+  }
+
   private processReturnStatement(node: ReturnStatement): TsNode {
     // Bare return (no value)
     if (!node.value) {
@@ -2215,7 +2243,7 @@ export class TypeScriptBuilder {
         );
         return ts.statements([
           llmNode,
-          ts.nodeResult(ts.self(DEFAULT_PROMPT_NAME)),
+          ts.nodeResult(this.maybeWrapReturnValidation(ts.self(DEFAULT_PROMPT_NAME))),
         ]);
       }
       const valueNode = this.processNode(node.value);
@@ -2225,7 +2253,7 @@ export class TypeScriptBuilder {
       ) {
         return valueNode;
       }
-      return ts.nodeResult(valueNode);
+      return ts.nodeResult(this.maybeWrapReturnValidation(valueNode));
     }
 
     if (
@@ -2245,11 +2273,11 @@ export class TypeScriptBuilder {
       );
       return ts.statements([
         llmNode,
-        ts.functionReturn(ts.self(DEFAULT_PROMPT_NAME)),
+        ts.functionReturn(this.maybeWrapReturnValidation(ts.self(DEFAULT_PROMPT_NAME))),
       ]);
     }
     const valueNode = this.processNode(node.value);
-    return ts.functionReturn(valueNode);
+    return ts.functionReturn(this.maybeWrapReturnValidation(valueNode));
   }
 
   private processAssignment(node: Assignment): TsNode {

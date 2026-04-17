@@ -7,7 +7,7 @@ describe("Schema", () => {
     const schema = new Schema(z.object({ name: z.string(), age: z.number() }));
     const result = schema.parse({ name: "Alice", age: 30 });
     expect(result.success).toBe(true);
-    expect(result.value).toEqual({ name: "Alice", age: 30 });
+    expect(result.success && result.value).toEqual({ name: "Alice", age: 30 });
   });
 
   it("parse returns failure for invalid data", () => {
@@ -20,7 +20,7 @@ describe("Schema", () => {
     const schema = new Schema(z.object({ x: z.number() }));
     const result = schema.parseJSON('{"x": 42}');
     expect(result.success).toBe(true);
-    expect(result.value).toEqual({ x: 42 });
+    expect(result.success && result.value).toEqual({ x: 42 });
   });
 
   it("parseJSON returns failure for invalid JSON", () => {
@@ -55,7 +55,7 @@ describe("__validateType", () => {
   it("returns success when value matches schema", () => {
     const result = __validateType(42, z.number());
     expect(result.success).toBe(true);
-    expect(result.value).toBe(42);
+    expect(result.success && result.value).toBe(42);
   });
 
   it("returns failure when value doesn't match", () => {
@@ -66,6 +66,6 @@ describe("__validateType", () => {
   it("works with complex schemas", () => {
     const result = __validateType({ name: "Alice" }, z.object({ name: z.string() }));
     expect(result.success).toBe(true);
-    expect(result.value).toEqual({ name: "Alice" });
+    expect(result.success && result.value).toEqual({ name: "Alice" });
   });
 });

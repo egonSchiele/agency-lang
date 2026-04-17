@@ -170,6 +170,7 @@ export type Assignment = BaseNode & {
   variableName: string;
   accessChain?: AccessChainElement[];
   typeHint?: VariableType;
+  validated?: boolean;
   scope?: ScopeType;
   shared?: boolean;
   declKind?: "let" | "const";

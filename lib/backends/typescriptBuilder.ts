@@ -924,6 +924,12 @@ export class TypeScriptBuilder {
 
   private processValueAccess(node: ValueAccess): TsNode {
     let result = this.processNode(node.base);
+    // If the base is a function call, await it before accessing properties/methods
+    // on the result. Without this, chaining like getGreeting().trim() would call
+    // .trim() on the Promise instead of the resolved value.
+    if (node.base.type === "functionCall" && node.chain.length > 0) {
+      result = ts.raw(`(${this.str(ts.await(result))})`);
+    }
     for (const element of node.chain) {
       switch (element.kind) {
         case "property":
@@ -946,6 +952,7 @@ export class TypeScriptBuilder {
           break;
         }
         case "methodCall": {
+          const isLastInChain = element === node.chain[node.chain.length - 1];
           const callNode = this.generateFunctionCallExpression(
             element.functionCall,
             "valueAccess",
@@ -961,11 +968,18 @@ export class TypeScriptBuilder {
               : callNode.arguments;
             const propNode = ts.prop(result, callNode.callee.name, { optional: element.optional });
             const callExpr = ts.call(propNode, args);
-            result = isClassMethod ? ts.await(callExpr) : callExpr;
+            // Parenthesize awaited calls when more chain elements follow,
+            // so .next() runs on the resolved value, not the Promise.
+            result = isLastInChain
+              ? ts.await(callExpr)
+              : ts.raw(`(${this.str(ts.await(callExpr))})`);
           } else {
             // Fallback for complex cases (e.g. await-wrapped)
             const dot = element.optional ? "?." : ".";
-            result = ts.raw(`${this.str(result)}${dot}${this.str(callNode)}`);
+            const awaited = `await ${this.str(result)}${dot}${this.str(callNode)}`;
+            result = isLastInChain
+              ? ts.raw(awaited)
+              : ts.raw(`(${awaited})`);
           }
           break;
         }

@@ -1,0 +1,63 @@
+import * as ui from "std::ui"
+import { bash } from "std::shell"
+import { edit, multiedit, applyPatch, mkdir, copy, move, remove } from "std::fs"
+import { cwd } from "std::system"
+callback onLLMCallStart(data) {
+  ui.chat("", data)
+  ui.startSpinner("thinking")
+}
+
+callback onLLMCallEnd(data) {
+  ui.stopSpinner()
+}
+
+callback onToolCallStart(data) {
+  ui.log("  tool: ${data.toolName}")
+}
+
+type NextAction = 
+  | { type: "respond"; message: string }
+  | { type: "done"; summary: string }
+
+const systemPrompt = read("./examples/coding-agent/systemPrompt.md") with approve
+
+node main() {
+  ui.initUI("Coding Agent")
+  ui.status("", cwd())
+  ui.log("I can help you read, search, and edit code.")
+  ui.log("Type your request below, or 'quit' to exit.")
+  ui.emptyLine()
+  ui.emptyLine()
+  let userMessage = ui.prompt("What would you like to do?")
+  handle {
+    thread {
+      system(systemPrompt)
+      let nextAction: NextAction = { 
+        type: "respond",
+        message: "How can I help?"
+      }
+      while (nextAction.type != "done") {
+        ui.chat("user", userMessage)
+        nextAction: NextAction = llm(userMessage, { 
+          tools: [bash, edit, cwd, read, write, multiedit, applyPatch, mkdir, copy, move, remove]
+        })
+        if (nextAction.type == "respond") {
+          ui.chat("agent", nextAction.message)
+          userMessage = ui.prompt("Your reply?")
+        }
+      }
+    }
+    ui.separator("Done")
+    ui.chat("agent", nextAction.summary)
+  } with (data) {
+    ui.log(color.yellow("User approval needed"))
+    ui.log(color.yellow(JSON.stringify(data)))
+    ui.log(color.yellow("Approve? (y/n)"))
+    if (ui.getConfirmation("Approve?")) {
+      return approve()
+    }
+    return reject()
+  }
+  ui.prompt("Press enter to exit")
+  ui.destroyUI()
+}

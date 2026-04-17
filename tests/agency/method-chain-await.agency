@@ -1,0 +1,8 @@
+def getGreeting(): string {
+  return "  Hello World  "
+}
+
+node main() {
+  let result = getGreeting().trim().toLowerCase()
+  return result
+}

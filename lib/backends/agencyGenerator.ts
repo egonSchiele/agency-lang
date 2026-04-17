@@ -503,8 +503,10 @@ export class AgencyGenerator {
 
     const exportPrefix = node.exported ? "export " : "";
 
+    const keyword = node.callback ? "callback" : "def";
+
     let result = this.indentStr(
-      `${exportPrefix}${safePrefix}def ${functionName}(${params})${returnTypeStr} {\n`,
+      `${exportPrefix}${safePrefix}${keyword} ${functionName}(${params})${returnTypeStr} {\n`,
     );
 
     this.increaseIndent();

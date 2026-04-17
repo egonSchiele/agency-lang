@@ -38,6 +38,7 @@ import {
   not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
   success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
+  Schema, __validateType,
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,

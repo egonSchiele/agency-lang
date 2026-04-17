@@ -642,4 +642,30 @@ describe("sharedAssignmentParser", () => {
       expect(result.result.shared).toBeUndefined();
     }
   });
+
+  it("parses assignment with validated type annotation", () => {
+    const result = assignmentParser("const x: number! = foo");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.typeHint).toEqual({ type: "primitiveType", value: "number" });
+      expect(result.result.validated).toBe(true);
+    }
+  });
+
+  it("parses assignment with validated union type", () => {
+    const result = assignmentParser('const x: "happy"|"sad"! = foo');
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.typeHint?.type).toBe("unionType");
+      expect(result.result.validated).toBe(true);
+    }
+  });
+
+  it("parses assignment without ! as not validated", () => {
+    const result = assignmentParser("const x: number = foo");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.validated).toBeUndefined();
+    }
+  });
 });

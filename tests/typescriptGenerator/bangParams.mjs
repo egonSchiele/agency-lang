@@ -145,11 +145,6 @@ let __functionCompleted = false;
     }
   })
   __stack.args["data"] = data;
-  const __vr_data = __validateType(__stack.args["data"], z.number());
-  if (!__vr_data.success) {
-    return __vr_data;
-  }
-  __stack.args["data"] = __vr_data.value;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "bangParams.agency", scopeName: "process" });
   let __resultCheckpointId = -1;
@@ -167,6 +162,11 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
+    const __vr_data = __validateType(__stack.args["data"], z.number());
+    if (!__vr_data.success) {
+      return __vr_data;
+    }
+    __stack.args["data"] = __vr_data.value;
     await runner.step(0, async (runner) => {
 await print(__stack.args.data)
     });

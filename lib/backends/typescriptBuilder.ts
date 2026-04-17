@@ -952,7 +952,7 @@ export class TypeScriptBuilder {
     ) {
       const baseName = (node.base as VariableNameLiteral).value;
       const typeAliases = this.getVisibleTypeAliases();
-      const builtinTypes = ["number", "string", "boolean", "null", "object"];
+      const builtinTypes = ["number", "string", "boolean", "null", "undefined", "any", "unknown", "object"];
 
       let zodSchema: string | null = null;
 
@@ -1652,23 +1652,6 @@ export class TypeScriptBuilder {
       }
     }
 
-    // Validation guards for parameters with ! (bang) syntax
-    for (const param of parameters) {
-      if (param.validated && param.typeHint) {
-        const zodSchema = mapTypeToZodSchema(param.typeHint, this.getVisibleTypeAliases());
-        const stackArg = $(ts.stack("args")).index(ts.str(param.name)).done();
-        const vrName = `__vr_${param.name}`;
-        setupStmts.push(
-          ts.constDecl(vrName, ts.validateType(stackArg, ts.raw(zodSchema))),
-          ts.if(
-            ts.raw(`!${vrName}.success`),
-            ts.return(ts.id(vrName)),
-          ),
-          ts.assign(stackArg, ts.raw(`${vrName}.value`)),
-        );
-      }
-    }
-
     // __self.__retryable
     setupStmts.push(
       ts.assign(
@@ -1687,10 +1670,30 @@ export class TypeScriptBuilder {
     // Pinned checkpoint at entry (enables result.retry and error-to-failure wrapping)
     setupStmts.push(this.buildResultCheckpointSetup(functionName, parameters));
 
+    // Validation guards for parameters with ! (bang) syntax.
+    // Placed inside the try block so the finally cleanup (stateStack.pop) always runs.
+    const validationGuards: TsNode[] = [];
+    for (const param of parameters) {
+      if (param.validated && param.typeHint) {
+        const zodSchema = mapTypeToZodSchema(param.typeHint, this.getVisibleTypeAliases());
+        const stackArg = $(ts.stack("args")).index(ts.str(param.name)).done();
+        const vrName = `__vr_${param.name}`;
+        validationGuards.push(
+          ts.constDecl(vrName, ts.validateType(stackArg, ts.raw(zodSchema))),
+          ts.if(
+            ts.raw(`!${vrName}.success`),
+            ts.return(ts.id(vrName)),
+          ),
+          ts.assign(stackArg, ts.raw(`${vrName}.value`)),
+        );
+      }
+    }
+
     // Try/catch wrapping the body, with finally to always pop the state stack
     setupStmts.push(
       ts.tryCatch(
         ts.statements([
+          ...validationGuards,
           ...bodyCode,
           ts.raw(
             "if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }",

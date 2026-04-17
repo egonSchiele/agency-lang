@@ -272,9 +272,38 @@ export class DebuggerUI implements DebuggerIO {
     // is not generated; we must catch the keypress directly.
     this.screen.key(["C-c"], () => this.cleanup());
 
+    // Ctrl-Z to suspend — blessed puts the terminal in raw mode so SIGTSTP
+    // is not generated; we must catch the keypress, restore the terminal,
+    // and send SIGTSTP manually. We defer the signal to the next tick so
+    // the terminal escape sequences flush first.
+    this.screen.key(["C-z"], () => {
+      process.stdin.setRawMode?.(false);
+      process.stdout.write(
+        "\x1b[?1049l" + // exit alternate screen buffer
+        "\x1b[2J" +     // clear entire screen
+        "\x1b[H" +      // move cursor to top-left
+        "\x1b[?25h",    // show cursor
+      );
+      // Node suppresses the default OS suspend action when any SIGTSTP
+      // listener is registered (blessed installs one). Remove them so the
+      // kernel's default suspend behavior is restored, then signal the
+      // entire process group so shell job control works.
+      process.removeAllListeners("SIGTSTP");
+      process.kill(0, "SIGTSTP");
+    });
+
     // Terminal cleanup handlers
     process.on("SIGINT", () => this.cleanup());
     process.on("SIGTERM", () => this.cleanup());
+    process.on("SIGCONT", () => {
+      process.stdin.setRawMode?.(true);
+      this.screen.program.alternateBuffer();
+      this.screen.program.hideCursor();
+      // Force a full repaint: clear blessed's internal line cache so it
+      // redraws every cell instead of diffing against stale state.
+      this.screen.alloc();
+      this.screen.render();
+    });
     process.on("uncaughtException", (err) => {
       this.cleanup(`Uncaught exception: ${err.stack || err}`);
     });
@@ -677,18 +706,20 @@ export class DebuggerUI implements DebuggerIO {
       this.commandInput.focus();
       this.screen.render();
 
-      // Handle escape to cancel
-      const onEscape = (
+      // Handle escape to cancel, Ctrl-C to quit
+      const onKeypress = (
         _ch: string,
         key: blessed.Widgets.Events.IKeyEventArg,
       ) => {
-        if (key.name === "escape") {
+        if (key.full === "C-c") {
+          this.cleanup();
+        } else if (key.name === "escape") {
           done(null);
         }
       };
 
       const done = (value: string | null) => {
-        this.commandInput.removeListener("keypress", onEscape);
+        this.commandInput.removeListener("keypress", onKeypress);
         this.commandInput.hide();
         this.commandBar.show();
         this.screen.restoreFocus();
@@ -700,7 +731,7 @@ export class DebuggerUI implements DebuggerIO {
         done(value || null);
       });
 
-      this.commandInput.on("keypress", onEscape);
+      this.commandInput.on("keypress", onKeypress);
     });
   }
 
@@ -840,6 +871,10 @@ export class DebuggerUI implements DebuggerIO {
         cleanup();
         this.render();
         resolve(checkpoints[index].id);
+      });
+
+      list.key(["C-c"], () => {
+        this.cleanup();
       });
 
       list.key(["escape", "q"], () => {

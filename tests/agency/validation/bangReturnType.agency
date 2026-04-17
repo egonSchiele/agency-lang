@@ -1,0 +1,11 @@
+def stringify(x: number): string! {
+  return x
+}
+
+node main() {
+  const result = stringify(42)
+  if (isFailure(result)) {
+    return "correctly failed"
+  }
+  return "unexpected success"
+}

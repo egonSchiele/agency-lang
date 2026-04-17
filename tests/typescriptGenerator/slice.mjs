@@ -124,28 +124,28 @@ let __functionCompleted = false;
 __stack.locals.arr = [1, 2, 3, 4, 5];
     });
     await runner.step(1, async (runner) => {
-__stack.locals.a = __stack.locals.arr.slice(1, 3);
+__stack.locals.bothBounds = __stack.locals.arr.slice(1, 3);
     });
     await runner.step(2, async (runner) => {
-__stack.locals.b = __stack.locals.arr.slice(2);
+__stack.locals.startOnly = __stack.locals.arr.slice(2);
     });
     await runner.step(3, async (runner) => {
-__stack.locals.c = __stack.locals.arr.slice(0, 3);
+__stack.locals.endOnly = __stack.locals.arr.slice(0, 3);
     });
     await runner.step(4, async (runner) => {
-__stack.locals.d = __stack.locals.arr.slice();
+__stack.locals.noBounds = __stack.locals.arr.slice();
     });
     await runner.step(5, async (runner) => {
-__stack.locals.e = __stack.locals.arr.slice(-2);
+__stack.locals.negativeStart = __stack.locals.arr.slice(-2);
     });
     await runner.step(6, async (runner) => {
-__stack.locals.f = __stack.locals.arr?.slice(1, 3);
+__stack.locals.optionalSlice = __stack.locals.arr?.slice(1, 3);
     });
     await runner.step(7, async (runner) => {
-__stack.locals.s = `hello`;
+__stack.locals.str = `hello`;
     });
     await runner.step(8, async (runner) => {
-__stack.locals.g = __stack.locals.s.slice(1, 3);
+__stack.locals.stringSlice = __stack.locals.str.slice(1, 3);
     });
     if (runner.halted) return runner.haltResult;
     await callHook({

@@ -1225,13 +1225,11 @@ const sliceChainParser: Parser<AccessChainElement> = (input: string) => {
   );
   const result = parser(input);
   if (!result.success) return result;
-  const element: AccessChainElement = {
-    kind: "slice" as const,
-    ...(result.result.start && { start: result.result.start }),
-    ...(result.result.end && { end: result.result.end }),
-    ...(result.result.optional && { optional: true }),
-  };
-  return success(element, result.rest);
+  const element: Partial<AccessChainElement> = { kind: "slice" as const };
+  if (result.result.start) element.start = result.result.start;
+  if (result.result.end) element.end = result.result.end;
+  if (result.result.optional) element.optional = true;
+  return success(element as AccessChainElement, result.rest);
 };
 
 const indexChainParser: Parser<AccessChainElement> = (input: string) => {

@@ -599,10 +599,17 @@ export const booleanLiteralTypeParser: Parser<BooleanLiteralType> = trace(
   ),
 );
 
-export const objectPropertyDelimiter = seqR(
-  optionalSpaces,
-  oneOf(",;"),
-  optionalSpacesOrNewline,
+export const objectPropertyDelimiter = or(
+  seqR(
+    optionalSpaces,
+    oneOf(",;"),
+    optionalSpacesOrNewline,
+  ),
+  seqR(
+    optionalSpaces,
+    char("\n"),
+    optionalSpacesOrNewline,
+  ),
 );
 
 export const objectPropertyParser: Parser<ObjectProperty> = trace(

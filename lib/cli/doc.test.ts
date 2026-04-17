@@ -372,7 +372,7 @@ node main() {
     fs.writeFileSync(
       path.join(inputDir, "types.agency"),
       `type User = {
-  name: string;
+  name: string
   age: number
 }
 `,

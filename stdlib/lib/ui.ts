@@ -48,6 +48,8 @@ let initialized = false;
 let cols = 80;
 let rows = 24;
 
+let appTitle = "";
+
 // Status bar content
 let statusLeft = "";
 let statusRight = "";
@@ -73,14 +75,24 @@ let sigintHandler: (() => void) | null = null;
 // Fixed area — the single place that defines the bottom of the screen
 // ---------------------------------------------------------------------------
 
+// The index (within the fixed lines array) where the input prompt lives.
+// Set by buildFixedLines() so _prompt() can position the cursor correctly.
+let inputLineIndex = 0;
+
 // Returns an array of strings, one per line. The length of this array
 // determines how many rows are reserved at the bottom. Change this function
 // to add, remove, or restyle lines without touching anything else.
 function buildFixedLines(): string[] {
   const lines: string[] = [];
 
+  // const titlePadding = Math.max(0, cols - appTitle.length - 4);
+  // lines.push(color.green(`── ${appTitle} ${"─".repeat(titlePadding)}`));
+
+  lines.push("");
+  lines.push("");
   // prompt
   lines.push(color.dim("─".repeat(cols)));
+  inputLineIndex = lines.length;
   lines.push(`${color.bold("❯")} ${inputContent}`);
   lines.push(color.dim("─".repeat(cols)));
 
@@ -88,7 +100,8 @@ function buildFixedLines(): string[] {
   const left = truncate(statusLeft, Math.floor(((cols - 4) * 2) / 3));
   const right = truncate(statusRight, Math.floor((cols - 4) / 3));
   const padding = Math.max(0, cols - left.length - right.length - 2);
-  lines.push(color.cyan(`${left} ${"─".repeat(padding)} ${right}`));
+  lines.push(color.cyan(`${left} ${" ".repeat(padding)} ${right}`));
+  lines.push("");
 
   return lines;
 }
@@ -183,7 +196,8 @@ export function _initUI(title: string): void {
   if (initialized) return;
   initialized = true;
 
-  statusLeft = title;
+  appTitle = title;
+  statusLeft = "";
   statusRight = "";
   inputContent = "";
   hintContent = "";
@@ -192,6 +206,7 @@ export function _initUI(title: string): void {
   applyScrollRegion();
   process.stdout.write(moveTo(1, 1));
   renderFixedArea();
+  _separator(appTitle);
 
   resizeHandler = () => {
     updateSize();
@@ -369,8 +384,7 @@ export function _prompt(question: string): Promise<string> {
     renderFixedArea();
 
     // Position cursor after the prompt character for typing
-    const inputRow = fixedAreaStart() + 1; // second line of fixed area
-    process.stdout.write(moveTo(inputRow, 4));
+    process.stdout.write(moveTo(fixedAreaStart() + inputLineIndex, 4));
 
     const rl = readline.createInterface({
       input: process.stdin,

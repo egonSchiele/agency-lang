@@ -22,8 +22,8 @@ const systemPrompt = read("./examples/coding-agent/systemPrompt.md") with approv
 
 node main() {
   ui.initUI("Coding Agent")
-  ui.status("Coding Agent", cwd())
-  ui.separator("Welcome")
+  ui.status("", cwd())
+  //ui.separator("Welcome")
   //ui.emptyLine()
   ui.log("I can help you read, search, and edit code.")
   ui.log("Type your request below, or 'quit' to exit.")
@@ -52,7 +52,9 @@ node main() {
     ui.separator("Done")
     ui.chat("agent", nextAction.summary)
   } with (data) {
-    ui.log("\x1b[33m> ${JSON.stringify(data)}\x1b[0m")
+    ui.log(color.yellow("User approval needed"))
+    ui.log(color.yellow(JSON.stringify(data)))
+    ui.log(color.yellow("Approve? (y/n)"))
     if (ui.getConfirmation("Approve?")) {
       return approve()
     }

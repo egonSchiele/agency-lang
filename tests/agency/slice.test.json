@@ -3,7 +3,7 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "\"2,3 | 3,4,5 | 1,2,3 | 1,2,3,4,5 | 4,5 | el\"",
+      "expectedOutput": "{\"bothBounds\":[2,3],\"startOnly\":[3,4,5],\"endOnly\":[1,2,3],\"noBounds\":[1,2,3,4,5],\"negativeStart\":[4,5],\"negativeEnd\":[1,2,3,4],\"chained\":[2,3],\"variableBound\":[1,2,3],\"stringSlice\":\"el\",\"stringNegative\":\"llo\"}",
       "evaluationCriteria": [
         {
           "type": "exact"

@@ -27,8 +27,8 @@ node main() {
   //ui.emptyLine()
   ui.log("I can help you read, search, and edit code.")
   ui.log("Type your request below, or 'quit' to exit.")
-  ui.separator()
-  //ui.emptyLine()
+  ui.emptyLine()
+  ui.emptyLine()
   let userMessage = ui.prompt("What would you like to do?")
   print("User: ${userMessage}")
   handle {

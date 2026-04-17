@@ -40,137 +40,121 @@ export function _emptyLine(): string {
   return " ".repeat(cols);
 }
 
-type UIConfig = {
-  title: string;
-  statusRight: string;
-};
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
 
-// UI title and default right-side status text, set once during _initUI()
-let config: UIConfig = { title: "", statusRight: "" };
-
-// Whether the UI has been initialized via _initUI()
 let initialized = false;
-
-// Terminal row where the status bar is drawn (2 rows from bottom)
-let statusBarRow = 0;
-
-// Terminal row where the input prompt is drawn (1 row from bottom)
-let inputRow = 0;
-
-// Terminal row where the hint text is drawn (last row)
-let hintRow = 0;
-
-// Current terminal width in columns
 let cols = 80;
-
-// Current terminal height in rows
 let rows = 24;
 
-// Dynamic left-side status bar text; overrides config.title when non-empty
-let currentStatusLeft = "";
+// Status bar content
+let statusLeft = "";
+let statusRight = "";
 
-// Dynamic right-side status bar text; overrides config.statusRight when non-empty
-let currentStatusRight = "";
+// Input bar content
+let inputContent = "";
+let hintContent = "";
 
-// Active readline interface during _prompt(), closed when the user submits input
+// Spinner
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+let spinnerInterval: ReturnType<typeof setInterval> | null = null;
+let spinnerIdx = 0;
+
+// Readline
 let activeRl: readline.Interface | null = null;
 
-// Interval handle for the spinner animation, cleared by _stopSpinner()
-let spinnerInterval: ReturnType<typeof setInterval> | null = null;
-
-const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-let spinnerIdx = 0;
-let spinnerText = "";
-
+// Event handlers (stored for cleanup)
 let resizeHandler: (() => void) | null = null;
 let exitHandler: (() => void) | null = null;
 let sigintHandler: (() => void) | null = null;
 
-function getTermSize(): { rows: number; cols: number } {
-  return {
-    rows: process.stdout.rows || 24,
-    cols: process.stdout.columns || 80,
-  };
+// ---------------------------------------------------------------------------
+// Fixed area — the single place that defines the bottom of the screen
+// ---------------------------------------------------------------------------
+
+// Returns an array of strings, one per line. The length of this array
+// determines how many rows are reserved at the bottom. Change this function
+// to add, remove, or restyle lines without touching anything else.
+function buildFixedLines(): string[] {
+  const lines: string[] = [];
+
+  // prompt
+  lines.push(color.dim("─".repeat(cols)));
+  lines.push(`${color.bold("❯")} ${inputContent}`);
+  lines.push(color.dim("─".repeat(cols)));
+
+  // status bar
+  const left = truncate(statusLeft, Math.floor(((cols - 4) * 2) / 3));
+  const right = truncate(statusRight, Math.floor((cols - 4) / 3));
+  const padding = Math.max(0, cols - left.length - right.length - 2);
+  lines.push(color.cyan(`${left} ${"─".repeat(padding)} ${right}`));
+
+  return lines;
 }
+
+function fixedLineCount(): number {
+  return buildFixedLines().length;
+}
+
+// The row where the fixed area starts (1-indexed)
+function fixedAreaStart(): number {
+  return rows - fixedLineCount() + 1;
+}
+
+// The last row of the scroll region (one above the fixed area)
+function scrollBottom(): number {
+  return fixedAreaStart() - 1;
+}
+
+// Renders the entire fixed area at the bottom of the screen.
+// This is the ONLY function that writes to the fixed rows.
+function renderFixedArea() {
+  const lines = buildFixedLines();
+  const startRow = fixedAreaStart();
+  let out = saveCursor();
+  for (let i = 0; i < lines.length; i++) {
+    out += moveTo(startRow + i, 1) + clearLine() + lines[i];
+  }
+  out += restoreCursor();
+  process.stdout.write(out);
+}
+
+function clearFixedArea() {
+  const startRow = fixedAreaStart();
+  const count = fixedLineCount();
+  let out = saveCursor();
+  for (let i = 0; i < count; i++) {
+    out += moveTo(startRow + i, 1) + clearLine();
+  }
+  out += restoreCursor();
+  process.stdout.write(out);
+}
+
+// ---------------------------------------------------------------------------
+// Terminal helpers
+// ---------------------------------------------------------------------------
 
 const MIN_ROWS = 6;
 
-function updateLayout() {
-  const size = getTermSize();
-  rows = Math.max(size.rows, MIN_ROWS);
-  cols = size.cols;
-  statusBarRow = rows - 2;
-  inputRow = rows - 1;
-  hintRow = rows;
+function updateSize() {
+  rows = Math.max(process.stdout.rows || 24, MIN_ROWS);
+  cols = process.stdout.columns || 80;
 }
 
 function truncate(str: string, maxLen: number): string {
+  if (maxLen <= 0) return "";
   if (str.length <= maxLen) return str;
   return str.slice(0, maxLen - 1) + "…";
 }
 
-function renderStatusBar() {
-  const rawLeft = currentStatusLeft || config.title;
-  const rawRight = currentStatusRight || config.statusRight;
-  const maxContent = cols - 4;
-  const rightLen = Math.min(rawRight.length, Math.floor(maxContent / 3));
-  const leftLen = Math.min(rawLeft.length, maxContent - rightLen);
-  const left = truncate(rawLeft, leftLen);
-  const right = truncate(rawRight, rightLen);
-  const padding = Math.max(0, cols - left.length - right.length - 2);
-  const bar = color.cyan(` ${left}${"─".repeat(padding)} ${right}`);
-  process.stdout.write(
-    saveCursor() +
-      moveTo(statusBarRow, 1) +
-      clearLine() +
-      bar +
-      restoreCursor(),
-  );
-}
-
-function renderInputPrompt(prompt: string) {
-  process.stdout.write(
-    saveCursor() +
-      moveTo(inputRow, 1) +
-      clearLine() +
-      color.bold("❯") +
-      ` ${prompt}` +
-      restoreCursor(),
-  );
-}
-
-function renderHintBar(hint: string) {
-  process.stdout.write(
-    saveCursor() +
-      moveTo(hintRow, 1) +
-      clearLine() +
-      color.dim(`  ${hint}`) +
-      restoreCursor(),
-  );
-}
-
-function clearBottomArea() {
-  process.stdout.write(
-    saveCursor() +
-      moveTo(statusBarRow, 1) +
-      clearLine() +
-      moveTo(inputRow, 1) +
-      clearLine() +
-      moveTo(hintRow, 1) +
-      clearLine() +
-      restoreCursor(),
-  );
-}
-
-function setupScrollRegion() {
-  updateLayout();
-  process.stdout.write(setScrollRegion(1, statusBarRow - 1));
-  process.stdout.write(moveTo(1, 1));
+function applyScrollRegion() {
+  process.stdout.write(setScrollRegion(1, scrollBottom()));
 }
 
 function writeInScrollRegion(text: string) {
   process.stdout.write(
-    saveCursor() + moveTo(statusBarRow - 1, 1) + "\n" + text + restoreCursor(),
+    saveCursor() + moveTo(scrollBottom(), 1) + "\n" + text + restoreCursor(),
   );
 }
 
@@ -188,32 +172,31 @@ function writeBox(
     writeInScrollRegion(renderLine(lines[i], i));
   }
   writeInScrollRegion(color.dim(`└${"─".repeat(Math.max(0, cols - 2))}`));
-  renderStatusBar();
+  renderFixedArea();
 }
 
-function resetState() {
-  config = { title: "", statusRight: "" };
-  currentStatusLeft = "";
-  currentStatusRight = "";
-  spinnerIdx = 0;
-  spinnerText = "";
-}
+// ---------------------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------------------
 
 export function _initUI(title: string): void {
   if (initialized) return;
   initialized = true;
-  config.title = title;
-  config.statusRight = "";
 
-  setupScrollRegion();
-  renderStatusBar();
-  renderInputPrompt("");
-  renderHintBar("");
+  statusLeft = title;
+  statusRight = "";
+  inputContent = "";
+  hintContent = "";
+
+  updateSize();
+  applyScrollRegion();
+  process.stdout.write(moveTo(1, 1));
+  renderFixedArea();
 
   resizeHandler = () => {
-    updateLayout();
-    process.stdout.write(setScrollRegion(1, statusBarRow - 1));
-    renderStatusBar();
+    updateSize();
+    applyScrollRegion();
+    renderFixedArea();
   };
   exitHandler = () => {
     if (initialized) _destroyUI();
@@ -231,6 +214,7 @@ export function _initUI(title: string): void {
 export function _destroyUI(): void {
   if (!initialized) return;
   initialized = false;
+
   if (spinnerInterval) {
     clearInterval(spinnerInterval);
     spinnerInterval = null;
@@ -251,23 +235,25 @@ export function _destroyUI(): void {
     process.removeListener("SIGINT", sigintHandler);
     sigintHandler = null;
   }
+
   process.stdout.write(resetScrollRegion());
-  clearBottomArea();
+  clearFixedArea();
   process.stdout.write(moveTo(rows, 1) + "\n");
-  resetState();
+
+  statusLeft = "";
+  statusRight = "";
+  inputContent = "";
+  hintContent = "";
 }
+
+// ---------------------------------------------------------------------------
+// Public API — scrollable output
+// ---------------------------------------------------------------------------
 
 export function _log(message: string): void {
   if (!initialized) return;
   writeInScrollRegion(message);
-  renderStatusBar();
-}
-
-export function _status(left: string, right: string): void {
-  if (!initialized) return;
-  currentStatusLeft = left;
-  currentStatusRight = right;
-  renderStatusBar();
+  renderFixedArea();
 }
 
 export function _chat(role: string, message: string): void {
@@ -284,7 +270,7 @@ export function _chat(role: string, message: string): void {
   for (let i = 1; i < lines.length; i++) {
     writeInScrollRegion(`  ${lines[i]}`);
   }
-  renderStatusBar();
+  renderFixedArea();
 }
 
 export function _code(filename: string, content: string): void {
@@ -321,7 +307,6 @@ export function _diff(filename: string, _content: string): void {
       return color.bgRed(`│ ${line}`);
     }
     return `| ${line}`;
-    //return `${color.dim("│")} ${line}`;
   });
 }
 
@@ -333,16 +318,27 @@ export function _separator(label: string): void {
   } else {
     writeInScrollRegion(color.dim("─".repeat(cols)));
   }
-  renderStatusBar();
+  renderFixedArea();
+}
+
+// ---------------------------------------------------------------------------
+// Public API — fixed area updates
+// ---------------------------------------------------------------------------
+
+export function _status(left: string, right: string): void {
+  if (!initialized) return;
+  statusLeft = left;
+  statusRight = right;
+  renderFixedArea();
 }
 
 export function _startSpinner(text: string): void {
   if (!initialized || spinnerInterval) return;
-  spinnerText = text;
   spinnerIdx = 0;
   const update = () => {
     const frame = SPINNER_FRAMES[spinnerIdx % SPINNER_FRAMES.length];
-    renderInputPrompt(`${color.cyan(frame)} ${spinnerText}`);
+    inputContent = `${color.cyan(frame)} ${text}`;
+    renderFixedArea();
     spinnerIdx++;
   };
   update();
@@ -355,7 +351,8 @@ export function _stopSpinner(): void {
     spinnerInterval = null;
   }
   if (initialized) {
-    renderInputPrompt("");
+    inputContent = "";
+    renderFixedArea();
   }
 }
 
@@ -366,10 +363,14 @@ export function _prompt(question: string): Promise<string> {
   _stopSpinner();
 
   return new Promise<string>((resolve) => {
-    process.stdout.write(
-      moveTo(inputRow, 1) + clearLine() + color.bold("❯") + " ",
-    );
-    renderHintBar(question);
+    // Update hint, clear input, position cursor on the input row
+    hintContent = question;
+    inputContent = "";
+    renderFixedArea();
+
+    // Position cursor after the prompt character for typing
+    const inputRow = fixedAreaStart() + 1; // second line of fixed area
+    process.stdout.write(moveTo(inputRow, 4));
 
     const rl = readline.createInterface({
       input: process.stdin,
@@ -379,16 +380,12 @@ export function _prompt(question: string): Promise<string> {
     });
     activeRl = rl;
 
-    process.stdout.write(moveTo(inputRow, 4));
-
     rl.on("line", (answer: string) => {
       rl.close();
       activeRl = null;
-      process.stdout.write(
-        moveTo(inputRow, 1) + clearLine() + moveTo(hintRow, 1) + clearLine(),
-      );
-      renderInputPrompt("");
-      renderHintBar("");
+      inputContent = "";
+      hintContent = "";
+      renderFixedArea();
       resolve(answer);
     });
   });

@@ -418,11 +418,7 @@ program
   .option("-o, --output <dir>", "Output directory for generated docs")
   .action((input: string, opts: { output?: string }) => {
     const config = getConfig();
-    const outputDir = opts.output || config.doc?.outDir;
-    if (!outputDir) {
-      console.error("Error: No output directory specified. Use -o or set doc.outDir in agency.json.");
-      process.exit(1);
-    }
+    const outputDir = opts.output || config.doc?.outDir || "docs";
     generateDoc(config, input, outputDir);
   });
 

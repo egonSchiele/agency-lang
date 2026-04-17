@@ -18,26 +18,67 @@ import {
 import * as fs from "fs";
 import * as path from "path";
 
+// Maps a symbol name to the relative .md path where it's documented
+type SymbolRegistry = Record<string, string>;
+
+type DocContext = {
+  baseUrl?: string;
+  sourceRelPath?: string;
+  symbolRegistry: SymbolRegistry;
+  currentMdPath?: string;
+};
+
 export function generateDoc(
   config: AgencyConfig,
   inputPath: string,
   outputDir: string,
 ): void {
+  const baseUrl = config.doc?.baseUrl;
+
   if (fs.statSync(inputPath).isDirectory()) {
-    for (const { path: filePath } of findRecursively(inputPath)) {
+    // First pass: build symbol registry across all files
+    const symbolRegistry: SymbolRegistry = {};
+    const files = [...findRecursively(inputPath)];
+
+    for (const { path: filePath } of files) {
       const relativePath = path.relative(inputPath, filePath);
-      const outputPath = path.join(
-        outputDir,
-        relativePath.replace(/\.agency$/, ".md"),
-      );
+      const mdRelPath = relativePath.replace(/\.agency$/, ".md");
+      const contents = readFile(filePath);
+      const program = parse(contents, config);
+
+      for (const node of program.nodes) {
+        if (node.type === "typeAlias") {
+          symbolRegistry[node.aliasName] = mdRelPath;
+        } else if (node.type === "function") {
+          symbolRegistry[node.functionName] = mdRelPath;
+        } else if (node.type === "graphNode") {
+          symbolRegistry[node.nodeName] = mdRelPath;
+        }
+      }
+    }
+
+    // Second pass: generate docs
+    for (const { path: filePath } of files) {
+      const relativePath = path.relative(inputPath, filePath);
+      const mdRelPath = relativePath.replace(/\.agency$/, ".md");
+      const outputPath = path.join(outputDir, mdRelPath);
       fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-      generateDocForFile(config, filePath, outputPath);
+      generateDocForFile(config, filePath, outputPath, {
+        baseUrl,
+        sourceRelPath: relativePath,
+        symbolRegistry,
+        currentMdPath: mdRelPath,
+      });
     }
   } else {
     const baseName = path.basename(inputPath).replace(/\.agency$/, ".md");
     const outputPath = path.join(outputDir, baseName);
     fs.mkdirSync(outputDir, { recursive: true });
-    generateDocForFile(config, inputPath, outputPath);
+    generateDocForFile(config, inputPath, outputPath, {
+      baseUrl,
+      sourceRelPath: path.basename(inputPath),
+      symbolRegistry: {},
+    });
   }
 }
 
@@ -45,6 +86,7 @@ function generateDocForFile(
   config: AgencyConfig,
   filePath: string,
   outputPath: string,
+  ctx: DocContext,
 ): void {
   const contents = readFile(filePath);
   const program = parse(contents, config);
@@ -74,17 +116,22 @@ function generateDocForFile(
   const title = path.basename(filePath).replace(/\.agency$/, "");
   const sections: string[] = [heading(1, title)];
 
+  // Page-level "View source" link
+  if (ctx.baseUrl && ctx.sourceRelPath) {
+    sections.push(`[View source](${ctx.baseUrl}/${ctx.sourceRelPath})`);
+  }
+
   if (program.docComment) {
     sections.push(formatDocComment(program.docComment));
   }
 
-  const typeSection = generateTypeSection(typeAliases);
+  const typeSection = generateTypeSection(typeAliases, ctx);
   if (typeSection) sections.push(typeSection);
 
-  const functionSection = generateFunctionSection(functions);
+  const functionSection = generateFunctionSection(functions, ctx);
   if (functionSection) sections.push(functionSection);
 
-  const nodeSection = generateNodeSection(nodes);
+  const nodeSection = generateNodeSection(nodes, ctx);
   if (nodeSection) sections.push(nodeSection);
 
   fs.writeFileSync(outputPath, sections.join("\n\n") + "\n");
@@ -94,6 +141,43 @@ function generateDocForFile(
 function formatType(type: VariableType | undefined | null): string {
   if (!type) return "";
   return variableTypeToString(type, {}).replace(/\s*\r?\n\s*/g, " ").trim();
+}
+
+function formatTypeLinked(
+  type: VariableType | undefined | null,
+  ctx: DocContext,
+): string {
+  if (!type) return "";
+  const plain = formatType(type);
+  if (!type || type.type !== "typeAliasVariable") return plain;
+
+  const name = type.aliasName;
+  const targetMdPath = ctx.symbolRegistry[name];
+  if (!targetMdPath) return plain;
+
+  if (targetMdPath === ctx.currentMdPath) {
+    // Same file — anchor link
+    return `[${name}](#${name.toLowerCase()})`;
+  }
+
+  // Cross-file — relative link to the other doc page
+  const from = path.dirname(ctx.currentMdPath || "");
+  const rel = path.relative(from, targetMdPath);
+  return `[${name}](${rel}#${name.toLowerCase()})`;
+}
+
+function sourceLink(loc: { line: number } | undefined, ctx: DocContext): string {
+  if (!ctx.baseUrl || !ctx.sourceRelPath || !loc) return "";
+  return ` [source](${ctx.baseUrl}/${ctx.sourceRelPath}#L${loc.line})`;
+}
+
+function crossFileSourceLink(name: string, ctx: DocContext): string {
+  const targetMdPath = ctx.symbolRegistry[name];
+  if (!targetMdPath) return "";
+  if (targetMdPath === ctx.currentMdPath) return "";
+  const from = path.dirname(ctx.currentMdPath || "");
+  const rel = path.relative(from, targetMdPath);
+  return ` [source](${rel}#${name.toLowerCase()})`;
 }
 
 function formatSignature(
@@ -119,11 +203,14 @@ function formatDefaultValue(node: FunctionParameter["defaultValue"]): string {
   return generator.processNode(node).trim();
 }
 
-function generateParamTable(params: FunctionParameter[]): string | null {
+function generateParamTable(
+  params: FunctionParameter[],
+  ctx: DocContext,
+): string | null {
   if (params.length === 0) return null;
   const rows = params.map((p) => [
     p.name,
-    formatType(p.typeHint),
+    p.typeHint ? formatTypeLinked(p.typeHint, ctx) : "",
     formatDefaultValue(p.defaultValue),
   ]);
   return `${bold("Parameters:")}\n\n${markdownTable(["Name", "Type", "Default"], rows)}`;
@@ -133,36 +220,39 @@ function formatDocComment(comment: AgencyMultiLineComment): string {
   return comment.content.trim();
 }
 
-function formatTypeAlias(alias: TypeAlias): string {
+function formatTypeAlias(alias: TypeAlias, ctx: DocContext): string {
   const code = generateAgency({
     type: "agencyProgram",
     nodes: [alias],
   });
+  const src = sourceLink(alias.loc, ctx);
   return section(
-    heading(3, alias.aliasName),
+    heading(3, alias.aliasName) + src,
     alias.docComment ? formatDocComment(alias.docComment) : null,
     codeFence(code),
   );
 }
 
-function generateTypeSection(aliases: TypeAlias[]): string | null {
+function generateTypeSection(aliases: TypeAlias[], ctx: DocContext): string | null {
   if (aliases.length === 0) return null;
-  return section(heading(2, "Types"), ...aliases.map(formatTypeAlias));
+  return section(heading(2, "Types"), ...aliases.map((a) => formatTypeAlias(a, ctx)));
 }
 
 function generateFunctionSection(
   fns: FunctionDefinition[],
+  ctx: DocContext,
 ): string | null {
   if (fns.length === 0) return null;
   const parts = fns.map((fn) => {
     const sig = formatSignature(fn.functionName, fn.parameters, fn.returnType);
+    const src = sourceLink(fn.loc, ctx);
     return section(
-      heading(3, fn.functionName),
+      heading(3, fn.functionName) + src,
       codeFence(sig),
       fn.docString ? fn.docString.value : null,
       fn.docComment ? formatDocComment(fn.docComment) : null,
-      generateParamTable(fn.parameters),
-      fn.returnType ? `${bold("Returns:")} ${formatType(fn.returnType)}` : null,
+      generateParamTable(fn.parameters, ctx),
+      fn.returnType ? `${bold("Returns:")} ${formatTypeLinked(fn.returnType, ctx)}` : null,
     );
   });
   return section(heading(2, "Functions"), ...parts);
@@ -170,17 +260,19 @@ function generateFunctionSection(
 
 function generateNodeSection(
   nodes: GraphNodeDefinition[],
+  ctx: DocContext,
 ): string | null {
   if (nodes.length === 0) return null;
   const parts = nodes.map((node) => {
     const sig = formatSignature(node.nodeName, node.parameters, node.returnType);
+    const src = sourceLink(node.loc, ctx);
     return section(
-      heading(3, node.nodeName),
+      heading(3, node.nodeName) + src,
       codeFence(sig),
       node.docString ? node.docString.value : null,
       node.docComment ? formatDocComment(node.docComment) : null,
-      generateParamTable(node.parameters),
-      node.returnType ? `${bold("Returns:")} ${formatType(node.returnType)}` : null,
+      generateParamTable(node.parameters, ctx),
+      node.returnType ? `${bold("Returns:")} ${formatTypeLinked(node.returnType, ctx)}` : null,
     );
   });
   return section(heading(2, "Nodes"), ...parts);

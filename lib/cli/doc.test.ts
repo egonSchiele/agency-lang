@@ -305,4 +305,132 @@ type Status = "active" | "inactive"
     expect(output).toContain("### Status");
     expect(output).toContain('```ts\ntype Status = "active" | "inactive"\n```');
   });
+
+  it("adds page-level View source link when baseUrl is configured", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "test.agency"),
+      `node main() {
+  print("hello")
+}
+`,
+    );
+
+    generateDoc(
+      { doc: { baseUrl: "https://example.com/src" } },
+      path.join(inputDir, "test.agency"),
+      outputDir,
+    );
+    const output = fs.readFileSync(
+      path.join(outputDir, "test.md"),
+      "utf-8",
+    );
+
+    expect(output).toContain("[View source](https://example.com/src/test.agency)");
+  });
+
+  it("adds item-level [source] links with line numbers", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "funcs.agency"),
+      `def greet(name: string): string {
+  return "Hello, " + name
+}
+
+node main() {
+  print("hello")
+}
+`,
+    );
+
+    generateDoc(
+      { doc: { baseUrl: "https://example.com/src" } },
+      path.join(inputDir, "funcs.agency"),
+      outputDir,
+    );
+    const output = fs.readFileSync(
+      path.join(outputDir, "funcs.md"),
+      "utf-8",
+    );
+
+    // Function and node headings should have [source] links with line numbers
+    expect(output).toMatch(/### greet \[source\]\(https:\/\/example\.com\/src\/funcs\.agency#L\d+\)/);
+    expect(output).toMatch(/### main \[source\]\(https:\/\/example\.com\/src\/funcs\.agency#L\d+\)/);
+  });
+
+  it("generates cross-file type links in directory mode", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "types.agency"),
+      `type User = {
+  name: string;
+  age: number
+}
+`,
+    );
+
+    fs.writeFileSync(
+      path.join(inputDir, "funcs.agency"),
+      `type Category = "a" | "b"
+
+def getCategory(): Category {
+  return "a"
+}
+`,
+    );
+
+    generateDoc(
+      { doc: { baseUrl: "https://example.com/src" } },
+      inputDir,
+      outputDir,
+    );
+
+    const funcsOutput = fs.readFileSync(
+      path.join(outputDir, "funcs.md"),
+      "utf-8",
+    );
+
+    // Return type Category is defined in same file — anchor link
+    expect(funcsOutput).toContain("[Category](#category)");
+
+    const typesOutput = fs.readFileSync(
+      path.join(outputDir, "types.md"),
+      "utf-8",
+    );
+
+    // Types file should have User with source link
+    expect(typesOutput).toContain("### User");
+  });
+
+  it("does not add source links when baseUrl is not configured", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "test.agency"),
+      `def foo(): string {
+  return "bar"
+}
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "test.agency"), outputDir);
+    const output = fs.readFileSync(
+      path.join(outputDir, "test.md"),
+      "utf-8",
+    );
+
+    expect(output).not.toContain("[View source]");
+    expect(output).not.toContain("[source]");
+  });
 });

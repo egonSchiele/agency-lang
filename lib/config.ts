@@ -135,4 +135,11 @@ export interface AgencyConfig {
     /** Number of test files to run in parallel. Default: 1 (sequential). */
     parallel?: number;
   };
+
+  doc?: {
+    /** Output directory for generated documentation (default: "docs") */
+    outDir?: string;
+
+    baseUrl?: string; // Base URL for links in generated docs
+  }
 }

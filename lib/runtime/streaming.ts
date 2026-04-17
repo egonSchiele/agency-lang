@@ -2,6 +2,7 @@ import { PromptResult, Result, StreamChunk, ToolCallJSON } from "smoltalk";
 import { builtinSleep } from "./builtins.js";
 import type { RuntimeContext } from "./state/context.js";
 import { GraphState } from "./types.js";
+import { isAbortError } from "./errors.js";
 
 export function isGenerator(variable: any): boolean {
   const toString = Object.prototype.toString.call(variable);
@@ -32,20 +33,26 @@ export async function handleStreamingResponse(args: {
       },
     );
     let syncResult: PromptResult;
-    for await (const chunk of completion) {
-      switch (chunk.type) {
-        case "tool_call":
-          toolCalls.push(chunk.toolCall);
-          break;
-        case "done":
-          syncResult = chunk.result;
-          break;
-        case "error":
-          console.error(`Error in LLM response stream: ${chunk.error}`);
-          break;
-        default:
-          break;
+    try {
+      for await (const chunk of completion) {
+        switch (chunk.type) {
+          case "tool_call":
+            toolCalls.push(chunk.toolCall);
+            break;
+          case "done":
+            syncResult = chunk.result;
+            break;
+          case "error":
+            console.error(`Error in LLM response stream: ${chunk.error}`);
+            break;
+          default:
+            break;
+        }
       }
+    } catch (error) {
+      if (isAbortError(error)) throw error;
+      console.error("Unexpected error consuming LLM stream:", error);
+      throw error;
     }
     return { success: true, value: { completion: syncResult!, toolCalls } };
   } else {
@@ -62,30 +69,36 @@ export async function handleStreamingResponse(args: {
     }
     ctx.onStreamLock = true;
 
-    for await (const chunk of completion) {
-      switch (chunk.type) {
-        case "text":
-          onStream({ type: "text", text: chunk.text });
-          break;
-        case "tool_call":
-          toolCalls.push(chunk.toolCall);
-          onStream({
-            type: "tool_call",
-            toolCall: chunk.toolCall,
-          });
-          break;
-        case "done":
-          onStream({ type: "done", result: chunk.result });
-          return {
-            success: true,
-            value: { completion: chunk.result, toolCalls },
-          };
-        case "error":
-          onStream({ type: "error", error: chunk.error });
-          break;
+    try {
+      for await (const chunk of completion) {
+        switch (chunk.type) {
+          case "text":
+            onStream({ type: "text", text: chunk.text });
+            break;
+          case "tool_call":
+            toolCalls.push(chunk.toolCall);
+            onStream({
+              type: "tool_call",
+              toolCall: chunk.toolCall,
+            });
+            break;
+          case "done":
+            onStream({ type: "done", result: chunk.result });
+            return {
+              success: true,
+              value: { completion: chunk.result, toolCalls },
+            };
+          case "error":
+            onStream({ type: "error", error: chunk.error });
+            break;
+        }
       }
+    } catch (error) {
+      if (isAbortError(error)) throw error;
+      console.error("Unexpected error consuming LLM stream:", error);
+      throw error;
+    } finally {
+      ctx.onStreamLock = false;
     }
-
-    ctx.onStreamLock = false;
   }
 }

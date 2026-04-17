@@ -1,7 +1,7 @@
 import { _initUI, _destroyUI, _log, _status, _chat, _code, _diff, _separator, _startSpinner, _stopSpinner, _prompt, _emptyLine } from "./lib/ui.js"
 export def initUI(title: string) {
   """
-  Initialize a terminal UI with a scrollable output area and a fixed input bar at the bottom. Call this once at the start of your agent. The title appears in the status bar.
+  Initialize a terminal UI with a scrollable output area and a fixed input bar at the bottom. Call this once at the start of your agent. The title is shown in the scrollable output area on init; use status() to populate the status bar.
   """
   _initUI(title)
 }
@@ -29,7 +29,7 @@ export safe def status(left: string, right: string = "") {
 
 export safe def chat(role: string = "", message: string = "") {
   """
-  Print a chat message with a colored role prefix. Built-in colors: "user" (blue), "agent" (green). Other roles appear in yellow.
+  Print a chat message with a colored role prefix. Built-in colors: "user" (cyan), "agent" (white). Other roles appear dim.
   """
   _chat(role, message)
 }

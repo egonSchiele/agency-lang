@@ -911,6 +911,7 @@ export class TypeScriptBuilder {
           result = ts.index(result, this.processNode(element.index), { optional: element.optional });
           break;
         case "methodCall": {
+          const isLastInChain = element === node.chain[node.chain.length - 1];
           const callNode = this.generateFunctionCallExpression(
             element.functionCall,
             "valueAccess",
@@ -926,11 +927,18 @@ export class TypeScriptBuilder {
               : callNode.arguments;
             const propNode = ts.prop(result, callNode.callee.name, { optional: element.optional });
             const callExpr = ts.call(propNode, args);
-            result = ts.await(callExpr);
+            // Parenthesize awaited calls when more chain elements follow,
+            // so .next() runs on the resolved value, not the Promise.
+            result = isLastInChain
+              ? ts.await(callExpr)
+              : ts.raw(`(${this.str(ts.await(callExpr))})`);
           } else {
             // Fallback for complex cases (e.g. await-wrapped)
             const dot = element.optional ? "?." : ".";
-            result = ts.raw(`await ${this.str(result)}${dot}${this.str(callNode)}`);
+            const awaited = `await ${this.str(result)}${dot}${this.str(callNode)}`;
+            result = isLastInChain
+              ? ts.raw(awaited)
+              : ts.raw(`(${awaited})`);
           }
           break;
         }

@@ -150,11 +150,11 @@ function clearFixedArea() {
 // Terminal helpers
 // ---------------------------------------------------------------------------
 
-const MIN_ROWS = 6;
-
 function updateSize() {
-  rows = Math.max(process.stdout.rows || 24, MIN_ROWS);
   cols = process.stdout.columns || 80;
+  // Ensure at least enough rows for the fixed area plus one scroll line
+  const minRows = fixedLineCount() + 1;
+  rows = Math.max(process.stdout.rows || 24, minRows);
 }
 
 function truncate(str: string, maxLen: number): string {
@@ -323,7 +323,7 @@ export function _diff(filename: string, _content: string): void {
     } else if (line.startsWith("-")) {
       return color.bgRed(`│ ${line}`);
     }
-    return `| ${line}`;
+    return `│ ${line}`;
   });
 }
 

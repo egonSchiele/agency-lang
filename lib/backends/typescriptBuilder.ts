@@ -904,6 +904,19 @@ export class TypeScriptBuilder {
         case "index":
           result = ts.index(result, this.processNode(element.index), { optional: element.optional });
           break;
+        case "slice": {
+          const args: TsNode[] = [];
+          if (element.start) {
+            args.push(this.processNode(element.start));
+            if (element.end) args.push(this.processNode(element.end));
+          } else if (element.end) {
+            args.push(ts.raw("0"));
+            args.push(this.processNode(element.end));
+          }
+          const sliceProp = ts.prop(result, "slice", { optional: element.optional });
+          result = ts.call(sliceProp, args);
+          break;
+        }
         case "methodCall": {
           const callNode = this.generateFunctionCallExpression(
             element.functionCall,
@@ -2946,6 +2959,18 @@ export class TypeScriptBuilder {
         case "index":
           result = ts.index(result, this.processNode(element.index));
           break;
+        case "slice": {
+          const args: TsNode[] = [];
+          if (element.start) {
+            args.push(this.processNode(element.start));
+            if (element.end) args.push(this.processNode(element.end));
+          } else if (element.end) {
+            args.push(ts.raw("0"));
+            args.push(this.processNode(element.end));
+          }
+          result = $(result).prop("slice").call(args).done();
+          break;
+        }
         case "methodCall": {
           const callNode = this.generateFunctionCallExpression(
             element.functionCall,

@@ -69,10 +69,26 @@ Add a `"slice"` case to `processValueAccess` in `lib/backends/typescriptBuilder.
 - When `start` is omitted and `end` is present, passes `0` as the first argument.
 - Handles optional chaining by passing `{ optional: true }` to `ts.prop()`.
 
+Also add a `"slice"` case to `processValueAccessPartial` (used for pipe expression processing) with the same logic.
+
 No new IR nodes needed.
+
+### Tree Walker
+
+Update `walkNodes()` in `lib/utils/node.ts` to handle the `"slice"` kind. This function dispatches on `element.kind` for `AccessChainElement` at two locations (assignment access chains and valueAccess chains). Add an `else if (element.kind === "slice")` branch at both sites to walk `element.start` and `element.end` when present. Without this, variables used inside slice bounds (e.g., `arr[0:n]`) would not be visited during scope resolution in the preprocessor.
+
+### Formatter
+
+Update `processAccessChainElement()` in `lib/backends/agencyGenerator.ts` to handle the `"slice"` kind. This function formats access chain elements back to Agency source code and has a `default` case that throws for unknown kinds. Without a `"slice"` case, formatting any Agency code containing slice syntax will throw.
+
+## Notes
+
+- Chained slices like `arr[1:3][0:1]` work naturally — each `.slice()` returns an array/string, and the next chain element operates on the result.
+- `arr[:]` produces a shallow copy for arrays (not deep copy). This matches JS `.slice()` behavior.
+- Non-integer indices (e.g., `arr[1.5:3]`) are not validated since there are no type checker changes. JS `.slice()` will truncate floats.
 
 ## Testing
 
-- **Parser unit tests** in `lib/parsers/access.test.ts` — test all slice variants and verify AST shape.
+- **Parser unit tests** in `lib/parsers/access.test.ts` — test all slice variants (`[1:3]`, `[1:]`, `[:3]`, `[:]`, `[-2:]`, `?.[1:3]`) and verify AST shape.
 - **Integration test fixtures** in `tests/typescriptGenerator/` — `.agency` file with slice expressions and expected `.mts` output.
-- **Agency execution tests** in `tests/agency/` — run slicing on arrays and strings to verify runtime behavior.
+- **Agency execution tests** in `tests/agency/` — run slicing on arrays and strings, including chained slices (`arr[1:3][0:1]`), expression bounds (`arr[0:n]`), and negative indices (`arr[-1:]`, `arr[:-1]`).

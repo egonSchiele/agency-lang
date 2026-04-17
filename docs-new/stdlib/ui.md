@@ -65,8 +65,8 @@ Print a chat message with a colored role prefix. Built-in colors: "user" (blue),
 
 | Name | Type | Default |
 |---|---|---|
-| role | string |  |
-| message | string |  |
+| role | string | "" |
+| message | string | "" |
 
 ### code
 
@@ -165,3 +165,11 @@ Ask the user a yes/no question in the input bar. Returns true if the user answer
 | question | string |  |
 
 **Returns:** boolean
+
+### emptyLine
+
+```ts
+emptyLine()
+```
+
+Print an empty line. Useful for adding spacing in the output.

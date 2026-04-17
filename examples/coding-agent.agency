@@ -1,65 +1,63 @@
-import { initUI, destroyUI, log, chat, code, diff, separator, status, startSpinner, stopSpinner, prompt, getConfirmation } from "std::ui"
+import * as ui from "std::ui"
 import { bash } from "std::shell"
-import { edit } from "std::fs"
+import { edit, multiedit, applyPatch, mkdir, copy, move, remove } from "std::fs"
 import { cwd } from "std::system"
-callback onLLMCallStart(data) {
-  startSpinner("thinking")
+/* callback onLLMCallStart(data) {
+  ui.chat("", data)
+  ui.startSpinner("thinking")
 }
 
 callback onLLMCallEnd(data) {
-  stopSpinner()
-}
-
+  ui.stopSpinner()
+} */
 callback onToolCallStart(data) {
-  log("  tool: ${data.toolName}")
+  ui.log("  tool: ${data.toolName}")
 }
 
 type NextAction = 
   | { type: "respond"; message: string }
   | { type: "done"; summary: string }
 
+const systemPrompt = read("./examples/coding-agent/systemPrompt.md") with approve
+
 node main() {
-  initUI("Coding Agent")
-  status("Coding Agent", cwd())
-  separator("Welcome")
-  log("I can help you read, search, and edit code.")
-  log("Type your request below, or 'quit' to exit.")
-  separator()
-  let userMessage = prompt("What would you like to do?")
+  ui.initUI("Coding Agent")
+  ui.status("Coding Agent", cwd())
+  ui.separator("Welcome")
+  //ui.emptyLine()
+  ui.log("I can help you read, search, and edit code.")
+  ui.log("Type your request below, or 'quit' to exit.")
+  ui.separator()
+  //ui.emptyLine()
+  let userMessage = ui.prompt("What would you like to do?")
+  print("User: ${userMessage}")
   handle {
     thread {
-      system("""
-                                You are a helpful coding assistant. You have tools to run shell commands,
-                                read and edit files. Use the bash tool to explore the codebase (ls, cat, grep, etc).
-                                Use the edit tool to make changes to files.
-                                Always explain what you're doing before and after using tools.
-                                When you're done with the user's request, set type to "done" with a summary.
-                                When you need to ask the user something or show results, set type to "respond".
-                              """)
+      system(systemPrompt)
       let nextAction: NextAction = { 
         type: "respond",
         message: "How can I help?"
       }
       while (nextAction.type != "done") {
-        chat("user", userMessage)
+        ui.chat("user", userMessage)
         nextAction: NextAction = llm(userMessage, { 
-          tools: [bash, edit, cwd]
+          tools: [bash, edit, cwd, read, write, multiedit, applyPatch, mkdir, copy, move, remove]
         })
         if (nextAction.type == "respond") {
-          chat("agent", nextAction.message)
-          userMessage = prompt("Your reply?")
+          ui.chat("agent", nextAction.message)
+          userMessage = ui.prompt("Your reply?")
         }
       }
     }
-    separator("Done")
-    chat("agent", nextAction.summary)
+    ui.separator("Done")
+    ui.chat("agent", nextAction.summary)
   } with (data) {
-    log("\x1b[33m> ${JSON.stringify(data)}\x1b[0m")
-    if (getConfirmation("Approve?")) {
+    ui.log("\x1b[33m> ${JSON.stringify(data)}\x1b[0m")
+    if (ui.getConfirmation("Approve?")) {
       return approve()
     }
     return reject()
   }
-  prompt("Press enter to exit")
-  destroyUI()
+  ui.prompt("Press enter to exit")
+  ui.destroyUI()
 }

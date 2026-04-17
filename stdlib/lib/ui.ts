@@ -1,5 +1,11 @@
 import * as readline from "readline";
 import { color } from "termcolors";
+import { syntaxHighlight } from "./syntax.js";
+
+/* CSI stands for Control Sequence Introducer — it's the escape sequence \x1B[ (ESC followed by [)
+used in ANSI terminal control codes. It's the prefix for commands that control cursor position,
+text color, clearing the screen, and other terminal formatting operations.
+*/
 
 const ESC = "\x1b";
 const CSI = `${ESC}[`;
@@ -12,6 +18,8 @@ function clearLine(): string {
   return `${CSI}2K`;
 }
 
+// These let you move the cursor around to draw/update part of the screen,
+// then jump back to where you were.
 function saveCursor(): string {
   return `${CSI}s`;
 }
@@ -28,21 +36,46 @@ function resetScrollRegion(): string {
   return `${CSI}r`;
 }
 
+export function _emptyLine(): string {
+  return " ".repeat(cols);
+}
+
 type UIConfig = {
   title: string;
   statusRight: string;
 };
 
+// UI title and default right-side status text, set once during _initUI()
 let config: UIConfig = { title: "", statusRight: "" };
+
+// Whether the UI has been initialized via _initUI()
 let initialized = false;
+
+// Terminal row where the status bar is drawn (2 rows from bottom)
 let statusBarRow = 0;
+
+// Terminal row where the input prompt is drawn (1 row from bottom)
 let inputRow = 0;
+
+// Terminal row where the hint text is drawn (last row)
 let hintRow = 0;
+
+// Current terminal width in columns
 let cols = 80;
+
+// Current terminal height in rows
 let rows = 24;
+
+// Dynamic left-side status bar text; overrides config.title when non-empty
 let currentStatusLeft = "";
+
+// Dynamic right-side status bar text; overrides config.statusRight when non-empty
 let currentStatusRight = "";
+
+// Active readline interface during _prompt(), closed when the user submits input
 let activeRl: readline.Interface | null = null;
+
+// Interval handle for the spinner animation, cleared by _stopSpinner()
 let spinnerInterval: ReturnType<typeof setInterval> | null = null;
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -100,7 +133,8 @@ function renderInputPrompt(prompt: string) {
     saveCursor() +
       moveTo(inputRow, 1) +
       clearLine() +
-      color.bold("❯") + ` ${prompt}` +
+      color.bold("❯") +
+      ` ${prompt}` +
       restoreCursor(),
   );
 }
@@ -136,11 +170,7 @@ function setupScrollRegion() {
 
 function writeInScrollRegion(text: string) {
   process.stdout.write(
-    saveCursor() +
-      moveTo(statusBarRow - 1, 1) +
-      "\n" +
-      text +
-      restoreCursor(),
+    saveCursor() + moveTo(statusBarRow - 1, 1) + "\n" + text + restoreCursor(),
   );
 }
 
@@ -149,7 +179,11 @@ function writeBox(
   lines: string[],
   renderLine: (line: string, index: number) => string,
 ): void {
-  writeInScrollRegion(color.dim(`┌─ ${filename} ${"─".repeat(Math.max(0, cols - filename.length - 6))}`));
+  writeInScrollRegion(
+    color.dim(
+      `┌─ ${filename} ${"─".repeat(Math.max(0, cols - filename.length - 6))}`,
+    ),
+  );
   for (let i = 0; i < lines.length; i++) {
     writeInScrollRegion(renderLine(lines[i], i));
   }
@@ -238,7 +272,12 @@ export function _status(left: string, right: string): void {
 
 export function _chat(role: string, message: string): void {
   if (!initialized) return;
-  const colorFn = role === "user" ? color.blue.bold : role === "agent" ? color.green.bold : color.yellow.bold;
+  const colorFn =
+    role === "user"
+      ? color.cyan.bold
+      : role === "agent"
+        ? color.white.bold
+        : color.dim;
   const prefix = colorFn(role);
   const lines = message.split("\n");
   writeInScrollRegion(`${prefix}: ${lines[0]}`);
@@ -256,22 +295,44 @@ export function _code(filename: string, content: string): void {
   });
 }
 
-export function _diff(filename: string, content: string): void {
+const languageMap: Record<string, string> = {
+  agency: "typescript",
+  ts: "typescript",
+  js: "javascript",
+  py: "python",
+  java: "java",
+  rb: "ruby",
+  go: "go",
+  rs: "rust",
+};
+
+export function _diff(filename: string, _content: string): void {
   if (!initialized) return;
+  const ext = filename.split(".").slice(-1)[0];
+  const language = languageMap[ext];
+  let content = _content;
+  if (language) {
+    content = syntaxHighlight(content, language);
+  }
   writeBox(filename, content.split("\n"), (line) => {
     if (line.startsWith("+")) {
-      return color.green(`│ ${line}`);
+      return color.bgGreen(`│ ${line}`);
     } else if (line.startsWith("-")) {
-      return color.red(`│ ${line}`);
+      return color.bgRed(`│ ${line}`);
     }
-    return `${color.dim("│")} ${line}`;
+    return `| ${line}`;
+    //return `${color.dim("│")} ${line}`;
   });
 }
 
 export function _separator(label: string): void {
   if (!initialized) return;
-  const padding = Math.max(0, cols - label.length - 4);
-  writeInScrollRegion(color.dim(`── ${label} ${"─".repeat(padding)}`));
+  if (label) {
+    const padding = Math.max(0, cols - label.length - 4);
+    writeInScrollRegion(color.dim(`── ${label} ${"─".repeat(padding)}`));
+  } else {
+    writeInScrollRegion(color.dim("─".repeat(cols)));
+  }
   renderStatusBar();
 }
 

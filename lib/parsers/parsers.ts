@@ -239,10 +239,19 @@ export const multiLineCommentParser: Parser<AgencyMultiLineComment> = (
 ) => {
   const parser = seqC(
     set("type", "multiLineComment"),
+    set("isDoc", false as boolean),
     optionalSpaces,
     capture(map(between(str("/*"), str("*/"), anyChar), joinChars), "content"),
   );
-  return parser(input);
+  const result = parser(input);
+  if (result.success) {
+    const content = result.result.content;
+    if (content.startsWith("*")) {
+      result.result.isDoc = true;
+      result.result.content = content.slice(1);
+    }
+  }
+  return result;
 };
 
 // =============================================================================
@@ -2540,6 +2549,8 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = label("a node defini
         "expected node body",
         optionalSpacesOrNewline,
         char("{"),
+        optionalSpacesOrNewline,
+        capture(or(docStringParser, succeed(undefined)), "docString"),
         optionalSpacesOrNewline,
         capture(bodyParser, "body"),
         optionalSpacesOrNewline,

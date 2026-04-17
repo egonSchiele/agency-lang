@@ -169,7 +169,62 @@ export class TypescriptPreprocessor {
     }
   }
 
+  protected attachDocComments(): void {
+    const nodes = this.program.nodes;
+    const DECLARATION_TYPES = ["function", "graphNode", "typeAlias"];
+
+    // Helper: check if an import is a stdlib import (auto-injected by template)
+    const isStdlibImport = (node: AgencyNode): boolean =>
+      node.type === "importStatement" &&
+      (node as any).modulePath?.startsWith("std::");
+
+    // 1. Declaration-level doc comments: attach to the next function/node/typeAlias
+    const toRemove: number[] = [];
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      if (node.type !== "multiLineComment" || !node.isDoc) continue;
+
+      // Find next non-newline node
+      let nextIndex = i + 1;
+      while (nextIndex < nodes.length && nodes[nextIndex].type === "newLine") {
+        nextIndex++;
+      }
+
+      if (nextIndex < nodes.length && DECLARATION_TYPES.includes(nodes[nextIndex].type)) {
+        const decl = nodes[nextIndex] as
+          | import("@/types.js").FunctionDefinition
+          | import("@/types.js").GraphNodeDefinition
+          | import("@/types/typeHints.js").TypeAlias;
+        decl.docComment = node as import("@/types.js").AgencyMultiLineComment;
+        toRemove.push(i);
+      }
+    }
+
+    // Remove attached doc comments from statement list (in reverse to preserve indices)
+    for (let i = toRemove.length - 1; i >= 0; i--) {
+      nodes.splice(toRemove[i], 1);
+    }
+
+    // 2. File-level doc comment: first unmatched doc comment before any user import/declaration
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      // Skip comments, newlines, and stdlib imports
+      if (node.type === "comment" || node.type === "newLine") continue;
+      if (node.type === "multiLineComment" && !node.isDoc) continue;
+      if (isStdlibImport(node)) continue;
+
+      // If we hit an unmatched doc comment, it's the file-level doc comment
+      if (node.type === "multiLineComment" && node.isDoc) {
+        this.program.docComment = node as import("@/types.js").AgencyMultiLineComment;
+        nodes.splice(i, 1);
+      }
+      // Stop at the first non-skippable node regardless
+      break;
+    }
+  }
+
   preprocess(): AgencyProgram {
+    this.attachDocComments();
     this.program.nodes = collectTags(this.program.nodes);
     if (Object.keys(this.functionDefinitions).length === 0) {
       this.getFunctionDefinitions();

@@ -3,9 +3,11 @@ import { AgencyGenerator, generateAgency } from "@/backends/agencyGenerator.js";
 import { parse, readFile } from "./commands.js";
 import { findRecursively } from "./util.js";
 import { variableTypeToString } from "@/backends/typescriptGenerator/typeToString.js";
+import { AgencyMultiLineComment } from "@/types.js";
 import { TypeAlias, VariableType } from "@/types/typeHints.js";
 import { FunctionDefinition, FunctionParameter } from "@/types/function.js";
 import { GraphNodeDefinition } from "@/types/graphNode.js";
+import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import {
   heading,
   codeFence,
@@ -47,6 +49,10 @@ function generateDocForFile(
   const contents = readFile(filePath);
   const program = parse(contents, config);
 
+  // Run doc comment attachment so docComment fields are populated
+  const preprocessor = new TypescriptPreprocessor(program, config);
+  preprocessor["attachDocComments"]();
+
   const typeAliases: TypeAlias[] = [];
   const functions: FunctionDefinition[] = [];
   const nodes: GraphNodeDefinition[] = [];
@@ -67,6 +73,10 @@ function generateDocForFile(
 
   const title = path.basename(filePath).replace(/\.agency$/, "");
   const sections: string[] = [heading(1, title)];
+
+  if (program.docComment) {
+    sections.push(formatDocComment(program.docComment));
+  }
 
   const typeSection = generateTypeSection(typeAliases);
   if (typeSection) sections.push(typeSection);
@@ -119,12 +129,20 @@ function generateParamTable(params: FunctionParameter[]): string | null {
   return `${bold("Parameters:")}\n\n${markdownTable(["Name", "Type", "Default"], rows)}`;
 }
 
+function formatDocComment(comment: AgencyMultiLineComment): string {
+  return comment.content.trim();
+}
+
 function formatTypeAlias(alias: TypeAlias): string {
   const code = generateAgency({
     type: "agencyProgram",
     nodes: [alias],
   });
-  return section(heading(3, alias.aliasName), codeFence(code));
+  return section(
+    heading(3, alias.aliasName),
+    alias.docComment ? formatDocComment(alias.docComment) : null,
+    codeFence(code),
+  );
 }
 
 function generateTypeSection(aliases: TypeAlias[]): string | null {
@@ -142,6 +160,7 @@ function generateFunctionSection(
       heading(3, fn.functionName),
       codeFence(sig),
       fn.docString ? fn.docString.value : null,
+      fn.docComment ? formatDocComment(fn.docComment) : null,
       generateParamTable(fn.parameters),
       fn.returnType ? `${bold("Returns:")} ${formatType(fn.returnType)}` : null,
     );
@@ -158,6 +177,8 @@ function generateNodeSection(
     return section(
       heading(3, node.nodeName),
       codeFence(sig),
+      node.docString ? node.docString.value : null,
+      node.docComment ? formatDocComment(node.docComment) : null,
       generateParamTable(node.parameters),
       node.returnType ? `${bold("Returns:")} ${formatType(node.returnType)}` : null,
     );

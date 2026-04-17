@@ -151,6 +151,9 @@ export class AgencyGenerator {
 
     const output: string[] = [];
 
+    if (program.docComment) {
+      output.push(this.processMultiLineComment(program.docComment));
+    }
     this.addIfNonEmpty(this.preprocess(), output);
     this.addIfNonEmpty(this.importStatements.join("\n"), output);
     this.addIfNonEmpty(this.generateImports(), output);
@@ -398,8 +401,14 @@ export class AgencyGenerator {
     this.typeAliases[node.aliasName] = node.aliasedType;
     const aliasedTypeStr = this.aliasedTypeToString(node.aliasedType);
     const exportPrefix = node.exported ? "export " : "";
-    return this.indentStr(
-      `${exportPrefix}type ${node.aliasName} = ${aliasedTypeStr}`,
+    const docComment = node.docComment
+      ? this.processMultiLineComment(node.docComment) + "\n"
+      : "";
+    return (
+      docComment +
+      this.indentStr(
+        `${exportPrefix}type ${node.aliasName} = ${aliasedTypeStr}`,
+      )
     );
   }
 
@@ -532,7 +541,10 @@ export class AgencyGenerator {
 
     result += this.indentStr(`}`);
 
-    return tags + result;
+    const docComment = node.docComment
+      ? this.processMultiLineComment(node.docComment) + "\n"
+      : "";
+    return docComment + tags + result;
   }
 
   protected processFunctionCall(node: FunctionCall): string {
@@ -785,6 +797,9 @@ export class AgencyGenerator {
   }
 
   protected processMultiLineComment(node: AgencyMultiLineComment): string {
+    if (node.isDoc) {
+      return this.indentStr(`/**${node.content}*/`);
+    }
     return this.indentStr(`/*${node.content}*/`);
   }
 
@@ -863,6 +878,12 @@ export class AgencyGenerator {
 
     this.increaseIndent();
 
+    if (node.docString) {
+      const docLines = [`"""`, ...node.docString.value.split("\n"), `"""`];
+      const docStr = docLines.map((line) => this.indentStr(line)).join("\n");
+      result += `${docStr}\n`;
+    }
+
     const lines: string[] = [];
     for (const stmt of body) {
       lines.push(this.processNode(stmt));
@@ -877,7 +898,10 @@ export class AgencyGenerator {
     this.decreaseIndent();
 
     result += this.indentStr(`}`);
-    return tags + result;
+    const docComment = node.docComment
+      ? this.processMultiLineComment(node.docComment) + "\n"
+      : "";
+    return docComment + tags + result;
   }
 
   protected processClassDefinition(node: ClassDefinition): string {

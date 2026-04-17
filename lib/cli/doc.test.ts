@@ -174,6 +174,116 @@ def greet(name: string = "world"): string {
     expect(output).toContain('| name | string | "world" |');
   });
 
+  it("renders file-level doc comment after title", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "filedoc.agency"),
+      `/** This file implements email categorization. */
+
+import { helper } from "./helper.ts"
+
+node main() {
+  print("hello")
+}
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "filedoc.agency"), outputDir);
+    const output = fs.readFileSync(
+      path.join(outputDir, "filedoc.md"),
+      "utf-8",
+    );
+
+    expect(output).toContain("# filedoc");
+    expect(output).toContain("This file implements email categorization.");
+    // File doc should come before nodes section
+    const fileDocIndex = output.indexOf("This file implements email categorization.");
+    const nodesIndex = output.indexOf("## Nodes");
+    expect(fileDocIndex).toBeLessThan(nodesIndex);
+  });
+
+  it("renders doc comment and docstring on a function (docstring first)", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "funcdoc.agency"),
+      `/** Extra context for docs. */
+def add(a: number, b: number): number {
+  """Adds two numbers."""
+  return a + b
+}
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "funcdoc.agency"), outputDir);
+    const output = fs.readFileSync(
+      path.join(outputDir, "funcdoc.md"),
+      "utf-8",
+    );
+
+    expect(output).toContain("Adds two numbers.");
+    expect(output).toContain("Extra context for docs.");
+    // Docstring should come before doc comment
+    const docstringIndex = output.indexOf("Adds two numbers.");
+    const docCommentIndex = output.indexOf("Extra context for docs.");
+    expect(docstringIndex).toBeLessThan(docCommentIndex);
+  });
+
+  it("renders doc comment and docstring on a node (docstring first)", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "nodedoc.agency"),
+      `/** Extra node context. */
+node main() {
+  """Main entry point."""
+  print("hello")
+}
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "nodedoc.agency"), outputDir);
+    const output = fs.readFileSync(
+      path.join(outputDir, "nodedoc.md"),
+      "utf-8",
+    );
+
+    expect(output).toContain("Main entry point.");
+    expect(output).toContain("Extra node context.");
+    const docstringIndex = output.indexOf("Main entry point.");
+    const docCommentIndex = output.indexOf("Extra node context.");
+    expect(docstringIndex).toBeLessThan(docCommentIndex);
+  });
+
+  it("renders doc comment on a type alias", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "typedoc.agency"),
+      `/** Possible message categories. */
+type Category = "reminder" | "todo"
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "typedoc.agency"), outputDir);
+    const output = fs.readFileSync(
+      path.join(outputDir, "typedoc.md"),
+      "utf-8",
+    );
+
+    expect(output).toContain("Possible message categories.");
+    expect(output).toContain("### Category");
+  });
+
   it("handles type aliases that are not objects", () => {
     const inputDir = path.join(tmpDir, "input");
     const outputDir = path.join(tmpDir, "output");

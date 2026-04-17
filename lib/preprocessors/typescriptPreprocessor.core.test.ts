@@ -1218,4 +1218,224 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       expect(combined).toContain("tool1");
     });
   });
+
+  describe("attachDocComments", () => {
+    it("should attach a file-level doc comment to program.docComment", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          { type: "multiLineComment", content: " File docs ", isDoc: true },
+          {
+            type: "importStatement",
+            modulePath: "./foo.js",
+            importedNames: [],
+          } as any,
+          {
+            type: "function",
+            functionName: "foo",
+            parameters: [],
+            body: [],
+          },
+        ],
+      };
+      const preprocessor = new TypescriptPreprocessor(program);
+      preprocessor.preprocess();
+      expect(program.docComment).toBeDefined();
+      expect(program.docComment!.content).toBe(" File docs ");
+      // Should be removed from nodes
+      expect(program.nodes.every((n) => n.type !== "multiLineComment")).toBe(true);
+    });
+
+    it("should skip regular comments before file-level doc comment", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          { type: "comment", content: " regular comment" },
+          { type: "multiLineComment", content: " File docs ", isDoc: true },
+          {
+            type: "importStatement",
+            modulePath: "./foo.js",
+            importedNames: [],
+          } as any,
+          {
+            type: "function",
+            functionName: "foo",
+            parameters: [],
+            body: [],
+          },
+        ],
+      };
+      const preprocessor = new TypescriptPreprocessor(program);
+      preprocessor.preprocess();
+      expect(program.docComment).toBeDefined();
+      expect(program.docComment!.content).toBe(" File docs ");
+    });
+
+    it("should attach doc comment to a function when directly before it", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          { type: "multiLineComment", content: " Func docs ", isDoc: true },
+          {
+            type: "function",
+            functionName: "foo",
+            parameters: [],
+            body: [],
+          },
+        ],
+      };
+      const preprocessor = new TypescriptPreprocessor(program);
+      preprocessor.preprocess();
+      // Doc comment directly before a declaration attaches to the declaration, not file-level
+      expect(program.docComment).toBeUndefined();
+      const fn = program.nodes.find((n) => n.type === "function") as any;
+      expect(fn.docComment).toBeDefined();
+      expect(fn.docComment.content).toBe(" Func docs ");
+    });
+
+    it("should attach doc comment to a function after an import", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "importStatement",
+            modulePath: "./foo.js",
+            importedNames: [],
+          } as any,
+          { type: "multiLineComment", content: " Func docs ", isDoc: true },
+          {
+            type: "function",
+            functionName: "foo",
+            parameters: [],
+            body: [],
+          },
+        ],
+      };
+      const preprocessor = new TypescriptPreprocessor(program);
+      preprocessor.preprocess();
+      expect(program.docComment).toBeUndefined();
+      const fn = program.nodes.find((n) => n.type === "function") as any;
+      expect(fn.docComment).toBeDefined();
+      expect(fn.docComment.content).toBe(" Func docs ");
+    });
+
+    it("should attach doc comment to a node", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "importStatement",
+            modulePath: "./foo.js",
+            importedNames: [],
+          } as any,
+          { type: "multiLineComment", content: " Node docs ", isDoc: true },
+          {
+            type: "graphNode",
+            nodeName: "main",
+            parameters: [],
+            body: [],
+          },
+        ],
+      };
+      const preprocessor = new TypescriptPreprocessor(program);
+      preprocessor.preprocess();
+      const node = program.nodes.find((n) => n.type === "graphNode") as any;
+      expect(node.docComment).toBeDefined();
+      expect(node.docComment.content).toBe(" Node docs ");
+    });
+
+    it("should attach doc comment to a type alias", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "importStatement",
+            modulePath: "./foo.js",
+            importedNames: [],
+          } as any,
+          { type: "multiLineComment", content: " Type docs ", isDoc: true },
+          {
+            type: "typeAlias",
+            aliasName: "Foo",
+            aliasedType: { type: "primitiveType", value: "string" },
+          },
+        ],
+      };
+      const preprocessor = new TypescriptPreprocessor(program);
+      preprocessor.preprocess();
+      const alias = program.nodes.find((n) => n.type === "typeAlias") as any;
+      expect(alias.docComment).toBeDefined();
+      expect(alias.docComment.content).toBe(" Type docs ");
+    });
+
+    it("should not attach non-doc multi-line comments", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          { type: "multiLineComment", content: " regular ", isDoc: false },
+          {
+            type: "function",
+            functionName: "foo",
+            parameters: [],
+            body: [],
+          },
+        ],
+      };
+      const preprocessor = new TypescriptPreprocessor(program);
+      preprocessor.preprocess();
+      expect(program.docComment).toBeUndefined();
+      const fn = program.nodes.find((n) => n.type === "function") as any;
+      expect(fn.docComment).toBeUndefined();
+    });
+
+    it("should leave unattached doc comments in statement list", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "importStatement",
+            modulePath: "./foo.js",
+            importedNames: [],
+          } as any,
+          { type: "multiLineComment", content: " orphan doc ", isDoc: true },
+          {
+            type: "importStatement",
+            modulePath: "./bar.js",
+            importedNames: [],
+          } as any,
+        ],
+      };
+      const preprocessor = new TypescriptPreprocessor(program);
+      preprocessor.preprocess();
+      expect(program.docComment).toBeUndefined();
+      const comments = program.nodes.filter((n) => n.type === "multiLineComment");
+      expect(comments.length).toBe(1);
+    });
+
+    it("should attach doc comments with newlines between comment and declaration", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "importStatement",
+            modulePath: "./foo.js",
+            importedNames: [],
+          } as any,
+          { type: "multiLineComment", content: " Func docs ", isDoc: true },
+          { type: "newLine" },
+          {
+            type: "function",
+            functionName: "foo",
+            parameters: [],
+            body: [],
+          },
+        ],
+      };
+      const preprocessor = new TypescriptPreprocessor(program);
+      preprocessor.preprocess();
+      const fn = program.nodes.find((n) => n.type === "function") as any;
+      expect(fn.docComment).toBeDefined();
+      expect(fn.docComment.content).toBe(" Func docs ");
+    });
+  });
 });

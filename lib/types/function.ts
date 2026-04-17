@@ -1,4 +1,5 @@
 import {
+  AgencyMultiLineComment,
   AgencyNode,
   Expression,
   Literal,
@@ -42,6 +43,7 @@ export type FunctionDefinition = BaseNode & {
   body: AgencyNode[];
   returnType?: VariableType | null;
   docString?: DocString;
+  docComment?: AgencyMultiLineComment;
   async?: boolean;
   safe?: boolean;
   exported?: boolean;

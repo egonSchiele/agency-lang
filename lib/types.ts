@@ -197,6 +197,7 @@ export type AgencyComment = BaseNode & {
 export type AgencyMultiLineComment = BaseNode & {
   type: "multiLineComment";
   content: string;
+  isDoc: boolean;
 };
 
 export type NewLine = BaseNode & {
@@ -247,6 +248,7 @@ export type AgencyNode =
 export type AgencyProgram = {
   type: "agencyProgram";
   nodes: AgencyNode[];
+  docComment?: AgencyMultiLineComment;
 };
 
 export type JSONEdge =

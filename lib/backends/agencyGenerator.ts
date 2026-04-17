@@ -401,11 +401,8 @@ export class AgencyGenerator {
     this.typeAliases[node.aliasName] = node.aliasedType;
     const aliasedTypeStr = this.aliasedTypeToString(node.aliasedType);
     const exportPrefix = node.exported ? "export " : "";
-    const docComment = node.docComment
-      ? this.processMultiLineComment(node.docComment) + "\n"
-      : "";
     return (
-      docComment +
+      this.formatDocComment(node) +
       this.indentStr(
         `${exportPrefix}type ${node.aliasName} = ${aliasedTypeStr}`,
       )
@@ -541,10 +538,7 @@ export class AgencyGenerator {
 
     result += this.indentStr(`}`);
 
-    const docComment = node.docComment
-      ? this.processMultiLineComment(node.docComment) + "\n"
-      : "";
-    return docComment + tags + result;
+    return this.formatDocComment(node) + tags + result;
   }
 
   protected processFunctionCall(node: FunctionCall): string {
@@ -803,6 +797,11 @@ export class AgencyGenerator {
     return this.indentStr(`/*${node.content}*/`);
   }
 
+  protected formatDocComment(node: { docComment?: AgencyMultiLineComment }): string {
+    if (!node.docComment) return "";
+    return this.processMultiLineComment(node.docComment) + "\n";
+  }
+
   protected processImportStatement(node: ImportStatement): string {
     const importedNames = node.importedNames.map((name) =>
       this.processImportNameType(name),
@@ -898,10 +897,7 @@ export class AgencyGenerator {
     this.decreaseIndent();
 
     result += this.indentStr(`}`);
-    const docComment = node.docComment
-      ? this.processMultiLineComment(node.docComment) + "\n"
-      : "";
-    return docComment + tags + result;
+    return this.formatDocComment(node) + tags + result;
   }
 
   protected processClassDefinition(node: ClassDefinition): string {

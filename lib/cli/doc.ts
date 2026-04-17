@@ -3,7 +3,7 @@ import { AgencyGenerator, generateAgency } from "@/backends/agencyGenerator.js";
 import { parse, readFile } from "./commands.js";
 import { findRecursively } from "./util.js";
 import { variableTypeToString } from "@/backends/typescriptGenerator/typeToString.js";
-import { AgencyMultiLineComment } from "@/types.js";
+import { AgencyMultiLineComment, AgencyProgram } from "@/types.js";
 import { TypeAlias, VariableType } from "@/types/typeHints.js";
 import { FunctionDefinition, FunctionParameter } from "@/types/function.js";
 import { GraphNodeDefinition } from "@/types/graphNode.js";
@@ -36,15 +36,18 @@ export function generateDoc(
   const baseUrl = config.doc?.baseUrl;
 
   if (fs.statSync(inputPath).isDirectory()) {
-    // First pass: build symbol registry across all files
+    // First pass: parse all files and build symbol registry
     const symbolRegistry: SymbolRegistry = {};
     const files = [...findRecursively(inputPath)];
+    const parsedPrograms = new Map<string, { program: AgencyProgram; relativePath: string; mdRelPath: string }>();
 
     for (const { path: filePath } of files) {
       const relativePath = path.relative(inputPath, filePath);
       const mdRelPath = relativePath.replace(/\.agency$/, ".md");
       const contents = readFile(filePath);
       const program = parse(contents, config);
+
+      parsedPrograms.set(filePath, { program, relativePath, mdRelPath });
 
       for (const node of program.nodes) {
         if (node.type === "typeAlias") {
@@ -57,10 +60,8 @@ export function generateDoc(
       }
     }
 
-    // Second pass: generate docs
-    for (const { path: filePath } of files) {
-      const relativePath = path.relative(inputPath, filePath);
-      const mdRelPath = relativePath.replace(/\.agency$/, ".md");
+    // Second pass: generate docs (reusing parsed programs)
+    for (const [filePath, { program, relativePath, mdRelPath }] of parsedPrograms) {
       const outputPath = path.join(outputDir, mdRelPath);
       fs.mkdirSync(path.dirname(outputPath), { recursive: true });
       generateDocForFile(config, filePath, outputPath, {
@@ -68,7 +69,7 @@ export function generateDoc(
         sourceRelPath: relativePath,
         symbolRegistry,
         currentMdPath: mdRelPath,
-      });
+      }, program);
     }
   } else {
     const baseName = path.basename(inputPath).replace(/\.agency$/, ".md");
@@ -87,13 +88,13 @@ function generateDocForFile(
   filePath: string,
   outputPath: string,
   ctx: DocContext,
+  preParsed?: AgencyProgram,
 ): void {
-  const contents = readFile(filePath);
-  const program = parse(contents, config);
+  const program = preParsed ?? parse(readFile(filePath), config);
 
   // Run doc comment attachment so docComment fields are populated
   const preprocessor = new TypescriptPreprocessor(program, config);
-  preprocessor["attachDocComments"]();
+  preprocessor.attachDocComments();
 
   const typeAliases: TypeAlias[] = [];
   const functions: FunctionDefinition[] = [];
@@ -149,7 +150,7 @@ function formatTypeLinked(
 ): string {
   if (!type) return "";
   const plain = formatType(type);
-  if (!type || type.type !== "typeAliasVariable") return plain;
+  if (type.type !== "typeAliasVariable") return plain;
 
   const name = type.aliasName;
   const targetMdPath = ctx.symbolRegistry[name];
@@ -169,15 +170,6 @@ function formatTypeLinked(
 function sourceLink(loc: { line: number } | undefined, ctx: DocContext): string {
   if (!ctx.baseUrl || !ctx.sourceRelPath || !loc) return "";
   return ` [source](${ctx.baseUrl}/${ctx.sourceRelPath}#L${loc.line})`;
-}
-
-function crossFileSourceLink(name: string, ctx: DocContext): string {
-  const targetMdPath = ctx.symbolRegistry[name];
-  if (!targetMdPath) return "";
-  if (targetMdPath === ctx.currentMdPath) return "";
-  const from = path.dirname(ctx.currentMdPath || "");
-  const rel = path.relative(from, targetMdPath);
-  return ` [source](${rel}#${name.toLowerCase()})`;
 }
 
 function formatSignature(

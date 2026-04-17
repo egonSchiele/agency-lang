@@ -140,6 +140,7 @@ export interface AgencyConfig {
     /** Output directory for generated documentation (default: "docs") */
     outDir?: string;
 
-    baseUrl?: string; // Base URL for links in generated docs
+    /** Base URL for source links in generated docs */
+    baseUrl?: string;
   }
 }

@@ -222,11 +222,39 @@ export class TypeScriptBuilder {
     value: TsNode,
     accessChain?: AccessChainElement[],
   ): TsNode {
+    if (accessChain && accessChain.length > 0 && accessChain[accessChain.length - 1].kind === "slice") {
+      return this.buildSliceAssignment(scope, varName, value, accessChain);
+    }
     if (scope === "global" && (!accessChain || accessChain.length === 0)) {
       return ts.globalSet(this.moduleId, varName, value);
     }
     const lhs = this.buildAssignmentLhs(scope, varName, accessChain);
     return ts.assign(lhs, value);
+  }
+
+  /**
+   * arr[1:3] = [10, 20] → arr.splice(start, end - start, ...value)
+   * arr[2:] = [10]      → arr.splice(start, arr.length - start, ...value)
+   */
+  private buildSliceAssignment(
+    scope: ScopeType,
+    varName: string,
+    value: TsNode,
+    accessChain: AccessChainElement[],
+  ): TsNode {
+    const sliceEl = accessChain[accessChain.length - 1] as Extract<AccessChainElement, { kind: "slice" }>;
+    const baseChain = accessChain.length > 1 ? accessChain.slice(0, -1) : undefined;
+    const base = this.buildAssignmentLhs(scope, varName, baseChain);
+    const baseStr = this.str(base);
+
+    const startNode = sliceEl.start ? this.processNode(sliceEl.start) : ts.raw("0");
+    const startStr = this.str(startNode);
+
+    const deleteCountStr = sliceEl.end
+      ? `${this.str(this.processNode(sliceEl.end))} - ${startStr}`
+      : `${baseStr}.length - ${startStr}`;
+
+    return ts.raw(`${baseStr}.splice(${startStr}, ${deleteCountStr}, ...${this.str(value)})`);
   }
 
   // ------- Lookup helpers -------
@@ -904,6 +932,19 @@ export class TypeScriptBuilder {
         case "index":
           result = ts.index(result, this.processNode(element.index), { optional: element.optional });
           break;
+        case "slice": {
+          const args: TsNode[] = [];
+          if (element.start) {
+            args.push(this.processNode(element.start));
+            if (element.end) args.push(this.processNode(element.end));
+          } else if (element.end) {
+            args.push(ts.raw("0"));
+            args.push(this.processNode(element.end));
+          }
+          const sliceProp = ts.prop(result, "slice", { optional: element.optional });
+          result = ts.call(sliceProp, args);
+          break;
+        }
         case "methodCall": {
           const callNode = this.generateFunctionCallExpression(
             element.functionCall,
@@ -2946,6 +2987,18 @@ export class TypeScriptBuilder {
         case "index":
           result = ts.index(result, this.processNode(element.index));
           break;
+        case "slice": {
+          const args: TsNode[] = [];
+          if (element.start) {
+            args.push(this.processNode(element.start));
+            if (element.end) args.push(this.processNode(element.end));
+          } else if (element.end) {
+            args.push(ts.raw("0"));
+            args.push(this.processNode(element.end));
+          }
+          result = $(result).prop("slice").call(args).done();
+          break;
+        }
         case "methodCall": {
           const callNode = this.generateFunctionCallExpression(
             element.functionCall,

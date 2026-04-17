@@ -1,0 +1,11 @@
+node main() {
+  let arr: number[] = [1, 2, 3, 4, 5]
+  let bothBounds = arr[1:3]
+  let startOnly = arr[2:]
+  let endOnly = arr[:3]
+  let noBounds = arr[:]
+  let negativeStart = arr[-2:]
+  let optionalSlice = arr?.[1:3]
+  let str = "hello"
+  let stringSlice = str[1:3]
+}

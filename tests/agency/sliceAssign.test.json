@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"bothBounds\":[1,10,20,4,5],\"startOnly\":[1,2,30],\"endOnly\":[40,50,3,4,5],\"noBounds\":[10,20,30],\"negativeStart\":[1,2,3,10,20]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

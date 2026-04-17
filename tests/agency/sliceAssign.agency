@@ -1,0 +1,24 @@
+node main() {
+  let bothBounds = [1, 2, 3, 4, 5]
+  bothBounds[1:3] = [10, 20]
+
+  let startOnly = [1, 2, 3, 4, 5]
+  startOnly[2:] = [30]
+
+  let endOnly = [1, 2, 3, 4, 5]
+  endOnly[:2] = [40, 50]
+
+  let noBounds = [1, 2, 3, 4, 5]
+  noBounds[:] = [10, 20, 30]
+
+  let negativeStart = [1, 2, 3, 4, 5]
+  negativeStart[-2:] = [10, 20]
+
+  return {
+    bothBounds: bothBounds,
+    startOnly: startOnly,
+    endOnly: endOnly,
+    noBounds: noBounds,
+    negativeStart: negativeStart
+  }
+}

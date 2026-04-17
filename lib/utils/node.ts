@@ -184,6 +184,9 @@ export function* getAllVariablesInBody(
       for (const element of node.chain) {
         if (element.kind === "index") {
           yield* getAllVariablesInBody([element.index]);
+        } else if (element.kind === "slice") {
+          if (element.start) yield* getAllVariablesInBody([element.start]);
+          if (element.end) yield* getAllVariablesInBody([element.end]);
         } else if (element.kind === "methodCall") {
           for (const arg of element.functionCall.arguments) {
             yield* getAllVariablesInBody([unwrapCallArg(arg)]);
@@ -357,6 +360,9 @@ export function* walkNodes(
       for (const element of node.chain) {
         if (element.kind === "index") {
           yield* walkNodes([element.index], [...ancestors, node], scopes);
+        } else if (element.kind === "slice") {
+          if (element.start) yield* walkNodes([element.start], [...ancestors, node], scopes);
+          if (element.end) yield* walkNodes([element.end], [...ancestors, node], scopes);
         } else if (element.kind === "methodCall") {
           yield* walkNodes(
             [element.functionCall],

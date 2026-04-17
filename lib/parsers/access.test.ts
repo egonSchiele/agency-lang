@@ -182,6 +182,148 @@ describe("valueAccessParser", () => {
     });
   });
 
+  describe("slice access", () => {
+    it('should parse "arr[1:3]" with both bounds', () => {
+      const result = valueAccessParser("arr[1:3]");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "valueAccess",
+          base: { type: "variableName", value: "arr" },
+          chain: [{
+            kind: "slice",
+            start: { type: "number", value: "1" },
+            end: { type: "number", value: "3" },
+          }],
+        });
+      }
+    });
+
+    it('should parse "arr[1:]" with start only', () => {
+      const result = valueAccessParser("arr[1:]");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "valueAccess",
+          base: { type: "variableName", value: "arr" },
+          chain: [{
+            kind: "slice",
+            start: { type: "number", value: "1" },
+          }],
+        });
+      }
+    });
+
+    it('should parse "arr[:3]" with end only', () => {
+      const result = valueAccessParser("arr[:3]");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "valueAccess",
+          base: { type: "variableName", value: "arr" },
+          chain: [{
+            kind: "slice",
+            end: { type: "number", value: "3" },
+          }],
+        });
+      }
+    });
+
+    it('should parse "arr[:]" with no bounds', () => {
+      const result = valueAccessParser("arr[:]");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "valueAccess",
+          base: { type: "variableName", value: "arr" },
+          chain: [{ kind: "slice" }],
+        });
+      }
+    });
+
+    it('should parse "arr[-2:]" with negative start', () => {
+      const result = valueAccessParser("arr[-2:]");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "valueAccess",
+          base: { type: "variableName", value: "arr" },
+          chain: [{
+            kind: "slice",
+            start: { type: "number", value: "-2" },
+          }],
+        });
+      }
+    });
+
+    it('should parse "arr?.[1:3]" with optional chaining', () => {
+      const result = valueAccessParser("arr?.[1:3]");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "valueAccess",
+          base: { type: "variableName", value: "arr" },
+          chain: [{
+            kind: "slice",
+            start: { type: "number", value: "1" },
+            end: { type: "number", value: "3" },
+            optional: true,
+          }],
+        });
+      }
+    });
+
+    it('should parse "arr[1:3][0:1]" with chained slices', () => {
+      const result = valueAccessParser("arr[1:3][0:1]");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "valueAccess",
+          base: { type: "variableName", value: "arr" },
+          chain: [
+            {
+              kind: "slice",
+              start: { type: "number", value: "1" },
+              end: { type: "number", value: "3" },
+            },
+            {
+              kind: "slice",
+              start: { type: "number", value: "0" },
+              end: { type: "number", value: "1" },
+            },
+          ],
+        });
+      }
+    });
+
+    it('should parse "arr[n:]" with variable bound', () => {
+      const result = valueAccessParser("arr[n:]");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "valueAccess",
+          base: { type: "variableName", value: "arr" },
+          chain: [{
+            kind: "slice",
+            start: { type: "variableName", value: "n" },
+          }],
+        });
+      }
+    });
+
+    it('should still parse "arr[0]" as index access, not slice', () => {
+      const result = valueAccessParser("arr[0]");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "valueAccess",
+          base: { type: "variableName", value: "arr" },
+          chain: [{ kind: "index", index: { type: "number", value: "0" } }],
+        });
+      }
+    });
+  });
+
   describe("dot property access", () => {
     const testCases = [
       {

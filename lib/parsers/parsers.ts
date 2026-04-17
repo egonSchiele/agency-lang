@@ -1211,6 +1211,27 @@ const bracketParser: Parser<boolean> = or(
   map(char("["), () => false),
 );
 
+const sliceChainParser: Parser<AccessChainElement> = (input: string) => {
+  const parser = seqC(
+    capture(bracketParser, "optional"),
+    optionalSpaces,
+    capture(optional(lazy(() => exprParser)), "start"),
+    optionalSpaces,
+    char(":"),
+    optionalSpaces,
+    capture(optional(lazy(() => exprParser)), "end"),
+    optionalSpaces,
+    char("]"),
+  );
+  const result = parser(input);
+  if (!result.success) return result;
+  const element: Partial<AccessChainElement> = { kind: "slice" as const };
+  if (result.result.start) element.start = result.result.start;
+  if (result.result.end) element.end = result.result.end;
+  if (result.result.optional) element.optional = true;
+  return success(element as AccessChainElement, result.rest);
+};
+
 const indexChainParser: Parser<AccessChainElement> = (input: string) => {
   const parser = seqC(
     capture(bracketParser, "optional"),
@@ -1229,6 +1250,7 @@ const indexChainParser: Parser<AccessChainElement> = (input: string) => {
 
 const chainElementParser: Parser<AccessChainElement> = or(
   dotMethodCallParser,
+  sliceChainParser,
   indexChainParser,
 );
 

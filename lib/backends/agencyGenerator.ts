@@ -1037,6 +1037,12 @@ export class AgencyGenerator {
         const inner = this.processNode(node.index).trim();
         return node.optional ? `?.[${inner}]` : `[${inner}]`;
       }
+      case "slice": {
+        const start = node.start ? this.processNode(node.start).trim() : "";
+        const end = node.end ? this.processNode(node.end).trim() : "";
+        const inner = `${start}:${end}`;
+        return node.optional ? `?.[${inner}]` : `[${inner}]`;
+      }
       case "methodCall":
         return `${dot}${this.generateFunctionCallExpression(node.functionCall, "valueAccess")}`;
       default:

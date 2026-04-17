@@ -89,3 +89,4 @@ export { DebuggerState } from "../debugger/debuggerState.js";
 
 export { success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult } from "./result.js";
 export type { ResultValue, ResultSuccess, ResultFailure } from "./result.js";
+export { Schema, __validateType } from "./schema.js";

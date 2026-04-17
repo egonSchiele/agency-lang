@@ -151,9 +151,6 @@ export class AgencyGenerator {
 
     const output: string[] = [];
 
-    if (program.docComment) {
-      output.push(this.processMultiLineComment(program.docComment));
-    }
     this.addIfNonEmpty(this.preprocess(), output);
     this.addIfNonEmpty(this.importStatements.join("\n"), output);
     this.addIfNonEmpty(this.generateImports(), output);

@@ -8,6 +8,7 @@ import { TypeAlias, VariableType } from "@/types/typeHints.js";
 import { FunctionDefinition, FunctionParameter } from "@/types/function.js";
 import { GraphNodeDefinition } from "@/types/graphNode.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
+import { collectProgramInfo, GLOBAL_SCOPE_KEY } from "@/programInfo.js";
 import {
   heading,
   codeFence,
@@ -36,7 +37,7 @@ export function generateDoc(
   const baseUrl = config.doc?.baseUrl;
 
   if (fs.statSync(inputPath).isDirectory()) {
-    // First pass: parse all files and build symbol registry
+    // First pass: parse and preprocess all files, build symbol registry
     const symbolRegistry: SymbolRegistry = {};
     const files = [...findRecursively(inputPath)];
     const parsedPrograms = new Map<string, { program: AgencyProgram; relativePath: string; mdRelPath: string }>();
@@ -45,18 +46,19 @@ export function generateDoc(
       const relativePath = path.relative(inputPath, filePath);
       const mdRelPath = relativePath.replace(/\.agency$/, ".md");
       const contents = readFile(filePath);
-      const program = parse(contents, config);
+      const program = preprocessProgram(parse(contents, config), config);
 
       parsedPrograms.set(filePath, { program, relativePath, mdRelPath });
 
-      for (const node of program.nodes) {
-        if (node.type === "typeAlias") {
-          symbolRegistry[node.aliasName] = mdRelPath;
-        } else if (node.type === "function") {
-          symbolRegistry[node.functionName] = mdRelPath;
-        } else if (node.type === "graphNode") {
-          symbolRegistry[node.nodeName] = mdRelPath;
-        }
+      const info = collectProgramInfo(program);
+      for (const name of Object.keys(info.functionDefinitions)) {
+        symbolRegistry[name] = mdRelPath;
+      }
+      for (const node of info.graphNodes) {
+        symbolRegistry[node.nodeName] = mdRelPath;
+      }
+      for (const name of Object.keys(info.typeAliases[GLOBAL_SCOPE_KEY] || {})) {
+        symbolRegistry[name] = mdRelPath;
       }
     }
 
@@ -64,7 +66,7 @@ export function generateDoc(
     for (const [filePath, { program, relativePath, mdRelPath }] of parsedPrograms) {
       const outputPath = path.join(outputDir, mdRelPath);
       fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-      generateDocForFile(config, filePath, outputPath, {
+      generateDocForFile(filePath, outputPath, {
         baseUrl,
         sourceRelPath: relativePath,
         symbolRegistry,
@@ -75,42 +77,33 @@ export function generateDoc(
     const baseName = path.basename(inputPath).replace(/\.agency$/, ".md");
     const outputPath = path.join(outputDir, baseName);
     fs.mkdirSync(outputDir, { recursive: true });
-    generateDocForFile(config, inputPath, outputPath, {
+    const program = preprocessProgram(parse(readFile(inputPath), config), config);
+    generateDocForFile(inputPath, outputPath, {
       baseUrl,
       sourceRelPath: path.basename(inputPath),
       symbolRegistry: {},
-    });
+    }, program);
   }
 }
 
+function preprocessProgram(program: AgencyProgram, config: AgencyConfig): AgencyProgram {
+  const preprocessor = new TypescriptPreprocessor(program, config);
+  preprocessor.attachDocComments();
+  return program;
+}
+
 function generateDocForFile(
-  config: AgencyConfig,
   filePath: string,
   outputPath: string,
   ctx: DocContext,
-  preParsed?: AgencyProgram,
+  program: AgencyProgram,
 ): void {
-  const program = preParsed ?? parse(readFile(filePath), config);
-
-  // Run doc comment attachment so docComment fields are populated
-  const preprocessor = new TypescriptPreprocessor(program, config);
-  preprocessor.attachDocComments();
+  const info = collectProgramInfo(program);
 
   const typeAliases: TypeAlias[] = [];
-  const functions: FunctionDefinition[] = [];
-  const nodes: GraphNodeDefinition[] = [];
-
   for (const node of program.nodes) {
-    switch (node.type) {
-      case "typeAlias":
-        typeAliases.push(node);
-        break;
-      case "function":
-        functions.push(node);
-        break;
-      case "graphNode":
-        nodes.push(node);
-        break;
+    if (node.type === "typeAlias") {
+      typeAliases.push(node);
     }
   }
 
@@ -129,10 +122,11 @@ function generateDocForFile(
   const typeSection = generateTypeSection(typeAliases, ctx);
   if (typeSection) sections.push(typeSection);
 
+  const functions = Object.values(info.functionDefinitions);
   const functionSection = generateFunctionSection(functions, ctx);
   if (functionSection) sections.push(functionSection);
 
-  const nodeSection = generateNodeSection(nodes, ctx);
+  const nodeSection = generateNodeSection(info.graphNodes, ctx);
   if (nodeSection) sections.push(nodeSection);
 
   fs.writeFileSync(outputPath, sections.join("\n\n") + "\n");
@@ -161,11 +155,9 @@ function formatTypeLinked(
   if (!targetMdPath) return plain;
 
   if (targetMdPath === ctx.currentMdPath) {
-    // Same file — anchor link
     return `[${name}](#${name.toLowerCase()})`;
   }
 
-  // Cross-file — relative link to the other doc page
   const from = path.dirname(ctx.currentMdPath || "");
   const rel = path.relative(from, targetMdPath);
   return `[${name}](${toPosixPath(rel)}#${name.toLowerCase()})`;

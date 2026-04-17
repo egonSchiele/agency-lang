@@ -176,48 +176,59 @@ export class TypescriptPreprocessor {
   attachDocComments(): void {
     const nodes = this.program.nodes;
     const DECLARATION_TYPES = ["function", "graphNode", "typeAlias"];
+    const SKIP_TYPES = ["newLine", "tag"];
 
     const isStdlibImport = (node: AgencyNode): boolean =>
       node.type === "importStatement" &&
       (node as ImportStatement).modulePath.startsWith("std::");
 
-    // 1. Declaration-level doc comments: attach to the next function/node/typeAlias
-    const toRemove: number[] = [];
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i];
-      if (node.type !== "multiLineComment" || !node.isDoc) continue;
+    // Build a new node list, attaching doc comments to declarations and dropping them from the list
+    const result: AgencyNode[] = [];
+    let pendingDocComment: AgencyMultiLineComment | null = null;
 
-      let nextIndex = i + 1;
-      while (
-        nextIndex < nodes.length &&
-        (nodes[nextIndex].type === "newLine" || nodes[nextIndex].type === "tag")
-      ) {
-        nextIndex++;
+    for (const node of nodes) {
+      if (node.type === "multiLineComment" && node.isDoc) {
+        pendingDocComment = node as AgencyMultiLineComment;
+        continue;
       }
 
-      if (nextIndex < nodes.length && DECLARATION_TYPES.includes(nodes[nextIndex].type)) {
-        const decl = nodes[nextIndex] as FunctionDefinition | GraphNodeDefinition | TypeAlias;
-        decl.docComment = node as AgencyMultiLineComment;
-        toRemove.push(i);
+      // Skip nodes that shouldn't break doc comment attachment
+      if (pendingDocComment && SKIP_TYPES.includes(node.type)) {
+        result.push(node);
+        continue;
       }
+
+      if (pendingDocComment && DECLARATION_TYPES.includes(node.type)) {
+        const decl = node as FunctionDefinition | GraphNodeDefinition | TypeAlias;
+        decl.docComment = pendingDocComment;
+        pendingDocComment = null;
+      } else if (pendingDocComment) {
+        // Doc comment wasn't followed by a declaration — keep it as a regular comment
+        result.push(pendingDocComment);
+        pendingDocComment = null;
+      }
+
+      result.push(node);
     }
 
-    for (let i = toRemove.length - 1; i >= 0; i--) {
-      nodes.splice(toRemove[i], 1);
+    // Handle trailing doc comment
+    if (pendingDocComment) {
+      result.push(pendingDocComment);
     }
 
-    // 2. File-level doc comment: first unmatched doc comment before any user import/declaration
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i];
+    this.program.nodes = result;
+
+    // File-level doc comment: first unmatched doc comment before any user import/declaration
+    for (let i = 0; i < this.program.nodes.length; i++) {
+      const node = this.program.nodes[i];
       if (node.type === "comment" || node.type === "newLine") continue;
       if (node.type === "multiLineComment" && !node.isDoc) continue;
       if (isStdlibImport(node)) continue;
 
       if (node.type === "multiLineComment" && node.isDoc) {
         this.program.docComment = node as AgencyMultiLineComment;
-        nodes.splice(i, 1);
+        this.program.nodes.splice(i, 1);
       }
-      // Stop at the first non-skippable node regardless
       break;
     }
   }

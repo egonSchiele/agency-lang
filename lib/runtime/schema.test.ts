@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Schema, __validateType } from "./schema.js";
+import { failure } from "./result.js";
 import { z } from "zod";
 
 describe("Schema", () => {
@@ -67,5 +68,17 @@ describe("__validateType", () => {
     const result = __validateType({ name: "Alice" }, z.object({ name: z.string() }));
     expect(result.success).toBe(true);
     expect(result.success && result.value).toEqual({ name: "Alice" });
+  });
+
+  it("passes through failure Results unchanged", () => {
+    const f = failure("something went wrong");
+    const result = __validateType(f, z.number());
+    expect(result.success).toBe(false);
+    expect(result).toBe(f);
+  });
+
+  it("still validates non-failure values normally", () => {
+    const result = __validateType("not a number", z.number());
+    expect(result.success).toBe(false);
   });
 });

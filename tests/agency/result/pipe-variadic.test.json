@@ -3,7 +3,7 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "{\"r1\":{\"success\":true,\"value\":\"hello\"},\"r2\":{\"success\":true,\"value\":\"world\"}}",
+      "expectedOutput": "{\"r1\":{\"__type\":\"resultType\",\"success\":true,\"value\":\"hello\"},\"r2\":{\"__type\":\"resultType\",\"success\":true,\"value\":\"world\"}}",
       "evaluationCriteria": [
         {
           "type": "exact"

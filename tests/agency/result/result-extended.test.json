@@ -3,7 +3,7 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "{\"val\":42,\"err\":\"bad input\",\"r3\":{\"success\":true,\"value\":5},\"r4\":{\"success\":true,\"value\":4},\"r5Success\":false,\"r5Error\":\"division by zero\",\"r5HasCheckpoint\":true}",
+      "expectedOutput": "{\"val\":42,\"err\":\"bad input\",\"r3\":{\"__type\":\"resultType\",\"success\":true,\"value\":5},\"r4\":{\"__type\":\"resultType\",\"success\":true,\"value\":4},\"r5Success\":false,\"r5Error\":\"division by zero\",\"r5HasCheckpoint\":true}",
       "evaluationCriteria": [
         {
           "type": "exact"

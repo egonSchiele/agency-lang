@@ -1,0 +1,16 @@
+type MaybeResult = Result<number> | string
+
+node main() {
+  const s = schema(MaybeResult)
+  const goodResult = s.parse(success(42))
+  const goodString = s.parse("hello")
+  const badResult = s.parse(success("not a number"))
+  if (isSuccess(goodResult)) {
+    if (isSuccess(goodString)) {
+      if (isFailure(badResult)) {
+        return "nested union works"
+      }
+    }
+  }
+  return "failed"
+}

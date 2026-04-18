@@ -1,0 +1,15 @@
+type Wrapper = {
+  result: Result<string>
+}
+
+node main() {
+  const s = schema(Wrapper)
+  const good = s.parse({result: success("hello")})
+  const bad = s.parse({result: success(42)})
+  if (isSuccess(good)) {
+    if (isFailure(bad)) {
+      return "nested object works"
+    }
+  }
+  return "failed"
+}

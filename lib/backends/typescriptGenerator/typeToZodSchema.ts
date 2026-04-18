@@ -114,5 +114,26 @@ export function mapTypeToValidationSchema(
     }
     return mapTypeToValidationSchema(typeAliases[variableType.aliasName], typeAliases);
   }
+  // Recurse into composite types so nested Result types are handled correctly
+  if (variableType.type === "arrayType") {
+    return `z.array(${mapTypeToValidationSchema(variableType.elementType, typeAliases)})`;
+  }
+  if (variableType.type === "unionType") {
+    const schemas = variableType.types.map((t) => mapTypeToValidationSchema(t, typeAliases));
+    return `z.union([${schemas.join(", ")}])`;
+  }
+  if (variableType.type === "objectType") {
+    const props = variableType.properties
+      .map((prop) => {
+        let str = `"${prop.key.replace(/"/g, '\\"')}": ${mapTypeToValidationSchema(prop.value, typeAliases)}`;
+        if (prop.description) {
+          str += `.describe("${escape(prop.description)}")`;
+        }
+        return str;
+      })
+      .join(", ");
+    return `z.object({ ${props} })`;
+  }
+  // Leaf types (primitives, literals) — delegate to existing function
   return mapTypeToZodSchema(variableType, typeAliases);
 }

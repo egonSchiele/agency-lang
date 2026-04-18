@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"nested array works\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "schema() validates Result types nested inside arrays"
+    }
+  ]
+}

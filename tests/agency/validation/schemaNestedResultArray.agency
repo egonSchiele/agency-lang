@@ -1,0 +1,14 @@
+type NumResult = Result<number>
+type ResultArray = NumResult[]
+
+node main() {
+  const s = schema(ResultArray)
+  const good = s.parse([success(1), success(2)])
+  const bad = s.parse([success("not a number")])
+  if (isSuccess(good)) {
+    if (isFailure(bad)) {
+      return "nested array works"
+    }
+  }
+  return "failed"
+}

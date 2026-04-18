@@ -529,7 +529,7 @@ describe("detectLlmCalls", () => {
                   { name: "add", arguments: { a: 4, b: 5 } },
                 ],
               },
-              { role: "tool", content: "9", toolCallId: "1" },
+              { role: "tool", content: "9" },
               { role: "assistant", content: "The answer is 9" },
             ]),
           },
@@ -703,7 +703,7 @@ describe("detectLlmCalls", () => {
                   { name: "add", arguments: { a: 1, b: 2 } },
                 ],
               },
-              { role: "tool", content: "3", toolCallId: "1" },
+              { role: "tool", content: "3" },
             ]),
           },
         ],
@@ -753,29 +753,86 @@ describe("detectLlmCalls", () => {
     const events = detectLlmCalls(prev, curr, 2);
     expect(events).toEqual([]);
   });
+
+  it("matches tool results to correct tool calls by ID", () => {
+    const prev = makeCheckpoint({
+      stepPath: "0",
+      stack: {
+        stack: [
+          { args: {}, locals: {}, threads: makeThreads([]), step: 0 },
+        ],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: ["main"],
+      },
+    });
+    const curr = makeCheckpoint({
+      stepPath: "1",
+      stack: {
+        stack: [
+          {
+            args: {},
+            locals: {},
+            step: 1,
+            threads: makeThreads([
+              { role: "user", content: "Add 4+5 and multiply 2*3" },
+              {
+                role: "assistant",
+                content: null,
+                toolCalls: [
+                  { id: "call-add", name: "add", arguments: { a: 4, b: 5 } },
+                  {
+                    id: "call-multiply",
+                    name: "multiply",
+                    arguments: { a: 2, b: 3 },
+                  },
+                ],
+              },
+              { role: "tool", content: "6", toolCallId: "call-multiply" },
+              { role: "tool", content: "9", toolCallId: "call-add" },
+              { role: "assistant", content: "9 and 6" },
+            ]),
+          },
+        ],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: ["main"],
+      },
+    });
+    const events = detectLlmCalls(prev, curr, 1);
+    const toolEvents = events.filter((e: any) => e.type === "tool-call");
+    expect(toolEvents).toHaveLength(2);
+    expect(toolEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          toolName: "add",
+          args: { a: 4, b: 5 },
+          result: "9",
+        }),
+        expect.objectContaining({
+          toolName: "multiply",
+          args: { a: 2, b: 3 },
+          result: "6",
+        }),
+      ]),
+    );
+  });
 });
 
 describe("detectInterrupts", () => {
-  it("emits interrupt-thrown for interrupt-related label", () => {
-    const prev = makeCheckpoint({ stepPath: "1", label: null });
-    const curr = makeCheckpoint({ stepPath: "2", label: "result-entry" });
-    const events = detectInterrupts(prev, curr, 2);
-    expect(events).toHaveLength(1);
-    expect(events[0].type).toBe("interrupt-thrown");
-  });
-
-  it("emits interrupt-resolved when execution continues past interrupt", () => {
-    const prev = makeCheckpoint({ stepPath: "2", label: "result-entry" });
-    const curr = makeCheckpoint({ stepPath: "3", label: null });
-    const events = detectInterrupts(prev, curr, 3);
-    expect(events).toHaveLength(1);
-    expect(events[0].type).toBe("interrupt-resolved");
-  });
-
-  it("returns empty when no interrupt", () => {
+  it("returns empty (not yet implemented)", () => {
     const prev = makeCheckpoint({ stepPath: "0", label: null });
     const curr = makeCheckpoint({ stepPath: "1", label: null });
     const events = detectInterrupts(prev, curr, 1);
+    expect(events).toEqual([]);
+  });
+
+  it("does not treat result-entry label as interrupt", () => {
+    const prev = makeCheckpoint({ stepPath: "1", label: null });
+    const curr = makeCheckpoint({ stepPath: "2", label: "result-entry" });
+    const events = detectInterrupts(prev, curr, 2);
     expect(events).toEqual([]);
   });
 });
@@ -798,7 +855,7 @@ describe("detectBranches", () => {
         stack: [
           {
             args: {},
-            locals: { __condbranch_1: true },
+            locals: { __condbranch_1: 0 },
             threads: null,
             step: 1,
           },
@@ -831,7 +888,7 @@ describe("detectBranches", () => {
         stack: [
           {
             args: {},
-            locals: { __condbranch_1: false },
+            locals: { __condbranch_1: -1 },
             threads: null,
             step: 1,
           },

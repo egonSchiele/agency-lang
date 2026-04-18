@@ -1,7 +1,4 @@
-import {
-  type Checkpoint,
-  RESULT_ENTRY_LABEL,
-} from "../state/checkpointStore.js";
+import type { Checkpoint } from "../state/checkpointStore.js";
 import { GlobalStore } from "../state/globalStore.js";
 
 // --- Event types ---
@@ -186,13 +183,6 @@ function getTokenUsageDiff(
   };
 }
 
-const INTERRUPT_LABELS = [RESULT_ENTRY_LABEL];
-
-function isInterruptLabel(label: string | null): boolean {
-  if (!label) return false;
-  return INTERRUPT_LABELS.some((il) => label.includes(il));
-}
-
 // --- Detectors ---
 
 export function detectNodeTransitions(
@@ -336,7 +326,12 @@ export function detectLlmCalls(
   if (currMessages.length <= prevMessages.length) return events;
 
   const newMessages = currMessages.slice(prevMessages.length);
-  const toolCalls: Array<{ name: string; arguments: any; result?: any }> = [];
+  const toolCalls: Array<{
+    id?: string;
+    name: string;
+    arguments: any;
+    result?: any;
+  }> = [];
 
   let prompt = "";
   let response = "";
@@ -346,10 +341,14 @@ export function detectLlmCalls(
       prompt = getMessageContent(msg);
     } else if (msg.role === "assistant" && msg.toolCalls) {
       for (const tc of msg.toolCalls) {
-        toolCalls.push({ name: tc.name, arguments: tc.arguments });
+        toolCalls.push({ id: tc.id, name: tc.name, arguments: tc.arguments });
       }
     } else if (msg.role === "tool") {
-      const pending = toolCalls.findLast((tc) => tc.result === undefined);
+      const pending = msg.toolCallId
+        ? toolCalls.find(
+            (tc) => tc.id === msg.toolCallId && tc.result === undefined,
+          )
+        : toolCalls.find((tc) => tc.result === undefined);
       if (pending) {
         pending.result = getMessageContent(msg);
         events.push({
@@ -381,31 +380,16 @@ export function detectLlmCalls(
   return events;
 }
 
+// Interrupt detection is not yet implemented. The checkpoint data does not
+// reliably distinguish interactive interrupts from Result error-handling
+// checkpoints. The InterruptThrownEvent and InterruptResolvedEvent types are
+// kept for future use when interrupt metadata is available in traces.
 export function detectInterrupts(
-  prev: Checkpoint | null,
-  curr: Checkpoint,
-  step: number,
+  _prev: Checkpoint | null,
+  _curr: Checkpoint,
+  _step: number,
 ): TraceEvent[] {
-  if (!prev) return [];
-  const events: TraceEvent[] = [];
-
-  if (isInterruptLabel(curr.label)) {
-    events.push({
-      ...makeBaseEvent(curr, step),
-      type: "interrupt-thrown",
-      message: curr.label ?? "",
-    });
-  }
-
-  if (isInterruptLabel(prev.label) && !isInterruptLabel(curr.label)) {
-    events.push({
-      ...makeBaseEvent(curr, step),
-      type: "interrupt-resolved",
-      outcome: "approved",
-    });
-  }
-
-  return events;
+  return [];
 }
 
 export function detectBranches(
@@ -426,7 +410,7 @@ export function detectBranches(
   }> = [
     {
       prefix: "__condbranch_",
-      toEvent: (val) => ({ condition: val ? "if" : "else" }),
+      toEvent: (val) => ({ condition: val < 0 ? "else" : "if" }),
     },
     {
       prefix: "__iteration_",

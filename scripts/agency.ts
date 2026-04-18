@@ -108,7 +108,7 @@ traceCmd
 traceCmd
   .command("log")
   .description("Generate a JSON event log from a trace file")
-  .argument("<file>", "Path to .agencytrace or .agencybundle file")
+  .argument("<file>", "Path to .trace, .agencytrace, or .agencybundle file")
   .option("-o, --output <file>", "Output JSON file path (default: stdout)")
   .action((file: string, options: { output?: string }) => {
     traceLog(file, options.output);

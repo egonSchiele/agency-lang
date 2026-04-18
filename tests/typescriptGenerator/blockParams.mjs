@@ -171,24 +171,22 @@ if (__ctx._pendingArgOverrides) {
     await runner.step(0, async (runner) => {
 __stack.locals.results = [];
     });
-    await runner.step(1, async (runner) => {
-await runner.loop(1, __stack.args.items, async (item, _, runner) => {
+    await runner.loop(1, __stack.args.items, async (item, _, runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = await block(item);
 if (isInterrupt(__stack.locals.result)) {
-            await __ctx.pendingPromises.awaitAll()
-            runner.halt(__stack.locals.result)
-            return;
-          }
-        });
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt(__stack.locals.result)
+          return;
+        }
+      });
 await runner.step(1, async (runner) => {
 __stack.locals.results = await append(__stack.locals.results, __stack.locals.result);
 if (isInterrupt(__stack.locals.results)) {
-            await __ctx.pendingPromises.awaitAll()
-            runner.halt(__stack.locals.results)
-            return;
-          }
-        });
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt(__stack.locals.results)
+          return;
+        }
       });
     });
     await runner.step(2, async (runner) => {

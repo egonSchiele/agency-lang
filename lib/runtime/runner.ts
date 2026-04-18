@@ -273,6 +273,12 @@ export class Runner {
     if (this.shouldSkip()) return;
     if (this.getCounter() > id) return;
 
+    // INVARIANT: Debug interrupts bypass handlers entirely.
+    // maybeDebugHook fires BEFORE pushHandler, so if the debugger pauses
+    // here, the handler is never registered for this step. This is correct:
+    // debug interrupts are internal to the debugger and must not be routed
+    // through user-defined handlers. On resume, the debug flag causes the
+    // hook to be skipped, and pushHandler executes normally.
     if (await this.maybeDebugHook(id)) return;
 
     this.ctx.pushHandler(handlerFn);

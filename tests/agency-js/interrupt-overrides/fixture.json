@@ -4,6 +4,7 @@
     "result": true
   },
   "reject": {
+    "__type": "resultType",
     "success": false,
     "error": "interrupt rejected",
     "checkpoint": null,

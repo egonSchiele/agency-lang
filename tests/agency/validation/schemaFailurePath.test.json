@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"correctly rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Schema.parse returns failure for invalid data"
+    }
+  ]
+}

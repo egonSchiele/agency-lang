@@ -1,0 +1,17 @@
+def mayFail(x: number) {
+  if (x == 0) {
+    return failure("zero not allowed")
+  }
+  return success(x * 10)
+}
+
+node main() {
+  const result = try mayFail(5)
+  if (isSuccess(result)) {
+    const validated: number! = result.value
+    if (isSuccess(validated)) {
+      return validated.value
+    }
+  }
+  return "failed"
+}

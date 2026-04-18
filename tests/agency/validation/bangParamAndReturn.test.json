@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"both failed correctly\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Combined ! on param and return type: param fails for string, return fails for number (expected string)"
+    }
+  ]
+}

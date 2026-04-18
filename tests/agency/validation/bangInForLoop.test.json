@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[2,\"fail\",6]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Bang validation works correctly inside a for loop"
+    }
+  ]
+}

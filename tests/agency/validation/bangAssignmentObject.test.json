@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"Alice\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Bang with inline object type validates correctly"
+    }
+  ]
+}

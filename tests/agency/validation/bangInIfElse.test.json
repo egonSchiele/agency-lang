@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"validated in if\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Bang validation works inside if/else blocks"
+    }
+  ]
+}

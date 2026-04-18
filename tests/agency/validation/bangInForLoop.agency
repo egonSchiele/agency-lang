@@ -1,0 +1,17 @@
+def validate(x: number!) {
+  return x * 2
+}
+
+node main() {
+  const items = [1, "bad", 3]
+  const results = []
+  for (item in items) {
+    const r = validate(item)
+    if (isFailure(r)) {
+      results.push("fail")
+    } else {
+      results.push(r)
+    }
+  }
+  return results
+}

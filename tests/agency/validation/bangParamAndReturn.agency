@@ -1,0 +1,14 @@
+def process(x: number!): string! {
+  return x
+}
+
+node main() {
+  const paramFail = process("bad")
+  const returnFail = process(42)
+  if (isFailure(paramFail)) {
+    if (isFailure(returnFail)) {
+      return "both failed correctly"
+    }
+  }
+  return "unexpected"
+}

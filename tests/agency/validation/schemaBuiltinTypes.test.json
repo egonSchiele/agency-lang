@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"all correct\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "string.schema and boolean.schema work for validation"
+    }
+  ]
+}

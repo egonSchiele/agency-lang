@@ -1,0 +1,10 @@
+node main() {
+  const good: {name: string, age: number}! = {name: "Alice", age: 30}
+  const bad: {name: string, age: number}! = {name: "Alice", age: "thirty"}
+  if (isSuccess(good)) {
+    if (isFailure(bad)) {
+      return good.value.name
+    }
+  }
+  return "failed"
+}

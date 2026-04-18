@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "42",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Schema.parseJSON validates JSON strings end-to-end"
+    }
+  ]
+}

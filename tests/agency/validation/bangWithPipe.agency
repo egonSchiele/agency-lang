@@ -1,0 +1,15 @@
+def double(x: number): Result {
+  return success(x * 2)
+}
+
+def addOne(x: number): Result {
+  return success(x + 1)
+}
+
+node main() {
+  const result: number! = success(5) |> double |> addOne
+  if (isSuccess(result)) {
+    return result.value
+  }
+  return "failed"
+}

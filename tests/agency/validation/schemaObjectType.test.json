@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"localhost\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Schema for object type validates structure correctly"
+    }
+  ]
+}

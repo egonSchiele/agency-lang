@@ -1,0 +1,15 @@
+node main() {
+  let flag = true
+  if (flag) {
+    const x: number! = 42
+    if (isSuccess(x)) {
+      return "validated in if"
+    }
+  } else {
+    const y: number! = "bad"
+    if (isFailure(y)) {
+      return "failed in else"
+    }
+  }
+  return "unexpected"
+}

@@ -1,0 +1,11 @@
+def double(x: number): number! {
+  return x * 2
+}
+
+node main() {
+  const result = double(5)
+  if (isSuccess(result)) {
+    return result.value
+  }
+  return "failed"
+}

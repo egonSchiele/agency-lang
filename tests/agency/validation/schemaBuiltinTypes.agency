@@ -1,6 +1,6 @@
 node main() {
-  const strSchema = string.schema
-  const boolSchema = boolean.schema
+  const strSchema = schema(string)
+  const boolSchema = schema(boolean)
 
   const strGood = strSchema.parse("hello")
   const strBad = strSchema.parse(42)

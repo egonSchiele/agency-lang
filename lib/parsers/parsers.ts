@@ -104,6 +104,7 @@ import { BinOpExpression, Operator } from "../types/binop.js";
 import { Placeholder } from "../types/placeholder.js";
 import { TryExpression } from "../types/tryExpression.js";
 import { ClassDefinition, ClassField, ClassMethod, NewExpression } from "../types/classDefinition.js";
+import { SchemaExpression } from "../types/schemaExpression.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { DebuggerStatement } from "../types/debuggerStatement.js";
 import { Keyword, keywords, createKeyword } from "@/types/keyword.js";
@@ -1435,12 +1436,26 @@ export const newExpressionParser: Parser<NewExpression> = (input: string) => {
 };
 
 // The base atom parser: the smallest unit of an expression.
+export const schemaExpressionParser: Parser<SchemaExpression> = trace(
+  "schemaExpressionParser",
+  seqC(
+    set("type", "schemaExpression"),
+    str("schema"),
+    char("("),
+    optionalSpaces,
+    capture(variableTypeParser, "typeArg"),
+    optionalSpaces,
+    char(")"),
+  ),
+);
+
 const baseAtom: Parser<Expression> = or(
   unaryTypeofParser,
   unaryVoidParser,
   unaryNotParser,
   tryExpressionParser,
   newExpressionParser,
+  schemaExpressionParser,
   placeholderParser,
   lazy(() => agencyArrayParser),
   lazy(() => agencyObjectParser),

@@ -1,4 +1,7 @@
-import type { Checkpoint } from "../state/checkpointStore.js";
+import {
+  type Checkpoint,
+  RESULT_ENTRY_LABEL,
+} from "../state/checkpointStore.js";
 import { GlobalStore } from "../state/globalStore.js";
 
 // --- Event types ---
@@ -98,15 +101,20 @@ export function makeBaseEvent(
 ): BaseEvent {
   return {
     step,
-    nodeId: checkpoint.nodeId,
-    scopeName: checkpoint.scopeName,
-    moduleId: checkpoint.moduleId,
-    stepPath: checkpoint.stepPath,
+    ...checkpoint.location,
   };
 }
 
 function isInternalVar(name: string): boolean {
   return name.startsWith("__");
+}
+
+function valuesEqual(a: any, b: any): boolean {
+  if (a === b) return true;
+  if (a == null || b == null) return false;
+  if (typeof a !== typeof b) return false;
+  if (typeof a !== "object") return false;
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 function diffObject(
@@ -118,7 +126,7 @@ function diffObject(
     if (isInternalVar(key)) continue;
     const prevVal = prev[key];
     const currVal = curr[key];
-    if (JSON.stringify(prevVal) !== JSON.stringify(currVal)) {
+    if (!valuesEqual(prevVal, currVal)) {
       changes.push({ key, value: currVal, previousValue: prevVal ?? null });
     }
   }
@@ -178,7 +186,7 @@ function getTokenUsageDiff(
   };
 }
 
-const INTERRUPT_LABELS = ["result-entry"];
+const INTERRUPT_LABELS = [RESULT_ENTRY_LABEL];
 
 function isInterruptLabel(label: string | null): boolean {
   if (!label) return false;
@@ -412,29 +420,24 @@ export function detectBranches(
   const prevLocals = prev.stack.stack.at(-1)?.locals ?? {};
   const currLocals = curr.stack.stack.at(-1)?.locals ?? {};
 
-  for (const key of Object.keys(currLocals)) {
-    if (key.startsWith("__condbranch_")) {
-      const prevVal = prevLocals[key];
-      const currVal = currLocals[key];
-      if (JSON.stringify(prevVal) !== JSON.stringify(currVal)) {
-        events.push({
-          ...base,
-          type: "branch",
-          condition: currVal ? "if" : "else",
-        });
-      }
-    }
+  const branchDetectors: Array<{
+    prefix: string;
+    toEvent: (val: any) => Partial<BranchEvent>;
+  }> = [
+    {
+      prefix: "__condbranch_",
+      toEvent: (val) => ({ condition: val ? "if" : "else" }),
+    },
+    {
+      prefix: "__iteration_",
+      toEvent: (val) => ({ condition: "for", iteration: val }),
+    },
+  ];
 
-    if (key.startsWith("__iteration_")) {
-      const prevVal = prevLocals[key];
-      const currVal = currLocals[key];
-      if (JSON.stringify(prevVal) !== JSON.stringify(currVal)) {
-        events.push({
-          ...base,
-          type: "branch",
-          condition: "for",
-          iteration: currVal,
-        });
+  for (const key of Object.keys(currLocals)) {
+    for (const { prefix, toEvent } of branchDetectors) {
+      if (key.startsWith(prefix) && !valuesEqual(prevLocals[key], currLocals[key])) {
+        events.push({ ...base, type: "branch", ...toEvent(currLocals[key]) } as BranchEvent);
       }
     }
   }

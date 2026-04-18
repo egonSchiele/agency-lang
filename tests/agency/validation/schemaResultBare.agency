@@ -1,0 +1,11 @@
+node main() {
+  const s = schema(Result)
+  const good = s.parse(success(42))
+  const bad = s.parse("not a result")
+  if (isSuccess(good)) {
+    if (isFailure(bad)) {
+      return "works"
+    }
+  }
+  return "failed"
+}

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"works\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "schema(Result) validates Result objects"
+    }
+  ]
+}

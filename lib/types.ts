@@ -33,6 +33,7 @@ import { WithModifier } from "./types/withModifier.js";
 import { Tag } from "./types/tag.js";
 import { TryExpression } from "./types/tryExpression.js";
 import { ClassDefinition, ClassField, ClassMethod, NewExpression } from "./types/classDefinition.js";
+import { SchemaExpression } from "./types/schemaExpression.js";
 export * from "./types/access.js";
 export * from "./types/awaitPending.js";
 export * from "./types/dataStructures.js";
@@ -58,6 +59,7 @@ export * from "./types/base.js";
 export * from "./types/tag.js";
 export type { TryExpression } from "./types/tryExpression.js";
 export * from "./types/classDefinition.js";
+export * from "./types/schemaExpression.js";
 
 export type Expression =
   | ValueAccess
@@ -69,7 +71,8 @@ export type Expression =
   | Placeholder
   | TryExpression
   | NewExpression
-  | RegexLiteral;
+  | RegexLiteral
+  | SchemaExpression;
 
 /**
  * Scope types for variable resolution.
@@ -244,7 +247,8 @@ export type AgencyNode =
   | ClassMethod
   | ClassField
   | NewExpression
-  | RegexLiteral;
+  | RegexLiteral
+  | SchemaExpression;
 
 export type AgencyProgram = {
   type: "agencyProgram";

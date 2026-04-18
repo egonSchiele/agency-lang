@@ -404,4 +404,39 @@ describe("exprParser", () => {
       }
     });
   });
+
+  describe("schema expressions", () => {
+    it("should parse schema(number)", () => {
+      const result = exprParser("schema(number)");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("schemaExpression");
+        if (result.result.type === "schemaExpression") {
+          expect(result.result.typeArg).toEqual({ type: "primitiveType", value: "number" });
+        }
+      }
+    });
+
+    it("should parse schema(Result<number>)", () => {
+      const result = exprParser("schema(Result<number>)");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("schemaExpression");
+        if (result.result.type === "schemaExpression") {
+          expect(result.result.typeArg.type).toBe("resultType");
+        }
+      }
+    });
+
+    it("should parse schema({name: string, age: number})", () => {
+      const result = exprParser("schema({name: string, age: number})");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("schemaExpression");
+        if (result.result.type === "schemaExpression") {
+          expect(result.result.typeArg.type).toBe("objectType");
+        }
+      }
+    });
+  });
 });

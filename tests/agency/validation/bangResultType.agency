@@ -1,0 +1,11 @@
+def compute(): Result {
+  return success(42)
+}
+
+node main() {
+  const r: Result! = compute()
+  if (isSuccess(r)) {
+    return r.value
+  }
+  return "failed"
+}

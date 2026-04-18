@@ -1,0 +1,22 @@
+def mayFail(x: number): Result {
+  if (x == 0) {
+    return failure("zero!")
+  }
+  return success(x * 10)
+}
+
+def validate(x: number!) {
+  return x + 1
+}
+
+node main() {
+  const f = mayFail(0)
+  const assignResult: number! = f
+  const paramResult = validate(f)
+  if (isFailure(assignResult)) {
+    if (isFailure(paramResult)) {
+      return assignResult.error
+    }
+  }
+  return "unexpected"
+}

@@ -1,8 +1,8 @@
 type Color = "red" | "green" | "blue"
 
 node main() {
-  const schema = Color.schema
-  const result = schema.parse("yellow")
+  const s = schema(Color)
+  const result = s.parse("yellow")
   if (isFailure(result)) {
     return "correctly rejected"
   }

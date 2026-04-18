@@ -363,3 +363,62 @@ describe("AgencyGenerator - bang (!) validated type annotations", () => {
   });
 });
 
+describe("AgencyGenerator - Result type formatting", () => {
+  function formatAgency(input: string): string {
+    const parseResult = parseAgency(input, {}, false);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return "";
+    const generator = new AgencyGenerator();
+    return generator.generate(parseResult.result).output.trim();
+  }
+
+  it("should format Result<Foo> with single type param", () => {
+    const input = `def check(): Result<number> {\n  return success(42)\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("Result<number>");
+    expect(output).not.toContain("Result<number,");
+  });
+
+  it("should format bare Result without type params", () => {
+    const input = `def check(): Result {\n  return success(42)\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain(": Result");
+    expect(output).not.toContain("Result<");
+  });
+
+  it("should format Result<Foo, Bar> with non-default failure type", () => {
+    const input = `def check(): Result<number, number> {\n  return success(42)\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("Result<number, number>");
+  });
+
+  it("should normalize Result<Foo, string> to Result<Foo>", () => {
+    const input = `def check(): Result<number, string> {\n  return success(42)\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("Result<number>");
+    expect(output).not.toContain("Result<number, string>");
+  });
+});
+
+describe("AgencyGenerator - schema(Type) expressions", () => {
+  function formatAgency(input: string): string {
+    const parseResult = parseAgency(input, {}, false);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return "";
+    const generator = new AgencyGenerator();
+    return generator.generate(parseResult.result).output.trim();
+  }
+
+  it("should format schema(number)", () => {
+    const input = `node main() {\n  const s = schema(number)\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("schema(number)");
+  });
+
+  it("should format schema(Result<number>)", () => {
+    const input = `node main() {\n  const s = schema(Result<number>)\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("schema(Result<number>)");
+  });
+});
+

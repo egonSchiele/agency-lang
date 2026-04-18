@@ -4,11 +4,11 @@ type Config = {
 }
 
 node main() {
-  const schema = Config.schema
+  const s = schema(Config)
   const goodObj = {host: "localhost", port: 8080}
   const badObj = {host: "localhost", port: "not a number"}
-  const good = schema.parse(goodObj)
-  const bad = schema.parse(badObj)
+  const good = s.parse(goodObj)
+  const bad = s.parse(badObj)
   if (isSuccess(good)) {
     if (isFailure(bad)) {
       return good.value.host

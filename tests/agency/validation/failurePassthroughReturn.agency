@@ -1,0 +1,16 @@
+def inner(): Result {
+  return failure("inner failed")
+}
+
+def outer(): number! {
+  const result = inner()
+  return result
+}
+
+node main() {
+  const r = outer()
+  if (isFailure(r)) {
+    return r.error
+  }
+  return "unexpected"
+}

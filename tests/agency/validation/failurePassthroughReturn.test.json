@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"inner failed\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Failure passes through ! return type validation"
+    }
+  ]
+}

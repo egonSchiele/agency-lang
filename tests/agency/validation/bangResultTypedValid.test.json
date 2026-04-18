@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "42",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Result<number>! validates inner value and returns the Result directly"
+    }
+  ]
+}

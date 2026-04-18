@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Schema, __validateType } from "./schema.js";
+import { failure } from "./result.js";
 import { z } from "zod";
 
 describe("Schema", () => {
@@ -67,5 +68,29 @@ describe("__validateType", () => {
     const result = __validateType({ name: "Alice" }, z.object({ name: z.string() }));
     expect(result.success).toBe(true);
     expect(result.success && result.value).toEqual({ name: "Alice" });
+  });
+
+  it("passes through failure Results unchanged", () => {
+    const f = failure("something went wrong");
+    const result = __validateType(f, z.number());
+    expect(result.success).toBe(false);
+    expect(result).toBe(f);
+  });
+
+  it("still validates non-failure values normally", () => {
+    const result = __validateType("not a number", z.number());
+    expect(result.success).toBe(false);
+  });
+
+  it("returns Result directly when value is already a valid Result (no double-wrapping)", () => {
+    const resultSchema = z.union([
+      z.object({ success: z.literal(true), value: z.number() }),
+      z.object({ success: z.literal(false), error: z.any() }),
+    ]);
+    const original = { success: true as const, value: 42 };
+    const result = __validateType(original, resultSchema);
+    // Should return the Result directly, not success({success: true, value: 42})
+    expect(result).toEqual({ success: true, value: 42 });
+    expect((result as any).value).toBe(42);
   });
 });

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"generic works\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "schema(Result<number>) works directly without type alias"
+    }
+  ]
+}

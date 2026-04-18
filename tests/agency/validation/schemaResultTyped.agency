@@ -1,0 +1,16 @@
+type NumberResult = Result<number>
+
+node main() {
+  const s = schema(NumberResult)
+  const good = s.parse(success(42))
+  const badValue = s.parse(success("not a number"))
+  const notResult = s.parse("hello")
+  if (isSuccess(good)) {
+    if (isFailure(badValue)) {
+      if (isFailure(notResult)) {
+        return "all correct"
+      }
+    }
+  }
+  return "failed"
+}

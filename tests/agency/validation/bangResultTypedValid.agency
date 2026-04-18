@@ -1,0 +1,9 @@
+type NumberResult = Result<number>
+
+node main() {
+  const r: NumberResult! = success(42)
+  if (isSuccess(r)) {
+    return r.value
+  }
+  return "failed"
+}

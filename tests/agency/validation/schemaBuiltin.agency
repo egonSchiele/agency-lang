@@ -1,5 +1,5 @@
 node main() {
-  const numSchema = number.schema
+  const numSchema = schema(number)
   const good = numSchema.parse(42)
   const bad = numSchema.parse("hello")
   if (isSuccess(good)) {

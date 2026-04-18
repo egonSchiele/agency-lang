@@ -1,0 +1,15 @@
+def double(x: number): Result {
+  return success(x * 2)
+}
+
+def alwaysFail(x: number): Result {
+  return failure("pipe failed")
+}
+
+node main() {
+  const result: number! = success(5) |> double |> alwaysFail
+  if (isFailure(result)) {
+    return result.error
+  }
+  return "unexpected"
+}

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"pipe failed\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Failure from pipe chain passes through ! validation"
+    }
+  ]
+}

@@ -269,35 +269,76 @@ ${safeKeyword}def ${funcName}(id: string, shouldSave: boolean, items: string[]):
   });
 });
 
-describe("TypeName.schema access", () => {
-  it("should throw on .schema for unrecognized type name", () => {
-    expect(() =>
-      generateWithBuilder(`
-node main() {
-  const schema = UnknownType.schema
-}
-`),
-    ).toThrow("UnknownType");
-  });
-
-  it("should compile .schema for named type aliases", () => {
+describe("schema(Type) expression", () => {
+  it("should compile schema(Type) for named type aliases", () => {
     expect(() =>
       generateWithBuilder(`
 type Category = "bug" | "feature"
 node main() {
-  const schema = Category.schema
+  const s = schema(Category)
 }
 `),
     ).not.toThrow();
   });
 
-  it("should compile .schema for builtin types", () => {
+  it("should compile schema(Type) for builtin types", () => {
     expect(() =>
       generateWithBuilder(`
 node main() {
-  const schema = number.schema
+  const s = schema(number)
 }
 `),
     ).not.toThrow();
+  });
+
+  it("should compile schema(Result<number>)", () => {
+    expect(() =>
+      generateWithBuilder(`
+node main() {
+  const s = schema(Result<number>)
+}
+`),
+    ).not.toThrow();
+  });
+
+  it("generated code contains new Schema(...)", () => {
+    const output = generateWithBuilder(`
+type Category = "bug" | "feature"
+node main() {
+  const s = schema(Category)
+}
+`);
+    expect(output).toContain("new Schema(");
+  });
+});
+
+import { mapTypeToValidationSchema } from "./typescriptGenerator/typeToZodSchema.js";
+
+describe("mapTypeToValidationSchema", () => {
+
+  it("generates Result validation schema for bare Result", () => {
+    const schema = mapTypeToValidationSchema(
+      { type: "resultType", successType: { type: "primitiveType", value: "any" }, failureType: { type: "primitiveType", value: "any" } },
+      {},
+    );
+    expect(schema).toContain("z.literal(true)");
+    expect(schema).toContain("z.literal(false)");
+  });
+
+  it("generates Result validation schema with typed success", () => {
+    const schema = mapTypeToValidationSchema(
+      { type: "resultType", successType: { type: "primitiveType", value: "number" }, failureType: { type: "primitiveType", value: "string" } },
+      {},
+    );
+    expect(schema).toContain("z.number()");
+    expect(schema).toContain("z.literal(true)");
+  });
+
+  it("delegates non-Result types to mapTypeToZodSchema", () => {
+    const schema = mapTypeToValidationSchema(
+      { type: "primitiveType", value: "number" },
+      {},
+    );
+    expect(schema).toBe("z.number()");
   });
 });

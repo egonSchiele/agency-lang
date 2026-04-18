@@ -1,0 +1,9 @@
+type NumberResult = Result<number>
+
+node main() {
+  const r: NumberResult! = success("not a number")
+  if (isFailure(r)) {
+    return "correctly rejected"
+  }
+  return "unexpected"
+}

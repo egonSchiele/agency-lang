@@ -59,9 +59,9 @@ export class State {
    * and before break/continue statements. */
   resetLoopIteration(subKey: string): void {
     this.locals[`__substep_${subKey}`] = 0;
-    this.clearLocalsWithPrefix(`__condbranch_${subKey}_`);
-    this.clearLocalsWithPrefix(`__substep_${subKey}_`);
-    this.clearLocalsWithPrefix(`__iteration_${subKey}_`);
+    this.clearLocalsWithPrefix(`__condbranch_${subKey}.`);
+    this.clearLocalsWithPrefix(`__substep_${subKey}.`);
+    this.clearLocalsWithPrefix(`__iteration_${subKey}.`);
   }
 
   removeDebugFlags(): void {
@@ -199,10 +199,10 @@ export class StateStack {
    *
    * - stepPath "3"     → top-level step → increment stack.step
    * - stepPath "4.0"   → substep inside step 4 → set __substep_4 = 0 + 1
-   * - stepPath "4.0.2" → sub-substep → set __substep_4_0 = 2 + 1
+   * - stepPath "4.0.2" → sub-substep → set __substep_4.0 = 2 + 1
    *
    * The naming convention matches the builder's generated code:
-   * all segments except the last form the substep variable name (__substep_X_Y),
+   * all segments except the last form the substep variable name (__substep_X.Y),
    * and the value is set to lastSegment + 1 to advance past it.
    */
   advanceDebugStep(stepPath: string): void {
@@ -214,9 +214,9 @@ export class StateStack {
       // Top-level step
       frame.step++;
     } else {
-      // Substep: variable name is __substep_ + all segments except last, joined by _
+      // Substep: variable name is __substep_ + all segments except last, joined by .
       const parentSegments = segments.slice(0, -1);
-      const varName = `__substep_${parentSegments.join("_")}`;
+      const varName = `__substep_${parentSegments.join(".")}`;
       const lastSegment = segments[segments.length - 1];
       frame.locals[varName] = lastSegment + 1;
     }

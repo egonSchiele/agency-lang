@@ -191,7 +191,7 @@ describe("Runner", () => {
       });
 
       expect(frame.locals.__substep_2).toBe(2); // substep 1 completed
-      expect(frame.locals.__substep_2_1).toBe(4); // substep 3 completed
+      expect((frame.locals as any)["__substep_2.1"]).toBe(4); // substep 3 completed
     });
   });
 
@@ -258,7 +258,7 @@ describe("Runner", () => {
       });
 
       // condbranch key should include the parent path
-      expect(frame.locals.__condbranch_3_0).toBe(0);
+      expect((frame.locals as any)["__condbranch_3.0"]).toBe(0);
     });
   });
 

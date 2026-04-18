@@ -153,7 +153,7 @@ export class TypeScriptBuilder {
   /** Tracks the current substep nesting path. Empty when at the top level
    * of a stepped body. Non-empty when inside a block (if/else, etc.) that
    * has been broken into substeps. Used to generate unique variable names
-   * like __substep_3_1 for nested blocks. */
+   * like __substep_3.1 for nested blocks. */
   private _subStepPath: number[] = [];
   private _sourceMapBuilder: SourceMapBuilder = new SourceMapBuilder();
 
@@ -1255,7 +1255,7 @@ export class TypeScriptBuilder {
       this.loopVars.push(node.indexVar);
     }
 
-    const subKey = this._subStepPath.join("_");
+    const subKey = this._subStepPath.join(".");
 
     this._loopContextStack.push(subKey);
     const bodyNodes = this.processBodyAsParts(node.body);
@@ -1305,7 +1305,7 @@ export class TypeScriptBuilder {
 
   private processWhileLoopWithSteps(node: WhileLoop): TsNode {
     const id = this._subStepPath[this._subStepPath.length - 1];
-    const subKey = this._subStepPath.join("_");
+    const subKey = this._subStepPath.join(".");
     const condition = this.processNode(node.condition);
 
     this._loopContextStack.push(subKey);
@@ -1797,7 +1797,7 @@ export class TypeScriptBuilder {
           !this.isGraphNode(node.functionName)
         ) {
           this._asyncBranchCheckNeeded = true;
-          const branchKey = this._subStepPath.join("_");
+          const branchKey = this._subStepPath.join(".");
           let statements = ts.statements(this.forkBranchSetup(branchKey));
           const callWithStack = this.generateFunctionCallExpression(
             node,
@@ -2372,7 +2372,7 @@ export class TypeScriptBuilder {
           !this.isGraphNode(value.functionName)
         ) {
           this._asyncBranchCheckNeeded = true;
-          const branchKey = this._subStepPath.join("_");
+          const branchKey = this._subStepPath.join(".");
           stmts.unshift(...this.forkBranchSetup(branchKey));
           stmts[stmts.length - 1] = this.scopedAssign(
             node.scope!,
@@ -2821,7 +2821,7 @@ export class TypeScriptBuilder {
 
   private processHandleBlockWithSteps(node: HandleBlock): TsNode {
     const id = this._subStepPath[this._subStepPath.length - 1];
-    const subKey = this._subStepPath.join("_");
+    const subKey = this._subStepPath.join(".");
     const handlerName = `__handler_${subKey}`;
 
     // Build handler arrow function
@@ -3198,7 +3198,7 @@ export class TypeScriptBuilder {
       if (!currentPart) currentPart = [];
       currentPart.push(processed);
       if (this._asyncBranchCheckNeeded) {
-        branchKeys[result.length] = this._subStepPath.join("_");
+        branchKeys[result.length] = this._subStepPath.join(".");
         this._asyncBranchCheckNeeded = false;
       }
       this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);

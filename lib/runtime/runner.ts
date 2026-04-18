@@ -43,9 +43,9 @@ export class Runner {
 
   // ── Path and counter management ──
 
-  /** The current step path as a string, e.g. "1_0_2" */
+  /** The current step path as a string, e.g. "1.0.2" */
   key(): string {
-    return this.path.join("_");
+    return this.path.join(".");
   }
 
   /** Return checkpoint metadata for the current step. */
@@ -305,7 +305,7 @@ export class Runner {
     const condKey =
       this.path.length === 0
         ? `__condbranch_${id}`
-        : `__condbranch_${this.key()}_${id}`;
+        : `__condbranch_${this.key()}.${id}`;
 
     // Evaluate condition only once (not on resume)
     if (this.frame.locals[condKey] === undefined) {
@@ -352,7 +352,7 @@ export class Runner {
     const iterKey =
       this.path.length === 0
         ? `__iteration_${id}`
-        : `__iteration_${this.key()}_${id}`;
+        : `__iteration_${this.key()}.${id}`;
 
     this.frame.locals[iterKey] = this.frame.locals[iterKey] ?? 0;
 
@@ -375,7 +375,7 @@ export class Runner {
 
       // Reset all nested tracking variables for next iteration
       const pathPrefix =
-        this.path.length === 0 ? `${id}` : `${this.key()}_${id}`;
+        this.path.length === 0 ? `${id}` : `${this.key()}.${id}`;
       this.frame.clearLocalsWithPrefix(`__substep_${pathPrefix}`);
       this.frame.clearLocalsWithPrefix(`__condbranch_${pathPrefix}`);
       this.frame.clearLocalsWithPrefix(`__iteration_${pathPrefix}`);
@@ -407,7 +407,7 @@ export class Runner {
     const iterKey =
       this.path.length === 0
         ? `__iteration_${id}`
-        : `__iteration_${this.key()}_${id}`;
+        : `__iteration_${this.key()}.${id}`;
 
     this.frame.locals[iterKey] = this.frame.locals[iterKey] ?? 0;
     let currentIter = 0;
@@ -432,7 +432,7 @@ export class Runner {
       if (this.halted) return;
 
       const pathPrefix =
-        this.path.length === 0 ? `${id}` : `${this.key()}_${id}`;
+        this.path.length === 0 ? `${id}` : `${this.key()}.${id}`;
       this.frame.clearLocalsWithPrefix(`__substep_${pathPrefix}`);
       this.frame.clearLocalsWithPrefix(`__condbranch_${pathPrefix}`);
       this.frame.clearLocalsWithPrefix(`__iteration_${pathPrefix}`);

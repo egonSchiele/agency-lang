@@ -209,8 +209,8 @@ describe("advanceDebugStep", () => {
   it("sets substep counter for a three-segment stepPath", () => {
     const stack = new StateStack([makeFrame({ step: 4, locals: {} })]);
     stack.advanceDebugStep("4.0.2");
-    // Should set __substep_4_0 = 2 + 1 = 3
-    expect(stack.lastFrame().locals.__substep_4_0).toBe(3);
+    // Should set __substep_4.0 = 2 + 1 = 3
+    expect((stack.lastFrame().locals as any)["__substep_4.0"]).toBe(3);
     expect(stack.lastFrame().step).toBe(4);
   });
 

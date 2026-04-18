@@ -3216,7 +3216,6 @@ export class TypeScriptBuilder {
 
       if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type)) {
         flushPart();
-        currentPart = [];
       }
 
       const stepIndex = result.length;

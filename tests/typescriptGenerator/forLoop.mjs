@@ -127,33 +127,31 @@ let __functionCompleted = false;
     await runner.step(1, async (runner) => {
 __stack.locals.items = [`a`, `b`, `c`];
     });
-    await runner.step(2, async (runner) => {
-await runner.loop(2, __stack.locals.items, async (item, _, runner) => {
+    await runner.loop(2, __stack.locals.items, async (item, _, runner) => {
 await runner.step(0, async (runner) => {
 await print(item)
-        });
       });
-//  Range-based for loop
     });
     await runner.step(3, async (runner) => {
-await runner.loop(3, Array.from({length: 5 - 0}, (_, __i) => __i + 0), async (i, _, runner) => {
+//  Range-based for loop
+    });
+    await runner.loop(4, Array.from({length: 5 - 0}, (_, __i) => __i + 0), async (i, _, runner) => {
 await runner.step(0, async (runner) => {
 await print(i)
-        });
       });
-//  Indexed for loop
-    });
-    await runner.step(4, async (runner) => {
-__stack.locals.names = [`alice`, `bob`];
     });
     await runner.step(5, async (runner) => {
-await runner.loop(5, __stack.locals.names, async (name, index, runner) => {
+//  Indexed for loop
+    });
+    await runner.step(6, async (runner) => {
+__stack.locals.names = [`alice`, `bob`];
+    });
+    await runner.loop(7, __stack.locals.names, async (name, index, runner) => {
 await runner.step(0, async (runner) => {
 await print(name)
-        });
+      });
 await runner.step(1, async (runner) => {
 await print(index)
-        });
       });
     });
     if (runner.halted) return runner.haltResult;
@@ -203,4 +201,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"forLoop.agency:main":{"1":{"line":-1,"col":2},"2":{"line":0,"col":2},"3":{"line":5,"col":2},"4":{"line":10,"col":2},"5":{"line":11,"col":2},"2.0":{"line":1,"col":4},"3.0":{"line":6,"col":4},"5.0":{"line":12,"col":4},"5.1":{"line":13,"col":4}}};
+export const __sourceMap = {"forLoop.agency:main":{"1":{"line":-1,"col":2},"2":{"line":0,"col":2},"4":{"line":5,"col":2},"6":{"line":10,"col":2},"7":{"line":11,"col":2},"2.0":{"line":1,"col":4},"4.0":{"line":6,"col":4},"7.0":{"line":12,"col":4},"7.1":{"line":13,"col":4}}};

@@ -368,8 +368,7 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
-await runner.ifElse(0, [
+    await runner.ifElse(0, [
 
   {
     condition: async () => __stack.args.b === 0,
@@ -378,12 +377,11 @@ await runner.step(0, async (runner) => {
 __functionCompleted = true;
 runner.halt(failure(`division by zero`, { checkpoint: __ctx.getResultCheckpoint(), functionName: "safeDivide", args: __stack.args }))
 return;
-            });
+          });
     },
   },
 
 ]);
-    });
     await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(await success(__stack.args.a / __stack.args.b))

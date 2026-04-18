@@ -105,17 +105,6 @@ import { SourceMapBuilder } from "./sourceMap.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
-/** IR node kinds that correspond to compound Runner methods (handle, ifElse, loop, etc.).
- *  These already have their own debug hooks / counter / path management,
- *  so processBodyAsParts must NOT wrap them in an extra runnerStep. */
-const COMPOUND_RUNNER_KINDS: ReadonlySet<TsNode["kind"]> = new Set([
-  "runnerHandle",
-  "runnerIfElse",
-  "runnerLoop",
-  "runnerWhileLoop",
-  "runnerThread",
-]);
-
 export class TypeScriptBuilder {
   // Output assembly
   private generatedStatements: TsNode[] = [];
@@ -3196,6 +3185,7 @@ export class TypeScriptBuilder {
 
       if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type)) {
         flushPart();
+        currentPart = [];
       }
 
       const stepIndex = result.length;
@@ -3205,21 +3195,11 @@ export class TypeScriptBuilder {
         currentPart.push(ts.assign(ts.self("__retryable"), ts.bool(false)));
       }
       const processed = this.processStatement(stmt);
-
-      // Compound constructs (handle, ifElse, loop, etc.) are already
-      // step-level IR nodes with their own Runner method that handles
-      // debug hooks, counter management, and path tracking. Push them
-      // directly to result[] instead of wrapping in another runnerStep.
-      if (COMPOUND_RUNNER_KINDS.has(processed.kind)) {
-        flushPart();
-        result.push(processed);
-      } else {
-        if (!currentPart) currentPart = [];
-        currentPart.push(processed);
-        if (this._asyncBranchCheckNeeded) {
-          branchKeys[result.length] = this._subStepPath.join("_");
-          this._asyncBranchCheckNeeded = false;
-        }
+      if (!currentPart) currentPart = [];
+      currentPart.push(processed);
+      if (this._asyncBranchCheckNeeded) {
+        branchKeys[result.length] = this._subStepPath.join("_");
+        this._asyncBranchCheckNeeded = false;
       }
       this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
       this._subStepPath.pop();

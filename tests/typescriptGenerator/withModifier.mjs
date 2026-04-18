@@ -254,21 +254,23 @@ let __functionCompleted = false;
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "withModifier.agency", scopeName: "main" });
   try {
-    await runner.handle(0, async (__data: any) => approve(__data), async (runner) => {
+    await runner.step(0, async (runner) => {
+await runner.handle(0, async (__data: any) => approve(__data), async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = await foo({
-          ctx: __ctx,
-          threads: __threads,
-          interruptData: __state?.interruptData
-        });
+            ctx: __ctx,
+            threads: __threads,
+            interruptData: __state?.interruptData
+          });
 if (isInterrupt(__stack.locals.result)) {
-          await __ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __stack.locals.result
-          })
-          return;
-        }
+            await __ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __stack.locals.result
+            })
+            return;
+          }
+        });
       });
     });
     await runner.step(1, async (runner) => {

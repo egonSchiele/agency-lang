@@ -25,13 +25,10 @@ const ifElseCompiled = path.join(fixtureDir, "if-else-test.ts");
 const nestedAgency = path.join(fixtureDir, "nested-calls-test.agency");
 const nestedCompiled = path.join(fixtureDir, "nested-calls-test.ts");
 
-const handleAgency = path.join(fixtureDir, "handle-test.agency");
-const handleCompiled = path.join(fixtureDir, "handle-test.ts");
-
 // Compile all fixtures once, clean up after all tests
 const allCompiled = [
   stepTestCompiled, fnCallCompiled, interruptCompiled,
-  loopCompiled, ifElseCompiled, nestedCompiled, handleCompiled,
+  loopCompiled, ifElseCompiled, nestedCompiled,
 ];
 
 beforeAll(() => {
@@ -41,7 +38,6 @@ beforeAll(() => {
   compile({ debugger: true }, loopAgency, loopCompiled, { ts: true });
   compile({ debugger: true }, ifElseAgency, ifElseCompiled, { ts: true });
   compile({ debugger: true }, nestedAgency, nestedCompiled, { ts: true });
-  compile({ debugger: true }, handleAgency, handleCompiled, { ts: true });
 });
 
 afterAll(() => {
@@ -628,37 +624,6 @@ describe("DebuggerDriver with loops", () => {
     // then the last interrupt is restored so the user can still interact
     expect(testUI.renderCalls.length).toBe(2);
   });
-
-  it("produces correct step paths without double-nesting", async () => {
-    const mod = await freshImport(loopCompiled);
-    const commands: DebuggerCommand[] = Array(30).fill({ type: "step" });
-    const testUI = new TestDebuggerIO(commands);
-    const driver = makeDriver(mod, testUI);
-    const initialResult = await getInitialResult(mod, driver);
-    await driver.run(initialResult, { interceptConsole: false });
-
-    // No mangled paths with underscores in any scope
-    for (const cp of testUI.renderCalls) {
-      expect(cp.stepPath).not.toContain("_");
-    }
-
-    const mainPaths = testUI.renderCalls
-      .filter((cp) => cp.scopeName === "main")
-      .map((cp) => cp.stepPath);
-
-    expect(mainPaths).toContain("0");   // sum = 0
-    expect(mainPaths).toContain("1");   // for loop
-    expect(mainPaths).toContain("1.0"); // loop body: sum = sum + i
-    expect(mainPaths).toContain("2");   // return sum
-
-    // Loop body should appear 3 times (range(3) = [0, 1, 2])
-    const loopBodyCount = mainPaths.filter((p) => p === "1.0").length;
-    expect(loopBodyCount).toBe(3);
-
-    const log = testUI.state.getActivityLog();
-    const sourceMapErrors = log.filter((l) => l.includes("No source map entry found"));
-    expect(sourceMapErrors).toEqual([]);
-  });
 });
 
 describe("DebuggerDriver with if/else", () => {
@@ -685,32 +650,6 @@ describe("DebuggerDriver with if/else", () => {
 
     const returnValue = result?.data !== undefined ? result.data : result;
     expect(returnValue).toBe("non-positive");
-  });
-
-  it("produces correct step paths without double-nesting", async () => {
-    const mod = await freshImport(ifElseCompiled);
-    const commands: DebuggerCommand[] = Array(20).fill({ type: "step" });
-    const testUI = new TestDebuggerIO(commands);
-    const driver = makeDriver(mod, testUI);
-    const initialResult = await getInitialResult(mod, driver, 5);
-    await driver.run(initialResult, { interceptConsole: false });
-
-    // No mangled paths with underscores in any scope
-    for (const cp of testUI.renderCalls) {
-      expect(cp.stepPath).not.toContain("_");
-    }
-
-    const mainPaths = testUI.renderCalls
-      .filter((cp) => cp.scopeName === "main")
-      .map((cp) => cp.stepPath);
-
-    expect(mainPaths).toContain("0");   // ifElse block
-    expect(mainPaths).toContain("0.0"); // then branch body
-    expect(mainPaths).toContain("1");   // return result
-
-    const log = testUI.state.getActivityLog();
-    const sourceMapErrors = log.filter((l) => l.includes("No source map entry found"));
-    expect(sourceMapErrors).toEqual([]);
   });
 });
 
@@ -951,74 +890,5 @@ describe("DebuggerDriver with loaded single checkpoint", () => {
 
     // Should have at least the initial render + rewind attempt + step
     expect(testUI.renderCalls.length).toBeGreaterThanOrEqual(1);
-  });
-});
-
-describe("DebuggerDriver with handle blocks", () => {
-  it("produces correct step paths without double-nesting", async () => {
-    const mod = await freshImport(handleCompiled);
-    const commands: DebuggerCommand[] = Array(20).fill({ type: "step" });
-    const testUI = new TestDebuggerIO(commands);
-    const driver = makeDriver(mod, testUI);
-    const initialResult = await getInitialResult(mod, driver);
-    await driver.run(initialResult, { interceptConsole: false });
-
-    // No mangled paths with underscores in any scope
-    for (const cp of testUI.renderCalls) {
-      expect(cp.stepPath).not.toContain("_");
-    }
-
-    const mainPaths = testUI.renderCalls
-      .filter((cp) => cp.scopeName === "main")
-      .map((cp) => cp.stepPath);
-
-    // Should see the handle block and its body
-    expect(mainPaths).toContain("0");   // const name = "Alice"
-    expect(mainPaths).toContain("1");   // handle block
-    expect(mainPaths).toContain("1.0"); // const greeting = greet(name)
-  });
-
-  it("has no source map errors when stepping through handle block", async () => {
-    const mod = await freshImport(handleCompiled);
-    const commands: DebuggerCommand[] = Array(20).fill({ type: "step" });
-    const testUI = new TestDebuggerIO(commands);
-    const driver = makeDriver(mod, testUI);
-    const initialResult = await getInitialResult(mod, driver);
-    await driver.run(initialResult, { interceptConsole: false });
-
-    const log = testUI.state.getActivityLog();
-    const sourceMapErrors = log.filter((l) => l.includes("No source map entry found"));
-    expect(sourceMapErrors).toEqual([]);
-  });
-
-  it("continue runs through handle block to completion", async () => {
-    const mod = await freshImport(handleCompiled);
-    const commands: DebuggerCommand[] = [{ type: "continue" }];
-    const testUI = new TestDebuggerIO(commands);
-    const driver = makeDriver(mod, testUI);
-    const initialResult = await getInitialResult(mod, driver);
-    const result = await driver.run(initialResult, { interceptConsole: false });
-
-    const returnValue = result?.data !== undefined ? result.data : result;
-    expect(returnValue).toBe("Alice");
-    expect(testUI.renderCalls.length).toBe(2);
-  });
-
-  it("handler approves user interrupt without surfacing to debugger", async () => {
-    const mod = await freshImport(handleCompiled);
-    const commands: DebuggerCommand[] = Array(30).fill({ type: "step" });
-    const testUI = new TestDebuggerIO(commands);
-    const driver = makeDriver(mod, testUI);
-    const initialResult = await getInitialResult(mod, driver);
-    const result = await driver.run(initialResult, { interceptConsole: false });
-
-    const returnValue = result?.data !== undefined ? result.data : result;
-    expect(returnValue).toBe("Alice");
-
-    // The interrupt from greet() should have been handled by the handler,
-    // not surfaced as a user interrupt prompt
-    const log = testUI.state.getActivityLog();
-    const interruptPrompts = log.filter((l) => l.startsWith("Interrupt:"));
-    expect(interruptPrompts).toEqual([]);
   });
 });

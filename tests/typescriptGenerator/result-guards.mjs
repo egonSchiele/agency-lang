@@ -162,7 +162,8 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.ifElse(0, [
+    await runner.step(0, async (runner) => {
+await runner.ifElse(0, [
 
   {
     condition: async () => await isSuccess(__stack.args.r),
@@ -171,11 +172,12 @@ await runner.step(0, async (runner) => {
 __functionCompleted = true;
 runner.halt(`ok`)
 return;
-          });
+            });
     },
   },
 
 ]);
+    });
     await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(`error`)

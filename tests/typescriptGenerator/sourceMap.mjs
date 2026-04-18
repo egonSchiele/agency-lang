@@ -240,25 +240,29 @@ let __functionCompleted = false;
     await runner.step(0, async (runner) => {
 __stack.locals.x = 1;
     });
-    await runner.ifElse(1, [
+    await runner.step(1, async (runner) => {
+await runner.ifElse(1, [
 
   {
     condition: async () => __stack.locals.x === 1,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.y = 2;
-          });
+            });
     },
   },
 
 ], async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.y = 3;
-        });
+          });
 });
-    await runner.loop(2, [`a`, `b`], async (item, _, runner) => {
+    });
+    await runner.step(2, async (runner) => {
+await runner.loop(2, [`a`, `b`], async (item, _, runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.z = item;
+        });
       });
     });
     if (runner.halted) return runner.haltResult;

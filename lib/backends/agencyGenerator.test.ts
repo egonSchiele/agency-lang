@@ -400,3 +400,25 @@ describe("AgencyGenerator - Result type formatting", () => {
   });
 });
 
+describe("AgencyGenerator - schema(Type) expressions", () => {
+  function formatAgency(input: string): string {
+    const parseResult = parseAgency(input, {}, false);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return "";
+    const generator = new AgencyGenerator();
+    return generator.generate(parseResult.result).output.trim();
+  }
+
+  it("should format schema(number)", () => {
+    const input = `node main() {\n  const s = schema(number)\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("schema(number)");
+  });
+
+  it("should format schema(Result<number>)", () => {
+    const input = `node main() {\n  const s = schema(Result<number>)\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("schema(Result<number>)");
+  });
+});
+

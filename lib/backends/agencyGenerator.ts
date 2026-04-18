@@ -272,6 +272,8 @@ export class AgencyGenerator {
         return this.processClassDefinition(node);
       case "newExpression":
         return this.processNewExpression(node);
+      case "schemaExpression":
+        return `schema(${variableTypeToString(node.typeArg, this.typeAliases)})`;
       case "regex":
         return `re/${node.pattern}/${node.flags}`;
       default:

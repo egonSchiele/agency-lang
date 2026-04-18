@@ -1,0 +1,16 @@
+def double(x: number): Result {
+  return success(x * 2)
+}
+
+def addOne(x: number): Result {
+  return success(x + 1)
+}
+
+node main() {
+  const result = success(5) |> double |> addOne
+  const validated: number! = result.value
+  if (isSuccess(validated)) {
+    return validated.value
+  }
+  return "failed"
+}

@@ -15,6 +15,7 @@ export type FunctionParameter = {
   type: "functionParameter";
   name: string;
   typeHint?: VariableType;
+  validated?: boolean;
   variadic?: boolean;
   defaultValue?: Literal | AgencyArray | AgencyObject;
 };
@@ -42,6 +43,7 @@ export type FunctionDefinition = BaseNode & {
   parameters: FunctionParameter[];
   body: AgencyNode[];
   returnType?: VariableType | null;
+  returnTypeValidated?: boolean;
   docString?: DocString;
   docComment?: AgencyMultiLineComment;
   async?: boolean;

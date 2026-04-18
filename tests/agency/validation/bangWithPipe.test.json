@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "11",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Bang combined with pipe operator validates the final result"
+    }
+  ]
+}

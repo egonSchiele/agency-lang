@@ -1,0 +1,11 @@
+node main() {
+  const numSchema = number.schema
+  const good = numSchema.parse(42)
+  const bad = numSchema.parse("hello")
+  if (isSuccess(good)) {
+    if (isFailure(bad)) {
+      return good.value
+    }
+  }
+  return "failed"
+}

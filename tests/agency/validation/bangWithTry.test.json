@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "42",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Bang validates the unwrapped value from a try expression"
+    }
+  ]
+}

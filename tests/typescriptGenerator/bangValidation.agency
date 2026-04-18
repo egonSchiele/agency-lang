@@ -1,0 +1,6 @@
+type Category = "bug" | "feature" | "docs"
+
+node main() {
+  const result: Category! = "bug"
+  print(result)
+}

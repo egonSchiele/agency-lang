@@ -1,0 +1,15 @@
+def process(x: number!) {
+  return x + 1
+}
+
+node main() {
+  const a = process("bad")
+  const b = process(5)
+  const c = process("also bad")
+  if (isFailure(a)) {
+    if (isFailure(c)) {
+      return b
+    }
+  }
+  return "unexpected"
+}

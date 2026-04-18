@@ -1,0 +1,14 @@
+def getNumber() {
+  return 42
+}
+
+node main() {
+  const result = try getNumber()
+  if (isSuccess(result)) {
+    const validated: number! = result.value
+    if (isSuccess(validated)) {
+      return validated.value
+    }
+  }
+  return "failed"
+}

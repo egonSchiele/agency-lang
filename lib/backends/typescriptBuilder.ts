@@ -7,6 +7,7 @@ import {
   Expression,
   Keyword,
   Literal,
+  VariableNameLiteral,
   NamedArgument,
   PromptSegment,
   FunctionScope,
@@ -399,6 +400,47 @@ export class TypeScriptBuilder {
       default:
         throw new Error(`Unknown scope type: ${(currentScope as any).type}`);
     }
+  }
+
+  private getScopeReturnTypeValidated(): boolean {
+    const currentScope = this.getCurrentScope();
+    switch (currentScope.type) {
+      case "function": {
+        const funcDef =
+          this.programInfo.functionDefinitions[currentScope.functionName];
+        return !!funcDef?.returnTypeValidated;
+      }
+      case "node": {
+        const graphNode = this.programInfo.graphNodes.find(
+          (n) => n.nodeName === currentScope.nodeName,
+        );
+        return !!graphNode?.returnTypeValidated;
+      }
+      default:
+        return false;
+    }
+  }
+
+  private static readonly BUILTIN_SCHEMA_TYPES = [
+    "number", "string", "boolean", "null", "undefined", "any", "unknown", "object",
+  ];
+
+  /**
+   * Resolve a type name (alias or builtin) to its Zod schema string.
+   * Returns null if the name is not a known type alias or builtin.
+   */
+  private resolveZodSchemaForTypeName(typeName: string): string | null {
+    const typeAliases = this.getVisibleTypeAliases();
+    if (typeAliases[typeName]) {
+      return mapTypeToZodSchema(typeAliases[typeName], typeAliases);
+    }
+    if (TypeScriptBuilder.BUILTIN_SCHEMA_TYPES.includes(typeName)) {
+      return mapTypeToZodSchema(
+        { type: "primitiveType" as const, value: typeName },
+        typeAliases,
+      );
+    }
+    return null;
   }
 
   private agencyFileToDefaultImportName(agencyFile: string): string {
@@ -923,6 +965,23 @@ export class TypeScriptBuilder {
   }
 
   private processValueAccess(node: ValueAccess): TsNode {
+    // Check for TypeName.schema pattern
+    if (
+      node.base.type === "variableName" &&
+      node.chain.length === 1 &&
+      node.chain[0].kind === "property" &&
+      node.chain[0].name === "schema"
+    ) {
+      const baseName = (node.base as VariableNameLiteral).value;
+      const zodSchema = this.resolveZodSchemaForTypeName(baseName);
+      if (zodSchema) {
+        return ts.new(ts.id("Schema"), [ts.raw(zodSchema)]);
+      }
+      throw new Error(
+        `Cannot access .schema on '${baseName}': not a known type alias or builtin type`,
+      );
+    }
+
     let result = this.processNode(node.base);
     // If the base is a function call, await it before accessing properties/methods
     // on the result. Without this, chaining like getGreeting().trim() would call
@@ -1623,10 +1682,31 @@ export class TypeScriptBuilder {
     // Pinned checkpoint at entry (enables result.retry and error-to-failure wrapping)
     setupStmts.push(this.buildResultCheckpointSetup(functionName, parameters));
 
+    // Validation guards for parameters with ! (bang) syntax.
+    // Placed inside the try block so the finally cleanup (stateStack.pop) always runs.
+    const validationGuards: TsNode[] = [];
+    for (const param of parameters) {
+      if (param.validated && param.typeHint) {
+        const zodSchema = mapTypeToZodSchema(param.typeHint, this.getVisibleTypeAliases());
+        const stackArg = $(ts.stack("args")).index(ts.str(param.name)).done();
+        const vrName = `__vr_${param.name}`;
+        const vrId = ts.id(vrName);
+        validationGuards.push(
+          ts.constDecl(vrName, ts.validateType(stackArg, ts.raw(zodSchema))),
+          ts.if(
+            ts.not(ts.prop(vrId, "success")),
+            ts.return(vrId),
+          ),
+          ts.assign(stackArg, ts.prop(vrId, "value")),
+        );
+      }
+    }
+
     // Try/catch wrapping the body, with finally to always pop the state stack
     setupStmts.push(
       ts.tryCatch(
         ts.statements([
+          ...validationGuards,
           ...bodyCode,
           ts.raw(
             "if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }",
@@ -2153,6 +2233,15 @@ export class TypeScriptBuilder {
       .done();
   }
 
+  /** If the enclosing function/node has returnTypeValidated, wrap value in __validateType */
+  private maybeWrapReturnValidation(valueNode: TsNode): TsNode {
+    if (!this.getScopeReturnTypeValidated()) return valueNode;
+    const returnType = this.getScopeReturnType();
+    if (!returnType) return valueNode;
+    const zodSchema = mapTypeToZodSchema(returnType, this.getVisibleTypeAliases());
+    return ts.validateType(valueNode, ts.raw(zodSchema));
+  }
+
   private processReturnStatement(node: ReturnStatement): TsNode {
     // Bare return (no value)
     if (!node.value) {
@@ -2198,7 +2287,7 @@ export class TypeScriptBuilder {
         );
         return ts.statements([
           llmNode,
-          ts.nodeResult(ts.self(DEFAULT_PROMPT_NAME)),
+          ts.nodeResult(this.maybeWrapReturnValidation(ts.self(DEFAULT_PROMPT_NAME))),
         ]);
       }
       const valueNode = this.processNode(node.value);
@@ -2208,7 +2297,7 @@ export class TypeScriptBuilder {
       ) {
         return valueNode;
       }
-      return ts.nodeResult(valueNode);
+      return ts.nodeResult(this.maybeWrapReturnValidation(valueNode));
     }
 
     if (
@@ -2228,14 +2317,32 @@ export class TypeScriptBuilder {
       );
       return ts.statements([
         llmNode,
-        ts.functionReturn(ts.self(DEFAULT_PROMPT_NAME)),
+        ts.functionReturn(this.maybeWrapReturnValidation(ts.self(DEFAULT_PROMPT_NAME))),
       ]);
     }
     const valueNode = this.processNode(node.value);
-    return ts.functionReturn(valueNode);
+    return ts.functionReturn(this.maybeWrapReturnValidation(valueNode));
   }
 
   private processAssignment(node: Assignment): TsNode {
+    const result = this._processAssignmentInner(node);
+    // If the type annotation has !, wrap the assigned value in __validateType
+    if (node.validated && node.typeHint) {
+      const zodSchema = mapTypeToZodSchema(
+        node.typeHint,
+        this.getVisibleTypeAliases(),
+      );
+      const varRef = ts.scopedVar(node.variableName, node.scope!, this.moduleId);
+      const validateStmt = ts.assign(varRef, ts.validateType(varRef, ts.raw(zodSchema)));
+      if (result.kind === "statements") {
+        return ts.statementsPush(result, validateStmt);
+      }
+      return ts.statements([result, validateStmt]);
+    }
+    return result;
+  }
+
+  private _processAssignmentInner(node: Assignment): TsNode {
     const { variableName, typeHint, value } = node;
 
     // `this.field = value` and `super.field = value` — emit as direct property assignment
@@ -2905,6 +3012,17 @@ export class TypeScriptBuilder {
         fn: this.buildPipeLambda(stages[lastIdx]),
       }),
     );
+
+    // If the assignment has ! (validated), wrap the final result in __validateType
+    if (stmt.validated && stmt.typeHint) {
+      const zodSchema = mapTypeToZodSchema(stmt.typeHint, this.getVisibleTypeAliases());
+      nodes.push(
+        ts.runnerStep({
+          id: baseId + stages.length,
+          body: [ts.assign(targetVar, ts.validateType(targetVar, ts.raw(zodSchema)))],
+        }),
+      );
+    }
 
     return nodes;
   }

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"success\":true,\"value\":42}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Node return type ! wraps return value in validation Result"
+    }
+  ]
+}

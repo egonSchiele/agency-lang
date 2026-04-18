@@ -1,0 +1,7 @@
+node main() {
+  const x: number! = "not a number"
+  if (isFailure(x)) {
+    return "validation failed"
+  }
+  return "unexpected success"
+}

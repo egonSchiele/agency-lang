@@ -350,6 +350,10 @@ export const ts = {
     return { kind: "newExpr", callee, arguments: args };
   },
 
+  validateType(value: TsNode, zodSchema: TsNode): TsCall {
+    return ts.call(ts.id("__validateType"), [value, zodSchema]);
+  },
+
   scopedVar(
     name: string,
     scope: TsScopedVar["scope"],

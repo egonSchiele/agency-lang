@@ -1,0 +1,5 @@
+*.agency linguist-language=typescript
+tests/typescriptGenerator/*.mjs -diff
+tests/typescriptGenerator/*.mjs linguist-generated=true
+tests/typescriptBuilder/*.mjs -diff
+tests/typescriptBuilder/*.mjs linguist-generated=true

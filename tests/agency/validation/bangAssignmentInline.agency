@@ -1,0 +1,10 @@
+node main() {
+  const x: "happy"|"sad"! = "happy"
+  const y: "happy"|"sad"! = "angry"
+  if (isSuccess(x)) {
+    if (isFailure(y)) {
+      return x.value
+    }
+  }
+  return "failed"
+}

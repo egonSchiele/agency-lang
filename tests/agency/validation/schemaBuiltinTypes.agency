@@ -1,0 +1,20 @@
+node main() {
+  const strSchema = string.schema
+  const boolSchema = boolean.schema
+
+  const strGood = strSchema.parse("hello")
+  const strBad = strSchema.parse(42)
+  const boolGood = boolSchema.parse(true)
+  const boolBad = boolSchema.parse("true")
+
+  if (isSuccess(strGood)) {
+    if (isFailure(strBad)) {
+      if (isSuccess(boolGood)) {
+        if (isFailure(boolBad)) {
+          return "all correct"
+        }
+      }
+    }
+  }
+  return "failed"
+}

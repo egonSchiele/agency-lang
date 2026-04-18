@@ -1,0 +1,25 @@
+node main() {
+  const results = []
+
+  let flag = true
+  if (flag) {
+    const x: number! = 42
+    if (isSuccess(x)) {
+      results.push("if-success")
+    }
+  } else {
+    results.push("wrong branch")
+  }
+
+  flag = false
+  if (flag) {
+    results.push("wrong branch")
+  } else {
+    const y: number! = "bad"
+    if (isFailure(y)) {
+      results.push("else-failure")
+    }
+  }
+
+  return results
+}

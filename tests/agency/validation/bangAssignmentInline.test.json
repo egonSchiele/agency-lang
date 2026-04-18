@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"happy\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Bang with inline union type validates correctly"
+    }
+  ]
+}

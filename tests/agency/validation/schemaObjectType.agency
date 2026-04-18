@@ -1,0 +1,18 @@
+type Config = {
+  host: string,
+  port: number
+}
+
+node main() {
+  const schema = Config.schema
+  const goodObj = {host: "localhost", port: 8080}
+  const badObj = {host: "localhost", port: "not a number"}
+  const good = schema.parse(goodObj)
+  const bad = schema.parse(badObj)
+  if (isSuccess(good)) {
+    if (isFailure(bad)) {
+      return good.value.host
+    }
+  }
+  return "failed"
+}

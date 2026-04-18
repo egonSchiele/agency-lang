@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"if-success\",\"else-failure\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Bang validation works in both if and else branches"
+    }
+  ]
+}

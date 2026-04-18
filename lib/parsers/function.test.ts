@@ -3437,3 +3437,55 @@ describe("callback declarations", () => {
     }
   });
 });
+
+describe("bang (!) validated type annotations", () => {
+  it("parses function param with validated type", () => {
+    const result = functionParser("def process(data: number!) { }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.parameters[0].typeHint).toEqual({ type: "primitiveType", value: "number" });
+      expect(result.result.parameters[0].validated).toBe(true);
+    }
+  });
+
+  it("parses function param without ! as not validated", () => {
+    const result = functionParser("def process(data: number) { }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.parameters[0].validated).toBeUndefined();
+    }
+  });
+
+  it("parses function with validated return type", () => {
+    const result = functionParser("def process(x: string): number! { }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.returnTypeValidated).toBe(true);
+      expect(result.result.returnType).toEqual({ type: "primitiveType", value: "number" });
+    }
+  });
+
+  it("parses function return type without ! as not validated", () => {
+    const result = functionParser("def process(x: string): number { }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.returnTypeValidated).toBeUndefined();
+    }
+  });
+
+  it("parses node with validated return type", () => {
+    const result = graphNodeParser("node main(): number! { }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.returnTypeValidated).toBe(true);
+    }
+  });
+
+  it("parses node return type without ! as not validated", () => {
+    const result = graphNodeParser("node main(): number { }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.returnTypeValidated).toBeUndefined();
+    }
+  });
+});

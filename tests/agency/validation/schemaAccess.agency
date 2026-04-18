@@ -1,0 +1,10 @@
+type Category = "bug" | "feature"
+
+node main() {
+  const schema = Category.schema
+  const good = schema.parse("bug")
+  if (isSuccess(good)) {
+    return good.value
+  }
+  return "failed"
+}

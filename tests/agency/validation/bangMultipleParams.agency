@@ -1,0 +1,15 @@
+def add(a: number!, b: number!) {
+  return a + b
+}
+
+node main() {
+  const good = add(3, 4)
+  const badFirst = add("x", 4)
+  const badSecond = add(3, "y")
+  if (isFailure(badFirst)) {
+    if (isFailure(badSecond)) {
+      return good
+    }
+  }
+  return "failed"
+}

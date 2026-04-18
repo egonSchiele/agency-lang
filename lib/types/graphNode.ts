@@ -24,6 +24,7 @@ export type GraphNodeDefinition = BaseNode & {
   parameters: FunctionParameter[];
   body: AgencyNode[];
   returnType?: VariableType | null;
+  returnTypeValidated?: boolean;
   visibility?: Visibility;
   tags?: Tag[];
   docComment?: AgencyMultiLineComment;

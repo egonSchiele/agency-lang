@@ -1,0 +1,11 @@
+node main() {
+  const schema = number.schema
+  const good = schema.parseJSON("42")
+  const bad = schema.parseJSON("not json")
+  if (isSuccess(good)) {
+    if (isFailure(bad)) {
+      return good.value
+    }
+  }
+  return "failed"
+}

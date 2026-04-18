@@ -156,7 +156,7 @@ export const varNameChar: Parser<string> = oneOf(
 However, because every agency code gets rendered in a template that imports some standard functions,
 the line numbers would be off if we didn't account for the template lines.
 */
-const AGENCY_TEMPLATE_OFFSET = 3;
+export const AGENCY_TEMPLATE_OFFSET = 3;
 
 /**
  * Wraps a parser to add a `loc` field from tarsec's withSpan.
@@ -1954,6 +1954,7 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
             char(":"),
             optionalSpaces,
             capture(variableTypeParser, "typeHint"),
+            capture(optional(map(str("!"), () => true)), "validated"),
           ),
         ),
       ),
@@ -1997,8 +1998,9 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
     );
   }
 
-  const { target: _target, value, ...rest } = parsed;
+  const { target: _target, validated: _validated, value, ...rest } = parsed;
   const out: Assignment = { ...rest, variableName, value, accessChain };
+  if (_validated) out.validated = true;
   return success(out, result.rest);
 };
 export const assignmentParser: Parser<Assignment> = label("an assignment", withLoc(_assignmentParserInner));
@@ -2338,6 +2340,7 @@ export const functionParameterParser: Parser<FunctionParameter> = trace(
             char(":"),
             optionalSpaces,
             capture(variableTypeParser, "typeHint"),
+            capture(optional(map(str("!"), () => true)), "validated"),
           ),
         ),
       ),
@@ -2353,10 +2356,11 @@ export const functionParameterParser: Parser<FunctionParameter> = trace(
       ),
     ),
     (result: any) => {
-      const { __optional, ...rest } = result;
+      const { __optional, validated: _validated, ...rest } = result;
       if (__optional && !rest.defaultValue) {
         rest.defaultValue = { type: "null" };
       }
+      if (_validated) rest.validated = true;
       return rest as FunctionParameter;
     },
   ),
@@ -2396,7 +2400,7 @@ export const functionReturnTypeParser: Parser<VariableType> = trace(
   ),
 );
 
-const _baseFunctionParser: Parser<FunctionDefinition> = trace(
+const _baseFunctionParser: Parser<any> = trace(
   "_baseFunctionParser",
   seqC(
     set("type", "function"),
@@ -2416,6 +2420,7 @@ const _baseFunctionParser: Parser<FunctionDefinition> = trace(
     char(")"),
     optionalSpaces,
     capture(optional(functionReturnTypeParser), "returnType"),
+    capture(optional(map(str("!"), () => true)), "returnTypeValidated"),
     captureCaptures(
       parseError(
         "Expected function body",
@@ -2455,8 +2460,9 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   const baseResult = _baseFunctionParser(safeResult.rest);
   if (!baseResult.success) return baseResult;
 
-  const { keyword, ...rest } = baseResult.result as FunctionDefinition & { keyword?: string };
-  const result = { ...rest };
+  const { keyword, returnTypeValidated: _rtv, ...rest } = baseResult.result as any;
+  const result = { ...rest } as FunctionDefinition;
+  if (_rtv) result.returnTypeValidated = true;
   const isCallback = keyword === "callback";
   if (isExported) result.exported = true;
   if (isSafe) result.safe = true;
@@ -2524,40 +2530,48 @@ const visibilityParser: Parser<Visibility> = or(
 
 export const graphNodeParser: Parser<GraphNodeDefinition> = label("a node definition", withLoc(trace(
   "graphNodeParser",
-  seqC(
-    set("type", "graphNode"),
-    capture(visibilityParser, "visibility"),
-    optionalSpaces,
-    str("node"),
-    many1(space),
-    capture(many1Till(char("(")), "nodeName"),
-    char("("),
-    optionalSpaces,
-    capture(
-      sepBy(
-        comma,
-        functionParameterParser,
+  map(
+    seqC(
+      set("type", "graphNode"),
+      capture(visibilityParser, "visibility"),
+      optionalSpaces,
+      str("node"),
+      many1(space),
+      capture(many1Till(char("(")), "nodeName"),
+      char("("),
+      optionalSpaces,
+      capture(
+        sepBy(
+          comma,
+          functionParameterParser,
+        ),
+        "parameters",
       ),
-      "parameters",
-    ),
-    optionalSpaces,
-    char(")"),
-    optionalSpaces,
-    capture(optional(functionReturnTypeParser), "returnType"),
-    captureCaptures(
-      parseError(
-        "expected node body",
-        optionalSpacesOrNewline,
-        char("{"),
-        optionalSpacesOrNewline,
-        capture(or(docStringParser, succeed(undefined)), "docString"),
-        optionalSpacesOrNewline,
-        capture(bodyParser, "body"),
-        optionalSpacesOrNewline,
-        char("}"),
-        optionalSemicolon,
+      optionalSpaces,
+      char(")"),
+      optionalSpaces,
+      capture(optional(functionReturnTypeParser), "returnType"),
+      capture(optional(map(str("!"), () => true)), "returnTypeValidated"),
+      captureCaptures(
+        parseError(
+          "expected node body",
+          optionalSpacesOrNewline,
+          char("{"),
+          optionalSpacesOrNewline,
+          capture(or(docStringParser, succeed(undefined)), "docString"),
+          optionalSpacesOrNewline,
+          capture(bodyParser, "body"),
+          optionalSpacesOrNewline,
+          char("}"),
+          optionalSemicolon,
+        ),
       ),
     ),
+    (result: any) => {
+      const { returnTypeValidated: _rtv, ...rest } = result;
+      if (_rtv) rest.returnTypeValidated = true;
+      return rest;
+    },
   ),
 )));
 

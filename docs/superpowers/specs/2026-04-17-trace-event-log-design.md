@@ -15,7 +15,13 @@ agency trace log <file>            # accepts .agencytrace or .agencybundle, outp
 agency trace log <file> -o out.json  # write to file
 ```
 
-If given a `.agencybundle`, the trace is extracted from the bundle. If given a raw `.agencytrace`, the trace is read directly. Source files are not required.
+`TraceReader.fromFile()` already handles both `.agencytrace` and `.agencybundle` files transparently, so the CLI code needs no special-casing.
+
+**CLI structure change:** The existing `trace` command is currently a leaf command (runs a trace). It needs to be converted to a command group: `trace run` becomes the default subcommand (preserving existing behavior), and `trace log` is added alongside it.
+
+**Edge cases:**
+- Empty traces (header only, or header + footer with no checkpoints): output an empty JSON array `[]`.
+- Crashed/truncated traces (no footer): process whatever checkpoints exist. The output may be partial -- this is expected and no warning is needed since `TraceReader` already handles this gracefully.
 
 ## Output Format
 
@@ -25,7 +31,7 @@ A single JSON array written to stdout (or a file with `-o`). Each element is a s
 [
   { "step": 0, "nodeId": "main", "scopeName": "main", "moduleId": "foo.agency", "stepPath": "0", "type": "node-enter", "nodeName": "main" },
   { "step": 1, "nodeId": "main", "scopeName": "main", "moduleId": "foo.agency", "stepPath": "1", "type": "variable-set", "variable": "name", "value": "world", "previousValue": null, "scope": "local" },
-  { "step": 2, "nodeId": "main", "scopeName": "main", "moduleId": "foo.agency", "stepPath": "2", "type": "llm-call", "prompt": "Say hello to world!", "response": "Hello, world!", "toolCalls": [], "tokenUsage": { "promptTokens": 12, "completionTokens": 5, "totalTokens": 17 } },
+  { "step": 2, "nodeId": "main", "scopeName": "main", "moduleId": "foo.agency", "stepPath": "2", "type": "llm-call", "prompt": "Say hello to world!", "response": "Hello, world!", "toolCalls": [], "tokenUsage": { "inputTokens": 12, "outputTokens": 5, "cachedInputTokens": 0, "totalTokens": 17 } },
   { "step": 3, "nodeId": "main", "scopeName": "main", "moduleId": "foo.agency", "stepPath": "3", "type": "variable-set", "variable": "greeting", "value": "Hello, world!", "previousValue": null, "scope": "local" }
 ]
 ```
@@ -55,11 +61,15 @@ type TraceEvent = {
 | `function-enter` | New stack frame appeared | `functionName`, `args` |
 | `function-exit` | Stack frame removed | `functionName`, `returnValue` |
 | `variable-set` | Local or global value changed | `variable`, `value`, `previousValue`, `scope: "local" \| "global"` |
-| `llm-call` | Message history grew | `prompt`, `response`, `toolCalls`, `tokenUsage` |
-| `tool-call` | Tool call/result messages appeared | `toolName`, `args`, `result` |
-| `interrupt-thrown` | Checkpoint label or state indicates interrupt | `message` |
-| `interrupt-resolved` | Execution resumed after interrupt checkpoint | `outcome: "approved" \| "rejected"` |
-| `branch` | `stepPath` diverges from linear increment | `condition: "if" \| "else" \| "while" \| "for"`, `iteration` |
+| `llm-call` | Message history grew (new assistant message) | `prompt`, `response`, `toolCalls`, `tokenUsage` |
+| `tool-call` | LLM-initiated tool call messages appeared in thread | `toolName`, `args`, `result` |
+| `interrupt-thrown` | Checkpoint label is an interrupt-related label | `message` |
+| `interrupt-resolved` | Execution resumed after interrupt checkpoint | `outcome: "approved" \| "rejected" \| "resolved"`, `data` (optional, arbitrary resolution data) |
+| `branch` | Internal variables (`__condbranch_*`, `__iteration_*`) changed | `condition: "if" \| "else" \| "while" \| "for"`, `iteration` |
+
+### Clarification: `tool-call` vs `function-enter`/`function-exit`
+
+In Agency, tools and functions are the same thing. The `function-enter`/`function-exit` events are emitted for all function calls detected via stack frame changes. The `tool-call` event is emitted specifically for LLM-initiated tool invocations, detected from tool_call/tool_result messages in the thread history. A single tool invocation will produce both a `tool-call` event (from message history) and `function-enter`/`function-exit` events (from stack changes). The `tool-call` event provides the LLM's perspective (what it asked for and got back), while `function-enter`/`function-exit` provide the execution perspective (what actually ran).
 
 ## Diffing Algorithm
 
@@ -85,19 +95,28 @@ The first checkpoint (index 0) produces an initial `node-enter` event.
 
 3. **Variable changes** -- for each stack frame that exists in both checkpoints, diff local variables (key-value comparison). For globals, diff each module's global store. Emit `variable-set` for each changed or new variable. Skip internal/framework variables (those starting with `__`).
 
-4. **LLM calls** -- compare message history from `checkpoint.getThreadMessages()`. If new messages appeared:
+4. **LLM calls** -- compare message history using raw `MessageJSON` objects from the thread store in the checkpoint's serialized state (not `getThreadMessages()`, which flattens tool calls to strings). If new messages appeared:
    - New user message is the prompt.
    - New assistant message is the response.
    - Tool_call/tool_result message pairs in between produce `tool-call` events emitted before the `llm-call` event.
-   - Diff token stats in globals to get usage for this specific call.
+   - Diff cumulative token stats in globals (`inputTokens`, `outputTokens`, `cachedInputTokens`, `totalTokens`) to approximate per-call usage. Note: when multiple LLM calls occur in a single checkpoint step, per-call attribution is approximate.
 
-5. **Interrupts** -- if a checkpoint's label contains interrupt-related markers, or if execution jumped backward (step path regression after an interrupt), emit `interrupt-thrown`. If the next checkpoint shows execution continuing past the interrupt point, emit `interrupt-resolved` with the outcome.
+5. **Interrupts** -- detect using checkpoint labels. Known interrupt-related labels include `"result-entry"` (`RESULT_ENTRY_LABEL`). If a checkpoint has an interrupt-related label, emit `interrupt-thrown`. If the next checkpoint shows execution continuing past the interrupt point (step path advances beyond the interrupt), emit `interrupt-resolved`. The `outcome` field is `"approved"`, `"rejected"`, or `"resolved"` (for interrupts resolved with arbitrary data). The optional `data` field contains any resolution data.
 
-6. **Control flow** -- parse `stepPath` (e.g., `"1.3.2"`) to detect branching. If the step path diverges from a linear increment, infer the branch type from the pattern. Loop iterations show as repeated scope entries with incrementing sub-paths.
+6. **Control flow** -- detect branch type using internal checkpoint variables: `__condbranch_*` variables indicate if/else branches, `__iteration_*` variables indicate loop iterations. Step path patterns provide supplementary signal (repeated sub-paths for loops, skipped paths for untaken branches).
 
 ### Ordering within a step
 
 When a single checkpoint transition produces multiple events, they are emitted in the order above (node → stack → variables → llm → interrupts → control flow). This matches the logical execution order.
+
+## Scope
+
+### In scope
+- Single-threaded execution (main stack)
+- All event types listed above
+
+### Out of scope for v1
+- **Fork/parallel execution.** When `fork` blocks produce checkpoints with branch state (`branches` field on `State`), each branch has its own stack and thread store. Handling branch diffs would require emitting events per branch with a `branchId` field. This is deferred to a future version.
 
 ## Implementation
 
@@ -105,7 +124,7 @@ When a single checkpoint transition produces multiple events, they are emitted i
 |------|---------|
 | `lib/runtime/trace/eventLog.ts` | Core diffing logic: `deriveEvents()`, individual detectors, event types |
 | `lib/cli/events.ts` | CLI command: reads trace/bundle, runs event log, writes output |
-| `scripts/agency.ts` | Wire up `agency trace log` subcommand |
+| `scripts/agency.ts` | Convert `trace` to command group, add `trace log` subcommand |
 
 ## Design decisions
 
@@ -114,3 +133,4 @@ When a single checkpoint transition produces multiple events, they are emitted i
 - **No source locations.** Events include logical info (node name, scope, step path) but not file/line numbers. Keeps things simple and doesn't require source files.
 - **Full LLM data inline.** Prompts, responses, tool call args/results, and token usage are all included. No summary/verbose split.
 - **Internal variables filtered.** Variables prefixed with `__` are skipped to avoid noise from framework internals.
+- **Token usage field names match runtime.** Uses `inputTokens`/`outputTokens`/`cachedInputTokens`/`totalTokens` as stored in `GlobalStore`, not OpenAI-style field names.

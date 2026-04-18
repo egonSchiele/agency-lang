@@ -5,7 +5,7 @@
       "input": "",
       "expectedOutput": "42",
       "evaluationCriteria": [{ "type": "exact" }],
-      "description": "Result<number>! validates inner value matches number"
+      "description": "Result<number>! validates inner value and returns the Result directly"
     }
   ]
 }

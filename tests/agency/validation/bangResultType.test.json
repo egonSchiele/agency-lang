@@ -3,9 +3,9 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "\"double-wrapped correctly\"",
+      "expectedOutput": "42",
       "evaluationCriteria": [{ "type": "exact" }],
-      "description": "Result! validates value is a Result and double-wraps it"
+      "description": "Result! validates value is a Result and returns it directly (no double-wrapping)"
     }
   ]
 }

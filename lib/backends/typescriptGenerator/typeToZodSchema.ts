@@ -5,19 +5,18 @@ import { escape } from "../../utils.js";
 export const DEFAULT_SCHEMA = "z.string()";
 
 /**
- * Maps Agency types to Zod schema strings
+ * Internal recursive schema mapper. The `resultHandler` parameter controls
+ * how Result types are converted:
+ * - For LLM structured output: returns just the success type schema
+ * - For validation: returns a schema that validates the full Result shape
  */
-export function mapTypeToZodSchema(
+function mapTypeToSchema(
   variableType: VariableType,
   typeAliases: Record<string, VariableType>,
+  resultHandler: (vt: VariableType, ta: Record<string, VariableType>) => string,
 ): string {
-  /* console.log(
-    color.yellow(
-      `Variable type is`,
-      JSON.stringify(variableType),
-    ),
-  );
- */
+  const recurse = (vt: VariableType) => mapTypeToSchema(vt, typeAliases, resultHandler);
+
   if (!variableType) {
     throw new Error(
       `Received undefined variableType. typeAliases: ${JSON.stringify(typeAliases)}`,
@@ -34,7 +33,6 @@ export function mapTypeToZodSchema(
       case "null":
         return "z.null()";
       case "undefined":
-        // Undefined cannot be represented in JSON Schema
         return "z.null()";
       case "any":
         return "z.any()";
@@ -43,16 +41,10 @@ export function mapTypeToZodSchema(
       case "object":
         return "z.record(z.string(), z.any())";
       default:
-        // Default to string for unknown types
         return DEFAULT_SCHEMA;
     }
   } else if (variableType.type === "arrayType") {
-    // Recursively handle array element type
-    const elementSchema = mapTypeToZodSchema(
-      variableType.elementType,
-      typeAliases,
-    );
-    return `z.array(${elementSchema})`;
+    return `z.array(${recurse(variableType.elementType)})`;
   } else if (variableType.type === "stringLiteralType") {
     return `z.literal("${variableType.value.replace(/"/g, '\\"')}")`;
   } else if (variableType.type === "numberLiteralType") {
@@ -60,17 +52,12 @@ export function mapTypeToZodSchema(
   } else if (variableType.type === "booleanLiteralType") {
     return `z.literal(${variableType.value})`;
   } else if (variableType.type === "unionType") {
-    const unionSchemas = variableType.types.map((t) =>
-      mapTypeToZodSchema(t, typeAliases),
-    );
-    return `z.union([${unionSchemas.join(", ")}])`;
+    const schemas = variableType.types.map(recurse);
+    return `z.union([${schemas.join(", ")}])`;
   } else if (variableType.type === "objectType") {
     const props = variableType.properties
       .map((prop) => {
-        let str = `"${prop.key.replace(/"/g, '\\"')}": ${mapTypeToZodSchema(
-          prop.value,
-          typeAliases,
-        )}`;
+        let str = `"${prop.key.replace(/"/g, '\\"')}": ${recurse(prop.value)}`;
         if (prop.description) {
           str += `.describe("${escape(prop.description)}")`;
         }
@@ -79,61 +66,44 @@ export function mapTypeToZodSchema(
       .join(", ");
     return `z.object({ ${props} })`;
   } else if (variableType.type === "resultType") {
-    return mapTypeToZodSchema(variableType.successType, typeAliases);
+    return resultHandler(variableType, typeAliases);
   } else if (variableType.type === "typeAliasVariable") {
     if (!typeAliases || !typeAliases[variableType.aliasName]) {
       throw new Error(
         `Type alias '${variableType.aliasName}' not found in provided type aliases: ${JSON.stringify(typeAliases)}`,
       );
     }
-    return mapTypeToZodSchema(typeAliases[variableType.aliasName], typeAliases);
+    return recurse(typeAliases[variableType.aliasName]);
   }
 
-  // Fallback (should never reach here)
   return "z.string()";
 }
 
 /**
+ * Maps Agency types to Zod schema strings for LLM structured output.
+ * For Result types, returns only the success type schema (the LLM
+ * doesn't return Result objects).
+ */
+export function mapTypeToZodSchema(
+  variableType: VariableType,
+  typeAliases: Record<string, VariableType>,
+): string {
+  return mapTypeToSchema(variableType, typeAliases, (vt, ta) =>
+    mapTypeToZodSchema((vt as any).successType, ta),
+  );
+}
+
+/**
  * Maps Agency types to Zod schema strings for validation contexts.
- * Unlike mapTypeToZodSchema (used for LLM structured output), this generates
- * schemas that validate the full Result structure rather than just the success type.
+ * For Result types, generates a schema that validates the full Result
+ * structure ({success: true, value: T} | {success: false, error: any}).
  */
 export function mapTypeToValidationSchema(
   variableType: VariableType,
   typeAliases: Record<string, VariableType>,
 ): string {
-  if (variableType.type === "resultType") {
-    const successSchema = mapTypeToValidationSchema(variableType.successType, typeAliases);
+  return mapTypeToSchema(variableType, typeAliases, (vt, ta) => {
+    const successSchema = mapTypeToValidationSchema((vt as any).successType, ta);
     return `z.union([z.object({ success: z.literal(true), value: ${successSchema} }), z.object({ success: z.literal(false), error: z.any() })])`;
-  }
-  if (variableType.type === "typeAliasVariable") {
-    if (!typeAliases || !typeAliases[variableType.aliasName]) {
-      throw new Error(
-        `Type alias '${variableType.aliasName}' not found in provided type aliases: ${JSON.stringify(typeAliases)}`,
-      );
-    }
-    return mapTypeToValidationSchema(typeAliases[variableType.aliasName], typeAliases);
-  }
-  // Recurse into composite types so nested Result types are handled correctly
-  if (variableType.type === "arrayType") {
-    return `z.array(${mapTypeToValidationSchema(variableType.elementType, typeAliases)})`;
-  }
-  if (variableType.type === "unionType") {
-    const schemas = variableType.types.map((t) => mapTypeToValidationSchema(t, typeAliases));
-    return `z.union([${schemas.join(", ")}])`;
-  }
-  if (variableType.type === "objectType") {
-    const props = variableType.properties
-      .map((prop) => {
-        let str = `"${prop.key.replace(/"/g, '\\"')}": ${mapTypeToValidationSchema(prop.value, typeAliases)}`;
-        if (prop.description) {
-          str += `.describe("${escape(prop.description)}")`;
-        }
-        return str;
-      })
-      .join(", ");
-    return `z.object({ ${props} })`;
-  }
-  // Leaf types (primitives, literals) — delegate to existing function
-  return mapTypeToZodSchema(variableType, typeAliases);
+  });
 }

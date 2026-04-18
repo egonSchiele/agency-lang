@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { success, failure, isFailure } from "./result.js";
+import { success, failure, isFailure, isSuccess } from "./result.js";
 import type { ResultValue, ResultFailure } from "./result.js";
 
 export class Schema {
@@ -31,6 +31,12 @@ export function __validateType(value: unknown, schema: z.ZodType): ResultValue {
   }
   const result = schema.safeParse(value);
   if (result.success) {
+    // If the validated value is already a Result, return it directly
+    // instead of wrapping it in another success(). This avoids double-wrapping
+    // when validating with Result types (e.g. const r: Result! = compute()).
+    if (isSuccess(result.data as any) || isFailure(result.data as any)) {
+      return result.data as ResultValue;
+    }
     return success(result.data);
   }
   return failure(result.error.message);

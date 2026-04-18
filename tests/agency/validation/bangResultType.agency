@@ -5,12 +5,7 @@ def compute(): Result {
 node main() {
   const r: Result! = compute()
   if (isSuccess(r)) {
-    const inner = r.value
-    if (isSuccess(inner)) {
-      if (inner.value == 42) {
-        return "double-wrapped correctly"
-      }
-    }
+    return r.value
   }
-  return "not double-wrapped"
+  return "failed"
 }

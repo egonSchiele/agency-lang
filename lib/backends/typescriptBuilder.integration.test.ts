@@ -268,3 +268,36 @@ ${safeKeyword}def ${funcName}(id: string, shouldSave: boolean, items: string[]):
     }
   });
 });
+
+describe("TypeName.schema access", () => {
+  it("should throw on .schema for unrecognized type name", () => {
+    expect(() =>
+      generateWithBuilder(`
+node main() {
+  const schema = UnknownType.schema
+}
+`),
+    ).toThrow("UnknownType");
+  });
+
+  it("should compile .schema for named type aliases", () => {
+    expect(() =>
+      generateWithBuilder(`
+type Category = "bug" | "feature"
+node main() {
+  const schema = Category.schema
+}
+`),
+    ).not.toThrow();
+  });
+
+  it("should compile .schema for builtin types", () => {
+    expect(() =>
+      generateWithBuilder(`
+node main() {
+  const schema = number.schema
+}
+`),
+    ).not.toThrow();
+  });
+});

@@ -421,6 +421,28 @@ export class TypeScriptBuilder {
     }
   }
 
+  private static readonly BUILTIN_SCHEMA_TYPES = [
+    "number", "string", "boolean", "null", "undefined", "any", "unknown", "object",
+  ];
+
+  /**
+   * Resolve a type name (alias or builtin) to its Zod schema string.
+   * Returns null if the name is not a known type alias or builtin.
+   */
+  private resolveZodSchemaForTypeName(typeName: string): string | null {
+    const typeAliases = this.getVisibleTypeAliases();
+    if (typeAliases[typeName]) {
+      return mapTypeToZodSchema(typeAliases[typeName], typeAliases);
+    }
+    if (TypeScriptBuilder.BUILTIN_SCHEMA_TYPES.includes(typeName)) {
+      return mapTypeToZodSchema(
+        { type: "primitiveType" as const, value: typeName },
+        typeAliases,
+      );
+    }
+    return null;
+  }
+
   private agencyFileToDefaultImportName(agencyFile: string): string {
     return `__graph_${agencyFile.replace(".agency", "").replace(/[^a-zA-Z0-9_]/g, "_")}`;
   }
@@ -951,23 +973,13 @@ export class TypeScriptBuilder {
       node.chain[0].name === "schema"
     ) {
       const baseName = (node.base as VariableNameLiteral).value;
-      const typeAliases = this.getVisibleTypeAliases();
-      const builtinTypes = ["number", "string", "boolean", "null", "undefined", "any", "unknown", "object"];
-
-      let zodSchema: string | null = null;
-
-      if (typeAliases[baseName]) {
-        zodSchema = mapTypeToZodSchema(typeAliases[baseName], typeAliases);
-      } else if (builtinTypes.includes(baseName)) {
-        zodSchema = mapTypeToZodSchema(
-          { type: "primitiveType" as const, value: baseName },
-          typeAliases,
-        );
-      }
-
+      const zodSchema = this.resolveZodSchemaForTypeName(baseName);
       if (zodSchema) {
         return ts.new(ts.id("Schema"), [ts.raw(zodSchema)]);
       }
+      throw new Error(
+        `Cannot access .schema on '${baseName}': not a known type alias or builtin type`,
+      );
     }
 
     let result = this.processNode(node.base);
@@ -1678,13 +1690,14 @@ export class TypeScriptBuilder {
         const zodSchema = mapTypeToZodSchema(param.typeHint, this.getVisibleTypeAliases());
         const stackArg = $(ts.stack("args")).index(ts.str(param.name)).done();
         const vrName = `__vr_${param.name}`;
+        const vrId = ts.id(vrName);
         validationGuards.push(
           ts.constDecl(vrName, ts.validateType(stackArg, ts.raw(zodSchema))),
           ts.if(
-            ts.raw(`!${vrName}.success`),
-            ts.return(ts.id(vrName)),
+            ts.not(ts.prop(vrId, "success")),
+            ts.return(vrId),
           ),
-          ts.assign(stackArg, ts.raw(`${vrName}.value`)),
+          ts.assign(stackArg, ts.prop(vrId, "value")),
         );
       }
     }

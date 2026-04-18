@@ -84,13 +84,12 @@ describe("__validateType", () => {
 
   it("returns Result directly when value is already a valid Result (no double-wrapping)", () => {
     const resultSchema = z.union([
-      z.object({ success: z.literal(true), value: z.number() }),
-      z.object({ success: z.literal(false), error: z.any() }),
+      z.object({ __type: z.literal("resultType"), success: z.literal(true), value: z.number() }),
+      z.object({ __type: z.literal("resultType"), success: z.literal(false), error: z.any() }),
     ]);
-    const original = { success: true as const, value: 42 };
+    const original = { __type: "resultType" as const, success: true as const, value: 42 };
     const result = __validateType(original, resultSchema);
-    // Should return the Result directly, not success({success: true, value: 42})
-    expect(result).toEqual({ success: true, value: 42 });
+    expect(result).toEqual({ __type: "resultType", success: true, value: 42 });
     expect((result as any).value).toBe(42);
   });
 });

@@ -3,11 +3,12 @@ import { z } from "zod";
 export type ResultValue = ResultSuccess | ResultFailure;
 
 const resultValueSchema = z.union([
-  z.object({ success: z.literal(true), value: z.any() }),
-  z.object({ success: z.literal(false), error: z.any() }),
+  z.object({ __type: z.literal("resultType"), success: z.literal(true), value: z.any() }),
+  z.object({ __type: z.literal("resultType"), success: z.literal(false), error: z.any() }),
 ]);
 
 export type ResultSuccess = {
+  __type: "resultType";
   success: true;
   value: any;
 };
@@ -20,6 +21,7 @@ export type FailureOpts = {
 };
 
 export type ResultFailure = {
+  __type: "resultType";
   success: false;
   error: any;
   checkpoint: any;
@@ -29,11 +31,12 @@ export type ResultFailure = {
 };
 
 export function success(value: any): ResultSuccess {
-  return { success: true, value };
+  return { __type: "resultType", success: true, value };
 }
 
 export function failure(error: any, opts?: FailureOpts): ResultFailure {
   return {
+    __type: "resultType",
     success: false,
     error,
     checkpoint: opts?.checkpoint ?? null,
@@ -43,12 +46,12 @@ export function failure(error: any, opts?: FailureOpts): ResultFailure {
   };
 }
 
-export function isSuccess(result: ResultValue): result is ResultSuccess {
-  return result != null && result.success === true;
+export function isSuccess(result: unknown): result is ResultSuccess {
+  return result != null && typeof result === "object" && (result as any).__type === "resultType" && (result as any).success === true;
 }
 
-export function isFailure(result: ResultValue): result is ResultFailure {
-  return result != null && result.success === false;
+export function isFailure(result: unknown): result is ResultFailure {
+  return result != null && typeof result === "object" && (result as any).__type === "resultType" && (result as any).success === false;
 }
 
 /** Wrap a function call in try-catch, returning a Result.
@@ -82,8 +85,8 @@ export async function __pipeBind(result: ResultValue, fn: (value: any) => any): 
     return output;
   }
   // Smart bind/fmap: if fn returns a Result, use it directly
-  if (output != null && typeof output === "object" && "success" in output && typeof output.success === "boolean") {
+  if (output != null && typeof output === "object" && (output as any).__type === "resultType" && typeof output.success === "boolean") {
     return output;
   }
-  return { success: true, value: output };
+  return success(output);
 }

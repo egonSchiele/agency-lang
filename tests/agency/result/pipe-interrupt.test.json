@@ -3,7 +3,7 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "{\"value\":{\"success\":true,\"value\":23},\"callCount\":1}",
+      "expectedOutput": "{\"value\":{\"__type\":\"resultType\",\"success\":true,\"value\":23},\"callCount\":1}",
       "evaluationCriteria": [
         {
           "type": "exact"

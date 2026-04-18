@@ -96,7 +96,7 @@ export function mapTypeToZodSchema(
 /**
  * Maps Agency types to Zod schema strings for validation contexts.
  * For Result types, generates a schema that validates the full Result
- * structure ({success: true, value: T} | {success: false, error: any}).
+ * structure ({__type: "resultType", success: true, value: T} | {__type: "resultType", success: false, error: any}).
  */
 export function mapTypeToValidationSchema(
   variableType: VariableType,
@@ -104,6 +104,6 @@ export function mapTypeToValidationSchema(
 ): string {
   return mapTypeToSchema(variableType, typeAliases, (vt, ta) => {
     const successSchema = mapTypeToValidationSchema((vt as any).successType, ta);
-    return `z.union([z.object({ success: z.literal(true), value: ${successSchema} }), z.object({ success: z.literal(false), error: z.any() })])`;
+    return `z.union([z.object({ __type: z.literal("resultType"), success: z.literal(true), value: ${successSchema} }), z.object({ __type: z.literal("resultType"), success: z.literal(false), error: z.any() })])`;
   });
 }

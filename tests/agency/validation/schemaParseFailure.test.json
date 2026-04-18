@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"original error\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Schema.parse passes through failure Results unchanged"
+    }
+  ]
+}

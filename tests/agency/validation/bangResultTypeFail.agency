@@ -1,0 +1,7 @@
+node main() {
+  const r: Result! = 42
+  if (isFailure(r)) {
+    return "correctly rejected"
+  }
+  return "unexpected"
+}

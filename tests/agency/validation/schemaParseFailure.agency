@@ -1,0 +1,9 @@
+node main() {
+  const s = schema(number)
+  const f = failure("original error")
+  const result = s.parse(f)
+  if (isFailure(result)) {
+    return result.error
+  }
+  return "unexpected"
+}

@@ -46,12 +46,12 @@ export function failure(error: any, opts?: FailureOpts): ResultFailure {
   };
 }
 
-export function isSuccess(result: ResultValue): result is ResultSuccess {
-  return result != null && (result as any).__type === "resultType" && result.success === true;
+export function isSuccess(result: unknown): result is ResultSuccess {
+  return result != null && typeof result === "object" && (result as any).__type === "resultType" && (result as any).success === true;
 }
 
-export function isFailure(result: ResultValue): result is ResultFailure {
-  return result != null && (result as any).__type === "resultType" && result.success === false;
+export function isFailure(result: unknown): result is ResultFailure {
+  return result != null && typeof result === "object" && (result as any).__type === "resultType" && (result as any).success === false;
 }
 
 /** Wrap a function call in try-catch, returning a Result.
@@ -85,7 +85,7 @@ export async function __pipeBind(result: ResultValue, fn: (value: any) => any): 
     return output;
   }
   // Smart bind/fmap: if fn returns a Result, use it directly
-  if (output != null && typeof output === "object" && (output as any).__type === "resultType") {
+  if (output != null && typeof output === "object" && (output as any).__type === "resultType" && typeof output.success === "boolean") {
     return output;
   }
   return success(output);

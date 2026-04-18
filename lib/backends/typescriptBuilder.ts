@@ -7,7 +7,6 @@ import {
   Expression,
   Keyword,
   Literal,
-  VariableNameLiteral,
   NamedArgument,
   PromptSegment,
   FunctionScope,
@@ -27,6 +26,7 @@ import {
 } from "@/config.js";
 import type { SourceLocationOpts } from "@/runtime/state/checkpointStore.js";
 import { DebuggerStatement } from "@/types/debuggerStatement.js";
+import { SchemaExpression } from "@/types/schemaExpression.js";
 import { Sentinel } from "@/types/sentinel.js";
 import { expressionToString } from "@/utils/node.js";
 import { toCompiledImportPath } from "../importPaths.js";
@@ -88,6 +88,7 @@ import {
 import {
   DEFAULT_SCHEMA,
   mapTypeToZodSchema,
+  mapTypeToValidationSchema,
 } from "./typescriptGenerator/typeToZodSchema.js";
 
 import { $, ts } from "../ir/builders.js";
@@ -419,28 +420,6 @@ export class TypeScriptBuilder {
       default:
         return false;
     }
-  }
-
-  private static readonly BUILTIN_SCHEMA_TYPES = [
-    "number", "string", "boolean", "null", "undefined", "any", "unknown", "object",
-  ];
-
-  /**
-   * Resolve a type name (alias or builtin) to its Zod schema string.
-   * Returns null if the name is not a known type alias or builtin.
-   */
-  private resolveZodSchemaForTypeName(typeName: string): string | null {
-    const typeAliases = this.getVisibleTypeAliases();
-    if (typeAliases[typeName]) {
-      return mapTypeToZodSchema(typeAliases[typeName], typeAliases);
-    }
-    if (TypeScriptBuilder.BUILTIN_SCHEMA_TYPES.includes(typeName)) {
-      return mapTypeToZodSchema(
-        { type: "primitiveType" as const, value: typeName },
-        typeAliases,
-      );
-    }
-    return null;
   }
 
   private agencyFileToDefaultImportName(agencyFile: string): string {
@@ -847,6 +826,8 @@ export class TypeScriptBuilder {
         return this.processClassDefinition(node);
       case "newExpression":
         return this.processNewExpression(node);
+      case "schemaExpression":
+        return this.processSchemaExpression(node);
       case "regex":
         return ts.raw(`/${node.pattern}/${node.flags}`);
       default:
@@ -965,23 +946,6 @@ export class TypeScriptBuilder {
   }
 
   private processValueAccess(node: ValueAccess): TsNode {
-    // Check for TypeName.schema pattern
-    if (
-      node.base.type === "variableName" &&
-      node.chain.length === 1 &&
-      node.chain[0].kind === "property" &&
-      node.chain[0].name === "schema"
-    ) {
-      const baseName = (node.base as VariableNameLiteral).value;
-      const zodSchema = this.resolveZodSchemaForTypeName(baseName);
-      if (zodSchema) {
-        return ts.new(ts.id("Schema"), [ts.raw(zodSchema)]);
-      }
-      throw new Error(
-        `Cannot access .schema on '${baseName}': not a known type alias or builtin type`,
-      );
-    }
-
     let result = this.processNode(node.base);
     // If the base is a function call, await it before accessing properties/methods
     // on the result. Without this, chaining like getGreeting().trim() would call
@@ -1128,6 +1092,11 @@ export class TypeScriptBuilder {
   private processNewExpression(node: NewExpression): TsNode {
     const args = node.arguments.map((a) => this.processNode(a as AgencyNode));
     return ts.new(ts.id(node.className), args);
+  }
+
+  private processSchemaExpression(node: SchemaExpression): TsNode {
+    const zodSchema = mapTypeToValidationSchema(node.typeArg, this.getVisibleTypeAliases());
+    return ts.new(ts.id("Schema"), [ts.raw(zodSchema)]);
   }
 
   /**
@@ -1687,7 +1656,7 @@ export class TypeScriptBuilder {
     const validationGuards: TsNode[] = [];
     for (const param of parameters) {
       if (param.validated && param.typeHint) {
-        const zodSchema = mapTypeToZodSchema(param.typeHint, this.getVisibleTypeAliases());
+        const zodSchema = mapTypeToValidationSchema(param.typeHint, this.getVisibleTypeAliases());
         const stackArg = $(ts.stack("args")).index(ts.str(param.name)).done();
         const vrName = `__vr_${param.name}`;
         const vrId = ts.id(vrName);
@@ -2238,7 +2207,7 @@ export class TypeScriptBuilder {
     if (!this.getScopeReturnTypeValidated()) return valueNode;
     const returnType = this.getScopeReturnType();
     if (!returnType) return valueNode;
-    const zodSchema = mapTypeToZodSchema(returnType, this.getVisibleTypeAliases());
+    const zodSchema = mapTypeToValidationSchema(returnType, this.getVisibleTypeAliases());
     return ts.validateType(valueNode, ts.raw(zodSchema));
   }
 
@@ -2328,7 +2297,7 @@ export class TypeScriptBuilder {
     const result = this._processAssignmentInner(node);
     // If the type annotation has !, wrap the assigned value in __validateType
     if (node.validated && node.typeHint) {
-      const zodSchema = mapTypeToZodSchema(
+      const zodSchema = mapTypeToValidationSchema(
         node.typeHint,
         this.getVisibleTypeAliases(),
       );
@@ -3015,7 +2984,7 @@ export class TypeScriptBuilder {
 
     // If the assignment has ! (validated), wrap the final result in __validateType
     if (stmt.validated && stmt.typeHint) {
-      const zodSchema = mapTypeToZodSchema(stmt.typeHint, this.getVisibleTypeAliases());
+      const zodSchema = mapTypeToValidationSchema(stmt.typeHint, this.getVisibleTypeAliases());
       nodes.push(
         ts.runnerStep({
           id: baseId + stages.length,

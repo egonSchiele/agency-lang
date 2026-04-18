@@ -118,6 +118,8 @@ export function expressionToString(expr: Expression): string {
     }
     case "regex":
       return `/${expr.pattern}/${expr.flags}`;
+    case "schemaExpression":
+      return `schema(...)`;
   }
 }
 

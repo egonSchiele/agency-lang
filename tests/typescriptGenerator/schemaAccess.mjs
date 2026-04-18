@@ -123,7 +123,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "schemaAccess.agency", scopeName: "main" });
   try {
     await runner.step(0, async (runner) => {
-__stack.locals.schema = new Schema(z.union([z.literal("bug"), z.literal("feature"), z.literal("docs")]));
+__stack.locals.schema = Category.schema;
     });
     await runner.step(1, async (runner) => {
 __stack.locals.result = await __stack.locals.schema.parse(`bug`);

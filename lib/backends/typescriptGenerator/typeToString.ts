@@ -52,6 +52,7 @@ export function variableTypeToString(
     const s = variableTypeToString(variableType.successType, typeAliases);
     const f = variableTypeToString(variableType.failureType, typeAliases);
     if (s === "any" && f === "any") return "Result";
+    if (f === "string") return `Result<${s}>`;
     return `Result<${s}, ${f}>`;
   }
   return "unknown";

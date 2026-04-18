@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"zero!\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Failure Results pass through ! validation unchanged, preserving original error"
+    }
+  ]
+}

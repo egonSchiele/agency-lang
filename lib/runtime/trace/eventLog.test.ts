@@ -173,6 +173,112 @@ describe("detectStackChanges", () => {
     expect((events[0] as any).returnValue).toBe("Hello!");
   });
 
+  it("emits function-exit without returnValue when no new local in caller", () => {
+    const prev = makeCheckpoint({
+      scopeName: "greet",
+      stepPath: "2",
+      stack: {
+        stack: [
+          { args: {}, locals: { x: 1 }, threads: null, step: 1 },
+          {
+            args: { name: "Alice" },
+            locals: { name: "Alice" },
+            threads: null,
+            step: 2,
+          },
+        ],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: ["main"],
+      },
+    });
+    const curr = makeCheckpoint({
+      scopeName: "main",
+      stepPath: "2",
+      stack: {
+        stack: [
+          { args: {}, locals: { x: 1 }, threads: null, step: 2 },
+        ],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: ["main"],
+      },
+    });
+    const events = detectStackChanges(prev, curr, 3);
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe("function-exit");
+    expect((events[0] as any).returnValue).toBeUndefined();
+  });
+
+  it("emits multiple function-enter events when multiple frames pushed", () => {
+    const prev = makeCheckpoint({
+      stepPath: "1",
+      stack: {
+        stack: [{ args: {}, locals: {}, threads: null, step: 1 }],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: ["main"],
+      },
+    });
+    const curr = makeCheckpoint({
+      scopeName: "inner",
+      stepPath: "0",
+      stack: {
+        stack: [
+          { args: {}, locals: {}, threads: null, step: 1 },
+          { args: { a: 1 }, locals: { a: 1 }, threads: null, step: 0 },
+          { args: { b: 2 }, locals: { b: 2 }, threads: null, step: 0 },
+        ],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: ["main"],
+      },
+    });
+    const events = detectStackChanges(prev, curr, 2);
+    expect(events).toHaveLength(2);
+    expect(events[0].type).toBe("function-enter");
+    expect(events[1].type).toBe("function-enter");
+  });
+
+  it("emits multiple function-exit events when multiple frames popped", () => {
+    const prev = makeCheckpoint({
+      scopeName: "inner",
+      stepPath: "1",
+      stack: {
+        stack: [
+          { args: {}, locals: {}, threads: null, step: 1 },
+          { args: {}, locals: {}, threads: null, step: 1 },
+          { args: {}, locals: {}, threads: null, step: 1 },
+        ],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: ["main"],
+      },
+    });
+    const curr = makeCheckpoint({
+      scopeName: "main",
+      stepPath: "2",
+      stack: {
+        stack: [
+          { args: {}, locals: {}, threads: null, step: 2 },
+        ],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: ["main"],
+      },
+    });
+    const events = detectStackChanges(prev, curr, 3);
+    expect(events).toHaveLength(2);
+    expect(events[0].type).toBe("function-exit");
+    expect(events[1].type).toBe("function-exit");
+  });
+
   it("returns empty when stack depth unchanged", () => {
     const prev = makeCheckpoint({ stepPath: "0" });
     const curr = makeCheckpoint({ stepPath: "1" });
@@ -272,6 +378,35 @@ describe("detectVariableChanges", () => {
       previousValue: 0,
       scope: "global",
     });
+  });
+
+  it("emits no event when value is unchanged", () => {
+    const prev = makeCheckpoint({
+      stepPath: "1",
+      stack: {
+        stack: [
+          { args: {}, locals: { x: 42, y: "hello" }, threads: null, step: 1 },
+        ],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: ["main"],
+      },
+    });
+    const curr = makeCheckpoint({
+      stepPath: "2",
+      stack: {
+        stack: [
+          { args: {}, locals: { x: 42, y: "hello" }, threads: null, step: 2 },
+        ],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: ["main"],
+      },
+    });
+    const events = detectVariableChanges(prev, curr, 2);
+    expect(events).toEqual([]);
   });
 
   it("skips variables prefixed with __", () => {
@@ -419,6 +554,174 @@ describe("detectLlmCalls", () => {
     expect(llmEvents[0]).toMatchObject({
       type: "llm-call",
       response: "The answer is 9",
+    });
+  });
+
+  it("includes token usage delta from globals", () => {
+    const prev = makeCheckpoint({
+      stepPath: "0",
+      stack: {
+        stack: [
+          { args: {}, locals: {}, threads: makeThreads([]), step: 0 },
+        ],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: ["main"],
+      },
+      globals: {
+        store: {
+          "test.agency": {},
+          __internal: {
+            __tokenStats: {
+              usage: {
+                inputTokens: 10,
+                outputTokens: 5,
+                cachedInputTokens: 0,
+                totalTokens: 15,
+              },
+            },
+          },
+        },
+        initializedModules: ["test.agency"],
+      },
+    });
+    const curr = makeCheckpoint({
+      stepPath: "1",
+      stack: {
+        stack: [
+          {
+            args: {},
+            locals: {},
+            step: 1,
+            threads: makeThreads([
+              { role: "user", content: "Hi" },
+              { role: "assistant", content: "Hello" },
+            ]),
+          },
+        ],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: ["main"],
+      },
+      globals: {
+        store: {
+          "test.agency": {},
+          __internal: {
+            __tokenStats: {
+              usage: {
+                inputTokens: 25,
+                outputTokens: 12,
+                cachedInputTokens: 3,
+                totalTokens: 37,
+              },
+            },
+          },
+        },
+        initializedModules: ["test.agency"],
+      },
+    });
+    const events = detectLlmCalls(prev, curr, 1);
+    const llmEvent = events.find((e: any) => e.type === "llm-call") as any;
+    expect(llmEvent.tokenUsage).toEqual({
+      inputTokens: 15,
+      outputTokens: 7,
+      cachedInputTokens: 3,
+      totalTokens: 22,
+    });
+  });
+
+  it("handles TextPart[] content in messages", () => {
+    const prev = makeCheckpoint({
+      stepPath: "0",
+      stack: {
+        stack: [
+          { args: {}, locals: {}, threads: makeThreads([]), step: 0 },
+        ],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: ["main"],
+      },
+    });
+    const curr = makeCheckpoint({
+      stepPath: "1",
+      stack: {
+        stack: [
+          {
+            args: {},
+            locals: {},
+            step: 1,
+            threads: makeThreads([
+              {
+                role: "user",
+                content: [{ text: "Hello " }, { text: "world" }],
+              },
+              { role: "assistant", content: "Hi there" },
+            ]),
+          },
+        ],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: ["main"],
+      },
+    });
+    const events = detectLlmCalls(prev, curr, 1);
+    const llmEvent = events.find((e: any) => e.type === "llm-call") as any;
+    expect(llmEvent.prompt).toBe("Hello world");
+  });
+
+  it("emits llm-call with empty response when only tool messages appear", () => {
+    const prev = makeCheckpoint({
+      stepPath: "0",
+      stack: {
+        stack: [
+          { args: {}, locals: {}, threads: makeThreads([]), step: 0 },
+        ],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: ["main"],
+      },
+    });
+    const curr = makeCheckpoint({
+      stepPath: "1",
+      stack: {
+        stack: [
+          {
+            args: {},
+            locals: {},
+            step: 1,
+            threads: makeThreads([
+              { role: "user", content: "Add 1+2" },
+              {
+                role: "assistant",
+                content: null,
+                toolCalls: [
+                  { name: "add", arguments: { a: 1, b: 2 } },
+                ],
+              },
+              { role: "tool", content: "3", toolCallId: "1" },
+            ]),
+          },
+        ],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: ["main"],
+      },
+    });
+    const events = detectLlmCalls(prev, curr, 1);
+    const toolEvents = events.filter((e: any) => e.type === "tool-call");
+    const llmEvents = events.filter((e: any) => e.type === "llm-call");
+    expect(toolEvents).toHaveLength(1);
+    expect(llmEvents).toHaveLength(1);
+    expect(llmEvents[0]).toMatchObject({
+      type: "llm-call",
+      prompt: "Add 1+2",
+      response: "",
     });
   });
 

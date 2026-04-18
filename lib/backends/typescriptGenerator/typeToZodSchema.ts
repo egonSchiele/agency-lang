@@ -92,3 +92,27 @@ export function mapTypeToZodSchema(
   // Fallback (should never reach here)
   return "z.string()";
 }
+
+/**
+ * Maps Agency types to Zod schema strings for validation contexts.
+ * Unlike mapTypeToZodSchema (used for LLM structured output), this generates
+ * schemas that validate the full Result structure rather than just the success type.
+ */
+export function mapTypeToValidationSchema(
+  variableType: VariableType,
+  typeAliases: Record<string, VariableType>,
+): string {
+  if (variableType.type === "resultType") {
+    const successSchema = mapTypeToValidationSchema(variableType.successType, typeAliases);
+    return `z.union([z.object({ success: z.literal(true), value: ${successSchema} }), z.object({ success: z.literal(false), error: z.any() })])`;
+  }
+  if (variableType.type === "typeAliasVariable") {
+    if (!typeAliases || !typeAliases[variableType.aliasName]) {
+      throw new Error(
+        `Type alias '${variableType.aliasName}' not found in provided type aliases: ${JSON.stringify(typeAliases)}`,
+      );
+    }
+    return mapTypeToValidationSchema(typeAliases[variableType.aliasName], typeAliases);
+  }
+  return mapTypeToZodSchema(variableType, typeAliases);
+}

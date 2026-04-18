@@ -301,3 +301,34 @@ node main() {
     ).not.toThrow();
   });
 });
+
+import { mapTypeToValidationSchema } from "./typescriptGenerator/typeToZodSchema.js";
+
+describe("mapTypeToValidationSchema", () => {
+
+  it("generates Result validation schema for bare Result", () => {
+    const schema = mapTypeToValidationSchema(
+      { type: "resultType", successType: { type: "primitiveType", value: "any" }, failureType: { type: "primitiveType", value: "any" } },
+      {},
+    );
+    expect(schema).toContain("z.literal(true)");
+    expect(schema).toContain("z.literal(false)");
+  });
+
+  it("generates Result validation schema with typed success", () => {
+    const schema = mapTypeToValidationSchema(
+      { type: "resultType", successType: { type: "primitiveType", value: "number" }, failureType: { type: "primitiveType", value: "string" } },
+      {},
+    );
+    expect(schema).toContain("z.number()");
+    expect(schema).toContain("z.literal(true)");
+  });
+
+  it("delegates non-Result types to mapTypeToZodSchema", () => {
+    const schema = mapTypeToValidationSchema(
+      { type: "primitiveType", value: "number" },
+      {},
+    );
+    expect(schema).toBe("z.number()");
+  });
+});

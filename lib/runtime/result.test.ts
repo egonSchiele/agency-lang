@@ -4,17 +4,17 @@ import { success, failure, isSuccess, isFailure, __pipeBind } from "./result.js"
 describe("success", () => {
   it("creates a success result", () => {
     const result = success(42);
-    expect(result).toEqual({ success: true, value: 42 });
+    expect(result).toEqual({ __type: "resultType", success: true, value: 42 });
   });
 
   it("creates a success result with a string value", () => {
     const result = success("hello");
-    expect(result).toEqual({ success: true, value: "hello" });
+    expect(result).toEqual({ __type: "resultType", success: true, value: "hello" });
   });
 
   it("creates a success result with null value", () => {
     const result = success(null);
-    expect(result).toEqual({ success: true, value: null });
+    expect(result).toEqual({ __type: "resultType", success: true, value: null });
   });
 });
 
@@ -22,6 +22,7 @@ describe("failure", () => {
   it("creates a failure result with string error", () => {
     const result = failure("something went wrong");
     expect(result).toEqual({
+      __type: "resultType",
       success: false,
       error: "something went wrong",
       checkpoint: null,
@@ -34,6 +35,7 @@ describe("failure", () => {
   it("creates a failure result with object error", () => {
     const result = failure({ code: 404, message: "not found" });
     expect(result).toEqual({
+      __type: "resultType",
       success: false,
       error: { code: 404, message: "not found" },
       checkpoint: null,

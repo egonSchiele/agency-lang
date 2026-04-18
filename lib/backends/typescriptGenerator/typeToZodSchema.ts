@@ -104,6 +104,6 @@ export function mapTypeToValidationSchema(
 ): string {
   return mapTypeToSchema(variableType, typeAliases, (vt, ta) => {
     const successSchema = mapTypeToValidationSchema((vt as any).successType, ta);
-    return `z.union([z.object({ success: z.literal(true), value: ${successSchema} }), z.object({ success: z.literal(false), error: z.any() })])`;
+    return `z.union([z.object({ __type: z.literal("resultType"), success: z.literal(true), value: ${successSchema} }), z.object({ __type: z.literal("resultType"), success: z.literal(false), error: z.any() })])`;
   });
 }

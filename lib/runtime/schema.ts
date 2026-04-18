@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { success, failure } from "./result.js";
+import { success, failure, isFailure } from "./result.js";
 import type { ResultValue, ResultFailure } from "./result.js";
 
 export class Schema {
@@ -25,8 +25,8 @@ export class Schema {
 }
 
 export function __validateType(value: unknown, schema: z.ZodType): ResultValue {
-  // Universal rule: failures always pass through unchanged
-  if (value != null && typeof value === "object" && "success" in value && (value as any).success === false) {
+  // Don't validate failures — surface the original error, not a schema mismatch
+  if (isFailure(value as any)) {
     return value as ResultFailure;
   }
   const result = schema.safeParse(value);

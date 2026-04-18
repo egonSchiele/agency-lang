@@ -13,6 +13,7 @@ import {
   nodeScope,
   Scope,
 } from "@/types.js";
+import { variableTypeToString } from "@/backends/typescriptGenerator/typeToString.js";
 import { color } from "@/utils/termcolors.js";
 
 /** Unwrap a function call argument to its inner expression. */
@@ -119,7 +120,7 @@ export function expressionToString(expr: Expression): string {
     case "regex":
       return `/${expr.pattern}/${expr.flags}`;
     case "schemaExpression":
-      return `schema(...)`;
+      return `schema(${variableTypeToString(expr.typeArg, {})})`;
   }
 }
 

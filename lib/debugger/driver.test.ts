@@ -637,13 +637,15 @@ describe("DebuggerDriver with loops", () => {
     const initialResult = await getInitialResult(mod, driver);
     await driver.run(initialResult, { interceptConsole: false });
 
+    // No mangled paths with underscores in any scope
+    for (const cp of testUI.renderCalls) {
+      expect(cp.stepPath).not.toContain("_");
+    }
+
     const mainPaths = testUI.renderCalls
       .filter((cp) => cp.scopeName === "main")
       .map((cp) => cp.stepPath);
 
-    for (const sp of mainPaths) {
-      expect(sp).not.toContain("_");
-    }
     expect(mainPaths).toContain("0");   // sum = 0
     expect(mainPaths).toContain("1");   // for loop
     expect(mainPaths).toContain("1.0"); // loop body: sum = sum + i
@@ -693,13 +695,15 @@ describe("DebuggerDriver with if/else", () => {
     const initialResult = await getInitialResult(mod, driver, 5);
     await driver.run(initialResult, { interceptConsole: false });
 
+    // No mangled paths with underscores in any scope
+    for (const cp of testUI.renderCalls) {
+      expect(cp.stepPath).not.toContain("_");
+    }
+
     const mainPaths = testUI.renderCalls
       .filter((cp) => cp.scopeName === "main")
       .map((cp) => cp.stepPath);
 
-    for (const sp of mainPaths) {
-      expect(sp).not.toContain("_");
-    }
     expect(mainPaths).toContain("0");   // ifElse block
     expect(mainPaths).toContain("0.0"); // then branch body
     expect(mainPaths).toContain("1");   // return result
@@ -959,14 +963,15 @@ describe("DebuggerDriver with handle blocks", () => {
     const initialResult = await getInitialResult(mod, driver);
     await driver.run(initialResult, { interceptConsole: false });
 
+    // No mangled paths with underscores in any scope
+    for (const cp of testUI.renderCalls) {
+      expect(cp.stepPath).not.toContain("_");
+    }
+
     const mainPaths = testUI.renderCalls
       .filter((cp) => cp.scopeName === "main")
       .map((cp) => cp.stepPath);
 
-    // No mangled paths with underscores
-    for (const sp of mainPaths) {
-      expect(sp).not.toContain("_");
-    }
     // Should see the handle block and its body
     expect(mainPaths).toContain("0");   // const name = "Alice"
     expect(mainPaths).toContain("1");   // handle block

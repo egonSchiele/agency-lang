@@ -1,10 +1,8 @@
 # ui
 
-[View source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency)
-
 ## Functions
 
-### initUI [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1)
+### initUI
 
 ```ts
 initUI(title: string)
@@ -18,7 +16,9 @@ Initialize a terminal UI with a scrollable output area and a fixed input bar at 
 |---|---|---|
 | title | string |  |
 
-### destroyUI [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L8)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1))
+
+### destroyUI
 
 ```ts
 destroyUI()
@@ -26,7 +26,9 @@ destroyUI()
 
 Tear down the terminal UI and restore normal terminal behavior. Called automatically on exit, but you can call it early if needed.
 
-### log [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L15)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L8))
+
+### log
 
 ```ts
 log(message: string)
@@ -40,7 +42,9 @@ Print a message to the scrollable output area. Supports ANSI colors.
 |---|---|---|
 | message | string |  |
 
-### status [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L22)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L15))
+
+### status
 
 ```ts
 status(left: string, right: string)
@@ -55,7 +59,9 @@ Update the status bar. The left text appears on the left side, the right text on
 | left | string |  |
 | right | string | "" |
 
-### chat [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L29)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L22))
+
+### chat
 
 ```ts
 chat(role: string, message: string)
@@ -70,7 +76,9 @@ Print a chat message with a colored role prefix. Built-in colors: "user" (cyan),
 | role | string | "" |
 | message | string | "" |
 
-### code [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L36)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L29))
+
+### code
 
 ```ts
 code(filename: string, content: string)
@@ -85,7 +93,9 @@ Display a code block with a filename header and line numbers, inside a bordered 
 | filename | string |  |
 | content | string |  |
 
-### diff [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L43)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L36))
+
+### diff
 
 ```ts
 diff(filename: string, content: string)
@@ -100,7 +110,9 @@ Display a diff with colored +/- lines, inside a bordered box with the filename a
 | filename | string |  |
 | content | string |  |
 
-### separator [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L50)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L43))
+
+### separator
 
 ```ts
 separator(label: string)
@@ -114,7 +126,9 @@ Print a horizontal line with an optional label. Useful for visually grouping out
 |---|---|---|
 | label | string | "" |
 
-### startSpinner [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L57)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L50))
+
+### startSpinner
 
 ```ts
 startSpinner(text: string)
@@ -128,7 +142,9 @@ Show an animated spinner in the input bar with a label. Useful while the agent i
 |---|---|---|
 | text | string | "working" |
 
-### stopSpinner [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L64)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L57))
+
+### stopSpinner
 
 ```ts
 stopSpinner()
@@ -136,7 +152,9 @@ stopSpinner()
 
 Stop the spinner and clear the input bar.
 
-### prompt [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L71)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L64))
+
+### prompt
 
 ```ts
 prompt(question: string): string
@@ -152,7 +170,9 @@ Prompt the user for text input in the fixed input bar at the bottom of the scree
 
 **Returns:** string
 
-### getConfirmation [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L78)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L71))
+
+### getConfirmation
 
 ```ts
 getConfirmation(question: string): boolean
@@ -168,10 +188,14 @@ Ask the user a yes/no question in the input bar. Returns true if the user answer
 
 **Returns:** boolean
 
-### emptyLine [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L89)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L78))
+
+### emptyLine
 
 ```ts
 emptyLine()
 ```
 
 Print an empty line. Useful for adding spacing in the output.
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L89))

@@ -1,10 +1,8 @@
 # fs
 
-[View source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency)
-
 ## Types
 
-### EditResult [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L2)
+### EditResult
 
 ```ts
 type EditResult = {
@@ -13,7 +11,9 @@ type EditResult = {
 }
 ```
 
-### Edit [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L23)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L2))
+
+### Edit
 
 ```ts
 type Edit = {
@@ -23,7 +23,9 @@ type Edit = {
 }
 ```
 
-### MultiEditResult [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L29)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L23))
+
+### MultiEditResult
 
 ```ts
 type MultiEditResult = {
@@ -33,7 +35,9 @@ type MultiEditResult = {
 }
 ```
 
-### PatchResult [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L49)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L29))
+
+### PatchResult
 
 ```ts
 type PatchResult = {
@@ -42,9 +46,11 @@ type PatchResult = {
 }
 ```
 
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L49))
+
 ## Functions
 
-### edit [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L7)
+### edit
 
 ```ts
 edit(filename: string, oldText: string, newText: string, replaceAll: boolean): Result
@@ -63,7 +69,9 @@ Edit a file by replacing oldText with newText. By default oldText must match exa
 
 **Returns:** Result
 
-### multiedit [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L35)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L7))
+
+### multiedit
 
 ```ts
 multiedit(filename: string, edits: Edit[]): Result
@@ -80,7 +88,9 @@ Apply a sequence of edits to a single file atomically. Each edit has oldText, ne
 
 **Returns:** Result
 
-### applyPatch [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L54)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L35))
+
+### applyPatch
 
 ```ts
 applyPatch(patch: string): Result
@@ -96,7 +106,9 @@ Apply a unified diff to the working tree. Supports file creation (--- /dev/null)
 
 **Returns:** Result
 
-### mkdir [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L67)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L54))
+
+### mkdir
 
 ```ts
 mkdir(dir: string): Result
@@ -112,7 +124,9 @@ Create a directory, including any missing parent directories. Idempotent: succee
 
 **Returns:** Result
 
-### copy [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L80)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L67))
+
+### copy
 
 ```ts
 copy(src: string, dest: string): Result
@@ -129,7 +143,9 @@ Copy a file or directory. Directories are copied recursively. Fails if src does 
 
 **Returns:** Result
 
-### move [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L94)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L80))
+
+### move
 
 ```ts
 move(src: string, dest: string): Result
@@ -146,7 +162,9 @@ Move or rename a file or directory. Falls back to copy+remove if src and dest ar
 
 **Returns:** Result
 
-### remove [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L108)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L94))
+
+### remove
 
 ```ts
 remove(target: string): Result
@@ -161,3 +179,5 @@ Delete a file or directory. Directories are removed recursively. Does not fail i
 | target | string |  |
 
 **Returns:** Result
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L108))

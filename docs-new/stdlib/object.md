@@ -1,10 +1,8 @@
 # object
 
-[View source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency)
-
 ## Functions
 
-### mapValues [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L0)
+### mapValues
 
 ```ts
 mapValues(obj: any, func: (any, string) => any): any
@@ -21,7 +19,9 @@ Return a new object with the same keys, but with each value transformed by the f
 
 **Returns:** any
 
-### mapEntries [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L11)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L0))
+
+### mapEntries
 
 ```ts
 mapEntries(obj: any, func: (any, string) => any): any
@@ -38,7 +38,9 @@ Return a new object by applying the function to each entry. The function receive
 
 **Returns:** any
 
-### filterEntries [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L23)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L11))
+
+### filterEntries
 
 ```ts
 filterEntries(obj: any, func: (any, string) => boolean): any
@@ -55,7 +57,9 @@ Return a new object containing only the entries for which the function returns t
 
 **Returns:** any
 
-### everyEntry [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L36)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L23))
+
+### everyEntry
 
 ```ts
 everyEntry(obj: any, func: (any, string) => boolean): boolean
@@ -72,7 +76,9 @@ Return true if the function returns true for every entry in the object. The func
 
 **Returns:** boolean
 
-### someEntry [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L48)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L36))
+
+### someEntry
 
 ```ts
 someEntry(obj: any, func: (any, string) => boolean): boolean
@@ -88,3 +94,5 @@ Return true if the function returns true for at least one entry in the object. T
 | func | (any, string) => boolean |  |
 
 **Returns:** boolean
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L48))

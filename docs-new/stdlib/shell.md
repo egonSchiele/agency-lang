@@ -1,10 +1,8 @@
 # shell
 
-[View source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency)
-
 ## Types
 
-### BashResult [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L2)
+### BashResult
 
 ```ts
 type BashResult = {
@@ -14,7 +12,9 @@ type BashResult = {
 }
 ```
 
-### LsEntry [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L24)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L2))
+
+### LsEntry
 
 ```ts
 type LsEntry = {
@@ -25,7 +25,9 @@ type LsEntry = {
 }
 ```
 
-### GrepMatch [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L45)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L24))
+
+### GrepMatch
 
 ```ts
 type GrepMatch = {
@@ -35,7 +37,9 @@ type GrepMatch = {
 }
 ```
 
-### StatInfo [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L82)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L45))
+
+### StatInfo
 
 ```ts
 type StatInfo = {
@@ -46,9 +50,11 @@ type StatInfo = {
 }
 ```
 
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L82))
+
 ## Functions
 
-### bash [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L8)
+### bash
 
 ```ts
 bash(command: string, cwd: string, timeout: number, stdin: string): BashResult
@@ -67,7 +73,9 @@ Run a shell command and return its stdout, stderr, and exit code. Pass cwd to ch
 
 **Returns:** [BashResult](#bashresult)
 
-### ls [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L31)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L8))
+
+### ls
 
 ```ts
 ls(dir: string, recursive: boolean): Result
@@ -84,7 +92,9 @@ List entries in a directory. Each entry includes name, path, type ("file", "dir"
 
 **Returns:** Result
 
-### grep [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L51)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L31))
+
+### grep
 
 ```ts
 grep(pattern: string, dir: string, flags: string, maxResults: number): Result
@@ -103,7 +113,9 @@ Search for a regex pattern in files under a directory. Returns matches with file
 
 **Returns:** Result
 
-### glob [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L67)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L51))
+
+### glob
 
 ```ts
 glob(pattern: string, dir: string, maxResults: number): Result
@@ -121,7 +133,9 @@ Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Returns paths 
 
 **Returns:** Result
 
-### stat [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L89)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L67))
+
+### stat
 
 ```ts
 stat(filename: string): StatInfo
@@ -137,7 +151,9 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
 
 **Returns:** [StatInfo](#statinfo)
 
-### exists [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L96)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L89))
+
+### exists
 
 ```ts
 exists(filename: string): boolean
@@ -153,7 +169,9 @@ Return true if a file or directory exists at the given path.
 
 **Returns:** boolean
 
-### which [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L103)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L96))
+
+### which
 
 ```ts
 which(command: string): string
@@ -168,3 +186,5 @@ Locate an executable in PATH and return its absolute path. Returns an empty stri
 | command | string |  |
 
 **Returns:** string
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L103))

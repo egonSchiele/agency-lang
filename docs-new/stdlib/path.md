@@ -1,10 +1,8 @@
 # path
 
-[View source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency)
-
 ## Functions
 
-### join [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L2)
+### join
 
 ```ts
 join(...parts: string[]): string
@@ -20,7 +18,9 @@ Join path segments using the platform separator, normalizing the result.
 
 **Returns:** string
 
-### resolve [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L9)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L2))
+
+### resolve
 
 ```ts
 resolve(...parts: string[]): string
@@ -36,7 +36,9 @@ Resolve path segments into an absolute path, relative to the current working dir
 
 **Returns:** string
 
-### basename [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L16)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L9))
+
+### basename
 
 ```ts
 basename(p: string, ext: string): string
@@ -53,7 +55,9 @@ Return the last portion of a path. If ext is given and the path ends with it, ex
 
 **Returns:** string
 
-### dirname [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L23)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L16))
+
+### dirname
 
 ```ts
 dirname(p: string): string
@@ -69,7 +73,9 @@ Return the directory portion of a path.
 
 **Returns:** string
 
-### extname [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L30)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L23))
+
+### extname
 
 ```ts
 extname(p: string): string
@@ -85,7 +91,9 @@ Return the extension of a path (including the leading dot), or an empty string i
 
 **Returns:** string
 
-### relative [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L37)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L30))
+
+### relative
 
 ```ts
 relative(from: string, to: string): string
@@ -102,7 +110,9 @@ Return the relative path from 'from' to 'to'.
 
 **Returns:** string
 
-### isAbsolute [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L44)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L37))
+
+### isAbsolute
 
 ```ts
 isAbsolute(p: string): boolean
@@ -117,3 +127,5 @@ Return true if the path is absolute.
 | p | string |  |
 
 **Returns:** boolean
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L44))

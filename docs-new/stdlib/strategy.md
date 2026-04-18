@@ -1,10 +1,8 @@
 # strategy
 
-[View source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency)
-
 ## Functions
 
-### sample [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L0)
+### sample
 
 ```ts
 sample(n: number, block: () => any): any[]
@@ -21,7 +19,9 @@ Run a block n times in parallel. Returns an array of all results.
 
 **Returns:** any[]
 
-### consensus [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L9)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L0))
+
+### consensus
 
 ```ts
 consensus(n: number, block: () => any): any
@@ -38,7 +38,9 @@ Run a block n times in parallel and return the most common result (majority vote
 
 **Returns:** any
 
-### retry [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L17)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L9))
+
+### retry
 
 ```ts
 retry(n: number, test: (any) => boolean, block: () => any): any
@@ -56,7 +58,9 @@ Run a block up to n times. Returns the first result that passes the test functio
 
 **Returns:** any
 
-### retryWithFeedback [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L31)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L17))
+
+### retryWithFeedback
 
 ```ts
 retryWithFeedback(n: number, test: (any) => boolean, block: (any, number) => any): any
@@ -74,7 +78,9 @@ Run a block up to n times. Each attempt receives the previous result and the att
 
 **Returns:** any
 
-### firstValid [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L47)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L31))
+
+### firstValid
 
 ```ts
 firstValid(variants: any[], test: (any) => boolean, block: (any) => any): any
@@ -91,3 +97,5 @@ Run a block for each variant in parallel, then return the first result that pass
 | block | (any) => any |  |
 
 **Returns:** any
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L47))

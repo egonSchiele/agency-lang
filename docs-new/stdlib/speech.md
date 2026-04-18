@@ -1,10 +1,8 @@
 # speech
 
-[View source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency)
-
 ## Functions
 
-### speak [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L2)
+### speak
 
 ```ts
 speak(text: string, voice: string, rate: number, outputFile: string)
@@ -21,7 +19,9 @@ A tool for speaking text aloud using text-to-speech. Optionally specify a voice 
 | rate | number | 0 |
 | outputFile | string | "" |
 
-### transcribe [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L9)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L2))
+
+### transcribe
 
 ```ts
 transcribe(filepath: string, language: string): string
@@ -37,3 +37,5 @@ A tool for transcribing an audio file to text using OpenAI's Whisper API. Option
 | language | string | "" |
 
 **Returns:** string
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L9))

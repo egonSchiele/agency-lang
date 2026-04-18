@@ -1,10 +1,8 @@
 # system
 
-[View source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency)
-
 ## Functions
 
-### screenshot [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L2)
+### screenshot
 
 ```ts
 screenshot(filepath: string, x: number, y: number, width: number, height: number)
@@ -22,7 +20,9 @@ A tool for taking a screenshot and saving it to a file. Optionally specify x, y,
 | width | number | -1 |
 | height | number | -1 |
 
-### cwd [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L9)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L2))
+
+### cwd
 
 ```ts
 cwd(): string
@@ -32,7 +32,9 @@ Return the absolute path of the current working directory of the Agency process.
 
 **Returns:** string
 
-### env [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L16)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L9))
+
+### env
 
 ```ts
 env(name: string): string | null
@@ -48,7 +50,9 @@ Read an environment variable. Returns null if the variable is not set.
 
 **Returns:** string | null
 
-### setEnv [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L23)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L16))
+
+### setEnv
 
 ```ts
 setEnv(name: string, value: string): Result
@@ -64,3 +68,5 @@ Set an environment variable in the current process. Fails if the name is empty o
 | value | string |  |
 
 **Returns:** Result
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L23))

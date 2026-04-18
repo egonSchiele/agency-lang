@@ -112,7 +112,7 @@ function generateDocForFile(
 
   // Page-level "View source" link
   if (ctx.baseUrl && ctx.sourceRelPath) {
-    sections.push(`[View source](${ctx.baseUrl}/${toPosixPath(ctx.sourceRelPath)})`);
+    // sections.push(`[View source](${ctx.baseUrl}/${toPosixPath(ctx.sourceRelPath)})`);
   }
 
   if (program.docComment) {
@@ -165,7 +165,7 @@ function formatTypeLinked(
 
 function sourceLink(loc: { line: number } | undefined, ctx: DocContext): string {
   if (!ctx.baseUrl || !ctx.sourceRelPath || !loc) return "";
-  return ` [source](${ctx.baseUrl}/${toPosixPath(ctx.sourceRelPath)}#L${loc.line})`;
+  return `([source](${ctx.baseUrl}/${toPosixPath(ctx.sourceRelPath)}#L${loc.line}))`;
 }
 
 function formatSignature(
@@ -213,11 +213,11 @@ function formatTypeAlias(alias: TypeAlias, ctx: DocContext): string {
     type: "agencyProgram",
     nodes: [alias],
   });
-  const src = sourceLink(alias.loc, ctx);
   return section(
-    heading(3, alias.aliasName) + src,
+    heading(3, alias.aliasName),
     alias.docComment ? formatDocComment(alias.docComment) : null,
     codeFence(code),
+    sourceLink(alias.loc, ctx),
   );
 }
 
@@ -233,14 +233,14 @@ function generateFunctionSection(
   if (fns.length === 0) return null;
   const parts = fns.map((fn) => {
     const sig = formatSignature(fn.functionName, fn.parameters, fn.returnType);
-    const src = sourceLink(fn.loc, ctx);
     return section(
-      heading(3, fn.functionName) + src,
+      heading(3, fn.functionName),
       codeFence(sig),
       fn.docString ? fn.docString.value : null,
       fn.docComment ? formatDocComment(fn.docComment) : null,
       generateParamTable(fn.parameters, ctx),
       fn.returnType ? `${bold("Returns:")} ${formatTypeLinked(fn.returnType, ctx)}` : null,
+      sourceLink(fn.loc, ctx),
     );
   });
   return section(heading(2, "Functions"), ...parts);
@@ -253,14 +253,14 @@ function generateNodeSection(
   if (nodes.length === 0) return null;
   const parts = nodes.map((node) => {
     const sig = formatSignature(node.nodeName, node.parameters, node.returnType);
-    const src = sourceLink(node.loc, ctx);
     return section(
-      heading(3, node.nodeName) + src,
+      heading(3, node.nodeName),
       codeFence(sig),
       node.docString ? node.docString.value : null,
       node.docComment ? formatDocComment(node.docComment) : null,
       generateParamTable(node.parameters, ctx),
       node.returnType ? `${bold("Returns:")} ${formatTypeLinked(node.returnType, ctx)}` : null,
+      sourceLink(node.loc, ctx)
     );
   });
   return section(heading(2, "Nodes"), ...parts);

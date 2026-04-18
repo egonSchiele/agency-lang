@@ -1,10 +1,8 @@
 # agent
 
-[View source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency)
-
 ## Types
 
-### Todo [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L0)
+### Todo
 
 ```ts
 type Todo = {
@@ -14,9 +12,11 @@ type Todo = {
 }
 ```
 
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L0))
+
 ## Functions
 
-### todoWrite [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L8)
+### todoWrite
 
 ```ts
 todoWrite(todos: Todo[]): Todo[]
@@ -32,7 +32,9 @@ Replace the current todo list. Each todo has an id, text, and status (one of 'pe
 
 **Returns:** Todo[]
 
-### todoList [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L16)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L8))
+
+### todoList
 
 ```ts
 todoList(): Todo[]
@@ -42,7 +44,9 @@ Return the current todo list.
 
 **Returns:** Todo[]
 
-### question [source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L23)
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L16))
+
+### question
 
 ```ts
 question(prompt: string): string
@@ -57,3 +61,5 @@ Ask the user a question and wait for their reply. Unlike input(), this raises an
 | prompt | string |  |
 
 **Returns:** string
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L23))

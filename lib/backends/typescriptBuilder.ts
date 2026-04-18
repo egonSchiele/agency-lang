@@ -104,6 +104,17 @@ import { SourceMapBuilder } from "./sourceMap.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
+/** IR node kinds that correspond to compound Runner methods (handle, ifElse, loop, etc.).
+ *  These already have their own debug hooks / counter / path management,
+ *  so processBodyAsParts must NOT wrap them in an extra runnerStep. */
+const COMPOUND_RUNNER_KINDS: ReadonlySet<TsNode["kind"]> = new Set([
+  "runnerHandle",
+  "runnerIfElse",
+  "runnerLoop",
+  "runnerWhileLoop",
+  "runnerThread",
+]);
+
 export class TypeScriptBuilder {
   // Output assembly
   private generatedStatements: TsNode[] = [];
@@ -3230,14 +3241,7 @@ export class TypeScriptBuilder {
       // step-level IR nodes with their own Runner method that handles
       // debug hooks, counter management, and path tracking. Push them
       // directly to result[] instead of wrapping in another runnerStep.
-      const COMPOUND_RUNNER_KINDS = new Set([
-        "runnerHandle",
-        "runnerIfElse",
-        "runnerLoop",
-        "runnerWhileLoop",
-        "runnerThread",
-      ]);
-      if ("kind" in processed && COMPOUND_RUNNER_KINDS.has((processed as any).kind)) {
+      if (COMPOUND_RUNNER_KINDS.has(processed.kind)) {
         flushPart();
         result.push(processed);
       } else {

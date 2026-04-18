@@ -4,7 +4,7 @@
 
 **Goal:** Add an `agency trace log` CLI command that derives a structured JSON event log from an existing trace file by diffing consecutive checkpoints.
 
-**Architecture:** A pure post-hoc diffing approach -- walk consecutive checkpoint pairs, detect what changed (stack frames, variables, messages, node transitions), and emit typed event objects. No changes to the trace format or runtime. The diffing logic lives in `lib/runtime/trace/eventLog.ts`, the CLI wiring in `lib/cli/events.ts`.
+**Architecture:** A registry of event emitters, each a function `(prev, curr, step) => TraceEvent[]`. A `diff()` function runs all emitters on each consecutive checkpoint pair and collects the results. New event types are added by writing an emitter and adding it to the registry. No changes to the trace format or runtime. The diffing logic lives in `lib/runtime/trace/eventLog.ts`, the CLI wiring in `lib/cli/events.ts`.
 
 **Tech Stack:** TypeScript, vitest, commander (CLI)
 
@@ -411,10 +411,11 @@ function isInternalVar(name: string): boolean {
 }
 
 export function detectStackChanges(
-  prev: Checkpoint,
+  prev: Checkpoint | null,
   curr: Checkpoint,
   step: number,
 ): TraceEvent[] {
+  if (!prev) return [];
   const events: TraceEvent[] = [];
   const prevDepth = prev.stack.stack.length;
   const currDepth = curr.stack.stack.length;
@@ -609,10 +610,11 @@ function diffObject(
 }
 
 export function detectVariableChanges(
-  prev: Checkpoint,
+  prev: Checkpoint | null,
   curr: Checkpoint,
   step: number,
 ): TraceEvent[] {
+  if (!prev) return [];
   const events: TraceEvent[] = [];
   const base = makeBaseEvent(curr, step);
 
@@ -841,10 +843,11 @@ function getTokenUsageDiff(
 }
 
 export function detectLlmCalls(
-  prev: Checkpoint,
+  prev: Checkpoint | null,
   curr: Checkpoint,
   step: number,
 ): TraceEvent[] {
+  if (!prev) return [];
   const events: TraceEvent[] = [];
   const base = makeBaseEvent(curr, step);
 
@@ -968,10 +971,11 @@ function isInterruptLabel(label: string | null): boolean {
 }
 
 export function detectInterrupts(
-  prev: Checkpoint,
+  prev: Checkpoint | null,
   curr: Checkpoint,
   step: number,
 ): TraceEvent[] {
+  if (!prev) return [];
   const events: TraceEvent[] = [];
 
   if (isInterruptLabel(curr.label)) {
@@ -1102,10 +1106,11 @@ Add to `eventLog.ts`:
 
 ```typescript
 export function detectBranches(
-  prev: Checkpoint,
+  prev: Checkpoint | null,
   curr: Checkpoint,
   step: number,
 ): TraceEvent[] {
+  if (!prev) return [];
   const events: TraceEvent[] = [];
   const base = makeBaseEvent(curr, step);
 
@@ -1209,26 +1214,44 @@ Expected: FAIL
 Add to `eventLog.ts`:
 
 ```typescript
+// An EventEmitter takes two consecutive checkpoints and a step index,
+// and returns any events it detects from the diff.
+type EventEmitter = (
+  prev: Checkpoint | null,
+  curr: Checkpoint,
+  step: number,
+) => TraceEvent[];
+
+// Registry of all event emitters, run in order.
+// The ordering determines event priority within a step.
+const eventEmitters: EventEmitter[] = [
+  detectNodeTransitions,
+  detectStackChanges,
+  detectVariableChanges,
+  detectLlmCalls,
+  detectInterrupts,
+  detectBranches,
+];
+
+function diff(prev: Checkpoint | null, curr: Checkpoint, step: number): TraceEvent[] {
+  const events: TraceEvent[] = [];
+  for (const emitter of eventEmitters) {
+    events.push(...emitter(prev, curr, step));
+  }
+  return events;
+}
+
 export function generateEventLog(checkpoints: Checkpoint[]): TraceEvent[] {
   if (checkpoints.length === 0) return [];
 
   const events: TraceEvent[] = [];
 
-  // First checkpoint: emit node-enter
-  events.push(...detectNodeTransitions(null, checkpoints[0], 0));
+  // First checkpoint: prev is null
+  events.push(...diff(null, checkpoints[0], 0));
 
   // Walk consecutive pairs
   for (let i = 1; i < checkpoints.length; i++) {
-    const prev = checkpoints[i - 1];
-    const curr = checkpoints[i];
-    const step = i;
-
-    events.push(...detectNodeTransitions(prev, curr, step));
-    events.push(...detectStackChanges(prev, curr, step));
-    events.push(...detectVariableChanges(prev, curr, step));
-    events.push(...detectLlmCalls(prev, curr, step));
-    events.push(...detectInterrupts(prev, curr, step));
-    events.push(...detectBranches(prev, curr, step));
+    events.push(...diff(checkpoints[i - 1], checkpoints[i], i));
   }
 
   return events;

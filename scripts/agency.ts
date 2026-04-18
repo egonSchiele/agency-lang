@@ -12,6 +12,7 @@ import {
 import { evaluate } from "@/cli/evaluate.js";
 import { fixtures, test, testTs, SlowTest } from "@/cli/test.js";
 import { createBundle, extractBundle } from "@/cli/bundle.js";
+import { traceLog } from "@/cli/events.js";
 import { AgencyConfig } from "@/config.js";
 import * as path from "path";
 import { _parseAgency } from "@/parser.js";
@@ -89,8 +90,12 @@ addRunOptions(
   runWithOptions(input, options);
 });
 
-program
+const traceCmd = program
   .command("trace")
+  .description("Trace-related commands");
+
+traceCmd
+  .command("run", { isDefault: true })
   .description("Compile and run .agency file, generating a trace")
   .argument("<input>", "Path to .agency input file")
   .option("-o, --output <file>", "Output trace file path (default: <input>.trace)")
@@ -98,6 +103,15 @@ program
   .action((input: string, options: { output?: string; resume?: string }) => {
     const traceFile = options.output || input.replace(/\.agency$/, ".trace");
     runWithOptions(input, { trace: traceFile, resume: options.resume });
+  });
+
+traceCmd
+  .command("log")
+  .description("Generate a JSON event log from a trace file")
+  .argument("<file>", "Path to .agencytrace or .agencybundle file")
+  .option("-o, --output <file>", "Output JSON file path (default: stdout)")
+  .action((file: string, options: { output?: string }) => {
+    traceLog(file, options.output);
   });
 
 program

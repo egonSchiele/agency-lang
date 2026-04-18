@@ -2428,10 +2428,16 @@ describe("resultTypeParser", () => {
     }
   });
 
-  it("Result<string> with one param throws a parse error", () => {
-    expect(() => resultTypeParser("Result<string>")).toThrow(
-      "expected two type parameters separated by comma",
-    );
+  it("parses Result<Foo> with single type param as sugar for Result<Foo, string>", () => {
+    const result = resultTypeParser("Result<number>");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "resultType",
+        successType: { type: "primitiveType", value: "number" },
+        failureType: { type: "primitiveType", value: "string" },
+      });
+    }
   });
 
   it("does not match ResultFoo as bare Result", () => {

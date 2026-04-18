@@ -816,22 +816,30 @@ export const blockTypeParser: Parser<BlockType> = trace(
 export const resultTypeParser: Parser<ResultType> = trace(
   "resultTypeParser",
   or(
-    // Result<SuccessType, FailureType>
+    // Result<SuccessType, FailureType> — two type params
     seqC(
       set("type", "resultType"),
       str("Result"),
       char("<"),
-      captureCaptures(
-        parseError(
-          "expected two type parameters separated by comma, e.g. `Result<string, number>`",
-          capture(lazy(() => variableTypeParser), "successType"),
-          optionalSpaces,
-          char(","),
-          optionalSpaces,
-          capture(lazy(() => variableTypeParser), "failureType"),
-          char(">"),
-        ),
-      ),
+      captureCaptures(seqC(
+        capture(lazy(() => variableTypeParser), "successType"),
+        optionalSpaces,
+        char(","),
+        optionalSpaces,
+        capture(lazy(() => variableTypeParser), "failureType"),
+        char(">"),
+      )),
+    ),
+    // Result<SuccessType> — single type param (sugar for Result<SuccessType, string>)
+    seqC(
+      set("type", "resultType"),
+      str("Result"),
+      char("<"),
+      captureCaptures(seqC(
+        capture(lazy(() => variableTypeParser), "successType"),
+        char(">"),
+      )),
+      set("failureType", { type: "primitiveType", value: "string" }),
     ),
     // Bare Result (sugar for Result<any, any>)
     // Use not(varNameChar) to avoid matching "ResultFoo" as bare Result

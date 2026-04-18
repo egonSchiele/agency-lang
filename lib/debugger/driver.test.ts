@@ -628,6 +628,35 @@ describe("DebuggerDriver with loops", () => {
     // then the last interrupt is restored so the user can still interact
     expect(testUI.renderCalls.length).toBe(2);
   });
+
+  it("produces correct step paths without double-nesting", async () => {
+    const mod = await freshImport(loopCompiled);
+    const commands: DebuggerCommand[] = Array(30).fill({ type: "step" });
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    await driver.run(initialResult, { interceptConsole: false });
+
+    const mainPaths = testUI.renderCalls
+      .filter((cp) => cp.scopeName === "main")
+      .map((cp) => cp.stepPath);
+
+    for (const sp of mainPaths) {
+      expect(sp).not.toContain("_");
+    }
+    expect(mainPaths).toContain("0");   // sum = 0
+    expect(mainPaths).toContain("1");   // for loop
+    expect(mainPaths).toContain("1.0"); // loop body: sum = sum + i
+    expect(mainPaths).toContain("2");   // return sum
+
+    // Loop body should appear 3 times (range(3) = [0, 1, 2])
+    const loopBodyCount = mainPaths.filter((p) => p === "1.0").length;
+    expect(loopBodyCount).toBe(3);
+
+    const log = testUI.state.getActivityLog();
+    const sourceMapErrors = log.filter((l) => l.includes("No source map entry found"));
+    expect(sourceMapErrors).toEqual([]);
+  });
 });
 
 describe("DebuggerDriver with if/else", () => {
@@ -654,6 +683,30 @@ describe("DebuggerDriver with if/else", () => {
 
     const returnValue = result?.data !== undefined ? result.data : result;
     expect(returnValue).toBe("non-positive");
+  });
+
+  it("produces correct step paths without double-nesting", async () => {
+    const mod = await freshImport(ifElseCompiled);
+    const commands: DebuggerCommand[] = Array(20).fill({ type: "step" });
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver, 5);
+    await driver.run(initialResult, { interceptConsole: false });
+
+    const mainPaths = testUI.renderCalls
+      .filter((cp) => cp.scopeName === "main")
+      .map((cp) => cp.stepPath);
+
+    for (const sp of mainPaths) {
+      expect(sp).not.toContain("_");
+    }
+    expect(mainPaths).toContain("0");   // ifElse block
+    expect(mainPaths).toContain("0.0"); // then branch body
+    expect(mainPaths).toContain("1");   // return result
+
+    const log = testUI.state.getActivityLog();
+    const sourceMapErrors = log.filter((l) => l.includes("No source map entry found"));
+    expect(sourceMapErrors).toEqual([]);
   });
 });
 

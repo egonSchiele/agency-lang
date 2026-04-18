@@ -41,6 +41,8 @@ export default defineConfig({
         text: "Appendix",
         items: [
           { text: "VSCode Extension", link: "/appendix/vscode-extension" },
+          { text: "Generating Docs", link: "/appendix/docs" },
+          { text: "Callbacks", link: "/appendix/callbacks" },
         ],
       },
       {

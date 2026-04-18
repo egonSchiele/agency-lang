@@ -59,6 +59,16 @@ This is a multi-line comment
 */
 ```
 
+Or doc comments for [documentation generation](/appendix/docs):
+
+```ts
+/** This is a doc comment for the Person type */
+type Person = {
+  name: string
+  age: number
+}
+```
+
 > Note: comments must be on their own line, they cannot be at the end of a line containing code.
 
 Regexes are also supported as a primitive:

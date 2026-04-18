@@ -3,9 +3,9 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "50",
+      "expectedOutput": "42",
       "evaluationCriteria": [{ "type": "exact" }],
-      "description": "Bang combined with try keyword works correctly"
+      "description": "Bang validates the unwrapped value from a try expression"
     }
   ]
 }

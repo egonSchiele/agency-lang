@@ -3,9 +3,9 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "\"validated in if\"",
+      "expectedOutput": "[\"if-success\",\"else-failure\"]",
       "evaluationCriteria": [{ "type": "exact" }],
-      "description": "Bang validation works inside if/else blocks"
+      "description": "Bang validation works in both if and else branches"
     }
   ]
 }

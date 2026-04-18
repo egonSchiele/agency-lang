@@ -3013,6 +3013,17 @@ export class TypeScriptBuilder {
       }),
     );
 
+    // If the assignment has ! (validated), wrap the final result in __validateType
+    if (stmt.validated && stmt.typeHint) {
+      const zodSchema = mapTypeToZodSchema(stmt.typeHint, this.getVisibleTypeAliases());
+      nodes.push(
+        ts.runnerStep({
+          id: baseId + stages.length,
+          body: [ts.assign(targetVar, ts.validateType(targetVar, ts.raw(zodSchema)))],
+        }),
+      );
+    }
+
     return nodes;
   }
 

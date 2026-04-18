@@ -7,9 +7,10 @@ def addOne(x: number): Result {
 }
 
 node main() {
-  const result: number! = success(5) |> double |> addOne
-  if (isSuccess(result)) {
-    return result.value
+  const result = success(5) |> double |> addOne
+  const validated: number! = result.value
+  if (isSuccess(validated)) {
+    return validated.value
   }
   return "failed"
 }

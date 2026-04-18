@@ -25,10 +25,13 @@ const ifElseCompiled = path.join(fixtureDir, "if-else-test.ts");
 const nestedAgency = path.join(fixtureDir, "nested-calls-test.agency");
 const nestedCompiled = path.join(fixtureDir, "nested-calls-test.ts");
 
+const handleAgency = path.join(fixtureDir, "handle-test.agency");
+const handleCompiled = path.join(fixtureDir, "handle-test.ts");
+
 // Compile all fixtures once, clean up after all tests
 const allCompiled = [
   stepTestCompiled, fnCallCompiled, interruptCompiled,
-  loopCompiled, ifElseCompiled, nestedCompiled,
+  loopCompiled, ifElseCompiled, nestedCompiled, handleCompiled,
 ];
 
 beforeAll(() => {
@@ -38,6 +41,7 @@ beforeAll(() => {
   compile({ debugger: true }, loopAgency, loopCompiled, { ts: true });
   compile({ debugger: true }, ifElseAgency, ifElseCompiled, { ts: true });
   compile({ debugger: true }, nestedAgency, nestedCompiled, { ts: true });
+  compile({ debugger: true }, handleAgency, handleCompiled, { ts: true });
 });
 
 afterAll(() => {
@@ -890,5 +894,73 @@ describe("DebuggerDriver with loaded single checkpoint", () => {
 
     // Should have at least the initial render + rewind attempt + step
     expect(testUI.renderCalls.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("DebuggerDriver with handle blocks", () => {
+  it("produces correct step paths without double-nesting", async () => {
+    const mod = await freshImport(handleCompiled);
+    const commands: DebuggerCommand[] = Array(20).fill({ type: "step" });
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    await driver.run(initialResult, { interceptConsole: false });
+
+    const mainPaths = testUI.renderCalls
+      .filter((cp) => cp.scopeName === "main")
+      .map((cp) => cp.stepPath);
+
+    // No mangled paths with underscores
+    for (const sp of mainPaths) {
+      expect(sp).not.toContain("_");
+    }
+    // Should see the handle block and its body
+    expect(mainPaths).toContain("0");   // const name = "Alice"
+    expect(mainPaths).toContain("1");   // handle block
+    expect(mainPaths).toContain("1.0"); // const greeting = greet(name)
+  });
+
+  it("has no source map errors when stepping through handle block", async () => {
+    const mod = await freshImport(handleCompiled);
+    const commands: DebuggerCommand[] = Array(20).fill({ type: "step" });
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    await driver.run(initialResult, { interceptConsole: false });
+
+    const log = testUI.state.getActivityLog();
+    const sourceMapErrors = log.filter((l) => l.includes("No source map entry found"));
+    expect(sourceMapErrors).toEqual([]);
+  });
+
+  it("continue runs through handle block to completion", async () => {
+    const mod = await freshImport(handleCompiled);
+    const commands: DebuggerCommand[] = [{ type: "continue" }];
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    const result = await driver.run(initialResult, { interceptConsole: false });
+
+    const returnValue = result?.data !== undefined ? result.data : result;
+    expect(returnValue).toBe("Alice");
+    expect(testUI.renderCalls.length).toBe(2);
+  });
+
+  it("handler approves user interrupt without surfacing to debugger", async () => {
+    const mod = await freshImport(handleCompiled);
+    const commands: DebuggerCommand[] = Array(30).fill({ type: "step" });
+    const testUI = new TestDebuggerIO(commands);
+    const driver = makeDriver(mod, testUI);
+    const initialResult = await getInitialResult(mod, driver);
+    const result = await driver.run(initialResult, { interceptConsole: false });
+
+    const returnValue = result?.data !== undefined ? result.data : result;
+    expect(returnValue).toBe("Alice");
+
+    // The interrupt from greet() should have been handled by the handler,
+    // not surfaced as a user interrupt prompt
+    const log = testUI.state.getActivityLog();
+    const interruptPrompts = log.filter((l) => l.startsWith("Interrupt:"));
+    expect(interruptPrompts).toEqual([]);
   });
 });

@@ -322,3 +322,44 @@ describe("AgencyGenerator - Doc Comments", () => {
   });
 });
 
+describe("AgencyGenerator - bang (!) validated type annotations", () => {
+  function formatAgency(input: string): string {
+    const parseResult = parseAgency(input, {}, false);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return "";
+    const generator = new AgencyGenerator();
+    return generator.generate(parseResult.result).output.trim();
+  }
+
+  it("should preserve ! on assignment type annotations", () => {
+    const input = `node main() {\n  const x: number! = 42\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("const x: number! = 42");
+  });
+
+  it("should preserve ! on function parameter types", () => {
+    const input = `def process(data: number!) {\n  print(data)\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("data: number!");
+  });
+
+  it("should preserve ! on function return types", () => {
+    const input = `def process(x: number): string! {\n  return x\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("): string!");
+  });
+
+  it("should preserve ! on node return types", () => {
+    const input = `node main(): number! {\n  return 42\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("(): number!");
+  });
+
+  it("should not add ! when not present", () => {
+    const input = `node main() {\n  const x: number = 42\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("const x: number = 42");
+    expect(output).not.toContain("number!");
+  });
+});
+

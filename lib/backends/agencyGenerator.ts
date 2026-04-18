@@ -414,8 +414,9 @@ export class AgencyGenerator {
       node.accessChain
         ?.map((ce) => this.processAccessChainElement(ce))
         .join("") ?? "";
+    const bangSuffix = node.validated ? "!" : "";
     const varName = node.typeHint
-      ? `${node.variableName}${chainStr}: ${variableTypeToString(node.typeHint, this.typeAliases)}`
+      ? `${node.variableName}${chainStr}: ${variableTypeToString(node.typeHint, this.typeAliases)}${bangSuffix}`
       : `${node.variableName}${chainStr}`;
     const sharedPrefix = node.shared ? "shared " : "";
     const declPrefix = node.declKind ? `${node.declKind} ` : "";
@@ -491,15 +492,17 @@ export class AgencyGenerator {
           : "";
         if (p.typeHint) {
           const typeStr = variableTypeToString(p.typeHint, this.typeAliases);
-          return `${prefix}${p.name}: ${typeStr}${defaultSuffix}`;
+          const bang = p.validated ? "!" : "";
+          return `${prefix}${p.name}: ${typeStr}${bang}${defaultSuffix}`;
         } else {
           return `${prefix}${p.name}${defaultSuffix}`;
         }
       })
       .join(", ");
 
+    const returnTypeBang = node.returnTypeValidated ? "!" : "";
     const returnTypeStr = node.returnType
-      ? ": " + variableTypeToString(node.returnType, this.typeAliases)
+      ? ": " + variableTypeToString(node.returnType, this.typeAliases) + returnTypeBang
       : "";
 
     let safePrefix = node.safe ? "safe " : "";
@@ -858,14 +861,17 @@ export class AgencyGenerator {
     const tags = this.formatAttachedTags(node);
     const { nodeName, body, parameters } = node;
     const params = parameters
-      .map((p) =>
-        p.typeHint
-          ? `${p.name}: ${variableTypeToString(p.typeHint, this.typeAliases)}`
-          : p.name,
-      )
+      .map((p) => {
+        if (p.typeHint) {
+          const bang = p.validated ? "!" : "";
+          return `${p.name}: ${variableTypeToString(p.typeHint, this.typeAliases)}${bang}`;
+        }
+        return p.name;
+      })
       .join(", ");
+    const returnTypeBang = node.returnTypeValidated ? "!" : "";
     const returnTypeStr = node.returnType
-      ? ": " + variableTypeToString(node.returnType, this.typeAliases)
+      ? ": " + variableTypeToString(node.returnType, this.typeAliases) + returnTypeBang
       : "";
     const visibilityStr = this.visibilityToString(node.visibility);
     let result = this.indentStr(
@@ -912,11 +918,13 @@ export class AgencyGenerator {
     // Methods (constructor is auto-generated, not formatted)
     for (const method of node.methods) {
       const params = method.parameters
-        .map((p) =>
-          p.typeHint
-            ? `${p.name}: ${variableTypeToString(p.typeHint, this.typeAliases)}`
-            : p.name,
-        )
+        .map((p) => {
+          if (p.typeHint) {
+            const bang = p.validated ? "!" : "";
+            return `${p.name}: ${variableTypeToString(p.typeHint, this.typeAliases)}${bang}`;
+          }
+          return p.name;
+        })
         .join(", ");
       const returnTypeStr = `: ${variableTypeToString(method.returnType, this.typeAliases)}`;
       result +=
@@ -990,8 +998,9 @@ export class AgencyGenerator {
 
     let handlerStr: string;
     if (node.handler.kind === "inline") {
+      const handlerBang = node.handler.param.validated ? "!" : "";
       const paramStr = node.handler.param.typeHint
-        ? `${node.handler.param.name}: ${variableTypeToString(node.handler.param.typeHint, this.typeAliases)}`
+        ? `${node.handler.param.name}: ${variableTypeToString(node.handler.param.typeHint, this.typeAliases)}${handlerBang}`
         : node.handler.param.name;
       this.increaseIndent();
       const handlerBodyCodes: string[] = [];

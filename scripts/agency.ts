@@ -29,6 +29,7 @@ import { loadEnv } from "@/utils/envfile.js";
 import { debug } from "@/cli/debug.js";
 import { generateDoc } from "@/cli/doc.js";
 import { optimize } from "@/cli/optimize.js";
+import { watchAndCompile } from "@/cli/watch.js";
 
 loadEnv();
 const program = new Command();
@@ -55,10 +56,19 @@ program
   .description("Compile .agency file(s) or directory(s) to JavaScript")
   .argument("<inputs...>", "Paths to .agency input files or directories")
   .option("--ts", "Output .ts files with // @no-check header")
-  .action(async (inputs: string[], opts: { ts?: boolean }) => {
+  .option("-w, --watch", "Watch for changes and recompile")
+  .action(async (inputs: string[], opts: { ts?: boolean; watch?: boolean }) => {
     const config = getConfig();
-    for (const input of inputs) {
-      compile(config, input, undefined, { ts: opts.ts });
+    if (opts.watch) {
+      const close = await watchAndCompile(config, inputs, { ts: opts.ts });
+      process.once("SIGINT", async () => {
+        await close();
+        process.exit(0);
+      });
+    } else {
+      for (const input of inputs) {
+        compile(config, input, undefined, { ts: opts.ts });
+      }
     }
   });
 

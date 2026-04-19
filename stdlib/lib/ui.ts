@@ -3,7 +3,9 @@ import { color } from "termcolors";
 import { syntaxHighlight } from "./syntax.js";
 import { _input } from "../_builtins.js";
 
-const isDebuggerMode = () => !!process.env.AGENCY_DEBUGGER;
+// Evaluated once at load time — the env var is set by the debugger CLI
+// before any compiled agency code runs and never changes.
+const isDebuggerMode = !!process.env.AGENCY_DEBUGGER;
 
 /* CSI stands for Control Sequence Introducer — it's the escape sequence \x1B[ (ESC followed by [)
 used in ANSI terminal control codes. It's the prefix for commands that control cursor position,
@@ -40,7 +42,7 @@ function resetScrollRegion(): string {
 }
 
 export function _emptyLine(): void {
-  if (isDebuggerMode()) { console.log(""); return; }
+  if (isDebuggerMode) { console.log(""); return; }
   if (!initialized) return;
   writeInScrollRegion("");
   renderFixedArea();
@@ -199,7 +201,7 @@ function writeBox(
 // ---------------------------------------------------------------------------
 
 export function _initUI(title: string): void {
-  if (isDebuggerMode()) return;
+  if (isDebuggerMode) return;
   if (initialized) return;
   initialized = true;
 
@@ -234,7 +236,7 @@ export function _initUI(title: string): void {
 }
 
 export function _destroyUI(): void {
-  if (isDebuggerMode()) return;
+  if (isDebuggerMode) return;
   if (!initialized) return;
   initialized = false;
 
@@ -274,14 +276,14 @@ export function _destroyUI(): void {
 // ---------------------------------------------------------------------------
 
 export function _log(message: string): void {
-  if (isDebuggerMode()) { console.log(message); return; }
+  if (isDebuggerMode) { console.log(message); return; }
   if (!initialized) return;
   writeInScrollRegion(message);
   renderFixedArea();
 }
 
 export function _chat(role: string, message: string): void {
-  if (isDebuggerMode()) { console.log(`${role}: ${message}`); return; }
+  if (isDebuggerMode) { console.log(`${role}: ${message}`); return; }
   if (!initialized) return;
   const colorFn =
     role === "user"
@@ -299,7 +301,7 @@ export function _chat(role: string, message: string): void {
 }
 
 export function _code(filename: string, content: string): void {
-  if (isDebuggerMode()) { console.log(`[${filename}]\n${content}`); return; }
+  if (isDebuggerMode) { console.log(`[${filename}]\n${content}`); return; }
   if (!initialized) return;
   writeBox(filename, content.split("\n"), (line, i) => {
     const lineNum = String(i + 1).padStart(4, " ");
@@ -319,7 +321,7 @@ const languageMap: Record<string, string> = {
 };
 
 export function _diff(filename: string, _content: string): void {
-  if (isDebuggerMode()) { console.log(`[${filename}]\n${_content}`); return; }
+  if (isDebuggerMode) { console.log(`[${filename}]\n${_content}`); return; }
   if (!initialized) return;
   const ext = filename.split(".").slice(-1)[0];
   const language = languageMap[ext];
@@ -338,7 +340,7 @@ export function _diff(filename: string, _content: string): void {
 }
 
 export function _separator(label: string): void {
-  if (isDebuggerMode()) { console.log(label ? `── ${label} ──` : "────"); return; }
+  if (isDebuggerMode) { console.log(label ? `── ${label} ──` : "────"); return; }
   if (!initialized) return;
   if (label) {
     const padding = Math.max(0, cols - label.length - 4);
@@ -354,7 +356,7 @@ export function _separator(label: string): void {
 // ---------------------------------------------------------------------------
 
 export function _status(left: string, right: string): void {
-  if (isDebuggerMode()) return;
+  if (isDebuggerMode) return;
   if (!initialized) return;
   statusLeft = left;
   statusRight = right;
@@ -362,7 +364,7 @@ export function _status(left: string, right: string): void {
 }
 
 export function _startSpinner(text: string): void {
-  if (isDebuggerMode()) return;
+  if (isDebuggerMode) return;
   if (!initialized || spinnerInterval) return;
   spinnerIdx = 0;
   const update = () => {
@@ -376,7 +378,7 @@ export function _startSpinner(text: string): void {
 }
 
 export function _stopSpinner(): void {
-  if (isDebuggerMode()) return;
+  if (isDebuggerMode) return;
   if (spinnerInterval) {
     clearInterval(spinnerInterval);
     spinnerInterval = null;
@@ -388,7 +390,9 @@ export function _stopSpinner(): void {
 }
 
 export function _prompt(question: string): Promise<string> {
-  if (isDebuggerMode()) return _input(question);
+  // Delegate to the builtin input() which supports the __agencyInputOverride
+  // hook and works inside handler bodies (where interrupts are forbidden).
+  if (isDebuggerMode) return _input(question);
   if (!initialized) {
     return Promise.resolve("");
   }

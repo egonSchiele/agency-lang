@@ -45,7 +45,7 @@ while (age < 100) {
   age = age + 1
 }
 
-for (const name of names) {
+for (name in names) {
   print(name)
 }
 ```

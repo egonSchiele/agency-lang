@@ -162,8 +162,7 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
-await runner.ifElse(0, [
+    await runner.ifElse(0, [
 
   {
     condition: async () => __stack.args.age >= 18,
@@ -172,12 +171,11 @@ await runner.step(0, async (runner) => {
 __functionCompleted = true;
 runner.halt(await success(__stack.args.age))
 return;
-            });
+          });
     },
   },
 
 ]);
-    });
     await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(failure(`too young`, { checkpoint: __ctx.getResultCheckpoint(), functionName: "checkAge", args: __stack.args }))

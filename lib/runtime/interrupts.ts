@@ -118,7 +118,16 @@ export async function interruptWithHandlers<T = any>(
     if (ctx.aborted) {
       throw new AgencyCancelledError();
     }
-    const result = await ctx.handlers[i](data);
+    // Enter tool call context so that the debugger treats handler execution
+    // as atomic — debug hooks won't fire inside the handler body, just like
+    // they don't fire inside LLM tool calls.
+    ctx.enterToolCall();
+    let result: any;
+    try {
+      result = await ctx.handlers[i](data);
+    } finally {
+      ctx.exitToolCall();
+    }
     if (result === undefined) {
       continue;
     }

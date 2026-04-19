@@ -255,8 +255,7 @@ __stack.locals.age = 25;
     await runner.step(4, async (runner) => {
 __stack.locals.status = `active`;
     });
-    await runner.step(5, async (runner) => {
-await runner.ifElse(5, [
+    await runner.ifElse(5, [
 
   {
     condition: async () => __stack.locals.status === `inactive`,
@@ -266,6 +265,7 @@ await print(`Stopped`)
   },
 
 ]);
+    await runner.step(6, async (runner) => {
 //  Final comment at end of file
     });
     if (runner.halted) return runner.haltResult;
@@ -315,4 +315,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"comments.agency:greet":{"1":{"line":10,"col":2},"2":{"line":12,"col":2}},"comments.agency:main":{"1":{"line":17,"col":2},"2":{"line":18,"col":2},"3":{"line":21,"col":2},"4":{"line":24,"col":2}}};
+export const __sourceMap = {"comments.agency:greet":{"1":{"line":10,"col":2},"2":{"line":12,"col":2}},"comments.agency:main":{"1":{"line":17,"col":2},"2":{"line":18,"col":2},"3":{"line":21,"col":2},"4":{"line":24,"col":2},"5":{"line":25,"col":2}}};

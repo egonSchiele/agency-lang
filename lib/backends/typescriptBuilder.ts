@@ -105,6 +105,16 @@ import { SourceMapBuilder } from "./sourceMap.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
+/** Runner IR node kinds that already manage their own step counter/path and
+ *  must NOT be wrapped inside a runnerStep by processBodyAsParts. */
+const COMPOUND_RUNNER_KINDS: ReadonlySet<TsNode["kind"]> = new Set([
+  "runnerHandle",
+  "runnerIfElse",
+  "runnerLoop",
+  "runnerWhileLoop",
+  "runnerThread",
+]);
+
 export class TypeScriptBuilder {
   // Output assembly
   private generatedStatements: TsNode[] = [];
@@ -1208,13 +1218,18 @@ export class TypeScriptBuilder {
   private processIfElseWithSteps(node: IfElse): TsNode {
     const id = this._subStepPath[this._subStepPath.length - 1];
 
-    // Flatten the else-if chain
+    // Flatten the else-if chain.
+    // Each branch gets a unique range of substep IDs so source map
+    // entries never collide between branches.
     const branches: { condition: TsNode; body: TsNode[] }[] = [];
     let elseBranch: TsNode[] | undefined;
+    let nextStartId = 0;
 
+    const thenBody = this.processBodyAsParts(node.thenBody, nextStartId);
+    nextStartId += thenBody.length;
     branches.push({
       condition: this.processNode(node.condition),
-      body: this.processBodyAsParts(node.thenBody),
+      body: thenBody,
     });
 
     let current: IfElse | undefined =
@@ -1224,9 +1239,11 @@ export class TypeScriptBuilder {
     let remainingElse = current ? undefined : node.elseBody;
 
     while (current) {
+      const body = this.processBodyAsParts(current.thenBody, nextStartId);
+      nextStartId += body.length;
       branches.push({
         condition: this.processNode(current.condition),
-        body: this.processBodyAsParts(current.thenBody),
+        body,
       });
       if (
         current.elseBody?.length === 1 &&
@@ -1240,7 +1257,7 @@ export class TypeScriptBuilder {
     }
 
     if (remainingElse && remainingElse.length > 0) {
-      elseBranch = this.processBodyAsParts(remainingElse);
+      elseBranch = this.processBodyAsParts(remainingElse, nextStartId);
     }
 
     return ts.runnerIfElse({ id, branches, elseBranch });
@@ -1816,6 +1833,15 @@ export class TypeScriptBuilder {
 
       // Sync calls: check for interrupt result
       const tempVar = "__funcResult";
+      if (this.insideHandlerBody) {
+        return ts.statements([
+          ts.constDecl(tempVar, callNode),
+          ts.if(
+            ts.raw(`isInterrupt(${tempVar})`),
+            ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
+          ),
+        ]);
+      }
       const nodeContext = scope.type === "node";
       // In node context, wrap with state for the driver.
       // In function context, halt with the interrupt directly so the caller's
@@ -2395,23 +2421,32 @@ export class TypeScriptBuilder {
           ),
         );
       } else if (this.getCurrentScope().type !== "global") {
-        // Sync: interrupt check with awaitAll before halt.
-        // In function context, halt with the interrupt directly so the caller's
-        // isInterrupt check can detect it.
-        const haltValue =
-          this.getCurrentScope().type === "node"
-            ? ts.obj([ts.setSpread(ts.runtime.state), ts.set("data", varRef)])
-            : varRef;
-        stmts.push(
-          ts.if(
-            $(ts.id("isInterrupt")).call([varRef]).done(),
-            ts.statements([
-              ts.raw("await __ctx.pendingPromises.awaitAll()"),
-              $(ts.id("runner")).prop("halt").call([haltValue]).done(),
-              ts.return(),
-            ]),
-          ),
-        );
+        if (this.insideHandlerBody) {
+          stmts.push(
+            ts.if(
+              ts.raw(`isInterrupt(${this.str(varRef)})`),
+              ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
+            ),
+          );
+        } else {
+          // Sync: interrupt check with awaitAll before halt.
+          // In function context, halt with the interrupt directly so the caller's
+          // isInterrupt check can detect it.
+          const haltValue =
+            this.getCurrentScope().type === "node"
+              ? ts.obj([ts.setSpread(ts.runtime.state), ts.set("data", varRef)])
+              : varRef;
+          stmts.push(
+            ts.if(
+              $(ts.id("isInterrupt")).call([varRef]).done(),
+              ts.statements([
+                ts.raw("await __ctx.pendingPromises.awaitAll()"),
+                $(ts.id("runner")).prop("halt").call([haltValue]).done(),
+                ts.return(),
+              ]),
+            ),
+          );
+        }
       }
       return ts.statements(stmts);
     } else if (value.type === "messageThread") {
@@ -2631,21 +2666,30 @@ export class TypeScriptBuilder {
     } else {
       // Sync: await + interrupt check
       stmts.push(ts.assign(varRef, ts.await(runPromptCall)));
-      stmts.push(ts.comment("halt if this is an interrupt"));
-      const isNodeContext = this.getCurrentScope().type === "node";
-      const haltValue = isNodeContext
-        ? ts.obj({ messages: ts.runtime.threads, data: varRef })
-        : varRef;
-      stmts.push(
-        ts.if(
-          $(ts.id("isInterrupt")).call([varRef]).done(),
-          ts.statements([
-            ts.raw("await __ctx.pendingPromises.awaitAll()"),
-            $(ts.id("runner")).prop("halt").call([haltValue]).done(),
-            ts.return(),
-          ]),
-        ),
-      );
+      if (this.insideHandlerBody) {
+        stmts.push(
+          ts.if(
+            ts.raw(`isInterrupt(${this.str(varRef)})`),
+            ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
+          ),
+        );
+      } else {
+        stmts.push(ts.comment("halt if this is an interrupt"));
+        const isNodeContext = this.getCurrentScope().type === "node";
+        const haltValue = isNodeContext
+          ? ts.obj({ messages: ts.runtime.threads, data: varRef })
+          : varRef;
+        stmts.push(
+          ts.if(
+            $(ts.id("isInterrupt")).call([varRef]).done(),
+            ts.statements([
+              ts.raw("await __ctx.pendingPromises.awaitAll()"),
+              $(ts.id("runner")).prop("halt").call([haltValue]).done(),
+              ts.return(),
+            ]),
+          ),
+        );
+      }
     }
 
     return ts.statements(stmts);
@@ -3138,6 +3182,7 @@ export class TypeScriptBuilder {
 
   private processBodyAsParts(
     body: AgencyNode[],
+    startId = 0,
   ): TsNode[] {
     const result: TsNode[] = [];
     const branchKeys: Record<number, string> = {};
@@ -3145,9 +3190,11 @@ export class TypeScriptBuilder {
     // Track the current "part" being built (for non-pipe statements)
     let currentPart: TsNode[] | null = null;
 
+    const nextId = () => startId + result.length;
+
     const flushPart = () => {
       if (currentPart) {
-        const id = result.length;
+        const id = nextId();
         if (branchKeys[id]) {
           result.push(
             ts.runnerBranchStep({
@@ -3168,7 +3215,7 @@ export class TypeScriptBuilder {
       const pipeStages = this.getPipeChainStages(stmt);
       if (pipeStages) {
         flushPart();
-        const baseId = result.length;
+        const baseId = nextId();
         const pipeNodes = this.expandPipeChain(
           stmt as Assignment,
           pipeStages,
@@ -3185,20 +3232,23 @@ export class TypeScriptBuilder {
 
       if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type)) {
         flushPart();
-        currentPart = [];
       }
 
-      const stepIndex = result.length;
+      const stepIndex = nextId();
       this._subStepPath.push(stepIndex);
       if (!this._isInSafeFunction && this.containsImpureCall(stmt)) {
         if (!currentPart) currentPart = [];
         currentPart.push(ts.assign(ts.self("__retryable"), ts.bool(false)));
       }
       const processed = this.processStatement(stmt);
-      if (!currentPart) currentPart = [];
-      currentPart.push(processed);
+      if (COMPOUND_RUNNER_KINDS.has(processed.kind)) {
+        result.push(processed);
+      } else {
+        if (!currentPart) currentPart = [];
+        currentPart.push(processed);
+      }
       if (this._asyncBranchCheckNeeded) {
-        branchKeys[result.length] = this._subStepPath.join(".");
+        branchKeys[nextId()] = this._subStepPath.join(".");
         this._asyncBranchCheckNeeded = false;
       }
       this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);

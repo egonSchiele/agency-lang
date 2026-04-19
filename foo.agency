@@ -1,8 +1,24 @@
-import { weather } from "std::weather"
+def greet(name: string) {
+  return interrupt("Are you sure you want to greet ${name}?")
+  return "Hello, ${name}!"
+}
+
 node main() {
-  const zipCode = "55105"
-  const result = llm("Get the weather for zip code ${zipCode}", { 
-    tools: [weather]
-  })
-  print(result)
+  const name = "Alice"
+  handle {
+    const greeting = greet(name)
+    print(greeting)
+  } with (msg) {
+    print("Caught interrupt with message: ${msg}")
+    return reject()
+  }
+  if (greeting) {
+    print("Greeting was: ${greeting}")
+  } else {
+    print("No greeting was produced.")
+  }
+  const arr = range(5)
+  for (x in arr) {
+    print(x)
+  }
 }

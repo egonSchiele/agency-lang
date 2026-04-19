@@ -58,7 +58,7 @@ When `--watch` is set, call `watchAndCompile()` instead of the normal compile lo
 
 ### New dependency
 
-`chokidar` (latest v3.x) added to `dependencies` in `package.json`.
+`chokidar` v4 added to `dependencies` in `package.json`. v4 is much lighter (1 dependency vs 13), has native TypeScript types, and uses Node's `fs.watch` instead of bundled fsevents. Glob patterns are not supported as watch targets in v4 — use the `ignored` option to filter for `.agency` files instead.
 
 ## Testing
 

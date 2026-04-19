@@ -1,30 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { Runner } from "./runner.js";
 import { State } from "./state/stateStack.js";
+import { makeMockCtx } from "./__tests__/testHelpers.js";
 
 function makeFrame(): State {
   return new State({ args: {}, locals: {}, step: 0 });
-}
-
-function makeMockCtx(): any {
-  return {
-    stateStack: {},
-    debuggerState: null,
-    traceWriter: null,
-    handlers: [] as any[],
-    pushHandler(fn: any) {
-      this.handlers.push(fn);
-    },
-    popHandler() {
-      this.handlers.pop();
-    },
-    threads: {
-      create: () => "tid-1",
-      createSubthread: () => "tid-sub-1",
-      pushActive: () => {},
-      popActive: () => {},
-    },
-  };
 }
 
 describe("Runner", () => {
@@ -150,8 +130,8 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
 
       await runner.step(0, async (runner) => {
-        await runner.step(0, async () => {});
-        await runner.step(1, async () => {});
+        await runner.step(0, async () => { });
+        await runner.step(1, async () => { });
       });
 
       expect(frame.step).toBe(1);
@@ -186,7 +166,7 @@ describe("Runner", () => {
 
       await runner.step(2, async (runner) => {
         await runner.step(1, async (runner) => {
-          await runner.step(3, async () => {});
+          await runner.step(3, async () => { });
         });
       });
 
@@ -253,7 +233,7 @@ describe("Runner", () => {
 
       await runner.step(3, async (runner) => {
         await runner.ifElse(0, [
-          { condition: () => true, body: async () => {} },
+          { condition: () => true, body: async () => { } },
         ]);
       });
 
@@ -309,7 +289,7 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
 
       await runner.loop(0, ["a", "b"], async (item, i, runner) => {
-        await runner.step(0, async () => {});
+        await runner.step(0, async () => { });
       });
 
       // After completion, the iteration counter should reflect 2 iterations
@@ -493,22 +473,22 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
 
       // Step 0: simple
-      await runner.step(0, async () => {});
+      await runner.step(0, async () => { });
 
       // Step 1: ifElse
       await runner.ifElse(1, [
         {
           condition: () => true,
           body: async (runner) => {
-            await runner.step(0, async () => {});
-            await runner.step(1, async () => {});
+            await runner.step(0, async () => { });
+            await runner.step(1, async () => { });
           },
         },
       ]);
 
       // Step 2: loop
       await runner.loop(2, ["a", "b"], async (item, i, runner) => {
-        await runner.step(0, async () => {});
+        await runner.step(0, async () => { });
       });
 
       expect(frame.step).toBe(3);

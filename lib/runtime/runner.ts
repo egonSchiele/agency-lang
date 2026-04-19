@@ -32,7 +32,16 @@ export class Runner {
   private moduleId: string;
   private scopeName: string;
 
-  constructor(ctx: RuntimeContext<any>, frame: State, opts?: { nodeContext?: boolean; state?: any; moduleId?: string; scopeName?: string }) {
+  constructor(
+    ctx: RuntimeContext<any>,
+    frame: State,
+    opts?: {
+      nodeContext?: boolean;
+      state?: any;
+      moduleId?: string;
+      scopeName?: string;
+    },
+  ) {
     this.ctx = ctx;
     this.frame = frame;
     this.nodeContext = opts?.nodeContext ?? false;
@@ -109,8 +118,12 @@ export class Runner {
    * where a step halts due to a nested interrupt (e.g., function call
    * that pauses) — the flag stays set so the next resume skips the hook.
    */
-  private async maybeDebugHook(id: number, label: string | null = null, isUserAdded: boolean = false): Promise<boolean> {
-    if (!this.ctx.debuggerState && !this.ctx.traceWriter) return false;
+  private async maybeDebugHook(
+    id: number,
+    label: string | null = null,
+    isUserAdded: boolean = false,
+  ): Promise<boolean> {
+    if (!this.ctx.hasDebugger() && !this.ctx.hasTraceWriter()) return false;
     if (this.ctx.isInsideToolCall()) return false;
 
     // On resume after a debug pause, skip the hook.
@@ -157,10 +170,10 @@ export class Runner {
   /** Clean up the debug flag for a step after it completes without halting. */
   private clearDebugFlag(id: number): void {
     //console.log(color.green(`[Runner] Clearing debug flag for step ${this.stepPath(id)}. node context: ${this.nodeContext}. locals before cleanup: ${JSON.stringify(this.frame.locals)}`));
-    if (!this.ctx.debuggerState && !this.ctx.traceWriter) {
+    if (!this.ctx.hasDebugger() && !this.ctx.hasTraceWriter()) {
       //console.log(`[Runner] No debugger or trace writer in context, skipping debug flag cleanup for step ${this.stepPath(id)}.`);
-      return
-    };
+      return;
+    }
     delete this.frame.locals[this.debugFlagKey(id)];
     //console.log(color.green(`[Runner] Debug flag cleared for step ${this.stepPath(id)}. locals after cleanup: ${JSON.stringify(this.frame.locals)}`));
   }
@@ -175,7 +188,10 @@ export class Runner {
 
   // ── Core step method ──
 
-  async step(id: number, callback: (runner: Runner) => Promise<void>): Promise<void> {
+  async step(
+    id: number,
+    callback: (runner: Runner) => Promise<void>,
+  ): Promise<void> {
     if (this.shouldSkip()) return;
     if (this.getCounter() > id) return;
 
@@ -201,18 +217,14 @@ export class Runner {
     if (this.halted) return;
     this.clearDebugFlag(id);
     this.setCounter(id + 1);
-
   }
 
   // ── Specialized: pipe ──
 
-  async pipe(
-    id: number,
-    input: any,
-    fn: (value: any) => any,
-  ): Promise<any> {
+  async pipe(id: number, input: any, fn: (value: any) => any): Promise<any> {
     if (this.shouldSkip()) return input;
-    if (this.getCounter() > id) return this.frame.locals[`__pipe_result_${this.stepPath(id)}`] ?? input;
+    if (this.getCounter() > id)
+      return this.frame.locals[`__pipe_result_${this.stepPath(id)}`] ?? input;
 
     if (await this.maybeDebugHook(id)) return input;
 
@@ -293,7 +305,10 @@ export class Runner {
 
   async ifElse(
     id: number,
-    branches: { condition: () => boolean | Promise<boolean>; body: (runner: Runner) => Promise<void> }[],
+    branches: {
+      condition: () => boolean | Promise<boolean>;
+      body: (runner: Runner) => Promise<void>;
+    }[],
     elseBranch?: (runner: Runner) => Promise<void>,
   ): Promise<void> {
     if (this.shouldSkip()) return;
@@ -496,7 +511,11 @@ export class Runner {
   async fork(
     id: number,
     items: any[],
-    blockFn: (item: any, index: number, branchStack: StateStack) => Promise<any>,
+    blockFn: (
+      item: any,
+      index: number,
+      branchStack: StateStack,
+    ) => Promise<any>,
     mode: "all" | "race",
   ): Promise<any> {
     if (this.shouldSkip()) return undefined;
@@ -523,7 +542,9 @@ export class Runner {
         return stack;
       });
 
-      const promises = items.map((item, i) => blockFn(item, i, branchStacks[i]));
+      const promises = items.map((item, i) =>
+        blockFn(item, i, branchStacks[i]),
+      );
 
       if (mode === "all") {
         const settled = await Promise.allSettled(promises);

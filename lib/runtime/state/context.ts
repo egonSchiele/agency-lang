@@ -11,7 +11,8 @@ import { callHook } from "../hooks.js";
 import type { AgencyCallbacks } from "../hooks.js";
 import type { HandlerFn } from "../types.js";
 import type { DebuggerState } from "../../debugger/debuggerState.js";
-import type { TraceWriter } from "../trace/traceWriter.js";
+import { TraceWriter } from "../trace/traceWriter.js";
+import type { TraceConfig } from "../trace/types.js";
 import { reviveWithClasses, type ClassRegistry } from "../classReviver.js";
 import { AgencyCancelledError } from "../errors.js";
 
@@ -44,7 +45,7 @@ export class RuntimeContext<T> {
   emit a checkpoint.*/
   _toolCallDepth: number;
   debuggerState: DebuggerState | null;
-  traceWriter: TraceWriter | null;
+  private traceWriter: TraceWriter | null;
 
   // we need a single statelog client instance that can be used across the entire execution of the graph,
   // so that all the logs share the same traceId, so they all show up in the same trace in the Statelog dashboard.
@@ -61,12 +62,17 @@ export class RuntimeContext<T> {
   // etc.), but at registration time only __globalCtx exists. External TypeScript
   // callers pass callbacks via runNode's `callbacks` option and should NOT receive
   // the execution context — wrapping at execution time keeps that boundary clean.
-  _registeredCallbacks: Partial<Record<keyof AgencyCallbacks, (...args: any[]) => any>> = {};
+  _registeredCallbacks: Partial<
+    Record<keyof AgencyCallbacks, (...args: any[]) => any>
+  > = {};
 
   // class registry for serialization/deserialization of Agency class instances
   classRegistry: ClassRegistry = {};
 
   abortController: AbortController;
+
+  traceConfig: TraceConfig;
+  runId: string | null;
 
   // stored so createExecutionContext can create new StatelogClients
   private statelogConfig: StatelogConfig;
@@ -77,6 +83,7 @@ export class RuntimeContext<T> {
     smoltalkDefaults: Partial<SmolPromptConfig>;
     dirname: string;
     maxRestores?: number;
+    traceConfig?: TraceConfig;
   }) {
     const statelogConfig = {
       ...args.statelogConfig,
@@ -101,6 +108,8 @@ export class RuntimeContext<T> {
     this.pendingPromises = new PendingPromiseStore();
     this.debuggerState = null;
     this.traceWriter = null;
+    this.traceConfig = args.traceConfig || {};
+    this.runId = null;
     this.dirname = args.dirname;
 
     const graphConfig = {
@@ -117,7 +126,14 @@ export class RuntimeContext<T> {
     this.abortController = new AbortController();
   }
 
-  createExecutionContext(): RuntimeContext<T> {
+  getRunId(): string {
+    if (!this.runId) {
+      throw new Error("runId not set on RuntimeContext");
+    }
+    return this.runId;
+  }
+
+  async createExecutionContext(runId: string): Promise<RuntimeContext<T>> {
     const execCtx = Object.create(
       RuntimeContext.prototype,
     ) as RuntimeContext<T>;
@@ -137,13 +153,18 @@ export class RuntimeContext<T> {
     execCtx._restoreCount = 0;
     execCtx._toolCallDepth = 0;
     execCtx.debuggerState = this.debuggerState;
-    execCtx.traceWriter = this.traceWriter;
+    execCtx.traceWriter = await TraceWriter.create({
+      runId,
+      traceConfig: this.traceConfig,
+    });
+    execCtx.traceConfig = this.traceConfig;
+    execCtx.runId = runId;
     execCtx.pendingPromises = new PendingPromiseStore();
     execCtx.classRegistry = this.classRegistry;
     execCtx.abortController = new AbortController();
     execCtx.statelogClient = new StatelogClient({
       ...this.statelogConfig,
-      traceId: nanoid(),
+      traceId: runId,
     });
     return execCtx;
   }
@@ -187,8 +208,7 @@ export class RuntimeContext<T> {
   installRegisteredCallbacks(source: RuntimeContext<T>): void {
     for (const name in source._registeredCallbacks) {
       const fn = source._registeredCallbacks[name as keyof AgencyCallbacks]!;
-      (this.callbacks as any)[name] =
-        (data: any) => fn(data, { ctx: this });
+      (this.callbacks as any)[name] = (data: any) => fn(data, { ctx: this });
     }
   }
 
@@ -295,4 +315,34 @@ export class RuntimeContext<T> {
     return { ...this.smoltalkDefaults, ...config };
   }
 
+  async pauseTraceWriter(): Promise<void> {
+    if (!this.traceWriter) {
+      //throw new Error("No trace writer to pause");
+    }
+    await this.traceWriter?.pause();
+    this.traceWriter = null;
+  }
+
+  async closeTraceWriter(): Promise<void> {
+    if (!this.traceWriter) {
+      //throw new Error("No trace writer to close");
+    }
+    await this.traceWriter?.close();
+    this.traceWriter = null;
+  }
+
+  async writeCheckpointToTraceWriter(checkpoint: Checkpoint): Promise<void> {
+    if (!this.traceWriter) {
+      return;
+    }
+    await this.traceWriter.writeCheckpoint(checkpoint);
+  }
+
+  hasDebugger(): boolean {
+    return this.debuggerState !== null;
+  }
+
+  hasTraceWriter(): boolean {
+    return this.traceWriter !== null;
+  }
 }

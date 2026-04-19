@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { Checkpoint, CheckpointStore } from "./checkpointStore.js";
 import {
-  StateStack,
   type StateStackJSON,
   type StateJSON,
 } from "./stateStack.js";
-import { GlobalStore, type GlobalStoreJSON } from "./globalStore.js";
+import { type GlobalStoreJSON } from "./globalStore.js";
 import { CheckpointError } from "../errors.js";
+import { makeMockCtx } from "../__tests__/testHelpers.js";
 
 function makeStackJSON(frames: Partial<StateJSON>[] = []): StateStackJSON {
   return {
@@ -28,24 +28,6 @@ function makeGlobalsJSON(
   store: Record<string, Record<string, any>> = {},
 ): GlobalStoreJSON {
   return { store, initializedModules: Object.keys(store) };
-}
-
-function makeMockCtx() {
-  const stateStack = new StateStack();
-  stateStack.nodesTraversed = ["start", "process"];
-  // Push a frame so there's something in the stack
-  const state = stateStack.getNewState();
-  state.args = { input: "hello" };
-  state.locals = { x: 42 };
-  state.step = 3;
-
-  const globals = GlobalStore.withTokenStats();
-  globals.set("mod1", "count", 10);
-
-  return {
-    stateStack,
-    globals,
-  } as any; // cast to RuntimeContext shape
 }
 
 describe("Checkpoint", () => {

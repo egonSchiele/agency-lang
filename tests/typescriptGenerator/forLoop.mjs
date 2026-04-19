@@ -16,7 +16,6 @@ import {
   rejectInterrupt as _rejectInterrupt,
   resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
-  resumeFromState as _resumeFromState,
   rewindFrom as _rewindFrom,
   RestoreSignal,
   deepClone as __deepClone,
@@ -55,7 +54,10 @@ const __globalCtx = new RuntimeContext({
       traceId: nanoid()
     }
   },
-  dirname: __dirname
+  dirname: __dirname,
+  traceConfig: {
+    program: "forLoop.agency"
+  }
 });
 const graph = __globalCtx.graph;
 
@@ -84,6 +86,7 @@ export const resolveInterrupt = (interrupt: Interrupt, value: any, opts?: { over
 export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
+export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("forLoop.agency")

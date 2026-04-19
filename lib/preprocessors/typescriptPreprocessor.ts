@@ -14,7 +14,6 @@ import {
   RawCode,
   Scope,
   ScopeType,
-  Sentinel,
   Tag,
   TypeAlias,
   WhileLoop,
@@ -284,7 +283,6 @@ export class TypescriptPreprocessor {
     this.validateNoAsyncInLoops();
 
     this.resolveVariableScopes();
-    //this.insertCheckpointSentinels();
     return this.program;
   }
 
@@ -1575,40 +1573,4 @@ export class TypescriptPreprocessor {
     }
   }
 
-  protected insertCheckpointSentinels(): void {
-    for (const node of this.program.nodes) {
-      if (node.type === "function" || node.type === "graphNode") {
-        node.body = walkBody(node.body, (body) => {
-          const newBody: AgencyNode[] = [];
-          for (const stmt of body) {
-            newBody.push(stmt);
-            if (
-              stmt.type === "assignment" &&
-              isLlmCall(stmt.value) &&
-              !stmt.value.async
-            ) {
-              const prompt = stmt.value.arguments[0] as AgencyNode;
-              if (!stmt.scope || !prompt) {
-                console.error(
-                  `[insertCheckpointSentinels] Skipping checkpoint for "${stmt.variableName}": missing scope or prompt`,
-                );
-                continue;
-              }
-              const sentinel: Sentinel = {
-                type: "sentinel",
-                value: "checkpoint",
-                data: {
-                  targetVariable: stmt.variableName,
-                  prompt,
-                  scope: stmt.scope,
-                },
-              };
-              newBody.push(sentinel);
-            }
-          }
-          return newBody;
-        });
-      }
-    }
-  }
 }

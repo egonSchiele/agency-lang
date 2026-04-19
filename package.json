@@ -4,7 +4,7 @@
   "description": "The Agency language",
   "main": "lib/index.js",
   "scripts": {
-    "test": "vitest",
+    "test": "vitest --test-timeout=1000",
     "test:run": "vitest run",
     "test:agency": "time node ./dist/scripts/agency.js test tests/agency -p 12",
     "test:agency-js": "time node ./dist/scripts/agency.js test js tests/agency-js -p 12",

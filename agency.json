@@ -8,6 +8,7 @@
     "logLevel": "warn",
     "defaultModel": "gpt-4o-mini"
   },
+  "traceDir": "traces",
   "typeCheck": true,
   "doc": {
     "outDir": "docs-new/stdlib",

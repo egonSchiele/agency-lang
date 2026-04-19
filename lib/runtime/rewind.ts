@@ -4,6 +4,7 @@ import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
 import type { GraphState } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
+import { isInterrupt } from "./interrupts.js";
 import { color } from "termcolors";
 
 export type RewindCheckpoint = {
@@ -38,7 +39,7 @@ export async function rewindFrom(args: {
 
   applyOverrides(checkpoint.checkpoint, overrides);
 
-  const execCtx = ctx.createExecutionContext();
+  const execCtx = await ctx.createExecutionContext(ctx.getRunId());
   execCtx.restoreState(checkpoint.checkpoint);
   execCtx._skipNextCheckpoint = true;
 

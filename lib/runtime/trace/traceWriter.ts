@@ -1,42 +1,124 @@
-import * as fs from "fs";
-import { ContentAddressableStore } from "./contentAddressableStore.js";
-import type { TraceManifest } from "./types.js";
-import { CHECKPOINT_SCHEMA } from "./types.js";
-import type { Checkpoint } from "../state/checkpointStore.js";
+import path from "path";
 import { VERSION } from "../../version.js";
+import type { Checkpoint } from "../state/checkpointStore.js";
+import { ContentAddressableStore } from "./contentAddressableStore.js";
+import { CallbackSink, FileSink, type TraceSink } from "./sinks.js";
+import type { TraceConfig, TraceLine, TraceManifest } from "./types.js";
+import { CHECKPOINT_SCHEMA } from "./types.js";
+
+function generateTraceFilePath(dir: string): string {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const id = Math.random().toString(16).slice(2, 6);
+  return path.join(dir, `${timestamp}_${id}.agencytrace`);
+}
 
 export class TraceWriter {
-  private fd: number;
   private store: ContentAddressableStore;
+  private sinks: TraceSink[];
   private checkpointCount = 0;
+  private chunkCount = 0;
+  private program: string = "";
+  private runId: string = "";
 
-  constructor(filePath: string, program: string) {
-    this.fd = fs.openSync(filePath, "w");
+  constructor(runId: string, program: string, sinks: TraceSink[]) {
     this.store = new ContentAddressableStore();
-    this.writeLine({
+    this.sinks = sinks;
+    this.runId = runId;
+    this.program = program;
+  }
+
+  async writeHeader(): Promise<void> {
+    await this.writeLine({
       type: "header",
       version: 1,
       agencyVersion: VERSION,
-      program,
+      program: this.program,
       timestamp: new Date().toISOString(),
       config: { hashAlgorithm: "sha256" },
+      runId: this.runId,
     });
   }
 
-  writeCheckpoint(checkpoint: Checkpoint): void {
+  async writeCheckpoint(checkpoint: Checkpoint): Promise<void> {
+    await this.writeHeader();
     const json = checkpoint.toJSON();
     const { record, chunks } = this.store.process(json, CHECKPOINT_SCHEMA);
 
     for (const chunk of chunks) {
-      this.writeLine({ type: "chunk", hash: chunk.hash, data: chunk.data });
+      await this.writeLine({
+        type: "chunk",
+        hash: chunk.hash,
+        data: chunk.data,
+      });
+      this.chunkCount++;
     }
 
     const manifest: TraceManifest = { type: "manifest", ...record };
-    this.writeLine(manifest);
+    await this.writeLine(manifest);
     this.checkpointCount++;
   }
 
-  private writeLine(obj: any): void {
-    fs.writeSync(this.fd, JSON.stringify(obj) + "\n");
+  /** Flush and close all sinks without emitting a footer.
+   *  Used when execution is pausing for an interrupt. */
+  async pause(): Promise<void> {
+    await this.writeHeader();
+    for (const sink of this.sinks) {
+      try {
+        await sink.close?.();
+      } catch (error) {
+        console.error("[agency] Error closing trace sink:", error);
+      }
+    }
+  }
+
+  /** Emit a footer and close all sinks.
+   *  Used when the agent run is truly finished. */
+  async close(): Promise<void> {
+    await this.writeHeader();
+    await this.writeLine({
+      type: "footer",
+      checkpointCount: this.checkpointCount,
+      chunkCount: this.chunkCount,
+      timestamp: new Date().toISOString(),
+    });
+    await this.pause();
+  }
+
+  private async writeLine(obj: TraceLine): Promise<void> {
+    for (const sink of this.sinks) {
+      try {
+        await sink.writeLine(obj);
+      } catch (error) {
+        console.error("[agency] Trace sink error:", error);
+      }
+    }
+  }
+
+
+
+  static async create({
+    runId,
+    traceConfig,
+  }: {
+    runId: string;
+    traceConfig: TraceConfig;
+  }): Promise<TraceWriter | null> {
+    const sinks: TraceSink[] = [];
+    if (traceConfig.traceFile) {
+      sinks.push(new FileSink(traceConfig.traceFile));
+    }
+    if (traceConfig.traceDir) {
+      const filePath = generateTraceFilePath(traceConfig.traceDir);
+      sinks.push(new FileSink(filePath));
+    }
+    if (traceConfig.traceCallback) {
+      sinks.push(new CallbackSink(runId, traceConfig.traceCallback));
+    }
+    if (sinks.length === 0) {
+      return null;
+    }
+    const writer = new TraceWriter(runId, traceConfig.program || "unknown.agency", sinks);
+    await writer.writeHeader();
+    return writer;
   }
 }

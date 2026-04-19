@@ -1,9 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { TraceWriter } from "./traceWriter.js";
+import { FileSink, CallbackSink } from "./sinks.js";
+import type { TraceLine } from "./types.js";
 import { Checkpoint } from "../state/checkpointStore.js";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+
+const RUN_ID = "test-run-id";
 
 function readTrace(filePath: string) {
   return fs
@@ -13,7 +17,9 @@ function readTrace(filePath: string) {
     .map((line) => JSON.parse(line));
 }
 
-function makeCheckpoint(overrides: Partial<Record<string, any>> = {}): Checkpoint {
+function makeCheckpoint(
+  overrides: Partial<Record<string, any>> = {},
+): Checkpoint {
   return new Checkpoint({
     id: 0,
     nodeId: "start",
@@ -50,8 +56,11 @@ describe("TraceWriter", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("writes a header as the first line", () => {
-    const writer = new TraceWriter(tracePath, "test.agency");
+  it("writes a header as the first line", async () => {
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      new FileSink(tracePath),
+    ]);
+    await writer.close();
 
     const lines = readTrace(tracePath);
     expect(lines[0].type).toBe("header");
@@ -61,9 +70,12 @@ describe("TraceWriter", () => {
     expect(lines[0].agencyVersion).toMatch(/^\d+\.\d+\.\d+/);
   });
 
-  it("writes chunks before their manifest", () => {
-    const writer = new TraceWriter(tracePath, "test.agency");
-    writer.writeCheckpoint(makeCheckpoint());
+  it("writes chunks before their manifest", async () => {
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      new FileSink(tracePath),
+    ]);
+    await writer.writeCheckpoint(makeCheckpoint());
+    await writer.close();
 
     const lines = readTrace(tracePath);
     const chunkIndices = lines
@@ -75,21 +87,26 @@ describe("TraceWriter", () => {
     }
   });
 
-  it("deduplicates identical globals across checkpoints", () => {
-    const writer = new TraceWriter(tracePath, "test.agency");
+  it("deduplicates identical globals across checkpoints", async () => {
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      new FileSink(tracePath),
+    ]);
 
-    writer.writeCheckpoint(makeCheckpoint({ id: 0, stepPath: "0" }));
-    writer.writeCheckpoint(makeCheckpoint({
-      id: 1,
-      stepPath: "1",
-      stack: {
-        stack: [{ args: {}, locals: { x: 99 }, threads: null, step: 1 }],
-        mode: "serialize",
-        other: {},
-        deserializeStackLength: 0,
-        nodesTraversed: ["start"],
-      },
-    }));
+    await writer.writeCheckpoint(makeCheckpoint({ id: 0, stepPath: "0" }));
+    await writer.writeCheckpoint(
+      makeCheckpoint({
+        id: 1,
+        stepPath: "1",
+        stack: {
+          stack: [{ args: {}, locals: { x: 99 }, threads: null, step: 1 }],
+          mode: "serialize",
+          other: {},
+          deserializeStackLength: 0,
+          nodesTraversed: ["start"],
+        },
+      }),
+    );
+    await writer.close();
 
     const lines = readTrace(tracePath);
     const chunks = lines.filter((l: any) => l.type === "chunk");
@@ -97,9 +114,14 @@ describe("TraceWriter", () => {
     expect(chunks).toHaveLength(3);
   });
 
-  it("manifest contains checkpoint metadata alongside hashed fields", () => {
-    const writer = new TraceWriter(tracePath, "test.agency");
-    writer.writeCheckpoint(makeCheckpoint({ label: "test-label", pinned: true }));
+  it("manifest contains checkpoint metadata alongside hashed fields", async () => {
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      new FileSink(tracePath),
+    ]);
+    await writer.writeCheckpoint(
+      makeCheckpoint({ label: "test-label", pinned: true }),
+    );
+    await writer.close();
 
     const lines = readTrace(tracePath);
     const manifest = lines.find((l: any) => l.type === "manifest");
@@ -113,5 +135,58 @@ describe("TraceWriter", () => {
     expect(typeof manifest.stack.stack[0]).toBe("string");
     expect(manifest.globals.initializedModules).toEqual(["main.agency"]);
     expect(typeof manifest.globals.store["main.agency"]).toBe("string");
+  });
+
+  it("emits footer on close with correct counts", async () => {
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      new FileSink(tracePath),
+    ]);
+    await writer.writeCheckpoint(makeCheckpoint());
+    await writer.close();
+
+    const lines = readTrace(tracePath);
+    const footer = lines.find((l: any) => l.type === "footer");
+    expect(footer).toBeDefined();
+    expect(footer.checkpointCount).toBe(1);
+    expect(footer.chunkCount).toBeGreaterThan(0);
+    expect(typeof footer.timestamp).toBe("string");
+  });
+
+  it("fans out to multiple sinks", async () => {
+    const callbackLines: TraceLine[] = [];
+    const callbackSink = new CallbackSink("test-id", (event) => {
+      callbackLines.push(event.line);
+    });
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      new FileSink(tracePath),
+      callbackSink,
+    ]);
+    await writer.writeCheckpoint(makeCheckpoint());
+    await writer.close();
+
+    const fileLines = readTrace(tracePath);
+    // Both sinks should have received the same number of lines
+    expect(callbackLines.length).toBe(fileLines.length);
+  });
+
+  it("sink error does not prevent other sinks from receiving data", async () => {
+    const callbackLines: TraceLine[] = [];
+    const errorSink = {
+      writeLine: () => {
+        throw new Error("sink error");
+      },
+    };
+    const goodSink = new CallbackSink("test-id", (event) => {
+      callbackLines.push(event.line);
+    });
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      errorSink,
+      goodSink,
+    ]);
+    await writer.writeCheckpoint(makeCheckpoint());
+    await writer.close();
+
+    // Good sink should still have received data despite error sink
+    expect(callbackLines.length).toBeGreaterThan(0);
   });
 });

@@ -28,16 +28,15 @@ export async function debugStep(
   }
 
   // Trace write path — independent of debugger
-  if (ctx.traceWriter && !ctx._skipNextCheckpoint && ctx.stateStack.currentNodeId()) {
+  if (!ctx._skipNextCheckpoint && ctx.stateStack.currentNodeId()) {
     const cp = Checkpoint.fromContext(ctx, info);
-    ctx.traceWriter.writeCheckpoint(cp);
+    await ctx.writeCheckpointToTraceWriter(cp);
   }
 
   const dbg = ctx.debuggerState;
   if (!dbg) {
-    return undefined
-  };
-
+    return undefined;
+  }
 
   // Decide whether to pause
   const isUserBreakpoint = info.isUserAdded;
@@ -67,7 +66,9 @@ export async function debugStep(
   to keep running until the current function you're in returns, and you
   get out of the current depth. That's what this logic does.
   */
-  const shouldPause = isStepping ? dbg.isAtOrBelowTargetDepth() : isUserBreakpoint;
+  const shouldPause = isStepping
+    ? dbg.isAtOrBelowTargetDepth()
+    : isUserBreakpoint;
 
   dbg.createRollingCheckpoint(ctx, {
     moduleId: info.moduleId,
@@ -117,6 +118,7 @@ export async function debugStep(
     info.label ?? undefined,
     checkpointId,
     checkpoint,
+    ctx.getRunId(),
   );
 
   return debugInterrupt;

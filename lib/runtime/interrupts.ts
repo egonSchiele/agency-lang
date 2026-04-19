@@ -8,7 +8,11 @@ import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { Approved, GraphState, Rejected } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { reviveWithClasses } from "./classReviver.js";
-export { type ClassRegistry, createClassReviver, reviveWithClasses } from "./classReviver.js";
+export {
+  type ClassRegistry,
+  createClassReviver,
+  reviveWithClasses,
+} from "./classReviver.js";
 
 export type InterruptApprove = {
   type: "approve";
@@ -64,13 +68,15 @@ export type Interrupt<T = any> = {
   checkpointId?: number;
   checkpoint?: Checkpoint;
   state?: InterruptState; // kept for backward compat migration shim
+  runId: string; // unique ID for the agent run, persists across interrupt pauses/resumes
 };
 
-export function interrupt<T = any>(data: T): Interrupt<T> {
+export function interrupt<T = any>(data: T, runId: string): Interrupt<T> {
   return {
     type: "interrupt",
     //interruptId: nanoid(),
     data,
+    runId,
   };
 }
 
@@ -78,6 +84,7 @@ export function createDebugInterrupt<T = any>(
   data: T,
   checkpointId: number,
   checkpoint: Checkpoint,
+  runId: string,
 ): Interrupt<T> {
   return {
     type: "interrupt",
@@ -85,6 +92,7 @@ export function createDebugInterrupt<T = any>(
     debugger: true,
     checkpointId,
     checkpoint,
+    runId,
   };
 }
 
@@ -109,7 +117,7 @@ export async function interruptWithHandlers<T = any>(
   ctx: RuntimeContext<any>,
 ): Promise<Interrupt<T> | Approved | Rejected> {
   if (ctx.handlers.length === 0) {
-    return interrupt(data);
+    return interrupt(data, ctx.getRunId());
   }
   let approvedValue: any = undefined;
   let hasApproval = false;
@@ -148,12 +156,12 @@ export async function interruptWithHandlers<T = any>(
     );
   }
   if (hasPropagation) {
-    return interrupt(data);
+    return interrupt(data, ctx.getRunId());
   }
   if (hasApproval) {
     return { type: "approved", value: approvedValue };
   }
-  return interrupt(data);
+  return interrupt(data, ctx.getRunId());
 }
 
 // if we ever end up supporting multiple interrupts at once
@@ -206,7 +214,7 @@ export async function respondToInterrupt(args: {
     applyOverrides(checkpoint, args.overrides);
   }
 
-  const execCtx = ctx.createExecutionContext();
+  const execCtx = await ctx.createExecutionContext(interrupt.runId);
   execCtx.restoreState(checkpoint);
 
   execCtx.installRegisteredCallbacks(ctx);
@@ -251,7 +259,16 @@ export async function respondToInterrupt(args: {
           { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) },
         );
         await execCtx.pendingPromises.awaitAll();
-        return createReturnObject({ result, globals: execCtx.globals });
+        const returnObject = createReturnObject({
+          result,
+          globals: execCtx.globals,
+        });
+        if (isInterrupt(returnObject.data)) {
+          await execCtx.pauseTraceWriter();
+        } else {
+          await execCtx.closeTraceWriter();
+        }
+        return returnObject;
       } catch (e) {
         if (e instanceof RestoreSignal) {
           const cp = e.checkpoint;
@@ -350,65 +367,4 @@ export async function resolveInterrupt({
     overrides,
     metadata,
   });
-}
-
-export async function resumeFromState(args: {
-  ctx: RuntimeContext<GraphState>;
-  state: InterruptState;
-  metadata?: Record<string, any>;
-}): Promise<any> {
-  const { ctx, metadata = {} } = args;
-
-  const execCtx = ctx.createExecutionContext();
-
-  const state = reviveWithClasses(args.state, ctx.classRegistry);
-
-  execCtx.stateStack = StateStack.fromJSON(state.stack);
-  execCtx.stateStack.deserializeMode();
-  execCtx.globals = GlobalStore.fromJSON(state.globals);
-
-  execCtx.installRegisteredCallbacks(ctx);
-  if (metadata.callbacks) {
-    Object.assign(execCtx.callbacks, metadata.callbacks);
-  }
-
-  if (metadata.debugger) {
-    execCtx.debuggerState = metadata.debugger;
-  }
-
-  const nodesTraversed = execCtx.stateStack.nodesTraversed || [];
-  let nodeName = nodesTraversed[nodesTraversed.length - 1];
-
-  if (!nodeName) {
-    throw new Error("No resumable node found in state file.");
-  }
-
-  try {
-    while (true) {
-      try {
-        const result = await execCtx.graph.run(
-          nodeName,
-          {
-            ctx: execCtx,
-            isResume: true,
-            data: {},
-          },
-          { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) },
-        );
-        await execCtx.pendingPromises.awaitAll();
-        return createReturnObject({ result, globals: execCtx.globals });
-      } catch (e) {
-        if (e instanceof RestoreSignal) {
-          const cp = e.checkpoint;
-          execCtx.restoreState(cp);
-          nodeName = cp.nodeId;
-          execCtx.stateStack.nodesTraversed = [cp.nodeId];
-          continue;
-        }
-        throw e;
-      }
-    }
-  } finally {
-    execCtx.cleanup();
-  }
 }

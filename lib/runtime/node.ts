@@ -2,12 +2,18 @@ import { MessageJSON } from "smoltalk";
 import { callHook } from "./hooks.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
-import { AgencyCancelledError, CheckpointError, RestoreSignal } from "./errors.js";
+import {
+  AgencyCancelledError,
+  CheckpointError,
+  RestoreSignal,
+} from "./errors.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { GraphState, InternalFunctionState, RunNodeResult } from "./types.js";
 import { createReturnObject } from "./utils.js";
 import { color } from "termcolors";
+import { nanoid } from "nanoid";
+import { isInterrupt } from "./interrupts.js";
 
 export function setupNode(args: { state: GraphState }): {
   stack: State;
@@ -101,7 +107,8 @@ export async function runNode({
   // When aborted, in-flight LLM requests are torn down and a AgencyCancelledError is thrown.
   abortSignal?: AbortSignal;
 }): Promise<RunNodeResult<any>> {
-  const execCtx = ctx.createExecutionContext();
+  const runId = nanoid();
+  const execCtx = await ctx.createExecutionContext(runId);
   if (initializeGlobals) {
     await initializeGlobals(execCtx);
   }
@@ -117,7 +124,9 @@ export async function runNode({
     if (abortSignal.aborted) {
       throw new AgencyCancelledError();
     }
-    abortSignal.addEventListener("abort", () => execCtx.cancel(), { once: true });
+    abortSignal.addEventListener("abort", () => execCtx.cancel(), {
+      once: true,
+    });
   }
 
   await callHook({
@@ -130,22 +139,36 @@ export async function runNode({
   try {
     while (true) {
       try {
-        const result = await execCtx.graph.run(nodeName, {
-          messages: threadStore,
-          data,
-          ctx: execCtx,
-          isResume,
-        }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
+        const result = await execCtx.graph.run(
+          nodeName,
+          {
+            messages: threadStore,
+            data,
+            ctx: execCtx,
+            isResume,
+          },
+          { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) },
+        );
         await execCtx.pendingPromises.awaitAll();
         const returnObject = createReturnObject({
           result,
           globals: execCtx.globals,
         });
-        await callHook({
-          callbacks: execCtx.callbacks,
-          name: "onAgentEnd",
-          data: { nodeName, result: returnObject },
-        });
+        if (isInterrupt(returnObject.data)) {
+          // Interrupt: attach runId and pause (no footer)
+          if (execCtx.runId) {
+            returnObject.data.runId = execCtx.runId;
+          }
+          await execCtx.pauseTraceWriter();
+        } else {
+          // Final result: emit footer and close
+          await callHook({
+            callbacks: execCtx.callbacks,
+            name: "onAgentEnd",
+            data: { nodeName, result: returnObject },
+          });
+          await execCtx.closeTraceWriter();
+        }
         return returnObject;
       } catch (e) {
         if (e instanceof RestoreSignal) {

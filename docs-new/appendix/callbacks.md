@@ -104,5 +104,12 @@ Called during streaming LLM responses. The data is a tagged union with one of th
 - `{ type: "done", result }` — streaming is complete
 - `{ type: "error", error }` — an error occurred during streaming
 
-### onCheckpoint
-Called when a rewind checkpoint is created. Receives the checkpoint data.
+### onTrace
+Called for each trace line emitted during execution. Providing this callback automatically activates tracing for the execution. Receives a `TraceEvent` object:
+
+- `runId`: a unique id identifying this run (useful for distinguishing concurrent requests)
+- `line`: the trace line, one of:
+  - `{ type: "header", ... }` — trace metadata (first line)
+  - `{ type: "chunk", hash, data }` — content-addressed data block
+  - `{ type: "manifest", ... }` — checkpoint reference (one per step)
+  - `{ type: "footer", checkpointCount, chunkCount, timestamp }` — emitted when execution completes

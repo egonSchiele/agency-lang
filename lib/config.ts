@@ -117,6 +117,10 @@ export interface AgencyConfig {
   /** Enable debugger mode — auto-inserts breakpoints before every step */
   debugger?: boolean;
 
+  /** Whether to emit debugStep() instrumentation in compiled output (default: true).
+   *  Set to false to eliminate per-step overhead when tracing/debugging is not needed. */
+  instrument?: boolean;
+
   /** Checkpoint configuration */
   checkpoints?: {
     /** Maximum number of times a single checkpoint can be restored before throwing CheckpointError.
@@ -129,6 +133,10 @@ export interface AgencyConfig {
 
   /** Custom path for the trace file (default: <program>.trace) */
   traceFile?: string;
+
+  /** Directory for auto-generated trace files. Each execution creates a new file
+   *  named <timestamp>_<id>.agencytrace. */
+  traceDir?: string;
 
   /** Test runner configuration */
   test?: {

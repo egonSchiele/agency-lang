@@ -3,8 +3,11 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { TraceWriter } from "../runtime/trace/traceWriter.js";
+import { FileSink } from "../runtime/trace/sinks.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import { traceLog } from "./events.js";
+
+const RUN_ID = "test-run-id";
 
 describe("traceLog integration", () => {
   let tmpDir: string;
@@ -17,12 +20,14 @@ describe("traceLog integration", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("generates event log from trace file and writes to output", () => {
+  it("generates event log from trace file and writes to output", async () => {
     const tracePath = path.join(tmpDir, "test.agencytrace");
     const outputPath = path.join(tmpDir, "events.json");
 
-    const writer = new TraceWriter(tracePath, "test.agency");
-    writer.writeCheckpoint(
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      new FileSink(tracePath),
+    ]);
+    await writer.writeCheckpoint(
       new Checkpoint({
         id: 0,
         nodeId: "main",
@@ -44,7 +49,7 @@ describe("traceLog integration", () => {
         },
       }),
     );
-    writer.writeCheckpoint(
+    await writer.writeCheckpoint(
       new Checkpoint({
         id: 1,
         nodeId: "main",
@@ -73,6 +78,7 @@ describe("traceLog integration", () => {
         },
       }),
     );
+    await writer.close();
 
     traceLog(tracePath, outputPath);
 
@@ -89,12 +95,15 @@ describe("traceLog integration", () => {
     expect(varEvent.value).toBe("hello");
   });
 
-  it("handles empty trace (no checkpoints)", () => {
+  it("handles empty trace (no checkpoints)", async () => {
     const tracePath = path.join(tmpDir, "empty.agencytrace");
     const outputPath = path.join(tmpDir, "events.json");
 
     // TraceWriter writes header on construction; no checkpoints added
-    new TraceWriter(tracePath, "test.agency");
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      new FileSink(tracePath),
+    ]);
+    await writer.close();
 
     traceLog(tracePath, outputPath);
 

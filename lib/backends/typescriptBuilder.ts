@@ -27,15 +27,12 @@ import {
 import type { SourceLocationOpts } from "@/runtime/state/checkpointStore.js";
 import { DebuggerStatement } from "@/types/debuggerStatement.js";
 import { SchemaExpression } from "@/types/schemaExpression.js";
-import { Sentinel } from "@/types/sentinel.js";
 import { expressionToString } from "@/utils/node.js";
 import { toCompiledImportPath } from "../importPaths.js";
 import * as renderDebugger from "../templates/backends/typescriptGenerator/debugger.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
 import * as renderInterruptReturn from "../templates/backends/typescriptGenerator/interruptReturn.js";
-import * as renderRewindCheckpoint from "../templates/backends/typescriptGenerator/rewindCheckpoint.js";
-import * as renderTraceSetup from "../templates/backends/typescriptGenerator/traceSetup.js";
 import * as renderBlockSetup from "../templates/backends/typescriptGenerator/blockSetup.js";
 import * as renderForkBlockSetup from "../templates/backends/typescriptGenerator/forkBlockSetup.js";
 import * as renderResultCheckpointSetup from "../templates/backends/typescriptGenerator/resultCheckpointSetup.js";
@@ -822,8 +819,6 @@ export class TypeScriptBuilder {
         return this.processBinOpExpression(node);
       case "keyword":
         return this.processKeyword(node);
-      case "sentinel":
-        return this.processSentinel(node);
       case "debuggerStatement":
         return this.processDebuggerStatement(node);
       case "placeholder":
@@ -2695,28 +2690,8 @@ export class TypeScriptBuilder {
     return ts.statements(stmts);
   }
 
-  private processSentinel(node: Sentinel): TsNode {
-    if (node.value === "checkpoint") {
-      const promptNode = this.processNode(node.data.prompt);
-      const varRef = ts.scopedVar(
-        node.data.targetVariable,
-        node.data.scope,
-        this.moduleId,
-      );
-      return ts.raw(
-        renderRewindCheckpoint.default({
-          targetVariable: node.data.targetVariable,
-          prompt: printTs(promptNode),
-          response: printTs(varRef),
-          ...this.checkpointOpts(),
-        }),
-      );
-    }
-    return ts.empty();
-  }
-
   private processDebuggerStatement(node: DebuggerStatement): TsNode {
-    if (!this.agencyConfig?.debugger && !this.agencyConfig?.trace) {
+    if (this.agencyConfig?.instrument === false) {
       // Debug/trace mode off: debugger keyword is a no-op
       return ts.empty();
     }
@@ -2929,7 +2904,7 @@ export class TypeScriptBuilder {
    *  step-triggering statement so that debugStep() is called at every
    *  substep boundary, not just top-level steps. */
   private insertDebugSteps(body: AgencyNode[]): AgencyNode[] {
-    if (!this.agencyConfig?.debugger && !this.agencyConfig?.trace) return body;
+    if (this.agencyConfig?.instrument === false) return body;
     const expanded: AgencyNode[] = [];
     for (const stmt of body) {
       if (
@@ -3305,6 +3280,17 @@ export class TypeScriptBuilder {
       );
     }
 
+    const traceConfigFields: Record<string, TsNode> = {
+      program: ts.str(this.moduleId),
+    };
+    if (this.agencyConfig.traceDir) {
+      traceConfigFields.traceDir = ts.str(this.agencyConfig.traceDir);
+    }
+    if (this.agencyConfig.traceFile) {
+      traceConfigFields.traceFile = ts.str(this.agencyConfig.traceFile);
+    }
+    runtimeCtxArgs.traceConfig = ts.obj(traceConfigFields);
+
     let runtimeCtx: TsNode = ts.statements([
       ts.constDecl(
         "__globalCtx",
@@ -3312,21 +3298,6 @@ export class TypeScriptBuilder {
       ),
       ts.constDecl("graph", $(ts.runtime.globalCtx).prop("graph").done()),
     ]);
-
-    if (this.agencyConfig.trace) {
-      const traceFile =
-        this.agencyConfig.traceFile ||
-        this.moduleId.replace(/\.agency$/, ".trace");
-      runtimeCtx = ts.statements([
-        runtimeCtx,
-        ts.raw(
-          renderTraceSetup.default({
-            traceFile: JSON.stringify(traceFile),
-            programId: JSON.stringify(this.moduleId),
-          }),
-        ),
-      ]);
-    }
 
     return renderImports.default({
       runtimeContextCode: printTs(runtimeCtx),

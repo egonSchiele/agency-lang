@@ -42,13 +42,36 @@ When calling a node from TypeScript, the user can pass an `onTrace` callback:
 ```typescript
 await main("input", {
   callbacks: {
-    onTrace(line: TraceLine) {
-      // Receives JSONL lines: header, chunks, manifests
-      // Stream to S3, database, etc.
+    onTrace(event: TraceEvent) {
+      // event.executionId — unique ID for this execution
+      // event.line — the TraceLine (header, chunk, manifest, or footer)
+      console.log(`[${event.executionId}] ${event.line.type}`);
     }
   }
 });
 ```
+
+The `TraceEvent` envelope wraps each `TraceLine` with an `executionId`:
+
+```typescript
+type TraceEvent = {
+  executionId: string;
+  line: TraceLine;
+};
+```
+
+This allows concurrent requests sharing a single `onTrace` callback to differentiate which execution each line belongs to. The `executionId` is a unique string generated per execution (e.g., via `nanoid`).
+
+A `TraceFooter` is emitted as the last line when execution completes, signaling that the execution is done and data can be flushed:
+
+```typescript
+// Footer line (last event for an execution):
+// event.line = { type: "footer", checkpointCount: N, chunkCount: M, timestamp: "..." }
+```
+
+The `TraceFooter` type already exists in `lib/runtime/trace/types.ts`. It is emitted by `TraceWriter.close()`.
+
+**File-based tracing** (`FileSink`) writes raw `TraceLine` objects (no envelope), since each file is already scoped to one execution. The envelope is only used by `CallbackSink`.
 
 Providing an `onTrace` callback automatically activates tracing for that execution. No other per-call trace options (`trace`, `traceFile`, `traceDir`) are exposed — config-level and CLI options handle file-based tracing, and the callback handles programmatic access.
 
@@ -84,7 +107,7 @@ The optional `close()` method allows sinks to release resources (e.g., file hand
 Two built-in implementations:
 
 - **`FileSink`** — Uses an async write stream instead of the current `fs.writeSync`. This prevents blocking the event loop on web servers. The `close()` method flushes and closes the stream.
-- **`CallbackSink`** — Wraps the user's `onTrace` callback. The callback can be sync or async.
+- **`CallbackSink`** — Wraps the user's `onTrace` callback. Each `TraceLine` is wrapped in a `TraceEvent` envelope with the execution's unique `executionId` before being passed to the callback. The callback can be sync or async.
 
 `TraceWriter` is refactored to accept one or more sinks:
 
@@ -108,7 +131,7 @@ The header line is emitted to all sinks on construction. Each `writeCheckpoint()
 2. If tracing is enabled (config or callback), create the appropriate sinks (file, callback, or both).
 3. Construct a `TraceWriter` with those sinks and attach it to `RuntimeContext.traceWriter`.
 4. If tracing is not enabled (no config, no callback), `traceWriter` stays null and `debugStep()` bails out immediately.
-5. When execution ends, `TraceWriter.close()` is called (which iterates over sinks and calls `close()` on each). This is triggered at the end of `runNode` in `lib/runtime/node.ts`.
+5. When execution ends, `TraceWriter.close()` is called. This emits a `TraceFooter` line (with `checkpointCount`, `chunkCount`, and timestamp) to all sinks, then calls `close()` on each sink. This is triggered at the end of `runNode` in `lib/runtime/node.ts`.
 
 ### 5. Cleanup of Dead Code
 
@@ -121,7 +144,18 @@ Remove the following, which are no longer needed:
 - The `Sentinel` type in `lib/types/sentinel.ts` (it is only used for checkpoint sentinels) and its entry in the `AgencyNode` union in `lib/types.ts`
 - The `renderRewindCheckpoint` import in the builder
 
-The new `onTrace` callback fully replaces `onCheckpoint` for any use case where users want to capture execution data programmatically. `onTrace` is added to `CallbackMap` in `lib/runtime/hooks.ts` (which mechanically derives `AgencyCallbacks`) with `onTrace: TraceLine`, and to `VALID_CALLBACK_NAMES` in `lib/types/function.ts`. Its return type is `void` (the `CallbackReturn` default), so no special override is needed. `TraceLine` is the existing union type of all JSONL line types (header, chunk, manifest), defined in `lib/runtime/trace/types.ts`.
+The new `onTrace` callback fully replaces `onCheckpoint` for any use case where users want to capture execution data programmatically. `onTrace` is added to `CallbackMap` in `lib/runtime/hooks.ts` (which mechanically derives `AgencyCallbacks`) with `onTrace: TraceEvent`, and to `VALID_CALLBACK_NAMES` in `lib/types/function.ts`. Its return type is `void` (the `CallbackReturn` default), so no special override is needed.
+
+`TraceEvent` is a new type defined in `lib/runtime/trace/types.ts`:
+
+```typescript
+type TraceEvent = {
+  executionId: string;
+  line: TraceLine;
+};
+```
+
+`TraceLine` is the existing union type of all JSONL line types (header, chunk, manifest, footer), defined in `lib/runtime/trace/types.ts`.
 
 ### 6. Compile-time Changes
 

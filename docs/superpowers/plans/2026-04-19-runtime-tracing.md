@@ -12,11 +12,23 @@
 
 ---
 
-### Task 1: Create TraceSink interface and implementations
+### Task 1: Add TraceEvent type, create TraceSink interface and implementations
 
 **Files:**
+- Modify: `lib/runtime/trace/types.ts` (add `TraceEvent` type)
 - Create: `lib/runtime/trace/sinks.ts`
 - Create: `lib/runtime/trace/sinks.test.ts`
+
+- [ ] **Step 0: Add `TraceEvent` type to `lib/runtime/trace/types.ts`**
+
+Add after the existing `TraceLine` type:
+
+```typescript
+export type TraceEvent = {
+  executionId: string;
+  line: TraceLine;
+};
+```
 
 - [ ] **Step 1: Write the TraceSink type and FileSink/CallbackSink tests**
 
@@ -88,27 +100,30 @@ describe("FileSink", () => {
 });
 
 describe("CallbackSink", () => {
-  it("invokes callback with each line", async () => {
-    const lines: TraceLine[] = [];
-    const sink = new CallbackSink((line) => { lines.push(line); });
+  it("wraps each line in a TraceEvent envelope with executionId", async () => {
+    const events: any[] = [];
+    const sink = new CallbackSink("exec-123", (event) => { events.push(event); });
 
     await sink.writeLine(sampleHeader);
     await sink.writeLine(sampleChunk);
 
-    expect(lines).toHaveLength(2);
-    expect(lines[0]).toBe(sampleHeader);
-    expect(lines[1]).toBe(sampleChunk);
+    expect(events).toHaveLength(2);
+    expect(events[0].executionId).toBe("exec-123");
+    expect(events[0].line).toBe(sampleHeader);
+    expect(events[1].executionId).toBe("exec-123");
+    expect(events[1].line).toBe(sampleChunk);
   });
 
   it("handles async callbacks", async () => {
-    const lines: TraceLine[] = [];
-    const sink = new CallbackSink(async (line) => {
+    const events: any[] = [];
+    const sink = new CallbackSink("exec-456", async (event) => {
       await new Promise((r) => setTimeout(r, 1));
-      lines.push(line);
+      events.push(event);
     });
 
     await sink.writeLine(sampleHeader);
-    expect(lines).toHaveLength(1);
+    expect(events).toHaveLength(1);
+    expect(events[0].executionId).toBe("exec-456");
   });
 });
 ```
@@ -123,7 +138,7 @@ Expected: FAIL — module `./sinks.js` not found
 ```typescript
 // lib/runtime/trace/sinks.ts
 import * as fs from "fs";
-import type { TraceLine } from "./types.js";
+import type { TraceLine, TraceEvent } from "./types.js";
 
 export type TraceSink = {
   writeLine(line: TraceLine): Promise<void> | void;
@@ -158,14 +173,16 @@ export class FileSink implements TraceSink {
 }
 
 export class CallbackSink implements TraceSink {
-  private callback: (line: TraceLine) => void | Promise<void>;
+  private callback: (event: TraceEvent) => void | Promise<void>;
+  private executionId: string;
 
-  constructor(callback: (line: TraceLine) => void | Promise<void>) {
+  constructor(executionId: string, callback: (event: TraceEvent) => void | Promise<void>) {
+    this.executionId = executionId;
     this.callback = callback;
   }
 
   async writeLine(line: TraceLine): Promise<void> {
-    await this.callback(line);
+    await this.callback({ executionId: this.executionId, line });
   }
 }
 ```
@@ -223,7 +240,7 @@ export class TraceWriter {
   private store: ContentAddressableStore;
   private sinks: TraceSink[];
   private checkpointCount = 0;
-
+  private chunkCount = 0;
   private headerPromise: Promise<void>;
 
   constructor(program: string, sinks: TraceSink[]) {
@@ -246,6 +263,7 @@ export class TraceWriter {
 
     for (const chunk of chunks) {
       await this.writeLine({ type: "chunk", hash: chunk.hash, data: chunk.data });
+      this.chunkCount++;
     }
 
     const manifest: TraceManifest = { type: "manifest", ...record };
@@ -254,6 +272,14 @@ export class TraceWriter {
   }
 
   async close(): Promise<void> {
+    await this.headerPromise;
+    // Emit footer as the last line
+    await this.writeLine({
+      type: "footer",
+      checkpointCount: this.checkpointCount,
+      chunkCount: this.chunkCount,
+      timestamp: new Date().toISOString(),
+    });
     for (const sink of this.sinks) {
       try {
         await sink.close?.();
@@ -375,12 +401,12 @@ Replace:
 ```
 with:
 ```typescript
-  onTrace: TraceLine;
+  onTrace: TraceEvent;
 ```
 
 Update the imports at the top of the file:
 - Remove: `import type { RewindCheckpoint } from "./rewind.js";`
-- Add: `import type { TraceLine } from "./trace/types.js";`
+- Add: `import type { TraceEvent } from "./trace/types.js";`
 
 - [ ] **Step 2: Update `VALID_CALLBACK_NAMES` in `lib/types/function.ts`**
 
@@ -392,7 +418,7 @@ Add:
 ```typescript
 export type { TraceSink } from "./trace/sinks.js";
 export { FileSink, CallbackSink } from "./trace/sinks.js";
-export type { TraceLine } from "./trace/types.js";
+export type { TraceLine, TraceEvent } from "./trace/types.js";
 ```
 
 - [ ] **Step 4: Build to verify the compile-time guard passes**
@@ -630,7 +656,8 @@ Inside `runNode()`, after callbacks assignment (after line 112), add trace setup
   }
 
   if (execCtx.callbacks.onTrace) {
-    sinks.push(new CallbackSink(execCtx.callbacks.onTrace));
+    const executionId = nanoid();
+    sinks.push(new CallbackSink(executionId, execCtx.callbacks.onTrace));
   }
 
   if (sinks.length > 0) {
@@ -791,25 +818,35 @@ node main() {
 import { main } from "./agent.js";
 import { writeFileSync } from "fs";
 
-const traceLines = [];
+const traceEvents = [];
 
 const result = await main({
   callbacks: {
-    onTrace(line) {
-      traceLines.push(line);
+    onTrace(event) {
+      traceEvents.push(event);
     },
   },
 });
 
-const hasHeader = traceLines.some(l => l.type === "header");
-const hasManifest = traceLines.some(l => l.type === "manifest");
-const types = [...new Set(traceLines.map(l => l.type))].sort();
+// Verify envelope structure
+const hasExecutionId = traceEvents.length > 0 && typeof traceEvents[0].executionId === "string";
+const allSameId = traceEvents.every(e => e.executionId === traceEvents[0]?.executionId);
+
+// Verify line contents
+const lines = traceEvents.map(e => e.line);
+const hasHeader = lines.some(l => l.type === "header");
+const hasManifest = lines.some(l => l.type === "manifest");
+const hasFooter = lines.some(l => l.type === "footer");
+const types = [...new Set(lines.map(l => l.type))].sort();
 
 writeFileSync("__result.json", JSON.stringify({
   result: result.data,
-  lineCount: traceLines.length,
+  eventCount: traceEvents.length,
+  hasExecutionId,
+  allSameId,
   hasHeader,
   hasManifest,
+  hasFooter,
   types,
 }, null, 2));
 ```
@@ -818,7 +855,7 @@ writeFileSync("__result.json", JSON.stringify({
 
 Run: `pnpm run build && node dist/scripts/agency.js test js tests/agency-js/trace/on-trace-callback`
 
-Save `__result.json` as `fixture.json`. Expected: `hasHeader: true`, `hasManifest: true`, `types` includes at least `["chunk", "header", "manifest"]`.
+Save `__result.json` as `fixture.json`. Expected: `hasExecutionId: true`, `allSameId: true`, `hasHeader: true`, `hasManifest: true`, `hasFooter: true`, `types` includes at least `["chunk", "footer", "header", "manifest"]`.
 
 - [ ] **Step 4: Commit**
 

@@ -3417,7 +3417,7 @@ describe("callback declarations", () => {
     const validNames = [
       "onAgentStart", "onAgentEnd", "onNodeStart", "onNodeEnd",
       "onLLMCallStart", "onLLMCallEnd", "onFunctionStart", "onFunctionEnd",
-      "onToolCallStart", "onToolCallEnd", "onStream", "onCheckpoint",
+      "onToolCallStart", "onToolCallEnd", "onStream", "onTrace",
     ];
     for (const name of validNames) {
       const result = functionParser(`callback ${name}(data) { log(data) }`);

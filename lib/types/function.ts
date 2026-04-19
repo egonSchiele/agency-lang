@@ -32,7 +32,7 @@ export const VALID_CALLBACK_NAMES = [
   "onToolCallStart",
   "onToolCallEnd",
   "onStream",
-  "onCheckpoint",
+  "onTrace",
 ] as const;
 
 export type CallbackName = (typeof VALID_CALLBACK_NAMES)[number];

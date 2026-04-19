@@ -9,7 +9,7 @@ import type {
   StrategyJSON,
 } from "smoltalk";
 import type { RunNodeResult } from "./types.js";
-import type { RewindCheckpoint } from "./rewind.js";
+import type { TraceEvent } from "./trace/types.js";
 import type { CallbackName } from "../types/function.js";
 
 export type CallbackMap = {
@@ -50,7 +50,7 @@ export type CallbackMap = {
     | { type: "tool_call"; toolCall: ToolCallJSON }
     | { type: "done"; result: PromptResult }
     | { type: "error"; error: any };
-  onCheckpoint: RewindCheckpoint;
+  onTrace: TraceEvent;
 };
 
 // Compile-time guard: ensures VALID_CALLBACK_NAMES stays in sync with CallbackMap.

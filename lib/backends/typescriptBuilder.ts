@@ -1833,6 +1833,15 @@ export class TypeScriptBuilder {
 
       // Sync calls: check for interrupt result
       const tempVar = "__funcResult";
+      if (this.insideHandlerBody) {
+        return ts.statements([
+          ts.constDecl(tempVar, callNode),
+          ts.if(
+            ts.raw(`isInterrupt(${tempVar})`),
+            ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
+          ),
+        ]);
+      }
       const nodeContext = scope.type === "node";
       // In node context, wrap with state for the driver.
       // In function context, halt with the interrupt directly so the caller's
@@ -2412,23 +2421,32 @@ export class TypeScriptBuilder {
           ),
         );
       } else if (this.getCurrentScope().type !== "global") {
-        // Sync: interrupt check with awaitAll before halt.
-        // In function context, halt with the interrupt directly so the caller's
-        // isInterrupt check can detect it.
-        const haltValue =
-          this.getCurrentScope().type === "node"
-            ? ts.obj([ts.setSpread(ts.runtime.state), ts.set("data", varRef)])
-            : varRef;
-        stmts.push(
-          ts.if(
-            $(ts.id("isInterrupt")).call([varRef]).done(),
-            ts.statements([
-              ts.raw("await __ctx.pendingPromises.awaitAll()"),
-              $(ts.id("runner")).prop("halt").call([haltValue]).done(),
-              ts.return(),
-            ]),
-          ),
-        );
+        if (this.insideHandlerBody) {
+          stmts.push(
+            ts.if(
+              ts.raw(`isInterrupt(${this.str(varRef)})`),
+              ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
+            ),
+          );
+        } else {
+          // Sync: interrupt check with awaitAll before halt.
+          // In function context, halt with the interrupt directly so the caller's
+          // isInterrupt check can detect it.
+          const haltValue =
+            this.getCurrentScope().type === "node"
+              ? ts.obj([ts.setSpread(ts.runtime.state), ts.set("data", varRef)])
+              : varRef;
+          stmts.push(
+            ts.if(
+              $(ts.id("isInterrupt")).call([varRef]).done(),
+              ts.statements([
+                ts.raw("await __ctx.pendingPromises.awaitAll()"),
+                $(ts.id("runner")).prop("halt").call([haltValue]).done(),
+                ts.return(),
+              ]),
+            ),
+          );
+        }
       }
       return ts.statements(stmts);
     } else if (value.type === "messageThread") {
@@ -2648,21 +2666,30 @@ export class TypeScriptBuilder {
     } else {
       // Sync: await + interrupt check
       stmts.push(ts.assign(varRef, ts.await(runPromptCall)));
-      stmts.push(ts.comment("halt if this is an interrupt"));
-      const isNodeContext = this.getCurrentScope().type === "node";
-      const haltValue = isNodeContext
-        ? ts.obj({ messages: ts.runtime.threads, data: varRef })
-        : varRef;
-      stmts.push(
-        ts.if(
-          $(ts.id("isInterrupt")).call([varRef]).done(),
-          ts.statements([
-            ts.raw("await __ctx.pendingPromises.awaitAll()"),
-            $(ts.id("runner")).prop("halt").call([haltValue]).done(),
-            ts.return(),
-          ]),
-        ),
-      );
+      if (this.insideHandlerBody) {
+        stmts.push(
+          ts.if(
+            ts.raw(`isInterrupt(${this.str(varRef)})`),
+            ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
+          ),
+        );
+      } else {
+        stmts.push(ts.comment("halt if this is an interrupt"));
+        const isNodeContext = this.getCurrentScope().type === "node";
+        const haltValue = isNodeContext
+          ? ts.obj({ messages: ts.runtime.threads, data: varRef })
+          : varRef;
+        stmts.push(
+          ts.if(
+            $(ts.id("isInterrupt")).call([varRef]).done(),
+            ts.statements([
+              ts.raw("await __ctx.pendingPromises.awaitAll()"),
+              $(ts.id("runner")).prop("halt").call([haltValue]).done(),
+              ts.return(),
+            ]),
+          ),
+        );
+      }
     }
 
     return ts.statements(stmts);

@@ -93,7 +93,13 @@
               },
               "scope": "local"
             }
-          ]
+          ],
+          "loc": {
+            "line": -2,
+            "col": 2,
+            "start": 16,
+            "end": 137
+          }
         },
         {
           "type": "assignment",

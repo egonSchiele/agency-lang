@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { TraceWriter } from "./traceWriter.js";
+import { FileSink } from "./sinks.js";
 import { TraceReader } from "./traceReader.js";
 import { Checkpoint } from "../state/checkpointStore.js";
 import * as fs from "fs";
@@ -19,10 +20,10 @@ describe("TraceReader", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  function writeSimpleTrace(count: number) {
-    const writer = new TraceWriter(tracePath, "test.agency");
+  async function writeSimpleTrace(count: number) {
+    const writer = new TraceWriter("test.agency", [new FileSink(tracePath)]);
     for (let i = 0; i < count; i++) {
-      writer.writeCheckpoint(new Checkpoint({
+      await writer.writeCheckpoint(new Checkpoint({
         id: i,
         nodeId: "start",
         moduleId: "main.agency",
@@ -41,19 +42,19 @@ describe("TraceReader", () => {
         },
       }));
     }
-
+    await writer.close();
   }
 
-  it("exposes header and checkpoints", () => {
-    writeSimpleTrace(3);
+  it("exposes header and checkpoints", async () => {
+    await writeSimpleTrace(3);
     const reader = TraceReader.fromFile(tracePath);
 
     expect(reader.header.program).toBe("test.agency");
     expect(reader.checkpoints).toHaveLength(3);
   });
 
-  it("returns fully reconstructed Checkpoint instances", () => {
-    writeSimpleTrace(3);
+  it("returns fully reconstructed Checkpoint instances", async () => {
+    await writeSimpleTrace(3);
     const reader = TraceReader.fromFile(tracePath);
 
     const cp = reader.checkpoints[1];
@@ -63,8 +64,8 @@ describe("TraceReader", () => {
     expect(cp.nodeId).toBe("start");
   });
 
-  it("roundtrips complex checkpoint data", () => {
-    const writer = new TraceWriter(tracePath, "test.agency");
+  it("roundtrips complex checkpoint data", async () => {
+    const writer = new TraceWriter("test.agency", [new FileSink(tracePath)]);
 
     const cp = new Checkpoint({
       id: 0,
@@ -90,8 +91,8 @@ describe("TraceReader", () => {
         initializedModules: ["main.agency", "helpers.agency"],
       },
     });
-    writer.writeCheckpoint(cp);
-
+    await writer.writeCheckpoint(cp);
+    await writer.close();
 
     const reader = TraceReader.fromFile(tracePath);
     const reconstructed = reader.checkpoints[0];
@@ -116,8 +117,8 @@ describe("TraceReader", () => {
     expect(reader.checkpoints).toHaveLength(0);
   });
 
-  it("has empty sources for plain trace files", () => {
-    writeSimpleTrace(1);
+  it("has empty sources for plain trace files", async () => {
+    await writeSimpleTrace(1);
     const reader = TraceReader.fromFile(tracePath);
     expect(reader.sources).toEqual({});
   });

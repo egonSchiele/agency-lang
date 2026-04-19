@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createBundle, extractBundle } from "./bundle.js";
 import { TraceWriter } from "@/runtime/trace/traceWriter.js";
+import { FileSink } from "@/runtime/trace/sinks.js";
 import { TraceReader } from "@/runtime/trace/traceReader.js";
 import { Checkpoint } from "@/runtime/state/checkpointStore.js";
 import * as fs from "fs";
@@ -25,9 +26,9 @@ describe("createBundle", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  function writeTestTrace() {
-    const writer = new TraceWriter(tracePath, "main.agency");
-    writer.writeCheckpoint(new Checkpoint({
+  async function writeTestTrace() {
+    const writer = new TraceWriter("main.agency", [new FileSink(tracePath)]);
+    await writer.writeCheckpoint(new Checkpoint({
       id: 0,
       nodeId: "main",
       moduleId: "main.agency",
@@ -45,6 +46,7 @@ describe("createBundle", () => {
         initializedModules: ["main.agency"],
       },
     }));
+    await writer.close();
   }
 
   function writeTestSource() {
@@ -54,8 +56,8 @@ describe("createBundle", () => {
     );
   }
 
-  it("creates a bundle with header, sources, and trace data", () => {
-    writeTestTrace();
+  it("creates a bundle with header, sources, and trace data", async () => {
+    await writeTestTrace();
     writeTestSource();
 
     createBundle(path.join(sourceDir, "main.agency"), tracePath, bundlePath);
@@ -66,8 +68,8 @@ describe("createBundle", () => {
     expect(reader.checkpoints.length).toBe(1);
   });
 
-  it("preserves checkpoint data from the original trace", () => {
-    writeTestTrace();
+  it("preserves checkpoint data from the original trace", async () => {
+    await writeTestTrace();
     writeTestSource();
 
     createBundle(path.join(sourceDir, "main.agency"), tracePath, bundlePath);
@@ -78,7 +80,7 @@ describe("createBundle", () => {
     expect(cp.stack.stack[0].locals.x).toBe(1);
   });
 
-  it("throws if trace file does not exist", () => {
+  it("throws if trace file does not exist", async () => {
     writeTestSource();
     expect(() => createBundle(
       path.join(sourceDir, "main.agency"),
@@ -87,8 +89,8 @@ describe("createBundle", () => {
     )).toThrow();
   });
 
-  it("throws if source file does not exist", () => {
-    writeTestTrace();
+  it("throws if source file does not exist", async () => {
+    await writeTestTrace();
     expect(() => createBundle(
       path.join(sourceDir, "nonexistent.agency"),
       tracePath,
@@ -117,9 +119,9 @@ describe("extractBundle", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  function writeTestTrace() {
-    const writer = new TraceWriter(tracePath, "main.agency");
-    writer.writeCheckpoint(new Checkpoint({
+  async function writeTestTrace() {
+    const writer = new TraceWriter("main.agency", [new FileSink(tracePath)]);
+    await writer.writeCheckpoint(new Checkpoint({
       id: 0,
       nodeId: "main",
       moduleId: "main.agency",
@@ -137,6 +139,7 @@ describe("extractBundle", () => {
         initializedModules: ["main.agency"],
       },
     }));
+    await writer.close();
   }
 
   function writeTestSource() {
@@ -146,14 +149,14 @@ describe("extractBundle", () => {
     );
   }
 
-  function createTestBundle() {
-    writeTestTrace();
+  async function createTestBundle() {
+    await writeTestTrace();
     writeTestSource();
     createBundle(path.join(sourceDir, "main.agency"), tracePath, bundlePath);
   }
 
-  it("extracts source files and trace from a bundle", () => {
-    createTestBundle();
+  it("extracts source files and trace from a bundle", async () => {
+    await createTestBundle();
 
     extractBundle(bundlePath, outDir);
 
@@ -162,8 +165,8 @@ describe("extractBundle", () => {
     expect(fs.existsSync(path.join(outDir, "main.trace"))).toBe(true);
   });
 
-  it("produces a valid trace file", () => {
-    createTestBundle();
+  it("produces a valid trace file", async () => {
+    await createTestBundle();
 
     extractBundle(bundlePath, outDir);
 

@@ -67,6 +67,7 @@ export class TestDebuggerIO implements DebuggerIO {
     }
   }
 
+  async showCheckpointsPanel(_checkpoints: Checkpoint[]): Promise<void> { }
   appendStdout(_text: string): void { }
   renderActivityOnly(): void { }
   startSpinner(): void { }

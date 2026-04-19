@@ -17,6 +17,7 @@ export type DebuggerCommand =
   | { type: "resolve"; value: unknown }
   | { type: "modify"; overrides: Record<string, unknown> }
   | { type: "stepBack"; preserveOverrides: boolean }
+  | { type: "showCheckpoints" }
   | { type: "save"; path: string }
   | { type: "load"; path: string }
   | { type: "quit" };
@@ -26,6 +27,7 @@ export type DebuggerIO = {
   render(checkpoint?: Checkpoint, full?: boolean): Promise<void>;
   waitForCommand(): Promise<DebuggerCommand>;
   showRewindSelector(checkpoints: Checkpoint[]): Promise<number | null>;
+  showCheckpointsPanel(checkpoints: Checkpoint[]): Promise<void>;
   promptForNodeArgs(parameters: FunctionParameter[]): Promise<unknown[]>;
   promptForInput(prompt: string): Promise<string>;
   appendStdout(text: string): void;

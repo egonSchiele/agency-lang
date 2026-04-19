@@ -64,8 +64,9 @@ export class DebuggerUI implements DebuggerIO {
   // Zoom: stores original position/size so we can restore on un-zoom
   private zoomedPane: { name: string; original: Record<string, any> } | null = null;
 
-  // Thread cycling: index into the list of thread IDs for the current checkpoint
-  private threadDisplayIndex = 0;
+  // Thread cycling: index into the list of thread IDs for the current checkpoint.
+  // undefined = show the active thread (default); number = explicit user selection.
+  private threadDisplayIndex: number | undefined = undefined;
   private spinnerInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
@@ -202,6 +203,7 @@ export class DebuggerUI implements DebuggerIO {
       o: "out",
       c: "continue",
       r: "rewind",
+      d: "checkpoints",
       k: "checkpoint",
       p: "print",
       q: "quit",
@@ -367,6 +369,9 @@ export class DebuggerUI implements DebuggerIO {
   async render(checkpoint?: Checkpoint, full = true): Promise<void> {
     if (checkpoint) {
       await this.state.setCheckpoint(checkpoint);
+      // Reset to default (active thread) so the pane tracks the most recent thread.
+      // User can still override with [ / ] cycling.
+      this.threadDisplayIndex = undefined;
     }
 
     // this.state.setSourceMap(sourceMap);
@@ -462,7 +467,7 @@ export class DebuggerUI implements DebuggerIO {
         (p) => p.name !== "threadsBox",
       );
       this.restoreFocusByName(focusedName);
-      this.threadDisplayIndex = 0;
+      this.threadDisplayIndex = undefined;
       return;
     }
 
@@ -622,6 +627,10 @@ export class DebuggerUI implements DebuggerIO {
             // Here we just signal intent; the driver will call showRewindSelector
             resolve({ type: "rewind" });
             break;
+          case "d":
+            cleanup();
+            resolve({ type: "showCheckpoints" });
+            break;
           case "k":
             cleanup();
             this.enterTextInput("checkpoint label (enter to skip)> ").then(
@@ -696,7 +705,8 @@ export class DebuggerUI implements DebuggerIO {
             }
             // Thread cycling: [ and ] to navigate between threads
             if (key.full === "[" || key.full === "]") {
-              this.threadDisplayIndex += key.full === "]" ? 1 : -1;
+              const current = this.threadDisplayIndex ?? 0;
+              this.threadDisplayIndex = current + (key.full === "]" ? 1 : -1);
               this.renderThreadsPane();
               this.screen.render();
               break;
@@ -969,6 +979,259 @@ export class DebuggerUI implements DebuggerIO {
         cleanup();
         this.render();
         resolve(null);
+      });
+    });
+  }
+
+  showCheckpointsPanel(checkpoints: Checkpoint[]): Promise<void> {
+    return new Promise((resolve) => {
+      if (checkpoints.length === 0) {
+        this.state.log("No checkpoints available.");
+        this.renderActivityPane();
+        this.screen.render();
+        resolve();
+        return;
+      }
+
+      let selectedIndex = checkpoints.length - 1; // start at most recent
+      let rawMode = false;
+
+      // Full-screen container
+      const container = blessed.box({
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%-3",
+        style: { bg: "black" },
+      });
+
+      // Left panel: checkpoint list
+      const listBox = blessed.box({
+        ...baseStyle,
+        parent: container,
+        top: 0,
+        left: 0,
+        width: "35%",
+        height: "100%",
+        label: " checkpoints ",
+        style: {
+          border: { fg: "cyan" },
+          label: { fg: "cyan" },
+        },
+      });
+
+      // Right panel: checkpoint detail
+      const detailBox = blessed.box({
+        ...baseStyle,
+        parent: container,
+        top: 0,
+        left: "35%+1",
+        width: "65%-1",
+        height: "100%",
+        label: " checkpoint detail ",
+        style: {
+          border: { fg: "green" },
+          label: { fg: "green" },
+        },
+      });
+
+      // Help bar replaces command bar
+      const helpBar = blessed.box({
+        bottom: 0,
+        left: 0,
+        width: "100%",
+        height: 3,
+        border: { type: "line" },
+        tags: true,
+        style: { border: { fg: "white" } },
+        content: `${this.bold("(↑/↓)")}navigate  ${this.bold("(^F/^B)")}scroll detail  ${this.bold("(t)")}toggle raw  ${this.bold("(enter)")}go to checkpoint  ${this.bold("(esc/q)")}close`,
+      });
+
+      // Hide normal UI
+      for (const p of this.focusablePanes) p.box.hide();
+      this.statsBar.hide();
+      this.commandBar.hide();
+
+      this.screen.append(container);
+      this.screen.append(helpBar);
+
+      const renderList = () => {
+        const lines = checkpoints.map((cp, i) => {
+          let tag = "{gray-fg}[auto]{/gray-fg}";
+          if (cp.pinned) {
+            tag = cp.label
+              ? `{yellow-fg}[manual: ${blessed.escape(cp.label)}]{/yellow-fg}`
+              : "{magenta-fg}[code]{/magenta-fg}";
+          }
+          const fileName = cp.getFilename();
+          const line = `${tag} {bold}#${cp.id}{/bold} ${blessed.escape(fileName)}:${blessed.escape(cp.scopeName)}`;
+          if (i === selectedIndex) {
+            return `{blue-bg}{white-fg} > ${line} {/white-fg}{/blue-bg}`;
+          }
+          return `   ${line}`;
+        });
+        listBox.setContent(lines.join("\n"));
+        listBox.setLabel(` checkpoints (${selectedIndex + 1}/${checkpoints.length}) `);
+
+        // Scroll to keep selected item visible
+        const boxHeight = (listBox as any).height as number;
+        const visibleRows = typeof boxHeight === "number" ? boxHeight - 2 : 20;
+        if (selectedIndex >= visibleRows) {
+          listBox.scrollTo(selectedIndex - Math.floor(visibleRows / 2));
+        } else {
+          listBox.scrollTo(0);
+        }
+      };
+
+      const renderFormattedDetail = (cp: Checkpoint): string[] => {
+        const lines: string[] = [];
+
+        lines.push(`{bold}{cyan-fg}Checkpoint #${cp.id}{/cyan-fg}{/bold}`);
+        lines.push("");
+        lines.push(`{bold}Location:{/bold}  ${blessed.escape(cp.getFilename())}:${blessed.escape(cp.scopeName)}`);
+        lines.push(`{bold}Step:{/bold}      ${blessed.escape(cp.stepPath)}`);
+        lines.push(`{bold}Node:{/bold}      ${blessed.escape(cp.nodeId || "(none)")}`);
+        lines.push(`{bold}Pinned:{/bold}    ${cp.pinned ? "yes" : "no"}`);
+        if (cp.label) {
+          lines.push(`{bold}Label:{/bold}     ${blessed.escape(cp.label)}`);
+        }
+
+        // Show the call stack
+        const frame = cp.getCurrentFrame();
+        if (frame) {
+          lines.push("");
+          lines.push("{bold}{yellow-fg}Arguments:{/yellow-fg}{/bold}");
+          if (frame.args && Object.keys(frame.args).length > 0) {
+            for (const [key, value] of Object.entries(frame.args)) {
+              if (!key.startsWith("__")) {
+                lines.push(`  ${blessed.escape(key)} = ${blessed.escape(formatValue(value))}`);
+              }
+            }
+          } else {
+            lines.push("  (none)");
+          }
+
+          lines.push("");
+          lines.push("{bold}{yellow-fg}Locals:{/yellow-fg}{/bold}");
+          if (frame.locals && Object.keys(frame.locals).length > 0) {
+            for (const [key, value] of Object.entries(frame.locals)) {
+              if (!key.startsWith("__")) {
+                lines.push(`  ${blessed.escape(key)} = ${blessed.escape(formatValue(value))}`);
+              }
+            }
+          } else {
+            lines.push("  (none)");
+          }
+        }
+
+        // Show globals for this module
+        const globals = cp.getGlobalsForModule();
+        if (globals) {
+          lines.push("");
+          lines.push("{bold}{green-fg}Globals:{/green-fg}{/bold}");
+          for (const [key, value] of Object.entries(globals)) {
+            if (!key.startsWith("__")) {
+              lines.push(`  ${blessed.escape(key)} = ${blessed.escape(formatValue(value))}`);
+            }
+          }
+        }
+
+        // Show stack depth
+        const frames = cp.stack?.stack;
+        if (frames && frames.length > 0) {
+          lines.push("");
+          lines.push(`{bold}{magenta-fg}Call Stack:{/magenta-fg}{/bold} (${frames.length} frame${frames.length === 1 ? "" : "s"})`);
+          for (let i = 0; i < frames.length; i++) {
+            const entry = frames[i];
+            const prefix = i === frames.length - 1 ? " > " : "   ";
+            const argKeys = Object.keys(entry.args).filter(k => !k.startsWith("__"));
+            const argStr = argKeys.length > 0 ? `(${argKeys.join(", ")})` : "()";
+            lines.push(`${prefix}frame ${i} ${argStr} at step ${entry.step}`);
+          }
+        }
+
+        return lines;
+      };
+
+      const renderRawDetail = (cp: Checkpoint): string[] => {
+        const json = JSON.stringify(cp.toJSON(), null, 2);
+        return blessed.escape(json).split("\n");
+      };
+
+      const renderDetail = () => {
+        const cp = checkpoints[selectedIndex];
+        const modeLabel = rawMode ? "raw" : "formatted";
+        const lines = rawMode ? renderRawDetail(cp) : renderFormattedDetail(cp);
+        detailBox.setContent(lines.join("\n"));
+        detailBox.setLabel(` checkpoint #${cp.id} detail (${modeLabel}) `);
+      };
+
+      const renderAll = () => {
+        renderList();
+        renderDetail();
+        this.screen.render();
+      };
+
+      renderAll();
+      container.focus();
+
+      const cleanup = () => {
+        container.destroy();
+        helpBar.destroy();
+        // Show normal UI
+        for (const p of this.focusablePanes) p.box.show();
+        this.statsBar.show();
+        this.commandBar.show();
+        this.render();
+      };
+
+      container.key(["up", "k"], () => {
+        if (selectedIndex > 0) {
+          selectedIndex--;
+          renderAll();
+        }
+      });
+
+      container.key(["down", "j"], () => {
+        if (selectedIndex < checkpoints.length - 1) {
+          selectedIndex++;
+          renderAll();
+        }
+      });
+
+      container.key(["C-f"], () => {
+        const boxHeight = (detailBox as any).height as number;
+        const pageSize = typeof boxHeight === "number" ? boxHeight - 2 : 20;
+        detailBox.scroll(pageSize);
+        this.screen.render();
+      });
+
+      container.key(["C-b"], () => {
+        const boxHeight = (detailBox as any).height as number;
+        const pageSize = typeof boxHeight === "number" ? boxHeight - 2 : 20;
+        detailBox.scroll(-pageSize);
+        this.screen.render();
+      });
+
+      container.key(["t"], () => {
+        rawMode = !rawMode;
+        renderAll();
+      });
+
+      container.key(["enter"], async () => {
+        const cp = checkpoints[selectedIndex];
+        cleanup();
+        await this.render(cp);
+        resolve();
+      });
+
+      container.key(["escape", "q"], () => {
+        cleanup();
+        resolve();
+      });
+
+      container.key(["C-c"], () => {
+        this.cleanup();
       });
     });
   }

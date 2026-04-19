@@ -259,7 +259,19 @@ export class Runner {
 
     if (await this.maybeDebugHook(id)) return;
 
-    const tid = threads[method]();
+    // Guard thread creation so it only happens once. On resume from a
+    // debug pause inside the callback, the entire thread() method
+    // re-executes (the step counter only advances after the callback
+    // completes). Without this guard, threads.create() would run again
+    // on every resume, creating duplicate threads.
+    const threadKey = `__thread_${this.stepPath(id)}`;
+    let tid: string;
+    if (this.frame.locals[threadKey] !== undefined) {
+      tid = this.frame.locals[threadKey];
+    } else {
+      tid = threads[method]();
+      this.frame.locals[threadKey] = tid;
+    }
     threads.pushActive(tid);
 
     this.path.push(id);

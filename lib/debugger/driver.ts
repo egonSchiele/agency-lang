@@ -505,6 +505,16 @@ export class DebuggerDriver {
           ),
         );
       }
+      case "showCheckpoints": {
+        const debugCheckpoints = this.debuggerState.getCheckpoints();
+        const userStore = this.mod.__getCheckpoints();
+        const userCheckpoints = userStore.getCheckpoints();
+        const allCheckpoints = [...debugCheckpoints, ...userCheckpoints].sort(
+          (a, b) => a.id - b.id,
+        );
+        await this.ui.showCheckpointsPanel(allCheckpoints);
+        return { data: interrupt };
+      }
       case "save": {
         const rollingCheckpoints = this.debuggerState.getCheckpoints();
         const rolling = rollingCheckpoints.at(-1);

@@ -1,5 +1,5 @@
 import * as fs from "fs";
-import type { TraceLine, TraceEvent } from "./types.js";
+import type { TraceCallback, TraceLine } from "./types.js";
 
 export type TraceSink = {
   writeLine(line: TraceLine): Promise<void> | void;
@@ -10,7 +10,10 @@ export class FileSink implements TraceSink {
   private stream: fs.WriteStream;
 
   constructor(filePath: string) {
-    this.stream = fs.createWriteStream(filePath, { flags: "w", encoding: "utf-8" });
+    this.stream = fs.createWriteStream(filePath, {
+      flags: "w",
+      encoding: "utf-8",
+    });
   }
 
   writeLine(line: TraceLine): Promise<void> {
@@ -34,15 +37,15 @@ export class FileSink implements TraceSink {
 }
 
 export class CallbackSink implements TraceSink {
-  private callback: (event: TraceEvent) => void | Promise<void>;
-  private executionId: string;
+  private callback: TraceCallback;
+  private runId: string;
 
-  constructor(executionId: string, callback: (event: TraceEvent) => void | Promise<void>) {
-    this.executionId = executionId;
+  constructor(runId: string, callback: TraceCallback) {
+    this.runId = runId;
     this.callback = callback;
   }
 
   async writeLine(line: TraceLine): Promise<void> {
-    await this.callback({ executionId: this.executionId, line });
+    await this.callback({ runId: this.runId, line });
   }
 }

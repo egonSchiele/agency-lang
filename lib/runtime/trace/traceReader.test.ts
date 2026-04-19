@@ -7,6 +7,8 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
+const RUN_ID = "test-run-id";
+
 describe("TraceReader", () => {
   let tmpDir: string;
   let tracePath: string;
@@ -21,26 +23,30 @@ describe("TraceReader", () => {
   });
 
   async function writeSimpleTrace(count: number) {
-    const writer = new TraceWriter("test.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      new FileSink(tracePath),
+    ]);
     for (let i = 0; i < count; i++) {
-      await writer.writeCheckpoint(new Checkpoint({
-        id: i,
-        nodeId: "start",
-        moduleId: "main.agency",
-        scopeName: "myNode",
-        stepPath: String(i),
-        stack: {
-          stack: [{ args: {}, locals: { x: i }, threads: null, step: i }],
-          mode: "serialize",
-          other: {},
-          deserializeStackLength: 0,
-          nodesTraversed: ["start"],
-        },
-        globals: {
-          store: { "main.agency": { count: 0 } },
-          initializedModules: ["main.agency"],
-        },
-      }));
+      await writer.writeCheckpoint(
+        new Checkpoint({
+          id: i,
+          nodeId: "start",
+          moduleId: "main.agency",
+          scopeName: "myNode",
+          stepPath: String(i),
+          stack: {
+            stack: [{ args: {}, locals: { x: i }, threads: null, step: i }],
+            mode: "serialize",
+            other: {},
+            deserializeStackLength: 0,
+            nodesTraversed: ["start"],
+          },
+          globals: {
+            store: { "main.agency": { count: 0 } },
+            initializedModules: ["main.agency"],
+          },
+        }),
+      );
     }
     await writer.close();
   }
@@ -65,7 +71,9 @@ describe("TraceReader", () => {
   });
 
   it("roundtrips complex checkpoint data", async () => {
-    const writer = new TraceWriter("test.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      new FileSink(tracePath),
+    ]);
 
     const cp = new Checkpoint({
       id: 0,
@@ -75,7 +83,12 @@ describe("TraceReader", () => {
       stepPath: "3",
       stack: {
         stack: [
-          { args: { name: "Alice" }, locals: { result: "hello" }, threads: null, step: 3 },
+          {
+            args: { name: "Alice" },
+            locals: { result: "hello" },
+            threads: null,
+            step: 3,
+          },
           { args: {}, locals: {}, threads: null, step: 0 },
         ],
         mode: "serialize",
@@ -100,17 +113,26 @@ describe("TraceReader", () => {
     expect(reconstructed.stack.mode).toBe("serialize");
     expect(reconstructed.stack.nodesTraversed).toEqual(["start", "process"]);
     expect(reconstructed.globals.store).toEqual(cp.globals.store);
-    expect(reconstructed.globals.initializedModules).toEqual(["main.agency", "helpers.agency"]);
+    expect(reconstructed.globals.initializedModules).toEqual([
+      "main.agency",
+      "helpers.agency",
+    ]);
     expect(reconstructed.nodeId).toBe("process");
   });
 
   it("reads a trace with no checkpoints", () => {
     const fd = fs.openSync(tracePath, "w");
-    fs.writeSync(fd, JSON.stringify({
-      type: "header", version: 1, agencyVersion: "0.0.0",
-      program: "test.agency",
-      timestamp: new Date().toISOString(), config: { hashAlgorithm: "sha256" },
-    }) + "\n");
+    fs.writeSync(
+      fd,
+      JSON.stringify({
+        type: "header",
+        version: 1,
+        agencyVersion: "0.0.0",
+        program: "test.agency",
+        timestamp: new Date().toISOString(),
+        config: { hashAlgorithm: "sha256" },
+      }) + "\n",
+    );
     fs.closeSync(fd);
 
     const reader = TraceReader.fromFile(tracePath);
@@ -125,17 +147,33 @@ describe("TraceReader", () => {
 
   it("collects source lines into the sources property", () => {
     const fd = fs.openSync(tracePath, "w");
-    fs.writeSync(fd, JSON.stringify({
-      type: "header", version: 1, program: "main.agency",
-      timestamp: new Date().toISOString(), config: { hashAlgorithm: "sha256" },
-      bundle: true,
-    }) + "\n");
-    fs.writeSync(fd, JSON.stringify({
-      type: "source", path: "main.agency", content: "node main() {\n  x = 1\n}",
-    }) + "\n");
-    fs.writeSync(fd, JSON.stringify({
-      type: "source", path: "helpers.agency", content: "function add(a, b) {\n  return a + b\n}",
-    }) + "\n");
+    fs.writeSync(
+      fd,
+      JSON.stringify({
+        type: "header",
+        version: 1,
+        program: "main.agency",
+        timestamp: new Date().toISOString(),
+        config: { hashAlgorithm: "sha256" },
+        bundle: true,
+      }) + "\n",
+    );
+    fs.writeSync(
+      fd,
+      JSON.stringify({
+        type: "source",
+        path: "main.agency",
+        content: "node main() {\n  x = 1\n}",
+      }) + "\n",
+    );
+    fs.writeSync(
+      fd,
+      JSON.stringify({
+        type: "source",
+        path: "helpers.agency",
+        content: "function add(a, b) {\n  return a + b\n}",
+      }) + "\n",
+    );
     fs.closeSync(fd);
 
     const reader = TraceReader.fromFile(tracePath);
@@ -148,17 +186,33 @@ describe("TraceReader", () => {
 
   it("writeSourcesToDisk extracts source files to a directory", () => {
     const fd = fs.openSync(tracePath, "w");
-    fs.writeSync(fd, JSON.stringify({
-      type: "header", version: 1, program: "main.agency",
-      timestamp: new Date().toISOString(), config: { hashAlgorithm: "sha256" },
-      bundle: true,
-    }) + "\n");
-    fs.writeSync(fd, JSON.stringify({
-      type: "source", path: "main.agency", content: "node main() {\n  x = 1\n}",
-    }) + "\n");
-    fs.writeSync(fd, JSON.stringify({
-      type: "source", path: "lib/helpers.agency", content: "function add(a, b) {}",
-    }) + "\n");
+    fs.writeSync(
+      fd,
+      JSON.stringify({
+        type: "header",
+        version: 1,
+        program: "main.agency",
+        timestamp: new Date().toISOString(),
+        config: { hashAlgorithm: "sha256" },
+        bundle: true,
+      }) + "\n",
+    );
+    fs.writeSync(
+      fd,
+      JSON.stringify({
+        type: "source",
+        path: "main.agency",
+        content: "node main() {\n  x = 1\n}",
+      }) + "\n",
+    );
+    fs.writeSync(
+      fd,
+      JSON.stringify({
+        type: "source",
+        path: "lib/helpers.agency",
+        content: "function add(a, b) {}",
+      }) + "\n",
+    );
     fs.closeSync(fd);
 
     const reader = TraceReader.fromFile(tracePath);
@@ -166,7 +220,11 @@ describe("TraceReader", () => {
     fs.mkdirSync(outDir);
     reader.writeSourcesToDisk(outDir);
 
-    expect(fs.readFileSync(path.join(outDir, "main.agency"), "utf-8")).toBe("node main() {\n  x = 1\n}");
-    expect(fs.readFileSync(path.join(outDir, "lib/helpers.agency"), "utf-8")).toBe("function add(a, b) {}");
+    expect(fs.readFileSync(path.join(outDir, "main.agency"), "utf-8")).toBe(
+      "node main() {\n  x = 1\n}",
+    );
+    expect(
+      fs.readFileSync(path.join(outDir, "lib/helpers.agency"), "utf-8"),
+    ).toBe("function add(a, b) {}");
   });
 });

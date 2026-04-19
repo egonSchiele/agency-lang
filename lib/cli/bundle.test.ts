@@ -8,6 +8,8 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
+const RUN_ID = "test-run-id";
+
 describe("createBundle", () => {
   let tmpDir: string;
   let tracePath: string;
@@ -27,25 +29,29 @@ describe("createBundle", () => {
   });
 
   async function writeTestTrace() {
-    const writer = new TraceWriter("main.agency", [new FileSink(tracePath)]);
-    await writer.writeCheckpoint(new Checkpoint({
-      id: 0,
-      nodeId: "main",
-      moduleId: "main.agency",
-      scopeName: "main",
-      stepPath: "1",
-      stack: {
-        stack: [{ args: {}, locals: { x: 1 }, threads: null, step: 1 }],
-        mode: "serialize",
-        other: {},
-        deserializeStackLength: 0,
-        nodesTraversed: ["main"],
-      },
-      globals: {
-        store: { "main.agency": {} },
-        initializedModules: ["main.agency"],
-      },
-    }));
+    const writer = new TraceWriter(RUN_ID, "main.agency", [
+      new FileSink(tracePath),
+    ]);
+    await writer.writeCheckpoint(
+      new Checkpoint({
+        id: 0,
+        nodeId: "main",
+        moduleId: "main.agency",
+        scopeName: "main",
+        stepPath: "1",
+        stack: {
+          stack: [{ args: {}, locals: { x: 1 }, threads: null, step: 1 }],
+          mode: "serialize",
+          other: {},
+          deserializeStackLength: 0,
+          nodesTraversed: ["main"],
+        },
+        globals: {
+          store: { "main.agency": {} },
+          initializedModules: ["main.agency"],
+        },
+      }),
+    );
     await writer.close();
   }
 
@@ -82,20 +88,24 @@ describe("createBundle", () => {
 
   it("throws if trace file does not exist", async () => {
     writeTestSource();
-    expect(() => createBundle(
-      path.join(sourceDir, "main.agency"),
-      path.join(tmpDir, "nonexistent.trace"),
-      bundlePath,
-    )).toThrow();
+    expect(() =>
+      createBundle(
+        path.join(sourceDir, "main.agency"),
+        path.join(tmpDir, "nonexistent.trace"),
+        bundlePath,
+      ),
+    ).toThrow();
   });
 
   it("throws if source file does not exist", async () => {
     await writeTestTrace();
-    expect(() => createBundle(
-      path.join(sourceDir, "nonexistent.agency"),
-      tracePath,
-      bundlePath,
-    )).toThrow();
+    expect(() =>
+      createBundle(
+        path.join(sourceDir, "nonexistent.agency"),
+        tracePath,
+        bundlePath,
+      ),
+    ).toThrow();
   });
 });
 
@@ -120,25 +130,29 @@ describe("extractBundle", () => {
   });
 
   async function writeTestTrace() {
-    const writer = new TraceWriter("main.agency", [new FileSink(tracePath)]);
-    await writer.writeCheckpoint(new Checkpoint({
-      id: 0,
-      nodeId: "main",
-      moduleId: "main.agency",
-      scopeName: "main",
-      stepPath: "1",
-      stack: {
-        stack: [{ args: {}, locals: { x: 1 }, threads: null, step: 1 }],
-        mode: "serialize",
-        other: {},
-        deserializeStackLength: 0,
-        nodesTraversed: ["main"],
-      },
-      globals: {
-        store: { "main.agency": {} },
-        initializedModules: ["main.agency"],
-      },
-    }));
+    const writer = new TraceWriter(RUN_ID, "main.agency", [
+      new FileSink(tracePath),
+    ]);
+    await writer.writeCheckpoint(
+      new Checkpoint({
+        id: 0,
+        nodeId: "main",
+        moduleId: "main.agency",
+        scopeName: "main",
+        stepPath: "1",
+        stack: {
+          stack: [{ args: {}, locals: { x: 1 }, threads: null, step: 1 }],
+          mode: "serialize",
+          other: {},
+          deserializeStackLength: 0,
+          nodesTraversed: ["main"],
+        },
+        globals: {
+          store: { "main.agency": {} },
+          initializedModules: ["main.agency"],
+        },
+      }),
+    );
     await writer.close();
   }
 
@@ -161,7 +175,9 @@ describe("extractBundle", () => {
     extractBundle(bundlePath, outDir);
 
     expect(fs.existsSync(path.join(outDir, "main.agency"))).toBe(true);
-    expect(fs.readFileSync(path.join(outDir, "main.agency"), "utf-8")).toContain("node main()");
+    expect(
+      fs.readFileSync(path.join(outDir, "main.agency"), "utf-8"),
+    ).toContain("node main()");
     expect(fs.existsSync(path.join(outDir, "main.trace"))).toBe(true);
   });
 
@@ -187,16 +203,24 @@ describe("extractBundle", () => {
     ].join("\n");
     fs.writeFileSync(bundlePath, malicious);
 
-    expect(() => extractBundle(bundlePath, outDir)).toThrow("absolute paths not allowed");
+    expect(() => extractBundle(bundlePath, outDir)).toThrow(
+      "absolute paths not allowed",
+    );
   });
 
   it("throws on path traversal in source path", () => {
     const malicious = [
       JSON.stringify({ program: "main.agency" }),
-      JSON.stringify({ type: "source", path: "../../escape.txt", content: "bad" }),
+      JSON.stringify({
+        type: "source",
+        path: "../../escape.txt",
+        content: "bad",
+      }),
     ].join("\n");
     fs.writeFileSync(bundlePath, malicious);
 
-    expect(() => extractBundle(bundlePath, outDir)).toThrow("escapes target directory");
+    expect(() => extractBundle(bundlePath, outDir)).toThrow(
+      "escapes target directory",
+    );
   });
 });

@@ -21,7 +21,6 @@ import {
   rejectInterrupt as _rejectInterrupt,
   resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
-  resumeFromState as _resumeFromState,
   rewindFrom as _rewindFrom,
   RestoreSignal,
   deepClone as __deepClone,

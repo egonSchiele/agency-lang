@@ -39,7 +39,7 @@ export async function rewindFrom(args: {
 
   applyOverrides(checkpoint.checkpoint, overrides);
 
-  const execCtx = ctx.createExecutionContext();
+  const execCtx = await ctx.createExecutionContext(ctx.getRunId());
   execCtx.restoreState(checkpoint.checkpoint);
   execCtx._skipNextCheckpoint = true;
 

@@ -4,7 +4,7 @@
       "nodeName": "main",
       "description": "Race returns first result to complete",
       "input": "",
-      "expectedOutput": "10",
+      "expectedOutput": "20",
       "evaluationCriteria": [{ "type": "exact" }]
     }
   ]

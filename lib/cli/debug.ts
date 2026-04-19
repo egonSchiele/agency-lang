@@ -26,7 +26,7 @@ export async function debug(
   let inputFile = _inputFile;
   let tempDir: string | null = null;
   let traceCheckpoints: Checkpoint[] | undefined;
-  let traceHeader: TraceHeader | undefined
+  let traceHeader: TraceHeader | undefined;
   // Load a trace or bundle file. If it's a bundle (header.bundle === true),
   // extract source files to a temp dir and point inputFile there.
   function loadTraceOrBundle(filePath: string): void {
@@ -47,7 +47,10 @@ export async function debug(
         console.error("Error: Bundle has invalid program path.");
         process.exit(1);
       }
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const timestamp = new Date()
+        .toISOString()
+        .replace(/[:.]/g, "-")
+        .slice(0, 19);
       tempDir = path.resolve(`.tmp/bundle/${timestamp}`);
       fs.mkdirSync(tempDir, { recursive: true });
       reader.writeSourcesToDisk(tempDir);
@@ -68,7 +71,9 @@ export async function debug(
       loadTraceOrBundle(inputFile);
       // If it wasn't a bundle (no source extracted), we can't compile a .trace file
       if (!tempDir) {
-        console.error("Error: Trace files require a source file. Use: agency debug source.agency --trace file.trace");
+        console.error(
+          "Error: Trace files require a source file. Use: agency debug source.agency --trace file.trace",
+        );
         process.exit(1);
       }
     }
@@ -79,7 +84,9 @@ export async function debug(
 
     if (options.checkpoint) {
       if (!fs.existsSync(options.checkpoint)) {
-        console.error(`Error: Checkpoint file not found: ${options.checkpoint}`);
+        console.error(
+          `Error: Checkpoint file not found: ${options.checkpoint}`,
+        );
         process.exit(1);
       }
       const json = JSON.parse(fs.readFileSync(options.checkpoint, "utf-8"));
@@ -186,9 +193,26 @@ export async function debug(
     }
 
     if (traceCheckpoints) {
+      if (!traceHeader) {
+        console.error(
+          "Error: Trace checkpoints found but no header information.",
+        );
+        process.exit(1);
+      }
+
+      if (!traceHeader.runId) {
+        console.error("Error: Trace header missing runId.");
+        process.exit(1);
+      }
+
       // Trace mode: start at the last checkpoint as if the program just finished
       const lastCp = traceCheckpoints[traceCheckpoints.length - 1];
-      const interrupt = createDebugInterrupt(undefined, lastCp.id, lastCp);
+      const interrupt = createDebugInterrupt(
+        undefined,
+        lastCp.id,
+        lastCp,
+        traceHeader.runId,
+      );
       await driver.run({ data: interrupt });
     } else {
       // Normal mode: run the node, it will pause at the first debugStep()

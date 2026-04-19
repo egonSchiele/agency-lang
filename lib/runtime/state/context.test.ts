@@ -38,7 +38,9 @@ describe("RuntimeContext", () => {
     it("cancel() should set an AgencyCancelledError as the abort reason", () => {
       const ctx = makeMockCtx();
       ctx.cancel("user stop");
-      expect(ctx.abortController.signal.reason).toBeInstanceOf(AgencyCancelledError);
+      expect(ctx.abortController.signal.reason).toBeInstanceOf(
+        AgencyCancelledError,
+      );
       expect(ctx.abortController.signal.reason.message).toBe("user stop");
     });
 
@@ -49,9 +51,9 @@ describe("RuntimeContext", () => {
       expect(ctx.abortController.signal.reason.message).toBe("first");
     });
 
-    it("createExecutionContext should get a fresh AbortController", () => {
+    it("createExecutionContext should get a fresh AbortController", async () => {
       const ctx = makeMockCtx();
-      const execCtx = ctx.createExecutionContext();
+      const execCtx = await ctx.createExecutionContext("foo");
       expect(execCtx.abortController).toBeInstanceOf(AbortController);
       expect(execCtx.abortController).not.toBe(ctx.abortController);
       expect(execCtx.aborted).toBe(false);

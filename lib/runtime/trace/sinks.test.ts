@@ -20,6 +20,7 @@ const sampleHeader: TraceLine = {
   program: "test.agency",
   timestamp: "2026-01-01T00:00:00Z",
   config: { hashAlgorithm: "sha256" },
+  runId: "test-run-id",
 };
 
 const sampleChunk: TraceLine = {
@@ -64,17 +65,19 @@ describe("FileSink", () => {
 });
 
 describe("CallbackSink", () => {
-  it("wraps each line in a TraceEvent envelope with executionId", async () => {
+  it("wraps each line in a TraceEvent envelope with runId", async () => {
     const events: any[] = [];
-    const sink = new CallbackSink("exec-123", (event) => { events.push(event); });
+    const sink = new CallbackSink("exec-123", (event) => {
+      events.push(event);
+    });
 
     await sink.writeLine(sampleHeader);
     await sink.writeLine(sampleChunk);
 
     expect(events).toHaveLength(2);
-    expect(events[0].executionId).toBe("exec-123");
+    expect(events[0].runId).toBe("exec-123");
     expect(events[0].line).toBe(sampleHeader);
-    expect(events[1].executionId).toBe("exec-123");
+    expect(events[1].runId).toBe("exec-123");
     expect(events[1].line).toBe(sampleChunk);
   });
 
@@ -87,6 +90,6 @@ describe("CallbackSink", () => {
 
     await sink.writeLine(sampleHeader);
     expect(events).toHaveLength(1);
-    expect(events[0].executionId).toBe("exec-456");
+    expect(events[0].runId).toBe("exec-456");
   });
 });

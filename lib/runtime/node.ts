@@ -2,7 +2,11 @@ import { MessageJSON } from "smoltalk";
 import { callHook } from "./hooks.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
-import { AgencyCancelledError, CheckpointError, RestoreSignal } from "./errors.js";
+import {
+  AgencyCancelledError,
+  CheckpointError,
+  RestoreSignal,
+} from "./errors.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { GraphState, InternalFunctionState, RunNodeResult } from "./types.js";
@@ -10,7 +14,6 @@ import { createReturnObject } from "./utils.js";
 import { color } from "termcolors";
 import { nanoid } from "nanoid";
 import { isInterrupt } from "./interrupts.js";
-import { createTraceWriter } from "./trace/setup.js";
 
 export function setupNode(args: { state: GraphState }): {
   stack: State;
@@ -104,7 +107,8 @@ export async function runNode({
   // When aborted, in-flight LLM requests are torn down and a AgencyCancelledError is thrown.
   abortSignal?: AbortSignal;
 }): Promise<RunNodeResult<any>> {
-  const execCtx = ctx.createExecutionContext();
+  const runId = nanoid();
+  const execCtx = await ctx.createExecutionContext(runId);
   if (initializeGlobals) {
     await initializeGlobals(execCtx);
   }
@@ -114,22 +118,15 @@ export async function runNode({
     Object.assign(execCtx.callbacks, callbacks);
   }
 
-  // Set up tracing based on config and callbacks (unless already set, e.g. by __setTraceWriter)
-  let ownsTraceWriter = false;
-  if (!execCtx.traceWriter) {
-    const runId = nanoid();
-    execCtx.runId = runId;
-    execCtx.traceWriter = createTraceWriter(ctx.traceConfig, execCtx.callbacks, runId);
-    ownsTraceWriter = !!execCtx.traceWriter;
-  }
-
   // Wire external abort signal to the execution context
   const cancel = (reason?: string) => execCtx.cancel(reason);
   if (abortSignal) {
     if (abortSignal.aborted) {
       throw new AgencyCancelledError();
     }
-    abortSignal.addEventListener("abort", () => execCtx.cancel(), { once: true });
+    abortSignal.addEventListener("abort", () => execCtx.cancel(), {
+      once: true,
+    });
   }
 
   await callHook({
@@ -142,12 +139,16 @@ export async function runNode({
   try {
     while (true) {
       try {
-        const result = await execCtx.graph.run(nodeName, {
-          messages: threadStore,
-          data,
-          ctx: execCtx,
-          isResume,
-        }, { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) });
+        const result = await execCtx.graph.run(
+          nodeName,
+          {
+            messages: threadStore,
+            data,
+            ctx: execCtx,
+            isResume,
+          },
+          { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) },
+        );
         await execCtx.pendingPromises.awaitAll();
         const returnObject = createReturnObject({
           result,
@@ -158,10 +159,7 @@ export async function runNode({
           if (execCtx.runId) {
             returnObject.data.runId = execCtx.runId;
           }
-          if (execCtx.traceWriter) {
-            await execCtx.traceWriter.pause();
-            execCtx.traceWriter = null;
-          }
+          await execCtx.pauseTraceWriter();
         } else {
           // Final result: emit footer and close
           await callHook({
@@ -169,10 +167,7 @@ export async function runNode({
             name: "onAgentEnd",
             data: { nodeName, result: returnObject },
           });
-          if (execCtx.traceWriter) {
-            await execCtx.traceWriter.close();
-            execCtx.traceWriter = null;
-          }
+          await execCtx.closeTraceWriter();
         }
         return returnObject;
       } catch (e) {

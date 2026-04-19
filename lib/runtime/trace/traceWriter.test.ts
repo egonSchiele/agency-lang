@@ -7,6 +7,8 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
+const RUN_ID = "test-run-id";
+
 function readTrace(filePath: string) {
   return fs
     .readFileSync(filePath, "utf-8")
@@ -15,7 +17,9 @@ function readTrace(filePath: string) {
     .map((line) => JSON.parse(line));
 }
 
-function makeCheckpoint(overrides: Partial<Record<string, any>> = {}): Checkpoint {
+function makeCheckpoint(
+  overrides: Partial<Record<string, any>> = {},
+): Checkpoint {
   return new Checkpoint({
     id: 0,
     nodeId: "start",
@@ -53,7 +57,9 @@ describe("TraceWriter", () => {
   });
 
   it("writes a header as the first line", async () => {
-    const writer = new TraceWriter("test.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      new FileSink(tracePath),
+    ]);
     await writer.close();
 
     const lines = readTrace(tracePath);
@@ -65,7 +71,9 @@ describe("TraceWriter", () => {
   });
 
   it("writes chunks before their manifest", async () => {
-    const writer = new TraceWriter("test.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      new FileSink(tracePath),
+    ]);
     await writer.writeCheckpoint(makeCheckpoint());
     await writer.close();
 
@@ -80,20 +88,24 @@ describe("TraceWriter", () => {
   });
 
   it("deduplicates identical globals across checkpoints", async () => {
-    const writer = new TraceWriter("test.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      new FileSink(tracePath),
+    ]);
 
     await writer.writeCheckpoint(makeCheckpoint({ id: 0, stepPath: "0" }));
-    await writer.writeCheckpoint(makeCheckpoint({
-      id: 1,
-      stepPath: "1",
-      stack: {
-        stack: [{ args: {}, locals: { x: 99 }, threads: null, step: 1 }],
-        mode: "serialize",
-        other: {},
-        deserializeStackLength: 0,
-        nodesTraversed: ["start"],
-      },
-    }));
+    await writer.writeCheckpoint(
+      makeCheckpoint({
+        id: 1,
+        stepPath: "1",
+        stack: {
+          stack: [{ args: {}, locals: { x: 99 }, threads: null, step: 1 }],
+          mode: "serialize",
+          other: {},
+          deserializeStackLength: 0,
+          nodesTraversed: ["start"],
+        },
+      }),
+    );
     await writer.close();
 
     const lines = readTrace(tracePath);
@@ -103,8 +115,12 @@ describe("TraceWriter", () => {
   });
 
   it("manifest contains checkpoint metadata alongside hashed fields", async () => {
-    const writer = new TraceWriter("test.agency", [new FileSink(tracePath)]);
-    await writer.writeCheckpoint(makeCheckpoint({ label: "test-label", pinned: true }));
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      new FileSink(tracePath),
+    ]);
+    await writer.writeCheckpoint(
+      makeCheckpoint({ label: "test-label", pinned: true }),
+    );
     await writer.close();
 
     const lines = readTrace(tracePath);
@@ -122,7 +138,9 @@ describe("TraceWriter", () => {
   });
 
   it("emits footer on close with correct counts", async () => {
-    const writer = new TraceWriter("test.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      new FileSink(tracePath),
+    ]);
     await writer.writeCheckpoint(makeCheckpoint());
     await writer.close();
 
@@ -136,8 +154,13 @@ describe("TraceWriter", () => {
 
   it("fans out to multiple sinks", async () => {
     const callbackLines: TraceLine[] = [];
-    const callbackSink = new CallbackSink("test-id", (event) => { callbackLines.push(event.line); });
-    const writer = new TraceWriter("test.agency", [new FileSink(tracePath), callbackSink]);
+    const callbackSink = new CallbackSink("test-id", (event) => {
+      callbackLines.push(event.line);
+    });
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      new FileSink(tracePath),
+      callbackSink,
+    ]);
     await writer.writeCheckpoint(makeCheckpoint());
     await writer.close();
 
@@ -149,10 +172,17 @@ describe("TraceWriter", () => {
   it("sink error does not prevent other sinks from receiving data", async () => {
     const callbackLines: TraceLine[] = [];
     const errorSink = {
-      writeLine: () => { throw new Error("sink error"); },
+      writeLine: () => {
+        throw new Error("sink error");
+      },
     };
-    const goodSink = new CallbackSink("test-id", (event) => { callbackLines.push(event.line); });
-    const writer = new TraceWriter("test.agency", [errorSink, goodSink]);
+    const goodSink = new CallbackSink("test-id", (event) => {
+      callbackLines.push(event.line);
+    });
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      errorSink,
+      goodSink,
+    ]);
     await writer.writeCheckpoint(makeCheckpoint());
     await writer.close();
 

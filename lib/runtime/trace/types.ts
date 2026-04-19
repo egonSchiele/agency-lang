@@ -16,6 +16,7 @@ export type TraceHeader = {
   timestamp: string;
   config: { hashAlgorithm: string };
   bundle?: boolean;
+  runId: string;
 };
 
 export type TraceSource = {
@@ -41,9 +42,25 @@ export type TraceFooter = {
   timestamp: string;
 };
 
-export type TraceLine = TraceHeader | TraceSource | TraceChunk | TraceManifest | TraceFooter;
+export type TraceLine =
+  | TraceHeader
+  | TraceSource
+  | TraceChunk
+  | TraceManifest
+  | TraceFooter;
 
 export type TraceEvent = {
-  executionId: string;
+  runId: string;
   line: TraceLine;
+};
+
+export type TraceCallback = (event: {
+  runId: string;
+  line: TraceLine;
+}) => void | Promise<void>;
+
+export type TraceConfig = {
+  traceDir?: string;
+  traceFile?: string;
+  traceCallback?: TraceCallback;
 };

@@ -55,10 +55,17 @@ export class DebuggerUI implements DebuggerIO {
     box: blessed.Widgets.BoxElement;
     name: string;
     color: string;
+    label: string;
   }[];
   public state: UIState;
   public prevState: UIState | null = null;
   private commandBarContent = "";
+
+  // Zoom: stores original position/size so we can restore on un-zoom
+  private zoomedPane: { name: string; original: Record<string, any> } | null = null;
+
+  // Thread cycling: index into the list of thread IDs for the current checkpoint
+  private threadDisplayIndex = 0;
   private spinnerInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
@@ -260,12 +267,12 @@ export class DebuggerUI implements DebuggerIO {
     this.screen.append(this.commandInput);
 
     this.focusablePanes = [
-      { box: this.sourceBox, name: "sourceBox", color: "cyan" },
-      { box: this.localsBox, name: "localsBox", color: "green" },
-      { box: this.globalsBox, name: "globalsBox", color: "green" },
-      { box: this.callStackBox, name: "callStackBox", color: "magenta" },
-      { box: this.activityBox, name: "activityBox", color: "yellow" },
-      { box: this.stdoutBox, name: "stdoutBox", color: "blue" },
+      { box: this.sourceBox, name: "sourceBox", color: "cyan", label: " source " },
+      { box: this.localsBox, name: "localsBox", color: "green", label: " locals " },
+      { box: this.globalsBox, name: "globalsBox", color: "green", label: " globals " },
+      { box: this.callStackBox, name: "callStackBox", color: "magenta", label: " call stack " },
+      { box: this.activityBox, name: "activityBox", color: "yellow", label: " activity " },
+      { box: this.stdoutBox, name: "stdoutBox", color: "blue", label: " stdout " },
     ];
 
     // Ctrl-C to quit — blessed puts the terminal in raw mode so SIGINT
@@ -446,7 +453,7 @@ export class DebuggerUI implements DebuggerIO {
   }
 
   private renderThreadsPane(): void {
-    const threadData = this.state.getThreadMessages();
+    const threadData = this.state.getThreadMessages(this.threadDisplayIndex);
     const focusedName = this.focusablePanes[this.focusIndex]?.name;
     if (!threadData) {
       this.threadsBox.hide();
@@ -455,6 +462,7 @@ export class DebuggerUI implements DebuggerIO {
         (p) => p.name !== "threadsBox",
       );
       this.restoreFocusByName(focusedName);
+      this.threadDisplayIndex = 0;
       return;
     }
 
@@ -462,25 +470,35 @@ export class DebuggerUI implements DebuggerIO {
     this.sourceBox.width = "65%";
     this.threadsBox.show();
 
+    const countLabel = threadData.threadCount > 1
+      ? ` [${threadData.threadIndex + 1}/${threadData.threadCount}]`
+      : "";
+    const threadLabel = ` threads: (id: ${threadData.threadId})${countLabel} `;
+
     // Add to focusable panes if not already there
-    if (!this.focusablePanes.some((p) => p.name === "threadsBox")) {
+    const existingPane = this.focusablePanes.find((p) => p.name === "threadsBox");
+    if (existingPane) {
+      existingPane.label = threadLabel;
+    } else {
       this.focusablePanes.splice(1, 0, {
         box: this.threadsBox,
         name: "threadsBox",
         color: "cyan",
+        label: threadLabel,
       });
       this.restoreFocusByName(focusedName);
     }
 
-    this.threadsBox.setLabel(` threads: ${this.fmt(threadData.threadId)} `);
+    this.threadsBox.setLabel(` ${this.fmt(threadLabel)} `);
 
     // Format messages
+    const isZoomed = this.zoomedPane?.name === "threadsBox";
     const content = threadData.messages
       .map((m) => {
-        // if its not a string,call json.strinfigy
-        const truncated =
-          m.content.length > 200 ? m.content.slice(0, 197) + "..." : m.content;
-        return `  ${this.bold(`[${this.fmt(m.role)}]`)} ${this.fmt(truncated)}`;
+        const display = isZoomed
+          ? m.content
+          : m.content.length > 200 ? m.content.slice(0, 197) + "..." : m.content;
+        return `  ${this.bold(`[${this.fmt(m.role)}]`)} ${this.fmt(display)}`;
       })
       .join("\n");
 
@@ -630,7 +648,11 @@ export class DebuggerUI implements DebuggerIO {
             resolve({ type: "quit" });
             break;
           case "tab":
-            this.cycleFocus();
+            if (key.shift) {
+              this.focusPane((this.focusIndex - 1 + this.focusablePanes.length) % this.focusablePanes.length);
+            } else {
+              this.cycleFocus();
+            }
             this.screen.render();
             break;
           case "up": {
@@ -659,7 +681,26 @@ export class DebuggerUI implements DebuggerIO {
             this.screen.render();
             break;
           }
+          case "z":
+            this.toggleZoom();
+            break;
           default:
+            // Number keys: jump directly to a panel (1-indexed)
+            if (key.full >= "1" && key.full <= "9") {
+              const panelIndex = parseInt(key.full, 10) - 1;
+              if (panelIndex < this.focusablePanes.length) {
+                this.focusPane(panelIndex);
+                this.screen.render();
+              }
+              break;
+            }
+            // Thread cycling: [ and ] to navigate between threads
+            if (key.full === "[" || key.full === "]") {
+              this.threadDisplayIndex += key.full === "]" ? 1 : -1;
+              this.renderThreadsPane();
+              this.screen.render();
+              break;
+            }
             if (key.full === ":") {
               cleanup();
               this.enterTextInput(":").then((input) => {
@@ -735,19 +776,66 @@ export class DebuggerUI implements DebuggerIO {
     });
   }
 
+  private focusPane(index: number): void {
+    for (let i = 0; i < this.focusablePanes.length; i++) {
+      const pane = this.focusablePanes[i];
+      if (i === index) {
+        pane.box.style.border.fg = "white";
+        pane.box.style.label.fg = "cyan";
+        pane.box.style.label.bold = true;
+        pane.box.setLabel(pane.label);
+        pane.box.style.fg = "white";
+      } else {
+        pane.box.style.border.fg = pane.color;
+        pane.box.style.label.fg = pane.color;
+        pane.box.style.label.bold = false;
+        pane.box.setLabel(pane.label);
+        pane.box.style.fg = "gray";
+      }
+    }
+    this.focusIndex = index;
+    this.focusablePanes[index].box.focus();
+  }
+
   private cycleFocus(): void {
-    // Restore previous pane's border color
-    const prev = this.focusablePanes[this.focusIndex];
-    prev.box.style.border.fg = prev.color;
-    prev.box.style.label.fg = prev.color;
+    this.focusPane((this.focusIndex + 1) % this.focusablePanes.length);
+  }
 
-    this.focusIndex = (this.focusIndex + 1) % this.focusablePanes.length;
-
-    // Highlight the newly focused pane
-    const next = this.focusablePanes[this.focusIndex];
-    next.box.style.border.fg = "white";
-    next.box.style.label.fg = "white";
-    next.box.focus();
+  private toggleZoom(): void {
+    const pane = this.focusablePanes[this.focusIndex];
+    if (this.zoomedPane) {
+      // Restore original position/size
+      const { original } = this.zoomedPane;
+      pane.box.top = original.top;
+      pane.box.left = original.left;
+      pane.box.width = original.width;
+      pane.box.height = original.height;
+      // Show all other panes
+      for (const p of this.focusablePanes) {
+        p.box.show();
+      }
+      this.zoomedPane = null;
+    } else {
+      // Save original geometry and maximize
+      this.zoomedPane = {
+        name: pane.name,
+        original: {
+          top: pane.box.top,
+          left: pane.box.left,
+          width: pane.box.width,
+          height: pane.box.height,
+        },
+      };
+      // Hide all other panes
+      for (const p of this.focusablePanes) {
+        if (p.name !== pane.name) p.box.hide();
+      }
+      pane.box.top = 0;
+      pane.box.left = 0;
+      pane.box.width = "100%";
+      pane.box.height = "100%-4";
+    }
+    this.screen.render();
   }
 
   promptForInput(prompt: string): Promise<string> {

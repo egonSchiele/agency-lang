@@ -20,6 +20,8 @@ export function resetGlobalCheckpointCounter(): void {
 
 export type ThreadMessages = {
   threadId: string;
+  threadIndex: number;
+  threadCount: number;
   messages: { role: string; content: string }[];
 };
 
@@ -75,7 +77,7 @@ export class Checkpoint implements SourceLocation {
     return this.stack.stack?.at(-1);
   }
 
-  getThreadMessages(): ThreadMessages | null {
+  getThreadMessages(displayIndex?: number): ThreadMessages | null {
     const frame = this.getCurrentFrame();
     if (!frame?.threads) return null;
 
@@ -83,21 +85,29 @@ export class Checkpoint implements SourceLocation {
     const threadIds = Object.keys(threads);
     if (threadIds.length === 0) return null;
 
-    // Prefer the active thread at the top of the stack, then any existing
-    // thread still referenced by the active stack, and finally the first
-    // available thread.
-    const activeId =
-      activeStack.findLast((id) => threads[id] != null) ?? threadIds[0];
-    const activeThread = threads[activeId];
-    if (!activeThread) return null;
+    let selectedId: string;
+    let selectedIndex: number;
 
-    const messages = activeThread.messages.map((m: MessageJSON) => ({
+    if (displayIndex !== undefined) {
+      // Explicit index requested (for thread cycling)
+      selectedIndex = ((displayIndex % threadIds.length) + threadIds.length) % threadIds.length;
+      selectedId = threadIds[selectedIndex];
+    } else {
+      // Default: prefer the active thread at the top of the stack
+      selectedId =
+        activeStack.findLast((id) => threads[id] != null) ?? threadIds[0];
+      selectedIndex = threadIds.indexOf(selectedId);
+    }
+
+    const selectedThread = threads[selectedId];
+    if (!selectedThread) return null;
+
+    const messages = selectedThread.messages.map((m: MessageJSON) => ({
       role: m.role ?? "unknown",
-      // smoltalk content can be string, TextPart[], or null
       content: this.getContentFromMessage(m),
     }));
 
-    return { threadId: activeId, messages };
+    return { threadId: selectedId, threadIndex: selectedIndex, threadCount: threadIds.length, messages };
   }
 
   private getContentFromMessage(message: MessageJSON): string {

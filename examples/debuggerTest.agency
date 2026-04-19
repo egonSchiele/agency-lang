@@ -1,0 +1,28 @@
+def greet(name: string) {
+  return interrupt("Are you sure you want to greet ${name}?")
+  return "Hello, ${name}!"
+}
+
+node main() {
+  const name = "Alice"
+  handle {
+    const greeting = greet(name)
+    print(greeting)
+  } with (msg) {
+    print("Caught interrupt with message: ${msg}")
+    const msg = input("Approve? (y/n)")
+    if (msg.trim().toLowerCase() === "y") {
+      return approve()
+    }
+    return reject()
+  }
+  if (greeting) {
+    print("Greeting was: ${greeting}")
+  } else {
+    print("No greeting was produced.")
+  }
+  const arr = range(5)
+  for (x in arr) {
+    print(x)
+  }
+}

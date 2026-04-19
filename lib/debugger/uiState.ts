@@ -164,9 +164,9 @@ export class UIState {
     this.pendingOverrides[key] = value;
   }
 
-  getThreadMessages(): ThreadMessages | null {
+  getThreadMessages(displayIndex?: number): ThreadMessages | null {
     if (!this.checkpoint) return null;
-    return this.checkpoint.getThreadMessages();
+    return this.checkpoint.getThreadMessages(displayIndex);
   }
 
   getModuleId() {

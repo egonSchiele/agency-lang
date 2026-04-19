@@ -8,6 +8,7 @@ import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { Approved, GraphState, Rejected } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { reviveWithClasses } from "./classReviver.js";
+import { createTraceWriter } from "./trace/setup.js";
 export { type ClassRegistry, createClassReviver, reviveWithClasses } from "./classReviver.js";
 
 export type InterruptApprove = {
@@ -64,6 +65,7 @@ export type Interrupt<T = any> = {
   checkpointId?: number;
   checkpoint?: Checkpoint;
   state?: InterruptState; // kept for backward compat migration shim
+  runId?: string; // unique ID for the agent run, persists across interrupt pauses/resumes
 };
 
 export function interrupt<T = any>(data: T): Interrupt<T> {
@@ -218,6 +220,13 @@ export async function respondToInterrupt(args: {
     execCtx.debuggerState = metadata.debugger;
   }
 
+  // Recreate trace writer with the same runId from the interrupt
+  const ownsTraceWriter = !!interrupt.runId && !execCtx.traceWriter;
+  if (ownsTraceWriter) {
+    execCtx.runId = interrupt.runId!;
+    execCtx.traceWriter = createTraceWriter(ctx.traceConfig, execCtx.callbacks, interrupt.runId!);
+  }
+
   let interruptData: InterruptData | undefined = interrupt.interruptData || {};
 
   if (interrupt.debugger && !interrupt.interruptData?.toolCall) {
@@ -251,7 +260,20 @@ export async function respondToInterrupt(args: {
           { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) },
         );
         await execCtx.pendingPromises.awaitAll();
-        return createReturnObject({ result, globals: execCtx.globals });
+        const returnObject = createReturnObject({ result, globals: execCtx.globals });
+        if (ownsTraceWriter && execCtx.traceWriter) {
+          if (isInterrupt(returnObject.data)) {
+            if (execCtx.runId) {
+              returnObject.data.runId = execCtx.runId;
+            }
+            await execCtx.traceWriter.pause();
+            execCtx.traceWriter = null;
+          } else {
+            await execCtx.traceWriter.close();
+            execCtx.traceWriter = null;
+          }
+        }
+        return returnObject;
       } catch (e) {
         if (e instanceof RestoreSignal) {
           const cp = e.checkpoint;
@@ -375,6 +397,9 @@ export async function resumeFromState(args: {
   if (metadata.debugger) {
     execCtx.debuggerState = metadata.debugger;
   }
+
+  // resumeFromState doesn't come from an interrupt, so no runId to restore.
+  // Trace writer will be set up if traceConfig or callbacks warrant it.
 
   const nodesTraversed = execCtx.stateStack.nodesTraversed || [];
   let nodeName = nodesTraversed[nodesTraversed.length - 1];

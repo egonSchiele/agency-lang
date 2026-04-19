@@ -4,6 +4,7 @@ import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
 import type { GraphState } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
+import { isInterrupt } from "./interrupts.js";
 import { color } from "termcolors";
 
 export type RewindCheckpoint = {

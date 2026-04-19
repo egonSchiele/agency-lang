@@ -3280,6 +3280,17 @@ export class TypeScriptBuilder {
       );
     }
 
+    const traceConfigFields: Record<string, TsNode> = {};
+    if (this.agencyConfig.traceDir) {
+      traceConfigFields.traceDir = ts.str(this.agencyConfig.traceDir);
+    }
+    if (this.agencyConfig.traceFile) {
+      traceConfigFields.traceFile = ts.str(this.agencyConfig.traceFile);
+    }
+    if (Object.keys(traceConfigFields).length > 0) {
+      runtimeCtxArgs.traceConfig = ts.obj(traceConfigFields);
+    }
+
     let runtimeCtx: TsNode = ts.statements([
       ts.constDecl(
         "__globalCtx",

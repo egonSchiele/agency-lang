@@ -8,6 +8,9 @@ import { ThreadStore } from "./state/threadStore.js";
 import { GraphState, InternalFunctionState, RunNodeResult } from "./types.js";
 import { createReturnObject } from "./utils.js";
 import { color } from "termcolors";
+import { nanoid } from "nanoid";
+import { isInterrupt } from "./interrupts.js";
+import { createTraceWriter } from "./trace/setup.js";
 
 export function setupNode(args: { state: GraphState }): {
   stack: State;
@@ -111,6 +114,15 @@ export async function runNode({
     Object.assign(execCtx.callbacks, callbacks);
   }
 
+  // Set up tracing based on config and callbacks (unless already set, e.g. by __setTraceWriter)
+  let ownsTraceWriter = false;
+  if (!execCtx.traceWriter) {
+    const runId = nanoid();
+    execCtx.runId = runId;
+    execCtx.traceWriter = createTraceWriter(ctx.traceConfig, execCtx.callbacks, runId);
+    ownsTraceWriter = !!execCtx.traceWriter;
+  }
+
   // Wire external abort signal to the execution context
   const cancel = (reason?: string) => execCtx.cancel(reason);
   if (abortSignal) {
@@ -141,11 +153,27 @@ export async function runNode({
           result,
           globals: execCtx.globals,
         });
-        await callHook({
-          callbacks: execCtx.callbacks,
-          name: "onAgentEnd",
-          data: { nodeName, result: returnObject },
-        });
+        if (isInterrupt(returnObject.data)) {
+          // Interrupt: attach runId and pause (no footer)
+          if (execCtx.runId) {
+            returnObject.data.runId = execCtx.runId;
+          }
+          if (execCtx.traceWriter) {
+            await execCtx.traceWriter.pause();
+            execCtx.traceWriter = null;
+          }
+        } else {
+          // Final result: emit footer and close
+          await callHook({
+            callbacks: execCtx.callbacks,
+            name: "onAgentEnd",
+            data: { nodeName, result: returnObject },
+          });
+          if (execCtx.traceWriter) {
+            await execCtx.traceWriter.close();
+            execCtx.traceWriter = null;
+          }
+        }
         return returnObject;
       } catch (e) {
         if (e instanceof RestoreSignal) {

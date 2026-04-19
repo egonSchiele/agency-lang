@@ -68,6 +68,9 @@ export class RuntimeContext<T> {
 
   abortController: AbortController;
 
+  traceConfig: { traceDir?: string; traceFile?: string };
+  runId: string | null;
+
   // stored so createExecutionContext can create new StatelogClients
   private statelogConfig: StatelogConfig;
   maxRestores: number;
@@ -77,6 +80,7 @@ export class RuntimeContext<T> {
     smoltalkDefaults: Partial<SmolPromptConfig>;
     dirname: string;
     maxRestores?: number;
+    traceConfig?: { traceDir?: string; traceFile?: string };
   }) {
     const statelogConfig = {
       ...args.statelogConfig,
@@ -101,6 +105,8 @@ export class RuntimeContext<T> {
     this.pendingPromises = new PendingPromiseStore();
     this.debuggerState = null;
     this.traceWriter = null;
+    this.traceConfig = args.traceConfig || {};
+    this.runId = null;
     this.dirname = args.dirname;
 
     const graphConfig = {
@@ -138,6 +144,8 @@ export class RuntimeContext<T> {
     execCtx._toolCallDepth = 0;
     execCtx.debuggerState = this.debuggerState;
     execCtx.traceWriter = this.traceWriter;
+    execCtx.traceConfig = this.traceConfig;
+    execCtx.runId = this.runId;
     execCtx.pendingPromises = new PendingPromiseStore();
     execCtx.classRegistry = this.classRegistry;
     execCtx.abortController = new AbortController();

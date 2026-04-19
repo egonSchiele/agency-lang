@@ -40,6 +40,21 @@ export class TraceWriter {
     this.checkpointCount++;
   }
 
+  /** Flush and close all sinks without emitting a footer.
+   *  Used when execution is pausing for an interrupt. */
+  async pause(): Promise<void> {
+    await this.headerPromise;
+    for (const sink of this.sinks) {
+      try {
+        await sink.close?.();
+      } catch (error) {
+        console.error("[agency] Error closing trace sink:", error);
+      }
+    }
+  }
+
+  /** Emit a footer and close all sinks.
+   *  Used when the agent run is truly finished. */
   async close(): Promise<void> {
     await this.headerPromise;
     await this.writeLine({
@@ -48,13 +63,7 @@ export class TraceWriter {
       chunkCount: this.chunkCount,
       timestamp: new Date().toISOString(),
     });
-    for (const sink of this.sinks) {
-      try {
-        await sink.close?.();
-      } catch (error) {
-        console.error("[agency] Error closing trace sink:", error);
-      }
-    }
+    await this.pause();
   }
 
   private async writeLine(obj: any): Promise<void> {

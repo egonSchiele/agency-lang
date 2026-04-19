@@ -9,9 +9,14 @@ export async function watchAndCompile(
   inputs: string[],
   options: { ts?: boolean },
 ): Promise<() => Promise<void>> {
-  // Initial compile
+  // Initial compile — catch errors so the watcher still starts
   for (const input of inputs) {
-    compile(config, input, undefined, { ts: options.ts });
+    try {
+      compile(config, input, undefined, { ts: options.ts });
+    } catch (err) {
+      console.error(color.red(`Error compiling ${input}:`));
+      console.error(err instanceof Error ? err.message : err);
+    }
   }
 
   // Set up watcher
@@ -50,6 +55,9 @@ export async function watchAndCompile(
   console.log(color.cyan("Watching for changes..."));
 
   return async () => {
+    for (const timer of Object.values(debounceTimers)) {
+      clearTimeout(timer);
+    }
     await watcher.close();
   };
 }

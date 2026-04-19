@@ -3,6 +3,8 @@ import * as fs from "fs";
 import * as path from "path";
 import { compile } from "../cli/commands.js";
 import { TraceReader } from "../runtime/trace/traceReader.js";
+import { TraceWriter } from "../runtime/trace/traceWriter.js";
+import { FileSink } from "../runtime/trace/sinks.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import { DebuggerDriver } from "./driver.js";
 import type { DebuggerCommand } from "./types.js";
@@ -17,7 +19,7 @@ describe("Trace integration with debugger", () => {
 
   beforeAll(async () => {
     compile(
-      { debugger: true, trace: true, traceFile },
+      { debugger: true },
       traceTestAgency,
       traceTestCompiled,
       { ts: true },
@@ -32,6 +34,10 @@ describe("Trace integration with debugger", () => {
   });
 
   it("produces a trace file when running with trace enabled", async () => {
+    // Set up TraceWriter on the module's global context
+    const traceWriter = new TraceWriter("trace-test.agency", [new FileSink(traceFile)]);
+    mod.__setTraceWriter(traceWriter);
+
     const commands: DebuggerCommand[] = Array(20).fill({ type: "step" });
     const testUI = new TestDebuggerIO(commands);
 
@@ -53,6 +59,9 @@ describe("Trace integration with debugger", () => {
     const initialResult = await mod.main({ callbacks });
     expect(isInterrupt(initialResult.data)).toBe(true);
     await driver.run(initialResult, { interceptConsole: false });
+
+    // Close the trace writer to flush
+    await traceWriter.close();
 
     // Verify trace file was created
     expect(fs.existsSync(traceFile)).toBe(true);

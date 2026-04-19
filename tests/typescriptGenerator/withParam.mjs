@@ -84,6 +84,7 @@ export const resolveInterrupt = (interrupt: Interrupt, value: any, opts?: { over
 export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
+export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("withParam.agency")

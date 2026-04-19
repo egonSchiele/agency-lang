@@ -33,7 +33,6 @@ import * as renderDebugger from "../templates/backends/typescriptGenerator/debug
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
 import * as renderInterruptReturn from "../templates/backends/typescriptGenerator/interruptReturn.js";
-import * as renderTraceSetup from "../templates/backends/typescriptGenerator/traceSetup.js";
 import * as renderBlockSetup from "../templates/backends/typescriptGenerator/blockSetup.js";
 import * as renderForkBlockSetup from "../templates/backends/typescriptGenerator/forkBlockSetup.js";
 import * as renderResultCheckpointSetup from "../templates/backends/typescriptGenerator/resultCheckpointSetup.js";
@@ -2692,7 +2691,7 @@ export class TypeScriptBuilder {
   }
 
   private processDebuggerStatement(node: DebuggerStatement): TsNode {
-    if (!this.agencyConfig?.debugger && !this.agencyConfig?.trace) {
+    if (this.agencyConfig?.instrument === false) {
       // Debug/trace mode off: debugger keyword is a no-op
       return ts.empty();
     }
@@ -2905,7 +2904,7 @@ export class TypeScriptBuilder {
    *  step-triggering statement so that debugStep() is called at every
    *  substep boundary, not just top-level steps. */
   private insertDebugSteps(body: AgencyNode[]): AgencyNode[] {
-    if (!this.agencyConfig?.debugger && !this.agencyConfig?.trace) return body;
+    if (this.agencyConfig?.instrument === false) return body;
     const expanded: AgencyNode[] = [];
     for (const stmt of body) {
       if (
@@ -3288,21 +3287,6 @@ export class TypeScriptBuilder {
       ),
       ts.constDecl("graph", $(ts.runtime.globalCtx).prop("graph").done()),
     ]);
-
-    if (this.agencyConfig.trace) {
-      const traceFile =
-        this.agencyConfig.traceFile ||
-        this.moduleId.replace(/\.agency$/, ".trace");
-      runtimeCtx = ts.statements([
-        runtimeCtx,
-        ts.raw(
-          renderTraceSetup.default({
-            traceFile: JSON.stringify(traceFile),
-            programId: JSON.stringify(this.moduleId),
-          }),
-        ),
-      ]);
-    }
 
     return renderImports.default({
       runtimeContextCode: printTs(runtimeCtx),

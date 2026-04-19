@@ -177,7 +177,8 @@ type TraceEvent = {
 | `lib/types/sentinel.ts` | Remove (checkpoint-only type) |
 | `lib/types.ts` | Remove `Sentinel` from `AgencyNode` union |
 | `lib/runtime/trace/traceWriter.ts` | Refactor to accept `TraceSink[]`, make `writeCheckpoint` async, add `close()` method |
-| `lib/runtime/node.ts` | Add trace config resolution (check config + onTrace callback), add `TraceWriter.close()` call at end of execution |
+| `lib/runtime/node.ts` | Call `createTraceWriter()`, add `TraceWriter.close()` call at end of execution |
+| New: `lib/runtime/trace/setup.ts` | `createTraceWriter()` factory — resolves config, creates sinks, returns `TraceWriter` or null |
 | `lib/runtime/trace/traceWriter.test.ts` | Update tests for new sink-based API |
 | `lib/runtime/state/context.ts` | Update `traceWriter` initialization |
 | `lib/backends/typescriptBuilder.ts` | Always emit `debugStep()` (unless `instrument: false`), remove sentinel handling, remove `renderRewindCheckpoint` import |

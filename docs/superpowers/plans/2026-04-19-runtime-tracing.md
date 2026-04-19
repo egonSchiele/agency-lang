@@ -565,8 +565,9 @@ git commit -m "feat: always emit debugStep instrumentation (opt-out via instrume
 ### Task 8: Runtime TraceWriter initialization
 
 **Files:**
+- Create: `lib/runtime/trace/setup.ts` (factory function for TraceWriter)
 - Modify: `lib/runtime/state/context.ts` (add `traceConfig` field, make `cleanup()` async)
-- Modify: `lib/runtime/node.ts` (add trace setup logic)
+- Modify: `lib/runtime/node.ts` (one-liner to call `createTraceWriter`)
 - Modify: `lib/runtime/interrupts.ts` (await async `cleanup()`)
 - Modify: `lib/runtime/rewind.ts` (await async `cleanup()`)
 - Modify: `lib/backends/typescriptBuilder.ts` (bake `traceDir`/`traceFile` into `RuntimeContext` constructor args)
@@ -606,30 +607,29 @@ if (Object.keys(traceConfigFields).length > 0) {
 }
 ```
 
-- [ ] **Step 3: Add trace file name generation utility and trace setup in `runNode`**
-
-In `lib/runtime/node.ts`, add imports and a helper:
+- [ ] **Step 3: Create `lib/runtime/trace/setup.ts` with factory function**
 
 ```typescript
-import { TraceWriter } from "./trace/traceWriter.js";
-import { FileSink, CallbackSink } from "./trace/sinks.js";
-import type { TraceSink } from "./trace/sinks.js";
+// lib/runtime/trace/setup.ts
 import * as fs from "fs";
 import * as path from "path";
+import { nanoid } from "agency-lang";
+import { TraceWriter } from "./traceWriter.js";
+import { FileSink, CallbackSink } from "./sinks.js";
+import type { TraceSink } from "./sinks.js";
+import type { AgencyCallbacks } from "../hooks.js";
 
 function generateTraceFilePath(dir: string): string {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const id = Math.random().toString(16).slice(2, 6);
   return path.join(dir, `${timestamp}_${id}.agencytrace`);
 }
-```
 
-Inside `runNode()`, after callbacks assignment (after line 112), add trace setup:
-
-```typescript
-  // Set up tracing based on config and callbacks
+export function createTraceWriter(
+  traceConfig: { traceDir?: string; traceFile?: string },
+  callbacks: AgencyCallbacks,
+): TraceWriter | null {
   const sinks: TraceSink[] = [];
-  const traceConfig = ctx.traceConfig;
 
   if (traceConfig?.traceDir) {
     fs.mkdirSync(traceConfig.traceDir, { recursive: true });
@@ -638,20 +638,29 @@ Inside `runNode()`, after callbacks assignment (after line 112), add trace setup
     sinks.push(new FileSink(traceConfig.traceFile));
   }
 
-  if (execCtx.callbacks.onTrace) {
-    const executionId = nanoid();
-    sinks.push(new CallbackSink(executionId, execCtx.callbacks.onTrace));
+  if (callbacks.onTrace) {
+    sinks.push(new CallbackSink(nanoid(), callbacks.onTrace));
   }
 
-  if (sinks.length > 0) {
-    execCtx.traceWriter = new TraceWriter(
-      traceConfig?.traceFile || traceConfig?.traceDir || "unknown.agency",
-      sinks,
-    );
-  }
+  return sinks.length > 0
+    ? new TraceWriter(traceConfig?.traceFile || traceConfig?.traceDir || "unknown.agency", sinks)
+    : null;
+}
 ```
 
-- [ ] **Step 4: Make `cleanup()` async and update all call sites**
+- [ ] **Step 4: Use `createTraceWriter` in `runNode`**
+
+In `lib/runtime/node.ts`, add import and one-liner after callbacks assignment (after line 112):
+
+```typescript
+import { createTraceWriter } from "./trace/setup.js";
+```
+
+```typescript
+  execCtx.traceWriter = createTraceWriter(ctx.traceConfig, execCtx.callbacks);
+```
+
+- [ ] **Step 5: Make `cleanup()` async and update all call sites**
 
 In `lib/runtime/state/context.ts`, change `cleanup()`:
 
@@ -682,15 +691,15 @@ Update all call sites to `await`:
 
 All four are in `finally` blocks of async functions, so adding `await` is safe.
 
-- [ ] **Step 5: Build and run tests**
+- [ ] **Step 6: Build and run tests**
 
 Run: `pnpm run build && pnpm test:run`
 Expected: All tests pass
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add lib/runtime/node.ts lib/runtime/state/context.ts lib/runtime/interrupts.ts lib/runtime/rewind.ts lib/backends/typescriptBuilder.ts
+git add lib/runtime/trace/setup.ts lib/runtime/node.ts lib/runtime/state/context.ts lib/runtime/interrupts.ts lib/runtime/rewind.ts lib/backends/typescriptBuilder.ts
 git commit -m "feat: runtime TraceWriter initialization from config and onTrace callback"
 ```
 

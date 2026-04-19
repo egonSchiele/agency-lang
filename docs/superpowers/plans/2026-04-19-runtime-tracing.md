@@ -594,11 +594,15 @@ In `createExecutionContext()`, copy it: `execCtx.traceConfig = this.traceConfig;
 In `lib/backends/typescriptBuilder.ts`, in the `generateImports()` method (around line 3297), add `traceConfig` to `runtimeCtxArgs`:
 
 ```typescript
-if (this.agencyConfig.traceDir || this.agencyConfig.traceFile) {
-  runtimeCtxArgs.traceConfig = ts.obj({
-    ...(this.agencyConfig.traceDir ? { traceDir: ts.str(this.agencyConfig.traceDir) } : {}),
-    ...(this.agencyConfig.traceFile ? { traceFile: ts.str(this.agencyConfig.traceFile) } : {}),
-  });
+const traceConfigFields: Record<string, TsNode> = {};
+if (this.agencyConfig.traceDir) {
+  traceConfigFields.traceDir = ts.str(this.agencyConfig.traceDir);
+}
+if (this.agencyConfig.traceFile) {
+  traceConfigFields.traceFile = ts.str(this.agencyConfig.traceFile);
+}
+if (Object.keys(traceConfigFields).length > 0) {
+  runtimeCtxArgs.traceConfig = ts.obj(traceConfigFields);
 }
 ```
 

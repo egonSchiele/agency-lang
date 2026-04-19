@@ -42,3 +42,8 @@ export type TraceFooter = {
 };
 
 export type TraceLine = TraceHeader | TraceSource | TraceChunk | TraceManifest | TraceFooter;
+
+export type TraceEvent = {
+  executionId: string;
+  line: TraceLine;
+};

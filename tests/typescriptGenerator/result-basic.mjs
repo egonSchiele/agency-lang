@@ -163,7 +163,9 @@ if (__ctx._pendingArgOverrides) {
 
   try {
     await runner.step(0, async (runner) => {
-await runner.ifElse(0, [
+
+    });
+    await runner.ifElse(0, [
 
   {
     condition: async () => __stack.args.age >= 18,
@@ -172,13 +174,12 @@ await runner.step(0, async (runner) => {
 __functionCompleted = true;
 runner.halt(await success(__stack.args.age))
 return;
-            });
+          });
     },
   },
 
 ]);
-    });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __functionCompleted = true;
 runner.halt(failure(`too young`, { checkpoint: __ctx.getResultCheckpoint(), functionName: "checkAge", args: __stack.args }))
 return;
@@ -213,4 +214,4 @@ return failure(
   }
 }
 export default graph
-export const __sourceMap = {"result-basic.agency:checkAge":{"0":{"line":-2,"col":2},"1":{"line":1,"col":2},"0.0":{"line":-1,"col":4}}};
+export const __sourceMap = {"result-basic.agency:checkAge":{"0":{"line":-2,"col":2},"2":{"line":1,"col":2},"0.0":{"line":-1,"col":4}}};

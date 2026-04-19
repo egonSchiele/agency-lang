@@ -241,28 +241,30 @@ let __functionCompleted = false;
 __stack.locals.x = 1;
     });
     await runner.step(1, async (runner) => {
-await runner.ifElse(1, [
+
+    });
+    await runner.ifElse(1, [
 
   {
     condition: async () => __stack.locals.x === 1,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.y = 2;
-            });
+          });
     },
   },
 
 ], async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.y = 3;
-          });
+        });
 });
+    await runner.step(3, async (runner) => {
+
     });
-    await runner.step(2, async (runner) => {
-await runner.loop(2, [`a`, `b`], async (item, _, runner) => {
+    await runner.loop(3, [`a`, `b`], async (item, _, runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.z = item;
-        });
       });
     });
     if (runner.halted) return runner.haltResult;
@@ -312,4 +314,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"sourceMap.agency:greet":{"0":{"line":-2,"col":2},"1":{"line":-1,"col":2}},"sourceMap.agency:main":{"0":{"line":3,"col":2},"1":{"line":4,"col":2},"2":{"line":9,"col":2},"1.0":{"line":7,"col":4},"2.0":{"line":10,"col":4}}};
+export const __sourceMap = {"sourceMap.agency:greet":{"0":{"line":-2,"col":2},"1":{"line":-1,"col":2}},"sourceMap.agency:main":{"0":{"line":3,"col":2},"1":{"line":4,"col":2},"3":{"line":9,"col":2},"1.0":{"line":7,"col":4},"3.0":{"line":10,"col":4}}};

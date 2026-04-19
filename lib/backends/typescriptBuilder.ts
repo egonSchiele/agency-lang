@@ -105,6 +105,16 @@ import { SourceMapBuilder } from "./sourceMap.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
+/** Runner IR node kinds that already manage their own step counter/path and
+ *  must NOT be wrapped inside a runnerStep by processBodyAsParts. */
+const COMPOUND_RUNNER_KINDS: ReadonlySet<TsNode["kind"]> = new Set([
+  "runnerHandle",
+  "runnerIfElse",
+  "runnerLoop",
+  "runnerWhileLoop",
+  "runnerThread",
+]);
+
 export class TypeScriptBuilder {
   // Output assembly
   private generatedStatements: TsNode[] = [];
@@ -3185,7 +3195,6 @@ export class TypeScriptBuilder {
 
       if (!TYPES_THAT_DONT_TRIGGER_NEW_PART.includes(stmt.type)) {
         flushPart();
-        currentPart = [];
       }
 
       const stepIndex = result.length;
@@ -3195,8 +3204,12 @@ export class TypeScriptBuilder {
         currentPart.push(ts.assign(ts.self("__retryable"), ts.bool(false)));
       }
       const processed = this.processStatement(stmt);
-      if (!currentPart) currentPart = [];
-      currentPart.push(processed);
+      if (COMPOUND_RUNNER_KINDS.has(processed.kind)) {
+        result.push(processed);
+      } else {
+        if (!currentPart) currentPart = [];
+        currentPart.push(processed);
+      }
       if (this._asyncBranchCheckNeeded) {
         branchKeys[result.length] = this._subStepPath.join(".");
         this._asyncBranchCheckNeeded = false;

@@ -256,7 +256,9 @@ __stack.locals.age = 25;
 __stack.locals.status = `active`;
     });
     await runner.step(5, async (runner) => {
-await runner.ifElse(5, [
+
+    });
+    await runner.ifElse(5, [
 
   {
     condition: async () => __stack.locals.status === `inactive`,
@@ -266,6 +268,7 @@ await print(`Stopped`)
   },
 
 ]);
+    await runner.step(7, async (runner) => {
 //  Final comment at end of file
     });
     if (runner.halted) return runner.haltResult;

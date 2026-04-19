@@ -128,67 +128,78 @@ let __functionCompleted = false;
 __stack.locals.flag = true;
     });
     await runner.step(2, async (runner) => {
-await runner.ifElse(2, [
+
+    });
+    await runner.ifElse(2, [
 
   {
     condition: async () => __stack.locals.flag,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `condition was true`;
-            });
+          });
     },
   },
 
 ]);
+    await runner.step(4, async (runner) => {
+
     });
-    await runner.step(3, async (runner) => {
-await runner.ifElse(3, [
+    await runner.ifElse(4, [
 
   {
     condition: async () => await isReady(),
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.status = `ready`;
-            });
+          });
     },
   },
 
 ]);
+    await runner.step(6, async (runner) => {
 //  If statement with property access
     });
-    await runner.step(4, async (runner) => {
+    await runner.step(7, async (runner) => {
 __stack.locals.obj = {
         "active": true
       };
     });
-    await runner.step(5, async (runner) => {
-await runner.ifElse(5, [
+    await runner.step(8, async (runner) => {
+
+    });
+    await runner.ifElse(8, [
 
   {
     condition: async () => __stack.locals.obj.active,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.message = `object is active`;
-            });
+          });
     },
   },
 
 ]);
+    await runner.step(10, async (runner) => {
 //  Nested if statements
     });
-    await runner.step(6, async (runner) => {
+    await runner.step(11, async (runner) => {
 __stack.locals.outer = true;
     });
-    await runner.step(7, async (runner) => {
-await runner.ifElse(7, [
+    await runner.step(12, async (runner) => {
+
+    });
+    await runner.ifElse(12, [
 
   {
     condition: async () => __stack.locals.outer,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.inner = false;
-            });
+          });
 await runner.step(1, async (runner) => {
+
+          });
 await runner.ifElse(1, [
 
   {
@@ -196,16 +207,16 @@ await runner.ifElse(1, [
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.nested = `both true`;
-                    });
+                });
     },
   },
 
 ]);
-            });
     },
   },
 
 ]);
+    await runner.step(14, async (runner) => {
 //  TODO fix
 //  If with index access
 //  arr = [1, 2, 3]
@@ -214,79 +225,90 @@ __stack.locals.nested = `both true`;
 //  }
 //  Multiple statements in then body
     });
-    await runner.step(8, async (runner) => {
+    await runner.step(15, async (runner) => {
 __stack.locals.condition = true;
     });
-    await runner.step(9, async (runner) => {
-await runner.ifElse(9, [
+    await runner.step(16, async (runner) => {
+
+    });
+    await runner.ifElse(16, [
 
   {
     condition: async () => __stack.locals.condition,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.a = 1;
-            });
+          });
 await runner.step(1, async (runner) => {
 __stack.locals.b = 2;
-            });
+          });
 await runner.step(2, async (runner) => {
 __stack.locals.c = 3;
-            });
+          });
     },
   },
 
 ]);
+    await runner.step(18, async (runner) => {
 //  Multiple statements in both then and else bodies
     });
-    await runner.step(10, async (runner) => {
+    await runner.step(19, async (runner) => {
 __stack.locals.value = false;
     });
-    await runner.step(11, async (runner) => {
-await runner.ifElse(11, [
+    await runner.step(20, async (runner) => {
+
+    });
+    await runner.ifElse(20, [
 
   {
     condition: async () => __stack.locals.value,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.x = 10;
-            });
+          });
 await runner.step(1, async (runner) => {
 __stack.locals.y = 20;
-            });
+          });
     },
   },
 
 ]);
+    await runner.step(22, async (runner) => {
 //  Basic else
     });
-    await runner.step(12, async (runner) => {
-await runner.ifElse(12, [
+    await runner.step(23, async (runner) => {
+
+    });
+    await runner.ifElse(23, [
 
   {
     condition: async () => __stack.locals.flag,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `yes`;
-            });
+          });
     },
   },
 
 ], async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `no`;
-          });
+        });
 });
+    await runner.step(25, async (runner) => {
 //  else if chain
     });
-    await runner.step(13, async (runner) => {
-await runner.ifElse(13, [
+    await runner.step(26, async (runner) => {
+
+    });
+    await runner.ifElse(26, [
 
   {
     condition: async () => __stack.locals.a === 1,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `one`;
-            });
+          });
     },
   },
 
@@ -295,16 +317,15 @@ __stack.locals.result = `one`;
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `two`;
-            });
+          });
     },
   },
 
 ], async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `other`;
-          });
+        });
 });
-    });
     if (runner.halted) return runner.haltResult;
     await callHook({
       callbacks: __ctx.callbacks,
@@ -352,4 +373,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"ifElse.agency:main":{"1":{"line":-1,"col":2},"2":{"line":0,"col":2},"3":{"line":4,"col":2},"4":{"line":9,"col":2},"5":{"line":12,"col":2},"6":{"line":17,"col":2},"7":{"line":18,"col":2},"8":{"line":32,"col":2},"9":{"line":33,"col":2},"10":{"line":40,"col":2},"11":{"line":41,"col":2},"12":{"line":47,"col":2},"13":{"line":54,"col":2},"2.0":{"line":1,"col":4},"3.0":{"line":5,"col":4},"5.0":{"line":13,"col":4},"7.0":{"line":19,"col":4},"7.1.0":{"line":21,"col":6},"7.1":{"line":20,"col":4},"9.0":{"line":34,"col":4},"9.1":{"line":35,"col":4},"9.2":{"line":36,"col":4},"11.0":{"line":42,"col":4},"11.1":{"line":43,"col":4},"12.0":{"line":50,"col":4},"13.0":{"line":59,"col":4}}};
+export const __sourceMap = {"ifElse.agency:main":{"1":{"line":-1,"col":2},"2":{"line":0,"col":2},"4":{"line":4,"col":2},"7":{"line":9,"col":2},"8":{"line":12,"col":2},"11":{"line":17,"col":2},"12":{"line":18,"col":2},"15":{"line":32,"col":2},"16":{"line":33,"col":2},"19":{"line":40,"col":2},"20":{"line":41,"col":2},"23":{"line":47,"col":2},"26":{"line":54,"col":2},"2.0":{"line":1,"col":4},"4.0":{"line":5,"col":4},"8.0":{"line":13,"col":4},"12.0":{"line":19,"col":4},"12.1.0":{"line":21,"col":6},"12.1":{"line":20,"col":4},"16.0":{"line":34,"col":4},"16.1":{"line":35,"col":4},"16.2":{"line":36,"col":4},"20.0":{"line":42,"col":4},"20.1":{"line":43,"col":4},"23.0":{"line":50,"col":4},"26.0":{"line":59,"col":4}}};

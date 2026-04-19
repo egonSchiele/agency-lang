@@ -163,7 +163,9 @@ if (__ctx._pendingArgOverrides) {
 
   try {
     await runner.step(0, async (runner) => {
-await runner.ifElse(0, [
+
+    });
+    await runner.ifElse(0, [
 
   {
     condition: async () => await isSuccess(__stack.args.r),
@@ -172,13 +174,12 @@ await runner.step(0, async (runner) => {
 __functionCompleted = true;
 runner.halt(`ok`)
 return;
-            });
+          });
     },
   },
 
 ]);
-    });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __functionCompleted = true;
 runner.halt(`error`)
 return;
@@ -213,4 +214,4 @@ return failure(
   }
 }
 export default graph
-export const __sourceMap = {"result-guards.agency:checkValue":{"0":{"line":-2,"col":2},"1":{"line":1,"col":2},"0.0":{"line":-1,"col":4}}};
+export const __sourceMap = {"result-guards.agency:checkValue":{"0":{"line":-2,"col":2},"2":{"line":1,"col":2},"0.0":{"line":-1,"col":4}}};

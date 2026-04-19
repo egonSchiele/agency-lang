@@ -1,8 +1,9 @@
-import { weather } from "std::weather"
 node main() {
-  const zipCode = "55105"
-  const result = llm("Get the weather for zip code ${zipCode}", { 
-    tools: [weather]
-  })
-  print(result)
+  const name = "Agency";
+  if (name === "Agency") {
+    console.log("Welcome to the Agency!");
+  } else {
+    console.log("Welcome to the " + name + "!");
+  }
+  const arr = range(1, 10);
 }

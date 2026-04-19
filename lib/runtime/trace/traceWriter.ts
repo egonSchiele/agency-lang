@@ -1,9 +1,16 @@
+import path from "path";
 import { VERSION } from "../../version.js";
 import type { Checkpoint } from "../state/checkpointStore.js";
 import { ContentAddressableStore } from "./contentAddressableStore.js";
 import { CallbackSink, FileSink, type TraceSink } from "./sinks.js";
 import type { TraceConfig, TraceLine, TraceManifest } from "./types.js";
 import { CHECKPOINT_SCHEMA } from "./types.js";
+
+function generateTraceFilePath(dir: string): string {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const id = Math.random().toString(16).slice(2, 6);
+  return path.join(dir, `${timestamp}_${id}.agencytrace`);
+}
 
 export class TraceWriter {
   private store: ContentAddressableStore;
@@ -87,27 +94,30 @@ export class TraceWriter {
     }
   }
 
+
+
   static async create({
     runId,
-    program,
     traceConfig,
   }: {
     runId: string;
-    program: string;
     traceConfig: TraceConfig;
-  }): Promise<TraceWriter> {
+  }): Promise<TraceWriter | null> {
     const sinks: TraceSink[] = [];
     if (traceConfig.traceFile) {
       sinks.push(new FileSink(traceConfig.traceFile));
     }
     if (traceConfig.traceDir) {
-      const filePath = `${traceConfig.traceDir}/trace-${Date.now()}.trace`;
+      const filePath = generateTraceFilePath(traceConfig.traceDir);
       sinks.push(new FileSink(filePath));
     }
     if (traceConfig.traceCallback) {
       sinks.push(new CallbackSink(runId, traceConfig.traceCallback));
     }
-    const writer = new TraceWriter(runId, program, sinks);
+    if (sinks.length === 0) {
+      return null;
+    }
+    const writer = new TraceWriter(runId, traceConfig.program || "unknown.agency", sinks);
     await writer.writeHeader();
     return writer;
   }

@@ -154,7 +154,6 @@ export class RuntimeContext<T> {
     execCtx.debuggerState = this.debuggerState;
     execCtx.traceWriter = await TraceWriter.create({
       runId,
-      program: "placeholder-program", // This will be overwritten by the actual program name in runNode, but we need to set it to something here.
       traceConfig: this.traceConfig,
     });
     execCtx.traceConfig = this.traceConfig;

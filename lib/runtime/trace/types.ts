@@ -60,6 +60,7 @@ export type TraceCallback = (event: {
 }) => void | Promise<void>;
 
 export type TraceConfig = {
+  program?: string;
   traceDir?: string;
   traceFile?: string;
   traceCallback?: TraceCallback;

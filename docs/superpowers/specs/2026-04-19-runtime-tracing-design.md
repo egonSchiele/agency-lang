@@ -35,26 +35,9 @@ When `traceDir` is set, every execution automatically writes a trace file to tha
 
 The existing `traceFile` config option continues to work for a fixed file path.
 
-#### 2b. Per-call Options
+#### 2b. Callback (`onTrace`)
 
-When calling a node from TypeScript, the user can pass trace options:
-
-```typescript
-// Auto-trace to default directory (./traces/<timestamp>_<id>.agencytrace)
-// When trace: true is passed without traceDir, defaults to ./traces/ relative to the working directory
-await main("input", { trace: true });
-
-// Trace to a specific directory with auto-generated filename
-await main("input", { traceDir: "my-traces/" });
-
-// Trace to an exact file path
-await main("input", { traceFile: "specific.agencytrace" });
-
-// Disable tracing even if config enables it
-await main("input", { trace: false });
-```
-
-#### 2c. Callback
+When calling a node from TypeScript, the user can pass an `onTrace` callback:
 
 ```typescript
 await main("input", {
@@ -67,12 +50,23 @@ await main("input", {
 });
 ```
 
-#### Precedence Rules
+Providing an `onTrace` callback automatically activates tracing for that execution. No other per-call trace options (`trace`, `traceFile`, `traceDir`) are exposed — config-level and CLI options handle file-based tracing, and the callback handles programmatic access.
 
-- Per-call options override config-level settings.
-- `trace: false` always wins — disables tracing even if `traceDir` is set in config.
-- If neither per-call nor config enables file-based tracing, but `onTrace` is provided, tracing activates (since there is a consumer for the data).
-- `onTrace` callback and file-based tracing can coexist — both receive the same data.
+#### 2c. CLI (`--trace`)
+
+The existing `--trace` flag on the CLI continues to work:
+
+```bash
+agency run foo.agency --trace              # writes to foo.agencytrace
+agency run foo.agency --trace out.agencytrace  # writes to specific file
+agency trace foo.agency                    # dedicated trace command
+```
+
+#### Activation Rules
+
+- If `traceDir` or `traceFile` is set in config, every execution writes a trace file.
+- If `onTrace` is provided per-call, tracing activates for that execution (even if config does not enable file-based tracing).
+- If both config and `onTrace` are active, both receive the same data (file sink + callback sink coexist).
 
 ### 3. TraceSink Abstraction
 
@@ -110,10 +104,10 @@ The header line is emitted to all sinks on construction. Each `writeCheckpoint()
 
 `TraceWriter` creation moves from compile-time (the current `traceSetup.mustache` template bakes it into the module) to runtime initialization. When an execution starts:
 
-1. Resolve tracing config: merge `agency.json` config with per-call options, applying precedence rules. This resolution happens in `lib/runtime/node.ts` during `setupNode` / execution context creation, where per-call options are already handled.
-2. If tracing is enabled, create the appropriate sinks (file, callback, or both).
+1. Resolve tracing config: check `agency.json` config for `traceDir`/`traceFile`, and check per-call options for `onTrace` callback. This resolution happens in `lib/runtime/node.ts` during `setupNode` / execution context creation, where per-call options are already handled.
+2. If tracing is enabled (config or callback), create the appropriate sinks (file, callback, or both).
 3. Construct a `TraceWriter` with those sinks and attach it to `RuntimeContext.traceWriter`.
-4. If tracing is disabled (`trace: false` or no config), `traceWriter` stays null and `debugStep()` bails out immediately.
+4. If tracing is not enabled (no config, no callback), `traceWriter` stays null and `debugStep()` bails out immediately.
 5. When execution ends, `TraceWriter.close()` is called (which iterates over sinks and calls `close()` on each). This is triggered at the end of `runNode` in `lib/runtime/node.ts`.
 
 ### 5. Cleanup of Dead Code
@@ -137,7 +131,7 @@ The new `onTrace` callback fully replaces `onCheckpoint` for any use case where 
 - `config.trace`, `config.traceFile`, and `config.debugger` remain as config options but become runtime-only flags.
 - In `lib/runtime/debugger.ts`, the trace write path (`ctx.traceWriter.writeCheckpoint()`) becomes async. Since `debugStep()` is already async, this only requires adding `await` to the `writeCheckpoint` call.
 
-**Note on file extension**: The existing codebase uses `.trace` as the default extension. This spec introduces `.agencytrace` as the new standard extension for trace files. The `traceFile` config option accepts any path so users can still use `.trace` if they prefer, but auto-generated filenames (from `traceDir` and `trace: true`) will use `.agencytrace`.
+**Note on file extension**: The existing codebase uses `.trace` as the default extension. This spec introduces `.agencytrace` as the new standard extension for trace files. The `traceFile` config option accepts any path so users can still use `.trace` if they prefer, but auto-generated filenames (from `traceDir`) will use `.agencytrace`.
 
 ## Files to Modify
 
@@ -149,7 +143,7 @@ The new `onTrace` callback fully replaces `onCheckpoint` for any use case where 
 | `lib/types/sentinel.ts` | Remove (checkpoint-only type) |
 | `lib/types.ts` | Remove `Sentinel` from `AgencyNode` union |
 | `lib/runtime/trace/traceWriter.ts` | Refactor to accept `TraceSink[]`, make `writeCheckpoint` async, add `close()` method |
-| `lib/runtime/node.ts` | Add trace config resolution (merge per-call options with config), add `TraceWriter.close()` call at end of execution |
+| `lib/runtime/node.ts` | Add trace config resolution (check config + onTrace callback), add `TraceWriter.close()` call at end of execution |
 | `lib/runtime/trace/traceWriter.test.ts` | Update tests for new sink-based API |
 | `lib/runtime/debugger.ts` | Make trace write path async |
 | `lib/runtime/state/context.ts` | Update `traceWriter` initialization |
@@ -168,10 +162,8 @@ The new `onTrace` callback fully replaces `onCheckpoint` for any use case where 
 
 **Integration tests** (agency-js):
 - `traceDir` in `agency.json` produces auto-named trace files in the specified directory
-- Per-call `trace: true` produces a trace file at the default location
-- Per-call `traceFile` / `traceDir` options produce trace files at the specified paths
-- `trace: false` overrides config-level `traceDir` and produces no trace file
 - `onTrace` callback receives correct JSONL lines (header, chunks, manifests)
-- `onTrace` + file-based tracing coexist: both receive the same data
+- `onTrace` callback activates tracing even without config-level trace options
+- `onTrace` + config-level `traceDir` coexist: both receive the same data
 - `instrument: false` in `agency.json` produces compiled code without `debugStep()` calls
 - Existing trace and debugger tests continue to pass

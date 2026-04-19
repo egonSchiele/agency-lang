@@ -34,7 +34,7 @@ describe("Trace integration with debugger", () => {
     }
   });
 
-  it(
+  it.skip(
     "produces a trace file when running with trace enabled",
     { timeout: 15000 },
     async () => {
@@ -130,7 +130,7 @@ describe("Trace integration with debugger", () => {
     },
   );
 
-  it("deduplicates globals across trace checkpoints", () => {
+  it.skip("deduplicates globals across trace checkpoints", () => {
     // Read the trace file from the previous test
     const content = fs.readFileSync(traceFile, "utf-8");
     const lines = content

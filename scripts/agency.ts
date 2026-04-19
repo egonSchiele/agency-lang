@@ -61,7 +61,7 @@ program
     const config = getConfig();
     if (opts.watch) {
       const close = await watchAndCompile(config, inputs, { ts: opts.ts });
-      process.on("SIGINT", async () => {
+      process.once("SIGINT", async () => {
         await close();
         process.exit(0);
       });

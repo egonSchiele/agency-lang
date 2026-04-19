@@ -1,4 +1,4 @@
-import { compile } from "@/cli/commands.js";
+import { compile, resetCompilationCache } from "@/cli/commands.js";
 import { AgencyConfig } from "@/config.js";
 import { color } from "@/utils/termcolors.js";
 import chokidar from "chokidar";
@@ -9,16 +9,6 @@ export async function watchAndCompile(
   inputs: string[],
   options: { ts?: boolean },
 ): Promise<() => Promise<void>> {
-  // Initial compile — catch errors so the watcher still starts
-  for (const input of inputs) {
-    try {
-      compile(config, input, undefined, { ts: options.ts });
-    } catch (err) {
-      console.error(color.red(`Error compiling ${input}:`));
-      console.error(err instanceof Error ? err.message : err);
-    }
-  }
-
   // Set up watcher
   const debounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
   const DEBOUNCE_MS = 100;
@@ -32,6 +22,33 @@ export async function watchAndCompile(
     ignoreInitial: true,
   });
 
+  const safeCompile = (target: string) => {
+    // Intercept process.exit so compilation errors don't kill the watcher
+    const originalExit = process.exit;
+    let exitCalled = false;
+    process.exit = ((code?: number) => {
+      exitCalled = true;
+      throw new Error(`Compilation failed (exit code ${code ?? 1})`);
+    }) as never;
+    try {
+      compile(config, target, undefined, { ts: options.ts });
+    } finally {
+      process.exit = originalExit;
+    }
+    if (exitCalled) return false;
+    return true;
+  };
+
+  // Initial compile — errors are caught so the watcher still starts
+  for (const input of inputs) {
+    try {
+      safeCompile(input);
+    } catch (err) {
+      console.error(color.red(`Error compiling ${input}:`));
+      console.error(err instanceof Error ? err.message : err);
+    }
+  }
+
   const recompile = (filePath: string) => {
     // Debounce per file
     if (debounceTimers[filePath]) {
@@ -39,8 +56,10 @@ export async function watchAndCompile(
     }
     debounceTimers[filePath] = setTimeout(() => {
       try {
-        compile(config, filePath, undefined, { ts: options.ts });
-        console.log(color.green(`Recompiled ${filePath}`));
+        resetCompilationCache();
+        if (safeCompile(filePath)) {
+          console.log(color.green(`Recompiled ${filePath}`));
+        }
       } catch (err) {
         console.error(color.red(`Error compiling ${filePath}:`));
         console.error(err instanceof Error ? err.message : err);

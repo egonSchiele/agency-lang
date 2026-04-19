@@ -6,6 +6,7 @@ import * as os from "os";
 // Mock compile to avoid needing the full pipeline
 vi.mock("@/cli/commands.js", () => ({
   compile: vi.fn(),
+  resetCompilationCache: vi.fn(),
 }));
 
 // Mock chokidar — use vi.hoisted so mocks are available in the hoisted vi.mock factory
@@ -111,6 +112,23 @@ describe("watchAndCompile", () => {
     expect(compile).toHaveBeenCalledWith({}, "new-file.agency", undefined, {
       ts: false,
     });
+  });
+
+  it("should survive process.exit calls from compile", async () => {
+    await watchAndCompile({}, [tmpDir], { ts: false });
+
+    const changeCall = mockOn.mock.calls.find((c) => c[0] === "change");
+    const changeHandler = changeCall![1];
+
+    // Simulate compile calling process.exit (e.g. strict typecheck failure)
+    vi.mocked(compile).mockImplementation(() => {
+      process.exit(1);
+    });
+
+    changeHandler("strict-fail.agency");
+    expect(() => vi.advanceTimersByTime(150)).not.toThrow();
+    // process.exit should be restored after compile
+    expect(process.exit).toBe(process.exit);
   });
 
   it("should survive compilation errors", async () => {

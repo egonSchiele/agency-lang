@@ -2316,6 +2316,8 @@ export const forLoopParser: Parser<ForLoop> = label("a for loop", withLoc(trace(
     optionalSpaces,
     char("("),
     optionalSpaces,
+    optional(or(str("let"), str("const"))),
+    optionalSpaces,
     capture(many1WithJoin(varNameChar), "itemVar"),
     optional(
       captureCaptures(
@@ -2328,7 +2330,7 @@ export const forLoopParser: Parser<ForLoop> = label("a for loop", withLoc(trace(
       ),
     ),
     optionalSpaces,
-    str("in"),
+    or(str("in"), str("of")),
     spaces,
     capture(exprParser, "iterable"),
     optionalSpaces,

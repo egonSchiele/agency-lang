@@ -317,35 +317,14 @@ git commit -m "refactor: TraceWriter uses TraceSink[] with async I/O"
 
 ---
 
-### Task 3: Make debugStep() trace path async
+### Task 3: Verify debugStep() trace path is fire-and-forget
 
 **Files:**
-- Modify: `lib/runtime/debugger.ts`
+- No changes needed to `lib/runtime/debugger.ts`
 
-- [ ] **Step 1: Add `await` to the `writeCheckpoint` call in `debugStep()`**
+The `writeCheckpoint` call in `debugStep()` (line 33) is intentionally **not** awaited. Trace writes are fire-and-forget to avoid slowing down execution. The existing call `ctx.traceWriter.writeCheckpoint(cp)` remains unchanged — it returns a Promise that is intentionally discarded. Node.js write streams buffer internally, and `TraceWriter.close()` (called during cleanup) will flush everything before the stream is closed.
 
-In `lib/runtime/debugger.ts`, line 33, change:
-```typescript
-ctx.traceWriter.writeCheckpoint(cp);
-```
-to:
-```typescript
-await ctx.traceWriter.writeCheckpoint(cp);
-```
-
-`debugStep()` is already an async function, so this is a safe change.
-
-- [ ] **Step 2: Run existing tests to verify nothing breaks**
-
-Run: `pnpm test:run`
-Expected: All existing tests pass
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add lib/runtime/debugger.ts
-git commit -m "fix: await async writeCheckpoint in debugStep"
-```
+- [ ] **Step 1: Verify no changes needed, move on**
 
 ---
 

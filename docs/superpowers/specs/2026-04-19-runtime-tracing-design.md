@@ -163,7 +163,7 @@ type TraceEvent = {
 - Add `instrument` config option (default: `true`). When `false`, no `debugStep()` calls are emitted.
 - Refactor `traceSetup.mustache` — `TraceWriter` creation should no longer be baked into compiled code. Instead, the runtime initialization path creates the `TraceWriter` based on resolved config + per-call options.
 - `config.trace`, `config.traceFile`, and `config.debugger` remain as config options but become runtime-only flags.
-- In `lib/runtime/debugger.ts`, the trace write path (`ctx.traceWriter.writeCheckpoint()`) becomes async. Since `debugStep()` is already async, this only requires adding `await` to the `writeCheckpoint` call.
+- In `lib/runtime/debugger.ts`, the `writeCheckpoint` call remains fire-and-forget (not awaited). Trace writes should not slow down execution. The returned promise is intentionally discarded; `TraceWriter.close()` flushes everything during cleanup.
 
 **Note on file extension**: The existing codebase uses `.trace` as the default extension. This spec introduces `.agencytrace` as the new standard extension for trace files. The `traceFile` config option accepts any path so users can still use `.trace` if they prefer, but auto-generated filenames (from `traceDir`) will use `.agencytrace`.
 
@@ -179,7 +179,6 @@ type TraceEvent = {
 | `lib/runtime/trace/traceWriter.ts` | Refactor to accept `TraceSink[]`, make `writeCheckpoint` async, add `close()` method |
 | `lib/runtime/node.ts` | Add trace config resolution (check config + onTrace callback), add `TraceWriter.close()` call at end of execution |
 | `lib/runtime/trace/traceWriter.test.ts` | Update tests for new sink-based API |
-| `lib/runtime/debugger.ts` | Make trace write path async |
 | `lib/runtime/state/context.ts` | Update `traceWriter` initialization |
 | `lib/backends/typescriptBuilder.ts` | Always emit `debugStep()` (unless `instrument: false`), remove sentinel handling, remove `renderRewindCheckpoint` import |
 | `lib/preprocessors/typescriptPreprocessor.ts` | Remove `insertCheckpointSentinels()` method |

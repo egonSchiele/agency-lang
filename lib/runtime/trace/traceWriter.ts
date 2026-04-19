@@ -101,7 +101,7 @@ export class TraceWriter {
       sinks.push(new FileSink(traceConfig.traceFile));
     }
     if (traceConfig.traceDir) {
-      const filePath = `${traceConfig.traceDir}/trace-${Date.now()}.log`;
+      const filePath = `${traceConfig.traceDir}/trace-${Date.now()}.trace`;
       sinks.push(new FileSink(filePath));
     }
     if (traceConfig.traceCallback) {

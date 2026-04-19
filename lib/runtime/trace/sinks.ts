@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import type { TraceCallback, TraceLine } from "./types.js";
+import path from "path";
 
 export type TraceSink = {
   writeLine(line: TraceLine): Promise<void> | void;
@@ -10,10 +11,19 @@ export class FileSink implements TraceSink {
   private stream: fs.WriteStream;
 
   constructor(filePath: string) {
+    this.createDirIfNotExists(path.dirname(filePath));
     this.stream = fs.createWriteStream(filePath, {
       flags: "w",
       encoding: "utf-8",
     });
+  }
+
+  createDirIfNotExists(dirPath: string) {
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+    } else if (!fs.statSync(dirPath).isDirectory()) {
+      throw new Error(`Path ${dirPath} exists and is not a directory`);
+    }
   }
 
   writeLine(line: TraceLine): Promise<void> {

@@ -100,6 +100,10 @@ export async function debug(
       process.exit(1);
     }
 
+    // Signal to stdlib UI components that they should fall back to console.log
+    // instead of drawing their own TUI, which would conflict with the debugger.
+    process.env.AGENCY_DEBUGGER = "1";
+
     // Dynamically import the compiled module
     const absOutput = path.resolve(outputFile);
     const mod = await import(absOutput);

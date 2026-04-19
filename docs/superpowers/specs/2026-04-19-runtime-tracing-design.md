@@ -60,7 +60,7 @@ type TraceEvent = {
 };
 ```
 
-This allows concurrent requests sharing a single `onTrace` callback to differentiate which execution each line belongs to. The `executionId` is a unique string generated per execution (e.g., via `nanoid`).
+This allows concurrent requests sharing a single `onTrace` callback to differentiate which execution each line belongs to. The `executionId` is the `runId` — a unique string generated once per agent run (via `nanoid`) that persists across interrupt pauses and resumes.
 
 A `TraceFooter` is emitted as the last line when execution completes, signaling that the execution is done and data can be flushed:
 
@@ -102,7 +102,7 @@ type TraceSink = {
 };
 ```
 
-The optional `close()` method allows sinks to release resources (e.g., file handles) when execution ends. `RuntimeContext` calls `traceWriter.close()` during cleanup, which in turn calls `close()` on each sink.
+The optional `close()` method allows sinks to release resources (e.g., file handles). Called by `TraceWriter.pause()` and `TraceWriter.close()` (see TraceWriter Lifecycle below).
 
 Two built-in implementations:
 
@@ -123,15 +123,44 @@ The header line is emitted to all sinks on construction. Each `writeCheckpoint()
 
 **Error handling**: If a sink's `writeLine` throws or rejects, the error is swallowed with a warning (similar to how callback errors are handled in `callHook`). A failure in one sink does not prevent writing to other sinks, and does not interrupt agent execution.
 
-### 4. TraceWriter Lifecycle
+### 4. Run ID and TraceWriter Lifecycle
 
-`TraceWriter` creation moves from compile-time (the current `traceSetup.mustache` template bakes it into the module) to runtime initialization. When an execution starts:
+#### Run ID
 
-1. Resolve tracing config: check `agency.json` config for `traceDir`/`traceFile`, and check per-call options for `onTrace` callback. This resolution happens in `lib/runtime/node.ts` during `setupNode` / execution context creation, where per-call options are already handled.
-2. If tracing is enabled (config or callback), create the appropriate sinks (file, callback, or both).
-3. Construct a `TraceWriter` with those sinks and attach it to `RuntimeContext.traceWriter`.
-4. If tracing is not enabled (no config, no callback), `traceWriter` stays null and `debugStep()` bails out immediately.
-5. When execution ends, `TraceWriter.close()` is called. This emits a `TraceFooter` line (with `checkpointCount`, `chunkCount`, and timestamp) to all sinks, then calls `close()` on each sink. This is triggered at the end of `runNode` in `lib/runtime/node.ts`.
+Each agent execution gets a unique `runId` (generated via `nanoid`) that persists across interrupt pauses and resumes. The `runId` is:
+
+- Generated once when `runNode` is first called for an execution
+- Stored on `RuntimeContext` as `ctx.runId` so all code has access to it
+- Passed to `createTraceWriter` (which passes it to `CallbackSink` as the `executionId`)
+- Attached to `Interrupt` objects (new `runId` field on the `Interrupt` type) so it survives the round-trip to the user
+- Read back from the interrupt when `approveInterrupt`/`respondToInterrupt` resumes execution, and used to recreate the trace writer with the same ID
+
+This ensures that all `TraceEvent` objects emitted for a single logical agent run share the same `executionId`, even across interrupt pauses and resumes.
+
+#### TraceWriter API
+
+`TraceWriter` has two shutdown methods:
+
+- **`pause()`** — Flushes and closes all sinks. Does NOT emit a footer. Used when execution is pausing for an interrupt (the run isn't finished, just suspended).
+- **`close()`** — Emits a `TraceFooter` (with `checkpointCount`, `chunkCount`, timestamp), then calls `pause()`. Used when the agent run is truly finished.
+
+#### Lifecycle Flow
+
+`TraceWriter` creation moves from compile-time to runtime initialization:
+
+1. **Run starts** (`runNode`): Generate `runId`, store on `RuntimeContext`. Resolve tracing config (check `agency.json` for `traceDir`/`traceFile`, check callbacks for `onTrace`). If tracing is enabled, call `createTraceWriter(traceConfig, callbacks, runId)` to create sinks and writer. Attach to `RuntimeContext.traceWriter`. If tracing is not enabled, `traceWriter` stays null and `debugStep()` bails out immediately.
+
+2. **Interrupt propagated to user**: Call `traceWriter.pause()` (flush sinks, no footer). Attach `runId` to the interrupt object. All trace objects are destroyed — nothing lingers while the user decides what to do.
+
+3. **User resumes** (`approveInterrupt`/`respondToInterrupt`): Read `runId` from the interrupt. Create a new `TraceWriter` with new sinks but the same `runId`. Attach to execution context. Tracing continues with the same `executionId`.
+
+4. **Repeat** steps 2-3 for any further interrupts.
+
+5. **Final result** (not an interrupt): Call `traceWriter.close()` (emits footer, then closes sinks). The footer signals to `onTrace` consumers that this run is complete and data can be flushed.
+
+#### cleanup() behavior
+
+`RuntimeContext.cleanup()` remains synchronous and does NOT close the trace writer. Trace writer lifecycle is managed explicitly by `runNode` and the interrupt response functions, not by cleanup.
 
 ### 5. Cleanup of Dead Code
 
@@ -176,11 +205,13 @@ type TraceEvent = {
 | `lib/types/function.ts` | Remove `onCheckpoint` from `VALID_CALLBACK_NAMES`, add `onTrace` |
 | `lib/types/sentinel.ts` | Remove (checkpoint-only type) |
 | `lib/types.ts` | Remove `Sentinel` from `AgencyNode` union |
-| `lib/runtime/trace/traceWriter.ts` | Refactor to accept `TraceSink[]`, make `writeCheckpoint` async, add `close()` method |
-| `lib/runtime/node.ts` | Call `createTraceWriter()`, add `TraceWriter.close()` call at end of execution |
-| New: `lib/runtime/trace/setup.ts` | `createTraceWriter()` factory — resolves config, creates sinks, returns `TraceWriter` or null |
+| `lib/runtime/trace/traceWriter.ts` | Refactor to accept `TraceSink[]`, make `writeCheckpoint` async, add `pause()` and `close()` methods |
+| `lib/runtime/node.ts` | Generate `runId`, call `createTraceWriter()`, call `close()` on final result, `pause()` on interrupt |
+| `lib/runtime/interrupts.ts` | Read `runId` from interrupt on resume, recreate trace writer, attach `runId` to interrupts, call `pause()` before returning interrupt |
+| `lib/runtime/rewind.ts` | Same interrupt-aware trace writer lifecycle |
+| New: `lib/runtime/trace/setup.ts` | `createTraceWriter(traceConfig, callbacks, runId)` factory — resolves config, creates sinks with provided `runId`, returns `TraceWriter` or null |
 | `lib/runtime/trace/traceWriter.test.ts` | Update tests for new sink-based API |
-| `lib/runtime/state/context.ts` | Update `traceWriter` initialization |
+| `lib/runtime/state/context.ts` | Add `runId` field, add `traceConfig` field |
 | `lib/backends/typescriptBuilder.ts` | Always emit `debugStep()` (unless `instrument: false`), remove sentinel handling, remove `renderRewindCheckpoint` import |
 | `lib/preprocessors/typescriptPreprocessor.ts` | Remove `insertCheckpointSentinels()` method |
 | `lib/templates/backends/typescriptGenerator/traceSetup.mustache` | Refactor or remove (TraceWriter creation moves to runtime) |

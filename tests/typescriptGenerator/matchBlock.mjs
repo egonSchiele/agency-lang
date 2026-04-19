@@ -128,9 +128,6 @@ let __functionCompleted = false;
     await runner.step(1, async (runner) => {
 __stack.locals.action = `start`;
     });
-    await runner.step(2, async (runner) => {
-
-    });
     await runner.ifElse(2, [
 
   {
@@ -157,16 +154,13 @@ await print(`Restarting...`)
 ], async (runner) => {
 await print(`Unknown action`)
 });
-    await runner.step(4, async (runner) => {
+    await runner.step(3, async (runner) => {
 //  Match with number literals
     });
-    await runner.step(5, async (runner) => {
+    await runner.step(4, async (runner) => {
 __stack.locals.statusCode = 200;
     });
-    await runner.step(6, async (runner) => {
-
-    });
-    await runner.ifElse(6, [
+    await runner.ifElse(5, [
 
   {
     condition: async () => __stack.locals.statusCode === 200,
@@ -192,19 +186,16 @@ await print(`Internal Server Error`)
 ], async (runner) => {
 await print(`Unknown status`)
 });
-    await runner.step(8, async (runner) => {
+    await runner.step(6, async (runner) => {
 //  Match with variable assignment in body
     });
-    await runner.step(9, async (runner) => {
+    await runner.step(7, async (runner) => {
 __stack.locals.grade = `A`;
     });
-    await runner.step(10, async (runner) => {
+    await runner.step(8, async (runner) => {
 __stack.locals.points = 0;
     });
-    await runner.step(11, async (runner) => {
-
-    });
-    await runner.ifElse(11, [
+    await runner.ifElse(9, [
 
   {
     condition: async () => __stack.locals.grade === `A`,
@@ -237,16 +228,13 @@ __stack.locals.d = 55;
 ], async (runner) => {
 __stack.locals.e = 0;
 });
-    await runner.step(13, async (runner) => {
+    await runner.step(10, async (runner) => {
 //  Match with function calls in body
     });
-    await runner.step(14, async (runner) => {
+    await runner.step(11, async (runner) => {
 __stack.locals.level = `debug`;
     });
-    await runner.step(15, async (runner) => {
-
-    });
-    await runner.ifElse(15, [
+    await runner.ifElse(12, [
 
   {
     condition: async () => __stack.locals.level === `debug`,
@@ -277,16 +265,13 @@ await print(`Error level`)
   },
 
 ]);
-    await runner.step(17, async (runner) => {
+    await runner.step(13, async (runner) => {
 //  Match with array results
     });
-    await runner.step(18, async (runner) => {
+    await runner.step(14, async (runner) => {
 __stack.locals.resultType = `array`;
     });
-    await runner.step(19, async (runner) => {
-
-    });
-    await runner.ifElse(19, [
+    await runner.ifElse(15, [
 
   {
     condition: async () => __stack.locals.resultType === `array`,
@@ -308,16 +293,13 @@ __stack.locals.data2 = {
 ], async (runner) => {
 __stack.locals.data3 = [];
 });
-    await runner.step(21, async (runner) => {
+    await runner.step(16, async (runner) => {
 //  Match with object results
     });
-    await runner.step(22, async (runner) => {
+    await runner.step(17, async (runner) => {
 __stack.locals.format = `json`;
     });
-    await runner.step(23, async (runner) => {
-
-    });
-    await runner.ifElse(23, [
+    await runner.ifElse(18, [
 
   {
     condition: async () => __stack.locals.format === `xml`,
@@ -402,4 +384,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"matchBlock.agency:main":{"1":{"line":1,"col":2},"5":{"line":10,"col":2},"9":{"line":19,"col":2},"10":{"line":20,"col":2},"14":{"line":30,"col":2},"18":{"line":39,"col":2},"22":{"line":50,"col":2}}};
+export const __sourceMap = {"matchBlock.agency:main":{"1":{"line":1,"col":2},"4":{"line":10,"col":2},"7":{"line":19,"col":2},"8":{"line":20,"col":2},"11":{"line":30,"col":2},"14":{"line":39,"col":2},"17":{"line":50,"col":2}}};

@@ -254,9 +254,6 @@ let __functionCompleted = false;
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "withModifier.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
-
-    });
     await runner.handle(0, async (__data: any) => approve(__data), async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = await foo({
@@ -274,7 +271,7 @@ if (isInterrupt(__stack.locals.result)) {
         }
       });
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(1, async (runner) => {
 runner.halt({
         messages: __threads,
         data: __stack.locals.result
@@ -328,4 +325,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"withModifier.agency:foo":{"0":{"line":-2,"col":2}},"withModifier.agency:main":{"2":{"line":3,"col":2},"0.0":{"line":2,"col":2}}};
+export const __sourceMap = {"withModifier.agency:foo":{"0":{"line":-2,"col":2}},"withModifier.agency:main":{"1":{"line":3,"col":2},"0.0":{"line":2,"col":2}}};

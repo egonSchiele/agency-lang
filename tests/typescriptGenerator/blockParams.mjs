@@ -171,9 +171,6 @@ if (__ctx._pendingArgOverrides) {
     await runner.step(0, async (runner) => {
 __stack.locals.results = [];
     });
-    await runner.step(1, async (runner) => {
-
-    });
     await runner.loop(1, __stack.args.items, async (item, _, runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = await block(item);
@@ -192,7 +189,7 @@ if (isInterrupt(__stack.locals.results)) {
         }
       });
     });
-    await runner.step(3, async (runner) => {
+    await runner.step(2, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.locals.results)
 return;
@@ -333,4 +330,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"blockParams.agency:mapItems":{"0":{"line":-2,"col":2},"1":{"line":-1,"col":2},"3":{"line":3,"col":2},"1.0":{"line":0,"col":4},"1.1":{"line":1,"col":4}},"blockParams.agency:main":{"0":{"line":7,"col":2},"1":{"line":8,"col":2},"2":{"line":11,"col":2}},"blockParams.agency:__block_0":{"1.0":{"line":9,"col":4}}};
+export const __sourceMap = {"blockParams.agency:mapItems":{"0":{"line":-2,"col":2},"1":{"line":-1,"col":2},"2":{"line":3,"col":2},"1.0":{"line":0,"col":4},"1.1":{"line":1,"col":4}},"blockParams.agency:main":{"0":{"line":7,"col":2},"1":{"line":8,"col":2},"2":{"line":11,"col":2}},"blockParams.agency:__block_0":{"1.0":{"line":9,"col":4}}};

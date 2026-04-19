@@ -1,9 +1,12 @@
 node main() {
-  const name = "Agency";
+  const name = "Agency"
   if (name === "Agency") {
-    console.log("Welcome to the Agency!");
+    console.log("Welcome to the Agency!")
   } else {
-    console.log("Welcome to the " + name + "!");
+    console.log("Welcome to the ${name}!")
   }
-  const arr = range(1, 10);
+  const arr = range(1, 10)
+  for (num in arr) {
+    console.log(num)
+  }
 }

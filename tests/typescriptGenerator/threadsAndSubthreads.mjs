@@ -155,9 +155,6 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
-
-    });
     await runner.thread(0, __threads, "create", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -181,9 +178,6 @@ if (isInterrupt(__stack.locals.res1)) {
           return;
         }
       });
-await runner.step(1, async (runner) => {
-
-      });
 await runner.thread(1, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -206,9 +200,6 @@ if (isInterrupt(__stack.locals.res2)) {
             runner.halt(__stack.locals.res2)
             return;
           }
-        });
-await runner.step(1, async (runner) => {
-
         });
 await runner.thread(1, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
@@ -234,10 +225,7 @@ if (isInterrupt(__stack.locals.res3)) {
             }
           });
         });
-await runner.step(3, async (runner) => {
-
-        });
-await runner.thread(3, __threads, "create", async (runner) => {
+await runner.thread(2, __threads, "create", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res5 = await runPrompt({
@@ -262,10 +250,7 @@ if (isInterrupt(__stack.locals.res5)) {
           });
         });
       });
-await runner.step(3, async (runner) => {
-
-      });
-await runner.thread(3, __threads, "createSubthread", async (runner) => {
+await runner.thread(2, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res4 = await runPrompt({
@@ -290,19 +275,19 @@ if (isInterrupt(__stack.locals.res4)) {
         });
       });
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(1, async (runner) => {
 await print(`res1`, __stack.locals.res1)
     });
-    await runner.step(3, async (runner) => {
+    await runner.step(2, async (runner) => {
 await print(`res2`, __stack.locals.res2)
     });
-    await runner.step(4, async (runner) => {
+    await runner.step(3, async (runner) => {
 await print(`res3`, __stack.locals.res3)
     });
-    await runner.step(5, async (runner) => {
+    await runner.step(4, async (runner) => {
 await print(`res4`, __stack.locals.res4)
     });
-    await runner.step(6, async (runner) => {
+    await runner.step(5, async (runner) => {
 await print(`res5`, __stack.locals.res5)
     });
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
@@ -356,9 +341,6 @@ let __functionCompleted = false;
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "threadsAndSubthreads.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
-
-    });
     await runner.thread(0, __threads, "create", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -385,9 +367,6 @@ if (isInterrupt(__stack.locals.res1)) {
           return;
         }
       });
-await runner.step(1, async (runner) => {
-
-      });
 await runner.thread(1, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -413,9 +392,6 @@ if (isInterrupt(__stack.locals.res2)) {
             })
             return;
           }
-        });
-await runner.step(1, async (runner) => {
-
         });
 await runner.thread(1, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
@@ -444,10 +420,7 @@ if (isInterrupt(__stack.locals.res3)) {
             }
           });
         });
-await runner.step(3, async (runner) => {
-
-        });
-await runner.thread(3, __threads, "create", async (runner) => {
+await runner.thread(2, __threads, "create", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res5 = await runPrompt({
@@ -475,10 +448,7 @@ if (isInterrupt(__stack.locals.res5)) {
           });
         });
       });
-await runner.step(3, async (runner) => {
-
-      });
-await runner.thread(3, __threads, "createSubthread", async (runner) => {
+await runner.thread(2, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res4 = await runPrompt({
@@ -506,19 +476,19 @@ if (isInterrupt(__stack.locals.res4)) {
         });
       });
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(1, async (runner) => {
 await print(`res1`, __stack.locals.res1)
     });
-    await runner.step(3, async (runner) => {
+    await runner.step(2, async (runner) => {
 await print(`res2`, __stack.locals.res2)
     });
-    await runner.step(4, async (runner) => {
+    await runner.step(3, async (runner) => {
 await print(`res3`, __stack.locals.res3)
     });
-    await runner.step(5, async (runner) => {
+    await runner.step(4, async (runner) => {
 await print(`res4`, __stack.locals.res4)
     });
-    await runner.step(6, async (runner) => {
+    await runner.step(5, async (runner) => {
 await print(`res5`, __stack.locals.res5)
     });
     if (runner.halted) return runner.haltResult;
@@ -568,4 +538,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"threadsAndSubthreads.agency:foo":{"2":{"line":13,"col":2},"3":{"line":14,"col":2},"4":{"line":15,"col":2},"5":{"line":16,"col":2},"6":{"line":17,"col":2},"0.0":{"line":-1,"col":4},"0.1.0":{"line":1,"col":6},"0.1.1.0":{"line":3,"col":8},"0.1.3.0":{"line":6,"col":8},"0.3.0":{"line":10,"col":6}},"threadsAndSubthreads.agency:main":{"2":{"line":36,"col":2},"3":{"line":37,"col":2},"4":{"line":38,"col":2},"5":{"line":39,"col":2},"6":{"line":40,"col":2},"0.0":{"line":22,"col":4},"0.1.0":{"line":24,"col":6},"0.1.1.0":{"line":26,"col":8},"0.1.3.0":{"line":29,"col":8},"0.3.0":{"line":33,"col":6}}};
+export const __sourceMap = {"threadsAndSubthreads.agency:foo":{"1":{"line":13,"col":2},"2":{"line":14,"col":2},"3":{"line":15,"col":2},"4":{"line":16,"col":2},"5":{"line":17,"col":2},"0.0":{"line":-1,"col":4},"0.1.0":{"line":1,"col":6},"0.1.1.0":{"line":3,"col":8},"0.1.2.0":{"line":6,"col":8},"0.2.0":{"line":10,"col":6}},"threadsAndSubthreads.agency:main":{"1":{"line":36,"col":2},"2":{"line":37,"col":2},"3":{"line":38,"col":2},"4":{"line":39,"col":2},"5":{"line":40,"col":2},"0.0":{"line":22,"col":4},"0.1.0":{"line":24,"col":6},"0.1.1.0":{"line":26,"col":8},"0.1.2.0":{"line":29,"col":8},"0.2.0":{"line":33,"col":6}}};

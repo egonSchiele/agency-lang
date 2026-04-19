@@ -1726,7 +1726,7 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
 
 const semicolon = seqC(optionalSpaces, char(";"), optionalSpaces);
 
-export const matchBlockParser = label("a match block", seqC(
+export const matchBlockParser = label("a match block", withLoc(seqC(
   set("type", "matchBlock"),
   str("match"),
   optionalSpaces,
@@ -1746,7 +1746,7 @@ export const matchBlockParser = label("a match block", seqC(
   ),
   optionalSemicolon,
   optionalSpacesOrNewline,
-));
+)));
 
 // =============================================================================
 // importStatement.ts
@@ -2126,10 +2126,10 @@ export const _submessageThreadParser: Parser<MessageThread> = trace(
     ),
   ),
 );
-export const messageThreadParser: Parser<MessageThread> = or(
+export const messageThreadParser: Parser<MessageThread> = withLoc(or(
   _messageThreadParser,
   _submessageThreadParser,
-);
+));
 
 const inlineHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
   const parser = seqC(
@@ -2164,7 +2164,7 @@ const functionRefHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
   return parser(input);
 };
 
-export const handleBlockParser: Parser<HandleBlock> = trace(
+export const handleBlockParser: Parser<HandleBlock> = withLoc(trace(
   "handleBlockParser",
   seqC(
     set("type", "handleBlock"),
@@ -2185,9 +2185,9 @@ export const handleBlockParser: Parser<HandleBlock> = trace(
     optionalSpaces,
     capture(or(inlineHandlerParser, functionRefHandlerParser), "handler"),
   ),
-);
+));
 
-export const withModifierParser: Parser<WithModifier> = (input: string) => {
+export const withModifierParser: Parser<WithModifier> = withLoc((input: string) => {
   // Try to parse an assignment or a bare function call as the inner statement.
   const stmtResult = or(assignmentParser, functionCallParser)(input);
   if (!stmtResult.success) return failure("expected statement before 'with'", input);
@@ -2213,7 +2213,7 @@ export const withModifierParser: Parser<WithModifier> = (input: string) => {
     },
     modResult.rest,
   );
-};
+});
 
 const elseClauseParser: Parser<AgencyNode[]> = (input: string) => {
   const parser = seqC(optionalSpaces, str("else"), optionalSpaces);

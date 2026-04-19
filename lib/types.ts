@@ -26,7 +26,6 @@ import { TypeAlias, VariableType } from "./types/typeHints.js";
 import { WhileLoop } from "./types/whileLoop.js";
 import { AwaitPending } from "./types/awaitPending.js";
 import { HandleBlock } from "./types/handleBlock.js";
-import { Sentinel } from "./types/sentinel.js";
 import { DebuggerStatement } from "./types/debuggerStatement.js";
 import { Placeholder } from "./types/placeholder.js";
 import { WithModifier } from "./types/withModifier.js";
@@ -50,7 +49,6 @@ export * from "./types/whileLoop.js";
 export * from "./types/forLoop.js";
 export * from "./types/handleBlock.js";
 export * from "./types/keyword.js";
-export * from "./types/sentinel.js";
 export * from "./types/debuggerStatement.js";
 export * from "./types/blockArgument.js";
 export * from "./types/placeholder.js";
@@ -238,7 +236,6 @@ export type AgencyNode =
   | AwaitPending
   | HandleBlock
   | WithModifier
-  | Sentinel
   | DebuggerStatement
   | Placeholder
   | Tag

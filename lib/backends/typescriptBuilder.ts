@@ -27,14 +27,12 @@ import {
 import type { SourceLocationOpts } from "@/runtime/state/checkpointStore.js";
 import { DebuggerStatement } from "@/types/debuggerStatement.js";
 import { SchemaExpression } from "@/types/schemaExpression.js";
-import { Sentinel } from "@/types/sentinel.js";
 import { expressionToString } from "@/utils/node.js";
 import { toCompiledImportPath } from "../importPaths.js";
 import * as renderDebugger from "../templates/backends/typescriptGenerator/debugger.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
 import * as renderInterruptReturn from "../templates/backends/typescriptGenerator/interruptReturn.js";
-import * as renderRewindCheckpoint from "../templates/backends/typescriptGenerator/rewindCheckpoint.js";
 import * as renderTraceSetup from "../templates/backends/typescriptGenerator/traceSetup.js";
 import * as renderBlockSetup from "../templates/backends/typescriptGenerator/blockSetup.js";
 import * as renderForkBlockSetup from "../templates/backends/typescriptGenerator/forkBlockSetup.js";
@@ -822,8 +820,6 @@ export class TypeScriptBuilder {
         return this.processBinOpExpression(node);
       case "keyword":
         return this.processKeyword(node);
-      case "sentinel":
-        return this.processSentinel(node);
       case "debuggerStatement":
         return this.processDebuggerStatement(node);
       case "placeholder":
@@ -2693,26 +2689,6 @@ export class TypeScriptBuilder {
     }
 
     return ts.statements(stmts);
-  }
-
-  private processSentinel(node: Sentinel): TsNode {
-    if (node.value === "checkpoint") {
-      const promptNode = this.processNode(node.data.prompt);
-      const varRef = ts.scopedVar(
-        node.data.targetVariable,
-        node.data.scope,
-        this.moduleId,
-      );
-      return ts.raw(
-        renderRewindCheckpoint.default({
-          targetVariable: node.data.targetVariable,
-          prompt: printTs(promptNode),
-          response: printTs(varRef),
-          ...this.checkpointOpts(),
-        }),
-      );
-    }
-    return ts.empty();
   }
 
   private processDebuggerStatement(node: DebuggerStatement): TsNode {

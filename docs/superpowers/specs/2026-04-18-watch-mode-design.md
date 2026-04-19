@@ -31,8 +31,10 @@ export async function watchAndCompile(
   config: AgencyConfig,
   inputs: string[],
   options: { ts?: boolean }
-): Promise<void>
+): Promise<() => Promise<void>>
 ```
+
+Returns a `close` function that the caller can use to shut down the watcher (e.g. on SIGINT).
 
 Behavior:
 

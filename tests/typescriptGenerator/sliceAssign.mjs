@@ -16,7 +16,6 @@ import {
   rejectInterrupt as _rejectInterrupt,
   resolveInterrupt as _resolveInterrupt,
   modifyInterrupt as _modifyInterrupt,
-  resumeFromState as _resumeFromState,
   rewindFrom as _rewindFrom,
   RestoreSignal,
   deepClone as __deepClone,
@@ -55,7 +54,10 @@ const __globalCtx = new RuntimeContext({
       traceId: nanoid()
     }
   },
-  dirname: __dirname
+  dirname: __dirname,
+  traceConfig: {
+    program: "sliceAssign.agency"
+  }
 });
 const graph = __globalCtx.graph;
 

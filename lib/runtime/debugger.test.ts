@@ -1,28 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { debugStep } from "./debugger.js";
-import { StateStack } from "./state/stateStack.js";
-import { GlobalStore } from "./state/globalStore.js";
-import { CheckpointStore } from "./state/checkpointStore.js";
 import { DebuggerState } from "../debugger/debuggerState.js";
-
-function makeMockCtx(debuggerState: DebuggerState | null = null) {
-  const stateStack = new StateStack();
-  stateStack.nodesTraversed = ["start", "process"];
-  const state = stateStack.getNewState();
-  state.args = { input: "hello" };
-  state.locals = { x: 42 };
-  state.step = 3;
-
-  const globals = GlobalStore.withTokenStats();
-  globals.set("mod1", "count", 10);
-
-  return {
-    stateStack,
-    globals,
-    checkpoints: new CheckpointStore(),
-    debuggerState: debuggerState,
-  } as any;
-}
+import { makeMockCtx } from "./__tests__/testHelpers.js";
 
 function makeState(ctx: any) {
   return { ctx } as any;
@@ -39,7 +18,7 @@ const baseInfo = {
 
 describe("debugStep()", () => {
   it("returns undefined when ctx.debugger is null", async () => {
-    const ctx = makeMockCtx(null);
+    const ctx = makeMockCtx();
     const result = await debugStep(ctx, makeState(ctx), baseInfo);
     expect(result).toBeUndefined();
   });
@@ -47,7 +26,7 @@ describe("debugStep()", () => {
   it("returns interrupt when stepping with stepNext at current depth", async () => {
     const dbg = new DebuggerState(10);
     dbg.stepNext(); // stepping mode, targetDepth === callDepth (both 0)
-    const ctx = makeMockCtx(dbg);
+    const ctx = makeMockCtx({ debuggerState: dbg });
     const result = await debugStep(ctx, makeState(ctx), baseInfo);
     expect(result).toBeDefined();
     expect(result!.type).toBe("interrupt");
@@ -56,7 +35,7 @@ describe("debugStep()", () => {
   it("returns undefined when mode is 'running' and no label", async () => {
     const dbg = new DebuggerState(10);
     dbg.running();
-    const ctx = makeMockCtx(dbg);
+    const ctx = makeMockCtx({ debuggerState: dbg });
     const result = await debugStep(ctx, makeState(ctx), {
       ...baseInfo,
       label: null,
@@ -67,7 +46,7 @@ describe("debugStep()", () => {
   it("returns interrupt when mode is 'running' but label is set (user breakpoint)", async () => {
     const dbg = new DebuggerState(10);
     dbg.running();
-    const ctx = makeMockCtx(dbg);
+    const ctx = makeMockCtx({ debuggerState: dbg });
     const result = await debugStep(ctx, makeState(ctx), {
       ...baseInfo,
       label: "my-breakpoint",
@@ -80,7 +59,7 @@ describe("debugStep()", () => {
   it("always creates a rolling checkpoint", async () => {
     const dbg = new DebuggerState(10);
     dbg.running();
-    const ctx = makeMockCtx(dbg);
+    const ctx = makeMockCtx({ debuggerState: dbg });
 
     // mode is "running" with no label — will NOT pause, but should still create rolling checkpoint
     await debugStep(ctx, makeState(ctx), { ...baseInfo, label: null });
@@ -102,7 +81,7 @@ describe("debugStep()", () => {
     // Now go deeper: callDepth = 5
     dbg.enterCall();
     dbg.enterCall();
-    const ctx = makeMockCtx(dbg);
+    const ctx = makeMockCtx({ debuggerState: dbg });
     const result = await debugStep(ctx, makeState(ctx), baseInfo);
     expect(result).toBeUndefined();
   });
@@ -114,7 +93,7 @@ describe("debugStep()", () => {
     dbg.stepNext(); // targetDepth = 3
     // Now go shallower: callDepth = 2
     dbg.exitCall();
-    const ctx = makeMockCtx(dbg);
+    const ctx = makeMockCtx({ debuggerState: dbg });
     const result = await debugStep(ctx, makeState(ctx), baseInfo);
     expect(result).toBeDefined();
     expect(result!.type).toBe("interrupt");
@@ -124,7 +103,7 @@ describe("debugStep()", () => {
     const dbg = new DebuggerState(10);
     for (let i = 0; i < 3; i++) dbg.enterCall();
     dbg.stepNext(); // targetDepth = 3, callDepth = 3
-    const ctx = makeMockCtx(dbg);
+    const ctx = makeMockCtx({ debuggerState: dbg });
     const result = await debugStep(ctx, makeState(ctx), baseInfo);
     expect(result).toBeDefined();
     expect(result!.type).toBe("interrupt");
@@ -133,7 +112,7 @@ describe("debugStep()", () => {
   it("the returned interrupt has debugger: true", async () => {
     const dbg = new DebuggerState(10);
     dbg.stepNext();
-    const ctx = makeMockCtx(dbg);
+    const ctx = makeMockCtx({ debuggerState: dbg });
     const result = await debugStep(ctx, makeState(ctx), baseInfo);
     expect(result).toBeDefined();
     expect(result!.debugger).toBe(true);
@@ -142,7 +121,7 @@ describe("debugStep()", () => {
   it("the returned interrupt has checkpointId and checkpoint set", async () => {
     const dbg = new DebuggerState(10);
     dbg.stepNext();
-    const ctx = makeMockCtx(dbg);
+    const ctx = makeMockCtx({ debuggerState: dbg });
     const result = await debugStep(ctx, makeState(ctx), baseInfo);
     expect(result).toBeDefined();
     expect(typeof result!.checkpointId).toBe("number");
@@ -153,7 +132,7 @@ describe("debugStep()", () => {
   it("the interrupt data is the label when label is set", async () => {
     const dbg = new DebuggerState(10);
     dbg.running();
-    const ctx = makeMockCtx(dbg);
+    const ctx = makeMockCtx({ debuggerState: dbg });
     const result = await debugStep(ctx, makeState(ctx), {
       ...baseInfo,
       label: "my-label",
@@ -166,7 +145,7 @@ describe("debugStep()", () => {
   it("the interrupt data is undefined when no label (stepping mode)", async () => {
     const dbg = new DebuggerState(10);
     dbg.stepNext();
-    const ctx = makeMockCtx(dbg);
+    const ctx = makeMockCtx({ debuggerState: dbg });
     const result = await debugStep(ctx, makeState(ctx), {
       ...baseInfo,
       label: null,

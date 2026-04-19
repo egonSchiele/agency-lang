@@ -12,6 +12,7 @@ import type { AgencyCallbacks } from "../hooks.js";
 import type { HandlerFn } from "../types.js";
 import type { DebuggerState } from "../../debugger/debuggerState.js";
 import { TraceWriter } from "../trace/traceWriter.js";
+import type { TraceConfig } from "../trace/types.js";
 import { reviveWithClasses, type ClassRegistry } from "../classReviver.js";
 import { AgencyCancelledError } from "../errors.js";
 
@@ -70,7 +71,7 @@ export class RuntimeContext<T> {
 
   abortController: AbortController;
 
-  traceConfig: { traceDir?: string; traceFile?: string };
+  traceConfig: TraceConfig;
   runId: string | null;
 
   // stored so createExecutionContext can create new StatelogClients
@@ -82,7 +83,7 @@ export class RuntimeContext<T> {
     smoltalkDefaults: Partial<SmolPromptConfig>;
     dirname: string;
     maxRestores?: number;
-    traceConfig?: { traceDir?: string; traceFile?: string };
+    traceConfig?: TraceConfig;
   }) {
     const statelogConfig = {
       ...args.statelogConfig,
@@ -316,17 +317,17 @@ export class RuntimeContext<T> {
 
   async pauseTraceWriter(): Promise<void> {
     if (!this.traceWriter) {
-      throw new Error("No trace writer to pause");
+      //throw new Error("No trace writer to pause");
     }
-    await this.traceWriter.pause();
+    await this.traceWriter?.pause();
     this.traceWriter = null;
   }
 
   async closeTraceWriter(): Promise<void> {
     if (!this.traceWriter) {
-      throw new Error("No trace writer to close");
+      //throw new Error("No trace writer to close");
     }
-    await this.traceWriter.close();
+    await this.traceWriter?.close();
     this.traceWriter = null;
   }
 

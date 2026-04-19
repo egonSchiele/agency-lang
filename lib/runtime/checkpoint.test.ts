@@ -1,32 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { checkpoint, getCheckpoint, restore } from "./checkpoint.js";
-import { CheckpointStore } from "./state/checkpointStore.js";
-import { StateStack } from "./state/stateStack.js";
-import { GlobalStore } from "./state/globalStore.js";
-import { PendingPromiseStore } from "./state/pendingPromiseStore.js";
 import { CheckpointError, RestoreSignal } from "./errors.js";
-
-function makeMockCtx() {
-  const stateStack = new StateStack();
-  stateStack.nodesTraversed = ["start", "process"];
-  const state = stateStack.getNewState();
-  state.args = { input: "hello" };
-  state.locals = { x: 42 };
-  state.step = 3;
-
-  const globals = GlobalStore.withTokenStats();
-  globals.set("mod1", "count", 10);
-
-  const checkpoints = new CheckpointStore();
-  const pendingPromises = new PendingPromiseStore();
-
-  return {
-    stateStack,
-    globals,
-    checkpoints,
-    pendingPromises,
-  } as any;
-}
+import { makeMockCtx } from "./__tests__/testHelpers.js";
+import { CheckpointStore } from "./index.js";
 
 function makeState(ctx: any) {
   return { ctx } as any;
@@ -171,7 +147,7 @@ describe("restore()", () => {
     const id = await checkpoint(makeState(ctx));
 
     // Add a pending promise after checkpoint
-    ctx.pendingPromises.add(new Promise(() => {})); // never resolves
+    ctx.pendingPromises.add(new Promise(() => { })); // never resolves
 
     try {
       restore(id, {}, makeState(ctx));

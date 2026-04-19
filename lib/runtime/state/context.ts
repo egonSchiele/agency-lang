@@ -333,7 +333,7 @@ export class RuntimeContext<T> {
 
   async writeCheckpointToTraceWriter(checkpoint: Checkpoint): Promise<void> {
     if (!this.traceWriter) {
-      throw new Error("No trace writer to write checkpoint to");
+      return;
     }
     await this.traceWriter.writeCheckpoint(checkpoint);
   }

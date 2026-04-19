@@ -9,7 +9,7 @@ import { spawn } from "child_process";
 import { transformSync } from "esbuild";
 import * as fs from "fs";
 import * as path from "path";
-import { exit } from "process";
+
 import {
   getStdlibDir,
   isPkgImport,
@@ -83,7 +83,7 @@ export function parse(
     console.error("Failed to parse Agency program.");
     // console.error(parseResult);
     // throw new Error("Failed to parse Agency program");
-    exit(1);
+    process.exit(1);
   }
 
   return parseResult.result;

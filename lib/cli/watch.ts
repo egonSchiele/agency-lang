@@ -2,7 +2,25 @@ import { compile, resetCompilationCache } from "@/cli/commands.js";
 import { AgencyConfig } from "@/config.js";
 import { color } from "@/utils/termcolors.js";
 import chokidar from "chokidar";
+import { execSync } from "child_process";
 import * as fs from "fs";
+
+function getGitIgnorePatterns(): string[] {
+  try {
+    // Use git to resolve all ignore rules (including nested .gitignore files)
+    // This works from any subdirectory within the repo
+    const output = execSync(
+      "git ls-files --others --ignored --exclude-standard --directory",
+      { encoding: "utf-8" },
+    );
+    return output
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .map((line) => line.replace(/\/$/, "")); // strip trailing slashes from directories
+  } catch {
+    return [];
+  }
+}
 
 export async function watchAndCompile(
   config: AgencyConfig,
@@ -13,13 +31,27 @@ export async function watchAndCompile(
   const debounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
   const DEBOUNCE_MS = 100;
 
+  const gitIgnored = new Set(getGitIgnorePatterns());
+
   const watcher = chokidar.watch(inputs, {
     ignored: (filePath: string, stats?: fs.Stats) => {
-      // Don't ignore directories — we need to recurse into them
-      if (!stats?.isFile()) return false;
-      return !filePath.endsWith(".agency");
+      const basename = filePath.split("/").pop() ?? filePath;
+      // Always skip .git directory
+      if (basename === ".git") return true;
+      // Skip git-ignored paths
+      if (gitIgnored.has(filePath) || gitIgnored.has(basename)) return true;
+      // For files, only watch .agency files
+      if (stats?.isFile()) {
+        return !filePath.endsWith(".agency");
+      }
+      return false;
     },
     ignoreInitial: true,
+  });
+
+  watcher.on("error", (err) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(color.red(`Watcher error: ${msg}`));
   });
 
   const safeCompile = (target: string) => {

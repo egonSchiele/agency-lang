@@ -1,5 +1,4 @@
 def greet(name: string) {
-  return interrupt("Are you sure you want to greet ${name}?")
   return "Hello, ${name}!"
 }
 

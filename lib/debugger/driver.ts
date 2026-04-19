@@ -156,7 +156,7 @@ export class DebuggerDriver {
         this.ui.render();
       },
       onToolCallStart: (data) => {
-        this.ui.state.log(`Tool call: ${data.toolName}()`);
+        this.ui.state.log(`Tool call: ${data.toolName}(${data.args.map((a) => JSON.stringify(a)).join(", ")})`);
         this.ui.render();
       },
       onToolCallEnd: (data) => {

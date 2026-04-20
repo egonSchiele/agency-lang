@@ -24,7 +24,7 @@ Three complementary features:
 
 When the Agency compiler encounters a non-Agency, non-stdlib, non-pkg import (i.e., a plain `.js` or `.ts` import), it checks whether the referenced file exists. If it doesn't, it tries the other extension:
 
-- `import { foo } from "./bar.js"` → `./bar.js` doesn't exist �� try `./bar.ts` → found, use it
+- `import { foo } from "./bar.js"` → `./bar.js` doesn't exist → try `./bar.ts` → found, use it
 - `import { foo } from "./bar.ts"` → `./bar.ts` doesn't exist → try `./bar.js` → found, use it
 
 If neither extension exists, print a clear error message and exit:
@@ -45,9 +45,9 @@ This applies only to relative imports with `.js` or `.ts` extensions. It does NO
 
 ### Where the change lives
 
-Non-Agency imports (`.js`/`.ts` files) are not processed by the Agency compiler — they pass through to the generated TypeScript/JavaScript verbatim. The import path rewriting at `lib/cli/commands.ts:192-197` only handles `.agency` → `.js`/`.ts` rewrites and does not touch non-Agency imports.
+Today, non-Agency imports (`.js`/`.ts` files) are not specially processed by the Agency compiler — they pass through to the generated TypeScript/JavaScript verbatim. In the current implementation, the import path rewriting at `lib/cli/commands.ts:192-197` only handles `.agency` → `.js`/`.ts` rewrites.
 
-The flexible extension resolution therefore needs to happen in the AST import path rewriting loop. Currently, line 193-196 checks `node.type === "importStatement"` and only rewrites `.agency` extensions. We extend this: for non-Agency `importStatement` nodes with `.js` or `.ts` extensions, resolve the import against the filesystem and rewrite the extension if the specified file doesn't exist but the alternative does.
+This feature extends that same AST import path rewriting loop. Currently, lines 193-196 check `node.type === "importStatement"` and only rewrite `.agency` extensions; with this change, that logic also handles relative non-Agency `importStatement` nodes with `.js` or `.ts` extensions by resolving the import against the filesystem and rewriting the extension if the specified file doesn't exist but the alternative does.
 
 Note: after `resolveImports` runs, Agency imports become `importNodeStatement` or `importToolStatement` nodes. Plain `importStatement` nodes at this point are non-Agency imports — exactly the ones we want to resolve.
 

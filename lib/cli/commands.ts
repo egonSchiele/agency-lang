@@ -200,10 +200,11 @@ export function compile(
       return;
     }
 
-    // For .js/.ts imports, resolve flexibly: if the specified file doesn't
-    // exist, try the other extension. This lets users write .js imports that
-    // work in dist/ while the debugger finds the .ts source (and vice versa).
-    if (node.modulePath.endsWith(".js") || node.modulePath.endsWith(".ts")) {
+    // For relative .js/.ts imports, resolve flexibly: if the specified file
+    // doesn't exist, try the other extension. Bare specifiers (e.g. "some-pkg/index.js")
+    // are left to Node's resolver at runtime.
+    const isRelative = node.modulePath.startsWith("./") || node.modulePath.startsWith("../");
+    if (isRelative && (node.modulePath.endsWith(".js") || node.modulePath.endsWith(".ts"))) {
       const resolved = resolveFlexibleExtension(node.modulePath, absoluteInputFile);
       if (resolved === null) {
         const altExt = node.modulePath.endsWith(".js") ? ".ts" : ".js";

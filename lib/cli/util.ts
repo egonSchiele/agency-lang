@@ -191,20 +191,25 @@ export async function executeNodeAsync({
   interruptHandlers,
 }: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
   const distDir = config.distDir;
-  let compiledFilename: string;
+  let compiledPath: string;
 
   if (distDir) {
-    compiledFilename = resolveCompiledFile(distDir, agencyFile);
+    compiledPath = resolveCompiledFile(distDir, agencyFile);
   } else {
-    compile(config, agencyFile);
-    compiledFilename = path.basename(agencyFile).replace(".agency", ".js");
+    compiledPath = compile(config, agencyFile)!;
   }
 
   const baseName = agencyFile.replace(".agency", "");
   const evaluateFile = `${baseName}.evaluate.js`;
   const resultsFile = `${baseName}.evaluate.json`;
+  // The template imports via "./${filename}", so compute a relative path
+  // from the evaluate script's directory to the compiled module.
+  let importSpecifier = path.relative(path.dirname(evaluateFile), compiledPath).replace(/\\/g, "/");
+  if (!importSpecifier.startsWith(".")) {
+    importSpecifier = `./${importSpecifier}`;
+  }
   const evaluateScript = renderEvaluate({
-    filename: compiledFilename,
+    filename: importSpecifier,
     nodeName,
     hasArgs,
     args: argsString,
@@ -227,17 +232,23 @@ export async function executeNodeAsync({
 
 export function executeNode(args: ExecuteNodeArgs): { data: any; [key: string]: any } {
   const distDir = args.config.distDir;
-  let compiledFilename: string;
+  let compiledPath: string;
 
   if (distDir) {
-    compiledFilename = resolveCompiledFile(distDir, args.agencyFile);
+    compiledPath = resolveCompiledFile(distDir, args.agencyFile);
   } else {
-    compile(args.config, args.agencyFile);
-    compiledFilename = args.agencyFile.replace(".agency", ".js");
+    compiledPath = compile(args.config, args.agencyFile)!;
   }
 
+  const evaluateFile = "__evaluate.js";
+  // The template imports via "./${filename}", so compute a relative path
+  // from the evaluate script's directory to the compiled module.
+  let importSpecifier = path.relative(path.dirname(evaluateFile), compiledPath).replace(/\\/g, "/");
+  if (!importSpecifier.startsWith(".")) {
+    importSpecifier = `./${importSpecifier}`;
+  }
   const evaluateScript = renderEvaluate({
-    filename: compiledFilename,
+    filename: importSpecifier,
     nodeName: args.nodeName,
     hasArgs: args.hasArgs,
     args: args.argsString,
@@ -247,7 +258,6 @@ export function executeNode(args: ExecuteNodeArgs): { data: any; [key: string]: 
       : undefined,
     resultsFilename: "__evaluate.json",
   });
-  const evaluateFile = "__evaluate.js";
   fs.writeFileSync(evaluateFile, evaluateScript);
   execFileSync("node", [evaluateFile], { stdio: "inherit" });
   const results = readFileSync("__evaluate.json", "utf-8");

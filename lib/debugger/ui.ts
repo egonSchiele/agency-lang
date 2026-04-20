@@ -62,7 +62,8 @@ export class DebuggerUI implements DebuggerIO {
   private commandBarContent = "";
 
   // Zoom: stores original position/size so we can restore on un-zoom
-  private zoomedPane: { name: string; original: Record<string, any> } | null = null;
+  private zoomedPane: { name: string; original: Record<string, any> } | null =
+    null;
 
   // Thread cycling: index into the list of thread IDs for the current checkpoint.
   // undefined = show the active thread (default); number = explicit user selection.
@@ -269,12 +270,42 @@ export class DebuggerUI implements DebuggerIO {
     this.screen.append(this.commandInput);
 
     this.focusablePanes = [
-      { box: this.sourceBox, name: "sourceBox", color: "cyan", label: " source " },
-      { box: this.localsBox, name: "localsBox", color: "green", label: " locals " },
-      { box: this.globalsBox, name: "globalsBox", color: "green", label: " globals " },
-      { box: this.callStackBox, name: "callStackBox", color: "magenta", label: " call stack " },
-      { box: this.activityBox, name: "activityBox", color: "yellow", label: " activity " },
-      { box: this.stdoutBox, name: "stdoutBox", color: "blue", label: " stdout " },
+      {
+        box: this.sourceBox,
+        name: "sourceBox",
+        color: "cyan",
+        label: " source ",
+      },
+      {
+        box: this.localsBox,
+        name: "localsBox",
+        color: "green",
+        label: " locals ",
+      },
+      {
+        box: this.globalsBox,
+        name: "globalsBox",
+        color: "green",
+        label: " globals ",
+      },
+      {
+        box: this.callStackBox,
+        name: "callStackBox",
+        color: "magenta",
+        label: " call stack ",
+      },
+      {
+        box: this.activityBox,
+        name: "activityBox",
+        color: "yellow",
+        label: " activity ",
+      },
+      {
+        box: this.stdoutBox,
+        name: "stdoutBox",
+        color: "blue",
+        label: " stdout ",
+      },
     ];
 
     // Ctrl-C to quit — blessed puts the terminal in raw mode so SIGINT
@@ -289,9 +320,9 @@ export class DebuggerUI implements DebuggerIO {
       process.stdin.setRawMode?.(false);
       process.stdout.write(
         "\x1b[?1049l" + // exit alternate screen buffer
-        "\x1b[2J" +     // clear entire screen
-        "\x1b[H" +      // move cursor to top-left
-        "\x1b[?25h",    // show cursor
+          "\x1b[2J" + // clear entire screen
+          "\x1b[H" + // move cursor to top-left
+          "\x1b[?25h", // show cursor
       );
       // Node suppresses the default OS suspend action when any SIGTSTP
       // listener is registered (blessed installs one). Remove them so the
@@ -318,10 +349,27 @@ export class DebuggerUI implements DebuggerIO {
     });
   }
 
-  private static SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+  private static SPINNER_FRAMES = [
+    "⠋",
+    "⠙",
+    "⠹",
+    "⠸",
+    "⠼",
+    "⠴",
+    "⠦",
+    "⠧",
+    "⠇",
+    "⠏",
+  ];
   private static SPINNER_PHRASES = [
-    "thinking", "pondering", "reasoning", "working",
-    "executing", "processing", "contemplating", "computing",
+    "thinking",
+    "pondering",
+    "reasoning",
+    "working",
+    "executing",
+    "processing",
+    "contemplating",
+    "computing",
   ];
   private static SPINNER_INTERVAL_MS = 80;
   private static SPINNER_PHRASE_TICKS = 30; // ~2.4s at 80ms interval
@@ -329,12 +377,18 @@ export class DebuggerUI implements DebuggerIO {
   startSpinner(): void {
     if (this.spinnerInterval) return;
     let frameIdx = 0;
-    let phraseIdx = Math.floor(Math.random() * DebuggerUI.SPINNER_PHRASES.length);
+    let phraseIdx = Math.floor(
+      Math.random() * DebuggerUI.SPINNER_PHRASES.length,
+    );
     let ticksSincePhrase = 0;
 
     const update = () => {
-      const frame = DebuggerUI.SPINNER_FRAMES[frameIdx % DebuggerUI.SPINNER_FRAMES.length];
-      const phrase = DebuggerUI.SPINNER_PHRASES[phraseIdx % DebuggerUI.SPINNER_PHRASES.length];
+      const frame =
+        DebuggerUI.SPINNER_FRAMES[frameIdx % DebuggerUI.SPINNER_FRAMES.length];
+      const phrase =
+        DebuggerUI.SPINNER_PHRASES[
+          phraseIdx % DebuggerUI.SPINNER_PHRASES.length
+        ];
       this.commandBar.setContent(`{cyan-fg}${frame}{/cyan-fg} ${phrase}...`);
       this.screen.render();
       frameIdx++;
@@ -453,7 +507,9 @@ export class DebuggerUI implements DebuggerIO {
   }
 
   private restoreFocusByName(focusedName: string | undefined): void {
-    const newIndex = this.focusablePanes.findIndex((p) => p.name === focusedName);
+    const newIndex = this.focusablePanes.findIndex(
+      (p) => p.name === focusedName,
+    );
     this.focusIndex = newIndex >= 0 ? newIndex : 0;
   }
 
@@ -475,13 +531,16 @@ export class DebuggerUI implements DebuggerIO {
     this.sourceBox.width = "65%";
     this.threadsBox.show();
 
-    const countLabel = threadData.threadCount > 1
-      ? ` [${threadData.threadIndex + 1}/${threadData.threadCount}]`
-      : "";
+    const countLabel =
+      threadData.threadCount > 1
+        ? ` [${threadData.threadIndex + 1}/${threadData.threadCount}]`
+        : "";
     const threadLabel = ` threads: (id: ${threadData.threadId})${countLabel} `;
 
     // Add to focusable panes if not already there
-    const existingPane = this.focusablePanes.find((p) => p.name === "threadsBox");
+    const existingPane = this.focusablePanes.find(
+      (p) => p.name === "threadsBox",
+    );
     if (existingPane) {
       existingPane.label = threadLabel;
     } else {
@@ -502,7 +561,9 @@ export class DebuggerUI implements DebuggerIO {
       .map((m) => {
         const display = isZoomed
           ? m.content
-          : m.content.length > 200 ? m.content.slice(0, 197) + "..." : m.content;
+          : m.content.length > 200
+            ? m.content.slice(0, 197) + "..."
+            : m.content;
         return `  ${this.bold(`[${this.fmt(m.role)}]`)} ${this.fmt(display)}`;
       })
       .join("\n");
@@ -583,11 +644,12 @@ export class DebuggerUI implements DebuggerIO {
 
   private renderStatsBar(): void {
     const stats = this.state.getTokenStats();
-    const cost = stats.totalCost === 0
-      ? "$0.00"
-      : stats.totalCost < 0.0001
-        ? "<$0.0001"
-        : `$${stats.totalCost.toFixed(4)}`;
+    const cost =
+      stats.totalCost === 0
+        ? "$0.00"
+        : stats.totalCost < 0.0001
+          ? "<$0.0001"
+          : `$${stats.totalCost.toFixed(4)}`;
     const content = `  tokens: ${stats.totalTokens.toLocaleString()} | cost: ${cost}`;
     this.statsBar.setContent(`{gray-fg}${content}{/gray-fg}`);
   }
@@ -600,7 +662,6 @@ export class DebuggerUI implements DebuggerIO {
       ) => {
         switch (key.name) {
           case "s":
-          case "space":
           case "right":
             cleanup();
             resolve({ type: "step" });
@@ -617,6 +678,7 @@ export class DebuggerUI implements DebuggerIO {
             cleanup();
             resolve({ type: "stepOut" });
             break;
+          case "space":
           case "c":
             cleanup();
             resolve({ type: "continue" });
@@ -658,7 +720,10 @@ export class DebuggerUI implements DebuggerIO {
             break;
           case "tab":
             if (key.shift) {
-              this.focusPane((this.focusIndex - 1 + this.focusablePanes.length) % this.focusablePanes.length);
+              this.focusPane(
+                (this.focusIndex - 1 + this.focusablePanes.length) %
+                  this.focusablePanes.length,
+              );
             } else {
               this.cycleFocus();
             }
@@ -1072,7 +1137,9 @@ export class DebuggerUI implements DebuggerIO {
           return `   ${line}`;
         });
         listBox.setContent(lines.join("\n"));
-        listBox.setLabel(` checkpoints (${selectedIndex + 1}/${checkpoints.length}) `);
+        listBox.setLabel(
+          ` checkpoints (${selectedIndex + 1}/${checkpoints.length}) `,
+        );
 
         // Scroll to keep selected item visible
         const boxHeight = (listBox as any).height as number;
@@ -1089,9 +1156,13 @@ export class DebuggerUI implements DebuggerIO {
 
         lines.push(`{bold}{cyan-fg}Checkpoint #${cp.id}{/cyan-fg}{/bold}`);
         lines.push("");
-        lines.push(`{bold}Location:{/bold}  ${blessed.escape(cp.getFilename())}:${blessed.escape(cp.scopeName)}`);
+        lines.push(
+          `{bold}Location:{/bold}  ${blessed.escape(cp.getFilename())}:${blessed.escape(cp.scopeName)}`,
+        );
         lines.push(`{bold}Step:{/bold}      ${blessed.escape(cp.stepPath)}`);
-        lines.push(`{bold}Node:{/bold}      ${blessed.escape(cp.nodeId || "(none)")}`);
+        lines.push(
+          `{bold}Node:{/bold}      ${blessed.escape(cp.nodeId || "(none)")}`,
+        );
         lines.push(`{bold}Pinned:{/bold}    ${cp.pinned ? "yes" : "no"}`);
         if (cp.label) {
           lines.push(`{bold}Label:{/bold}     ${blessed.escape(cp.label)}`);
@@ -1105,7 +1176,9 @@ export class DebuggerUI implements DebuggerIO {
           if (frame.args && Object.keys(frame.args).length > 0) {
             for (const [key, value] of Object.entries(frame.args)) {
               if (!key.startsWith("__")) {
-                lines.push(`  ${blessed.escape(key)} = ${blessed.escape(formatValue(value))}`);
+                lines.push(
+                  `  ${blessed.escape(key)} = ${blessed.escape(formatValue(value))}`,
+                );
               }
             }
           } else {
@@ -1117,7 +1190,9 @@ export class DebuggerUI implements DebuggerIO {
           if (frame.locals && Object.keys(frame.locals).length > 0) {
             for (const [key, value] of Object.entries(frame.locals)) {
               if (!key.startsWith("__")) {
-                lines.push(`  ${blessed.escape(key)} = ${blessed.escape(formatValue(value))}`);
+                lines.push(
+                  `  ${blessed.escape(key)} = ${blessed.escape(formatValue(value))}`,
+                );
               }
             }
           } else {
@@ -1132,7 +1207,9 @@ export class DebuggerUI implements DebuggerIO {
           lines.push("{bold}{green-fg}Globals:{/green-fg}{/bold}");
           for (const [key, value] of Object.entries(globals)) {
             if (!key.startsWith("__")) {
-              lines.push(`  ${blessed.escape(key)} = ${blessed.escape(formatValue(value))}`);
+              lines.push(
+                `  ${blessed.escape(key)} = ${blessed.escape(formatValue(value))}`,
+              );
             }
           }
         }
@@ -1141,12 +1218,17 @@ export class DebuggerUI implements DebuggerIO {
         const frames = cp.stack?.stack;
         if (frames && frames.length > 0) {
           lines.push("");
-          lines.push(`{bold}{magenta-fg}Call Stack:{/magenta-fg}{/bold} (${frames.length} frame${frames.length === 1 ? "" : "s"})`);
+          lines.push(
+            `{bold}{magenta-fg}Call Stack:{/magenta-fg}{/bold} (${frames.length} frame${frames.length === 1 ? "" : "s"})`,
+          );
           for (let i = 0; i < frames.length; i++) {
             const entry = frames[i];
             const prefix = i === frames.length - 1 ? " > " : "   ";
-            const argKeys = Object.keys(entry.args).filter(k => !k.startsWith("__"));
-            const argStr = argKeys.length > 0 ? `(${argKeys.join(", ")})` : "()";
+            const argKeys = Object.keys(entry.args).filter(
+              (k) => !k.startsWith("__"),
+            );
+            const argStr =
+              argKeys.length > 0 ? `(${argKeys.join(", ")})` : "()";
             lines.push(`${prefix}frame ${i} ${argStr} at step ${entry.step}`);
           }
         }

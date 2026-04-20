@@ -1,4 +1,5 @@
 import * as readline from "readline";
+import process from "process";
 import { color } from "termcolors";
 import { syntaxHighlight } from "./syntax.js";
 import { _input } from "../_builtins.js";
@@ -42,7 +43,10 @@ function resetScrollRegion(): string {
 }
 
 export function _emptyLine(): void {
-  if (isDebuggerMode) { console.log(""); return; }
+  if (isDebuggerMode) {
+    console.log("");
+    return;
+  }
   if (!initialized) return;
   writeInScrollRegion("");
   renderFixedArea();
@@ -276,14 +280,20 @@ export function _destroyUI(): void {
 // ---------------------------------------------------------------------------
 
 export function _log(message: string): void {
-  if (isDebuggerMode) { console.log(message); return; }
+  if (isDebuggerMode) {
+    console.log(message);
+    return;
+  }
   if (!initialized) return;
   writeInScrollRegion(message);
   renderFixedArea();
 }
 
 export function _chat(role: string, message: string): void {
-  if (isDebuggerMode) { console.log(`${role}: ${message}`); return; }
+  if (isDebuggerMode) {
+    console.log(`${role}: ${message}`);
+    return;
+  }
   if (!initialized) return;
   const colorFn =
     role === "user"
@@ -301,7 +311,10 @@ export function _chat(role: string, message: string): void {
 }
 
 export function _code(filename: string, content: string): void {
-  if (isDebuggerMode) { console.log(`[${filename}]\n${content}`); return; }
+  if (isDebuggerMode) {
+    console.log(`[${filename}]\n${content}`);
+    return;
+  }
   if (!initialized) return;
   writeBox(filename, content.split("\n"), (line, i) => {
     const lineNum = String(i + 1).padStart(4, " ");
@@ -321,7 +334,10 @@ const languageMap: Record<string, string> = {
 };
 
 export function _diff(filename: string, _content: string): void {
-  if (isDebuggerMode) { console.log(`[${filename}]\n${_content}`); return; }
+  if (isDebuggerMode) {
+    console.log(`[${filename}]\n${_content}`);
+    return;
+  }
   if (!initialized) return;
   const ext = filename.split(".").slice(-1)[0];
   const language = languageMap[ext];
@@ -340,7 +356,10 @@ export function _diff(filename: string, _content: string): void {
 }
 
 export function _separator(label: string): void {
-  if (isDebuggerMode) { console.log(label ? `── ${label} ──` : "────"); return; }
+  if (isDebuggerMode) {
+    console.log(label ? `── ${label} ──` : "────");
+    return;
+  }
   if (!initialized) return;
   if (label) {
     const padding = Math.max(0, cols - label.length - 4);

@@ -43,6 +43,7 @@ export default defineConfig({
           { text: "VSCode Extension", link: "/appendix/vscode-extension" },
           { text: "Generating Docs", link: "/appendix/docs" },
           { text: "Callbacks", link: "/appendix/callbacks" },
+          { text: "Agency vs TypeScript", link: "/appendix/agency-vs-typescript" },
         ],
       },
       {

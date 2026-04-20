@@ -1,3 +1,5 @@
+import { flatMap } from "std::array"
+
 node main() {
   const words = ["hello world", "foo bar"]
   const letters = flatMap(words) as word {

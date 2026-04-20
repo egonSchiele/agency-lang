@@ -1,4 +1,5 @@
 import { ls } from "std::shell"
+import { sortBy, map } from "std::array"
 
 node main() {
   const entries = ls("tests/agency/stdlib/glob-fixtures", true) catch [] with approve

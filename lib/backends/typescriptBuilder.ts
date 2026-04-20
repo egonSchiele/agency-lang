@@ -1036,7 +1036,7 @@ export class TypeScriptBuilder {
     const rightNode = this.processNode(node.right);
     // Agency uses strict equality/inequality: == → ===, != → !==
     const emitOp = node.operator === "==" ? "===" :
-                   node.operator === "!=" ? "!==" : node.operator;
+      node.operator === "!=" ? "!==" : node.operator;
     return ts.binOp(leftNode, emitOp, rightNode, {
       parenLeft: this.needsParensLeft(node.left, node.operator),
       parenRight: this.needsParensRight(node.right, node.operator),
@@ -1124,10 +1124,10 @@ export class TypeScriptBuilder {
     return this.insideGlobalInit
       ? ts.functionCallConfig({ ctx: ts.runtime.ctx })
       : ts.functionCallConfig({
-          ctx: ts.runtime.ctx,
-          threads: ts.runtime.threads,
-          interruptData: ts.raw("__state?.interruptData"),
-        });
+        ctx: ts.runtime.ctx,
+        threads: ts.runtime.threads,
+        interruptData: ts.raw("__state?.interruptData"),
+      });
   }
 
   /**
@@ -3399,7 +3399,7 @@ export class TypeScriptBuilder {
               ])
               .done(),
           ),
-          { async: true, export: true },
+          { async: true, export: true, returnType: "Promise<RunNodeResult<any>>" },
         ),
       );
       result.push(

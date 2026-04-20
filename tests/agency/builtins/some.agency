@@ -1,3 +1,5 @@
+import { some } from "std::array"
+
 node main() {
   const hasNegative = some([1, -2, 3]) as n {
     return n < 0

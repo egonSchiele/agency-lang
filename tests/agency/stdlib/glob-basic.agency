@@ -1,4 +1,5 @@
 import { glob } from "std::shell"
+import { sortBy } from "std::array"
 
 node main() {
   const results = glob("**/*.{md,ts}", "tests/agency/stdlib/glob-fixtures") catch [] with approve

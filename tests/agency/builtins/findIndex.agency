@@ -1,3 +1,5 @@
+import { findIndex } from "std::array"
+
 node main() {
   const names = ["Alice", "Bob", "Charlie", "Dave"]
   const idx = findIndex(names) as name {

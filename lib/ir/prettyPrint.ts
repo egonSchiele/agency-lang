@@ -70,6 +70,7 @@ export function printTs(node: TsNode, indent = 0): string {
 
     case "varDecl": {
       let s = `${node.declKind} ${node.name}`;
+      // let s = `var ${node.name}`;
       if (node.typeAnnotation) s += `: ${node.typeAnnotation}`;
       if (node.initializer) s += ` = ${printTs(node.initializer, indent)}`;
       return s + ";";

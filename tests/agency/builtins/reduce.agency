@@ -1,3 +1,5 @@
+import { reduce } from "std::array"
+
 node main() {
   const numbers = [1, 2, 3, 4, 5]
   const sum = reduce(numbers, 0) as (acc, n) {

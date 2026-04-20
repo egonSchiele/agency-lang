@@ -6,7 +6,7 @@ Agency has a growing standard library. You can check out all the different funct
 import { search } from "std::wikipedia"
 ```
 
-All the functions inside `std::index` ([link](/stdlib/)) and `std::array` ([link](/stdlib/array)) are always pre-imported for you in every file.
+All the functions inside `std::index` ([link](/stdlib/)) are always pre-imported for you in every file.
 
 There are also some other functions that are built into the language itself:
 - `interrupt`: Use this function to throw an interrupt.

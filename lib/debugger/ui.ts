@@ -945,6 +945,7 @@ export class DebuggerUI implements DebuggerIO {
         },
       });
 
+      list.select(items.length - 1); // start with most recent checkpoint selected
       this.screen.append(list);
       list.focus();
       this.screen.render();

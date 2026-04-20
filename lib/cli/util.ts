@@ -174,12 +174,30 @@ export async function executeNodeAsync({
   argsString,
   interruptHandlers,
 }: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
-  compile(config, agencyFile);
+  const distDir = config.distDir;
+  let compiledFilename: string;
+
+  if (distDir) {
+    // distDir mode: skip compilation, import pre-compiled JS from distDir
+    const basename = path.basename(agencyFile, ".agency") + ".js";
+    const compiledPath = path.resolve(distDir, basename);
+    if (!fs.existsSync(compiledPath)) {
+      throw new Error(
+        `Compiled file not found: ${compiledPath}\n` +
+        `Make sure you have compiled your Agency files and that distDir is correct.`,
+      );
+    }
+    compiledFilename = compiledPath;
+  } else {
+    compile(config, agencyFile);
+    compiledFilename = path.basename(agencyFile).replace(".agency", ".js");
+  }
+
   const baseName = agencyFile.replace(".agency", "");
   const evaluateFile = `${baseName}.evaluate.js`;
   const resultsFile = `${baseName}.evaluate.json`;
   const evaluateScript = renderEvaluate({
-    filename: path.basename(agencyFile).replace(".agency", ".js"),
+    filename: compiledFilename,
     nodeName,
     hasArgs,
     args: argsString,
@@ -201,10 +219,26 @@ export async function executeNodeAsync({
 }
 
 export function executeNode(args: ExecuteNodeArgs): { data: any; [key: string]: any } {
-  const outFile = args.agencyFile.replace(".agency", ".js");
-  compile(args.config, args.agencyFile);
+  const distDir = args.config.distDir;
+  let compiledFilename: string;
+
+  if (distDir) {
+    const basename = path.basename(args.agencyFile, ".agency") + ".js";
+    const compiledPath = path.resolve(distDir, basename);
+    if (!fs.existsSync(compiledPath)) {
+      throw new Error(
+        `Compiled file not found: ${compiledPath}\n` +
+        `Make sure you have compiled your Agency files and that distDir is correct.`,
+      );
+    }
+    compiledFilename = compiledPath;
+  } else {
+    compile(args.config, args.agencyFile);
+    compiledFilename = args.agencyFile.replace(".agency", ".js");
+  }
+
   const evaluateScript = renderEvaluate({
-    filename: outFile,
+    filename: compiledFilename,
     nodeName: args.nodeName,
     hasArgs: args.hasArgs,
     args: args.argsString,

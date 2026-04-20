@@ -391,6 +391,7 @@ program
   .option("--rewind-size <n>", "Rolling checkpoint window size", "30")
   .option("--trace <file>", "Load and inspect a trace file")
   .option("--checkpoint <file>", "Load and inspect a checkpoint file")
+  .option("--dist-dir <dir>", "Import pre-compiled JS from this directory instead of compiling on the fly")
   .action(
     async (
       file: string,
@@ -399,6 +400,7 @@ program
         rewindSize: string;
         trace?: string;
         checkpoint?: string;
+        distDir?: string;
       },
     ) => {
       const config = getConfig();
@@ -407,6 +409,7 @@ program
         rewindSize: parseInt(options.rewindSize, 10),
         trace: options.trace,
         checkpoint: options.checkpoint,
+        distDir: options.distDir,
       });
     },
   );

@@ -1,7 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   findPackageRoot,
   resolveAgencyImportPath,
+  resolveFlexibleExtension,
   getStdlibDir,
   toCompiledImportPath,
   isPkgImport,
@@ -313,5 +314,69 @@ describe("buildSymbolTable with pkg:: imports", () => {
     } finally {
       fs.unlinkSync(tmpFile);
     }
+  });
+});
+
+describe("resolveFlexibleExtension", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-flex-ext-"));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("should return the resolved path when the file exists as-is", () => {
+    const tsFile = path.join(tmpDir, "bar.ts");
+    fs.writeFileSync(tsFile, "export const x = 1;");
+    const fromFile = path.join(tmpDir, "main.agency");
+
+    const result = resolveFlexibleExtension("./bar.ts", fromFile);
+    expect(result).toBe(tsFile);
+  });
+
+  it("should fall back from .js to .ts when .js doesn't exist", () => {
+    const tsFile = path.join(tmpDir, "bar.ts");
+    fs.writeFileSync(tsFile, "export const x = 1;");
+    const fromFile = path.join(tmpDir, "main.agency");
+
+    const result = resolveFlexibleExtension("./bar.js", fromFile);
+    expect(result).toBe(tsFile);
+  });
+
+  it("should fall back from .ts to .js when .ts doesn't exist", () => {
+    const jsFile = path.join(tmpDir, "bar.js");
+    fs.writeFileSync(jsFile, "export const x = 1;");
+    const fromFile = path.join(tmpDir, "main.agency");
+
+    const result = resolveFlexibleExtension("./bar.ts", fromFile);
+    expect(result).toBe(jsFile);
+  });
+
+  it("should return null when neither .js nor .ts exists", () => {
+    const fromFile = path.join(tmpDir, "main.agency");
+
+    const result = resolveFlexibleExtension("./bar.js", fromFile);
+    expect(result).toBeNull();
+  });
+
+  it("should return null for non-.js/.ts extensions", () => {
+    const fromFile = path.join(tmpDir, "main.agency");
+
+    const result = resolveFlexibleExtension("./bar.css", fromFile);
+    expect(result).toBeNull();
+  });
+
+  it("should prefer the exact extension when both files exist", () => {
+    const jsFile = path.join(tmpDir, "bar.js");
+    const tsFile = path.join(tmpDir, "bar.ts");
+    fs.writeFileSync(jsFile, "export const x = 1;");
+    fs.writeFileSync(tsFile, "export const x = 1;");
+    const fromFile = path.join(tmpDir, "main.agency");
+
+    expect(resolveFlexibleExtension("./bar.js", fromFile)).toBe(jsFile);
+    expect(resolveFlexibleExtension("./bar.ts", fromFile)).toBe(tsFile);
   });
 });

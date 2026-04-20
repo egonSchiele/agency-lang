@@ -15,6 +15,7 @@ import {
   isPkgImport,
   isStdlibImport,
   resolveAgencyImportPath,
+  resolveFlexibleExtension,
 } from "../importPaths.js";
 import { parseAgency } from "../parser.js";
 import { findRecursively, getImports } from "./util.js";
@@ -189,10 +190,33 @@ export function compile(
     compile(config, absPath, undefined, { ...options, symbolTable });
   }
 
-  // Update the import path in the AST to reference the new .ts file
+  // Update import paths in the AST
   resolvedProgram.nodes.forEach((node) => {
-    if (node.type === "importStatement" && !isStdlibImport(node.modulePath) && !isPkgImport(node.modulePath)) {
+    if (node.type !== "importStatement") return;
+    if (isStdlibImport(node.modulePath) || isPkgImport(node.modulePath)) return;
+
+    if (node.modulePath.endsWith(".agency")) {
       node.modulePath = node.modulePath.replace(".agency", ext);
+      return;
+    }
+
+    // For .js/.ts imports, resolve flexibly: if the specified file doesn't
+    // exist, try the other extension. This lets users write .js imports that
+    // work in dist/ while the debugger finds the .ts source (and vice versa).
+    if (node.modulePath.endsWith(".js") || node.modulePath.endsWith(".ts")) {
+      const resolved = resolveFlexibleExtension(node.modulePath, absoluteInputFile);
+      if (resolved === null) {
+        const altExt = node.modulePath.endsWith(".js") ? ".ts" : ".js";
+        const altPath = node.modulePath.replace(/\.(js|ts)$/, altExt);
+        console.error(
+          `Error: Cannot resolve import '${node.modulePath}' from '${inputFile}'.\n` +
+          `Tried: ${node.modulePath}, ${altPath} — neither file exists.`,
+        );
+        process.exit(1);
+      }
+      // Rewrite the import to use whatever extension actually exists on disk
+      const resolvedExt = path.extname(resolved);
+      node.modulePath = node.modulePath.replace(/\.(js|ts)$/, resolvedExt);
     }
   });
 

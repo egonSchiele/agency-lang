@@ -138,6 +138,11 @@ export interface AgencyConfig {
    *  named <timestamp>_<id>.agencytrace. */
   traceDir?: string;
 
+  /** Directory containing pre-compiled JS output (e.g., "dist").
+   *  When set, the debugger imports compiled modules from this directory
+   *  instead of compiling on the fly. Resolved relative to cwd. */
+  distDir?: string;
+
   /** Test runner configuration */
   test?: {
     /** Number of test files to run in parallel. Default: 1 (sequential). */

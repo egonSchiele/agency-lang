@@ -454,7 +454,7 @@ export class DebuggerUI implements DebuggerIO {
   private renderSourcePane(): void {
     const moduleId = this.state.getModuleId();
     const currentLine = this.state.getCurrentLine();
-    const filePath = moduleId;
+    const filePath = this.state.resolveModulePath(moduleId, [".agency"]) ?? moduleId;
     const fileContent = readSourceFile(filePath);
     const highlighted = syntaxHighlight(fileContent, "ts");
     const lines = highlighted.split("\n");

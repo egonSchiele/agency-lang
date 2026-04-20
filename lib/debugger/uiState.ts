@@ -2,6 +2,7 @@ import { SourceMap } from "@/backends/sourceMap.js";
 import { Checkpoint, type ThreadMessages } from "../runtime/state/checkpointStore.js";
 import { GlobalStore } from "../runtime/state/globalStore.js";
 import { checkpointSchema } from "../runtime/state/schemas.js";
+import { getStdlibDir } from "../importPaths.js";
 import { color } from "termcolors";
 import { uniq } from "@/utils.js";
 import fs from "fs";
@@ -44,18 +45,34 @@ export class UIState {
     return uiState;
   }
 
-  private agencyToJsFile(agencyFile: string): string | null {
-    const tsFile = agencyFile.replace(/\.agency$/, ".ts");
-    if (fs.existsSync(tsFile)) {
-      return tsFile;
+  /**
+   * Resolve a moduleId (e.g., "stdlib/index.agency") to an actual file path,
+   * trying the given extensions. Handles stdlib modules that live inside
+   * node_modules/agency-lang/stdlib/ when running from an external project.
+   */
+  resolveModulePath(moduleId: string, extensions: string[]): string | null {
+    // Try the path as-is first (works when running from the agency-lang repo)
+    for (const ext of extensions) {
+      const candidate = moduleId.replace(/\.agency$/, ext);
+      if (fs.existsSync(candidate)) return candidate;
     }
 
-    const jsFile = agencyFile.replace(/\.agency$/, ".js");
-    if (fs.existsSync(jsFile)) {
-      return jsFile;
+    // If the moduleId refers to a stdlib file, resolve against the actual
+    // stdlib directory (handles npm-installed packages where stdlib lives
+    // in node_modules/agency-lang/stdlib/)
+    if (moduleId.includes("stdlib")) {
+      const basename = path.basename(moduleId);
+      for (const ext of extensions) {
+        const candidate = path.join(getStdlibDir(), basename).replace(/\.agency$/, ext);
+        if (fs.existsSync(candidate)) return candidate;
+      }
     }
 
     return null;
+  }
+
+  private agencyToJsFile(agencyFile: string): string | null {
+    return this.resolveModulePath(agencyFile, [".js", ".ts"]);
   }
 
   async setCheckpoint(checkpoint: Checkpoint | undefined) {

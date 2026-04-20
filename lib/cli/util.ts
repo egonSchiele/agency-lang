@@ -157,6 +157,22 @@ export type InterruptHandler = {
   expectedMessage?: string;
 };
 
+/**
+ * Resolve the compiled .js file for an .agency file from a distDir.
+ * Throws if the compiled file doesn't exist.
+ */
+export function resolveCompiledFile(distDir: string, agencyFile: string): string {
+  const basename = path.basename(agencyFile, ".agency") + ".js";
+  const compiledPath = path.resolve(distDir, basename);
+  if (!fs.existsSync(compiledPath)) {
+    throw new Error(
+      `Compiled file not found: ${compiledPath}\n` +
+      `Make sure you have compiled your Agency files and that distDir is correct.`,
+    );
+  }
+  return compiledPath;
+}
+
 type ExecuteNodeArgs = {
   config: AgencyConfig;
   agencyFile: string;
@@ -178,16 +194,7 @@ export async function executeNodeAsync({
   let compiledFilename: string;
 
   if (distDir) {
-    // distDir mode: skip compilation, import pre-compiled JS from distDir
-    const basename = path.basename(agencyFile, ".agency") + ".js";
-    const compiledPath = path.resolve(distDir, basename);
-    if (!fs.existsSync(compiledPath)) {
-      throw new Error(
-        `Compiled file not found: ${compiledPath}\n` +
-        `Make sure you have compiled your Agency files and that distDir is correct.`,
-      );
-    }
-    compiledFilename = compiledPath;
+    compiledFilename = resolveCompiledFile(distDir, agencyFile);
   } else {
     compile(config, agencyFile);
     compiledFilename = path.basename(agencyFile).replace(".agency", ".js");
@@ -223,15 +230,7 @@ export function executeNode(args: ExecuteNodeArgs): { data: any; [key: string]: 
   let compiledFilename: string;
 
   if (distDir) {
-    const basename = path.basename(args.agencyFile, ".agency") + ".js";
-    const compiledPath = path.resolve(distDir, basename);
-    if (!fs.existsSync(compiledPath)) {
-      throw new Error(
-        `Compiled file not found: ${compiledPath}\n` +
-        `Make sure you have compiled your Agency files and that distDir is correct.`,
-      );
-    }
-    compiledFilename = compiledPath;
+    compiledFilename = resolveCompiledFile(distDir, args.agencyFile);
   } else {
     compile(args.config, args.agencyFile);
     compiledFilename = args.agencyFile.replace(".agency", ".js");

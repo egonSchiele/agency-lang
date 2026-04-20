@@ -1,6 +1,6 @@
 import { AgencyConfig } from "@/config.js";
 import { compile } from "./commands.js";
-import { pickANode } from "./util.js";
+import { pickANode, resolveCompiledFile } from "./util.js";
 import { parseAgency } from "@/parser.js";
 import { getNodesOfType } from "@/utils/node.js";
 import { GraphNodeDefinition } from "@/types.js";
@@ -105,16 +105,7 @@ export async function debug(
 
     if (distDir) {
       // distDir mode: import pre-compiled JS from the dist directory
-      const basename = path.basename(inputFile, ".agency") + ".js";
-      const compiledPath = path.resolve(distDir, basename);
-
-      if (!fs.existsSync(compiledPath)) {
-        console.error(
-          `Error: Compiled file not found: ${compiledPath}\n` +
-          `Make sure you have compiled your Agency files and that distDir is correct.`,
-        );
-        process.exit(1);
-      }
+      const compiledPath = resolveCompiledFile(distDir, inputFile);
 
       // Warn if source is newer than compiled output
       const sourceMtime = fs.statSync(inputFile).mtimeMs;

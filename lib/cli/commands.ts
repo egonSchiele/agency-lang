@@ -175,8 +175,11 @@ export function compile(
   const imports = getImports(resolvedProgram);
 
   for (const importPath of imports) {
+    // stdlib and pkg imports are pre-compiled; don't recompile them
+    if (isStdlibImport(importPath) || isPkgImport(importPath)) continue;
+
     const absPath = resolveAgencyImportPath(importPath, absoluteInputFile);
-    if (config.restrictImports && !isStdlibImport(importPath) && !isPkgImport(importPath)) {
+    if (config.restrictImports) {
       const projectRoot = process.cwd();
       if (
         !absPath.startsWith(projectRoot + path.sep) &&

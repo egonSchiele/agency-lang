@@ -261,34 +261,6 @@ export function resolveAgencyImportPath(
   return path.resolve(path.dirname(fromFile), importPath);
 }
 
-const FLEXIBLE_EXTENSIONS: Record<string, string> = {
-  ".js": ".ts",
-  ".ts": ".js",
-};
-
-/**
- * Resolve a .js or .ts import path, trying the other extension if the
- * specified file doesn't exist. Returns the resolved absolute path, or
- * null if neither extension exists on disk.
- */
-export function resolveFlexibleExtension(
-  importPath: string,
-  fromFile: string,
-): string | null {
-  const ext = path.extname(importPath);
-  const altExt = FLEXIBLE_EXTENSIONS[ext];
-  if (!altExt) return null; // not a .js/.ts import
-
-  const dir = path.dirname(fromFile);
-  const resolved = path.resolve(dir, importPath);
-  if (fs.existsSync(resolved)) return resolved;
-
-  const altPath = resolved.slice(0, -ext.length) + altExt;
-  if (fs.existsSync(altPath)) return altPath;
-
-  return null;
-}
-
 /**
  * Convert an Agency import path to the path that should appear in generated
  * TypeScript import statements.

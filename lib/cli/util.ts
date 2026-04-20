@@ -19,6 +19,7 @@ import { isAgencyImport, resolveAgencyImportPath, getStdlibDir } from "../import
 import renderEvaluate from "@/templates/cli/evaluate.js";
 import renderJudgeEvaluate from "@/templates/cli/judgeEvaluate.js";
 import { compile } from "./commands.js";
+import { RunStrategy } from "../importStrategy.js";
 import { AgencyConfig } from "@/config.js";
 import { parseAgency } from "@/parser.js";
 export function parseTarget(target: string): {
@@ -196,7 +197,7 @@ export async function executeNodeAsync({
   if (distDir) {
     compiledPath = resolveCompiledFile(distDir, agencyFile);
   } else {
-    compiledPath = compile(config, agencyFile)!;
+    compiledPath = compile(config, agencyFile, undefined, { importStrategy: new RunStrategy() })!;
   }
 
   const baseName = agencyFile.replace(".agency", "");
@@ -237,7 +238,7 @@ export function executeNode(args: ExecuteNodeArgs): { data: any; [key: string]: 
   if (distDir) {
     compiledPath = resolveCompiledFile(distDir, args.agencyFile);
   } else {
-    compiledPath = compile(args.config, args.agencyFile)!;
+    compiledPath = compile(args.config, args.agencyFile, undefined, { importStrategy: new RunStrategy() })!;
   }
 
   const evaluateFile = "__evaluate.js";

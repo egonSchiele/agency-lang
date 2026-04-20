@@ -15,8 +15,8 @@ import {
   isPkgImport,
   isStdlibImport,
   resolveAgencyImportPath,
-  resolveFlexibleExtension,
 } from "../importPaths.js";
+import { CompileStrategy, RunStrategy, type ImportStrategy } from "../importStrategy.js";
 import { parseAgency } from "../parser.js";
 import { findRecursively, getImports } from "./util.js";
 
@@ -112,7 +112,7 @@ export function compile(
   config: AgencyConfig,
   inputFile: string,
   _outputFile?: string,
-  options?: { ts?: boolean; symbolTable?: SymbolTable },
+  options?: { ts?: boolean; symbolTable?: SymbolTable; importStrategy?: ImportStrategy },
 ): string | null {
   // Check if the input is a directory
   const stats = fs.statSync(inputFile);
@@ -190,36 +190,23 @@ export function compile(
     compile(config, absPath, undefined, { ...options, symbolTable });
   }
 
-  // Update import paths in the AST
+  // Rewrite import paths in the AST using the import strategy
+  const strategy = options?.importStrategy ?? new CompileStrategy({ targetExt: ext as ".js" | ".ts" });
+  const nonAgencyImports: string[] = [];
+
   resolvedProgram.nodes.forEach((node) => {
     if (node.type !== "importStatement") return;
     if (isStdlibImport(node.modulePath) || isPkgImport(node.modulePath)) return;
 
-    if (node.modulePath.endsWith(".agency")) {
-      node.modulePath = node.modulePath.replace(".agency", ext);
-      return;
-    }
+    node.modulePath = strategy.rewriteImport(node.modulePath, absoluteInputFile);
 
-    // For relative .js/.ts imports, resolve flexibly: if the specified file
-    // doesn't exist, try the other extension. Bare specifiers (e.g. "some-pkg/index.js")
-    // are left to Node's resolver at runtime.
-    const isRelative = node.modulePath.startsWith("./") || node.modulePath.startsWith("../");
-    if (isRelative && (node.modulePath.endsWith(".js") || node.modulePath.endsWith(".ts"))) {
-      const resolved = resolveFlexibleExtension(node.modulePath, absoluteInputFile);
-      if (resolved === null) {
-        const altExt = node.modulePath.endsWith(".js") ? ".ts" : ".js";
-        const altPath = node.modulePath.replace(/\.(js|ts)$/, altExt);
-        console.error(
-          `Error: Cannot resolve import '${node.modulePath}' from '${inputFile}'.\n` +
-          `Tried: ${node.modulePath}, ${altPath} — neither file exists.`,
-        );
-        process.exit(1);
-      }
-      // Rewrite the import to use whatever extension actually exists on disk
-      const resolvedExt = path.extname(resolved);
-      node.modulePath = node.modulePath.replace(/\.(js|ts)$/, resolvedExt);
+    // Collect non-Agency imports for dependency preparation
+    if (!node.modulePath.endsWith(".agency")) {
+      nonAgencyImports.push(node.modulePath);
     }
   });
+
+  strategy.prepareDependencies(nonAgencyImports, absoluteInputFile);
 
   const moduleId = path.relative(process.cwd(), absoluteInputFile);
   const generatedCode = generateTypeScript(
@@ -252,8 +239,8 @@ export function run(
   outputFile?: string,
   resumeFile?: string,
 ): void {
-  // Compile the file
-  const output = compile(config, inputFile, outputFile);
+  // Compile the file with RunStrategy so dependencies are prepared for execution
+  const output = compile(config, inputFile, outputFile, { importStrategy: new RunStrategy() });
   if (output === null) {
     console.error("Error: No output file generated.");
     process.exit(1);

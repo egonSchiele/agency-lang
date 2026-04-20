@@ -12,74 +12,159 @@ A secondary issue: when imports fail, the error is an unhelpful hard crash inste
 
 ## Solution
 
-Three complementary features:
+Two complementary features:
 
-1. **Flexible extension resolution** — At compile time, treat `.js` and `.ts` as interchangeable in import paths. If the specified file doesn't exist, try the other extension.
+1. **ImportStrategy** — A class hierarchy that encapsulates the different import handling behaviors for compile mode vs run mode.
 2. **distDir config** — For the debugger, allow specifying a dist directory so it can import pre-compiled JS instead of compiling on the fly.
-3. **Mtime warning** — When using distDir, warn if the `.agency` source is newer than the compiled output.
 
-## Feature 1: Flexible Extension Resolution
+## Feature 1: ImportStrategy
 
-### Behavior
+### The core insight
 
-When the Agency compiler encounters a non-Agency, non-stdlib, non-pkg import (i.e., a plain `.js` or `.ts` import), it checks whether the referenced file exists. If it doesn't, it tries the other extension:
+Import handling must differ between compile time and run time:
 
-- `import { foo } from "./bar.js"` → `./bar.js` doesn't exist → try `./bar.ts` → found, use it
-- `import { foo } from "./bar.ts"` → `./bar.ts` doesn't exist → try `./bar.js` → found, use it
+- **Compile time** (`agency compile`): The user has a build pipeline (e.g., tsc). Non-Agency imports should be left as-is. The user's build tools handle them.
+- **Run time** (`agency run` / `agency debug` / `agency test`): The compiled code will be executed immediately by Node. All imports must resolve to `.js` files that exist on disk.
 
-If neither extension exists, print a clear error message and exit:
+### Behavior by mode
 
+**Compile mode** (`agency compile`):
+
+| User writes | File on disk | Action | Rationale |
+|---|---|---|---|
+| `./tools.js` | `tools.js` exists | Leave as-is | Already correct |
+| `./tools.js` | Only `tools.ts` exists | Leave as-is | User's build pipeline (tsc) will produce `tools.js` |
+| `./tools.ts` | `tools.ts` exists | Leave as-is | User knows what they're doing |
+| `./foo.agency` | `foo.agency` exists | Rewrite to `.js` (or `.ts` with `--ts`) | Standard Agency behavior |
+| `"nanoid"` | n/a | Leave as-is | Node resolves at runtime |
+
+**Run mode** (`agency run` / `agency debug` / `agency test`):
+
+| User writes | File on disk | Action | Rationale |
+|---|---|---|---|
+| `./tools.js` | `tools.js` exists | Leave as-is | Already works |
+| `./tools.js` | Only `tools.ts` exists | Compile `tools.ts` → `tools.js` via esbuild | Make the `.js` import work |
+| `./tools.ts` | `tools.ts` exists | Compile `tools.ts` → `tools.js`, rewrite import to `.js` | Node needs `.js` at runtime |
+| `./tools.ts` | Only `tools.js` exists | Rewrite import to `.js` | The `.js` file is what Node needs |
+| `./foo.agency` | `foo.agency` exists | Compile to `.js`, rewrite import | Standard Agency behavior |
+| `"nanoid"` | n/a | Leave as-is | Node resolves at runtime |
+
+**distDir mode** (`agency debug --dist-dir` / `agency test` with distDir):
+
+| User writes | What's in distDir | Action | Rationale |
+|---|---|---|---|
+| `./tools.js` | `tools.js` exists | Import from distDir | Everything pre-compiled |
+| Any | File missing from distDir | Error: "compiled file not found" | User needs to rebuild |
+
+### Interface
+
+```ts
+interface ImportStrategy {
+  /**
+   * Rewrite an import path for the output.
+   * Handles .agency, .js, and .ts imports.
+   */
+  rewriteImport(modulePath: string, sourceFile: string): string;
+
+  /**
+   * Ensure all non-Agency dependencies are available for execution.
+   * Called after compilation, before the output is executed.
+   * Errors if a dependency can't be resolved.
+   */
+  prepareDependencies(imports: string[], sourceFile: string): void;
+}
 ```
-Error: Cannot resolve import './bar.js' from 'src/myapp.agency'.
-Tried: ./bar.js, ./bar.ts — neither file exists.
+
+### Class hierarchy
+
+`RunStrategy` extends `CompileStrategy`. Shared behavior (`.agency` rewriting) lives in the base class. Readers can see what's different by looking at the overrides in `RunStrategy`.
+
+```ts
+type CompileOptions = {
+  /** Extension for .agency rewrites: ".js" or ".ts" */
+  targetExt: ".js" | ".ts";
+};
+
+class CompileStrategy implements ImportStrategy {
+  constructor(protected options: CompileOptions) {}
+
+  rewriteImport(modulePath: string, sourceFile: string): string {
+    if (modulePath.endsWith(".agency")) {
+      return modulePath.replace(/\.agency$/, this.options.targetExt);
+    }
+    // Leave .js/.ts imports untouched — user's build pipeline handles them
+    return modulePath;
+  }
+
+  prepareDependencies(imports: string[], sourceFile: string): void {
+    // No-op — user's build pipeline handles dependencies
+  }
+}
+
+class RunStrategy extends CompileStrategy {
+  constructor() {
+    // Run always targets .js
+    super({ targetExt: ".js" });
+  }
+
+  rewriteImport(modulePath: string, sourceFile: string): string {
+    if (modulePath.endsWith(".agency")) {
+      return super.rewriteImport(modulePath, sourceFile);
+    }
+    // Always produce .js — Node needs .js at runtime
+    return modulePath.replace(/\.ts$/, ".js");
+  }
+
+  prepareDependencies(imports: string[], sourceFile: string): void {
+    for (const imp of imports) {
+      if (!imp.startsWith("./") && !imp.startsWith("../")) continue;
+      if (!imp.endsWith(".js")) continue;
+
+      const resolved = path.resolve(path.dirname(sourceFile), imp);
+      if (fs.existsSync(resolved)) continue;
+
+      const tsPath = resolved.replace(/\.js$/, ".ts");
+      if (fs.existsSync(tsPath)) {
+        // compile tsPath → resolved via esbuild (strip types)
+      } else {
+        throw new Error(
+          `Cannot resolve import '${imp}' from '${sourceFile}'.\n` +
+          `Tried: ${resolved}, ${tsPath} — neither file exists.`
+        );
+      }
+    }
+  }
+}
 ```
 
-### Scope
+### CLI wiring
 
-This applies only to relative imports with `.js` or `.ts` extensions. It does NOT apply to:
+```ts
+// agency compile foo.agency
+new CompileStrategy({ targetExt: ".js" })
 
-- `.agency` imports (handled by existing Agency import resolution)
-- `std::` imports (stdlib)
-- `pkg::` imports (packages)
-- Bare specifier imports (e.g., `import { nanoid } from "nanoid"` — these are resolved by Node at runtime)
+// agency compile foo.agency --ts
+new CompileStrategy({ targetExt: ".ts" })
+
+// agency run / agency debug / agency test
+new RunStrategy()
+```
 
 ### Where the change lives
 
-Today, non-Agency imports (`.js`/`.ts` files) are not specially processed by the Agency compiler — they pass through to the generated TypeScript/JavaScript verbatim. In the current implementation, the import path rewriting at `lib/cli/commands.ts:192-197` only handles `.agency` → `.js`/`.ts` rewrites.
+The `compile()` function in `lib/cli/commands.ts` receives an `ImportStrategy` and uses it in two places:
 
-This feature extends that same AST import path rewriting loop. Currently, lines 193-196 check `node.type === "importStatement"` and only rewrite `.agency` extensions; with this change, that logic also handles relative non-Agency `importStatement` nodes with `.js` or `.ts` extensions by resolving the import against the filesystem and rewriting the extension if the specified file doesn't exist but the alternative does.
+1. **Import path rewriting** — the loop that currently rewrites `.agency` imports now calls `strategy.rewriteImport()` for all `importStatement` nodes (after `resolveImports` has transformed Agency imports into `importNodeStatement` / `importToolStatement`).
 
-Note: after `resolveImports` runs, Agency imports become `importNodeStatement` or `importToolStatement` nodes. Plain `importStatement` nodes at this point are non-Agency imports — exactly the ones we want to resolve.
+2. **Dependency preparation** — after compilation, `strategy.prepareDependencies()` is called with the list of non-Agency imports. For `CompileStrategy` this is a no-op. For `RunStrategy` it compiles `.ts` → `.js` via esbuild.
 
-### New helper function
-
-Add to `lib/importPaths.ts`:
-
-```ts
-/**
- * Resolve a .js or .ts import path, trying the other extension if the
- * specified file doesn't exist. Returns the resolved absolute path or
- * null if neither extension exists.
- */
-export function resolveFlexibleExtension(
-  importPath: string,
-  fromFile: string,
-): string | null
-```
-
-This function:
-1. Resolves the import path relative to `fromFile`
-2. If the resolved file exists, returns it as-is
-3. If not, swaps `.js` ↔ `.ts` and checks again
-4. If neither exists, returns null (caller prints error and exits)
-
-The caller in `commands.ts` uses the result to rewrite the import path in the AST if the extension was swapped.
+The strategy classes live in `lib/importStrategy.ts`.
 
 ## Feature 2: distDir Config for the Debugger
 
 ### Motivation
 
-Even with flexible extension resolution, the debugger still needs to compile the `.agency` file on the fly. This works for simple projects but doesn't work when:
+Even with the ImportStrategy, the debugger still needs to compile the `.agency` file on the fly. This works for simple projects but doesn't work when:
 
 - The project uses `tsc` with path aliases or other transformations
 - There are other build steps between Agency compilation and the final JS output
@@ -108,17 +193,6 @@ The CLI flag overrides the config file value.
 ### Path resolution
 
 The debugger infers `srcDir` from the directory containing the input `.agency` file. It then computes the relative path and looks for the corresponding `.js` file in `distDir`.
-
-Given:
-- Input file: `src/agents/myapp.agency`
-- distDir: `dist` (resolved relative to project root / cwd)
-
-Resolution:
-1. `srcDir` = directory of input file = `src/agents/`
-2. Relative name = `myapp` (the filename without `.agency`)
-3. Compiled path = `path.resolve(distDir, "myapp.js")` = `dist/myapp.js`
-
-Wait — this doesn't account for nested structure. If `distDir` mirrors the source tree, we need to preserve subdirectory structure. But we don't know whether `tsc` strips a `rootDir` prefix or not.
 
 The simplest approach: **just use the basename**. The compiled `.js` file for `myapp.agency` is looked up as `<distDir>/myapp.js`. If the user's tsc config puts it somewhere else (e.g., `dist/agents/myapp.js`), they can adjust `distDir` accordingly (`--dist-dir dist/agents`).
 
@@ -186,16 +260,16 @@ Warning: The compiled module has an empty source map. Was it compiled with instr
 The debugger may not be able to step through code.
 ```
 
-## Feature 3: Mtime Warning
+## Mtime Warning
 
-When using `distDir` or `--compiled`, the debugger compares the modification time of the `.agency` source file against the compiled `.js` file. If the source is newer:
+When using `distDir`, the debugger compares the modification time of the `.agency` source file against the compiled `.js` file. If the source is newer:
 
 ```
 Warning: src/agents/myapp.agency is newer than dist/myapp.js.
 You may need to recompile before debugging.
 ```
 
-This is a warning, not a prompt or hard block. The debugger continues after printing the warning. This avoids issues in non-interactive contexts (CI, piped stdin) where a y/n prompt would hang. The warning catches the common case where someone edits their `.agency` file and forgets to recompile before debugging.
+This is a warning, not a prompt or hard block. The debugger continues after printing the warning. This avoids issues in non-interactive contexts (CI, piped stdin) where a y/n prompt would hang.
 
 Implementation: `fs.statSync(sourceFile).mtimeMs` vs `fs.statSync(compiledFile).mtimeMs`.
 
@@ -203,17 +277,18 @@ Implementation: `fs.statSync(sourceFile).mtimeMs` vs `fs.statSync(compiledFile).
 
 | File | Change |
 |------|--------|
-| `lib/importPaths.ts` | Add `resolveFlexibleExtension()` helper |
-| `lib/cli/commands.ts` | Use flexible extension resolution in `compile()` for non-Agency imports; print clear error if file not found with either extension |
+| `lib/importStrategy.ts` | New file: `ImportStrategy` interface, `CompileStrategy`, `RunStrategy` |
+| `lib/cli/commands.ts` | `compile()` accepts `ImportStrategy`, uses it for import rewriting and dependency preparation |
+| `lib/cli/util.ts` | `resolveCompiledFile` helper for distDir path resolution |
 | `lib/config.ts` | Add `distDir?: string` to `AgencyConfig` |
-| `scripts/agency.ts` | Add `--dist-dir` option to the debug command |
+| `scripts/agency.ts` | Pass correct strategy to each CLI command; add `--dist-dir` to debug command |
 | `lib/cli/debug.ts` | When distDir is set, skip compilation and import from dist; add mtime check |
+| `lib/importPaths.ts` | Remove `resolveFlexibleExtension` (replaced by ImportStrategy) |
 
 ## Testing
 
-- Unit tests for `resolveFlexibleExtension` — both extensions, neither exists, non-.js/.ts extension
-- Integration test: `.agency` file imports `./bar.js` when only `bar.ts` exists — should compile successfully
-- Integration test: `.agency` file imports `./bar.ts` when only `bar.js` exists — should compile successfully
-- Integration test: import where neither `.js` nor `.ts` exists — should print clear error
+- Unit tests for `CompileStrategy.rewriteImport` — `.agency` → `.js`, `.agency` → `.ts`, `.js`/`.ts` left as-is
+- Unit tests for `RunStrategy.rewriteImport` — `.agency` → `.js`, `.ts` → `.js`, `.js` left as-is
+- Unit tests for `RunStrategy.prepareDependencies` — compiles `.ts` when `.js` missing, errors when neither exists, no-op when `.js` exists
 - Debugger test with `--dist-dir` pointing at a directory with pre-compiled output
 - Mtime warning test: source newer than compiled → warning shown

@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   findPackageRoot,
   resolveAgencyImportPath,
-  resolveFlexibleExtension,
   getStdlibDir,
   toCompiledImportPath,
   isPkgImport,
@@ -10,6 +9,7 @@ import {
   parsePkgImport,
   resolvePkgAgencyPath,
 } from "./importPaths.js";
+import { CompileStrategy, RunStrategy } from "./importStrategy.js";
 import { buildSymbolTable } from "./symbolTable.js";
 import * as fs from "fs";
 import * as os from "os";
@@ -317,66 +317,98 @@ describe("buildSymbolTable with pkg:: imports", () => {
   });
 });
 
-describe("resolveFlexibleExtension", () => {
+describe("CompileStrategy", () => {
+  const jsStrategy = new CompileStrategy({ targetExt: ".js" });
+  const tsStrategy = new CompileStrategy({ targetExt: ".ts" });
+
+  it("should rewrite .agency to .js", () => {
+    expect(jsStrategy.rewriteImport("./foo.agency", "/src/main.agency")).toBe("./foo.js");
+  });
+
+  it("should rewrite .agency to .ts with --ts", () => {
+    expect(tsStrategy.rewriteImport("./foo.agency", "/src/main.agency")).toBe("./foo.ts");
+  });
+
+  it("should leave .js imports untouched", () => {
+    expect(jsStrategy.rewriteImport("./tools.js", "/src/main.agency")).toBe("./tools.js");
+  });
+
+  it("should leave .ts imports untouched", () => {
+    expect(jsStrategy.rewriteImport("./tools.ts", "/src/main.agency")).toBe("./tools.ts");
+  });
+
+  it("should leave bare specifiers untouched", () => {
+    expect(jsStrategy.rewriteImport("nanoid", "/src/main.agency")).toBe("nanoid");
+  });
+});
+
+describe("RunStrategy", () => {
+  const strategy = new RunStrategy();
+
+  it("should rewrite .agency to .js", () => {
+    expect(strategy.rewriteImport("./foo.agency", "/src/main.agency")).toBe("./foo.js");
+  });
+
+  it("should rewrite .ts to .js", () => {
+    expect(strategy.rewriteImport("./tools.ts", "/src/main.agency")).toBe("./tools.js");
+  });
+
+  it("should leave .js imports as-is", () => {
+    expect(strategy.rewriteImport("./tools.js", "/src/main.agency")).toBe("./tools.js");
+  });
+
+  it("should leave bare specifiers untouched", () => {
+    expect(strategy.rewriteImport("nanoid", "/src/main.agency")).toBe("nanoid");
+  });
+});
+
+describe("RunStrategy.prepareDependencies", () => {
   let tmpDir: string;
+  const strategy = new RunStrategy();
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-flex-ext-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-run-strategy-"));
   });
 
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("should return the resolved path when the file exists as-is", () => {
+  it("should compile .ts to .js when .js doesn't exist", () => {
     const tsFile = path.join(tmpDir, "bar.ts");
-    fs.writeFileSync(tsFile, "export const x = 1;");
-    const fromFile = path.join(tmpDir, "main.agency");
-
-    const result = resolveFlexibleExtension("./bar.ts", fromFile);
-    expect(result).toBe(tsFile);
-  });
-
-  it("should fall back from .js to .ts when .js doesn't exist", () => {
-    const tsFile = path.join(tmpDir, "bar.ts");
-    fs.writeFileSync(tsFile, "export const x = 1;");
-    const fromFile = path.join(tmpDir, "main.agency");
-
-    const result = resolveFlexibleExtension("./bar.js", fromFile);
-    expect(result).toBe(tsFile);
-  });
-
-  it("should fall back from .ts to .js when .ts doesn't exist", () => {
     const jsFile = path.join(tmpDir, "bar.js");
-    fs.writeFileSync(jsFile, "export const x = 1;");
+    fs.writeFileSync(tsFile, "export const x: number = 1;");
     const fromFile = path.join(tmpDir, "main.agency");
 
-    const result = resolveFlexibleExtension("./bar.ts", fromFile);
-    expect(result).toBe(jsFile);
+    strategy.prepareDependencies(["./bar.js"], fromFile);
+
+    expect(fs.existsSync(jsFile)).toBe(true);
+    const content = fs.readFileSync(jsFile, "utf-8");
+    expect(content).toContain("const x = 1");
   });
 
-  it("should return null when neither .js nor .ts exists", () => {
-    const fromFile = path.join(tmpDir, "main.agency");
-
-    const result = resolveFlexibleExtension("./bar.js", fromFile);
-    expect(result).toBeNull();
-  });
-
-  it("should return null for non-.js/.ts extensions", () => {
-    const fromFile = path.join(tmpDir, "main.agency");
-
-    const result = resolveFlexibleExtension("./bar.css", fromFile);
-    expect(result).toBeNull();
-  });
-
-  it("should prefer the exact extension when both files exist", () => {
+  it("should not overwrite existing .js files", () => {
     const jsFile = path.join(tmpDir, "bar.js");
-    const tsFile = path.join(tmpDir, "bar.ts");
-    fs.writeFileSync(jsFile, "export const x = 1;");
-    fs.writeFileSync(tsFile, "export const x = 1;");
+    fs.writeFileSync(jsFile, "// original");
     const fromFile = path.join(tmpDir, "main.agency");
 
-    expect(resolveFlexibleExtension("./bar.js", fromFile)).toBe(jsFile);
-    expect(resolveFlexibleExtension("./bar.ts", fromFile)).toBe(tsFile);
+    strategy.prepareDependencies(["./bar.js"], fromFile);
+
+    expect(fs.readFileSync(jsFile, "utf-8")).toBe("// original");
+  });
+
+  it("should throw when neither .js nor .ts exists", () => {
+    const fromFile = path.join(tmpDir, "main.agency");
+
+    expect(() => strategy.prepareDependencies(["./bar.js"], fromFile)).toThrow(
+      /Cannot resolve import/,
+    );
+  });
+
+  it("should skip bare specifiers", () => {
+    const fromFile = path.join(tmpDir, "main.agency");
+
+    // Should not throw — bare specifiers are skipped
+    strategy.prepareDependencies(["nanoid"], fromFile);
   });
 });

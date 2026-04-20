@@ -1,5 +1,6 @@
 import { AgencyConfig } from "@/config.js";
 import { compile } from "./commands.js";
+import { RunStrategy } from "../importStrategy.js";
 import { pickANode, resolveCompiledFile } from "./util.js";
 import { parseAgency } from "@/parser.js";
 import { getNodesOfType } from "@/utils/node.js";
@@ -121,7 +122,7 @@ export async function debug(
     } else {
       // Normal mode: compile the .agency file to .js on the fly
       const debugConfig: AgencyConfig = { ...config, debugger: true };
-      const outputFile = compile(debugConfig, inputFile);
+      const outputFile = compile(debugConfig, inputFile, undefined, { importStrategy: new RunStrategy() });
       if (outputFile === null) {
         console.error("Error: No output file generated.");
         process.exit(1);

@@ -265,12 +265,22 @@ export function resolveAgencyImportPath(
  * Convert an Agency import path to the path that should appear in generated
  * TypeScript import statements.
  *
- * - "std::foo"      -> absolute path to <stdlib-dir>/foo.js
+ * - "std::foo"      -> relative path to <stdlib-dir>/foo.js from the source file
  * - "./foo.agency"  -> "./foo.js" (relative, just extension swap)
+ *
+ * @param fromFile - Absolute path of the source file containing the import.
+ *   Used to compute relative paths for stdlib imports. If not provided,
+ *   falls back to absolute paths.
  */
-export function toCompiledImportPath(importPath: string): string {
+export function toCompiledImportPath(importPath: string, fromFile?: string): string {
   if (isStdlibImport(importPath)) {
-    return path.join(STDLIB_DIR, normalizeStdlibPath(importPath) + ".js");
+    const absTarget = path.join(STDLIB_DIR, normalizeStdlibPath(importPath) + ".js");
+    if (fromFile) {
+      let rel = path.relative(path.dirname(fromFile), absTarget).replace(/\\/g, "/");
+      if (!rel.startsWith(".")) rel = "./" + rel;
+      return rel;
+    }
+    return absTarget;
   }
   if (isPkgImport(importPath)) {
     // Emit bare specifier — Node resolves it at runtime via node_modules

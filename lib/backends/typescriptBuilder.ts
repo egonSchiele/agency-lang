@@ -16,7 +16,7 @@ import {
   TypeAlias,
   VariableType,
 } from "../types.js";
-
+import path from "path";
 import { formatTypeHint } from "@/cli/util.js";
 import {
   BUILTIN_FUNCTIONS,
@@ -1357,7 +1357,7 @@ export class TypeScriptBuilder {
   }
 
   private processImportStatement(node: ImportStatement): TsNode {
-    const from = toCompiledImportPath(node.modulePath);
+    const from = toCompiledImportPath(node.modulePath, path.resolve(this.moduleId));
     const imports = node.importedNames.map((nameType) => {
       switch (nameType.type) {
         case "namedImport":
@@ -1409,7 +1409,7 @@ export class TypeScriptBuilder {
     return ts.importDecl({
       importKind: "named",
       names: importNames,
-      from: toCompiledImportPath(node.agencyFile),
+      from: toCompiledImportPath(node.agencyFile, path.resolve(this.moduleId)),
     });
   }
 

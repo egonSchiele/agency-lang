@@ -30,7 +30,7 @@ const result = llm("What is 4 + 5?")
 print(result)
 ```
 
-### Streaming
+## Streaming
 
 To stream your response back, you will need two things:
 1. You will need to set the stream option on the LLM call to true.
@@ -49,10 +49,14 @@ const callbacks = {
 const result = await main("some-param", { callbacks })
 ```
 
-### Interrupts
+## Other options to llm()
+
+Agency uses the [Smoltalk library](https://github.com/egonSchiele/smoltalk) behind the scenes so any options you can pass into Smoltalk ([SmolConfig](https://github.com/egonSchiele/smoltalk#client-options-smolconfig) or [PromptConfig](https://github.com/egonSchiele/smoltalk#request-options-promptconfig)) you can pass in as part of the config object, which is the optional second parameter to the `llm` call.
+
+## Interrupts
 Any [interrupts](./interrupts) thrown in tools will just work with no extra work required.
 
-### The `safe` keyword
+## The `safe` keyword
 LLMs are often flaky and it's possible that your LLM will call a tool incorrectly for some reason. If this happens, it's possible to get the LLM to retry the tool call.
 
 Some functions are okay to retry and some aren't. If you have a function that has a side effect, like writing to a database

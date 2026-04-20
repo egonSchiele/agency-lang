@@ -18,13 +18,19 @@ agency run foo.agency --trace
 
 3. Set the `trace` and `traceFile` options in the [config file](./agency-config-file.html).
 
+4. Set the `traceDir` option in the config file. This will automatically generate a trace for every run and output it to the specified directory with a timestamped filename.
+
+## Inspecting traces
+
 You can inspect a trace file using the debugger, like so:
 
 ```
 agency debugger foo.agency --trace foo.trace
 ```
 
-Note that you have to additionally give the source file. The trace simply stores the execution context on each step. It does not store the source, which means you have to pass that separately. This makes the trace file smaller, but also means that if the source changes, you won't be able to examine the trace. If you would like to bundle the source file with the trace, you can use the bundle command:
+Note that you have to additionally give the source file. The trace simply stores the execution context on each step. It does not store the source, which means you have to pass that separately. This makes the trace file smaller, but also means that if the source changes, you won't be able to examine the trace. If you would like to bundle the source file with the trace, you can use the bundle command.
+
+## Bundles
 
 ```
 agency bundle source.agency source.trace

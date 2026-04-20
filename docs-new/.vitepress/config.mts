@@ -33,6 +33,7 @@ export default defineConfig({
           { text: "Fork", link: "/guide/fork" },
           { text: "Execution Model", link: "/guide/execution-model" },
           { text: "Imports and Packages", link: "/guide/imports-and-packages" },
+          { text: "Schemas", link: "/guide/schemas" },
           { text: "Classes", link: "/guide/classes" },
           { text: "Checkpointing", link: "/guide/checkpointing" },
         ],
@@ -40,10 +41,18 @@ export default defineConfig({
       {
         text: "Appendix",
         items: [
+          { text: "Agency CLI", link: "/appendix/cli" },
           { text: "VSCode Extension", link: "/appendix/vscode-extension" },
           { text: "Generating Docs", link: "/appendix/docs" },
           { text: "Callbacks", link: "/appendix/callbacks" },
-          { text: "Agency vs TypeScript", link: "/appendix/agency-vs-typescript" },
+          {
+            text: "Agency vs TypeScript",
+            link: "/appendix/agency-vs-typescript",
+          },
+          {
+            text: "Agency's Standard Library",
+            link: "/appendix/agency-stdlib",
+          },
         ],
       },
       {

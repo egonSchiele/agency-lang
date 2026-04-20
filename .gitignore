@@ -20,6 +20,7 @@ stdlib/array.ts
 stdlib/object.ts
 stdlib/strategy.ts
 traces/*
+tests/agency-js/**/traces/*
 
 # Allow test fixture files for pkg:: import tests
 !tests/pkg-imports/node_modules/

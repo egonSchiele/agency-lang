@@ -3,7 +3,7 @@ import process from "process";
 import fs from "fs";
 import path from "path";
 import { execFileSync } from "child_process";
-import { detectPlatform } from "./lib/utils.js";
+import { detectPlatform } from "./utils.js";
 
 export function _print(...messages: any[]): void {
   console.log(...messages);

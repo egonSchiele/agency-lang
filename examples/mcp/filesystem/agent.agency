@@ -5,13 +5,13 @@
 // as a local subprocess.
 //
 // To run:
-//   cd examples/mcp/filesystem
-//   pnpm run agency agent.agency
+//   Make sure the "mcpServers" config in agency.json includes the filesystem server.
+//   pnpm run agency examples/mcp/filesystem/agent.agency
 
 node main() {
   const tools = mcp("filesystem") catch []
 
-  if (len(tools) == 0) {
+  if (tools.length == 0) {
     print("Could not connect to the filesystem MCP server.")
     return null
   }

@@ -1,4 +1,5 @@
 import { AgencyNode } from "./types.js";
+import { z } from "zod";
 
 export const TYPES_THAT_DONT_TRIGGER_NEW_PART: AgencyNode["type"][] = [
   "typeAlias",
@@ -156,4 +157,78 @@ export interface AgencyConfig {
     /** Base URL for source links in generated docs */
     baseUrl?: string;
   }
+
+  /** MCP server configurations */
+  mcpServers?: Record<string, {
+    command: string;
+    args?: string[];
+    env?: Record<string, string>;
+  } | {
+    type: "http";
+    url: string;
+  }>;
 }
+
+// --- Zod schema for runtime validation of agency.json ---
+
+const McpStdioServerSchema = z.object({
+  command: z.string(),
+  args: z.array(z.string()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
+});
+
+const McpHttpServerSchema = z.object({
+  type: z.literal("http"),
+  url: z.string(),
+});
+
+const McpServerSchema = z.union([McpStdioServerSchema, McpHttpServerSchema]);
+
+export const AgencyConfigSchema = z.object({
+  verbose: z.boolean().optional(),
+  outDir: z.string().optional(),
+  excludeNodeTypes: z.array(z.string()).optional(),
+  excludeBuiltinFunctions: z.array(z.string()).optional(),
+  allowedFetchDomains: z.array(z.string()).optional(),
+  disallowedFetchDomains: z.array(z.string()).optional(),
+  tarsecTraceHost: z.string().optional(),
+  maxToolCallRounds: z.number().optional(),
+  log: z.object({
+    host: z.string().optional(),
+    projectId: z.string().optional(),
+    debugMode: z.boolean().optional(),
+    apiKey: z.string().optional(),
+  }).optional(),
+  client: z.object({
+    logLevel: z.enum(["error", "warn", "info", "debug"]).optional(),
+    defaultModel: z.string().optional(),
+    openAiApiKey: z.string().optional(),
+    googleApiKey: z.string().optional(),
+    statelog: z.object({
+      host: z.string().optional(),
+      projectId: z.string().optional(),
+      apiKey: z.string().optional(),
+    }).optional(),
+  }).optional(),
+  strictTypes: z.boolean().optional(),
+  typeCheck: z.boolean().optional(),
+  typeCheckStrict: z.boolean().optional(),
+  restrictImports: z.boolean().optional(),
+  debugger: z.boolean().optional(),
+  instrument: z.boolean().optional(),
+  checkpoints: z.object({
+    maxRestores: z.number().optional(),
+  }).optional(),
+  trace: z.boolean().optional(),
+  traceFile: z.string().optional(),
+  traceDir: z.string().optional(),
+  distDir: z.string().optional(),
+  test: z.object({
+    parallel: z.number().optional(),
+  }).optional(),
+  doc: z.object({
+    outDir: z.string().optional(),
+    baseUrl: z.string().optional(),
+  }).optional(),
+  mcpServers: z.record(z.string(), McpServerSchema).optional(),
+}).passthrough();

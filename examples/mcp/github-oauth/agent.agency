@@ -12,20 +12,16 @@
 //      export MCP_GITHUB_CLIENT_SECRET=your-client-secret
 //
 // To run:
-//   cd examples/mcp/github-oauth
-//   pnpm run agency agent.agency
+//   copy agency.json from the root of the repo to this directory, or add the "mcpServers" config to your existing agency.json
+//   pnpm run agency examples/mcp/github-oauth/agent.agency
 node main() {
   print("Connecting to GitHub MCP server with OAuth...")
   const tools = try mcp("github") catch []
   print("Tools from GitHub MCP:", tools)
-  if (len(tools) == 0) {
+  if (tools.length == 0) {
     print("Could not connect to GitHub MCP server.")
     print("Make sure MCP_GITHUB_CLIENT_ID and MCP_GITHUB_CLIENT_SECRET are set.")
     return null
   }
-  print("Connected to GitHub. Found ${len(tools)} tools.")
-  const result = llm("What are my 5 most recently updated GitHub repositories?", { 
-    tools: [...tools]
-  })
-  print(result)
+  print("Connected to GitHub. Found ${tools.length} tools.")
 }

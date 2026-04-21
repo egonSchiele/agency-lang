@@ -2203,6 +2203,14 @@ export class TypeScriptBuilder {
             ts.raw("__error instanceof RestoreSignal"),
             ts.statements([ts.throw("__error")]),
           ),
+          ts.consoleError(
+            ts.template([
+              {
+                text: "\\nAgent crashed: ",
+                expr: $(ts.id("__error")).prop("message").done(),
+              },
+            ]),
+          ),
           ts.return(
             ts.obj({
               messages: ts.runtime.threads,

@@ -62,10 +62,9 @@ export class McpManager {
   }
 
   async disconnectAll(): Promise<void> {
-    const disconnects = Object.values(this.connections).map((conn) =>
-      conn.disconnect().catch(() => {}),
-    );
-    await Promise.all(disconnects);
+    const conns = Object.values(this.connections);
+    if (conns.length === 0) return;
+    await Promise.all(conns.map((conn) => conn.disconnect().catch(() => {})));
     this.connections = {};
     this.toolCache = {};
   }

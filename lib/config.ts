@@ -1,5 +1,6 @@
 import { AgencyNode } from "./types.js";
 import { z } from "zod";
+import type { McpServerConfig } from "./runtime/mcp/types.js";
 
 export const TYPES_THAT_DONT_TRIGGER_NEW_PART: AgencyNode["type"][] = [
   "typeAlias",
@@ -159,14 +160,7 @@ export interface AgencyConfig {
   }
 
   /** MCP server configurations */
-  mcpServers?: Record<string, {
-    command: string;
-    args?: string[];
-    env?: Record<string, string>;
-  } | {
-    type: "http";
-    url: string;
-  }>;
+  mcpServers?: Record<string, McpServerConfig>;
 }
 
 // --- Zod schema for runtime validation of agency.json ---

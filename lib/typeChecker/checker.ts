@@ -49,9 +49,12 @@ function checkSingleFunctionCall(
   if (call.functionName in BUILTIN_FUNCTION_TYPES) {
     const sig = BUILTIN_FUNCTION_TYPES[call.functionName];
 
-    if (call.arguments.length !== sig.params.length) {
+    const minArgs = sig.minParams ?? sig.params.length;
+    const maxArgs = sig.params.length;
+    if (call.arguments.length < minArgs || call.arguments.length > maxArgs) {
+      const expected = minArgs === maxArgs ? `${minArgs}` : `${minArgs}–${maxArgs}`;
       ctx.errors.push({
-        message: `Expected ${sig.params.length} argument(s) for '${call.functionName}', but got ${call.arguments.length}.`,
+        message: `Expected ${expected} argument(s) for '${call.functionName}', but got ${call.arguments.length}.`,
       });
       return;
     }

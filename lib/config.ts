@@ -1,6 +1,8 @@
 import { AgencyNode } from "./types.js";
 import { z } from "zod";
 import type { McpServerConfig } from "./runtime/mcp/types.js";
+import * as fs from "fs";
+import * as path from "path";
 
 export const TYPES_THAT_DONT_TRIGGER_NEW_PART: AgencyNode["type"][] = [
   "typeAlias",
@@ -109,7 +111,6 @@ export interface AgencyConfig {
    */
   typeCheckStrict?: boolean;
 
-
   /**
    * If true, validate that import paths resolve within the project directory.
    * Prevents path traversal attacks via imports like `../../etc/passwd`.
@@ -157,7 +158,7 @@ export interface AgencyConfig {
 
     /** Base URL for source links in generated docs */
     baseUrl?: string;
-  }
+  };
 
   /** MCP server configurations */
   mcpServers?: Record<string, McpServerConfig>;
@@ -210,3 +211,58 @@ export const AgencyConfigSchema = z.object({
   doc: z.object({ outDir: z.string(), baseUrl: z.string() }).partial(),
   mcpServers: z.record(z.string(), McpServerSchema),
 }).partial().passthrough();
+
+/**
+ * Load agency.json at the given path without calling process.exit.
+ * Returns the parsed config, or an error message if the file is invalid.
+ * Returns an empty config if the file doesn't exist.
+ */
+export function loadConfigSafe(
+  configPath: string,
+): { config: AgencyConfig; error?: string } {
+  if (!fs.existsSync(configPath)) {
+    return { config: {} };
+  }
+  try {
+    const content = fs.readFileSync(configPath, "utf-8");
+    const parsed = JSON.parse(content);
+    const result = AgencyConfigSchema.safeParse(parsed);
+    if (!result.success) {
+      const issues = result.error.issues
+        .map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`)
+        .join("\n");
+      return {
+        config: {},
+        error: `Invalid agency.json config:\n${issues}`,
+      };
+    }
+    return { config: result.data as AgencyConfig };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      config: {},
+      error: `Error loading config from ${configPath}: ${message}`,
+    };
+  }
+}
+
+/**
+ * Find the agency.json for a given file path by searching upward.
+ * Returns the directory containing agency.json, or null if not found.
+ */
+export function findProjectRoot(startPath: string): string | null {
+  let current = fs.existsSync(startPath) && fs.statSync(startPath).isDirectory()
+    ? startPath
+    : path.dirname(startPath);
+
+  while (true) {
+    if (fs.existsSync(path.join(current, "agency.json"))) {
+      return current;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return null;
+    }
+    current = parent;
+  }
+}

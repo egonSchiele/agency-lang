@@ -1,5 +1,5 @@
 import { generateAgency } from "@/backends/agencyGenerator.js";
-import { AgencyConfig, AgencyConfigSchema } from "@/config.js";
+import { AgencyConfig, loadConfigSafe } from "@/config.js";
 import { AgencyProgram, generateTypeScript } from "@/index.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
 import { collectProgramInfo } from "@/programInfo.js";
@@ -25,39 +25,20 @@ export function loadConfig(
   configPath?: string,
   verbose: boolean = false,
 ): AgencyConfig {
-  let config: AgencyConfig = {};
-
-  // Determine config file path
-  const defaultConfigPath = path.join(process.cwd(), "agency.json");
-  const finalConfigPath = configPath || defaultConfigPath;
+  const finalConfigPath = configPath || path.join(process.cwd(), "agency.json");
 
   if (verbose) {
     console.log(`Looking for config at: ${finalConfigPath}`);
   }
 
-  // Check if config file exists
-  if (fs.existsSync(finalConfigPath)) {
-    try {
-      const configContent = fs.readFileSync(finalConfigPath, "utf-8");
-      config = JSON.parse(configContent);
-      const parseResult = AgencyConfigSchema.safeParse(config);
-      if (!parseResult.success) {
-        console.error(`Invalid agency.json config:`);
-        for (const issue of parseResult.error.issues) {
-          console.error(`  - ${issue.path.join(".")}: ${issue.message}`);
-        }
-        process.exit(1);
-      }
-      config = parseResult.data as AgencyConfig;
-      if (config.verbose) {
-        console.log(`Loaded config from ${finalConfigPath}`);
-      }
-    } catch (error) {
-      console.error(`Error loading config from ${finalConfigPath}:`, error);
-      process.exit(1);
-    }
+  const { config, error } = loadConfigSafe(finalConfigPath);
+  if (error) {
+    console.error(error);
+    process.exit(1);
   }
-
+  if (config.verbose) {
+    console.log(`Loaded config from ${finalConfigPath}`);
+  }
   return config;
 }
 
@@ -91,8 +72,6 @@ export function parse(
   // Check if parsing was successful
   if (!parseResult.success) {
     console.error("Failed to parse Agency program.");
-    // console.error(parseResult);
-    // throw new Error("Failed to parse Agency program");
     process.exit(1);
   }
 
@@ -100,15 +79,12 @@ export function parse(
 }
 
 export function readFile(inputFile: string): string {
-  // Validate input file
   if (!fs.existsSync(inputFile)) {
     console.error(`Error: Input file '${inputFile}' not found`);
     process.exit(1);
   }
 
-  // Read and parse the Agency file
-  const contents = fs.readFileSync(inputFile, "utf-8");
-  return contents;
+  return fs.readFileSync(inputFile, "utf-8");
 }
 
 const compiledFiles: Set<string> = new Set();
@@ -123,7 +99,6 @@ export function compile(
   _outputFile?: string,
   options?: { ts?: boolean; symbolTable?: SymbolTable; importStrategy?: ImportStrategy },
 ): string | null {
-  // Check if the input is a directory
   const stats = fs.statSync(inputFile);
   const verbose = config.verbose ?? false;
   if (stats.isDirectory()) {
@@ -133,7 +108,6 @@ export function compile(
     return null;
   }
 
-  // Resolve the absolute path of the input file to avoid duplicates
   const absoluteInputFile = path.resolve(inputFile);
   const ext = options?.ts ? ".ts" : ".js";
   let outputFile = _outputFile || inputFile.replace(".agency", ext);
@@ -146,7 +120,6 @@ export function compile(
 
     outputFile = path.join(outputDir, outputFile);
   }
-  // Skip if already compiled
   if (compiledFiles.has(absoluteInputFile)) {
     return outputFile;
   }
@@ -157,10 +130,8 @@ export function compile(
   const isStdlibIndex = absoluteInputFile === path.join(getStdlibDir(), "index.agency");
   const parsedProgram = parse(contents, config, !isStdlibIndex);
 
-  // Build symbol table once at the top level, reuse for recursive calls
   const symbolTable =
     options?.symbolTable ?? buildSymbolTable(absoluteInputFile, config);
-  // Resolve unified imports into specialized AST nodes
   const resolvedProgram = resolveImports(
     parsedProgram,
     symbolTable,
@@ -168,7 +139,6 @@ export function compile(
   );
   const info = collectProgramInfo(resolvedProgram, symbolTable);
 
-  // Run type checking if enabled via config
   if (config.typeCheck || config.typeCheckStrict) {
     const { errors } = typeCheck(resolvedProgram, config, info);
     if (errors.length > 0) {
@@ -184,7 +154,6 @@ export function compile(
   const imports = getImports(resolvedProgram);
 
   for (const importPath of imports) {
-    // stdlib and pkg imports are pre-compiled; don't recompile them
     if (isStdlibImport(importPath) || isPkgImport(importPath)) continue;
 
     const absPath = resolveAgencyImportPath(importPath, absoluteInputFile);
@@ -202,7 +171,6 @@ export function compile(
     compile(config, absPath, undefined, { ...options, symbolTable });
   }
 
-  // Rewrite import paths in the AST using the import strategy
   const strategy = options?.importStrategy ?? new CompileStrategy({ targetExt: ext as ".js" | ".ts" });
   const nonAgencyImports: string[] = [];
 
@@ -212,7 +180,6 @@ export function compile(
 
     node.modulePath = strategy.rewriteImport(node.modulePath, absoluteInputFile);
 
-    // Collect non-Agency imports for dependency preparation
     if (!node.modulePath.endsWith(".agency")) {
       nonAgencyImports.push(node.modulePath);
     }
@@ -235,10 +202,8 @@ export function compile(
     absoluteOutputFile,
   );
   if (options?.ts) {
-    // TypeScript output — add @ts-nocheck so type errors don't block compilation
     fs.writeFileSync(outputFile, "// @ts-nocheck\n" + generatedCode, "utf-8");
   } else {
-    // JavaScript output — strip types with esbuild
     const result = transformSync(generatedCode, {
       loader: "ts",
       format: "esm",
@@ -248,8 +213,44 @@ export function compile(
   }
 
   console.log(`${inputFile} → ${outputFile}`);
+  if (verbose) {
+    console.log(`compiled input file: ${inputFile}`);
+    console.log(generatedCode);
+  }
 
   return outputFile;
+}
+
+export async function format(
+  contents: string,
+  config: AgencyConfig = {},
+): Promise<string> {
+  const program = parse(contents, config);
+  return generateAgency(program);
+}
+
+export function formatFile(
+  inputFile: string,
+  inPlace: boolean = false,
+  config: AgencyConfig = {},
+): void {
+  const stats = fs.statSync(inputFile);
+  if (stats.isDirectory()) {
+    for (const { path } of findRecursively(inputFile)) {
+      formatFile(path, inPlace, config);
+    }
+    return;
+  }
+
+  const contents = readFile(inputFile);
+  format(contents, config).then((formatted) => {
+    if (inPlace) {
+      fs.writeFileSync(inputFile, formatted, "utf-8");
+      console.log(`Formatted: ${inputFile}`);
+    } else {
+      console.log(formatted);
+    }
+  });
 }
 
 export function run(
@@ -258,14 +259,12 @@ export function run(
   outputFile?: string,
   resumeFile?: string,
 ): void {
-  // Compile the file with RunStrategy so dependencies are prepared for execution
   const output = compile(config, inputFile, outputFile, { importStrategy: new RunStrategy() });
   if (output === null) {
     console.error("Error: No output file generated.");
     process.exit(1);
   }
 
-  // Run the generated TypeScript file with Node.js
   console.log(`Running ${output}...`);
   console.log("---");
 
@@ -289,40 +288,4 @@ export function run(
       process.exit(code || 1);
     }
   });
-}
-
-export async function format(
-  contents: string,
-  config: AgencyConfig,
-): Promise<string> {
-  const parsedProgram = parse(contents, config, false);
-  const generatedCode = generateAgency(parsedProgram);
-  return generatedCode;
-}
-
-export function formatFile(
-  inputPath: string,
-  inPlace: boolean,
-  config: AgencyConfig,
-): void {
-  const stats = fs.statSync(inputPath);
-
-  if (stats.isDirectory()) {
-    for (const { path } of findRecursively(inputPath)) {
-      formatFile(path, inPlace, config);
-    }
-    return;
-  }
-
-  // Format single file
-  const contents = readFile(inputPath);
-  const parsedProgram = parse(contents, config);
-  const generatedCode = generateAgency(parsedProgram);
-
-  if (inPlace) {
-    fs.writeFileSync(inputPath, generatedCode, "utf-8");
-    console.log(`Formatted ${inputPath}`);
-  } else {
-    console.log(generatedCode);
-  }
 }

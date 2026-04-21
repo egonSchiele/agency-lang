@@ -3,6 +3,7 @@ import * as path from "path";
 import { parseAgency } from "./parser.js";
 import type { AgencyConfig } from "./config.js";
 import type { AgencyProgram, FunctionParameter, VariableType } from "./types.js";
+import type { SourceLocation } from "./types/base.js";
 import { walkNodes } from "./utils/node.js";
 import { resolveAgencyImportPath, isAgencyImport, getStdlibDir } from "./importPaths.js";
 
@@ -11,9 +12,11 @@ export type SymbolKind = "node" | "function" | "type" | "class";
 export type SymbolInfo = {
   kind: SymbolKind;
   name: string;
+  loc?: SourceLocation;
   safe?: boolean;
   exported?: boolean;
   parameters?: FunctionParameter[];
+  returnType?: VariableType | null;
   aliasedType?: VariableType;
 };
 
@@ -33,27 +36,38 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
   for (const { node } of walkNodes(program.nodes)) {
     switch (node.type) {
       case "graphNode":
-        symbols[node.nodeName] = { kind: "node", name: node.nodeName };
+        symbols[node.nodeName] = {
+          kind: "node",
+          name: node.nodeName,
+          loc: node.loc,
+        };
         break;
       case "function":
         symbols[node.functionName] = {
           kind: "function",
           name: node.functionName,
+          loc: node.loc,
           safe: node.safe,
           exported: node.exported,
           parameters: node.parameters,
+          returnType: node.returnType,
         };
         break;
       case "typeAlias":
         symbols[node.aliasName] = {
           kind: "type",
           name: node.aliasName,
+          loc: node.loc,
           exported: node.exported,
           aliasedType: node.aliasedType,
         };
         break;
       case "classDefinition":
-        symbols[node.className] = { kind: "class", name: node.className };
+        symbols[node.className] = {
+          kind: "class",
+          name: node.className,
+          loc: node.loc,
+        };
         break;
     }
   }

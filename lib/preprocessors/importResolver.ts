@@ -4,7 +4,6 @@ import type {
   ImportToolStatement,
   ImportStatement,
 } from "../types/importStatement.js";
-import { getImportedToolNames } from "../types/importStatement.js";
 import type { SymbolTable } from "../symbolTable.js";
 import { resolveAgencyImportPath, isAgencyImport } from "../importPaths.js";
 
@@ -37,19 +36,21 @@ export function resolveImports(
     if (node.type === "importToolStatement") {
       const importedFilePath = resolveAgencyImportPath(node.agencyFile, currentFile);
       const fileSymbols = symbolTable[importedFilePath] ?? {};
-      for (const name of getImportedToolNames(node)) {
-        const symbol = fileSymbols[name];
-        if (!symbol) {
-          throw new Error(
-            `Symbol '${name}' is not defined in '${node.agencyFile}'`,
-          );
+      for (const namedImport of node.importedTools) {
+        for (const name of namedImport.importedNames) {
+          const symbol = fileSymbols[name];
+          if (!symbol) {
+            throw new Error(
+              `Symbol '${name}' is not defined in '${node.agencyFile}'`,
+            );
+          }
+          if (symbol.kind !== "function") {
+            throw new Error(
+              `Symbol '${name}' in '${node.agencyFile}' is not a function and cannot be imported as a tool.`,
+            );
+          }
+          assertExported(name, node.agencyFile, symbol.exported);
         }
-        if (symbol.kind !== "function") {
-          throw new Error(
-            `Symbol '${name}' in '${node.agencyFile}' is not a function and cannot be imported as a tool.`,
-          );
-        }
-        assertExported(name, node.agencyFile, symbol.exported);
       }
       newNodes.push(node);
       continue;

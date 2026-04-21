@@ -27,6 +27,7 @@ describe("MCP integration", () => {
     // Step 1: Get tools (returns Result)
     const result = await manager.getTools("test");
     expect(result.success).toBe(true);
+    if (!result.success) throw new Error("unreachable");
 
     const tools = result.value;
     expect(tools.length).toBeGreaterThan(0);
@@ -61,6 +62,7 @@ describe("MCP integration", () => {
 
     const result = await manager.getTools("test");
     expect(result.success).toBe(true);
+    if (!result.success) throw new Error("unreachable");
 
     const tools = result.value;
     const serialized = JSON.stringify(tools);

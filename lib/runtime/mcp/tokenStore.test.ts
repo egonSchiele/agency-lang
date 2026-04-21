@@ -70,6 +70,21 @@ describe("TokenStore", () => {
     expect(names.sort()).toEqual(["github", "slack"]);
   });
 
+  it("should reject server names with path traversal characters", async () => {
+    await expect(store.saveTokens("../evil", { access_token: "x", token_type: "bearer" }))
+      .rejects.toThrow(/Invalid MCP server name/);
+    await expect(store.saveTokens("foo/bar", { access_token: "x", token_type: "bearer" }))
+      .rejects.toThrow(/Invalid MCP server name/);
+    await expect(store.saveTokens("foo bar", { access_token: "x", token_type: "bearer" }))
+      .rejects.toThrow(/Invalid MCP server name/);
+  });
+
+  it("should allow valid server names with hyphens and underscores", async () => {
+    await store.saveTokens("my-server_1", { access_token: "x", token_type: "bearer" });
+    const loaded = await store.loadTokens("my-server_1");
+    expect(loaded?.access_token).toBe("x");
+  });
+
   it("should set file permissions to 0600", async () => {
     await store.saveTokens("github", { access_token: "abc", token_type: "bearer" });
     const filePath = path.join(tmpDir, "github.json");

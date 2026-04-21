@@ -92,6 +92,24 @@ describe("AgencyOAuthProvider", () => {
     }
   });
 
+  it("should return undefined from clientInformation when no config or env vars", async () => {
+    // Make sure the env vars are not set
+    const origId = process.env.MCP_GITHUB_CLIENT_ID;
+    delete process.env.MCP_GITHUB_CLIENT_ID;
+    try {
+      const provider = new AgencyOAuthProvider("github", store);
+      const info = await provider.clientInformation();
+      expect(info).toBeUndefined();
+    } finally {
+      if (origId !== undefined) process.env.MCP_GITHUB_CLIENT_ID = origId;
+    }
+  });
+
+  it("should throw from codeVerifier when no verifier is saved", async () => {
+    const provider = new AgencyOAuthProvider("github", store);
+    await expect(provider.codeVerifier()).rejects.toThrow(/No PKCE code verifier/);
+  });
+
   it("should have correct client metadata", () => {
     const provider = new AgencyOAuthProvider("github", store);
     const meta = provider.clientMetadata;

@@ -97,16 +97,29 @@ describe("interpolateEnvVars", () => {
 });
 
 describe("McpConnection with connector", () => {
-  it("should accept a connector function option", () => {
+  it("should call the connector function when connecting", async () => {
+    let connectorCalled = false;
     const conn = new McpConnection("test", {
       type: "http",
       url: "https://example.com/mcp",
       auth: "oauth",
     }, {
       connector: async () => {
+        connectorCalled = true;
         throw new Error("mock connector");
       },
     });
-    expect(conn).toBeDefined();
+
+    await expect(conn.connect()).rejects.toThrow("mock connector");
+    expect(connectorCalled).toBe(true);
+  });
+
+  it("should not use connector for stdio servers without one", async () => {
+    // This just verifies the non-connector path still works
+    // (the existing stdio test covers this, but this confirms the branching)
+    const conn = new McpConnection("bad", {
+      command: "nonexistent-command",
+    });
+    await expect(conn.connect()).rejects.toThrow();
   });
 });

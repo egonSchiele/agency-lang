@@ -132,6 +132,54 @@ describe("AgencyConfigSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("should reject clientSecret without auth: oauth", () => {
+    const result = AgencyConfigSchema.safeParse({
+      mcpServers: {
+        github: {
+          type: "http",
+          url: "https://example.com/mcp",
+          clientSecret: "secret",
+        },
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("should reject OAuth over plain HTTP (non-localhost)", () => {
+    const result = AgencyConfigSchema.safeParse({
+      mcpServers: {
+        github: {
+          type: "http",
+          url: "http://evil.com/mcp",
+          auth: "oauth",
+        },
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("should allow OAuth over HTTP on localhost", () => {
+    const result = AgencyConfigSchema.safeParse({
+      mcpServers: {
+        local: {
+          type: "http",
+          url: "http://localhost:3000/mcp",
+          auth: "oauth",
+        },
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("should reject server names with invalid characters", () => {
+    const result = AgencyConfigSchema.safeParse({
+      mcpServers: {
+        "../evil": { command: "npx", args: ["server"] },
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("should reject auth on stdio server", () => {
     const result = AgencyConfigSchema.safeParse({
       mcpServers: {

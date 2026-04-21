@@ -463,7 +463,7 @@ return;
     };
   }
 })
-export async function sayHi(name: any, { messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
+export async function sayHi(name: any, { messages, callbacks }: { messages?: any; callbacks?: any } = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "sayHi",
@@ -477,4 +477,4 @@ export async function sayHi(name: any, { messages, callbacks }: { messages?: any
 }
 export const __sayHiNodeParams = ["name"];
 export default graph
-export const __sourceMap = {"interrupt-2-deep-in-function.agency:greet":{"0":{"line":-2,"col":2},"1":{"line":-1,"col":2}},"interrupt-2-deep-in-function.agency:foo2":{"1":{"line":5,"col":2},"2":{"line":6,"col":2},"3":{"line":7,"col":2}},"interrupt-2-deep-in-function.agency:sayHi":{"0":{"line":11,"col":2},"1":{"line":12,"col":2},"2":{"line":13,"col":2},"3":{"line":14,"col":2},"4":{"line":15,"col":2},"5":{"line":16,"col":2}}};
+export const __sourceMap = {"interrupt-2-deep-in-function.agency:greet":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2}},"interrupt-2-deep-in-function.agency:foo2":{"1":{"line":6,"col":2},"2":{"line":7,"col":2},"3":{"line":8,"col":2}},"interrupt-2-deep-in-function.agency:sayHi":{"0":{"line":12,"col":2},"1":{"line":13,"col":2},"2":{"line":14,"col":2},"3":{"line":15,"col":2},"4":{"line":16,"col":2},"5":{"line":17,"col":2}}};

@@ -209,4 +209,4 @@ await log(`INFO`, [`hello`, `world`], {
   interruptData: __state?.interruptData
 })
 export default graph
-export const __sourceMap = {"variadic.agency:log":{"0":{"line":-2,"col":2}}};
+export const __sourceMap = {"variadic.agency:log":{"0":{"line":-1,"col":2}}};

@@ -294,7 +294,7 @@ await print(`Stopped`)
     };
   }
 })
-export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
+export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "main",
@@ -318,4 +318,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"comments.agency:greet":{"1":{"line":10,"col":2},"2":{"line":12,"col":2}},"comments.agency:main":{"1":{"line":17,"col":2},"2":{"line":18,"col":2},"3":{"line":21,"col":2},"4":{"line":24,"col":2},"5":{"line":25,"col":2}}};
+export const __sourceMap = {"comments.agency:greet":{"1":{"line":11,"col":2},"2":{"line":13,"col":2}},"comments.agency:main":{"1":{"line":18,"col":2},"2":{"line":19,"col":2},"3":{"line":22,"col":2},"4":{"line":25,"col":2},"5":{"line":26,"col":2}}};

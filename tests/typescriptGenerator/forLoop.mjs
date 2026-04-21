@@ -180,7 +180,7 @@ await print(index)
     };
   }
 })
-export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
+export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "main",
@@ -204,4 +204,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"forLoop.agency:main":{"1":{"line":-1,"col":2},"2":{"line":0,"col":2},"4":{"line":5,"col":2},"6":{"line":10,"col":2},"7":{"line":11,"col":2},"2.0":{"line":1,"col":4},"4.0":{"line":6,"col":4},"7.0":{"line":12,"col":4},"7.1":{"line":13,"col":4}}};
+export const __sourceMap = {"forLoop.agency:main":{"1":{"line":0,"col":2},"2":{"line":1,"col":2},"4":{"line":6,"col":2},"6":{"line":11,"col":2},"7":{"line":12,"col":2},"2.0":{"line":2,"col":4},"4.0":{"line":7,"col":4},"7.0":{"line":13,"col":4},"7.1":{"line":14,"col":4}}};

@@ -325,7 +325,7 @@ __stack.locals.result = `other`;
     };
   }
 })
-export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
+export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "main",
@@ -349,4 +349,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"ifElse.agency:main":{"1":{"line":-1,"col":2},"2":{"line":0,"col":2},"3":{"line":4,"col":2},"5":{"line":9,"col":2},"6":{"line":12,"col":2},"8":{"line":17,"col":2},"9":{"line":18,"col":2},"11":{"line":32,"col":2},"12":{"line":33,"col":2},"14":{"line":40,"col":2},"15":{"line":41,"col":2},"17":{"line":47,"col":2},"19":{"line":54,"col":2},"2.0":{"line":1,"col":4},"3.0":{"line":5,"col":4},"6.0":{"line":13,"col":4},"9.0":{"line":19,"col":4},"9.1.0":{"line":21,"col":6},"9.1":{"line":20,"col":4},"12.0":{"line":34,"col":4},"12.1":{"line":35,"col":4},"12.2":{"line":36,"col":4},"15.0":{"line":42,"col":4},"15.1":{"line":43,"col":4},"17.0":{"line":48,"col":4},"17.1":{"line":50,"col":4},"19.0":{"line":55,"col":4},"19.1":{"line":57,"col":4},"19.2":{"line":59,"col":4}}};
+export const __sourceMap = {"ifElse.agency:main":{"1":{"line":0,"col":2},"2":{"line":1,"col":2},"3":{"line":5,"col":2},"5":{"line":10,"col":2},"6":{"line":13,"col":2},"8":{"line":18,"col":2},"9":{"line":19,"col":2},"11":{"line":33,"col":2},"12":{"line":34,"col":2},"14":{"line":41,"col":2},"15":{"line":42,"col":2},"17":{"line":48,"col":2},"19":{"line":55,"col":2},"2.0":{"line":2,"col":4},"3.0":{"line":6,"col":4},"6.0":{"line":14,"col":4},"9.0":{"line":20,"col":4},"9.1.0":{"line":22,"col":6},"9.1":{"line":21,"col":4},"12.0":{"line":35,"col":4},"12.1":{"line":36,"col":4},"12.2":{"line":37,"col":4},"15.0":{"line":43,"col":4},"15.1":{"line":44,"col":4},"17.0":{"line":49,"col":4},"17.1":{"line":51,"col":4},"19.0":{"line":56,"col":4},"19.1":{"line":58,"col":4},"19.2":{"line":60,"col":4}}};

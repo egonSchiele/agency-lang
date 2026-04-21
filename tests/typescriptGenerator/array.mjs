@@ -203,7 +203,7 @@ await print(__stack.locals.greetings)
     };
   }
 })
-export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
+export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "main",
@@ -227,4 +227,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"array.agency:main":{"0":{"line":-2,"col":2},"1":{"line":-1,"col":2},"2":{"line":1,"col":2},"3":{"line":2,"col":2}}};
+export const __sourceMap = {"array.agency:main":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2},"2":{"line":2,"col":2},"3":{"line":3,"col":2}}};

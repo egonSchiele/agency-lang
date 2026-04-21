@@ -172,7 +172,7 @@ if (isInterrupt(__stack.locals.result)) {
     };
   }
 })
-export async function analyzeData(input: string, { messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
+export async function analyzeData(input: string, { messages, callbacks }: { messages?: any; callbacks?: any } = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "analyzeData",
@@ -186,4 +186,4 @@ export async function analyzeData(input: string, { messages, callbacks }: { mess
 }
 export const __analyzeDataNodeParams = ["input"];
 export default graph
-export const __sourceMap = {"skill.agency:analyzeData":{"0":{"line":-1,"col":2}}};
+export const __sourceMap = {"skill.agency:analyzeData":{"0":{"line":0,"col":2}}};

@@ -404,7 +404,7 @@ return;
   }
 })
 graph.conditionalEdge("sayHi", ["foo2"])
-export async function foo2(name: string, age: number, { messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
+export async function foo2(name: string, age: number, { messages, callbacks }: { messages?: any; callbacks?: any } = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "foo2",
@@ -418,7 +418,7 @@ export async function foo2(name: string, age: number, { messages, callbacks }: {
   });
 }
 export const __foo2NodeParams = ["name", "age"];
-export async function sayHi(name: any, { messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
+export async function sayHi(name: any, { messages, callbacks }: { messages?: any; callbacks?: any } = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "sayHi",
@@ -432,4 +432,4 @@ export async function sayHi(name: any, { messages, callbacks }: { messages?: any
 }
 export const __sayHiNodeParams = ["name"];
 export default graph
-export const __sourceMap = {"interrupt-in-node.agency:greet":{"0":{"line":-2,"col":2},"1":{"line":-1,"col":2}},"interrupt-in-node.agency:foo2":{"1":{"line":5,"col":2},"2":{"line":6,"col":2},"3":{"line":7,"col":2}},"interrupt-in-node.agency:sayHi":{"0":{"line":11,"col":2},"1":{"line":12,"col":2},"2":{"line":13,"col":2}}};
+export const __sourceMap = {"interrupt-in-node.agency:greet":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2}},"interrupt-in-node.agency:foo2":{"1":{"line":6,"col":2},"2":{"line":7,"col":2},"3":{"line":8,"col":2}},"interrupt-in-node.agency:sayHi":{"0":{"line":12,"col":2},"1":{"line":13,"col":2},"2":{"line":14,"col":2}}};

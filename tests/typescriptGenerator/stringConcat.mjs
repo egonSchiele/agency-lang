@@ -164,7 +164,7 @@ await print(`Hello, ${__stack.locals.name}!`)
     };
   }
 })
-export async function foo({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
+export async function foo({ messages, callbacks }: { messages?: any; callbacks?: any } = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "foo",
@@ -176,4 +176,4 @@ export async function foo({ messages, callbacks }: { messages?: any; callbacks?:
 }
 export const __fooNodeParams = [];
 export default graph
-export const __sourceMap = {"stringConcat.agency:foo":{"0":{"line":-2,"col":2},"1":{"line":-1,"col":2},"2":{"line":0,"col":2}}};
+export const __sourceMap = {"stringConcat.agency:foo":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2},"2":{"line":1,"col":2}}};

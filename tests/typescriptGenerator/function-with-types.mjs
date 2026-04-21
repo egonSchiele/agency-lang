@@ -872,7 +872,7 @@ if (isInterrupt(__stack.locals.flexResult)) {
     };
   }
 })
-export async function foo({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
+export async function foo({ messages, callbacks }: { messages?: any; callbacks?: any } = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "foo",
@@ -883,7 +883,7 @@ export async function foo({ messages, callbacks }: { messages?: any; callbacks?:
   });
 }
 export const __fooNodeParams = [];
-export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}) {
+export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "main",
@@ -907,4 +907,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"function-with-types.agency:add":{"0":{"line":1,"col":2},"1":{"line":2,"col":2}},"function-with-types.agency:greet":{"0":{"line":9,"col":2},"1":{"line":10,"col":2}},"function-with-types.agency:mixed":{"0":{"line":17,"col":2},"1":{"line":18,"col":2}},"function-with-types.agency:processArray":{"0":{"line":25,"col":2},"1":{"line":26,"col":2}},"function-with-types.agency:flexible":{"0":{"line":33,"col":2},"1":{"line":34,"col":2}},"function-with-types.agency:foo":{"0":{"line":38,"col":2},"1":{"line":39,"col":2}},"function-with-types.agency:main":{"1":{"line":44,"col":2},"2":{"line":45,"col":2},"3":{"line":46,"col":2},"4":{"line":47,"col":2},"5":{"line":48,"col":2}}};
+export const __sourceMap = {"function-with-types.agency:add":{"0":{"line":2,"col":2},"1":{"line":3,"col":2}},"function-with-types.agency:greet":{"0":{"line":10,"col":2},"1":{"line":11,"col":2}},"function-with-types.agency:mixed":{"0":{"line":18,"col":2},"1":{"line":19,"col":2}},"function-with-types.agency:processArray":{"0":{"line":26,"col":2},"1":{"line":27,"col":2}},"function-with-types.agency:flexible":{"0":{"line":34,"col":2},"1":{"line":35,"col":2}},"function-with-types.agency:foo":{"0":{"line":39,"col":2},"1":{"line":40,"col":2}},"function-with-types.agency:main":{"1":{"line":45,"col":2},"2":{"line":46,"col":2},"3":{"line":47,"col":2},"4":{"line":48,"col":2},"5":{"line":49,"col":2}}};

@@ -110,11 +110,19 @@ describe("AgencyOAuthProvider", () => {
     await expect(provider.codeVerifier()).rejects.toThrow(/No PKCE code verifier/);
   });
 
-  it("should have correct client metadata", () => {
-    const provider = new AgencyOAuthProvider("github", store);
+  it("should have correct client metadata after prepare()", async () => {
+    const provider = new AgencyOAuthProvider("github", store, { port: 0 });
+    await provider.prepare();
     const meta = provider.clientMetadata;
     expect(meta.client_name).toBe("agency-github");
     expect(meta.redirect_uris).toBeDefined();
+    expect(meta.redirect_uris.length).toBe(1);
+    await provider.cleanup();
+  });
+
+  it("should throw from redirectUrl before prepare()", () => {
+    const provider = new AgencyOAuthProvider("github", store);
+    expect(() => provider.redirectUrl).toThrow(/call prepare/);
   });
 
   it("should have a real redirectUrl after prepare()", async () => {

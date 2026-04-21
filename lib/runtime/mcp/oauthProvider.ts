@@ -94,8 +94,10 @@ export class AgencyOAuthProvider implements OAuthClientProvider {
   }
 
   get redirectUrl(): string {
-    // After prepare(), this is the real localhost URL with actual port.
-    return this._callbackUrl ?? "http://127.0.0.1:0/oauth/callback";
+    if (!this._callbackUrl) {
+      throw new Error(`OAuth flow for "${this.serverName}" not started — call prepare() first`);
+    }
+    return this._callbackUrl;
   }
 
   get clientMetadata(): OAuthClientMetadata {

@@ -18,8 +18,16 @@ export type McpHttpServerConfig = {
 
 export type McpServerConfig = McpStdioServerConfig | McpHttpServerConfig;
 
+export function isHttpServer(config: McpServerConfig): config is McpHttpServerConfig {
+  return "type" in config && config.type === "http";
+}
+
+export function isStdioServer(config: McpServerConfig): config is McpStdioServerConfig {
+  return !("type" in config);
+}
+
 export function isOAuthServer(config: McpServerConfig): config is McpHttpServerConfig {
-  return "type" in config && config.type === "http" && config.auth === "oauth";
+  return isHttpServer(config) && config.auth === "oauth";
 }
 
 export type McpTool = {

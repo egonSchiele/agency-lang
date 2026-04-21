@@ -68,4 +68,80 @@ describe("AgencyConfigSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("should accept HTTP server with auth: oauth", () => {
+    const result = AgencyConfigSchema.safeParse({
+      mcpServers: {
+        github: { type: "http", url: "https://github-mcp.example.com/mcp", auth: "oauth" },
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("should accept HTTP server with headers", () => {
+    const result = AgencyConfigSchema.safeParse({
+      mcpServers: {
+        weather: {
+          type: "http",
+          url: "https://weather.example.com/mcp",
+          headers: { "Authorization": "Bearer ${WEATHER_KEY}" },
+        },
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("should accept HTTP server with authTimeout", () => {
+    const result = AgencyConfigSchema.safeParse({
+      mcpServers: {
+        github: {
+          type: "http",
+          url: "https://github-mcp.example.com/mcp",
+          auth: "oauth",
+          authTimeout: 120000,
+        },
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("should reject HTTP server with both auth and headers", () => {
+    const result = AgencyConfigSchema.safeParse({
+      mcpServers: {
+        github: {
+          type: "http",
+          url: "https://example.com/mcp",
+          auth: "oauth",
+          headers: { "Authorization": "Bearer token" },
+        },
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("should reject authTimeout without auth: oauth", () => {
+    const result = AgencyConfigSchema.safeParse({
+      mcpServers: {
+        github: {
+          type: "http",
+          url: "https://example.com/mcp",
+          authTimeout: 120000,
+        },
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("should reject auth on stdio server", () => {
+    const result = AgencyConfigSchema.safeParse({
+      mcpServers: {
+        local: {
+          command: "npx",
+          args: ["some-server"],
+          auth: "oauth",
+        },
+      },
+    });
+    expect(result.success).toBe(false);
+  });
 });

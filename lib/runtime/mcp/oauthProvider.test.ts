@@ -1,0 +1,105 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { AgencyOAuthProvider } from "./oauthProvider.js";
+import { TokenStore } from "./tokenStore.js";
+import fs from "fs";
+import path from "path";
+import os from "os";
+
+describe("AgencyOAuthProvider", () => {
+  let tmpDir: string;
+  let store: TokenStore;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-oauth-test-"));
+    store = new TokenStore(tmpDir);
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("should return undefined tokens when none are stored", async () => {
+    const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store);
+    const tokens = await provider.tokens();
+    expect(tokens).toBeUndefined();
+  });
+
+  it("should return stored tokens", async () => {
+    const savedTokens = { access_token: "abc", token_type: "bearer" };
+    await store.saveTokens("github", savedTokens);
+
+    const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store);
+    const tokens = await provider.tokens();
+    expect(tokens).toEqual(savedTokens);
+  });
+
+  it("should save tokens via saveTokens", async () => {
+    const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store);
+    const tokens = { access_token: "new-token", token_type: "bearer" };
+    await provider.saveTokens(tokens);
+
+    const loaded = await store.loadTokens("github");
+    expect(loaded).toEqual(tokens);
+  });
+
+  it("should save and load code verifier", async () => {
+    const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store);
+    await provider.saveCodeVerifier("verifier-abc");
+    const loaded = await provider.codeVerifier();
+    expect(loaded).toBe("verifier-abc");
+  });
+
+  it("should save and load client info", async () => {
+    const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store);
+    const info = { client_id: "my-id", client_secret: "secret" };
+    await provider.saveClientInformation(info);
+    const loaded = await provider.clientInformation();
+    expect(loaded).toEqual(info);
+  });
+
+  it("should have correct client metadata", () => {
+    const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store);
+    const meta = provider.clientMetadata;
+    expect(meta.client_name).toBe("agency-github");
+    expect(meta.redirect_uris).toBeDefined();
+  });
+
+  it("should have a real redirectUrl after prepare()", async () => {
+    const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store, { port: 0 });
+    await provider.prepare();
+    expect(provider.redirectUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/oauth\/callback$/);
+    expect(provider.redirectUrl).not.toContain(":0/");
+    await provider.cleanup();
+  });
+
+  it("should call onOAuthRequired callback instead of opening browser when provided", async () => {
+    const onOAuthRequired = vi.fn();
+    const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store, {
+      onOAuthRequired,
+    });
+
+    const authUrl = new URL("https://example.com/authorize?code=123");
+    await provider.redirectToAuthorization(authUrl);
+
+    expect(onOAuthRequired).toHaveBeenCalledWith(
+      expect.objectContaining({
+        serverName: "github",
+        authUrl: authUrl.toString(),
+      }),
+    );
+  });
+
+  it("should expose waitForAuthCode() that resolves when callback arrives", async () => {
+    const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store, { port: 0 });
+    await provider.prepare();
+
+    const callbackUrl = provider.redirectUrl;
+    const state = provider.state();
+    const codePromise = provider.waitForAuthCode();
+    await fetch(`${callbackUrl}?code=test-code&state=${state}`);
+    const code = await codePromise;
+    expect(code).toBe("test-code");
+
+    await provider.cleanup();
+  });
+});

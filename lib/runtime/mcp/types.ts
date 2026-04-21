@@ -9,6 +9,11 @@ export type McpStdioServerConfig = {
 export type McpHttpServerConfig = {
   type: "http";
   url: string;
+  auth?: "oauth";
+  authTimeout?: number;
+  clientId?: string;
+  clientSecret?: string;
+  headers?: Record<string, string>;
 };
 
 export type McpServerConfig = McpStdioServerConfig | McpHttpServerConfig;

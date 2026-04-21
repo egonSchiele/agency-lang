@@ -174,6 +174,10 @@ const McpStdioServerSchema = z.object({
 const McpHttpServerSchema = z.object({
   type: z.literal("http"),
   url: z.string(),
+  auth: z.literal("oauth").optional(),
+  authTimeout: z.number().optional(),
+  clientId: z.string().optional(),
+  headers: z.record(z.string(), z.string()).optional(),
 }).strict();
 
 const McpServerSchema = z.union([McpStdioServerSchema, McpHttpServerSchema]);
@@ -209,4 +213,32 @@ export const AgencyConfigSchema = z.object({
   test: z.object({ parallel: z.number() }).partial(),
   doc: z.object({ outDir: z.string(), baseUrl: z.string() }).partial(),
   mcpServers: z.record(z.string(), McpServerSchema),
-}).partial().passthrough();
+}).partial().passthrough().superRefine((data, ctx) => {
+  if (!data.mcpServers) return;
+  for (const [name, server] of Object.entries(data.mcpServers)) {
+    if ("type" in server && server.type === "http") {
+      const httpServer = server as z.infer<typeof McpHttpServerSchema>;
+      if (httpServer.auth && httpServer.headers) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `MCP server "${name}": cannot specify both 'auth' and 'headers'`,
+          path: ["mcpServers", name],
+        });
+      }
+      if (httpServer.authTimeout && httpServer.auth !== "oauth") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `MCP server "${name}": 'authTimeout' requires 'auth: "oauth"'`,
+          path: ["mcpServers", name],
+        });
+      }
+      if (httpServer.clientId && httpServer.auth !== "oauth") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `MCP server "${name}": 'clientId' requires 'auth: "oauth"'`,
+          path: ["mcpServers", name],
+        });
+      }
+    }
+  }
+});

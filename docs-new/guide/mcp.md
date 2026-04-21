@@ -141,28 +141,16 @@ Many MCP servers (like GitHub) require OAuth authentication. Agency handles the 
    - Set the callback URL to `http://127.0.0.1:19876/oauth/callback`
    - Note your Client ID and Client Secret.
 
-2. Add the server to `agency.json`:
-
-```json
-{
-  "mcpServers": {
-    "github": {
-      "type": "http",
-      "url": "https://api.githubcopilot.com/mcp/",
-      "auth": "oauth",
-      "clientId": "your-client-id",
-      "clientSecret": "your-client-secret"
-    }
-  }
-}
-```
-
-Alternatively, you can set credentials as environment variables instead of putting them in the config file. Agency checks for `MCP_<SERVER>_CLIENT_ID` and `MCP_<SERVER>_CLIENT_SECRET` (server name uppercased) as a fallback:
+2. Set your credentials as environment variables. Agency looks for `MCP_<SERVER>_CLIENT_ID` and `MCP_<SERVER>_CLIENT_SECRET`, where the server name is uppercased and any hyphens are replaced with underscores:
 
 ```bash
 export MCP_GITHUB_CLIENT_ID=your-client-id
 export MCP_GITHUB_CLIENT_SECRET=your-client-secret
 ```
+
+For a server named `my-api`, the env vars would be `MCP_MY_API_CLIENT_ID` and `MCP_MY_API_CLIENT_SECRET`.
+
+3. Add the server to `agency.json`:
 
 ```json
 {
@@ -176,16 +164,31 @@ export MCP_GITHUB_CLIENT_SECRET=your-client-secret
 }
 ```
 
-3. The first time your agent connects, Agency opens your browser for authorization. After you approve, the token is stored at `~/.agency/tokens/<server-name>.json` and reused automatically on future runs.
+You can also put `clientId` directly in the config file if you prefer (it's not a secret). But never put `clientSecret` in `agency.json` — it gets stripped from compiled output for security, so it won't work, and you'd be putting a secret in a file that may be checked into version control. Always use environment variables for the client secret.
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "auth": "oauth",
+      "clientId": "your-client-id"
+    }
+  }
+}
+```
+
+4. The first time your agent connects, Agency opens your browser for authorization. After you approve, the token is stored at `~/.agency/tokens/<server-name>.json` and reused automatically on future runs.
 
 ### OAuth config options
 
 - `auth` (required): must be `"oauth"`
 - `clientId` (optional): the OAuth client ID. Falls back to `MCP_<SERVER>_CLIENT_ID` env var.
-- `clientSecret` (optional): the OAuth client secret. Falls back to `MCP_<SERVER>_CLIENT_SECRET` env var.
+- `clientSecret` (optional): the OAuth client secret. Falls back to `MCP_<SERVER>_CLIENT_SECRET` env var. **Use env vars for this — secrets are stripped from compiled output.**
 - `authTimeout` (optional): milliseconds to wait for the user to authorize in the browser. Defaults to 5 minutes.
 
-Note: `auth` and `headers` are mutually exclusive — use one or the other.
+Note: `auth` and `headers` are mutually exclusive — use one or the other. OAuth requires HTTPS (localhost is exempt for development).
 
 ### Using OAuth in Agency code
 

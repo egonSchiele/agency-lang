@@ -26,12 +26,8 @@ export function interpolateEnvVars(headers: Record<string, string>): Record<stri
   return result;
 }
 
-/**
- * A function that returns a connected {client, transport} pair.
- * Used by OAuthConnector to provide pre-authenticated connections.
- * McpConnection does NOT know what this function does internally.
- */
-export type ConnectorFn = () => Promise<{ client: Client; transport: any }>;
+/** Returns a connected MCP Client. Used by OAuthConnector. */
+export type ConnectorFn = () => Promise<{ client: Client }>;
 
 export type McpConnectionOptions = {
   /** Opaque connector function that returns a connected client+transport. */

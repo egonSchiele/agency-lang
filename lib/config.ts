@@ -240,6 +240,13 @@ export const AgencyConfigSchema = z.object({
           path: ["mcpServers", name],
         });
       }
+      if (httpServer.clientSecret && httpServer.auth !== "oauth") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `MCP server "${name}": 'clientSecret' requires 'auth: "oauth"'`,
+          path: ["mcpServers", name],
+        });
+      }
     }
   }
 });

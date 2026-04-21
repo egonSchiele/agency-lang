@@ -1,6 +1,7 @@
 import { McpConnection } from "./mcpConnection.js";
 import { OAuthConnector } from "./oauthConnector.js";
 import { TokenStore } from "./tokenStore.js";
+import { isOAuthServer } from "./types.js";
 import type { ServerName, McpServerConfig, McpHttpServerConfig, McpTool } from "./types.js";
 import { success, failure, type ResultValue } from "../result.js";
 import type { OAuthRequiredData } from "./oauthProvider.js";
@@ -29,12 +30,7 @@ export class McpManager {
 
   private createConnection(serverName: string): McpConnection {
     const serverConfig = this.config[serverName];
-    const isOAuth =
-      "type" in serverConfig &&
-      serverConfig.type === "http" &&
-      (serverConfig as McpHttpServerConfig).auth === "oauth";
-
-    if (isOAuth) {
+    if (isOAuthServer(serverConfig)) {
       const httpConfig = serverConfig as McpHttpServerConfig;
       const connector = new OAuthConnector(serverName, httpConfig.url, this.tokenStore, {
         onOAuthRequired: this.onOAuthRequired,
@@ -113,8 +109,12 @@ export class McpManager {
   }
 
   async disconnectAll(): Promise<void> {
+    // Clear pending connect promises so in-flight connections don't write
+    // back to this.connections after we've cleaned up.
+    this.connectPromises = {};
+
     const conns = Object.values(this.connections);
-    if (conns.length === 0) return;
+    // Swallow individual disconnect errors to ensure all servers get cleaned up
     await Promise.all(conns.map((conn) => conn.disconnect().catch(() => {})));
     this.connections = {};
     this.toolCache = {};

@@ -1,5 +1,6 @@
 import { TokenStore } from "../runtime/mcp/tokenStore.js";
 import { OAuthConnector } from "../runtime/mcp/oauthConnector.js";
+import { isOAuthServer } from "../runtime/mcp/types.js";
 import type { AgencyConfig } from "../config.js";
 import type { McpHttpServerConfig } from "../runtime/mcp/types.js";
 
@@ -20,16 +21,12 @@ export async function authServer(
   }
 
   const serverConfig = mcpServers[serverName];
-  if (!("type" in serverConfig) || serverConfig.type !== "http") {
-    console.error(`MCP server "${serverName}" is not an HTTP server — OAuth is only for HTTP servers.`);
+  if (!isOAuthServer(serverConfig)) {
+    console.error(`MCP server "${serverName}" is not configured with auth: "oauth".`);
     process.exit(1);
   }
 
   const httpConfig = serverConfig as McpHttpServerConfig;
-  if (httpConfig.auth !== "oauth") {
-    console.error(`MCP server "${serverName}" does not have auth: "oauth" in its config.`);
-    process.exit(1);
-  }
 
   const existing = await store.loadTokens(serverName);
   if (existing) {

@@ -13,8 +13,17 @@ import { TokenStore } from "./tokenStore.js";
 
 const execFileAsync = promisify(execFile);
 
-/** Open a URL in the default browser. macOS-only for now. */
+/**
+ * Open a URL in the default browser. macOS-only for now.
+ * Mirrors stdlib _openUrl() — duplicated here to avoid cross-tsconfig imports.
+ */
 async function openInBrowser(url: string): Promise<void> {
+  if (process.platform !== "darwin") {
+    throw new Error(
+      `Opening a browser is currently only supported on macOS (detected: ${process.platform}). ` +
+      `Cross-platform support will be added in a future release.`,
+    );
+  }
   await execFileAsync("open", [url]);
 }
 

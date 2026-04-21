@@ -84,8 +84,10 @@ export class OAuthConnector {
         const code = await this.provider.waitForAuthCode();
         await transport.finishAuth(code);
 
-        // Create fresh client/transport for retry — the SDK may not support
-        // reusing a Client/transport after an UnauthorizedError.
+        // Close the original client/transport — they can't be reused after
+        // UnauthorizedError and would leak otherwise.
+        await client.close().catch(() => {});
+
         const retryClient = this.createClient();
         const retryTransport = this.createTransport();
         await retryClient.connect(retryTransport);

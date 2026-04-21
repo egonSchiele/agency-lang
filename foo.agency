@@ -4,18 +4,7 @@ def greet(name: string) {
 
 node main() {
   const name = "Alice"
-  handle {
-    const greeting = greet(name)
-    print(greeting)
-  } with (msg) {
-    print("Caught interrupt with message: ${msg}")
-    return reject()
-  }
-  if (greeting) {
-    print("Greeting was: ${greeting}")
-  } else {
-    print("No greeting was produced.")
-  }
+  print(name)
   const arr = range(5)
   for (x in arr) {
     print(x)

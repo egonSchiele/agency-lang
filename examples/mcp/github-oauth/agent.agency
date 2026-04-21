@@ -14,19 +14,17 @@
 // To run:
 //   cd examples/mcp/github-oauth
 //   pnpm run agency agent.agency
-
 node main() {
-  const tools = mcp("github") catch []
-
+  print("Connecting to GitHub MCP server with OAuth...")
+  const tools = try mcp("github") catch []
+  print("Tools from GitHub MCP:", tools)
   if (len(tools) == 0) {
     print("Could not connect to GitHub MCP server.")
     print("Make sure MCP_GITHUB_CLIENT_ID and MCP_GITHUB_CLIENT_SECRET are set.")
     return null
   }
-
   print("Connected to GitHub. Found ${len(tools)} tools.")
-
-  const result = llm("What are my 5 most recently updated GitHub repositories?", {
+  const result = llm("What are my 5 most recently updated GitHub repositories?", { 
     tools: [...tools]
   })
   print(result)

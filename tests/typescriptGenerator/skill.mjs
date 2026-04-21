@@ -88,6 +88,9 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
+async function mcp(serverName: string) {
+  return __ctx.mcpManager.getTools(serverName);
+}
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("skill.agency")
 }

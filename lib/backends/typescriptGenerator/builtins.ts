@@ -5,6 +5,7 @@ import * as builtinFunctionsFetchJSON from "../../templates/backends/typescriptG
 import * as builtinFunctionsFetch from "../../templates/backends/typescriptGenerator/builtinFunctions/fetch.js";
 import * as builtinFunctionsSleep from "../../templates/backends/typescriptGenerator/builtinFunctions/sleep.js";
 import * as builtinFunctionsSystem from "../../templates/backends/typescriptGenerator/builtinFunctions/system.js";
+import * as builtinFunctionsMcp from "../../templates/backends/typescriptGenerator/builtinFunctions/mcp.js";
 import { BUILTIN_FUNCTIONS } from "@/config.js";
 
 /**
@@ -54,5 +55,8 @@ export function generateBuiltinHelpers(functionsUsed: Set<string>): string {
       helpers.push(sleepFunc);
     }
    */
+  const mcpFunc = builtinFunctionsMcp.default({});
+  helpers.push(mcpFunc);
+
   return helpers.join("\n\n");
 }

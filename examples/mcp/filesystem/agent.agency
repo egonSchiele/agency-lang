@@ -1,0 +1,29 @@
+// Example: Using an MCP server (no authentication required)
+//
+// This example connects to the filesystem MCP server and uses its tools
+// to interact with files. No authentication is needed — the server runs
+// as a local subprocess.
+//
+// To run:
+//   cd examples/mcp/filesystem
+//   pnpm run agency agent.agency
+
+node main() {
+  const tools = mcp("filesystem") catch []
+
+  if (len(tools) == 0) {
+    print("Could not connect to the filesystem MCP server.")
+    return null
+  }
+
+  print("Connected to filesystem MCP server.")
+  print("Available tools:")
+  for (tool in tools) {
+    print("  - ${tool.name}")
+  }
+
+  const result = llm("List the files in /tmp and tell me how many there are.", {
+    tools: [...tools]
+  })
+  print(result)
+}

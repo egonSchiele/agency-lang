@@ -1,0 +1,4 @@
+node main() {
+  const tools = mcp("test") catch []
+  return tools
+}

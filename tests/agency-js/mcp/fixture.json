@@ -1,0 +1,11 @@
+{
+  "toolCount": 1,
+  "hasAddTool": true,
+  "firstTool": {
+    "name": "test__add",
+    "serverName": "test",
+    "__mcpTool": true,
+    "hasDescription": true,
+    "hasInputSchema": true
+  }
+}

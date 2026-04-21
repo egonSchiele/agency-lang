@@ -61,7 +61,7 @@ export class McpManager {
 
     // Prevent concurrent connection attempts for the same server.
     // Only one OAuth flow should fire per server.
-    if (serverName in this.connectPromises) {
+    if (Object.hasOwn(this.connectPromises, serverName)) {
       return this.connectPromises[serverName];
     }
 

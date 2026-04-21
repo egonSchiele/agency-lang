@@ -47,7 +47,6 @@ export type OAuthProviderOptions = {
 
 export class AgencyOAuthProvider implements OAuthClientProvider {
   private serverName: string;
-  private serverUrl: string;
   private store: TokenStore;
   private options: OAuthProviderOptions;
   private callbackServer: CallbackServer | null = null;
@@ -55,12 +54,10 @@ export class AgencyOAuthProvider implements OAuthClientProvider {
 
   constructor(
     serverName: string,
-    serverUrl: string,
     store: TokenStore,
     options: OAuthProviderOptions = {},
   ) {
     this.serverName = serverName;
-    this.serverUrl = serverUrl;
     this.store = store;
     this.options = options;
   }
@@ -103,20 +100,22 @@ export class AgencyOAuthProvider implements OAuthClientProvider {
 
   get clientMetadata(): OAuthClientMetadata {
     return {
-      redirect_uris: [this.redirectUrl as any],
+      redirect_uris: [this.redirectUrl],
       client_name: `agency-${this.serverName}`,
     };
   }
 
+  private envVarName(suffix: string): string {
+    const normalized = this.serverName.toUpperCase().replace(/[^A-Z0-9_]/g, "_");
+    return `MCP_${normalized}_${suffix}`;
+  }
+
   private resolveClientId(): string | undefined {
-    // Config value first, then env var fallback
-    return this.options.clientId
-      ?? process.env[`MCP_${this.serverName.toUpperCase()}_CLIENT_ID`];
+    return this.options.clientId ?? process.env[this.envVarName("CLIENT_ID")];
   }
 
   private resolveClientSecret(): string | undefined {
-    return this.options.clientSecret
-      ?? process.env[`MCP_${this.serverName.toUpperCase()}_CLIENT_SECRET`];
+    return this.options.clientSecret ?? process.env[this.envVarName("CLIENT_SECRET")];
   }
 
   async clientInformation(): Promise<OAuthClientInformationMixed | undefined> {
@@ -171,7 +170,7 @@ export class AgencyOAuthProvider implements OAuthClientProvider {
         authUrl: authorizationUrl.toString(),
         complete: completePromise,
         cancel: () => {
-          this.cleanup();
+          void this.cleanup().catch(() => {});
           rejectComplete!(new Error("OAuth flow cancelled"));
         },
       });

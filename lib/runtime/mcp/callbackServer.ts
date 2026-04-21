@@ -83,6 +83,7 @@ export class CallbackServer {
 
       this.timeoutHandle = setTimeout(() => {
         this.rejectCode(new Error("OAuth callback timed out"));
+        this.stop();
       }, this.timeoutMs);
     });
   }

@@ -19,7 +19,7 @@ describe("AgencyOAuthProvider", () => {
   });
 
   it("should return undefined tokens when none are stored", async () => {
-    const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store);
+    const provider = new AgencyOAuthProvider("github", store);
     const tokens = await provider.tokens();
     expect(tokens).toBeUndefined();
   });
@@ -28,13 +28,13 @@ describe("AgencyOAuthProvider", () => {
     const savedTokens = { access_token: "abc", token_type: "bearer" };
     await store.saveTokens("github", savedTokens);
 
-    const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store);
+    const provider = new AgencyOAuthProvider("github", store);
     const tokens = await provider.tokens();
     expect(tokens).toEqual(savedTokens);
   });
 
   it("should save tokens via saveTokens", async () => {
-    const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store);
+    const provider = new AgencyOAuthProvider("github", store);
     const tokens = { access_token: "new-token", token_type: "bearer" };
     await provider.saveTokens(tokens);
 
@@ -43,14 +43,14 @@ describe("AgencyOAuthProvider", () => {
   });
 
   it("should save and load code verifier", async () => {
-    const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store);
+    const provider = new AgencyOAuthProvider("github", store);
     await provider.saveCodeVerifier("verifier-abc");
     const loaded = await provider.codeVerifier();
     expect(loaded).toBe("verifier-abc");
   });
 
   it("should save and load client info", async () => {
-    const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store);
+    const provider = new AgencyOAuthProvider("github", store);
     const info = { client_id: "my-id", client_secret: "secret" };
     await provider.saveClientInformation(info);
     const loaded = await provider.clientInformation();
@@ -64,7 +64,7 @@ describe("AgencyOAuthProvider", () => {
     process.env.MCP_GITHUB_CLIENT_SECRET = "env-client-secret";
     try {
       // No clientId/clientSecret in options — should pick up env vars
-      const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store);
+      const provider = new AgencyOAuthProvider("github", store);
       const info = await provider.clientInformation();
       expect(info).toBeDefined();
       expect((info as any).client_id).toBe("env-client-id");
@@ -81,7 +81,7 @@ describe("AgencyOAuthProvider", () => {
     const origId = process.env.MCP_GITHUB_CLIENT_ID;
     process.env.MCP_GITHUB_CLIENT_ID = "env-id";
     try {
-      const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store, {
+      const provider = new AgencyOAuthProvider("github", store, {
         clientId: "config-id",
       });
       const info = await provider.clientInformation();
@@ -93,14 +93,14 @@ describe("AgencyOAuthProvider", () => {
   });
 
   it("should have correct client metadata", () => {
-    const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store);
+    const provider = new AgencyOAuthProvider("github", store);
     const meta = provider.clientMetadata;
     expect(meta.client_name).toBe("agency-github");
     expect(meta.redirect_uris).toBeDefined();
   });
 
   it("should have a real redirectUrl after prepare()", async () => {
-    const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store, { port: 0 });
+    const provider = new AgencyOAuthProvider("github", store, { port: 0 });
     await provider.prepare();
     expect(provider.redirectUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/oauth\/callback$/);
     expect(provider.redirectUrl).not.toContain(":0/");
@@ -109,7 +109,7 @@ describe("AgencyOAuthProvider", () => {
 
   it("should call onOAuthRequired callback instead of opening browser when provided", async () => {
     const onOAuthRequired = vi.fn();
-    const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store, {
+    const provider = new AgencyOAuthProvider("github", store, {
       onOAuthRequired,
     });
 
@@ -125,7 +125,7 @@ describe("AgencyOAuthProvider", () => {
   });
 
   it("should expose waitForAuthCode() that resolves when callback arrives", async () => {
-    const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store, { port: 0 });
+    const provider = new AgencyOAuthProvider("github", store, { port: 0 });
     await provider.prepare();
 
     const callbackUrl = provider.redirectUrl;

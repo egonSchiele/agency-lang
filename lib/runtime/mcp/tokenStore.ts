@@ -18,16 +18,25 @@ export class TokenStore {
     }
   }
 
+  private validateServerName(serverName: string): string {
+    if (!/^[A-Za-z0-9_-]+$/.test(serverName)) {
+      throw new Error(
+        `Invalid MCP server name "${serverName}": must contain only letters, numbers, hyphens, and underscores`,
+      );
+    }
+    return serverName;
+  }
+
   private tokenPath(serverName: string): string {
-    return path.join(this.dir, `${serverName}.json`);
+    return path.join(this.dir, `${this.validateServerName(serverName)}.json`);
   }
 
   private verifierPath(serverName: string): string {
-    return path.join(this.dir, `${serverName}.verifier`);
+    return path.join(this.dir, `${this.validateServerName(serverName)}.verifier`);
   }
 
   private clientInfoPath(serverName: string): string {
-    return path.join(this.dir, `${serverName}.client.json`);
+    return path.join(this.dir, `${this.validateServerName(serverName)}.client.json`);
   }
 
   private atomicWrite(filePath: string, data: string): void {

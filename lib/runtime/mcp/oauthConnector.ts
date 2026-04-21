@@ -33,7 +33,7 @@ export class OAuthConnector {
   ) {
     this.serverName = serverName;
     this.url = url;
-    this.provider = new AgencyOAuthProvider(serverName, url, tokenStore, options);
+    this.provider = new AgencyOAuthProvider(serverName, tokenStore, options);
   }
 
   private createTransport(): StreamableHTTPClientTransport {

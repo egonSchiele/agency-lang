@@ -174,6 +174,11 @@ const McpStdioServerSchema = z.object({
 const McpHttpServerSchema = z.object({
   type: z.literal("http"),
   url: z.string(),
+  auth: z.literal("oauth").optional(),
+  authTimeout: z.number().optional(),
+  clientId: z.string().optional(),
+  clientSecret: z.string().optional(),
+  headers: z.record(z.string(), z.string()).optional(),
 }).strict();
 
 const McpServerSchema = z.union([McpStdioServerSchema, McpHttpServerSchema]);
@@ -208,5 +213,62 @@ export const AgencyConfigSchema = z.object({
   distDir: z.string(),
   test: z.object({ parallel: z.number() }).partial(),
   doc: z.object({ outDir: z.string(), baseUrl: z.string() }).partial(),
-  mcpServers: z.record(z.string(), McpServerSchema),
-}).partial().passthrough();
+  mcpServers: z.record(
+    z.string().regex(/^[A-Za-z0-9_-]+$/, "MCP server names must contain only letters, numbers, hyphens, and underscores"),
+    McpServerSchema,
+  ),
+}).partial().passthrough().superRefine((data, ctx) => {
+  if (!data.mcpServers) return;
+  for (const [name, server] of Object.entries(data.mcpServers)) {
+    if ("type" in server && server.type === "http") {
+      const httpServer = server as z.infer<typeof McpHttpServerSchema>;
+      if (httpServer.auth && httpServer.headers) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `MCP server "${name}": cannot specify both 'auth' and 'headers'`,
+          path: ["mcpServers", name],
+        });
+      }
+      if (httpServer.authTimeout && httpServer.auth !== "oauth") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `MCP server "${name}": 'authTimeout' requires 'auth: "oauth"'`,
+          path: ["mcpServers", name],
+        });
+      }
+      if (httpServer.clientId && httpServer.auth !== "oauth") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `MCP server "${name}": 'clientId' requires 'auth: "oauth"'`,
+          path: ["mcpServers", name],
+        });
+      }
+      if (httpServer.clientSecret && httpServer.auth !== "oauth") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `MCP server "${name}": 'clientSecret' requires 'auth: "oauth"'`,
+          path: ["mcpServers", name],
+        });
+      }
+      if (httpServer.auth === "oauth") {
+        try {
+          const parsed = new URL(httpServer.url);
+          const isLocalhost = ["127.0.0.1", "localhost"].includes(parsed.hostname);
+          if (parsed.protocol !== "https:" && !isLocalhost) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: `MCP server "${name}": OAuth requires HTTPS (or localhost for development)`,
+              path: ["mcpServers", name, "url"],
+            });
+          }
+        } catch {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `MCP server "${name}": invalid URL "${httpServer.url}"`,
+            path: ["mcpServers", name, "url"],
+          });
+        }
+      }
+    }
+  }
+});

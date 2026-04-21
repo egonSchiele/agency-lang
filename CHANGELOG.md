@@ -1,3 +1,9 @@
+## Apr 21 2026 — v0.0.102
+- Add mcp support with auth, docs
+## Apr 21 2026 — v0.0.101
+- Add mcp support
+## Apr 20 2026 — v0.0.100
+- Fix various import-related issues
 ## Apr 19 2026 — v0.0.93
 - Added `schema()` function and made validation work with Result types
 - Added `__type: "resultType"` tag to result types to avoid misdetecting user return values

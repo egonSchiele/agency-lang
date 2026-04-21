@@ -70,3 +70,21 @@ Set an environment variable in the current process. Fails if the name is empty o
 **Returns:** Result
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L23))
+
+### openUrl
+
+```ts
+openUrl(url: string): Result
+```
+
+Open a URL in the user's default browser. Currently macOS-only.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| url | string |  |
+
+**Returns:** Result
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L36))

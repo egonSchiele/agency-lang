@@ -2203,6 +2203,14 @@ export class TypeScriptBuilder {
             ts.raw("__error instanceof RestoreSignal"),
             ts.statements([ts.throw("__error")]),
           ),
+          ts.consoleError(
+            ts.template([
+              {
+                text: "\\nAgent crashed: ",
+                expr: $(ts.id("__error")).prop("message").done(),
+              },
+            ]),
+          ),
           ts.return(
             ts.obj({
               messages: ts.runtime.threads,
@@ -3312,8 +3320,19 @@ export class TypeScriptBuilder {
     ];
 
     if (this.agencyConfig.mcpServers) {
+      // Strip secrets from the config before embedding in generated code.
+      // clientId and clientSecret are resolved at runtime from env vars.
+      const sanitizedServers = Object.fromEntries(
+        Object.entries(this.agencyConfig.mcpServers).map(([name, cfg]) => {
+          if ("type" in cfg && cfg.type === "http") {
+            const { clientSecret, clientId, ...rest } = cfg as Record<string, any>;
+            return [name, rest];
+          }
+          return [name, cfg];
+        }),
+      );
       runtimeCtxStatements.push(
-        ts.raw(`__globalCtx.createMcpManager(${JSON.stringify(this.agencyConfig.mcpServers)});`),
+        ts.raw(`__globalCtx.createMcpManager(${JSON.stringify(sanitizedServers)});`),
       );
     }
 

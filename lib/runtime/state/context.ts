@@ -351,7 +351,10 @@ export class RuntimeContext<T> {
   }
 
   createMcpManager(config: Record<string, any>): void {
-    this._mcpManager = new McpManager(config);
+    const onOAuthRequired = this._registeredCallbacks.onOAuthRequired as
+      | ((data: any) => void | Promise<void>)
+      | undefined;
+    this._mcpManager = new McpManager(config, { onOAuthRequired });
   }
 
   get mcpManager(): McpManager {

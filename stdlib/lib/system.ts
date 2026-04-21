@@ -1,7 +1,10 @@
-import { execFileSync } from "child_process";
+import { execFileSync, execFile } from "child_process";
 import path from "path";
 import process from "process";
 import { detectPlatform } from "./utils.js";
+import { promisify } from "util";
+
+const execFileAsync = promisify(execFile);
 
 export function _cwd(): string {
   return process.cwd();
@@ -25,6 +28,23 @@ export function _setEnv(name: string, value: string): void {
     throw new Error("setEnv: value must not contain NUL bytes");
   }
   process.env[name] = value;
+}
+
+/**
+ * Open a URL in the user's default browser.
+ * Currently macOS-only (uses the `open` command). Throws on other platforms.
+ */
+export async function _openUrl(url: string): Promise<void> {
+  const platform = detectPlatform();
+
+  if (platform === "macos") {
+    await execFileAsync("open", ["--", url]);
+  } else {
+    throw new Error(
+      `openUrl is currently only supported on macOS (detected: ${platform}). ` +
+      `Cross-platform support will be added in a future release.`,
+    );
+  }
 }
 
 export function _screenshot(

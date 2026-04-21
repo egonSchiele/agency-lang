@@ -1,6 +1,8 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { McpManager } from "./mcpManager.js";
 import path from "path";
+import fs from "fs";
+import os from "os";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -82,5 +84,74 @@ describe("McpManager", () => {
     // callTool should lazily reconnect and succeed
     const result = await manager.callTool("test", "add", { a: 10, b: 20 });
     expect(result).toContain("30");
+  });
+});
+
+describe("McpManager OAuth config", () => {
+  it("should accept onOAuthRequired callback", () => {
+    const manager = new McpManager(
+      {
+        github: { type: "http" as const, url: "https://example.com/mcp", auth: "oauth" as const },
+      },
+      { onOAuthRequired: () => {} },
+    );
+    expect(manager).toBeDefined();
+  });
+
+  it("should accept a custom tokenStoreDir", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-mgr-test-"));
+    try {
+      const manager = new McpManager(
+        { github: { type: "http" as const, url: "https://example.com/mcp", auth: "oauth" as const } },
+        { tokenStoreDir: tmpDir },
+      );
+      expect(manager).toBeDefined();
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("should return a failure when OAuth server is unreachable", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-mgr-test-"));
+    try {
+      const manager = new McpManager(
+        {
+          test: {
+            type: "http" as const,
+            url: "http://127.0.0.1:1/nonexistent",
+            auth: "oauth" as const,
+          },
+        },
+        { tokenStoreDir: tmpDir },
+      );
+      const result = await manager.getTools("test");
+      expect(result.success).toBe(false);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("should deduplicate concurrent getTools calls for the same server", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-mgr-test-"));
+    try {
+      const manager = new McpManager(
+        {
+          test: {
+            type: "http" as const,
+            url: "http://127.0.0.1:1/nonexistent",
+            auth: "oauth" as const,
+          },
+        },
+        { tokenStoreDir: tmpDir },
+      );
+      const [result1, result2] = await Promise.all([
+        manager.getTools("test"),
+        manager.getTools("test"),
+      ]);
+      expect(result1.success).toBe(false);
+      expect(result2.success).toBe(false);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });

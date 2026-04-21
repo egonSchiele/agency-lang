@@ -1,0 +1,5 @@
+node main() {
+  const tools = mcp("test") catch []
+  const result: number = llm("You MUST use the test__add tool to add 3 and 4. Do not answer without calling the tool.", { tools: [...tools] })
+  return result
+}

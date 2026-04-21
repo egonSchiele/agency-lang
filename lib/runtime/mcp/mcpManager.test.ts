@@ -71,4 +71,23 @@ describe("McpManager", () => {
     await manager.getTools("test");
     await manager.disconnectAll();
   });
+
+  it("should lazily reconnect when calling a tool after disconnectAll", async () => {
+    manager = new McpManager({
+      test: {
+        command: "npx",
+        args: ["tsx", TEST_SERVER_PATH],
+      },
+    });
+
+    // Connect and verify
+    await manager.getTools("test");
+
+    // Disconnect all — simulates checkpoint restore where connections are cleared
+    await manager.disconnectAll();
+
+    // callTool should lazily reconnect and succeed
+    const result = await manager.callTool("test", "add", { a: 10, b: 20 });
+    expect(result).toContain("30");
+  });
 });

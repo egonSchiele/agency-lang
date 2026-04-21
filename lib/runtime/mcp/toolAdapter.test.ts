@@ -56,4 +56,20 @@ describe("mcpToolToRegistryEntry", () => {
     const result = await entry.handler.execute(3, 4, { ctx: null, threads: null, isToolCall: true });
     expect(result).toBe("7");
   });
+
+  it("should throw on malformed tool name without expected prefix", () => {
+    const tool: McpToolObject = {
+      name: "wrongprefix__add",
+      description: "Add two numbers",
+      serverName: "test",
+      inputSchema: { type: "object", properties: {} },
+      __mcpTool: true,
+    };
+
+    const mockCallTool = async () => "";
+
+    expect(() => mcpToolToRegistryEntry(tool, mockCallTool)).toThrow(
+      /expected prefix "test__"/,
+    );
+  });
 });

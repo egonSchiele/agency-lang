@@ -34,11 +34,18 @@ export function mcpToolToRegistryEntry(
   }
   const originalName = tool.name.slice(expectedPrefix.length);
 
+  // Smoltalk expects schemas with a .toJSONSchema() method (Zod-like).
+  // MCP gives us plain JSON Schema, so wrap it.
+  const schemaWrapper = {
+    ...tool.inputSchema,
+    toJSONSchema: () => tool.inputSchema,
+  };
+
   return {
     definition: {
       name: tool.name,
       description: tool.description,
-      schema: tool.inputSchema,
+      schema: schemaWrapper,
     },
     handler: {
       name: tool.name,

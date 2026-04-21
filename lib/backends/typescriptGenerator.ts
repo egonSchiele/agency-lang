@@ -10,6 +10,7 @@ export function generateTypeScript(
   config?: AgencyConfig,
   info?: ProgramInfo,
   moduleId?: string,
+  outputFile?: string,
 ): string {
   if (!moduleId) {
     throw new Error("moduleId is required for generateTypeScript");
@@ -17,7 +18,7 @@ export function generateTypeScript(
   const programInfo = info ?? collectProgramInfo(program);
   const preprocessor = new TypescriptPreprocessor(program, config, programInfo);
   const preprocessedProgram = preprocessor.preprocess();
-  const builder = new TypeScriptBuilder(config, programInfo, moduleId);
+  const builder = new TypeScriptBuilder(config, programInfo, moduleId, outputFile);
   const ir = builder.build(preprocessedProgram);
   return printTs(ir);
 }

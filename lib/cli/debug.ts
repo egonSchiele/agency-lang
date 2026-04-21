@@ -1,6 +1,7 @@
 import { AgencyConfig } from "@/config.js";
 import { compile } from "./commands.js";
-import { pickANode } from "./util.js";
+import { RunStrategy } from "../importStrategy.js";
+import { pickANode, resolveCompiledFile } from "./util.js";
 import { parseAgency } from "@/parser.js";
 import { getNodesOfType } from "@/utils/node.js";
 import { GraphNodeDefinition } from "@/types.js";
@@ -21,6 +22,7 @@ export async function debug(
     rewindSize?: number;
     trace?: string;
     checkpoint?: string;
+    distDir?: string;
   } = {},
 ): Promise<void> {
   let inputFile = _inputFile;
@@ -97,14 +99,41 @@ export async function debug(
       }
       traceCheckpoints = [cp];
     }
-    // Force debugger mode so the builder emits debugStep() calls
-    const debugConfig: AgencyConfig = { ...config, debugger: true };
+    // Resolve distDir from CLI flag or config
+    const distDir = options.distDir ?? config.distDir;
 
-    // Compile the .agency file to .js
-    const outputFile = compile(debugConfig, inputFile);
-    if (outputFile === null) {
-      console.error("Error: No output file generated.");
-      process.exit(1);
+    let absOutput: string;
+
+    if (distDir) {
+      // distDir mode: import pre-compiled JS from the dist directory
+      let compiledPath: string;
+      try {
+        compiledPath = resolveCompiledFile(distDir, inputFile);
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : String(error));
+        process.exit(1);
+      }
+
+      // Warn if source is newer than compiled output
+      const sourceMtime = fs.statSync(inputFile).mtimeMs;
+      const compiledMtime = fs.statSync(compiledPath).mtimeMs;
+      if (sourceMtime > compiledMtime) {
+        console.warn(
+          `Warning: ${inputFile} is newer than ${compiledPath}.\n` +
+          `You may need to recompile before debugging.`,
+        );
+      }
+
+      absOutput = compiledPath;
+    } else {
+      // Normal mode: compile the .agency file to .js on the fly
+      const debugConfig: AgencyConfig = { ...config, debugger: true };
+      const outputFile = compile(debugConfig, inputFile, undefined, { importStrategy: new RunStrategy() });
+      if (outputFile === null) {
+        console.error("Error: No output file generated.");
+        process.exit(1);
+      }
+      absOutput = path.resolve(outputFile);
     }
 
     // Signal to stdlib UI components that they should fall back to console.log
@@ -112,15 +141,21 @@ export async function debug(
     process.env.AGENCY_DEBUGGER = "1";
 
     // Dynamically import the compiled module
-    const absOutput = path.resolve(outputFile);
     const mod = await import(absOutput);
 
     // Get the source map from the module
     const sourceMap = mod.__sourceMap ?? {};
 
+    if (distDir && Object.keys(sourceMap).length === 0) {
+      console.warn(
+        "Warning: The compiled module has an empty source map. Was it compiled with instrument: false?\n" +
+        "The debugger may not be able to step through code.",
+      );
+    }
+
     // Parse the .agency file to get the list of graph nodes
     const contents = fs.readFileSync(inputFile, "utf-8");
-    const parseResult = parseAgency(contents, debugConfig);
+    const parseResult = parseAgency(contents, config);
     if (!parseResult.success) {
       console.error("Error: Could not parse Agency file.");
       process.exit(1);

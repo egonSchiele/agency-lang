@@ -4,6 +4,7 @@ all:
 	pnpm run templates && pnpm run build && $(MAKE) stdlib && $(MAKE) doc
 
 stdlib:
+	pnpm run agency compile stdlib/ && \
 	pnpm exec tsc -p tsconfig.stdlib.json
 
 test:

@@ -16,6 +16,7 @@ import {
   isStdlibImport,
   resolveAgencyImportPath,
 } from "../importPaths.js";
+import { CompileStrategy, RunStrategy, type ImportStrategy } from "../importStrategy.js";
 import { parseAgency } from "../parser.js";
 import { findRecursively, getImports } from "./util.js";
 
@@ -111,7 +112,7 @@ export function compile(
   config: AgencyConfig,
   inputFile: string,
   _outputFile?: string,
-  options?: { ts?: boolean; symbolTable?: SymbolTable },
+  options?: { ts?: boolean; symbolTable?: SymbolTable; importStrategy?: ImportStrategy },
 ): string | null {
   // Check if the input is a directory
   const stats = fs.statSync(inputFile);
@@ -174,8 +175,11 @@ export function compile(
   const imports = getImports(resolvedProgram);
 
   for (const importPath of imports) {
+    // stdlib and pkg imports are pre-compiled; don't recompile them
+    if (isStdlibImport(importPath) || isPkgImport(importPath)) continue;
+
     const absPath = resolveAgencyImportPath(importPath, absoluteInputFile);
-    if (config.restrictImports && !isStdlibImport(importPath) && !isPkgImport(importPath)) {
+    if (config.restrictImports) {
       const projectRoot = process.cwd();
       if (
         !absPath.startsWith(projectRoot + path.sep) &&
@@ -189,19 +193,37 @@ export function compile(
     compile(config, absPath, undefined, { ...options, symbolTable });
   }
 
-  // Update the import path in the AST to reference the new .ts file
+  // Rewrite import paths in the AST using the import strategy
+  const strategy = options?.importStrategy ?? new CompileStrategy({ targetExt: ext as ".js" | ".ts" });
+  const nonAgencyImports: string[] = [];
+
   resolvedProgram.nodes.forEach((node) => {
-    if (node.type === "importStatement" && !isStdlibImport(node.modulePath) && !isPkgImport(node.modulePath)) {
-      node.modulePath = node.modulePath.replace(".agency", ext);
+    if (node.type !== "importStatement") return;
+    if (isStdlibImport(node.modulePath) || isPkgImport(node.modulePath)) return;
+
+    node.modulePath = strategy.rewriteImport(node.modulePath, absoluteInputFile);
+
+    // Collect non-Agency imports for dependency preparation
+    if (!node.modulePath.endsWith(".agency")) {
+      nonAgencyImports.push(node.modulePath);
     }
   });
 
+  try {
+    strategy.prepareDependencies(nonAgencyImports, absoluteInputFile);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+
   const moduleId = path.relative(process.cwd(), absoluteInputFile);
+  const absoluteOutputFile = path.resolve(outputFile);
   const generatedCode = generateTypeScript(
     resolvedProgram,
     config,
     info,
     moduleId,
+    absoluteOutputFile,
   );
   if (options?.ts) {
     // TypeScript output — add @ts-nocheck so type errors don't block compilation
@@ -227,8 +249,8 @@ export function run(
   outputFile?: string,
   resumeFile?: string,
 ): void {
-  // Compile the file
-  const output = compile(config, inputFile, outputFile);
+  // Compile the file with RunStrategy so dependencies are prepared for execution
+  const output = compile(config, inputFile, outputFile, { importStrategy: new RunStrategy() });
   if (output === null) {
     console.error("Error: No output file generated.");
     process.exit(1);

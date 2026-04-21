@@ -2,7 +2,7 @@ import * as readline from "readline";
 import process from "process";
 import { color } from "termcolors";
 import { syntaxHighlight } from "./syntax.js";
-import { _input } from "../_builtins.js";
+import { _input } from "./builtins.js";
 
 // Evaluated once at load time — the env var is set by the debugger CLI
 // before any compiled agency code runs and never changes.

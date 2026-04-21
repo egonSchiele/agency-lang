@@ -19,6 +19,7 @@ import { isAgencyImport, resolveAgencyImportPath, getStdlibDir } from "../import
 import renderEvaluate from "@/templates/cli/evaluate.js";
 import renderJudgeEvaluate from "@/templates/cli/judgeEvaluate.js";
 import { compile } from "./commands.js";
+import { RunStrategy } from "../importStrategy.js";
 import { AgencyConfig } from "@/config.js";
 import { parseAgency } from "@/parser.js";
 export function parseTarget(target: string): {
@@ -157,6 +158,22 @@ export type InterruptHandler = {
   expectedMessage?: string;
 };
 
+/**
+ * Resolve the compiled .js file for an .agency file from a distDir.
+ * Throws if the compiled file doesn't exist.
+ */
+export function resolveCompiledFile(distDir: string, agencyFile: string): string {
+  const basename = path.basename(agencyFile, ".agency") + ".js";
+  const compiledPath = path.resolve(distDir, basename);
+  if (!fs.existsSync(compiledPath)) {
+    throw new Error(
+      `Compiled file not found: ${compiledPath}\n` +
+      `Make sure you have compiled your Agency files and that distDir is correct.`,
+    );
+  }
+  return compiledPath;
+}
+
 type ExecuteNodeArgs = {
   config: AgencyConfig;
   agencyFile: string;
@@ -174,12 +191,26 @@ export async function executeNodeAsync({
   argsString,
   interruptHandlers,
 }: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
-  compile(config, agencyFile);
+  const distDir = config.distDir;
+  let compiledPath: string;
+
+  if (distDir) {
+    compiledPath = resolveCompiledFile(distDir, agencyFile);
+  } else {
+    compiledPath = compile(config, agencyFile, undefined, { importStrategy: new RunStrategy() })!;
+  }
+
   const baseName = agencyFile.replace(".agency", "");
   const evaluateFile = `${baseName}.evaluate.js`;
   const resultsFile = `${baseName}.evaluate.json`;
+  // The template imports via "./${filename}", so compute a relative path
+  // from the evaluate script's directory to the compiled module.
+  let importSpecifier = path.relative(path.dirname(evaluateFile), compiledPath).replace(/\\/g, "/");
+  if (!importSpecifier.startsWith(".")) {
+    importSpecifier = `./${importSpecifier}`;
+  }
   const evaluateScript = renderEvaluate({
-    filename: path.basename(agencyFile).replace(".agency", ".js"),
+    filename: importSpecifier,
     nodeName,
     hasArgs,
     args: argsString,
@@ -201,10 +232,24 @@ export async function executeNodeAsync({
 }
 
 export function executeNode(args: ExecuteNodeArgs): { data: any; [key: string]: any } {
-  const outFile = args.agencyFile.replace(".agency", ".js");
-  compile(args.config, args.agencyFile);
+  const distDir = args.config.distDir;
+  let compiledPath: string;
+
+  if (distDir) {
+    compiledPath = resolveCompiledFile(distDir, args.agencyFile);
+  } else {
+    compiledPath = compile(args.config, args.agencyFile, undefined, { importStrategy: new RunStrategy() })!;
+  }
+
+  const evaluateFile = "__evaluate.js";
+  // The template imports via "./${filename}", so compute a relative path
+  // from the evaluate script's directory to the compiled module.
+  let importSpecifier = path.relative(path.dirname(evaluateFile), compiledPath).replace(/\\/g, "/");
+  if (!importSpecifier.startsWith(".")) {
+    importSpecifier = `./${importSpecifier}`;
+  }
   const evaluateScript = renderEvaluate({
-    filename: outFile,
+    filename: importSpecifier,
     nodeName: args.nodeName,
     hasArgs: args.hasArgs,
     args: args.argsString,
@@ -214,7 +259,6 @@ export function executeNode(args: ExecuteNodeArgs): { data: any; [key: string]: 
       : undefined,
     resultsFilename: "__evaluate.json",
   });
-  const evaluateFile = "__evaluate.js";
   fs.writeFileSync(evaluateFile, evaluateScript);
   execFileSync("node", [evaluateFile], { stdio: "inherit" });
   const results = readFileSync("__evaluate.json", "utf-8");

@@ -31,7 +31,7 @@ describe("McpManager", () => {
     }
   });
 
-  it("should cache connections (same result on second call)", async () => {
+  it("should return the same array reference on second call (cached)", async () => {
     manager = new McpManager({
       test: {
         command: "npx",
@@ -41,7 +41,12 @@ describe("McpManager", () => {
 
     const result1 = await manager.getTools("test");
     const result2 = await manager.getTools("test");
-    expect(result1).toEqual(result2);
+    expect(result1.success).toBe(true);
+    expect(result2.success).toBe(true);
+    if (result1.success && result2.success) {
+      // Same reference means the cached array was reused, not a new connection
+      expect(result1.value).toBe(result2.value);
+    }
   });
 
   it("should throw when server name is not in config", async () => {
@@ -58,18 +63,6 @@ describe("McpManager", () => {
 
     const result = await manager.getTools("bad");
     expect(result.success).toBe(false);
-  });
-
-  it("should disconnect all connections", async () => {
-    manager = new McpManager({
-      test: {
-        command: "npx",
-        args: ["tsx", TEST_SERVER_PATH],
-      },
-    });
-
-    await manager.getTools("test");
-    await manager.disconnectAll();
   });
 
   it("should lazily reconnect when calling a tool after disconnectAll", async () => {

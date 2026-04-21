@@ -25,7 +25,7 @@ describe("isMcpTool", () => {
 });
 
 describe("mcpToolToRegistryEntry", () => {
-  it("should produce a valid { definition, handler } pair", async () => {
+  it("should produce a valid { definition, handler } pair that passes correct args", async () => {
     const tool: McpToolObject = {
       name: "test__add",
       description: "Add two numbers",
@@ -38,11 +38,15 @@ describe("mcpToolToRegistryEntry", () => {
       __mcpTool: true,
     };
 
+    let capturedArgs: { serverName: string; toolName: string; args: Record<string, unknown> } | null = null;
     const mockCallTool = async (
-      _serverName: string,
-      _toolName: string,
-      _args: Record<string, unknown>,
-    ) => "7";
+      serverName: string,
+      toolName: string,
+      args: Record<string, unknown>,
+    ) => {
+      capturedArgs = { serverName, toolName, args };
+      return "7";
+    };
 
     const entry = mcpToolToRegistryEntry(tool, mockCallTool);
 
@@ -55,6 +59,13 @@ describe("mcpToolToRegistryEntry", () => {
     // prompt.ts appends a context object as the last arg — include it to test stripping
     const result = await entry.handler.execute(3, 4, { ctx: null, threads: null, isToolCall: true });
     expect(result).toBe("7");
+
+    // Verify callTool was called with the correct unprefixed tool name and args
+    expect(capturedArgs).toEqual({
+      serverName: "test",
+      toolName: "add",
+      args: { a: 3, b: 4 },
+    });
   });
 
   it("should throw on malformed tool name without expected prefix", () => {

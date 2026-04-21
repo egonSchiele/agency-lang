@@ -3303,13 +3303,21 @@ export class TypeScriptBuilder {
     }
     runtimeCtxArgs.traceConfig = ts.obj(traceConfigFields);
 
-    let runtimeCtx: TsNode = ts.statements([
+    const runtimeCtxStatements: TsNode[] = [
       ts.constDecl(
         "__globalCtx",
         ts.new(ts.id("RuntimeContext"), [ts.obj(runtimeCtxArgs)]),
       ),
       ts.constDecl("graph", $(ts.runtime.globalCtx).prop("graph").done()),
-    ]);
+    ];
+
+    if (this.agencyConfig.mcpServers) {
+      runtimeCtxStatements.push(
+        ts.raw(`__globalCtx.mcpManager = new McpManager(${JSON.stringify(this.agencyConfig.mcpServers)});`),
+      );
+    }
+
+    let runtimeCtx: TsNode = ts.statements(runtimeCtxStatements);
 
     return renderImports.default({
       runtimeContextCode: printTs(runtimeCtx),

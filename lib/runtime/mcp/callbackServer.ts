@@ -68,6 +68,7 @@ export class CallbackServer {
         res.writeHead(200, { "Content-Type": "text/html" });
         res.end(SUCCESS_HTML);
         this.resolveCode(code);
+        this.stop();
       });
 
       this.server.listen(this.port, "127.0.0.1", () => {

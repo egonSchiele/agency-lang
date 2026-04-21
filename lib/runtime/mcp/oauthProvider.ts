@@ -24,7 +24,7 @@ async function openInBrowser(url: string): Promise<void> {
       `Cross-platform support will be added in a future release.`,
     );
   }
-  await execFileAsync("open", [url]);
+  await execFileAsync("open", ["--", url]);
 }
 
 export type OAuthRequiredData = {

@@ -38,7 +38,7 @@ export async function _openUrl(url: string): Promise<void> {
   const platform = detectPlatform();
 
   if (platform === "macos") {
-    await execFileAsync("open", [url]);
+    await execFileAsync("open", ["--", url]);
   } else {
     throw new Error(
       `openUrl is currently only supported on macOS (detected: ${platform}). ` +

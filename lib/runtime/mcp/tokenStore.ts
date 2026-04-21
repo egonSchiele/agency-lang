@@ -15,6 +15,12 @@ export class TokenStore {
   private ensureDir(): void {
     if (!fs.existsSync(this.dir)) {
       fs.mkdirSync(this.dir, { recursive: true, mode: 0o700 });
+    } else {
+      // Fix permissions if the directory was created with overly permissive mode
+      const stat = fs.statSync(this.dir);
+      if ((stat.mode & 0o077) !== 0) {
+        fs.chmodSync(this.dir, 0o700);
+      }
     }
   }
 

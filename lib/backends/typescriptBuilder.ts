@@ -3312,8 +3312,19 @@ export class TypeScriptBuilder {
     ];
 
     if (this.agencyConfig.mcpServers) {
+      // Strip secrets from the config before embedding in generated code.
+      // clientId and clientSecret are resolved at runtime from env vars.
+      const sanitizedServers = Object.fromEntries(
+        Object.entries(this.agencyConfig.mcpServers).map(([name, cfg]) => {
+          if ("type" in cfg && cfg.type === "http") {
+            const { clientSecret, clientId, ...rest } = cfg as Record<string, any>;
+            return [name, rest];
+          }
+          return [name, cfg];
+        }),
+      );
       runtimeCtxStatements.push(
-        ts.raw(`__globalCtx.createMcpManager(${JSON.stringify(this.agencyConfig.mcpServers)});`),
+        ts.raw(`__globalCtx.createMcpManager(${JSON.stringify(sanitizedServers)});`),
       );
     }
 

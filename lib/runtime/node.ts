@@ -200,6 +200,7 @@ export async function runNode({
       }
     }
   } finally {
+    await execCtx.mcpManager.disconnectAll();
     execCtx.cleanup();
   }
 }

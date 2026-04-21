@@ -106,7 +106,13 @@ export async function debug(
 
     if (distDir) {
       // distDir mode: import pre-compiled JS from the dist directory
-      const compiledPath = resolveCompiledFile(distDir, inputFile);
+      let compiledPath: string;
+      try {
+        compiledPath = resolveCompiledFile(distDir, inputFile);
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : String(error));
+        process.exit(1);
+      }
 
       // Warn if source is newer than compiled output
       const sourceMtime = fs.statSync(inputFile).mtimeMs;

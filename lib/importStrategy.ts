@@ -60,28 +60,58 @@ export class RunStrategy extends CompileStrategy {
   }
 
   prepareDependencies(imports: string[], sourceFile: string): void {
+    const visited = new Set<string>();
     for (const imp of imports) {
       if (!imp.startsWith("./") && !imp.startsWith("../")) continue;
       if (!imp.endsWith(".js")) continue;
 
       const resolved = path.resolve(path.dirname(sourceFile), imp);
-      if (fs.existsSync(resolved)) continue;
+      this.ensureJsExists(resolved, sourceFile, visited);
+    }
+  }
 
-      const tsPath = resolved.replace(/\.js$/, ".ts");
-      if (fs.existsSync(tsPath)) {
-        const tsCode = fs.readFileSync(tsPath, "utf-8");
-        const result = transformSync(tsCode, {
-          loader: "ts",
-          format: "esm",
-          supported: { "top-level-await": true },
-        });
-        fs.writeFileSync(resolved, result.code);
-      } else {
-        throw new Error(
-          `Cannot resolve import '${imp}' from '${sourceFile}'.\n` +
-          `Tried: ${resolved}, ${tsPath} — neither file exists.`,
-        );
+  private ensureJsExists(jsPath: string, importer: string, visited: Set<string>): void {
+    const normalized = path.normalize(jsPath);
+    if (visited.has(normalized)) return;
+    visited.add(normalized);
+
+    if (fs.existsSync(normalized)) return;
+
+    const tsPath = normalized.replace(/\.js$/, ".ts");
+    if (!fs.existsSync(tsPath)) {
+      throw new Error(
+        `Cannot resolve import '${path.relative(path.dirname(importer), normalized)}' from '${importer}'.\n` +
+        `Tried: ${normalized}, ${tsPath} — neither file exists.`,
+      );
+    }
+
+    // Recursively ensure this file's dependencies exist first
+    const tsCode = fs.readFileSync(tsPath, "utf-8");
+    for (const nestedImp of this.getLocalJsImports(tsCode)) {
+      const nestedResolved = path.resolve(path.dirname(tsPath), nestedImp);
+      this.ensureJsExists(nestedResolved, tsPath, visited);
+    }
+
+    // Then compile this file
+    const result = transformSync(tsCode, {
+      loader: "ts",
+      format: "esm",
+      supported: { "top-level-await": true },
+    });
+    fs.writeFileSync(normalized, result.code);
+  }
+
+  /** Extract relative .js imports from TypeScript source code. */
+  private getLocalJsImports(code: string): string[] {
+    const imports: string[] = [];
+    const pattern = /\bimport\s+(?:[^'"]+?\s+from\s+)?["']([^"']+)["']/g;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(code)) !== null) {
+      const specifier = match[1];
+      if ((specifier.startsWith("./") || specifier.startsWith("../")) && specifier.endsWith(".js")) {
+        imports.push(specifier);
       }
     }
+    return imports;
   }
 }

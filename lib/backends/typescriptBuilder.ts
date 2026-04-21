@@ -166,6 +166,7 @@ export class TypeScriptBuilder {
 
   private programInfo: ProgramInfo;
   private moduleId: string;
+  private outputFile: string | undefined;
 
   /**
    * @param config - Agency compiler configuration (model defaults, logging, etc.)
@@ -173,15 +174,20 @@ export class TypeScriptBuilder {
    * @param moduleId - Unique identifier for this module (e.g., "foo.agency"), used to
    *   namespace global variables in the GlobalStore so that different modules' globals
    *   don't collide. Must be consistent between the defining module and any importers.
+   * @param outputFile - Absolute path where the generated code will be written.
+   *   Used to compute relative import paths for stdlib. If not provided, falls
+   *   back to resolving moduleId against cwd.
    */
   constructor(
     config: AgencyConfig | undefined,
     info: ProgramInfo,
     moduleId: string,
+    outputFile?: string,
   ) {
     this.agencyConfig = mergeDeep(this.configDefaults(), config || {});
     this.programInfo = info;
     this.moduleId = moduleId;
+    this.outputFile = outputFile;
   }
 
   private configDefaults(): Partial<AgencyConfig> {
@@ -1357,7 +1363,7 @@ export class TypeScriptBuilder {
   }
 
   private processImportStatement(node: ImportStatement): TsNode {
-    const from = toCompiledImportPath(node.modulePath, path.resolve(this.moduleId));
+    const from = toCompiledImportPath(node.modulePath, this.outputFile ?? path.resolve(this.moduleId));
     const imports = node.importedNames.map((nameType) => {
       switch (nameType.type) {
         case "namedImport":
@@ -1409,7 +1415,7 @@ export class TypeScriptBuilder {
     return ts.importDecl({
       importKind: "named",
       names: importNames,
-      from: toCompiledImportPath(node.agencyFile, path.resolve(this.moduleId)),
+      from: toCompiledImportPath(node.agencyFile, this.outputFile ?? path.resolve(this.moduleId)),
     });
   }
 

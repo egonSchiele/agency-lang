@@ -60,10 +60,11 @@ export class UIState {
     // If the moduleId refers to a stdlib file, resolve against the actual
     // stdlib directory (handles npm-installed packages where stdlib lives
     // in node_modules/agency-lang/stdlib/)
-    if (moduleId.includes("stdlib")) {
-      const basename = path.basename(moduleId);
+    const stdlibMatch = moduleId.match(/(?:^|[/\\])stdlib[/\\](.+)$/);
+    if (stdlibMatch) {
+      const stdlibRelativePath = stdlibMatch[1];
       for (const ext of extensions) {
-        const candidate = path.join(getStdlibDir(), basename).replace(/\.agency$/, ext);
+        const candidate = path.join(getStdlibDir(), stdlibRelativePath).replace(/\.agency$/, ext);
         if (fs.existsSync(candidate)) return candidate;
       }
     }

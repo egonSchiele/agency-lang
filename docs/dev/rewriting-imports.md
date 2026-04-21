@@ -73,7 +73,7 @@ Used by `agency run`, `agency debug`, and `agency test`. Extends `CompileStrateg
 | `./tools.ts` | Only `tools.js` exists | Leave as-is | Not our problem at compile time |
 | `./foo.agency` | `foo.agency` exists | Rewrite to `.js` (or `.ts` with `--ts`) | Standard Agency behavior |
 | `"nanoid"` | n/a | Leave as-is | Node resolves at runtime |
-| `std::foo` | n/a | Rewrite to absolute stdlib path | Standard Agency behavior |
+| `std::foo` | n/a | Rewrite to relative path to stdlib | Standard Agency behavior |
 
 **Summary: `agency compile` never touches `.js`/`.ts` imports. It only rewrites `.agency` imports.**
 
@@ -87,7 +87,7 @@ Used by `agency run`, `agency debug`, and `agency test`. Extends `CompileStrateg
 | `./tools.ts` | Only `tools.js` exists | Rewrite import to `.js` | The `.js` file is what Node needs |
 | `./foo.agency` | `foo.agency` exists | Compile to `.js`, rewrite import | Standard Agency behavior |
 | `"nanoid"` | n/a | Leave as-is | Node resolves at runtime |
-| `std::foo` | n/a | Rewrite to absolute stdlib path | Standard Agency behavior |
+| `std::foo` | n/a | Rewrite to relative path to stdlib | Standard Agency behavior |
 
 **Summary: `agency run` always produces `.js` imports and ensures the `.js` file exists — compiling `.ts` dependencies with esbuild if needed.**
 

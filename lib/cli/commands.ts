@@ -209,14 +209,21 @@ export function compile(
     }
   });
 
-  strategy.prepareDependencies(nonAgencyImports, absoluteInputFile);
+  try {
+    strategy.prepareDependencies(nonAgencyImports, absoluteInputFile);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
 
   const moduleId = path.relative(process.cwd(), absoluteInputFile);
+  const absoluteOutputFile = path.resolve(outputFile);
   const generatedCode = generateTypeScript(
     resolvedProgram,
     config,
     info,
     moduleId,
+    absoluteOutputFile,
   );
   if (options?.ts) {
     // TypeScript output — add @ts-nocheck so type errors don't block compilation

@@ -5,22 +5,22 @@ Agency imports work just like JavaScript imports. You can import from a relative
 These are all valid imports in Agency:
 
 ```ts
-// you can import from a .ts or .js file
 // default import
-import foo from "./foo.ts"
+// even if its a TypeScript file, use .js in the import path
+import foo from "./foo.js"
 
 // named import
-import { foo } from "./foo.ts"
+import { foo } from "./foo.js"
 
 // alias import
-import { foo as bar } from "./foo.ts"
+import { foo as bar } from "./foo.js"
 
 // namespace import
-import * as foo from "./foo.ts"
+import * as foo from "./foo.js"
 
 // mixed
-import foo, { bar } from "./foo.ts"
-import foo, * as bar from "./foo.ts"
+import foo, { bar } from "./foo.js"
+import foo, * as bar from "./foo.js"
 
 // same imports work for agency files
 // inside other agency files, use .agency

@@ -30,6 +30,7 @@ import { debug } from "@/cli/debug.js";
 import { generateDoc } from "@/cli/doc.js";
 import { optimize } from "@/cli/optimize.js";
 import { watchAndCompile } from "@/cli/watch.js";
+import { authServer, listAuth, revokeAuth } from "@/cli/auth.js";
 
 loadEnv();
 const program = new Command();
@@ -489,5 +490,24 @@ addRunOptions(
     process.exit(1);
   }
 });
+
+program
+  .command("auth [server-name]")
+  .description("Manage OAuth tokens for MCP servers")
+  .option("--list", "List all stored OAuth tokens")
+  .option("--revoke <server>", "Remove stored OAuth token for a server")
+  .action(async (serverName: string | undefined, opts: { list?: boolean; revoke?: string }) => {
+    if (opts.list) {
+      await listAuth();
+    } else if (opts.revoke) {
+      await revokeAuth(opts.revoke);
+    } else if (serverName) {
+      const config = getConfig();
+      await authServer(serverName, config);
+    } else {
+      console.error("Usage: agency auth <server-name> | --list | --revoke <server-name>");
+      process.exit(1);
+    }
+  });
 
 program.parse();

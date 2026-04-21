@@ -2544,6 +2544,7 @@ export class TypeScriptBuilder {
     const configArg = node.arguments[1];
     let clientConfig: TsNode;
     let configToolNames: string[] = [];
+    let configToolExprs: TsNode[] = [];
 
     if (configArg && configArg.type === "agencyObject") {
       // Extract tools from config object
@@ -2568,6 +2569,9 @@ export class TypeScriptBuilder {
             if (toolArg && toolArg.type === "variableName") {
               configToolNames.push(toolArg.value);
             }
+          } else if (item.type === "splat") {
+            // Pass-through: spread MCP tool arrays (or any other spread) directly
+            configToolExprs.push(ts.spread(this.processNode(item.value)));
           }
         }
       }
@@ -2607,13 +2611,15 @@ export class TypeScriptBuilder {
         .call([ts.str(name)])
         .done(),
     );
+    // Merge registry-resolved tools with pass-through expressions (spreads of MCP tools, etc.)
+    const allToolNodes: TsNode[] = [...toolNodes, ...configToolExprs];
 
     // Merge tools into clientConfig
     let mergedConfig: TsNode;
-    if (allToolNames.length > 0) {
+    if (allToolNodes.length > 0) {
       // Spread user config and add tools
       mergedConfig = ts.obj([
-        ts.set("tools", ts.arr(toolNodes)),
+        ts.set("tools", ts.arr(allToolNodes)),
         ts.setSpread(clientConfig),
       ]);
     } else {

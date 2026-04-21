@@ -89,7 +89,7 @@ export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
 async function mcp(serverName: string) {
-  return __ctx.mcpManager.getTools(serverName);
+  return __globalCtx.mcpManager.getTools(serverName);
 }
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("defaultValues.agency")

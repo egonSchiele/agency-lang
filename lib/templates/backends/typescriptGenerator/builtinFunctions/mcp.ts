@@ -4,7 +4,7 @@
 import { apply } from "typestache";
 
 export const template = `async function mcp(serverName: string) {
-  return __ctx.mcpManager.getTools(serverName);
+  return __globalCtx.mcpManager.getTools(serverName);
 }`;
 
 export type TemplateType = {

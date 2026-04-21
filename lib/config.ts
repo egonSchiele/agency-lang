@@ -169,12 +169,12 @@ const McpStdioServerSchema = z.object({
   command: z.string(),
   args: z.array(z.string()).optional(),
   env: z.record(z.string(), z.string()).optional(),
-});
+}).strict();
 
 const McpHttpServerSchema = z.object({
   type: z.literal("http"),
   url: z.string(),
-});
+}).strict();
 
 const McpServerSchema = z.union([McpStdioServerSchema, McpHttpServerSchema]);
 

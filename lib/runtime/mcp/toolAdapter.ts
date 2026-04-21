@@ -26,7 +26,13 @@ export function mcpToolToRegistryEntry(
   const params = Object.keys(properties);
 
   // Strip the serverName__ prefix to get the original MCP tool name
-  const originalName = tool.name.replace(`${tool.serverName}__`, "");
+  const expectedPrefix = `${tool.serverName}__`;
+  if (!tool.name.startsWith(expectedPrefix)) {
+    throw new Error(
+      `Invalid MCP tool name "${tool.name}": expected prefix "${expectedPrefix}"`,
+    );
+  }
+  const originalName = tool.name.slice(expectedPrefix.length);
 
   return {
     definition: {

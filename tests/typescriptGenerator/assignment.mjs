@@ -7,7 +7,7 @@ import { smoltalk } from "agency-lang";
 import path from "path";
 import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
 import {
-  RuntimeContext, MessageThread, ThreadStore, Runner,
+  RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint, getCheckpoint, restore,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
@@ -88,6 +88,9 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
+async function mcp(serverName: string) {
+  return __globalCtx.mcpManager.getTools(serverName);
+}
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("assignment.agency")
 }

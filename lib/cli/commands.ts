@@ -1,5 +1,5 @@
 import { generateAgency } from "@/backends/agencyGenerator.js";
-import { AgencyConfig } from "@/config.js";
+import { AgencyConfig, AgencyConfigSchema } from "@/config.js";
 import { AgencyProgram, generateTypeScript } from "@/index.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
 import { collectProgramInfo } from "@/programInfo.js";
@@ -40,6 +40,15 @@ export function loadConfig(
     try {
       const configContent = fs.readFileSync(finalConfigPath, "utf-8");
       config = JSON.parse(configContent);
+      const parseResult = AgencyConfigSchema.safeParse(config);
+      if (!parseResult.success) {
+        console.error(`Invalid agency.json config:`);
+        for (const issue of parseResult.error.issues) {
+          console.error(`  - ${issue.path.join(".")}: ${issue.message}`);
+        }
+        process.exit(1);
+      }
+      config = parseResult.data as AgencyConfig;
       if (config.verbose) {
         console.log(`Loaded config from ${finalConfigPath}`);
       }

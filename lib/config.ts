@@ -1,4 +1,6 @@
 import { AgencyNode } from "./types.js";
+import { z } from "zod";
+import type { McpServerConfig } from "./runtime/mcp/types.js";
 
 export const TYPES_THAT_DONT_TRIGGER_NEW_PART: AgencyNode["type"][] = [
   "typeAlias",
@@ -156,4 +158,55 @@ export interface AgencyConfig {
     /** Base URL for source links in generated docs */
     baseUrl?: string;
   }
+
+  /** MCP server configurations */
+  mcpServers?: Record<string, McpServerConfig>;
 }
+
+// --- Zod schema for runtime validation of agency.json ---
+
+const McpStdioServerSchema = z.object({
+  command: z.string(),
+  args: z.array(z.string()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
+}).strict();
+
+const McpHttpServerSchema = z.object({
+  type: z.literal("http"),
+  url: z.string(),
+}).strict();
+
+const McpServerSchema = z.union([McpStdioServerSchema, McpHttpServerSchema]);
+
+export const AgencyConfigSchema = z.object({
+  verbose: z.boolean(),
+  outDir: z.string(),
+  excludeNodeTypes: z.array(z.string()),
+  excludeBuiltinFunctions: z.array(z.string()),
+  allowedFetchDomains: z.array(z.string()),
+  disallowedFetchDomains: z.array(z.string()),
+  tarsecTraceHost: z.string(),
+  maxToolCallRounds: z.number(),
+  log: z.object({ host: z.string(), projectId: z.string(), debugMode: z.boolean(), apiKey: z.string() }).partial(),
+  client: z.object({
+    logLevel: z.enum(["error", "warn", "info", "debug"]),
+    defaultModel: z.string(),
+    openAiApiKey: z.string(),
+    googleApiKey: z.string(),
+    statelog: z.object({ host: z.string(), projectId: z.string(), apiKey: z.string() }).partial(),
+  }).partial(),
+  strictTypes: z.boolean(),
+  typeCheck: z.boolean(),
+  typeCheckStrict: z.boolean(),
+  restrictImports: z.boolean(),
+  debugger: z.boolean(),
+  instrument: z.boolean(),
+  checkpoints: z.object({ maxRestores: z.number() }).partial(),
+  trace: z.boolean(),
+  traceFile: z.string(),
+  traceDir: z.string(),
+  distDir: z.string(),
+  test: z.object({ parallel: z.number() }).partial(),
+  doc: z.object({ outDir: z.string(), baseUrl: z.string() }).partial(),
+  mcpServers: z.record(z.string(), McpServerSchema),
+}).partial().passthrough();

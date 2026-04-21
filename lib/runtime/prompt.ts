@@ -19,6 +19,7 @@ import { PromptResult, Result, StreamChunk, ToolCallJSON } from "smoltalk";
 import { ZodType } from "zod/v3";
 import { ThreadStore } from "./state/threadStore.js";
 import { isFailure } from "./result.js";
+import { isMcpTool, mcpToolToRegistryEntry } from "./mcp/toolAdapter.js";
 import { AgencyCancelledError, isAbortError } from "./errors.js";
 
 export interface ToolHandler {
@@ -434,9 +435,18 @@ export async function runPrompt(args: {
 
   // Extract tool registry entries from clientConfig.tools and split into
   // definitions (for smoltalk) and handlers (for execution).
-  const toolEntries: { definition: Tool; handler: ToolHandler }[] = (
-    args.clientConfig?.tools || []
-  ).map((entry: any) => entry);
+  // MCP tool objects (with __mcpTool: true) are transformed into registry entries here.
+  const rawTools = args.clientConfig?.tools || [];
+  const toolEntries: { definition: Tool; handler: ToolHandler }[] = rawTools.map(
+    (entry: any) => {
+      if (isMcpTool(entry)) {
+        return mcpToolToRegistryEntry(entry, (serverName, toolName, toolArgs) =>
+          ctx.mcpManager.callTool(serverName, toolName, toolArgs),
+        );
+      }
+      return entry;
+    },
+  );
   let tools = toolEntries
     .map((e) => e.definition)
     .filter((t) => !removedTools.includes(t.name));

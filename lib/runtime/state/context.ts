@@ -15,6 +15,7 @@ import { TraceWriter } from "../trace/traceWriter.js";
 import type { TraceConfig } from "../trace/types.js";
 import { reviveWithClasses, type ClassRegistry } from "../classReviver.js";
 import { AgencyCancelledError } from "../errors.js";
+import { McpManager } from "../mcp/mcpManager.js";
 
 /* bunch of stuff that every node/function in the runtime needs access to,
 that we don't want to pass as individual arguments everywhere */
@@ -70,6 +71,7 @@ export class RuntimeContext<T> {
   classRegistry: ClassRegistry = {};
 
   abortController: AbortController;
+  private _mcpManager: McpManager;
 
   traceConfig: TraceConfig;
   runId: string | null;
@@ -124,6 +126,7 @@ export class RuntimeContext<T> {
     this.smoltalkDefaults = args.smoltalkDefaults;
     this.classRegistry = {};
     this.abortController = new AbortController();
+    this._mcpManager = new McpManager({});
   }
 
   getRunId(): string {
@@ -162,6 +165,7 @@ export class RuntimeContext<T> {
     execCtx.pendingPromises = new PendingPromiseStore();
     execCtx.classRegistry = this.classRegistry;
     execCtx.abortController = new AbortController();
+    execCtx._mcpManager = this._mcpManager;
     execCtx.statelogClient = new StatelogClient({
       ...this.statelogConfig,
       traceId: runId,
@@ -344,5 +348,17 @@ export class RuntimeContext<T> {
 
   hasTraceWriter(): boolean {
     return this.traceWriter !== null;
+  }
+
+  createMcpManager(config: Record<string, any>): void {
+    this._mcpManager = new McpManager(config);
+  }
+
+  get mcpManager(): McpManager {
+    return this._mcpManager;
+  }
+
+  async disconnectMcp(): Promise<void> {
+    await this._mcpManager.disconnectAll();
   }
 }

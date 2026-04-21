@@ -177,6 +177,7 @@ const McpHttpServerSchema = z.object({
   auth: z.literal("oauth").optional(),
   authTimeout: z.number().optional(),
   clientId: z.string().optional(),
+  clientSecret: z.string().optional(),
   headers: z.record(z.string(), z.string()).optional(),
 }).strict();
 

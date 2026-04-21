@@ -99,16 +99,29 @@ export class AgencyOAuthProvider implements OAuthClientProvider {
     };
   }
 
+  private resolveClientId(): string | undefined {
+    // Config value first, then env var fallback
+    return this.options.clientId
+      ?? process.env[`MCP_${this.serverName.toUpperCase()}_CLIENT_ID`];
+  }
+
+  private resolveClientSecret(): string | undefined {
+    return this.options.clientSecret
+      ?? process.env[`MCP_${this.serverName.toUpperCase()}_CLIENT_SECRET`];
+  }
+
   async clientInformation(): Promise<OAuthClientInformationMixed | undefined> {
     const stored = await this.store.loadClientInfo(this.serverName);
     if (stored) return stored;
-    // If a pre-registered clientId was provided in config, use it.
+    // If a pre-registered clientId was provided (config or env var), use it.
     // This skips Dynamic Client Registration (DCR), which many servers
     // (like GitHub) don't support.
-    if (this.options.clientId) {
-      const info: Record<string, string> = { client_id: this.options.clientId };
-      if (this.options.clientSecret) {
-        info.client_secret = this.options.clientSecret;
+    const clientId = this.resolveClientId();
+    if (clientId) {
+      const info: Record<string, string> = { client_id: clientId };
+      const clientSecret = this.resolveClientSecret();
+      if (clientSecret) {
+        info.client_secret = clientSecret;
       }
       return info as unknown as OAuthClientInformationMixed;
     }
@@ -128,8 +141,6 @@ export class AgencyOAuthProvider implements OAuthClientProvider {
   }
 
   async redirectToAuthorization(authorizationUrl: URL): Promise<void> {
-    console.log(`[oauth] redirectUrl: ${this.redirectUrl}`);
-    console.log(`[oauth] authorizationUrl: ${authorizationUrl.toString()}`);
     // Set up a completion promise for the onOAuthRequired callback
     let resolveComplete: () => void;
     let rejectComplete: (err: Error) => void;

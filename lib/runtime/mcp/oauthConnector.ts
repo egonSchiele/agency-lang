@@ -37,22 +37,8 @@ export class OAuthConnector {
   }
 
   private createTransport(): StreamableHTTPClientTransport {
-    const debugFetch: typeof globalThis.fetch = async (input, init) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-      const response = await globalThis.fetch(input, init);
-      // Log token endpoint responses for debugging
-      if (url.includes("access_token") || url.includes("/token") || (init?.body && String(init.body).includes("grant_type"))) {
-        const cloned = response.clone();
-        const text = await cloned.text();
-        console.log(`[oauth-debug] Token endpoint ${url}`);
-        console.log(`[oauth-debug] Status: ${response.status}`);
-        console.log(`[oauth-debug] Response: ${text}`);
-      }
-      return response;
-    };
     return new StreamableHTTPClientTransport(new URL(this.url), {
       authProvider: this.provider,
-      fetch: debugFetch,
     });
   }
 

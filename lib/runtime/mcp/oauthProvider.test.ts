@@ -57,6 +57,41 @@ describe("AgencyOAuthProvider", () => {
     expect(loaded).toEqual(info);
   });
 
+  it("should fall back to env vars for clientId and clientSecret", async () => {
+    const origId = process.env.MCP_GITHUB_CLIENT_ID;
+    const origSecret = process.env.MCP_GITHUB_CLIENT_SECRET;
+    process.env.MCP_GITHUB_CLIENT_ID = "env-client-id";
+    process.env.MCP_GITHUB_CLIENT_SECRET = "env-client-secret";
+    try {
+      // No clientId/clientSecret in options — should pick up env vars
+      const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store);
+      const info = await provider.clientInformation();
+      expect(info).toBeDefined();
+      expect((info as any).client_id).toBe("env-client-id");
+      expect((info as any).client_secret).toBe("env-client-secret");
+    } finally {
+      if (origId === undefined) delete process.env.MCP_GITHUB_CLIENT_ID;
+      else process.env.MCP_GITHUB_CLIENT_ID = origId;
+      if (origSecret === undefined) delete process.env.MCP_GITHUB_CLIENT_SECRET;
+      else process.env.MCP_GITHUB_CLIENT_SECRET = origSecret;
+    }
+  });
+
+  it("should prefer config values over env vars", async () => {
+    const origId = process.env.MCP_GITHUB_CLIENT_ID;
+    process.env.MCP_GITHUB_CLIENT_ID = "env-id";
+    try {
+      const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store, {
+        clientId: "config-id",
+      });
+      const info = await provider.clientInformation();
+      expect((info as any).client_id).toBe("config-id");
+    } finally {
+      if (origId === undefined) delete process.env.MCP_GITHUB_CLIENT_ID;
+      else process.env.MCP_GITHUB_CLIENT_ID = origId;
+    }
+  });
+
   it("should have correct client metadata", () => {
     const provider = new AgencyOAuthProvider("github", "https://example.com/mcp", store);
     const meta = provider.clientMetadata;

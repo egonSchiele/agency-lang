@@ -79,6 +79,7 @@ export class McpManager {
       } catch (error) {
         const message =
           error instanceof Error ? error.message : String(error);
+        console.error(`[mcp] Failed to connect to server "${serverName}": ${message}`);
         return failure(
           `Failed to connect to MCP server "${serverName}": ${message}`,
         );

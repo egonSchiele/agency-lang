@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { mcpToolToRegistryEntry, isMcpTool } from "./toolAdapter.js";
-import type { McpToolObject } from "./types.js";
+import type { McpTool } from "./types.js";
 
 describe("isMcpTool", () => {
   it("should return true for MCP tool objects", () => {
-    const tool: McpToolObject = {
+    const tool: McpTool = {
       name: "test__add",
       description: "Add two numbers",
       serverName: "test",
@@ -26,7 +26,7 @@ describe("isMcpTool", () => {
 
 describe("mcpToolToRegistryEntry", () => {
   it("should produce a valid { definition, handler } pair that passes correct args", async () => {
-    const tool: McpToolObject = {
+    const tool: McpTool = {
       name: "test__add",
       description: "Add two numbers",
       serverName: "test",
@@ -69,7 +69,7 @@ describe("mcpToolToRegistryEntry", () => {
   });
 
   it("should throw on malformed tool name without expected prefix", () => {
-    const tool: McpToolObject = {
+    const tool: McpTool = {
       name: "wrongprefix__add",
       description: "Add two numbers",
       serverName: "test",

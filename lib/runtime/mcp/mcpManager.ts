@@ -1,30 +1,27 @@
 import { McpConnection } from "./mcpConnection.js";
-import type { McpServerConfig, McpToolObject } from "./types.js";
+import type { ServerName, McpServerConfig, McpTool } from "./types.js";
 import { success, failure, type ResultValue } from "../result.js";
 
 export class McpManager {
-  private config: Record<string, McpServerConfig>;
-  private connections: Record<string, McpConnection> = {};
-  private toolCache: Record<string, McpToolObject[]> = {};
+  private config: Record<ServerName, McpServerConfig>;
+  private connections: Record<ServerName, McpConnection> = {};
+  private toolCache: Record<ServerName, McpTool[]> = {};
 
-  constructor(config: Record<string, McpServerConfig>) {
+  constructor(config: Record<ServerName, McpServerConfig>) {
     this.config = config;
   }
 
   async getTools(serverName: string): Promise<ResultValue> {
-    // Config validation — programmer error, throw
     if (!this.config[serverName]) {
       throw new Error(
         `MCP server "${serverName}" not found in agency.json mcpServers config`,
       );
     }
 
-    // Return cached tools if already connected
     if (this.toolCache[serverName]) {
       return success(this.toolCache[serverName]);
     }
 
-    // Connect and fetch tools — runtime error, return Result
     try {
       const conn = new McpConnection(serverName, this.config[serverName]);
       await conn.connect();
@@ -47,7 +44,6 @@ export class McpManager {
   ): Promise<string> {
     const conn = this.connections[serverName];
     if (!conn) {
-      // Attempt to reconnect (lazy reconnection after restore)
       if (this.config[serverName]) {
         const reconnConn = new McpConnection(serverName, this.config[serverName]);
         await reconnConn.connect();
@@ -64,6 +60,7 @@ export class McpManager {
   async disconnectAll(): Promise<void> {
     const conns = Object.values(this.connections);
     if (conns.length === 0) return;
+    // Swallow individual disconnect errors to ensure all servers get cleaned up
     await Promise.all(conns.map((conn) => conn.disconnect().catch(() => {})));
     this.connections = {};
     this.toolCache = {};

@@ -1,14 +1,17 @@
-import type { McpToolObject } from "./types.js";
+import { z } from "zod";
+import type { McpTool } from "./types.js";
 import type { ToolRegistryEntry } from "../builtins.js";
 
-export function isMcpTool(obj: any): obj is McpToolObject {
-  return (
-    obj !== null &&
-    typeof obj === "object" &&
-    obj.__mcpTool === true &&
-    typeof obj.name === "string" &&
-    typeof obj.serverName === "string"
-  );
+const McpToolSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  serverName: z.string(),
+  inputSchema: z.record(z.string(), z.unknown()),
+  __mcpTool: z.literal(true),
+});
+
+export function isMcpTool(obj: any): obj is McpTool {
+  return McpToolSchema.safeParse(obj).success;
 }
 
 type CallToolFn = (
@@ -18,14 +21,12 @@ type CallToolFn = (
 ) => Promise<string>;
 
 export function mcpToolToRegistryEntry(
-  tool: McpToolObject,
+  tool: McpTool,
   callTool: CallToolFn,
 ): ToolRegistryEntry {
-  // Extract parameter names from the JSON Schema inputSchema
   const properties = (tool.inputSchema as any)?.properties || {};
   const params = Object.keys(properties);
 
-  // Strip the serverName__ prefix to get the original MCP tool name
   const expectedPrefix = `${tool.serverName}__`;
   if (!tool.name.startsWith(expectedPrefix)) {
     throw new Error(
@@ -51,7 +52,6 @@ export function mcpToolToRegistryEntry(
       name: tool.name,
       params,
       execute: async (...args: any[]) => {
-        // Last arg is the internal context object that prompt.ts appends — strip it
         const actualArgs = args.slice(0, params.length);
         const argsObj: Record<string, unknown> = {};
         params.forEach((p, i) => {

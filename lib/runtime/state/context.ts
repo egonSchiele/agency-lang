@@ -71,7 +71,7 @@ export class RuntimeContext<T> {
   classRegistry: ClassRegistry = {};
 
   abortController: AbortController;
-  mcpManager: McpManager;
+  private _mcpManager: McpManager;
 
   traceConfig: TraceConfig;
   runId: string | null;
@@ -126,7 +126,7 @@ export class RuntimeContext<T> {
     this.smoltalkDefaults = args.smoltalkDefaults;
     this.classRegistry = {};
     this.abortController = new AbortController();
-    this.mcpManager = new McpManager({});
+    this._mcpManager = new McpManager({});
   }
 
   getRunId(): string {
@@ -165,7 +165,7 @@ export class RuntimeContext<T> {
     execCtx.pendingPromises = new PendingPromiseStore();
     execCtx.classRegistry = this.classRegistry;
     execCtx.abortController = new AbortController();
-    execCtx.mcpManager = this.mcpManager;
+    execCtx._mcpManager = this._mcpManager;
     execCtx.statelogClient = new StatelogClient({
       ...this.statelogConfig,
       traceId: runId,
@@ -348,5 +348,17 @@ export class RuntimeContext<T> {
 
   hasTraceWriter(): boolean {
     return this.traceWriter !== null;
+  }
+
+  createMcpManager(config: Record<string, any>): void {
+    this._mcpManager = new McpManager(config);
+  }
+
+  get mcpManager(): McpManager {
+    return this._mcpManager;
+  }
+
+  async disconnectMcp(): Promise<void> {
+    await this._mcpManager.disconnectAll();
   }
 }

@@ -1,3 +1,5 @@
+export type ServerName = string;
+
 export type McpStdioServerConfig = {
   command: string;
   args?: string[];
@@ -11,7 +13,7 @@ export type McpHttpServerConfig = {
 
 export type McpServerConfig = McpStdioServerConfig | McpHttpServerConfig;
 
-export type McpToolObject = {
+export type McpTool = {
   name: string;
   description: string;
   serverName: string;

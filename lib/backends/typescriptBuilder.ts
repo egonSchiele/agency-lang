@@ -3313,7 +3313,7 @@ export class TypeScriptBuilder {
 
     if (this.agencyConfig.mcpServers) {
       runtimeCtxStatements.push(
-        ts.raw(`__globalCtx.mcpManager = new McpManager(${JSON.stringify(this.agencyConfig.mcpServers)});`),
+        ts.raw(`__globalCtx.createMcpManager(${JSON.stringify(this.agencyConfig.mcpServers)});`),
       );
     }
 

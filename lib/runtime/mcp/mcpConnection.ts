@@ -1,13 +1,13 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import type { McpServerConfig, McpToolObject } from "./types.js";
+import type { McpServerConfig, McpStdioServerConfig, McpTool } from "./types.js";
 
 export class McpConnection {
   private client: Client;
   private serverName: string;
   private config: McpServerConfig;
-  private tools: McpToolObject[] = [];
+  private tools: McpTool[] = [];
   private connected = false;
 
   constructor(serverName: string, config: McpServerConfig) {
@@ -21,22 +21,20 @@ export class McpConnection {
 
   async connect(): Promise<void> {
     let transport;
-    if ("command" in this.config) {
-      transport = new StdioClientTransport({
-        command: this.config.command,
-        args: this.config.args,
-        env: this.config.env
-          ? { ...process.env, ...this.config.env } as Record<string, string>
-          : undefined,
-      });
-    } else {
+    if ("type" in this.config && this.config.type === "http") {
       transport = new StreamableHTTPClientTransport(new URL(this.config.url));
+    } else {
+      const stdio = this.config as McpStdioServerConfig;
+      transport = new StdioClientTransport({
+        command: stdio.command,
+        args: stdio.args,
+        env: stdio.env,
+      });
     }
 
     await this.client.connect(transport);
     this.connected = true;
 
-    // Eagerly fetch tools on connect
     const result = await this.client.listTools();
     this.tools = (result.tools || []).map((tool) => ({
       name: `${this.serverName}__${tool.name}`,
@@ -47,7 +45,7 @@ export class McpConnection {
     }));
   }
 
-  getTools(): McpToolObject[] {
+  getTools(): McpTool[] {
     return this.tools;
   }
 
@@ -56,7 +54,6 @@ export class McpConnection {
     args: Record<string, unknown>,
   ): Promise<string> {
     const result = await this.client.callTool({ name: toolName, arguments: args });
-    // MCP tool results have a `content` array; concatenate text entries
     const textParts = (result.content as any[])
       .filter((c: any) => c.type === "text")
       .map((c: any) => c.text);

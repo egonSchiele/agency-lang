@@ -108,4 +108,4 @@ export type { ResultValue, ResultSuccess, ResultFailure } from "./result.js";
 export { Schema, __validateType } from "./schema.js";
 
 export { McpManager } from "./mcp/mcpManager.js";
-export type { McpServerConfig, McpToolObject } from "./mcp/types.js";
+export type { McpServerConfig, McpTool } from "./mcp/types.js";

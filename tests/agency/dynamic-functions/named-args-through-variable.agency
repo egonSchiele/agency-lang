@@ -1,0 +1,9 @@
+def add(a: number, b: number): number {
+  return a + b
+}
+
+node main() {
+  const fn = add
+  const result = fn(b: 10, a: 3)
+  return result
+}

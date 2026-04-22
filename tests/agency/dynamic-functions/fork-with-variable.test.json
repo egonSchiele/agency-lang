@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "skip": true,
+      "description": "Fork iterates over function variables and calls them dynamically (skipped: fork block param scoping not yet resolved)",
+      "input": "",
+      "expectedOutput": "[10,15]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

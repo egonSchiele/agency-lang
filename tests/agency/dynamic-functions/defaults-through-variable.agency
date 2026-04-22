@@ -1,0 +1,10 @@
+def greet(name: string, greeting: string = "Hello"): string {
+  return "${greeting}, ${name}!"
+}
+
+node main() {
+  const fn = greet
+  const withDefault = fn("Alice")
+  const withOverride = fn("Bob", "Hey")
+  return { withDefault: withDefault, withOverride: withOverride }
+}

@@ -1,0 +1,8 @@
+def greet(name: string): string {
+  return "hi"
+}
+
+node main() {
+  const fn = greet
+  const result = fn("Bob")
+}

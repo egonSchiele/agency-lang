@@ -301,6 +301,7 @@ return;
     if (__error instanceof RestoreSignal) {
       throw __error
     }
+    console.error(`\nAgent crashed: ${__error.message}`)
     return {
       messages: __threads,
       data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })

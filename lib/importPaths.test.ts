@@ -66,9 +66,9 @@ describe("resolveAgencyImportPath", () => {
 });
 
 describe("toCompiledImportPath", () => {
-  it("should convert std:: paths to absolute .js paths in stdlib dir", () => {
+  it("should convert std:: paths to package-absolute paths", () => {
     const result = toCompiledImportPath("std::math");
-    expect(result).toBe(path.join(getStdlibDir(), "math.js"));
+    expect(result).toBe("agency-lang/stdlib/math.js");
   });
 
   it("should convert relative .agency paths to .js", () => {
@@ -78,18 +78,7 @@ describe("toCompiledImportPath", () => {
 
   it("should handle std:: paths with subdirectories", () => {
     const result = toCompiledImportPath("std::collections/queue");
-    expect(result).toBe(path.join(getStdlibDir(), "collections", "queue.js"));
-  });
-});
-
-describe("std:: import code generation", () => {
-  it("generated import path should point to a .js file inside the stdlib dir", () => {
-    const result = toCompiledImportPath("std::math");
-    // Must be an absolute path ending with stdlib/math.js
-    expect(path.isAbsolute(result)).toBe(true);
-    expect(result).toMatch(/stdlib[/\\]math\.js$/);
-    // The stdlib dir should exist
-    expect(fs.existsSync(path.dirname(result))).toBe(true);
+    expect(result).toBe("agency-lang/stdlib/collections/queue.js");
   });
 });
 

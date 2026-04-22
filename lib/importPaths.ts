@@ -274,13 +274,7 @@ export function resolveAgencyImportPath(
  */
 export function toCompiledImportPath(importPath: string, fromFile?: string): string {
   if (isStdlibImport(importPath)) {
-    const absTarget = path.join(STDLIB_DIR, normalizeStdlibPath(importPath) + ".js");
-    if (fromFile) {
-      let rel = path.relative(path.dirname(fromFile), absTarget).replace(/\\/g, "/");
-      if (!rel.startsWith(".")) rel = "./" + rel;
-      return rel;
-    }
-    return absTarget;
+    return "agency-lang/stdlib/" + normalizeStdlibPath(importPath) + ".js";
   }
   if (isPkgImport(importPath)) {
     // Emit bare specifier — Node resolves it at runtime via node_modules

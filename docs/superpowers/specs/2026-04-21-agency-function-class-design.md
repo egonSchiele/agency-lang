@@ -86,7 +86,7 @@ class AgencyFunction {
 It performs the following steps:
 
 1. **Resolves named args**: For `{ type: "named" }` descriptors, positional args fill parameters left-to-right. Named args then fill remaining parameters by name. It is an error if a named arg targets a position already filled by a positional arg. Same validation rules as today — no duplicates, no unknown names.
-2. **Pads defaults**: If fewer args than non-variadic params, inserts `UNSET` (a dedicated singleton object) for params with defaults. The compiled function body checks `param === UNSET ? defaultValue : param`. This avoids the current bug where passing explicit `null` is indistinguishable from an omitted argument.
+2. **Pads defaults**: If fewer args than non-variadic params, inserts `UNSET` (a string sentinel) for params with defaults. The compiled function body checks `param === UNSET ? defaultValue : param`. This avoids the current bug where passing explicit `null` is indistinguishable from an omitted argument. `UNSET` is only used internally between `invoke()` and compiled function bodies — it's never exposed to user-level Agency code.
 3. **Wraps variadics**: If the last param is variadic, collects trailing args into an array.
 4. **Calls the underlying function**: `this._fn(...resolvedArgs, state)`.
 
@@ -105,9 +105,9 @@ The state object shape varies by context:
 
 The builder still constructs the appropriate state object per scope, but does so once per scope rather than at every call site.
 
-### `toJSON()` method
+### Serialization
 
-Returns `{ name, module }` for serialization. Used by the `FunctionRefReviver`.
+`AgencyFunction` does not implement `toJSON()` — this would conflict with the `nativeTypeReplacer` pattern (JSON.stringify calls `toJSON()` before the replacer sees the raw object). Instead, serialization is handled entirely by `FunctionRefReviver`, which reads `.name` and `.module` directly.
 
 ## What the Builder Emits
 

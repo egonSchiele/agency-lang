@@ -106,7 +106,7 @@ export class AgencyFunction {
 
     for (let i = positionalArgs.length; i < this._nonVariadicParams.length; i++) {
       const param = this._nonVariadicParams[i];
-      if (param.name in namedArgs) {
+      if (Object.hasOwn(namedArgs, param.name)) {
         result.push(namedArgs[param.name]);
       } else if (param.hasDefault) {
         const hasLaterNamedArg = this._nonVariadicParams

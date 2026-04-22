@@ -1,37 +1,62 @@
-import { z } from "zod";
 import { BaseReviver } from "./baseReviver.js";
+import { AgencyFunction } from "../agencyFunction.js";
 
-const functionRefSchema = z.object({
-  name: z.string(),
-  module: z.string(),
-});
+// During the transition, the registry may contain either AgencyFunction instances
+// (new path) or legacy { handler: { execute: Function } } entries (old path).
+// This type handles both. Once the builder migration is complete, remove the legacy type.
+type LegacyRegistryEntry = { handler: { execute: Function & { __functionRef?: { name: string; module: string } } } };
+type RegistryEntry = AgencyFunction | LegacyRegistryEntry;
+type FunctionRefRegistry = Record<string, RegistryEntry>;
 
-type FunctionRef = z.infer<typeof functionRefSchema>;
-type FunctionWithRef = Function & { __functionRef?: FunctionRef };
-type ToolRegistry = Record<string, { handler: { execute: Function } }>;
+function isAgencyFunctionEntry(entry: RegistryEntry): entry is AgencyFunction {
+  return AgencyFunction.isAgencyFunction(entry);
+}
 
-export class FunctionRefReviver implements BaseReviver<FunctionWithRef> {
-  registry: ToolRegistry | null = null;
+function getEntryRef(entry: RegistryEntry): { name: string; module: string; value: any } | null {
+  if (isAgencyFunctionEntry(entry)) {
+    return { name: entry.name, module: entry.module, value: entry };
+  }
+  const fn = (entry as LegacyRegistryEntry).handler?.execute;
+  if (fn && (fn as any).__functionRef) {
+    const ref = (fn as any).__functionRef;
+    return { name: ref.name, module: ref.module, value: fn };
+  }
+  return null;
+}
+
+type FunctionWithRef = Function & { __functionRef?: { name: string; module: string } };
+
+export class FunctionRefReviver implements BaseReviver<AgencyFunction | FunctionWithRef> {
+  registry: FunctionRefRegistry | null = null;
 
   nativeTypeName(): string {
     return "FunctionRef";
   }
 
-  isInstance(value: unknown): value is FunctionWithRef {
-    if (typeof value !== "function") return false;
-    return functionRefSchema.safeParse((value as any).__functionRef).success;
+  isInstance(value: unknown): value is AgencyFunction | FunctionWithRef {
+    if (AgencyFunction.isAgencyFunction(value)) return true;
+    // Legacy: bare function with __functionRef metadata
+    if (typeof value === "function" && (value as any).__functionRef) {
+      const ref = (value as any).__functionRef;
+      return typeof ref.name === "string" && typeof ref.module === "string";
+    }
+    return false;
   }
 
-  serialize(value: FunctionWithRef): Record<string, unknown> {
-    const ref = value.__functionRef!;
+  serialize(value: AgencyFunction | FunctionWithRef): Record<string, unknown> {
+    if (AgencyFunction.isAgencyFunction(value)) {
+      return { __nativeType: this.nativeTypeName(), name: value.name, module: value.module };
+    }
+    // Legacy path
+    const ref = (value as FunctionWithRef).__functionRef!;
     return { __nativeType: this.nativeTypeName(), name: ref.name, module: ref.module };
   }
 
   validate(value: Record<string, unknown>): boolean {
-    return functionRefSchema.safeParse({ name: value.name, module: value.module }).success;
+    return typeof value.name === "string" && typeof value.module === "string";
   }
 
-  revive(value: Record<string, unknown>): Function {
+  revive(value: Record<string, unknown>): AgencyFunction | Function {
     if (!this.registry) {
       throw new Error(
         `FunctionRefReviver: no registry set. Cannot revive function "${value.name}" from module "${value.module}".`
@@ -40,20 +65,20 @@ export class FunctionRefReviver implements BaseReviver<FunctionWithRef> {
     const name = value.name as string;
     const module = value.module as string;
 
-    // Fast path: direct lookup by name (works when registry key matches original name)
+    // Fast path: direct lookup by name
     const direct = this.registry[name];
     if (direct) {
-      const fn = direct.handler.execute as FunctionWithRef;
-      if (fn.__functionRef && fn.__functionRef.name === name && fn.__functionRef.module === module) {
-        return fn;
+      const ref = getEntryRef(direct);
+      if (ref && ref.name === name && ref.module === module) {
+        return ref.value;
       }
     }
 
-    // Slow path: linear scan for aliased imports (registry key differs from original name)
+    // Slow path: linear scan for aliased imports
     for (const [_key, entry] of Object.entries(this.registry)) {
-      const fn = entry.handler.execute as FunctionWithRef;
-      if (fn.__functionRef && fn.__functionRef.name === name && fn.__functionRef.module === module) {
-        return fn;
+      const ref = getEntryRef(entry);
+      if (ref && ref.name === name && ref.module === module) {
+        return ref.value;
       }
     }
 

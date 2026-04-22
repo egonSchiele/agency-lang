@@ -9,3 +9,10 @@ export def subtract(a: number, b: number): number {
 export def multiply(a: number, b: number): number {
   return a * b
 }
+
+export def divide(a: number, b: number): Result<number> {
+  if (b == 0) {
+    return failure("Cannot divide by zero")
+  }
+  return success(a / b)
+}

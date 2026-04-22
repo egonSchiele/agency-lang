@@ -52,3 +52,20 @@ multiply(a: number, b: number): number
 **Returns:** number
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/math.agency#L8))
+
+### divide
+
+```ts
+divide(a: number, b: number): Result<number>
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| a | number |  |
+| b | number |  |
+
+**Returns:** Result<number>
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/math.agency#L12))

@@ -1553,7 +1553,18 @@ export class TypescriptPreprocessor {
           } else if (varNode.type === "variableName") {
             if (varNode.scope) continue; // already resolved in block Phase 1
             if (isClassKeyword(varNode.value)) continue;
-            varNode.scope = lookupScope(nodeName, varNode.value) || "imported";
+            const resolved = lookupScope(nodeName, varNode.value);
+            if (resolved) {
+              varNode.scope = resolved;
+            } else if (this.graphNodeDefinitions[varNode.value]) {
+              throw new Error(
+                `Cannot use node "${varNode.value}" as a value. Nodes are graph transitions, not functions.`,
+              );
+            } else if (this.functionDefinitions[varNode.value]) {
+              varNode.scope = "functionRef";
+            } else {
+              varNode.scope = "imported";
+            }
           }
         }
       }
@@ -1567,7 +1578,17 @@ export class TypescriptPreprocessor {
             node.type === "variableName" ? node.value : node.variableName;
           if (isClassKeyword(name)) continue;
           const scope = lookupScope("", name);
-          node.scope = scope || "imported";
+          if (scope) {
+            node.scope = scope;
+          } else if (node.type === "variableName" && this.graphNodeDefinitions[name]) {
+            throw new Error(
+              `Cannot use node "${name}" as a value. Nodes are graph transitions, not functions.`,
+            );
+          } else if (node.type === "variableName" && this.functionDefinitions[name]) {
+            node.scope = "functionRef";
+          } else {
+            node.scope = "imported";
+          }
         }
       }
     }

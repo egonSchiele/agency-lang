@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Function reference passed as argument survives interrupt inside callee",
+      "input": "",
+      "expectedOutput": "\"10,20\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "confirm"
+        }
+      ]
+    }
+  ]
+}

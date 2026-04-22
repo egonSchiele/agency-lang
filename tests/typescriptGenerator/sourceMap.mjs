@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   _builtinTool as __builtinTool,
+  functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -120,6 +121,8 @@ const __toolRegistry = {
     }
   }
 };
+greet.__functionRef = { name: "greet", module: "sourceMap.agency" };
+__functionRefReviver.registry = __toolRegistry;
 async function greet(name: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -284,6 +287,7 @@ __stack.locals.z = item;
     if (__error instanceof RestoreSignal) {
       throw __error
     }
+    console.error(`\nAgent crashed: ${__error.message}`)
     return {
       messages: __threads,
       data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })

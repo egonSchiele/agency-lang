@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   _builtinTool as __builtinTool,
+  functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -180,6 +181,12 @@ const __toolRegistry = {
     }
   }
 };
+add.__functionRef = { name: "add", module: "function-with-types.agency" };
+greet.__functionRef = { name: "greet", module: "function-with-types.agency" };
+mixed.__functionRef = { name: "mixed", module: "function-with-types.agency" };
+processArray.__functionRef = { name: "processArray", module: "function-with-types.agency" };
+flexible.__functionRef = { name: "flexible", module: "function-with-types.agency" };
+__functionRefReviver.registry = __toolRegistry;
 async function add(x: number, y: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
@@ -746,6 +753,7 @@ return;
     if (__error instanceof RestoreSignal) {
       throw __error
     }
+    console.error(`\nAgent crashed: ${__error.message}`)
     return {
       messages: __threads,
       data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "foo" })
@@ -869,6 +877,7 @@ if (isInterrupt(__stack.locals.flexResult)) {
     if (__error instanceof RestoreSignal) {
       throw __error
     }
+    console.error(`\nAgent crashed: ${__error.message}`)
     return {
       messages: __threads,
       data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })

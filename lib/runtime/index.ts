@@ -25,6 +25,8 @@ export {
   updateTokenStats,
 } from "./utils.js";
 
+export { functionRefReviver } from "./revivers/index.js";
+
 export { callHook } from "./hooks.js";
 export type { AgencyCallbacks, CallbackMap, CallbackReturn } from "./hooks.js";
 

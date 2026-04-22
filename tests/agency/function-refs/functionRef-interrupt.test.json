@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Function reference survives serialization through an interrupt",
+      "input": "",
+      "expectedOutput": "\"10,20\"",
+
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "confirm"
+        }
+      ]
+    }
+  ]
+}

@@ -5,6 +5,9 @@ import { DateReviver } from "./dateReviver.js";
 import { RegExpReviver } from "./regExpReviver.js";
 import { URLReviver } from "./urlReviver.js";
 import { ErrorReviver } from "./errorReviver.js";
+import { FunctionRefReviver } from "./functionRefReviver.js";
+
+export const functionRefReviver = new FunctionRefReviver();
 
 const revivers: BaseReviver<any>[] = [
   new SetReviver(),
@@ -13,6 +16,7 @@ const revivers: BaseReviver<any>[] = [
   new RegExpReviver(),
   new URLReviver(),
   new ErrorReviver(),
+  functionRefReviver,
 ];
 
 const reviversByName: Record<string, BaseReviver<any>> = {};
@@ -24,8 +28,15 @@ for (const r of revivers) {
 // When value is a primitive but this[key] is an object, it means toJSON()
 // was called (Date, URL). Fall back to this[key] to get the raw value.
 export function nativeTypeReplacer(this: any, key: string, value: unknown): unknown {
-  const raw = typeof value === "object" && value !== null ? value : (key === "" ? value : this[key]);
-  if (typeof raw !== "object" || raw === null) return value;
+  let raw: unknown;
+  if ((typeof value === "object" && value !== null) || typeof value === "function") {
+    raw = value;
+  } else {
+    // Primitives: fall back to this[key] to handle toJSON() conversion (Date, URL)
+    raw = key === "" ? value : this[key];
+  }
+  if (raw === null) return value;
+  if (typeof raw !== "object" && typeof raw !== "function") return value;
   for (const r of revivers) {
     if (r.isInstance(raw)) {
       return r.serialize(raw);

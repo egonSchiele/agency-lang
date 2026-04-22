@@ -135,7 +135,7 @@ export type Scope =
   | SharedScope
   | LocalScope
   | BlockScope;
-export type ScopeType = Scope["type"] | "args" | "blockArgs";
+export type ScopeType = Scope["type"] | "args" | "blockArgs" | "functionRef";
 export type GlobalScope = {
   type: "global";
 };

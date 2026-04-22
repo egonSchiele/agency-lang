@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Aliased imported function reference survives interrupt serialization",
+      "input": "",
+      "expectedOutput": "\"5,30\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "confirm"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Block syntax passed into a function reference variable",
+      "input": "",
+      "expectedOutput": "[\"hello\",\"hello\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+def double(x: number): number {
+  return x * 2
+}
+
+def check() {
+  return interrupt("confirm")
+  return "ok"
+}
+
+node main() {
+  const fn = double
+  const before = fn(5)
+  const r = check()
+  const after = fn(10)
+  return "${before},${after}"
+}

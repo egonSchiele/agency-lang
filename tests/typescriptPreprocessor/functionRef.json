@@ -1,0 +1,119 @@
+{
+  "type": "agencyProgram",
+  "nodes": [
+    {
+      "type": "function",
+      "functionName": "greet",
+      "parameters": [
+        {
+          "type": "functionParameter",
+          "name": "name",
+          "typeHint": {
+            "type": "primitiveType",
+            "value": "string"
+          }
+        }
+      ],
+      "returnType": {
+        "type": "primitiveType",
+        "value": "string"
+      },
+      "body": [
+        {
+          "type": "returnStatement",
+          "value": {
+            "type": "string",
+            "segments": [
+              {
+                "type": "text",
+                "value": "hi"
+              }
+            ]
+          },
+          "loc": {
+            "line": -1,
+            "col": 2,
+            "start": 36,
+            "end": 48
+          }
+        }
+      ],
+      "loc": {
+        "line": -2,
+        "col": 0,
+        "start": 0,
+        "end": 49
+      }
+    },
+    {
+      "type": "graphNode",
+      "nodeName": "main",
+      "parameters": [],
+      "returnType": null,
+      "body": [
+        {
+          "type": "assignment",
+          "declKind": "const",
+          "variableName": "fn",
+          "value": {
+            "type": "variableName",
+            "value": "greet",
+            "loc": {
+              "line": 3,
+              "col": 13,
+              "start": 78,
+              "end": 83
+            },
+            "scope": "functionRef"
+          },
+          "loc": {
+            "line": 3,
+            "col": 2,
+            "start": 67,
+            "end": 86
+          },
+          "scope": "local"
+        },
+        {
+          "type": "assignment",
+          "declKind": "const",
+          "variableName": "result",
+          "value": {
+            "type": "functionCall",
+            "functionName": "fn",
+            "arguments": [
+              {
+                "type": "string",
+                "segments": [
+                  {
+                    "type": "text",
+                    "value": "Bob"
+                  }
+                ]
+              }
+            ],
+            "loc": {
+              "line": 4,
+              "col": 17,
+              "start": 101,
+              "end": 111
+            }
+          },
+          "loc": {
+            "line": 4,
+            "col": 2,
+            "start": 86,
+            "end": 111
+          },
+          "scope": "local"
+        }
+      ],
+      "loc": {
+        "line": 2,
+        "col": 0,
+        "start": 51,
+        "end": 112
+      }
+    }
+  ]
+}

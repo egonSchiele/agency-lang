@@ -1,0 +1,18 @@
+def tryParse(input: string): Result {
+  if (input == "ok") {
+    return success(42)
+  }
+  return failure("invalid input")
+}
+
+node main() {
+  const fn = tryParse
+  let r1 = fn("ok")
+  let r2 = fn("bad")
+  if (isSuccess(r1)) {
+    if (isFailure(r2)) {
+      return "both correct"
+    }
+  }
+  return "unexpected"
+}

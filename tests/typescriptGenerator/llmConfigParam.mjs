@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   _builtinTool as __builtinTool,
+  functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -108,6 +109,7 @@ const __toolRegistry = {
     }
   }
 };
+__functionRefReviver.registry = __toolRegistry;
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -202,6 +204,7 @@ await print(__stack.locals.foo, __stack.locals.foo2)
     if (__error instanceof RestoreSignal) {
       throw __error
     }
+    console.error(`\nAgent crashed: ${__error.message}`)
     return {
       messages: __threads,
       data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })

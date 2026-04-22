@@ -1,0 +1,10 @@
+def double(x: number): number {
+  return x * 2
+}
+
+node main() {
+  const fn = double
+  const fn2 = fn
+  const fn3 = fn2
+  return fn3(5)
+}

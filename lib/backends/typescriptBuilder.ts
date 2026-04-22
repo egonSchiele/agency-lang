@@ -164,6 +164,8 @@ export class TypeScriptBuilder {
   private _subStepPath: number[] = [];
   private _sourceMapBuilder: SourceMapBuilder = new SourceMapBuilder();
 
+  private _functionRefVars: Record<string, true> = {};
+
   private programInfo: ProgramInfo;
   private moduleId: string;
   private outputFile: string | undefined;
@@ -467,6 +469,11 @@ export class TypeScriptBuilder {
 
     // Generate tool registry (always — builtin tools are always available)
     this.generatedStatements.push(this.generateToolRegistry(functionDefs));
+
+    // Attach __functionRef metadata to all registered functions for serialization
+    this.generatedStatements.push(
+      ...this.generateFunctionRefMetadata(functionDefs),
+    );
 
     // Collect shared variable names and emit top-level `let` declarations
     const sharedVarNames = new Set<string>();
@@ -1550,6 +1557,43 @@ export class TypeScriptBuilder {
   }
 
   /**
+   * Generate __functionRef metadata assignments for all registered functions
+   * and bind the functionRefReviver's registry to __toolRegistry.
+   * This enables serialization of function references through interrupts.
+   */
+  private generateFunctionRefMetadata(functionDefs: FunctionDefinition[]): TsNode[] {
+    const stmts: TsNode[] = [];
+
+    for (const def of functionDefs) {
+      stmts.push(
+        ts.raw(
+          `${def.functionName}.__functionRef = { name: ${JSON.stringify(def.functionName)}, module: ${JSON.stringify(this.moduleId)} };`,
+        ),
+      );
+    }
+
+    // Imported functions use original name + source module, not the local alias
+    for (const toolImport of this.programInfo.importedTools) {
+      for (const namedImport of toolImport.importedTools) {
+        for (const originalName of namedImport.importedNames) {
+          const localName =
+            namedImport.aliases[originalName] ?? originalName;
+          const sourceModule = toolImport.agencyFile;
+          stmts.push(
+            ts.raw(
+              `${localName}.__functionRef = { name: ${JSON.stringify(originalName)}, module: ${JSON.stringify(sourceModule)} };`,
+            ),
+          );
+        }
+      }
+    }
+
+    stmts.push(ts.raw("__functionRefReviver.registry = __toolRegistry;"));
+
+    return stmts;
+  }
+
+  /**
    * For Result-returning functions: emit a pinned checkpoint at function entry
    * and a preamble that applies arg overrides on restore (for result.retry()).
    */
@@ -1734,9 +1778,12 @@ export class TypeScriptBuilder {
     const { functionName, parameters } = node;
 
     const prevSafe = this._isInSafeFunction;
+    const prevFunctionRefVars = this._functionRefVars;
     this._isInSafeFunction = !!node.safe;
+    this._functionRefVars = {};
     const bodyCode = this.processBodyAsParts(node.body);
     this._isInSafeFunction = prevSafe;
+    this._functionRefVars = prevFunctionRefVars;
     this.endScope();
 
     // Build function params: typed args + __state
@@ -2005,7 +2052,7 @@ export class TypeScriptBuilder {
 
     const shouldAwait = !node.async && context !== "valueAccess";
 
-    if (this.isAgencyFunction(node.functionName, context)) {
+    if (this.isAgencyFunction(node.functionName, context) || this._functionRefVars[node.functionName]) {
       // In global init scope, __threads and __state don't exist — pass only ctx
       const locationOpts = node.functionName === "checkpoint" ? {
         moduleId: ts.str(this.moduleId),
@@ -2024,7 +2071,10 @@ export class TypeScriptBuilder {
           isForked: node.async,
           ...locationOpts,
         });
-      const call = ts.call(ts.id(functionName), [...argNodes, configObj]);
+      const callee = this._functionRefVars[node.functionName]
+        ? ts.scopedVar(functionName, "local", this.moduleId)
+        : ts.id(functionName);
+      const call = ts.call(callee, [...argNodes, configObj]);
       return shouldAwait ? ts.await(call) : call;
     } else if (node.functionName === "system") {
       // __threads.active().push(smoltalk.systemMessage(msg))
@@ -2125,6 +2175,8 @@ export class TypeScriptBuilder {
   private processGraphNode(node: GraphNodeDefinition): TsNode {
     this.startScope({ type: "node", nodeName: node.nodeName });
     this._sourceMapBuilder.enterScope(this.moduleId, node.nodeName);
+    const prevFunctionRefVars = this._functionRefVars;
+    this._functionRefVars = {};
     const { nodeName, body, parameters } = node;
     this.adjacentNodes[nodeName] = [];
     this.currentAdjacentNodes = [];
@@ -2142,6 +2194,7 @@ export class TypeScriptBuilder {
 
     this.adjacentNodes[nodeName] = [...this.currentAdjacentNodes];
     this.isInsideGraphNode = false;
+    this._functionRefVars = prevFunctionRefVars;
     this.endScope();
     // Build the arrow function body
     const stmts: TsNode[] = [
@@ -2329,6 +2382,17 @@ export class TypeScriptBuilder {
   }
 
   private processAssignment(node: Assignment): TsNode {
+    // Needed so the builder knows to pass __state when calling these variables
+    if (node.value.type === "variableName") {
+      const valueName = node.value.value;
+      if (
+        node.value.scope === "functionRef" ||
+        this.isAgencyFunction(valueName, "functionArg") ||
+        this._functionRefVars[valueName]
+      ) {
+        this._functionRefVars[node.variableName] = true;
+      }
+    }
     const result = this._processAssignmentInner(node);
     // If the type annotation has !, wrap the assigned value in __validateType
     if (node.validated && node.typeHint) {

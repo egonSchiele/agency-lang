@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   _builtinTool as __builtinTool,
+  functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -137,6 +138,7 @@ const __toolRegistry = {
     }
   }
 };
+__functionRefReviver.registry = __toolRegistry;
 //  Test arrays and objects
 //  Simple array
 await print(__ctx.globals.get("arrayAndObject.agency", "nums"))

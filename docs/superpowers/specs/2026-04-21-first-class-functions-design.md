@@ -84,6 +84,8 @@ For aliased imports (`import { greet as sayHello }`), the serialization format s
 
 **Note**: The current `generateToolRegistry` registers imported functions under their *local* name (alias) as the key. For serialization to work correctly, the `__functionRef` metadata attached to the function must use the original name and source module — not the local alias. This way, even though the registry key is the alias, the serialization format is module-stable. On deserialization, the reviver resolves by original name + module, then looks up the function via the importing module's registry (which maps the alias to the same function object).
 
+**Important**: Aliased imports must continue to work as LLM tools. If a user writes `import { greet as sayHello }` and then `uses sayHello`, the LLM should see a tool called `sayHello`. The `__functionRef` metadata is only for serialization — it does not affect the tool name seen by the LLM, which is still the local alias. There is no existing test for aliased imports used as LLM tools, so one should be added as part of this work.
+
 ### Reverse lookup (function → registry name)
 
 The `nativeTypeReplacer` receives a bare JavaScript function object during `JSON.stringify`. It has no way to determine which registry entry it belongs to without additional metadata.
@@ -106,32 +108,54 @@ Extends the existing native type reviver:
 { "__nativeType": "FunctionRef", "name": "greet", "module": "foo.agency" }
 ```
 
-### Replacer changes
+### FunctionRefReviver (BaseReviver subclass)
 
-The existing `nativeTypeReplacer` in `lib/runtime/revivers/index.ts` guards on `typeof raw === "object"`. Functions are `typeof "function"` and fail this guard silently — `JSON.stringify` drops them (or converts to `null` in arrays).
+For consistency with the existing reviver pattern (MapReviver, SetReviver, DateReviver, etc.), `FunctionRef` gets its own `BaseReviver` subclass in `lib/runtime/revivers/functionRefReviver.ts`:
 
-The replacer must be updated to check for `typeof value === "function"` **before** the object guard. When a function has a `__functionRef` property, emit the `FunctionRef` marker. Functions without `__functionRef` (e.g., raw JS functions from TypeScript interop) should trigger a warning or error rather than being silently dropped.
-
-`FunctionRef` does **not** need a `BaseReviver` subclass. The replacer handles function detection inline (via `typeof` + `__functionRef` check), and the reviver side works through the existing `__nativeType` dispatch — since the serialized form is a plain object with `"__nativeType": "FunctionRef"`, the existing object-based reviver infrastructure handles it.
-
-### Deserialization
-
-The reviver looks up `module + name` in the registry and returns the actual function object.
-
-**Registry access**: The current `nativeTypeReviver` is a plain `(key, value)` function with no access to external state. To give it access to the function registry, make the reviver a **factory function** that closes over the registry:
-
-```js
-function createNativeTypeReviver(functionRegistry) {
-  return function nativeTypeReviver(key, value) {
-    // ... existing reviver logic ...
-    if (value?.__nativeType === "FunctionRef") {
-      return functionRegistry.lookup(value.module, value.name);
-    }
-  };
+```ts
+class FunctionRefReviver implements BaseReviver<Function> {
+  nativeTypeName(): string { return "FunctionRef"; }
+  isInstance(value: unknown): value is Function {
+    return typeof value === "function" && "__functionRef" in value;
+  }
+  serialize(value: Function): Record<string, unknown> {
+    const ref = (value as any).__functionRef;
+    return { __nativeType: "FunctionRef", name: ref.name, module: ref.module };
+  }
+  validate(value: Record<string, unknown>): boolean {
+    return typeof value.name === "string" && typeof value.module === "string";
+  }
+  revive(value: Record<string, unknown>): Function {
+    return this.registry.lookup(value.module as string, value.name as string);
+  }
 }
 ```
 
-All call sites that create a reviver (`deepClone`, `GlobalStore.toJSON`, `classReviver`, `runNodeAndFormat`, etc.) will need to pass the registry when constructing the reviver. Alternatively, the registry could be stored on `RuntimeContext` and accessed from there at call sites that already have `__ctx`.
+This keeps all serialization/deserialization logic in one place, consistent with the other revivers.
+
+**However**, the existing `nativeTypeReplacer` guards on `typeof raw === "object"`, which means functions (`typeof "function"`) are silently dropped before the reviver loop is reached. The replacer must be updated to also check `typeof raw === "function"` so that `FunctionRefReviver.isInstance` gets a chance to run. This is a small change to the guard in `nativeTypeReplacer`:
+
+```ts
+// Before:
+if (typeof raw !== "object" || raw === null) return value;
+
+// After:
+if (raw === null) return value;
+if (typeof raw !== "object" && typeof raw !== "function") return value;
+```
+
+Functions without `__functionRef` (e.g., raw JS functions from TypeScript interop) will not match `FunctionRefReviver.isInstance` and will fall through unchanged — `JSON.stringify` will still drop them, but that's the expected behavior for non-Agency functions.
+
+### Registry access for deserialization
+
+The `FunctionRefReviver` needs access to the function registry to look up functions by name during `revive()`. The other revivers don't need external state — they reconstruct values from the serialized data alone. For `FunctionRefReviver`, the registry must be provided.
+
+**Approach**: The reviver instance receives the registry at construction time. The `revivers` array in `lib/runtime/revivers/index.ts` is currently a module-level constant. To support this, either:
+
+1. Make the revivers array constructed per-context, with the `FunctionRefReviver` receiving the registry from `RuntimeContext`, or
+2. Give `FunctionRefReviver` a mutable `registry` property that gets set once the `__toolRegistry` is available at module load time.
+
+Option 2 is simpler and avoids changing the reviver initialization pattern for all other revivers. The generated code would set `functionRefReviver.registry = __toolRegistry` alongside the `__functionRef` metadata assignments.
 
 On lookup failure (function not found), throw a descriptive error. This is infrastructure code running during deserialization, not user-facing Agency code, so a thrown error is appropriate rather than an Agency `failure` Result.
 
@@ -156,7 +180,12 @@ When the preprocessor encounters `const fn = greet`, it needs to recognize that 
 - The variable `fn` needs to be stored in `__stack.locals` like any other local
 - But the value being assigned is a function from the registry, not a literal
 
-The preprocessor already knows about all function definitions (via `programInfo`). When it sees an identifier that matches a known function name being used as a value (not a call), it can flag it as a function reference.
+The preprocessor already knows about all function definitions (via `programInfo`). When it sees an identifier that matches a known function name being used as a value (not a call), it flags it by setting the AST node's `scope` to a new `"functionRef"` scope type. This is added to the `ScopeType` union in `lib/types.ts`.
+
+This approach fits the existing pattern — `scope` is already the mechanism the preprocessor uses to communicate variable resolution to the builder. The builder can then check `scope === "functionRef"` to know it should:
+1. Not try to look the name up as a regular variable
+2. Emit the function reference directly (just the function name, which resolves to the JS function)
+3. When the variable is later *called*, pass `__state` even though `isAgencyFunction` doesn't recognize the variable name
 
 ### Builder (code generation)
 
@@ -210,6 +239,7 @@ Type checker updates are **deferred** — not included in this initial implement
 - Function stored in a data structure survives an interrupt
 - Passing a `def` function where a block is expected
 - Aliased import (`import { greet as sayHello }`) assigned to variable, survives interrupt
+- Aliased import used as LLM tool (`uses sayHello`) — verifies aliasing doesn't break tool registration
 - Error case: registry lookup fails on deserialize (e.g., function was removed)
 
 ## Future Work

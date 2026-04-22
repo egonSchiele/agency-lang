@@ -436,7 +436,11 @@ let __functionCompleted = false;
 __stack.locals.fn = greet;
     });
     await runner.step(1, async (runner) => {
-__stack.locals.result = await fn(`Bob`);
+__stack.locals.result = await fn(`Bob`, {
+        ctx: __ctx,
+        threads: __threads,
+        interruptData: __state?.interruptData
+      });
 if (isInterrupt(__stack.locals.result)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({

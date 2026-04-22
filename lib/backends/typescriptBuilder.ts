@@ -164,6 +164,9 @@ export class TypeScriptBuilder {
   private _subStepPath: number[] = [];
   private _sourceMapBuilder: SourceMapBuilder = new SourceMapBuilder();
 
+  /** Variables known to hold function references (assigned from a functionRef-scoped value). */
+  private _functionRefVars: Set<string> = new Set();
+
   private programInfo: ProgramInfo;
   private moduleId: string;
   private outputFile: string | undefined;
@@ -2005,7 +2008,7 @@ export class TypeScriptBuilder {
 
     const shouldAwait = !node.async && context !== "valueAccess";
 
-    if (this.isAgencyFunction(node.functionName, context)) {
+    if (this.isAgencyFunction(node.functionName, context) || this._functionRefVars.has(node.functionName)) {
       // In global init scope, __threads and __state don't exist — pass only ctx
       const locationOpts = node.functionName === "checkpoint" ? {
         moduleId: ts.str(this.moduleId),
@@ -2329,6 +2332,13 @@ export class TypeScriptBuilder {
   }
 
   private processAssignment(node: Assignment): TsNode {
+    // Track variables assigned from function references for dynamic call support
+    if (
+      node.value.type === "variableName" &&
+      node.value.scope === "functionRef"
+    ) {
+      this._functionRefVars.add(node.variableName);
+    }
     const result = this._processAssignmentInner(node);
     // If the type annotation has !, wrap the assigned value in __validateType
     if (node.validated && node.typeHint) {

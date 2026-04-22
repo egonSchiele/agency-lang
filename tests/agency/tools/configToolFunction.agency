@@ -3,6 +3,6 @@ def greet(name: string): string {
 }
 
 node main() {
-  const result: string = llm("Use the greet function to greet Steve. Return ONLY the result of the function call, nothing else.", { tools: [tool(greet)] })
+  const result: string = llm("Use the greet function to greet Steve. Return ONLY the result of the function call, nothing else.", { tools: [greet] })
   return result
 }

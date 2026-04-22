@@ -54,7 +54,8 @@
               "col": 9,
               "start": 51,
               "end": 100
-            }
+            },
+            "scope": "imported"
           },
           "loc": {
             "line": -1,
@@ -201,7 +202,8 @@
                 "riskyAction",
                 "safeAction"
               ]
-            }
+            },
+            "scope": "imported"
           },
           "loc": {
             "line": 9,
@@ -232,7 +234,8 @@
             "col": 2,
             "start": 310,
             "end": 324
-          }
+          },
+          "scope": "imported"
         }
       ],
       "loc": {

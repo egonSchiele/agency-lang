@@ -3,6 +3,7 @@ import {
   AgencyNode,
   Expression,
   Literal,
+  ScopeType,
   VariableType,
 } from "../types.js";
 import { BaseNode } from "./base.js";
@@ -57,6 +58,7 @@ export type FunctionDefinition = BaseNode & {
 export type FunctionCall = BaseNode & {
   type: "functionCall";
   functionName: string;
+  scope?: ScopeType;
   arguments: (Expression | SplatExpression | NamedArgument)[];
   block?: BlockArgument;
   async?: boolean;

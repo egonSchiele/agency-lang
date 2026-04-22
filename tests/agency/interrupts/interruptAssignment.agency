@@ -4,7 +4,6 @@ def greet(): string {
 }
 
 node foo() {
-  uses greet
-  const res = llm("Call the greet function. Return JUST the result of the function call, no explanation.")
+  const res = llm("Call the greet function. Return JUST the result of the function call, no explanation.", { tools: [greet] })
   return res
 }

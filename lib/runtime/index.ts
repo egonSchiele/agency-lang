@@ -48,9 +48,7 @@ export {
   builtinRead,
   builtinSleep,
   readSkill,
-  tool as _builtinTool,
 } from "./builtins.js";
-export type { ToolRegistryEntry } from "./builtins.js";
 
 export { readSkillTool, readSkillToolParams } from "./builtinTools.js";
 

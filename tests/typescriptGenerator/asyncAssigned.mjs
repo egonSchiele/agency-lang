@@ -9,7 +9,7 @@ import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, R
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
-  checkpoint, getCheckpoint, restore,
+  checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
@@ -26,7 +26,7 @@ import {
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
-  _builtinTool as __builtinTool,
+  AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -67,11 +67,6 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
-// tool() function — looks up a tool by name from the module's __toolRegistry
-function tool(__name: string) {
-  return __builtinTool(__name, __toolRegistry);
-}
-
 // Handler result builtins
 function approve(value?: any) { return { type: "approved" as const, value }; }
 function reject(value?: any) { return { type: "rejected" as const, value }; }
@@ -89,41 +84,21 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
+
+// Wrap stateful runtime functions as AgencyFunction instances
+const checkpoint = new __AgencyFunction({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null });
+const getCheckpoint = new __AgencyFunction({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null });
+const restore = new __AgencyFunction({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null });
 async function mcp(serverName: string) {
   return __globalCtx.mcpManager.getTools(serverName);
 }
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("asyncAssigned.agency")
 }
-export const __computeTool = {
-  name: "compute",
-  description: `No description provided.`,
-  schema: z.object({"val": z.number(), })
-};
-export const __computeToolParams = ["val"];
-const __toolRegistry = {
-  compute: {
-    definition: __computeTool,
-    handler: {
-      name: "compute",
-      params: __computeToolParams,
-      execute: compute,
-      isBuiltin: false
-    }
-  },
-  readSkill: {
-    definition: __readSkillTool,
-    handler: {
-      name: "readSkill",
-      params: __readSkillToolParams,
-      execute: readSkill,
-      isBuiltin: true
-    }
-  }
-};
-compute.__functionRef = { name: "compute", module: "asyncAssigned.agency" };
+const __toolRegistry = {};
+__toolRegistry["readSkill"] = __AgencyFunction.create({ name: "readSkill", module: "asyncAssigned.agency", fn: readSkill, params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })), toolDefinition: __readSkillTool, }, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
-async function compute(val: number, __state: InternalFunctionState | undefined = undefined) {
+async function __compute_impl(val: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -172,7 +147,19 @@ if (__ctx._pendingArgOverrides) {
 
   try {
     await runner.step(0, async (runner) => {
-await sleep(0.1)
+const __funcResult = await sleep.invoke({
+        type: "positional",
+        args: [0.1]
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        interruptData: __state?.interruptData
+      });
+if (isInterrupt(__funcResult)) {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt(__funcResult)
+        return;
+      }
     });
     await runner.step(1, async (runner) => {
 __functionCompleted = true;
@@ -208,6 +195,22 @@ return failure(
     }
   }
 }
+const compute = __AgencyFunction.create({
+  name: "compute",
+  module: "asyncAssigned.agency",
+  fn: __compute_impl,
+  params: [{
+    name: "val",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "compute",
+    description: `No description provided.`,
+    schema: z.object({"val": z.number(), })
+  }
+}, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -241,7 +244,10 @@ __stack.branches = (__stack.branches || {});
 __stack.branches["0"] = {
         stack: __forked
       };
-__stack.locals.x = compute(5, {
+__stack.locals.x = compute.invoke({
+        type: "positional",
+        args: [5]
+      }, {
         ctx: __ctx,
         threads: __threads,
         interruptData: __state?.interruptData,
@@ -261,7 +267,10 @@ __stack.branches = (__stack.branches || {});
 __stack.branches["1"] = {
         stack: __forked
       };
-__stack.locals.y = compute(10, {
+__stack.locals.y = compute.invoke({
+        type: "positional",
+        args: [10]
+      }, {
         ctx: __ctx,
         threads: __threads,
         interruptData: __state?.interruptData,

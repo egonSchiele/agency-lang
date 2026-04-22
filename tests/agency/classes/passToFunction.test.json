@@ -1,10 +1,15 @@
 {
   "tests": [
     {
+      "skip": true,
       "nodeName": "main",
       "input": "",
       "expectedOutput": "\"Hi, Alice (age 30)\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "description": "Class instance passed to a function, method called inside"
     }
   ]

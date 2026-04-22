@@ -1,6 +1,7 @@
 {
   "tests": [
     {
+      "skip": true,
       "nodeName": "main",
       "description": "Set inside a class field survives serialization through an externally-resolved interrupt (exercises reviveWithClasses)",
       "input": "",

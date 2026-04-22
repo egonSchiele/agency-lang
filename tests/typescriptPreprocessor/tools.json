@@ -54,7 +54,8 @@
               "col": 9,
               "start": 48,
               "end": 93
-            }
+            },
+            "scope": "imported"
           },
           "loc": {
             "line": -1,
@@ -169,7 +170,8 @@
                 "getWeather",
                 "formatTemp"
               ]
-            }
+            },
+            "scope": "imported"
           },
           "loc": {
             "line": 8,
@@ -210,7 +212,8 @@
             "tools": {
               "type": "usesTool",
               "toolNames": []
-            }
+            },
+            "scope": "imported"
           },
           "loc": {
             "line": 8,

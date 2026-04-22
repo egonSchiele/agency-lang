@@ -53,6 +53,7 @@ import type {
   TsTernary,
   TsRunnerDebugger,
   TsWithHandler,
+  TsAgencyFunctionWrap,
 } from "./tsIR.js";
 
 export { $, TsChain } from "./fluent.js";
@@ -654,6 +655,10 @@ export const ts = {
 
   ternary(condition: TsNode, trueExpr: TsNode, falseExpr: TsNode): TsTernary {
     return { kind: "ternary", condition, trueExpr, falseExpr };
+  },
+
+  agencyFunctionWrap(fn: TsNode, name: string, module: string, params: { name: string }[]): TsAgencyFunctionWrap {
+    return { kind: "agencyFunctionWrap", name, module, fn, params };
   },
 
   /** Predefined runtime identifiers */

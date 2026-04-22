@@ -4,7 +4,6 @@ export def mogrify(a: number, b: number): number {
 }
 
 node withUses() {
-  uses mogrify
-  const result: number = llm("Use the mogrify function to mogrify 3, 7. Return ONLY the result.")
+  const result: number = llm("Use the mogrify function to mogrify 3, 7. Return ONLY the result.", { tools: [mogrify] })
   return result
 }

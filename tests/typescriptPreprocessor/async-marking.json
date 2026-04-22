@@ -92,7 +92,8 @@
             "tools": {
               "type": "usesTool",
               "toolNames": []
-            }
+            },
+            "scope": "imported"
           },
           "loc": {
             "line": 3,
@@ -159,7 +160,8 @@
               "col": 12,
               "start": 153,
               "end": 177
-            }
+            },
+            "scope": "functionRef"
           },
           "loc": {
             "line": 8,
@@ -192,7 +194,8 @@
               "col": 12,
               "start": 187,
               "end": 210
-            }
+            },
+            "scope": "functionRef"
           },
           "loc": {
             "line": 9,
@@ -265,7 +268,8 @@
             "tools": {
               "type": "usesTool",
               "toolNames": []
-            }
+            },
+            "scope": "imported"
           },
           "loc": {
             "line": 10,
@@ -296,7 +300,8 @@
             "col": 2,
             "start": 264,
             "end": 278
-          }
+          },
+          "scope": "imported"
         }
       ],
       "loc": {

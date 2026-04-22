@@ -9,7 +9,7 @@ import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, R
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
-  checkpoint, getCheckpoint, restore,
+  checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
@@ -26,7 +26,7 @@ import {
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
-  _builtinTool as __builtinTool,
+  AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -67,11 +67,6 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
-// tool() function — looks up a tool by name from the module's __toolRegistry
-function tool(__name: string) {
-  return __builtinTool(__name, __toolRegistry);
-}
-
 // Handler result builtins
 function approve(value?: any) { return { type: "approved" as const, value }; }
 function reject(value?: any) { return { type: "rejected" as const, value }; }
@@ -89,73 +84,21 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
+
+// Wrap stateful runtime functions as AgencyFunction instances
+const checkpoint = new __AgencyFunction({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null });
+const getCheckpoint = new __AgencyFunction({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null });
+const restore = new __AgencyFunction({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null });
 async function mcp(serverName: string) {
   return __globalCtx.mcpManager.getTools(serverName);
 }
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("functionRef.agency")
 }
-export const __greetTool = {
-  name: "greet",
-  description: `No description provided.`,
-  schema: z.object({"name": z.string(), })
-};
-export const __greetToolParams = ["name"];
-export const __doubleTool = {
-  name: "double",
-  description: `No description provided.`,
-  schema: z.object({"x": z.number(), })
-};
-export const __doubleToolParams = ["x"];
-export const __applyToAllTool = {
-  name: "applyToAll",
-  description: `No description provided.`,
-  schema: z.object({"items": z.array(z.number()), "transform": z.string(), })
-};
-export const __applyToAllToolParams = ["items", "transform"];
-const __toolRegistry = {
-  greet: {
-    definition: __greetTool,
-    handler: {
-      name: "greet",
-      params: __greetToolParams,
-      execute: greet,
-      isBuiltin: false
-    }
-  },
-  double: {
-    definition: __doubleTool,
-    handler: {
-      name: "double",
-      params: __doubleToolParams,
-      execute: double,
-      isBuiltin: false
-    }
-  },
-  applyToAll: {
-    definition: __applyToAllTool,
-    handler: {
-      name: "applyToAll",
-      params: __applyToAllToolParams,
-      execute: applyToAll,
-      isBuiltin: false
-    }
-  },
-  readSkill: {
-    definition: __readSkillTool,
-    handler: {
-      name: "readSkill",
-      params: __readSkillToolParams,
-      execute: readSkill,
-      isBuiltin: true
-    }
-  }
-};
-greet.__functionRef = { name: "greet", module: "functionRef.agency" };
-double.__functionRef = { name: "double", module: "functionRef.agency" };
-applyToAll.__functionRef = { name: "applyToAll", module: "functionRef.agency" };
+const __toolRegistry = {};
+__toolRegistry["readSkill"] = __AgencyFunction.create({ name: "readSkill", module: "functionRef.agency", fn: readSkill, params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })), toolDefinition: __readSkillTool, }, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
-async function greet(name: string, __state: InternalFunctionState | undefined = undefined) {
+async function __greet_impl(name: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -237,7 +180,23 @@ return failure(
     }
   }
 }
-async function double(x: number, __state: InternalFunctionState | undefined = undefined) {
+const greet = __AgencyFunction.create({
+  name: "greet",
+  module: "functionRef.agency",
+  fn: __greet_impl,
+  params: [{
+    name: "name",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "greet",
+    description: `No description provided.`,
+    schema: z.object({"name": z.string(), })
+  }
+}, __toolRegistry);
+async function __double_impl(x: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -319,7 +278,23 @@ return failure(
     }
   }
 }
-async function applyToAll(items: number[], transform: (number) => number, __state: InternalFunctionState | undefined = undefined) {
+const double = __AgencyFunction.create({
+  name: "double",
+  module: "functionRef.agency",
+  fn: __double_impl,
+  params: [{
+    name: "x",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "double",
+    description: `No description provided.`,
+    schema: z.object({"x": z.number(), })
+  }
+}, __toolRegistry);
+async function __applyToAll_impl(items: number[], transform: (number) => number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -378,7 +353,14 @@ __stack.locals.result = [];
     });
     await runner.loop(1, __stack.args.items, async (item, _, runner) => {
 await runner.step(0, async (runner) => {
-await __stack.locals.result.push(await transform(item))
+await __stack.locals.result.push(await __stack.args.transform.invoke({
+          type: "positional",
+          args: [item]
+        }, {
+          ctx: __ctx,
+          threads: __threads,
+          interruptData: __state?.interruptData
+        }))
       });
     });
     await runner.step(2, async (runner) => {
@@ -415,6 +397,22 @@ return failure(
     }
   }
 }
+const applyToAll = __AgencyFunction.create({
+  name: "applyToAll",
+  module: "functionRef.agency",
+  fn: __applyToAll_impl,
+  params: [{
+    name: "items",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "applyToAll",
+    description: `No description provided.`,
+    schema: z.object({"items": z.array(z.number()), })
+  }
+}, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -441,7 +439,10 @@ let __functionCompleted = false;
 __stack.locals.fn = greet;
     });
     await runner.step(1, async (runner) => {
-__stack.locals.result = await __stack.locals.fn(`Bob`, {
+__stack.locals.result = await __stack.locals.fn.invoke({
+        type: "positional",
+        args: [`Bob`]
+      }, {
         ctx: __ctx,
         threads: __threads,
         interruptData: __state?.interruptData
@@ -456,7 +457,10 @@ if (isInterrupt(__stack.locals.result)) {
       }
     });
     await runner.step(2, async (runner) => {
-__stack.locals.doubled = await applyToAll([1, 2, 3], double, {
+__stack.locals.doubled = await applyToAll.invoke({
+        type: "positional",
+        args: [[1, 2, 3], double]
+      }, {
         ctx: __ctx,
         threads: __threads,
         interruptData: __state?.interruptData

@@ -60,7 +60,8 @@
             "tools": {
               "type": "usesTool",
               "toolNames": []
-            }
+            },
+            "scope": "imported"
           },
           "loc": {
             "line": -1,
@@ -135,7 +136,8 @@
             "tools": {
               "type": "usesTool",
               "toolNames": []
-            }
+            },
+            "scope": "imported"
           },
           "loc": {
             "line": 4,
@@ -176,7 +178,8 @@
             "tools": {
               "type": "usesTool",
               "toolNames": []
-            }
+            },
+            "scope": "imported"
           },
           "loc": {
             "line": 5,
@@ -256,7 +259,8 @@
             "col": 2,
             "start": 239,
             "end": 255
-          }
+          },
+          "scope": "imported"
         }
       ],
       "loc": {

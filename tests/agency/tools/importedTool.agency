@@ -3,8 +3,7 @@ import tool { mogrify } from "./useTools.agency"
 // test an imported tool being used in a thread.
 node test() {
   thread {
-    uses mogrify
-    const result: number = llm("Use the mogrify function to mogrify 4, 7. Return ONLY the result.")
+    const result: number = llm("Use the mogrify function to mogrify 4, 7. Return ONLY the result.", { tools: [mogrify] })
     return result
   }
 }

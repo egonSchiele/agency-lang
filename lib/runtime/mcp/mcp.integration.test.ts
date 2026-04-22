@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { McpManager } from "./mcpManager.js";
-import { mcpToolToRegistryEntry } from "./toolAdapter.js";
+import { mcpToolToAgencyFunction } from "./toolAdapter.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -36,11 +36,14 @@ describe.skip("MCP integration", () => {
     expect(deserialized[0].serverName).toBe("test");
     expect(deserialized[0].name).toBe("test__add");
 
-    // After deserialization, we can still build a working handler
-    const entry = mcpToolToRegistryEntry(deserialized[0], (serverName, toolName, args) =>
+    // After deserialization, we can still build a working AgencyFunction
+    const fn = mcpToolToAgencyFunction(deserialized[0], (serverName, toolName, args) =>
       manager.callTool(serverName, toolName, args),
     );
-    const toolResult = await entry.handler.execute(3, 4, { ctx: null });
+    const toolResult = await fn.invoke(
+      { type: "named", positionalArgs: [], namedArgs: { a: 3, b: 4 } },
+      { ctx: null },
+    );
     expect(toolResult).toContain("7");
   });
 });

@@ -29,14 +29,14 @@ for (const r of revivers) {
 // was called (Date, URL). Fall back to this[key] to get the raw value.
 export function nativeTypeReplacer(this: any, key: string, value: unknown): unknown {
   let raw: unknown;
-  if ((typeof value === "object" && value !== null) || typeof value === "function") {
+  if (typeof value === "object" && value !== null) {
     raw = value;
   } else {
     // Primitives: fall back to this[key] to handle toJSON() conversion (Date, URL)
     raw = key === "" ? value : this[key];
   }
   if (raw === null) return value;
-  if (typeof raw !== "object" && typeof raw !== "function") return value;
+  if (typeof raw !== "object") return value;
   for (const r of revivers) {
     if (r.isInstance(raw)) {
       return r.serialize(raw);

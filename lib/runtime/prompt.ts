@@ -19,8 +19,9 @@ import { PromptResult, Result, StreamChunk, ToolCallJSON } from "smoltalk";
 import { ZodType } from "zod/v3";
 import { ThreadStore } from "./state/threadStore.js";
 import { isFailure } from "./result.js";
-import { isMcpTool, mcpToolToRegistryEntry } from "./mcp/toolAdapter.js";
+import { isMcpTool, mcpToolToAgencyFunction } from "./mcp/toolAdapter.js";
 import { AgencyCancelledError, isAbortError } from "./errors.js";
+import { AgencyFunction } from "./agencyFunction.js";
 
 export interface ToolHandler {
   name: string;
@@ -172,7 +173,7 @@ type ExecuteToolCallsResult =
 
 async function executeToolCalls({
   toolCalls,
-  toolHandlers,
+  toolFunctions,
   messages,
   ctx,
   clientConfig,
@@ -181,7 +182,7 @@ async function executeToolCalls({
   toolErrorCounts,
 }: {
   toolCalls: smoltalk.ToolCallJSON[];
-  toolHandlers: ToolHandler[];
+  toolFunctions: AgencyFunction[];
   messages: MessageThread;
   ctx: RuntimeContext<GraphState>;
   clientConfig: Partial<smoltalk.SmolPromptConfig>;
@@ -194,7 +195,7 @@ async function executeToolCalls({
       throw new AgencyCancelledError();
     }
 
-    const handler = toolHandlers.find((h) => h.name === toolCall.name);
+    const handler = toolFunctions.find((fn) => fn.name === toolCall.name);
     if (!handler) {
       console.error(
         `No handler found for tool call: ${toolCall.name}. This error will be sent back to the LLM.`,
@@ -226,9 +227,8 @@ async function executeToolCalls({
       continue;
     }
 
-    const params = handler.params.map(
-      (param: string) => toolCall.arguments[param],
-    );
+    // Build named args from tool call arguments, applying any modify overrides
+    let namedArgs = { ...toolCall.arguments };
 
     let result: any;
     if (
@@ -249,32 +249,28 @@ async function executeToolCalls({
         interruptData.interruptResponse.type === "modify"
       ) {
         const iResponse = interruptData.interruptResponse;
-        Object.keys(iResponse.newArguments).forEach((argName) => {
-          const index = handler.params.indexOf(argName);
-          if (index !== -1) {
-            params[index] = iResponse.newArguments[argName];
-          }
-        });
+        Object.assign(namedArgs, iResponse.newArguments);
       }
       await callHook({
         callbacks: ctx.callbacks,
         name: "onToolCallStart",
-        data: { toolName: handler.name, args: params },
+        data: { toolName: handler.name, args: namedArgs },
       });
 
-      // todo do we want to pass an existing message thread
-      // into tool calls
-      params.push({
+      const state = {
         ctx,
         threads: new ThreadStore(),
         interruptData,
         isToolCall: true,
-      });
+      };
 
       const toolCallStartTime = performance.now();
       ctx.enterToolCall();
       try {
-        result = await handler.execute(...params);
+        result = await handler.invoke(
+          { type: "named", positionalArgs: [], namedArgs },
+          state,
+        );
       } catch (error: unknown) {
         const retryable = false;
         const errorMessage =
@@ -381,7 +377,7 @@ async function executeToolCalls({
 
       ctx.statelogClient.toolCall({
         toolName: handler.name,
-        args: params,
+        args: namedArgs,
         output: result,
         model: JSON.stringify(clientConfig.model),
         timeTaken: toolCallEndTime - toolCallStartTime,
@@ -433,26 +429,23 @@ export async function runPrompt(args: {
     checkpointInfo,
   } = args;
 
-  // Extract tool registry entries from clientConfig.tools and split into
-  // definitions (for smoltalk) and handlers (for execution).
-  // MCP tool objects (with __mcpTool: true) are transformed into registry entries here.
-  const rawTools = args.clientConfig?.tools || [];
-  const toolEntries: { definition: Tool; handler: ToolHandler }[] = rawTools.map(
-    (entry: any) => {
-      if (isMcpTool(entry)) {
-        return mcpToolToRegistryEntry(entry, (serverName, toolName, toolArgs) =>
-          ctx.mcpManager.callTool(serverName, toolName, toolArgs),
-        );
-      }
-      return entry;
-    },
-  );
-  let tools = toolEntries
-    .map((e) => e.definition)
+  // Tools array contains AgencyFunction instances and/or MCP tool objects.
+  // Normalize MCP tools to AgencyFunction, then extract definitions and handlers.
+  const rawTools: any[] = args.clientConfig?.tools || [];
+  const agencyFunctions: AgencyFunction[] = rawTools.map((entry: any) => {
+    if (isMcpTool(entry)) {
+      return mcpToolToAgencyFunction(entry, (serverName, toolName, toolArgs) =>
+        ctx.mcpManager.callTool(serverName, toolName, toolArgs),
+      );
+    }
+    return entry as AgencyFunction;
+  });
+  let tools = agencyFunctions
+    .filter((fn) => fn.toolDefinition)
+    .map((fn) => fn.toolDefinition!)
     .filter((t) => !removedTools.includes(t.name));
-  let toolHandlers = toolEntries
-    .map((e) => e.handler)
-    .filter((h) => !removedTools.includes(h.name));
+  let toolFunctions = agencyFunctions
+    .filter((fn) => !removedTools.includes(fn.name));
 
   // Remove tools key from clientConfig before passing to smoltalk
   const { tools: _extractedTools, ...restClientConfig } =
@@ -516,7 +509,7 @@ export async function runPrompt(args: {
 
       const executeToolCallsResult = await executeToolCalls({
         toolCalls,
-        toolHandlers,
+        toolFunctions,
         messages,
         ctx,
         clientConfig,
@@ -529,8 +522,8 @@ export async function runPrompt(args: {
 
       // Filter out tools that failed after side effects
       tools = tools.filter((t) => !removedTools.includes(t.name));
-      toolHandlers = toolHandlers.filter(
-        (h) => !removedTools.includes(h.name),
+      toolFunctions = toolFunctions.filter(
+        (fn) => !removedTools.includes(fn.name),
       );
 
       if (executeToolCallsResult.isInterrupt) {

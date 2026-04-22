@@ -9,7 +9,7 @@ import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, R
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
-  checkpoint, getCheckpoint, restore,
+  checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
@@ -26,7 +26,7 @@ import {
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
-  _builtinTool as __builtinTool,
+  AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -67,11 +67,6 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
-// tool() function — looks up a tool by name from the module's __toolRegistry
-function tool(__name: string) {
-  return __builtinTool(__name, __toolRegistry);
-}
-
 // Handler result builtins
 function approve(value?: any) { return { type: "approved" as const, value }; }
 function reject(value?: any) { return { type: "rejected" as const, value }; }
@@ -89,73 +84,21 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
+
+// Wrap stateful runtime functions as AgencyFunction instances
+const checkpoint = new __AgencyFunction({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null });
+const getCheckpoint = new __AgencyFunction({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null });
+const restore = new __AgencyFunction({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null });
 async function mcp(serverName: string) {
   return __globalCtx.mcpManager.getTools(serverName);
 }
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("pipe-operator.agency")
 }
-export const __doubleTool = {
-  name: "double",
-  description: `No description provided.`,
-  schema: z.object({"x": z.number(), })
-};
-export const __doubleToolParams = ["x"];
-export const __multiplyTool = {
-  name: "multiply",
-  description: `No description provided.`,
-  schema: z.object({"a": z.number(), "b": z.number(), })
-};
-export const __multiplyToolParams = ["a", "b"];
-export const __safeDivideTool = {
-  name: "safeDivide",
-  description: `No description provided.`,
-  schema: z.object({"a": z.number(), "b": z.number(), })
-};
-export const __safeDivideToolParams = ["a", "b"];
-const __toolRegistry = {
-  double: {
-    definition: __doubleTool,
-    handler: {
-      name: "double",
-      params: __doubleToolParams,
-      execute: double,
-      isBuiltin: false
-    }
-  },
-  multiply: {
-    definition: __multiplyTool,
-    handler: {
-      name: "multiply",
-      params: __multiplyToolParams,
-      execute: multiply,
-      isBuiltin: false
-    }
-  },
-  safeDivide: {
-    definition: __safeDivideTool,
-    handler: {
-      name: "safeDivide",
-      params: __safeDivideToolParams,
-      execute: safeDivide,
-      isBuiltin: false
-    }
-  },
-  readSkill: {
-    definition: __readSkillTool,
-    handler: {
-      name: "readSkill",
-      params: __readSkillToolParams,
-      execute: readSkill,
-      isBuiltin: true
-    }
-  }
-};
-double.__functionRef = { name: "double", module: "pipe-operator.agency" };
-multiply.__functionRef = { name: "multiply", module: "pipe-operator.agency" };
-safeDivide.__functionRef = { name: "safeDivide", module: "pipe-operator.agency" };
+const __toolRegistry = {};
+__toolRegistry["readSkill"] = __AgencyFunction.create({ name: "readSkill", module: "pipe-operator.agency", fn: readSkill, params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })), toolDefinition: __readSkillTool, }, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
-async function double(x: number, __state: InternalFunctionState | undefined = undefined) {
+async function __double_impl(x: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -237,7 +180,23 @@ return failure(
     }
   }
 }
-async function multiply(a: number, b: number, __state: InternalFunctionState | undefined = undefined) {
+const double = __AgencyFunction.create({
+  name: "double",
+  module: "pipe-operator.agency",
+  fn: __double_impl,
+  params: [{
+    name: "x",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "double",
+    description: `No description provided.`,
+    schema: z.object({"x": z.number(), })
+  }
+}, __toolRegistry);
+async function __multiply_impl(a: number, b: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -325,7 +284,28 @@ return failure(
     }
   }
 }
-async function safeDivide(a: number, b: number, __state: InternalFunctionState | undefined = undefined) {
+const multiply = __AgencyFunction.create({
+  name: "multiply",
+  module: "pipe-operator.agency",
+  fn: __multiply_impl,
+  params: [{
+    name: "a",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }, {
+    name: "b",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "multiply",
+    description: `No description provided.`,
+    schema: z.object({"a": z.number(), "b": z.number(), })
+  }
+}, __toolRegistry);
+async function __safeDivide_impl(a: number, b: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -427,6 +407,27 @@ return failure(
     }
   }
 }
+const safeDivide = __AgencyFunction.create({
+  name: "safeDivide",
+  module: "pipe-operator.agency",
+  fn: __safeDivide_impl,
+  params: [{
+    name: "a",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }, {
+    name: "b",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "safeDivide",
+    description: `No description provided.`,
+    schema: z.object({"a": z.number(), "b": z.number(), })
+  }
+}, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -452,7 +453,10 @@ let __functionCompleted = false;
     await runner.step(0, async (runner) => {
 __stack.locals.__pipe_0 = await success(5);
     });
-    __stack.locals.r1 = await runner.pipe(1, __stack.locals.__pipe_0, async (__pipeArg) => double(__pipeArg, {
+    __stack.locals.r1 = await runner.pipe(1, __stack.locals.__pipe_0, async (__pipeArg) => await double.invoke({
+      type: "positional",
+      args: [__pipeArg]
+    }, {
       ctx: __ctx,
       threads: __threads,
       interruptData: __state?.interruptData
@@ -460,7 +464,10 @@ __stack.locals.__pipe_0 = await success(5);
     await runner.step(2, async (runner) => {
 __stack.locals.__pipe_1 = await success(5);
     });
-    __stack.locals.r2 = await runner.pipe(3, __stack.locals.__pipe_1, async (__pipeArg) => multiply(10, __pipeArg, {
+    __stack.locals.r2 = await runner.pipe(3, __stack.locals.__pipe_1, async (__pipeArg) => await multiply.invoke({
+      type: "positional",
+      args: [10, __pipeArg]
+    }, {
       ctx: __ctx,
       threads: __threads,
       interruptData: __state?.interruptData
@@ -468,12 +475,18 @@ __stack.locals.__pipe_1 = await success(5);
     await runner.step(4, async (runner) => {
 __stack.locals.__pipe_2 = await success(10);
     });
-    __stack.locals.__pipe_2 = await runner.pipe(5, __stack.locals.__pipe_2, async (__pipeArg) => double(__pipeArg, {
+    __stack.locals.__pipe_2 = await runner.pipe(5, __stack.locals.__pipe_2, async (__pipeArg) => await double.invoke({
+      type: "positional",
+      args: [__pipeArg]
+    }, {
       ctx: __ctx,
       threads: __threads,
       interruptData: __state?.interruptData
     }));
-    __stack.locals.r3 = await runner.pipe(6, __stack.locals.__pipe_2, async (__pipeArg) => multiply(3, __pipeArg, {
+    __stack.locals.r3 = await runner.pipe(6, __stack.locals.__pipe_2, async (__pipeArg) => await multiply.invoke({
+      type: "positional",
+      args: [3, __pipeArg]
+    }, {
       ctx: __ctx,
       threads: __threads,
       interruptData: __state?.interruptData
@@ -481,7 +494,10 @@ __stack.locals.__pipe_2 = await success(10);
     await runner.step(7, async (runner) => {
 __stack.locals.__pipe_3 = await failure(`nope`);
     });
-    __stack.locals.r4 = await runner.pipe(8, __stack.locals.__pipe_3, async (__pipeArg) => double(__pipeArg, {
+    __stack.locals.r4 = await runner.pipe(8, __stack.locals.__pipe_3, async (__pipeArg) => await double.invoke({
+      type: "positional",
+      args: [__pipeArg]
+    }, {
       ctx: __ctx,
       threads: __threads,
       interruptData: __state?.interruptData
@@ -489,7 +505,10 @@ __stack.locals.__pipe_3 = await failure(`nope`);
     await runner.step(9, async (runner) => {
 __stack.locals.__pipe_4 = await success(10);
     });
-    __stack.locals.r5 = await runner.pipe(10, __stack.locals.__pipe_4, async (__pipeArg) => safeDivide(__pipeArg, 2, {
+    __stack.locals.r5 = await runner.pipe(10, __stack.locals.__pipe_4, async (__pipeArg) => await safeDivide.invoke({
+      type: "positional",
+      args: [__pipeArg, 2]
+    }, {
       ctx: __ctx,
       threads: __threads,
       interruptData: __state?.interruptData

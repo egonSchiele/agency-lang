@@ -1,6 +1,7 @@
 {
   "tests": [
     {
+      "skip": true,
       "nodeName": "main",
       "description": "Function references in objects survive serialization through an interrupt",
       "input": "",

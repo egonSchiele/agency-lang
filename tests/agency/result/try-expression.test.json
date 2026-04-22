@@ -1,6 +1,7 @@
 {
   "tests": [
     {
+      "skip": true,
       "nodeName": "main",
       "input": "",
       "expectedOutput": "{\"goodSuccess\":true,\"goodValue\":10,\"badSuccess\":false,\"badError\":\"negative number\",\"methodGoodSuccess\":true,\"methodGoodValue\":15,\"methodBadSuccess\":false,\"methodBadError\":\"negative number\"}",

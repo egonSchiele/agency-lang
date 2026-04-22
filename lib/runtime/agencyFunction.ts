@@ -128,9 +128,9 @@ export class AgencyFunction {
     return this.resolvePositional(result);
   }
 
-  toJSON(): { name: string; module: string } {
-    return { name: this.name, module: this.module };
-  }
+  // Note: no toJSON() — serialization is handled by FunctionRefReviver via nativeTypeReplacer.
+  // Adding toJSON() would conflict with the replacer pattern (JSON.stringify calls toJSON()
+  // before the replacer sees the raw object).
 
   static isAgencyFunction(value: unknown): value is AgencyFunction {
     return typeof value === "object" && value !== null

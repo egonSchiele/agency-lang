@@ -131,10 +131,11 @@ describe("AgencyFunction", () => {
     });
   });
 
-  describe("toJSON", () => {
-    it("returns name and module", () => {
+  describe("serialization properties", () => {
+    it("exposes name and module for serialization", () => {
       const fn = makeFunction([{ name: "a" }]);
-      expect(fn.toJSON()).toEqual({ name: "testFn", module: "test.agency" });
+      expect(fn.name).toBe("testFn");
+      expect(fn.module).toBe("test.agency");
     });
   });
 

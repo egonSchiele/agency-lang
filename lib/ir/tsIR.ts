@@ -286,7 +286,8 @@ export interface TsScopedVar {
   | "imported"
   | "local"
   | "block"
-  | "blockArgs";
+  | "blockArgs"
+  | "functionRef";
   moduleId?: string;
 }
 

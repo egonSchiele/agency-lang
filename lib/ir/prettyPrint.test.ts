@@ -398,4 +398,8 @@ describe("prettyPrint", () => {
     expect(printTs(ts.scopedVar("helper", "imported"))).toBe("helper");
   });
 
+  it("TsScopedVar functionRef", () => {
+    expect(printTs(ts.scopedVar("greet", "functionRef"))).toBe("greet");
+  });
+
 });

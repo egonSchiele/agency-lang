@@ -1,4 +1,4 @@
-export const UNSET = "UNSET";
+export const UNSET: unique symbol = Symbol("UNSET");
 
 export type FuncParam = {
   name: string;

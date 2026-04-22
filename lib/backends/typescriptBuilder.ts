@@ -35,6 +35,7 @@ import * as renderInterruptAssignment from "../templates/backends/typescriptGene
 import * as renderInterruptReturn from "../templates/backends/typescriptGenerator/interruptReturn.js";
 import * as renderBlockSetup from "../templates/backends/typescriptGenerator/blockSetup.js";
 import * as renderForkBlockSetup from "../templates/backends/typescriptGenerator/forkBlockSetup.js";
+import * as renderBuiltinToolRegistration from "../templates/backends/typescriptGenerator/builtinToolRegistration.js";
 import * as renderResultCheckpointSetup from "../templates/backends/typescriptGenerator/resultCheckpointSetup.js";
 import * as renderFunctionCatchFailure from "../templates/backends/typescriptGenerator/functionCatchFailure.js";
 import * as renderClassMethod from "../templates/backends/typescriptGenerator/classMethod.js";
@@ -1532,15 +1533,12 @@ export class TypeScriptBuilder {
     // Builtin tools: wrap as AgencyFunction instances
     for (const toolName of BUILTIN_TOOLS) {
       const internalName = BUILTIN_FUNCTIONS[toolName] || toolName;
-      stmts.push(ts.raw(
-        `__toolRegistry[${JSON.stringify(toolName)}] = __AgencyFunction.create({` +
-        ` name: ${JSON.stringify(toolName)},` +
-        ` module: ${JSON.stringify(this.moduleId)},` +
-        ` fn: ${internalName},` +
-        ` params: __${toolName}ToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),` +
-        ` toolDefinition: __${toolName}Tool,` +
-        ` }, __toolRegistry);`,
-      ));
+      stmts.push(ts.raw(renderBuiltinToolRegistration.default({
+        toolName,
+        toolNameQuoted: JSON.stringify(toolName),
+        moduleIdQuoted: JSON.stringify(this.moduleId),
+        internalName,
+      })));
     }
 
     // Bind reviver
@@ -1994,36 +1992,7 @@ export class TypeScriptBuilder {
     const shouldAwait = !node.async && context !== "valueAccess";
 
     if (isAgency) {
-      // Build CallType descriptor and use .invoke()
-      const descriptor = this.buildCallDescriptor(node);
-
-      // Build state config
-      const locationOpts = node.functionName === "checkpoint" ? {
-        moduleId: ts.str(this.moduleId),
-        scopeName: ts.str(this.currentScopeName()),
-        stepPath: ts.str(this._subStepPath.join(".")),
-      } : {};
-      const configObj = this.insideGlobalInit
-        ? ts.functionCallConfig({
-          ctx: ts.runtime.ctx,
-        })
-        : ts.functionCallConfig({
-          ctx: ts.runtime.ctx,
-          threads: ts.runtime.threads,
-          interruptData: ts.raw("__state?.interruptData"),
-          stateStack: options?.stateStack,
-          isForked: node.async,
-          ...locationOpts,
-        });
-
-      const callee = node.scope
-        ? ts.scopedVar(functionName, node.scope, this.moduleId)
-        : ts.id(functionName);
-      const invokeCall = $(callee)
-        .prop("invoke")
-        .call([descriptor, configObj])
-        .done();
-      return shouldAwait ? ts.await(invokeCall) : invokeCall;
+      return this.emitAgencyFunctionCall(node, functionName, shouldAwait, options);
     } else if (node.functionName === "system") {
       const argNodes = node.arguments.map((a) => this.processCallArg(a));
       return $(ts.threads.active())
@@ -2031,16 +2000,59 @@ export class TypeScriptBuilder {
         .call([ts.smoltalkSystemMessage(argNodes)])
         .done();
     } else {
-      // Non-agency function: direct call (TS functions, builtins, etc.)
-      const argNodes = node.arguments.map((a) => this.processCallArg(a));
-
-      if (node.block) {
-        argNodes.push(this.processBlockArgument(node));
-      }
-
-      const call = $.id(functionName).call(argNodes).done();
-      return shouldAwait ? ts.await(call) : call;
+      return this.emitDirectFunctionCall(node, functionName, shouldAwait);
     }
+  }
+
+  private emitAgencyFunctionCall(
+    node: FunctionCall,
+    functionName: string,
+    shouldAwait: boolean,
+    options?: { stateStack?: TsNode },
+  ): TsNode {
+    const descriptor = this.buildCallDescriptor(node);
+
+    const locationOpts = node.functionName === "checkpoint" ? {
+      moduleId: ts.str(this.moduleId),
+      scopeName: ts.str(this.currentScopeName()),
+      stepPath: ts.str(this._subStepPath.join(".")),
+    } : {};
+    const configObj = this.insideGlobalInit
+      ? ts.functionCallConfig({
+        ctx: ts.runtime.ctx,
+      })
+      : ts.functionCallConfig({
+        ctx: ts.runtime.ctx,
+        threads: ts.runtime.threads,
+        interruptData: ts.raw("__state?.interruptData"),
+        stateStack: options?.stateStack,
+        isForked: node.async,
+        ...locationOpts,
+      });
+
+    const callee = node.scope
+      ? ts.scopedVar(functionName, node.scope, this.moduleId)
+      : ts.id(functionName);
+    const invokeCall = $(callee)
+      .prop("invoke")
+      .call([descriptor, configObj])
+      .done();
+    return shouldAwait ? ts.await(invokeCall) : invokeCall;
+  }
+
+  private emitDirectFunctionCall(
+    node: FunctionCall,
+    functionName: string,
+    shouldAwait: boolean,
+  ): TsNode {
+    const argNodes = node.arguments.map((a) => this.processCallArg(a));
+
+    if (node.block) {
+      argNodes.push(this.processBlockArgument(node));
+    }
+
+    const call = $.id(functionName).call(argNodes).done();
+    return shouldAwait ? ts.await(call) : call;
   }
 
   /**

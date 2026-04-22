@@ -1778,9 +1778,12 @@ export class TypeScriptBuilder {
     const { functionName, parameters } = node;
 
     const prevSafe = this._isInSafeFunction;
+    const prevFunctionRefVars = this._functionRefVars;
     this._isInSafeFunction = !!node.safe;
+    this._functionRefVars = {};
     const bodyCode = this.processBodyAsParts(node.body);
     this._isInSafeFunction = prevSafe;
+    this._functionRefVars = prevFunctionRefVars;
     this.endScope();
 
     // Build function params: typed args + __state
@@ -2172,6 +2175,8 @@ export class TypeScriptBuilder {
   private processGraphNode(node: GraphNodeDefinition): TsNode {
     this.startScope({ type: "node", nodeName: node.nodeName });
     this._sourceMapBuilder.enterScope(this.moduleId, node.nodeName);
+    const prevFunctionRefVars = this._functionRefVars;
+    this._functionRefVars = {};
     const { nodeName, body, parameters } = node;
     this.adjacentNodes[nodeName] = [];
     this.currentAdjacentNodes = [];
@@ -2189,6 +2194,7 @@ export class TypeScriptBuilder {
 
     this.adjacentNodes[nodeName] = [...this.currentAdjacentNodes];
     this.isInsideGraphNode = false;
+    this._functionRefVars = prevFunctionRefVars;
     this.endScope();
     // Build the arrow function body
     const stmts: TsNode[] = [

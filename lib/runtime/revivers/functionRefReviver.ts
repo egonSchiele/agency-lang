@@ -1,9 +1,13 @@
+import { z } from "zod";
 import { BaseReviver } from "./baseReviver.js";
 
-type FunctionWithRef = Function & {
-  __functionRef?: { name: string; module: string };
-};
+const functionRefSchema = z.object({
+  name: z.string(),
+  module: z.string(),
+});
 
+type FunctionRef = z.infer<typeof functionRefSchema>;
+type FunctionWithRef = Function & { __functionRef?: FunctionRef };
 type ToolRegistry = Record<string, { handler: { execute: Function } }>;
 
 export class FunctionRefReviver implements BaseReviver<FunctionWithRef> {
@@ -14,7 +18,8 @@ export class FunctionRefReviver implements BaseReviver<FunctionWithRef> {
   }
 
   isInstance(value: unknown): value is FunctionWithRef {
-    return typeof value === "function" && "__functionRef" in value;
+    if (typeof value !== "function") return false;
+    return functionRefSchema.safeParse((value as any).__functionRef).success;
   }
 
   serialize(value: FunctionWithRef): Record<string, unknown> {
@@ -23,7 +28,7 @@ export class FunctionRefReviver implements BaseReviver<FunctionWithRef> {
   }
 
   validate(value: Record<string, unknown>): boolean {
-    return typeof value.name === "string" && typeof value.module === "string";
+    return functionRefSchema.safeParse({ name: value.name, module: value.module }).success;
   }
 
   revive(value: Record<string, unknown>): Function {

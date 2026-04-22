@@ -1580,6 +1580,10 @@ export class TypescriptPreprocessor {
           const scope = lookupScope("", name);
           if (scope) {
             node.scope = scope;
+          } else if (node.type === "variableName" && this.graphNodeDefinitions[name]) {
+            throw new Error(
+              `Cannot use node "${name}" as a value. Nodes are graph transitions, not functions.`,
+            );
           } else if (node.type === "variableName" && this.functionDefinitions[name]) {
             node.scope = "functionRef";
           } else {

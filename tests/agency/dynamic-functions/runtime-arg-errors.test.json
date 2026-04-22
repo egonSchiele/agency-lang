@@ -2,40 +2,31 @@
   "tests": [
     {
       "nodeName": "testUnknownArg",
-      "description": "Runtime error when calling function variable with unknown named arg",
       "input": "",
-      "expectedOutput": "",
+      "expectedOutput": "{\"__type\":\"resultType\",\"success\":false,\"error\":\"Unknown named argument 'z' in call to 'add'\",\"checkpoint\":null,\"retryable\":false,\"functionName\":\"testUnknownArg\",\"args\":null}",
       "evaluationCriteria": [
         {
-          "type": "llmJudge",
-          "judgePrompt": "Does the output contain an error about an unknown named argument 'z'? Score 80 if yes.",
-          "desiredAccuracy": 70
+          "type": "exact"
         }
       ]
     },
     {
       "nodeName": "testMissingRequired",
-      "description": "Runtime error when calling function variable with missing required arg",
       "input": "",
-      "expectedOutput": "",
+      "expectedOutput": "{\"__type\":\"resultType\",\"success\":false,\"error\":\"Missing required argument 'b' in call to 'add'\",\"checkpoint\":null,\"retryable\":false,\"functionName\":\"testMissingRequired\",\"args\":null}",
       "evaluationCriteria": [
         {
-          "type": "llmJudge",
-          "judgePrompt": "Does the output contain an error about a missing required argument 'b'? Score 80 if yes.",
-          "desiredAccuracy": 70
+          "type": "exact"
         }
       ]
     },
     {
       "nodeName": "testConflict",
-      "description": "Runtime error when named arg conflicts with positional arg",
       "input": "",
-      "expectedOutput": "",
+      "expectedOutput": "{\"__type\":\"resultType\",\"success\":false,\"error\":\"Named argument 'a' conflicts with positional argument at position 1 in call to 'add'\",\"checkpoint\":null,\"retryable\":false,\"functionName\":\"testConflict\",\"args\":null}",
       "evaluationCriteria": [
         {
-          "type": "llmJudge",
-          "judgePrompt": "Does the output contain an error about a named argument conflicting with a positional argument? Score 80 if yes.",
-          "desiredAccuracy": 70
+          "type": "exact"
         }
       ]
     }

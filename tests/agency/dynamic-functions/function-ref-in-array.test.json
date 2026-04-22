@@ -2,8 +2,7 @@
   "tests": [
     {
       "nodeName": "main",
-      "skip": true,
-      "description": "Function refs stored in array and called by index (skipped: value access chain issue)",
+      "description": "Function refs stored in array, extracted to variable, and called",
       "input": "",
       "expectedOutput": "{\"r1\":10,\"r2\":15}",
       "evaluationCriteria": [

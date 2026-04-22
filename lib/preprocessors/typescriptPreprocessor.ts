@@ -1606,8 +1606,7 @@ export class TypescriptPreprocessor {
       }
     }
 
-    // Resolve scope on function call nodes so the builder can emit the
-    // correct callee reference (e.g. __stack.locals.fn vs bare identifier).
+    // Resolve scope on top-level function call nodes
     for (const { node } of walkNodesArray(this.program.nodes)) {
       if (node.type === "functionCall" && !node.scope) {
         const name = node.functionName;
@@ -1615,11 +1614,7 @@ export class TypescriptPreprocessor {
           node.scope = "functionRef";
         } else {
           const scope = lookupScope("", name);
-          if (scope) {
-            node.scope = scope;
-          } else {
-            node.scope = "imported";
-          }
+          node.scope = scope ?? "imported";
         }
       }
     }

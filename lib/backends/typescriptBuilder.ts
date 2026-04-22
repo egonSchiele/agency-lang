@@ -371,17 +371,20 @@ export class TypeScriptBuilder {
     return true;
   }
 
-  /**
-   * Returns true if the function is a plain TypeScript import (not from an .agency file).
-   */
+  private _plainTsImportNames: Set<string> | null = null;
+
   private isPlainTsImport(functionName: string): boolean {
-    for (const stmt of this.programInfo.importStatements) {
-      for (const nameType of stmt.importedNames) {
-        const names = getImportedNames(nameType);
-        if (names.includes(functionName)) return true;
+    if (!this._plainTsImportNames) {
+      this._plainTsImportNames = new Set<string>();
+      for (const stmt of this.programInfo.importStatements) {
+        for (const nameType of stmt.importedNames) {
+          for (const name of getImportedNames(nameType)) {
+            this._plainTsImportNames.add(name);
+          }
+        }
       }
     }
-    return false;
+    return this._plainTsImportNames.has(functionName);
   }
 
   private isGraphNode(functionName: string): boolean {
@@ -517,7 +520,7 @@ export class TypeScriptBuilder {
           stmt.variableName,
           valueNode,
         );
-        const handler = this.buildBuiltinHandlerArrow(node.handlerName);
+        const handler = this.buildHandlerArrow(node.handlerName);
 
         globalInitStatements.push(ts.withHandler(handler, setNode));
       } else {
@@ -1405,6 +1408,59 @@ export class TypeScriptBuilder {
   }
 
   /**
+   * Process a block argument into a wrapped AgencyFunction TsNode.
+   * Shared by generateFunctionCallExpression and buildCallDescriptor.
+   */
+  private processBlockArgument(node: FunctionCall): TsNode {
+    const block = node.block!;
+    const fnDef = this.programInfo.functionDefinitions[node.functionName];
+    const imported = this.programInfo.importedFunctions[node.functionName];
+    const paramList = fnDef?.parameters ?? imported?.parameters;
+    const blockType = paramList
+      ?.map((p) => p.typeHint)
+      .find((t): t is BlockType => t?.type === "blockType");
+
+    const blockParams: TsParam[] = block.params.map((p, i) => ({
+      name: p.name,
+      typeAnnotation: blockType?.params[i]
+        ? formatTypeHint(blockType.params[i].typeAnnotation)
+        : "any",
+    }));
+
+    const blockName = `__block_${this._blockCounter++}`;
+    const parentScopeName = this.currentScopeName();
+    this.startScope({ type: "block", blockName });
+    this._sourceMapBuilder.enterScope(this.moduleId, blockName);
+    const bodyParts = this.processBodyAsParts(block.body);
+    this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
+    this.endScope();
+
+    const bodyStr = bodyParts.map((n) => printTs(n, 1)).join("\n");
+
+    const blockSetupCode = renderBlockSetup.default({
+      params: block.params.map((p) => ({
+        paramName: p.name,
+        paramNameQuoted: JSON.stringify(p.name),
+      })),
+      moduleId: JSON.stringify(this.moduleId),
+      scopeName: JSON.stringify(blockName),
+      body: bodyStr,
+    });
+
+    const blockFn = ts.arrowFn(
+      blockParams,
+      ts.statements([ts.raw(blockSetupCode)]),
+      { async: true },
+    );
+    return ts.agencyFunctionWrap(
+      blockFn,
+      blockName,
+      this.moduleId,
+      block.params.map((p) => ({ name: p.name })),
+    );
+  }
+
+  /**
    * Build a tool definition TsNode for an Agency function.
    * Returns ts.id("null") if the function has no parameters (no schema needed for tools).
    */
@@ -1970,7 +2026,6 @@ export class TypeScriptBuilder {
       return shouldAwait ? ts.await(invokeCall) : invokeCall;
     } else if (node.functionName === "system") {
       const argNodes = node.arguments.map((a) => this.processCallArg(a));
-      // __threads.active().push(smoltalk.systemMessage(msg))
       return $(ts.threads.active())
         .prop("push")
         .call([ts.smoltalkSystemMessage(argNodes)])
@@ -1980,52 +2035,7 @@ export class TypeScriptBuilder {
       const argNodes = node.arguments.map((a) => this.processCallArg(a));
 
       if (node.block) {
-        const fnDef = this.programInfo.functionDefinitions[node.functionName];
-        const imported = this.programInfo.importedFunctions[node.functionName];
-        const paramList = fnDef?.parameters ?? imported?.parameters;
-        const blockType = paramList
-          ?.map((p) => p.typeHint)
-          .find((t): t is BlockType => t?.type === "blockType");
-
-        const blockParams: TsParam[] = node.block.params.map((p, i) => ({
-          name: p.name,
-          typeAnnotation: blockType?.params[i]
-            ? formatTypeHint(blockType.params[i].typeAnnotation)
-            : "any",
-        }));
-
-        const blockName = `__block_${this._blockCounter++}`;
-        const parentScopeName = this.currentScopeName();
-        this.startScope({ type: "block", blockName });
-        this._sourceMapBuilder.enterScope(this.moduleId, blockName);
-        const bodyParts = this.processBodyAsParts(node.block.body);
-        this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
-        this.endScope();
-
-        const bodyStr = bodyParts.map((n) => printTs(n, 1)).join("\n");
-
-        const blockSetupCode = renderBlockSetup.default({
-          params: node.block.params.map((p) => ({
-            paramName: p.name,
-            paramNameQuoted: JSON.stringify(p.name),
-          })),
-          moduleId: JSON.stringify(this.moduleId),
-          scopeName: JSON.stringify(blockName),
-          body: bodyStr,
-        });
-
-        const blockFn = ts.arrowFn(
-          blockParams,
-          ts.statements([ts.raw(blockSetupCode)]),
-          { async: true },
-        );
-        const wrappedBlock = ts.agencyFunctionWrap(
-          blockFn,
-          blockName,
-          this.moduleId,
-          node.block.params.map((p) => ({ name: p.name })),
-        );
-        argNodes.push(wrappedBlock);
+        argNodes.push(this.processBlockArgument(node));
       }
 
       const call = $.id(functionName).call(argNodes).done();
@@ -2061,7 +2071,6 @@ export class TypeScriptBuilder {
       });
     }
 
-    // Positional call: { type: "positional", args: [...] }
     const argNodes: TsNode[] = [];
     for (const arg of args) {
       if (arg.type === "functionCall") {
@@ -2074,54 +2083,8 @@ export class TypeScriptBuilder {
       }
     }
 
-    // Handle block arguments for Agency functions with blocks
     if (node.block) {
-      const fnDef = this.programInfo.functionDefinitions[node.functionName];
-      const imported = this.programInfo.importedFunctions[node.functionName];
-      const paramList = fnDef?.parameters ?? imported?.parameters;
-      const blockType = paramList
-        ?.map((p) => p.typeHint)
-        .find((t): t is BlockType => t?.type === "blockType");
-
-      const blockParams: TsParam[] = node.block.params.map((p, i) => ({
-        name: p.name,
-        typeAnnotation: blockType?.params[i]
-          ? formatTypeHint(blockType.params[i].typeAnnotation)
-          : "any",
-      }));
-
-      const blockName = `__block_${this._blockCounter++}`;
-      const parentScopeName = this.currentScopeName();
-      this.startScope({ type: "block", blockName });
-      this._sourceMapBuilder.enterScope(this.moduleId, blockName);
-      const bodyParts = this.processBodyAsParts(node.block.body);
-      this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
-      this.endScope();
-
-      const bodyStr = bodyParts.map((n) => printTs(n, 1)).join("\n");
-
-      const blockSetupCode = renderBlockSetup.default({
-        params: node.block.params.map((p) => ({
-          paramName: p.name,
-          paramNameQuoted: JSON.stringify(p.name),
-        })),
-        moduleId: JSON.stringify(this.moduleId),
-        scopeName: JSON.stringify(blockName),
-        body: bodyStr,
-      });
-
-      const blockFn = ts.arrowFn(
-        blockParams,
-        ts.statements([ts.raw(blockSetupCode)]),
-        { async: true },
-      );
-      const wrappedBlock = ts.agencyFunctionWrap(
-        blockFn,
-        blockName,
-        this.moduleId,
-        node.block.params.map((p) => ({ name: p.name })),
-      );
-      argNodes.push(wrappedBlock);
+      argNodes.push(this.processBlockArgument(node));
     }
 
     return ts.obj({
@@ -2875,7 +2838,7 @@ export class TypeScriptBuilder {
     }
   }
 
-  private buildBuiltinHandlerArrow(handlerName: string): TsNode {
+  private buildHandlerArrow(handlerName: string): TsNode {
     const args = handlerName === "propagate" ? [] : [ts.id("__data")];
 
     if (TypeScriptBuilder.TEMPLATE_FUNCTIONS.has(handlerName)) {
@@ -2926,17 +2889,7 @@ export class TypeScriptBuilder {
         { async: true },
       );
     } else {
-      const fnName = node.handler.functionName;
-      if (
-        fnName === "approve" ||
-        fnName === "reject" ||
-        fnName === "propagate"
-      ) {
-        handler = this.buildBuiltinHandlerArrow(fnName);
-      } else {
-        // User-defined Agency function handler: use .invoke()
-        handler = this.buildBuiltinHandlerArrow(node.handler.functionName);
-      }
+      handler = this.buildHandlerArrow(node.handler.functionName);
     }
 
     // Body: process each statement with substep tracking
@@ -2947,7 +2900,7 @@ export class TypeScriptBuilder {
 
   private processWithModifier(node: WithModifier): TsNode {
     const id = this._subStepPath[this._subStepPath.length - 1];
-    const handler = this.buildBuiltinHandlerArrow(node.handlerName);
+    const handler = this.buildHandlerArrow(node.handlerName);
     const bodyNodes = this.processBodyAsParts([node.statement]);
     return ts.runnerHandle({ id, handler, body: bodyNodes });
   }

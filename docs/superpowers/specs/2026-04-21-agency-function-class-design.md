@@ -373,6 +373,29 @@ The reviver and builder changes must happen together because the reviver's regis
 - Fork with function-ref variables
 - Pipe with function-ref variables
 
+## Dynamic Tool Arrays for `llm()`
+
+Today, `uses add, subtract` is resolved entirely at compile time — the builder generates `tool("add")` lookup calls into the static registry. This prevents users from building dynamic tool arrays at runtime.
+
+With `AgencyFunction`, each instance carries its own `toolDefinition`. This means tools can be passed as a real runtime array:
+
+```
+const tools = [add, subtract]
+tools.push(divide)
+const result = llm("do math", { tools: tools })
+```
+
+### How it works
+
+- The `uses` directive still works as syntactic sugar — the preprocessor collects tool names and the builder emits them as `AgencyFunction` references (not `tool("name")` lookups)
+- For `llm("...", { tools: expr })`, the builder emits the expression as-is — it evaluates to an `AgencyFunction[]` at runtime
+- `runPrompt()` in `prompt.ts` receives `AgencyFunction[]`, reads `.toolDefinition` from each for the LLM schema, and calls `.invoke()` when the LLM picks a tool
+- Since `invoke()` accepts named args, LLM tool calls (which return named arguments) are handled naturally: `handler.invoke({ type: "named", positionalArgs: [], namedArgs: toolCall.arguments }, state)`
+
+### MCP tools
+
+MCP tools from external servers aren't Agency functions. They get wrapped in `AgencyFunction` instances by the MCP tool adapter, with a `_fn` that calls the MCP server. From `prompt.ts`'s perspective, all tools are `AgencyFunction` instances — one code path.
+
 ## Future Work (Deferred but Architecturally Supported)
 
 ### Lambdas

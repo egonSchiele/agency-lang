@@ -902,14 +902,26 @@ git commit -m "feat: update builder to emit .invoke() for all Agency function ca
 
 ---
 
-### Task 8: Update LLM tool call path in `prompt.ts` and `builtins.ts`
+### Task 8: Update LLM tool call path — `prompt.ts`, `builtins.ts`, and dynamic tool arrays
 
-The runtime code that executes LLM tool calls relies on the old `ToolRegistryEntry` shape (`handler.name`, `handler.params`, `handler.execute()`). This must be updated to work with `AgencyFunction`.
+The runtime code that executes LLM tool calls relies on the old `ToolRegistryEntry` shape (`handler.name`, `handler.params`, `handler.execute()`). This must be updated to work with `AgencyFunction`. We also take this opportunity to make tools a real runtime array — currently `uses add, subtract` is resolved entirely at compile time, which prevents users from building dynamic tool arrays.
+
+**The goal:** After this task, the following Agency code works:
+
+```
+const tools = [add, subtract]
+tools.push(divide)
+const result = llm("do math", { tools: tools })
+```
+
+Since each `AgencyFunction` carries its own `toolDefinition`, `prompt.ts` can read tool schemas directly from the array at runtime. No compile-time registry lookup needed.
 
 **Files:**
 - Modify: `lib/runtime/prompt.ts`
 - Modify: `lib/runtime/builtins.ts`
-- Modify: `lib/runtime/mcp/toolAdapter.ts` (if it returns `ToolRegistryEntry`)
+- Modify: `lib/runtime/mcp/toolAdapter.ts`
+- Modify: `lib/backends/typescriptBuilder.ts` (the `processLlmCall()` method)
+- Modify: `lib/templates/backends/typescriptGenerator/imports.mustache`
 
 - [ ] **Step 1: Update `ToolRegistryEntry` type in `builtins.ts`**
 
@@ -924,39 +936,94 @@ export function tool(name: string, registry: Record<string, AgencyFunction>): Ag
 }
 ```
 
-Remove or deprecate the `ToolRegistryEntry` type.
+Remove the `ToolRegistryEntry` type. Any code that imports it needs updating.
 
-- [ ] **Step 2: Update `prompt.ts` tool execution**
+- [ ] **Step 2: Update `prompt.ts` to accept `AgencyFunction[]` for tools**
 
-In `lib/runtime/prompt.ts`, the `executeToolCalls` function uses `handler.name`, `handler.params`, and `handler.execute()`. Update to use `AgencyFunction`:
+In `lib/runtime/prompt.ts`, the `runPrompt` function currently receives tools as `ToolRegistryEntry[]`. Change to accept `AgencyFunction[]`.
+
+Key changes in `runPrompt()`:
+- `clientConfig.tools` is now `AgencyFunction[]`
+- Tool definitions for the LLM: `tools.map(fn => fn.toolDefinition)` instead of `tools.map(e => e.definition)`
+- Tool handlers: the `AgencyFunction` instances themselves (no separate handler extraction)
 
 Key changes in `executeToolCalls()`:
-- `toolHandlers` is now `AgencyFunction[]` (or looked up from `Record<string, AgencyFunction>`)
-- `handler.name` → `handler.name` (same)
-- `handler.params.map(param => toolCall.arguments[param])` → `handler.params.map(p => toolCall.arguments[p.name])`
-- `handler.execute(...params)` → `handler.invoke({ type: "positional", args: params }, state)` where state is `{ ctx, threads: new ThreadStore(), interruptData, isToolCall: true }`
-- Remove the manual state push (`params.push({ ctx, threads, ... })`) — `invoke()` handles this
-- Interrupt modify path: `handler.params.indexOf(argName)` → `handler.params.findIndex(p => p.name === argName)`
-- Tool definitions: `entry.definition` → `entry.toolDefinition`
+- `toolHandlers` is now `AgencyFunction[]`
+- `handler.name` → `handler.name` (same — `AgencyFunction` has `.name`)
+- `handler.params.map(param => toolCall.arguments[param])` → use `.invoke()` with named args instead:
+  ```typescript
+  result = await handler.invoke(
+    { type: "named", positionalArgs: [], namedArgs: toolCall.arguments },
+    { ctx, threads: new ThreadStore(), interruptData, isToolCall: true }
+  );
+  ```
+  This is cleaner — the LLM returns named arguments, and `invoke()` resolves them to positional order. No manual positional mapping needed.
+- Remove the manual state push (`params.push({ ctx, threads, ... })`) — `invoke()` handles state
+- Interrupt modify path: instead of `handler.params.indexOf(argName)` to remap arguments into positional slots, just merge modified arguments into `namedArgs` before calling `invoke()`:
+  ```typescript
+  const args = { ...toolCall.arguments, ...iResponse.newArguments };
+  result = await handler.invoke(
+    { type: "named", positionalArgs: [], namedArgs: args },
+    state
+  );
+  ```
 
-Also update the `runPrompt` function where it constructs `tools` and `toolHandlers` from `__toolRegistry`:
-- `toolEntries.map(e => e.definition)` → `toolEntries.map(e => e.toolDefinition)`
-- `toolEntries.map(e => e.handler)` → `toolEntries` (the entries themselves are `AgencyFunction`)
+- [ ] **Step 3: Update MCP tool adapter**
 
-- [ ] **Step 3: Update MCP tool adapter if needed**
+`lib/runtime/mcp/toolAdapter.ts` currently returns `ToolRegistryEntry`. MCP tools aren't `AgencyFunction` instances — they come from external servers. Two options:
 
-Check `lib/runtime/mcp/toolAdapter.ts` — if it returns `ToolRegistryEntry`, it needs to return `AgencyFunction` instances or a compatible interface.
+**(a)** Wrap MCP tools in `AgencyFunction` instances with a special `_fn` that calls the MCP server. The `toolDefinition` comes from the MCP tool's schema. This is the cleanest approach — `prompt.ts` has one code path for all tools.
 
-- [ ] **Step 4: Build to verify**
+**(b)** Keep a separate interface for MCP tools and handle them as a special case in `prompt.ts`. Messier but less work.
+
+Recommend (a). Create `AgencyFunction` instances for MCP tools:
+```typescript
+const mcpFn = new AgencyFunction({
+  name: mcpTool.name,
+  module: "__mcp",
+  fn: async (...args) => { /* call MCP server */ },
+  params: mcpTool.inputSchema ? extractParams(mcpTool.inputSchema) : [],
+  toolDefinition: { name: mcpTool.name, description: mcpTool.description, schema: mcpTool.inputSchema },
+});
+```
+
+- [ ] **Step 4: Update builder's `processLlmCall()` — tools become real array expressions**
+
+Currently `processLlmCall()` (around line 2676-2699 in `typescriptBuilder.ts`) converts tool names to `tool("name")` calls:
+
+```typescript
+// Current:
+const toolNodes = allToolNames.map(name => tool("name"));
+// tools: [tool("add"), tool("subtract")]
+```
+
+Change to emit the `AgencyFunction` references directly:
+
+```typescript
+// After:
+// tools: [add, subtract]
+```
+
+For `uses add, subtract`: the preprocessor already collects tool names and attaches them to the `llm()` node. The builder now emits them as bare identifiers (which are `AgencyFunction` instances) instead of `tool("name")` lookups.
+
+For `llm("...", { tools: myArray })`: when tools comes from a config object expression, emit it as-is — it's already a runtime expression that evaluates to an `AgencyFunction[]`. The builder no longer needs to parse and transform it.
+
+The `tool()` helper function in `imports.mustache` may still be useful for the `uses` directive to look up tools by name from the registry, but it's no longer required for the `llm()` config path.
+
+- [ ] **Step 5: Recompile templates**
+
+Run: `pnpm run templates`
+
+- [ ] **Step 6: Build to verify**
 
 Run: `pnpm run build`
 Expected: Compiles
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add lib/runtime/prompt.ts lib/runtime/builtins.ts lib/runtime/mcp/toolAdapter.ts
-git commit -m "feat: update LLM tool call path for AgencyFunction"
+git add lib/runtime/prompt.ts lib/runtime/builtins.ts lib/runtime/mcp/toolAdapter.ts lib/backends/typescriptBuilder.ts lib/templates/backends/typescriptGenerator/imports.mustache lib/templates/backends/typescriptGenerator/imports.ts
+git commit -m "feat: update LLM tool path for AgencyFunction, support dynamic tool arrays"
 ```
 
 ---
@@ -1050,6 +1117,8 @@ These are the features that were previously broken and now work with `AgencyFunc
 - Create: `tests/agency/function-refs/functionRef-fork.test.json`
 - Create: `tests/agency/function-refs/functionRef-pipe.agency`
 - Create: `tests/agency/function-refs/functionRef-pipe.test.json`
+- Create: `tests/agency/function-refs/functionRef-dynamicTools.agency`
+- Create: `tests/agency/function-refs/functionRef-dynamicTools.test.json`
 
 - [ ] **Step 1: Write named args through dynamic variable test**
 
@@ -1213,12 +1282,36 @@ node main() {
 }
 ```
 
-- [ ] **Step 6: Run all new tests**
+- [ ] **Step 6: Write dynamic tools array test**
+
+This tests that tools can be passed as a dynamic runtime array to `llm()`. Note: this test requires LLM calls, so it goes in `tests/agency/function-refs/` but may need to be marked as requiring LLM access or use a mock. If the test framework doesn't support LLM mocking, write this as a `tests/typescriptGenerator/` fixture instead to verify the generated code shape is correct, and add a comment about manual testing.
+
+```
+// tests/agency/function-refs/functionRef-dynamicTools.agency
+def add(a: number, b: number): number {
+  return a + b
+}
+
+def subtract(a: number, b: number): number {
+  return a - b
+}
+
+node main() {
+  const tools = [add]
+  tools.push(subtract)
+  const result = llm("what is 5 + 3?", { tools: tools })
+  return result
+}
+```
+
+If this requires LLM access and cannot be run as a pure execution test, create a typescriptGenerator fixture instead that verifies the generated code passes the tools array through to `runPrompt()` rather than doing `tool("name")` lookups.
+
+- [ ] **Step 7: Run all new tests**
 
 Run: `pnpm run agency test tests/agency/function-refs`
-Expected: PASS for all tests including the 5 new ones
+Expected: PASS for all tests including the new ones
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add tests/agency/function-refs/

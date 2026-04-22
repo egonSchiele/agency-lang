@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   _builtinTool as __builtinTool,
+  functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -108,6 +109,7 @@ const __toolRegistry = {
     }
   }
 };
+__functionRefReviver.registry = __toolRegistry;
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state

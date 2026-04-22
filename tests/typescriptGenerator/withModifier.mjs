@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   _builtinTool as __builtinTool,
+  functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -120,6 +121,8 @@ const __toolRegistry = {
     }
   }
 };
+foo.__functionRef = { name: "foo", module: "withModifier.agency" };
+__functionRefReviver.registry = __toolRegistry;
 async function foo(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state

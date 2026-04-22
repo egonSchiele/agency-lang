@@ -28,6 +28,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   _builtinTool as __builtinTool,
+  functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -136,6 +137,9 @@ const __toolRegistry = {
     }
   }
 };
+safeLookup.__functionRef = { name: "safeLookup", module: "safe-function.agency" };
+unsafeSave.__functionRef = { name: "unsafeSave", module: "safe-function.agency" };
+__functionRefReviver.registry = __toolRegistry;
 
 async function safeLookup(id: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({

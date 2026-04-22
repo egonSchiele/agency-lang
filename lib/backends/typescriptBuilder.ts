@@ -471,6 +471,11 @@ export class TypeScriptBuilder {
     // Generate tool registry (always — builtin tools are always available)
     this.generatedStatements.push(this.generateToolRegistry(functionDefs));
 
+    // Attach __functionRef metadata to all registered functions for serialization
+    this.generatedStatements.push(
+      ...this.generateFunctionRefMetadata(functionDefs),
+    );
+
     // Collect shared variable names and emit top-level `let` declarations
     const sharedVarNames = new Set<string>();
     for (const node of program.nodes) {
@@ -1550,6 +1555,45 @@ export class TypeScriptBuilder {
     }
 
     return ts.varDecl("const", "__toolRegistry", ts.obj(entries));
+  }
+
+  /**
+   * Generate __functionRef metadata assignments for all registered functions
+   * and bind the functionRefReviver's registry to __toolRegistry.
+   * This enables serialization of function references through interrupts.
+   */
+  private generateFunctionRefMetadata(functionDefs: FunctionDefinition[]): TsNode[] {
+    const stmts: TsNode[] = [];
+
+    // Attach __functionRef to locally defined functions
+    for (const def of functionDefs) {
+      stmts.push(
+        ts.raw(
+          `${def.functionName}.__functionRef = { name: ${JSON.stringify(def.functionName)}, module: ${JSON.stringify(this.moduleId)} };`,
+        ),
+      );
+    }
+
+    // Attach __functionRef to imported functions (using original name + source module)
+    for (const toolImport of this.programInfo.importedTools) {
+      for (const namedImport of toolImport.importedTools) {
+        for (const originalName of namedImport.importedNames) {
+          const localName =
+            namedImport.aliases[originalName] ?? originalName;
+          const sourceModule = toolImport.agencyFile;
+          stmts.push(
+            ts.raw(
+              `${localName}.__functionRef = { name: ${JSON.stringify(originalName)}, module: ${JSON.stringify(sourceModule)} };`,
+            ),
+          );
+        }
+      }
+    }
+
+    // Bind the reviver's registry so deserialization can look up functions
+    stmts.push(ts.raw("__functionRefReviver.registry = __toolRegistry;"));
+
+    return stmts;
   }
 
   /**

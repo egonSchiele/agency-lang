@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   _builtinTool as __builtinTool,
+  functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -150,6 +151,10 @@ const __toolRegistry = {
     }
   }
 };
+double.__functionRef = { name: "double", module: "pipe-operator.agency" };
+multiply.__functionRef = { name: "multiply", module: "pipe-operator.agency" };
+safeDivide.__functionRef = { name: "safeDivide", module: "pipe-operator.agency" };
+__functionRefReviver.registry = __toolRegistry;
 async function double(x: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state

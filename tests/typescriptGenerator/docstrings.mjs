@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   _builtinTool as __builtinTool,
+  functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -172,6 +173,11 @@ const __toolRegistry = {
     }
   }
 };
+add.__functionRef = { name: "add", module: "docstrings.agency" };
+greet.__functionRef = { name: "greet", module: "docstrings.agency" };
+calculateArea.__functionRef = { name: "calculateArea", module: "docstrings.agency" };
+processData.__functionRef = { name: "processData", module: "docstrings.agency" };
+__functionRefReviver.registry = __toolRegistry;
 //  Test docstrings in functions
 async function add(a: any, b: any, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({

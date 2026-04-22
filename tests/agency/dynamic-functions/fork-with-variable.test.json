@@ -2,8 +2,7 @@
   "tests": [
     {
       "nodeName": "main",
-      "skip": true,
-      "description": "Fork iterates over function variables and calls them dynamically (skipped: fork block param scoping not yet resolved)",
+      "description": "Fork iterates over function variables and calls them dynamically",
       "input": "",
       "expectedOutput": "[10,15]",
       "evaluationCriteria": [

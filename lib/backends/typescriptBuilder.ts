@@ -2152,6 +2152,7 @@ export class TypeScriptBuilder {
     const bodyStr = bodyParts.map((n) => printTs(n, 1)).join("\n");
 
     const blockSetupCode = renderForkBlockSetup.default({
+      paramName,
       paramNameQuoted: JSON.stringify(paramName),
       moduleId: JSON.stringify(this.moduleId),
       scopeName: JSON.stringify(blockName),

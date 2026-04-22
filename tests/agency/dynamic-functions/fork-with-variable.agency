@@ -8,9 +8,8 @@ def triple(x: number): number {
 
 node main() {
   const fns = [double, triple]
-  let results: number[] = []
-  fork(fns) as fn {
-    results.push(fn(5))
+  let results = fork(fns) as fn {
+    return fn(5)
   }
   return results
 }

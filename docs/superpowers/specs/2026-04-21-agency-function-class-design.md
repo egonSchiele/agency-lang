@@ -34,7 +34,7 @@ The fix is to move all parameter resolution to runtime. The `AgencyFunction` cla
 ### Shape
 
 ```typescript
-type ParamMeta = {
+type FuncParam = {
   name: string;
   position: number;
   hasDefault: boolean;
@@ -42,7 +42,7 @@ type ParamMeta = {
   variadic: boolean;
 };
 
-type CallDescriptor =
+type CallType =
   | { type: "positional"; args: unknown[] }
   | { type: "named"; positionalArgs: unknown[]; namedArgs: Record<string, unknown> };
 
@@ -52,21 +52,29 @@ type ToolDefinition = {
   schema: ZodObject<any>;
 };
 
-const AGENCY_FUNCTION_BRAND = Symbol.for("AgencyFunction");
-
 class AgencyFunction {
-  readonly [AGENCY_FUNCTION_BRAND] = true;
+  readonly __agencyFunction = true;
   readonly name: string;
   readonly module: string;
-  readonly params: ParamMeta[];
+  readonly params: FuncParam[];
   readonly toolDefinition: ToolDefinition | null;
   private readonly _fn: Function;
 
-  invoke(descriptor: CallDescriptor, state?: RuntimeState): Promise<unknown>;
+  invoke(descriptor: CallType, state?: RuntimeState): Promise<unknown>;
   toJSON(): { name: string; module: string };
 
   static isAgencyFunction(value: unknown): value is AgencyFunction {
-    return typeof value === "object" && value !== null && AGENCY_FUNCTION_BRAND in value;
+    return typeof value === "object" && value !== null
+      && (value as any).__agencyFunction === true;
+  }
+
+  static create(
+    opts: AgencyFunctionOpts,
+    registry: Record<string, AgencyFunction>,
+  ): AgencyFunction {
+    const fn = new AgencyFunction(opts);
+    registry[opts.name] = fn;
+    return fn;
   }
 }
 ```
@@ -78,13 +86,13 @@ class AgencyFunction {
 It performs the following steps:
 
 1. **Resolves named args**: For `{ type: "named" }` descriptors, positional args fill parameters left-to-right. Named args then fill remaining parameters by name. It is an error if a named arg targets a position already filled by a positional arg. Same validation rules as today — no duplicates, no unknown names.
-2. **Pads defaults**: If fewer args than non-variadic params, inserts `UNSET` (a dedicated sentinel symbol) for params with defaults. The compiled function body checks `param === UNSET ? defaultValue : param`. This avoids the current bug where passing explicit `null` is indistinguishable from an omitted argument.
+2. **Pads defaults**: If fewer args than non-variadic params, inserts `UNSET` (a dedicated singleton object) for params with defaults. The compiled function body checks `param === UNSET ? defaultValue : param`. This avoids the current bug where passing explicit `null` is indistinguishable from an omitted argument.
 3. **Wraps variadics**: If the last param is variadic, collects trailing args into an array.
 4. **Calls the underlying function**: `this._fn(...resolvedArgs, state)`.
 
 The `UNSET` sentinel is exported from `agencyFunction.ts`:
 ```typescript
-export const UNSET = Symbol("UNSET");
+export const UNSET = "UNSET";
 ```
 
 The `state` parameter replaces the current pattern where the builder constructs a config object (`{ ctx, threads, interruptData, ... }`) at every call site. `AgencyFunction` receives the full state and passes it through.
@@ -118,7 +126,7 @@ After:
 ```typescript
 async function __add_impl(a, b, __state) { ... }
 
-const add = new AgencyFunction({
+const add = AgencyFunction.create({
   name: "add",
   module: "math.agency",
   fn: __add_impl,
@@ -131,8 +139,10 @@ const add = new AgencyFunction({
     description: "Adds two numbers",
     schema: z.object({ a: z.number(), b: z.number() }),
   },
-});
+}, __toolRegistry);
 ```
+
+`AgencyFunction.create()` constructs the instance and registers it in `__toolRegistry` under the function's name. This ensures every Agency function is automatically registered — you can't forget to add it to the registry.
 
 ### Function calls
 
@@ -191,14 +201,17 @@ const __toolRegistry = {
 
 After:
 ```typescript
-const __toolRegistry: Record<string, AgencyFunction> = { add, subtract, ... };
+const __toolRegistry: Record<string, AgencyFunction> = {};
+// Each AgencyFunction.create() call populates __toolRegistry automatically
 ```
 
 The `AgencyFunction` instance *is* the tool definition, handler, and metadata. The `uses` directive and LLM tool resolution look up `AgencyFunction` instances directly.
 
-For **imported functions**: `import { add } from "math.agency"` imports an `AgencyFunction` instance. The importing module adds it to its local `__toolRegistry`.
+For **locally defined functions**: `AgencyFunction.create()` registers the function under its name automatically.
 
-For **aliased imports**: `import { add as plus }` — the registry key is `plus`, but `AgencyFunction.name` and `AgencyFunction.module` point to the original. Serialization uses those, not the alias.
+For **imported functions**: `import { add } from "math.agency"` imports an `AgencyFunction` instance. The importing module registers it with `__toolRegistry[name] = importedFunction`.
+
+For **aliased imports**: `import { add as plus }` — the registry key is `plus`, but `AgencyFunction.name` and `AgencyFunction.module` point to the original. The importing module does `__toolRegistry["plus"] = importedAdd`. Serialization uses the original name/module, not the alias.
 
 For **builtin tools**: Builtin functions (`print`, `read`, etc.) get wrapped in `AgencyFunction` instances with appropriate parameter metadata. Their `_fn` implementations are thin wrappers that accept and ignore the `state` parameter, since builtins don't participate in the interrupt/state machinery.
 
@@ -208,7 +221,7 @@ The `FunctionRefReviver` is adapted, not replaced. This keeps the reviver patter
 
 ### Serialization
 
-The `nativeTypeReplacer` detects `AgencyFunction` instances via the `AGENCY_FUNCTION_BRAND` symbol property (using `AgencyFunction.isAgencyFunction()`). This is more reliable than `instanceof` across module boundaries — `Symbol.for()` guarantees the same symbol globally regardless of how many copies of the runtime exist. The serialized format is unchanged:
+The `nativeTypeReplacer` detects `AgencyFunction` instances via `AgencyFunction.isAgencyFunction()`, which checks for the `__agencyFunction` brand property. This is more reliable than `instanceof` across module boundaries. The serialized format is unchanged:
 
 ```json
 { "__nativeType": "FunctionRef", "name": "add", "module": "math.agency" }

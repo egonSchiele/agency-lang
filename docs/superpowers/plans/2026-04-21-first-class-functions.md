@@ -166,7 +166,7 @@ const revivers: BaseReviver<any>[] = [
 ];
 ```
 
-Update the `nativeTypeReplacer` guard (lines 27-28):
+Update the `nativeTypeReplacer` guard (lines 27-28). The existing ternary is already dense — replace it with a clear if/else:
 
 ```typescript
 // Before:
@@ -174,7 +174,13 @@ const raw = typeof value === "object" && value !== null ? value : (key === "" ? 
 if (typeof raw !== "object" || raw === null) return value;
 
 // After:
-const raw = typeof value === "object" && value !== null ? value : (typeof value === "function" ? value : (key === "" ? value : this[key]));
+let raw: unknown;
+if ((typeof value === "object" && value !== null) || typeof value === "function") {
+  raw = value;
+} else {
+  // Primitives: fall back to this[key] to handle toJSON() conversion (Date, URL)
+  raw = key === "" ? value : this[key];
+}
 if (raw === null) return value;
 if (typeof raw !== "object" && typeof raw !== "function") return value;
 ```
@@ -325,6 +331,37 @@ describe("nativeTypeReplacer with functions", () => {
     const json = JSON.stringify(obj, nativeTypeReplacer);
     const parsed = JSON.parse(json);
     expect(parsed.nested.deep.callback).toEqual({
+      __nativeType: "FunctionRef",
+      name: "greet",
+      module: "test.agency",
+    });
+  });
+
+  it("handles function refs inside a serialized Set", () => {
+    const fn = makeRegisteredFunction("greet", "test.agency");
+    const s = new Set([1, fn, "hello"]);
+    const json = JSON.stringify(s, nativeTypeReplacer);
+    const parsed = JSON.parse(json);
+    // Set serializes as { __nativeType: "Set", values: [...] }
+    // The function inside values should be serialized as a FunctionRef
+    expect(parsed.__nativeType).toBe("Set");
+    const fnEntry = parsed.values.find((v: any) => v?.__nativeType === "FunctionRef");
+    expect(fnEntry).toEqual({
+      __nativeType: "FunctionRef",
+      name: "greet",
+      module: "test.agency",
+    });
+  });
+
+  it("handles function refs inside a serialized Map", () => {
+    const fn = makeRegisteredFunction("greet", "test.agency");
+    const m = new Map<string, any>([["callback", fn], ["data", 42]]);
+    const json = JSON.stringify(m, nativeTypeReplacer);
+    const parsed = JSON.parse(json);
+    // Map serializes as { __nativeType: "Map", entries: [[k, v], ...] }
+    expect(parsed.__nativeType).toBe("Map");
+    const callbackEntry = parsed.entries.find((e: any) => e[0] === "callback");
+    expect(callbackEntry[1]).toEqual({
       __nativeType: "FunctionRef",
       name: "greet",
       module: "test.agency",
@@ -808,7 +845,79 @@ git commit -m "test: function references in objects survive interrupt serializat
 
 ---
 
-### Task 11: Agency execution test — imported function reference with alias
+### Task 11: Agency execution test — function ref passed as argument survives interrupt
+
+**Files:**
+- Create: `tests/agency/functionRef-arg-interrupt.agency`
+- Create: `tests/agency/functionRef-arg-interrupt.test.json`
+
+This tests that a function reference passed as an argument to another function survives serialization when an interrupt fires inside that function.
+
+- [ ] **Step 1: Create the test file**
+
+Create `tests/agency/functionRef-arg-interrupt.agency`:
+
+```
+def double(x: number): number {
+  return x * 2
+}
+
+def useTransform(transform: (number) => number) {
+  const before = transform(5)
+  return interrupt("confirm")
+  const after = transform(10)
+  return "${before},${after}"
+}
+
+node main() {
+  const result = useTransform(double)
+  return result
+}
+```
+
+- [ ] **Step 2: Create the test JSON**
+
+Create `tests/agency/functionRef-arg-interrupt.test.json`:
+
+```json
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Function reference passed as argument survives interrupt inside callee",
+      "input": "",
+      "expectedOutput": "10,20",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "confirm"
+        }
+      ]
+    }
+  ]
+}
+```
+
+- [ ] **Step 3: Run the test**
+
+Run: `pnpm test:run`
+Expected: PASS — the `transform` argument (holding `double`) survives the interrupt inside `useTransform`.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add tests/agency/functionRef-arg-interrupt.agency tests/agency/functionRef-arg-interrupt.test.json
+git commit -m "test: function ref passed as argument survives interrupt"
+```
+
+---
+
+### Task 12: Agency execution test — imported function reference with alias
 
 **Files:**
 - Create: `tests/agency/imports/functionRef-alias.agency`
@@ -882,7 +991,7 @@ git commit -m "test: aliased imported function reference survives interrupt"
 
 ---
 
-### Task 12: Agency execution test — passing a def function where a block is expected
+### Task 13: Agency execution test — passing a def function where a block is expected
 
 **Files:**
 - Create: `tests/agency/functionRef-as-block.agency`
@@ -943,7 +1052,7 @@ git commit -m "test: def function used where block is expected"
 
 ---
 
-### Task 13: Preprocessor test — node-as-value compile error
+### Task 14: Preprocessor test — node-as-value compile error
 
 **Files:**
 - Create: `tests/typescriptPreprocessor/functionRef-node-error.agency` (or add to an existing error test pattern)
@@ -983,7 +1092,7 @@ git commit -m "test: compile error when using node name as value expression"
 
 ---
 
-### Task 14: Rebuild all fixtures and run full test suite
+### Task 15: Rebuild all fixtures and run full test suite
 
 **Files:** None (verification only)
 

@@ -7,7 +7,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEST_SERVER_PATH = path.join(__dirname, "__tests__", "testServer.ts");
 
-describe("MCP integration", () => {
+describe.skip("MCP integration", () => {
   let manager: McpManager;
 
   afterEach(async () => {

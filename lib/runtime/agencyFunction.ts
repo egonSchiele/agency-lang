@@ -77,8 +77,55 @@ export class AgencyFunction {
     return result;
   }
 
-  private resolveNamed(_positionalArgs: unknown[], _namedArgs: Record<string, unknown>): unknown[] {
-    throw new Error("Named args not yet implemented");
+  private resolveNamed(positionalArgs: unknown[], namedArgs: Record<string, unknown>): unknown[] {
+    const nonVariadicParams = this.params.filter(p => !p.variadic);
+
+    // Validate no unknown named args
+    for (const name of Object.keys(namedArgs)) {
+      if (!nonVariadicParams.find(p => p.name === name)) {
+        throw new Error(
+          `Unknown named argument '${name}' in call to '${this.name}'`,
+        );
+      }
+    }
+
+    // Validate named args don't conflict with positional
+    for (const name of Object.keys(namedArgs)) {
+      const paramIdx = nonVariadicParams.findIndex(p => p.name === name);
+      if (paramIdx < positionalArgs.length) {
+        throw new Error(
+          `Named argument '${name}' conflicts with positional argument at position ${paramIdx + 1} in call to '${this.name}'`,
+        );
+      }
+    }
+
+    // Build result: positional args first, then fill from named args in parameter order
+    const result: unknown[] = [...positionalArgs];
+
+    for (let i = positionalArgs.length; i < nonVariadicParams.length; i++) {
+      const param = nonVariadicParams[i];
+      if (param.name in namedArgs) {
+        result.push(namedArgs[param.name]);
+      } else if (param.hasDefault) {
+        // Check if any later param has a named arg — if so, insert UNSET placeholder
+        const hasLaterNamedArg = nonVariadicParams
+          .slice(i + 1)
+          .some(p => p.name in namedArgs);
+        if (hasLaterNamedArg) {
+          result.push(UNSET);
+        } else {
+          // Trailing skipped params — stop here, resolvePositional will pad
+          break;
+        }
+      } else {
+        throw new Error(
+          `Missing required argument '${param.name}' in call to '${this.name}'`,
+        );
+      }
+    }
+
+    // Apply variadic wrapping and default padding via resolvePositional
+    return this.resolvePositional(result);
   }
 
   toJSON(): { name: string; module: string } {

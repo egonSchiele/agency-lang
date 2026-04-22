@@ -59,4 +59,115 @@ describe("AgencyFunction", () => {
       expect(result).toEqual([undefined]); // just state
     });
   });
+
+  describe("named calls", () => {
+    it("reorders named args to positional order", async () => {
+      const fn = makeFunction([{ name: "a" }, { name: "b" }, { name: "c" }]);
+      const result = await fn.invoke({
+        type: "named",
+        positionalArgs: [],
+        namedArgs: { c: 3, a: 1, b: 2 },
+      });
+      expect(result).toEqual([1, 2, 3, undefined]);
+    });
+
+    it("mixes positional and named args", async () => {
+      const fn = makeFunction([{ name: "a" }, { name: "b" }, { name: "c" }]);
+      const result = await fn.invoke({
+        type: "named",
+        positionalArgs: [1],
+        namedArgs: { c: 3, b: 2 },
+      });
+      expect(result).toEqual([1, 2, 3, undefined]);
+    });
+
+    it("fills skipped optional params with UNSET", async () => {
+      const fn = makeFunction([
+        { name: "a" },
+        { name: "b", hasDefault: true, defaultValue: 10 },
+        { name: "c" },
+      ]);
+      const result = await fn.invoke({
+        type: "named",
+        positionalArgs: [],
+        namedArgs: { a: 1, c: 3 },
+      });
+      expect(result).toEqual([1, UNSET, 3, undefined]);
+    });
+
+    it("pads trailing defaults when named args stop early", async () => {
+      const fn = makeFunction([
+        { name: "a" },
+        { name: "b", hasDefault: true, defaultValue: 10 },
+        { name: "c", hasDefault: true, defaultValue: 20 },
+      ]);
+      const result = await fn.invoke({
+        type: "named",
+        positionalArgs: [],
+        namedArgs: { a: 1 },
+      });
+      expect(result).toEqual([1, UNSET, UNSET, undefined]);
+    });
+
+    it("throws on unknown named arg", async () => {
+      const fn = makeFunction([{ name: "a" }]);
+      await expect(
+        fn.invoke({ type: "named", positionalArgs: [], namedArgs: { z: 1 } }),
+      ).rejects.toThrow("Unknown named argument 'z'");
+    });
+
+    it("throws on duplicate named arg targeting positional slot", async () => {
+      const fn = makeFunction([{ name: "a" }, { name: "b" }]);
+      await expect(
+        fn.invoke({ type: "named", positionalArgs: [1], namedArgs: { a: 2 } }),
+      ).rejects.toThrow("conflicts with positional argument");
+    });
+
+    it("throws on missing required arg", async () => {
+      const fn = makeFunction([{ name: "a" }, { name: "b" }]);
+      await expect(
+        fn.invoke({ type: "named", positionalArgs: [], namedArgs: { a: 1 } }),
+      ).rejects.toThrow("Missing required argument 'b'");
+    });
+  });
+
+  describe("toJSON", () => {
+    it("returns name and module", () => {
+      const fn = makeFunction([{ name: "a" }]);
+      expect(fn.toJSON()).toEqual({ name: "testFn", module: "test.agency" });
+    });
+  });
+
+  describe("isAgencyFunction", () => {
+    it("returns true for AgencyFunction instances", () => {
+      const fn = makeFunction([]);
+      expect(AgencyFunction.isAgencyFunction(fn)).toBe(true);
+    });
+
+    it("returns false for plain objects", () => {
+      expect(AgencyFunction.isAgencyFunction({})).toBe(false);
+      expect(AgencyFunction.isAgencyFunction(null)).toBe(false);
+      expect(AgencyFunction.isAgencyFunction(42)).toBe(false);
+      expect(AgencyFunction.isAgencyFunction("hello")).toBe(false);
+    });
+
+    it("returns false for objects with __agencyFunction but wrong value", () => {
+      expect(AgencyFunction.isAgencyFunction({ __agencyFunction: "yes" })).toBe(false);
+    });
+  });
+
+  describe("create", () => {
+    it("creates instance and registers it in the registry", () => {
+      const registry: Record<string, AgencyFunction> = {};
+      const fn = AgencyFunction.create({
+        name: "add",
+        module: "math.agency",
+        fn: async () => {},
+        params: [],
+        toolDefinition: null,
+      }, registry);
+      expect(registry["add"]).toBe(fn);
+      expect(fn.name).toBe("add");
+    });
+  });
 });

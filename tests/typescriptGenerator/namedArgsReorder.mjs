@@ -9,7 +9,7 @@ import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, R
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
-  checkpoint, getCheckpoint, restore,
+  checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
@@ -26,7 +26,7 @@ import {
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
-  _builtinTool as __builtinTool,
+  AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -67,11 +67,6 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
-// tool() function — looks up a tool by name from the module's __toolRegistry
-function tool(__name: string) {
-  return __builtinTool(__name, __toolRegistry);
-}
-
 // Handler result builtins
 function approve(value?: any) { return { type: "approved" as const, value }; }
 function reject(value?: any) { return { type: "rejected" as const, value }; }
@@ -89,41 +84,28 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
+
+const __toolRegistry: Record<string, any> = {};
+
+// Wrap stateful runtime functions as AgencyFunction instances
+const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
+const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
+const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
 async function mcp(serverName: string) {
   return __globalCtx.mcpManager.getTools(serverName);
 }
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("namedArgsReorder.agency")
 }
-export const __greetTool = {
-  name: "greet",
-  description: `No description provided.`,
-  schema: z.object({"name": z.string(), "greeting": z.string().nullable().describe("Default: Hello"), "punctuation": z.string().nullable().describe("Default: !"), })
-};
-export const __greetToolParams = ["name", "greeting", "punctuation"];
-const __toolRegistry = {
-  greet: {
-    definition: __greetTool,
-    handler: {
-      name: "greet",
-      params: __greetToolParams,
-      execute: greet,
-      isBuiltin: false
-    }
-  },
-  readSkill: {
-    definition: __readSkillTool,
-    handler: {
-      name: "readSkill",
-      params: __readSkillToolParams,
-      execute: readSkill,
-      isBuiltin: true
-    }
-  }
-};
-greet.__functionRef = { name: "greet", module: "namedArgsReorder.agency" };
+__toolRegistry["readSkill"] = __AgencyFunction.create({
+  name: "readSkill",
+  module: "namedArgsReorder.agency",
+  fn: readSkill,
+  params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
+  toolDefinition: __readSkillTool,
+}, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
-async function greet(name: string, greeting: string | null = null, punctuation: string | null = null, __state: InternalFunctionState | undefined = undefined) {
+async function __greet_impl(name: string, greeting: string | typeof __UNSET = __UNSET, punctuation: string | typeof __UNSET = __UNSET, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -156,8 +138,8 @@ let __functionCompleted = false;
     }
   })
   __stack.args["name"] = name;
-  __stack.args["greeting"] = greeting ?? `Hello`;
-  __stack.args["punctuation"] = punctuation ?? `!`;
+  __stack.args["greeting"] = (greeting === __UNSET ? (`Hello`) : (greeting));
+  __stack.args["punctuation"] = (punctuation === __UNSET ? (`!`) : (punctuation));
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "namedArgsReorder.agency", scopeName: "greet" });
   let __resultCheckpointId = -1;
@@ -217,6 +199,32 @@ return failure(
     }
   }
 }
+const greet = __AgencyFunction.create({
+  name: "greet",
+  module: "namedArgsReorder.agency",
+  fn: __greet_impl,
+  params: [{
+    name: "name",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }, {
+    name: "greeting",
+    hasDefault: true,
+    defaultValue: undefined,
+    variadic: false
+  }, {
+    name: "punctuation",
+    hasDefault: true,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "greet",
+    description: `No description provided.`,
+    schema: z.object({"name": z.string(), "greeting": z.string().nullable().describe("Default: Hello"), "punctuation": z.string().nullable().describe("Default: !"), })
+  }
+}, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -243,7 +251,14 @@ let __functionCompleted = false;
 //  Reordered named args
     });
     await runner.step(1, async (runner) => {
-__stack.locals.a = await greet(`world`, `Hi`, null, {
+__stack.locals.a = await greet.invoke({
+        type: "named",
+        positionalArgs: [],
+        namedArgs: {
+          greeting: `Hi`,
+          name: `world`
+        }
+      }, {
         ctx: __ctx,
         threads: __threads,
         interruptData: __state?.interruptData
@@ -259,7 +274,14 @@ if (isInterrupt(__stack.locals.a)) {
 //  Skip middle param with named args
     });
     await runner.step(2, async (runner) => {
-__stack.locals.b = await greet(`world`, null, `.`, {
+__stack.locals.b = await greet.invoke({
+        type: "named",
+        positionalArgs: [],
+        namedArgs: {
+          name: `world`,
+          punctuation: `.`
+        }
+      }, {
         ctx: __ctx,
         threads: __threads,
         interruptData: __state?.interruptData
@@ -275,7 +297,13 @@ if (isInterrupt(__stack.locals.b)) {
 //  Mixed positional + named
     });
     await runner.step(3, async (runner) => {
-__stack.locals.c = await greet(`world`, null, `?`, {
+__stack.locals.c = await greet.invoke({
+        type: "named",
+        positionalArgs: [`world`],
+        namedArgs: {
+          punctuation: `?`
+        }
+      }, {
         ctx: __ctx,
         threads: __threads,
         interruptData: __state?.interruptData

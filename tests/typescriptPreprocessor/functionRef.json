@@ -97,7 +97,8 @@
               "col": 17,
               "start": 101,
               "end": 111
-            }
+            },
+            "scope": "local"
           },
           "loc": {
             "line": 4,

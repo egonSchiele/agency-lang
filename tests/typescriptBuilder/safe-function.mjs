@@ -10,7 +10,7 @@ import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, R
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
-  checkpoint, getCheckpoint, restore,
+  checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
@@ -27,7 +27,7 @@ import {
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
-  _builtinTool as __builtinTool,
+  AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -68,11 +68,6 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
-// tool() function — looks up a tool by name from the module's __toolRegistry
-function tool(__name: string) {
-  return __builtinTool(__name, __toolRegistry);
-}
-
 // Handler result builtins
 function approve(value?: any) { return { type: "approved" as const, value }; }
 function reject(value?: any) { return { type: "rejected" as const, value }; }
@@ -90,58 +85,29 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
+
+const __toolRegistry: Record<string, any> = {};
+
+// Wrap stateful runtime functions as AgencyFunction instances
+const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
+const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
+const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
 async function mcp(serverName: string) {
   return __globalCtx.mcpManager.getTools(serverName);
 }
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("safe-function.agency")
 }
-export const __safeLookupTool = {
-  name: "safeLookup",
-  description: `No description provided.`,
-  schema: z.object({"id": z.string(), })
-};
-export const __safeLookupToolParams = ["id"];
-export const __unsafeSaveTool = {
-  name: "unsafeSave",
-  description: `No description provided.`,
-  schema: z.object({"id": z.string(), })
-};
-export const __unsafeSaveToolParams = ["id"];
-const __toolRegistry = {
-  safeLookup: {
-    definition: __safeLookupTool,
-    handler: {
-      name: "safeLookup",
-      params: __safeLookupToolParams,
-      execute: safeLookup,
-      isBuiltin: false
-    }
-  },
-  unsafeSave: {
-    definition: __unsafeSaveTool,
-    handler: {
-      name: "unsafeSave",
-      params: __unsafeSaveToolParams,
-      execute: unsafeSave,
-      isBuiltin: false
-    }
-  },
-  readSkill: {
-    definition: __readSkillTool,
-    handler: {
-      name: "readSkill",
-      params: __readSkillToolParams,
-      execute: readSkill,
-      isBuiltin: true
-    }
-  }
-};
-safeLookup.__functionRef = { name: "safeLookup", module: "safe-function.agency" };
-unsafeSave.__functionRef = { name: "unsafeSave", module: "safe-function.agency" };
+__toolRegistry["readSkill"] = __AgencyFunction.create({
+  name: "readSkill",
+  module: "safe-function.agency",
+  fn: readSkill,
+  params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
+  toolDefinition: __readSkillTool,
+}, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
 
-async function safeLookup(id: string, __state: InternalFunctionState | undefined = undefined) {
+async function __safeLookup_impl(id: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -223,7 +189,23 @@ return failure(
     }
   }
 }
-async function unsafeSave(id: string, __state: InternalFunctionState | undefined = undefined) {
+const safeLookup = __AgencyFunction.create({
+  name: "safeLookup",
+  module: "safe-function.agency",
+  fn: __safeLookup_impl,
+  params: [{
+    name: "id",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "safeLookup",
+    description: `No description provided.`,
+    schema: z.object({"id": z.string(), })
+  }
+}, __toolRegistry);
+async function __unsafeSave_impl(id: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -309,6 +291,22 @@ return failure(
     }
   }
 }
+const unsafeSave = __AgencyFunction.create({
+  name: "unsafeSave",
+  module: "safe-function.agency",
+  fn: __unsafeSave_impl,
+  params: [{
+    name: "id",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "unsafeSave",
+    description: `No description provided.`,
+    schema: z.object({"id": z.string(), })
+  }
+}, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -337,10 +335,7 @@ __stack.locals.result = await runPrompt({
         ctx: __ctx,
         prompt: `Use the tools`,
         messages: __threads.getOrCreateActive(),
-        clientConfig: {
-          tools: [tool("safeLookup"), tool("unsafeSave")],
-          ...{}
-        },
+        clientConfig: {},
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools,

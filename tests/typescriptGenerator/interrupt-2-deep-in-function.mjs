@@ -9,7 +9,7 @@ import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, R
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
-  checkpoint, getCheckpoint, restore,
+  checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
@@ -26,7 +26,7 @@ import {
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
-  _builtinTool as __builtinTool,
+  AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -67,11 +67,6 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
-// tool() function — looks up a tool by name from the module's __toolRegistry
-function tool(__name: string) {
-  return __builtinTool(__name, __toolRegistry);
-}
-
 // Handler result builtins
 function approve(value?: any) { return { type: "approved" as const, value }; }
 function reject(value?: any) { return { type: "rejected" as const, value }; }
@@ -89,57 +84,28 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
+
+const __toolRegistry: Record<string, any> = {};
+
+// Wrap stateful runtime functions as AgencyFunction instances
+const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
+const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
+const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
 async function mcp(serverName: string) {
   return __globalCtx.mcpManager.getTools(serverName);
 }
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("interrupt-2-deep-in-function.agency")
 }
-export const __greetTool = {
-  name: "greet",
-  description: `No description provided.`,
-  schema: z.object({"name": z.string(), "age": z.number(), })
-};
-export const __greetToolParams = ["name", "age"];
-export const __foo2Tool = {
-  name: "foo2",
-  description: `No description provided.`,
-  schema: z.object({"name": z.string(), "age": z.number(), })
-};
-export const __foo2ToolParams = ["name", "age"];
-const __toolRegistry = {
-  greet: {
-    definition: __greetTool,
-    handler: {
-      name: "greet",
-      params: __greetToolParams,
-      execute: greet,
-      isBuiltin: false
-    }
-  },
-  foo2: {
-    definition: __foo2Tool,
-    handler: {
-      name: "foo2",
-      params: __foo2ToolParams,
-      execute: foo2,
-      isBuiltin: false
-    }
-  },
-  readSkill: {
-    definition: __readSkillTool,
-    handler: {
-      name: "readSkill",
-      params: __readSkillToolParams,
-      execute: readSkill,
-      isBuiltin: true
-    }
-  }
-};
-greet.__functionRef = { name: "greet", module: "interrupt-2-deep-in-function.agency" };
-foo2.__functionRef = { name: "foo2", module: "interrupt-2-deep-in-function.agency" };
+__toolRegistry["readSkill"] = __AgencyFunction.create({
+  name: "readSkill",
+  module: "interrupt-2-deep-in-function.agency",
+  fn: readSkill,
+  params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
+  toolDefinition: __readSkillTool,
+}, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
-async function greet(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
+async function __greet_impl(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -275,7 +241,28 @@ return failure(
     }
   }
 }
-async function foo2(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
+const greet = __AgencyFunction.create({
+  name: "greet",
+  module: "interrupt-2-deep-in-function.agency",
+  fn: __greet_impl,
+  params: [{
+    name: "name",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }, {
+    name: "age",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "greet",
+    description: `No description provided.`,
+    schema: z.object({"name": z.string(), "age": z.number(), })
+  }
+}, __toolRegistry);
+async function __foo2_impl(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -330,7 +317,14 @@ if (__ctx._pendingArgOverrides) {
 
   try {
     await runner.step(0, async (runner) => {
-await print(`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`) + greet
+await print.invoke({
+        type: "positional",
+        args: [`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`]
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        interruptData: __state?.interruptData
+      }) + greet
     });
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -352,7 +346,19 @@ if (isInterrupt(__stack.locals.response)) {
       }
     });
     await runner.step(2, async (runner) => {
-await print(`Greeted, age is still ${__stack.args.age}...`)
+const __funcResult = await print.invoke({
+        type: "positional",
+        args: [`Greeted, age is still ${__stack.args.age}...`]
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        interruptData: __state?.interruptData
+      });
+if (isInterrupt(__funcResult)) {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt(__funcResult)
+        return;
+      }
     });
     await runner.step(3, async (runner) => {
 __functionCompleted = true;
@@ -388,6 +394,27 @@ return failure(
     }
   }
 }
+const foo2 = __AgencyFunction.create({
+  name: "foo2",
+  module: "interrupt-2-deep-in-function.agency",
+  fn: __foo2_impl,
+  params: [{
+    name: "name",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }, {
+    name: "age",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "foo2",
+    description: `No description provided.`,
+    schema: z.object({"name": z.string(), "age": z.number(), })
+  }
+}, __toolRegistry);
 graph.node("sayHi", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -414,13 +441,31 @@ let __functionCompleted = false;
   }
   try {
     await runner.step(0, async (runner) => {
-await print(`Saying hi to ${__stack.args.name}...`)
+const __funcResult = await print.invoke({
+        type: "positional",
+        args: [`Saying hi to ${__stack.args.name}...`]
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        interruptData: __state?.interruptData
+      });
+if (isInterrupt(__funcResult)) {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __funcResult
+        })
+        return;
+      }
     });
     await runner.step(1, async (runner) => {
 __stack.locals.age = 30;
     });
     await runner.step(2, async (runner) => {
-__stack.locals.response = await foo2(__stack.args.name, __stack.locals.age, {
+__stack.locals.response = await foo2.invoke({
+        type: "positional",
+        args: [__stack.args.name, __stack.locals.age]
+      }, {
         ctx: __ctx,
         threads: __threads,
         interruptData: __state?.interruptData
@@ -435,10 +480,40 @@ if (isInterrupt(__stack.locals.response)) {
       }
     });
     await runner.step(3, async (runner) => {
-await print(__stack.locals.response)
+const __funcResult = await print.invoke({
+        type: "positional",
+        args: [__stack.locals.response]
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        interruptData: __state?.interruptData
+      });
+if (isInterrupt(__funcResult)) {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __funcResult
+        })
+        return;
+      }
     });
     await runner.step(4, async (runner) => {
-await print(`Greeting sent.`)
+const __funcResult = await print.invoke({
+        type: "positional",
+        args: [`Greeting sent.`]
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        interruptData: __state?.interruptData
+      });
+if (isInterrupt(__funcResult)) {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __funcResult
+        })
+        return;
+      }
     });
     await runner.step(5, async (runner) => {
 runner.halt({

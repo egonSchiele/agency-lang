@@ -9,7 +9,7 @@ import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, R
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
-  checkpoint, getCheckpoint, restore,
+  checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
@@ -26,7 +26,7 @@ import {
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
-  _builtinTool as __builtinTool,
+  AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -67,11 +67,6 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
-// tool() function — looks up a tool by name from the module's __toolRegistry
-function tool(__name: string) {
-  return __builtinTool(__name, __toolRegistry);
-}
-
 // Handler result builtins
 function approve(value?: any) { return { type: "approved" as const, value }; }
 function reject(value?: any) { return { type: "rejected" as const, value }; }
@@ -89,105 +84,28 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
+
+const __toolRegistry: Record<string, any> = {};
+
+// Wrap stateful runtime functions as AgencyFunction instances
+const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
+const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
+const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
 async function mcp(serverName: string) {
   return __globalCtx.mcpManager.getTools(serverName);
 }
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("function-with-types.agency")
 }
-export const __addTool = {
-  name: "add",
-  description: `Adds two numbers together`,
-  schema: z.object({"x": z.number(), "y": z.number(), })
-};
-export const __addToolParams = ["x", "y"];
-export const __greetTool = {
-  name: "greet",
-  description: `Greets a person by name`,
-  schema: z.object({"name": z.string(), })
-};
-export const __greetToolParams = ["name"];
-export const __mixedTool = {
-  name: "mixed",
-  description: `Mixed typed and untyped parameters`,
-  schema: z.object({"count": z.number(), "label": z.string(), })
-};
-export const __mixedToolParams = ["count", "label"];
-export const __processArrayTool = {
-  name: "processArray",
-  description: `Processes an array of numbers`,
-  schema: z.object({"items": z.array(z.number()), })
-};
-export const __processArrayToolParams = ["items"];
-export const __flexibleTool = {
-  name: "flexible",
-  description: `Handles either a string or number`,
-  schema: z.object({"value": z.union([z.string(), z.number()]), })
-};
-export const __flexibleToolParams = ["value"];
-const __toolRegistry = {
-  add: {
-    definition: __addTool,
-    handler: {
-      name: "add",
-      params: __addToolParams,
-      execute: add,
-      isBuiltin: false
-    }
-  },
-  greet: {
-    definition: __greetTool,
-    handler: {
-      name: "greet",
-      params: __greetToolParams,
-      execute: greet,
-      isBuiltin: false
-    }
-  },
-  mixed: {
-    definition: __mixedTool,
-    handler: {
-      name: "mixed",
-      params: __mixedToolParams,
-      execute: mixed,
-      isBuiltin: false
-    }
-  },
-  processArray: {
-    definition: __processArrayTool,
-    handler: {
-      name: "processArray",
-      params: __processArrayToolParams,
-      execute: processArray,
-      isBuiltin: false
-    }
-  },
-  flexible: {
-    definition: __flexibleTool,
-    handler: {
-      name: "flexible",
-      params: __flexibleToolParams,
-      execute: flexible,
-      isBuiltin: false
-    }
-  },
-  readSkill: {
-    definition: __readSkillTool,
-    handler: {
-      name: "readSkill",
-      params: __readSkillToolParams,
-      execute: readSkill,
-      isBuiltin: true
-    }
-  }
-};
-add.__functionRef = { name: "add", module: "function-with-types.agency" };
-greet.__functionRef = { name: "greet", module: "function-with-types.agency" };
-mixed.__functionRef = { name: "mixed", module: "function-with-types.agency" };
-processArray.__functionRef = { name: "processArray", module: "function-with-types.agency" };
-flexible.__functionRef = { name: "flexible", module: "function-with-types.agency" };
+__toolRegistry["readSkill"] = __AgencyFunction.create({
+  name: "readSkill",
+  module: "function-with-types.agency",
+  fn: readSkill,
+  params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
+  toolDefinition: __readSkillTool,
+}, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
-async function add(x: number, y: number, __state: InternalFunctionState | undefined = undefined) {
+async function __add_impl(x: number, y: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -294,7 +212,28 @@ return failure(
     }
   }
 }
-async function greet(name: string, __state: InternalFunctionState | undefined = undefined) {
+const add = __AgencyFunction.create({
+  name: "add",
+  module: "function-with-types.agency",
+  fn: __add_impl,
+  params: [{
+    name: "x",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }, {
+    name: "y",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "add",
+    description: `Adds two numbers together`,
+    schema: z.object({"x": z.number(), "y": z.number(), })
+  }
+}, __toolRegistry);
+async function __greet_impl(name: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -395,7 +334,23 @@ return failure(
     }
   }
 }
-async function mixed(count: number, label: any, __state: InternalFunctionState | undefined = undefined) {
+const greet = __AgencyFunction.create({
+  name: "greet",
+  module: "function-with-types.agency",
+  fn: __greet_impl,
+  params: [{
+    name: "name",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "greet",
+    description: `Greets a person by name`,
+    schema: z.object({"name": z.string(), })
+  }
+}, __toolRegistry);
+async function __mixed_impl(count: number, label: any, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -502,7 +457,28 @@ return failure(
     }
   }
 }
-async function processArray(items: number[], __state: InternalFunctionState | undefined = undefined) {
+const mixed = __AgencyFunction.create({
+  name: "mixed",
+  module: "function-with-types.agency",
+  fn: __mixed_impl,
+  params: [{
+    name: "count",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }, {
+    name: "label",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "mixed",
+    description: `Mixed typed and untyped parameters`,
+    schema: z.object({"count": z.number(), "label": z.string(), })
+  }
+}, __toolRegistry);
+async function __processArray_impl(items: number[], __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -603,7 +579,23 @@ return failure(
     }
   }
 }
-async function flexible(value: string | number, __state: InternalFunctionState | undefined = undefined) {
+const processArray = __AgencyFunction.create({
+  name: "processArray",
+  module: "function-with-types.agency",
+  fn: __processArray_impl,
+  params: [{
+    name: "items",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "processArray",
+    description: `Processes an array of numbers`,
+    schema: z.object({"items": z.array(z.number()), })
+  }
+}, __toolRegistry);
+async function __flexible_impl(value: string | number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -704,6 +696,22 @@ return failure(
     }
   }
 }
+const flexible = __AgencyFunction.create({
+  name: "flexible",
+  module: "function-with-types.agency",
+  fn: __flexible_impl,
+  params: [{
+    name: "value",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "flexible",
+    description: `Handles either a string or number`,
+    schema: z.object({"value": z.union([z.string(), z.number()]), })
+  }
+}, __toolRegistry);
 graph.node("foo", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -727,7 +735,22 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function-with-types.agency", scopeName: "foo" });
   try {
     await runner.step(0, async (runner) => {
-await print(`This is a node with a return type`)
+const __funcResult = await print.invoke({
+        type: "positional",
+        args: [`This is a node with a return type`]
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        interruptData: __state?.interruptData
+      });
+if (isInterrupt(__funcResult)) {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __funcResult
+        })
+        return;
+      }
     });
     await runner.step(1, async (runner) => {
 runner.halt({
@@ -786,7 +809,10 @@ let __functionCompleted = false;
 //  Call the functions
     });
     await runner.step(1, async (runner) => {
-__stack.locals.sum = await add(5, 10, {
+__stack.locals.sum = await add.invoke({
+        type: "positional",
+        args: [5, 10]
+      }, {
         ctx: __ctx,
         threads: __threads,
         interruptData: __state?.interruptData
@@ -801,7 +827,10 @@ if (isInterrupt(__stack.locals.sum)) {
       }
     });
     await runner.step(2, async (runner) => {
-__stack.locals.greeting = await greet(`Alice`, {
+__stack.locals.greeting = await greet.invoke({
+        type: "positional",
+        args: [`Alice`]
+      }, {
         ctx: __ctx,
         threads: __threads,
         interruptData: __state?.interruptData
@@ -816,7 +845,10 @@ if (isInterrupt(__stack.locals.greeting)) {
       }
     });
     await runner.step(3, async (runner) => {
-__stack.locals.labeled = await mixed(42, `Answer`, {
+__stack.locals.labeled = await mixed.invoke({
+        type: "positional",
+        args: [42, `Answer`]
+      }, {
         ctx: __ctx,
         threads: __threads,
         interruptData: __state?.interruptData
@@ -831,7 +863,10 @@ if (isInterrupt(__stack.locals.labeled)) {
       }
     });
     await runner.step(4, async (runner) => {
-__stack.locals.processed = await processArray([1, 2, 3, 4, 5], {
+__stack.locals.processed = await processArray.invoke({
+        type: "positional",
+        args: [[1, 2, 3, 4, 5]]
+      }, {
         ctx: __ctx,
         threads: __threads,
         interruptData: __state?.interruptData
@@ -846,7 +881,10 @@ if (isInterrupt(__stack.locals.processed)) {
       }
     });
     await runner.step(5, async (runner) => {
-__stack.locals.flexResult = await flexible(`test`, {
+__stack.locals.flexResult = await flexible.invoke({
+        type: "positional",
+        args: [`test`]
+      }, {
         ctx: __ctx,
         threads: __threads,
         interruptData: __state?.interruptData

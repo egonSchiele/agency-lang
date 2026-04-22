@@ -9,7 +9,7 @@ import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, R
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
-  checkpoint, getCheckpoint, restore,
+  checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
@@ -26,7 +26,7 @@ import {
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
-  _builtinTool as __builtinTool,
+  AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -67,11 +67,6 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
-// tool() function — looks up a tool by name from the module's __toolRegistry
-function tool(__name: string) {
-  return __builtinTool(__name, __toolRegistry);
-}
-
 // Handler result builtins
 function approve(value?: any) { return { type: "approved" as const, value }; }
 function reject(value?: any) { return { type: "rejected" as const, value }; }
@@ -89,97 +84,29 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
+
+const __toolRegistry: Record<string, any> = {};
+
+// Wrap stateful runtime functions as AgencyFunction instances
+const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
+const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
+const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
 async function mcp(serverName: string) {
   return __globalCtx.mcpManager.getTools(serverName);
 }
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("docstrings.agency")
 }
-export const __addTool = {
-  name: "add",
-  description: `Add two numbers together.
-  This is a simple addition function.`,
-  schema: z.object({"a": z.string(), "b": z.string(), })
-};
-export const __addToolParams = ["a", "b"];
-export const __greetTool = {
-  name: "greet",
-  description: `Generate a greeting message for the given name.`,
-  schema: z.object({"name": z.string(), })
-};
-export const __greetToolParams = ["name"];
-export const __calculateAreaTool = {
-  name: "calculateArea",
-  description: `Calculate the area of a rectangle.
-
-  Parameters:
-  - width: the width of the rectangle
-  - height: the height of the rectangle
-
-  Returns: the area as a number`,
-  schema: z.object({"width": z.string(), "height": z.string(), })
-};
-export const __calculateAreaToolParams = ["width", "height"];
-export const __processDataTool = {
-  name: "processData",
-  description: `Single line docstring`,
-  schema: z.object({})
-};
-export const __processDataToolParams = [];
-const __toolRegistry = {
-  add: {
-    definition: __addTool,
-    handler: {
-      name: "add",
-      params: __addToolParams,
-      execute: add,
-      isBuiltin: false
-    }
-  },
-  greet: {
-    definition: __greetTool,
-    handler: {
-      name: "greet",
-      params: __greetToolParams,
-      execute: greet,
-      isBuiltin: false
-    }
-  },
-  calculateArea: {
-    definition: __calculateAreaTool,
-    handler: {
-      name: "calculateArea",
-      params: __calculateAreaToolParams,
-      execute: calculateArea,
-      isBuiltin: false
-    }
-  },
-  processData: {
-    definition: __processDataTool,
-    handler: {
-      name: "processData",
-      params: __processDataToolParams,
-      execute: processData,
-      isBuiltin: false
-    }
-  },
-  readSkill: {
-    definition: __readSkillTool,
-    handler: {
-      name: "readSkill",
-      params: __readSkillToolParams,
-      execute: readSkill,
-      isBuiltin: true
-    }
-  }
-};
-add.__functionRef = { name: "add", module: "docstrings.agency" };
-greet.__functionRef = { name: "greet", module: "docstrings.agency" };
-calculateArea.__functionRef = { name: "calculateArea", module: "docstrings.agency" };
-processData.__functionRef = { name: "processData", module: "docstrings.agency" };
+__toolRegistry["readSkill"] = __AgencyFunction.create({
+  name: "readSkill",
+  module: "docstrings.agency",
+  fn: readSkill,
+  params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
+  toolDefinition: __readSkillTool,
+}, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
 //  Test docstrings in functions
-async function add(a: any, b: any, __state: InternalFunctionState | undefined = undefined) {
+async function __add_impl(a: any, b: any, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -262,7 +189,29 @@ return failure(
     }
   }
 }
-async function greet(name: any, __state: InternalFunctionState | undefined = undefined) {
+const add = __AgencyFunction.create({
+  name: "add",
+  module: "docstrings.agency",
+  fn: __add_impl,
+  params: [{
+    name: "a",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }, {
+    name: "b",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "add",
+    description: `Add two numbers together.
+  This is a simple addition function.`,
+    schema: z.object({"a": z.string(), "b": z.string(), })
+  }
+}, __toolRegistry);
+async function __greet_impl(name: any, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -339,7 +288,23 @@ return failure(
     }
   }
 }
-async function calculateArea(width: any, height: any, __state: InternalFunctionState | undefined = undefined) {
+const greet = __AgencyFunction.create({
+  name: "greet",
+  module: "docstrings.agency",
+  fn: __greet_impl,
+  params: [{
+    name: "name",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "greet",
+    description: `Generate a greeting message for the given name.`,
+    schema: z.object({"name": z.string(), })
+  }
+}, __toolRegistry);
+async function __calculateArea_impl(width: any, height: any, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -422,7 +387,34 @@ return failure(
     }
   }
 }
-async function processData(__state: InternalFunctionState | undefined = undefined) {
+const calculateArea = __AgencyFunction.create({
+  name: "calculateArea",
+  module: "docstrings.agency",
+  fn: __calculateArea_impl,
+  params: [{
+    name: "width",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }, {
+    name: "height",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "calculateArea",
+    description: `Calculate the area of a rectangle.
+
+  Parameters:
+  - width: the width of the rectangle
+  - height: the height of the rectangle
+
+  Returns: the area as a number`,
+    schema: z.object({"width": z.string(), "height": z.string(), })
+  }
+}, __toolRegistry);
+async function __processData_impl(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -492,5 +484,16 @@ return failure(
     }
   }
 }
+const processData = __AgencyFunction.create({
+  name: "processData",
+  module: "docstrings.agency",
+  fn: __processData_impl,
+  params: [],
+  toolDefinition: {
+    name: "processData",
+    description: `Single line docstring`,
+    schema: z.object({})
+  }
+}, __toolRegistry);
 export default graph
 export const __sourceMap = {"docstrings.agency:add":{},"docstrings.agency:greet":{},"docstrings.agency:calculateArea":{},"docstrings.agency:processData":{}};

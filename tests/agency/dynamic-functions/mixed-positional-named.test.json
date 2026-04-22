@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Mixed positional and named args work through a function variable",
+      "input": "",
+      "expectedOutput": "\"Hello World!!!\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

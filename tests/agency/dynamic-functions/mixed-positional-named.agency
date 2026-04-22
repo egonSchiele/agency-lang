@@ -1,0 +1,9 @@
+def format(prefix: string, name: string, suffix: string = "!"): string {
+  return "${prefix} ${name}${suffix}"
+}
+
+node main() {
+  const fn = format
+  const result = fn("Hello", suffix: "!!!", name: "World")
+  return result
+}

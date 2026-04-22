@@ -1,0 +1,43 @@
+{
+  "tests": [
+    {
+      "nodeName": "testUnknownArg",
+      "description": "Runtime error when calling function variable with unknown named arg",
+      "input": "",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "Does the output contain an error about an unknown named argument 'z'? Score 80 if yes.",
+          "desiredAccuracy": 70
+        }
+      ]
+    },
+    {
+      "nodeName": "testMissingRequired",
+      "description": "Runtime error when calling function variable with missing required arg",
+      "input": "",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "Does the output contain an error about a missing required argument 'b'? Score 80 if yes.",
+          "desiredAccuracy": 70
+        }
+      ]
+    },
+    {
+      "nodeName": "testConflict",
+      "description": "Runtime error when named arg conflicts with positional arg",
+      "input": "",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "Does the output contain an error about a named argument conflicting with a positional argument? Score 80 if yes.",
+          "desiredAccuracy": 70
+        }
+      ]
+    }
+  ]
+}

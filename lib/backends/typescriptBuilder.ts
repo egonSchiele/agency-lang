@@ -3147,7 +3147,9 @@ export class TypeScriptBuilder {
         const argNodes = stage.arguments.map((a) =>
           a.type === "placeholder" ? pipeArg : this.processNode(a as AgencyNode),
         );
-        const callee = ts.raw(mapFunctionName(stage.functionName));
+        const callee = stage.scope
+          ? ts.scopedVar(mapFunctionName(stage.functionName), stage.scope, this.moduleId)
+          : ts.raw(mapFunctionName(stage.functionName));
         const descriptor = ts.obj({
           type: ts.str("positional"),
           args: ts.arr(argNodes),

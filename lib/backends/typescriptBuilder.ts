@@ -164,8 +164,7 @@ export class TypeScriptBuilder {
   private _subStepPath: number[] = [];
   private _sourceMapBuilder: SourceMapBuilder = new SourceMapBuilder();
 
-  /** Variables known to hold function references (assigned from a functionRef-scoped value). */
-  private _functionRefVars: Set<string> = new Set();
+  private _functionRefVars: Record<string, true> = {};
 
   private programInfo: ProgramInfo;
   private moduleId: string;
@@ -1565,7 +1564,6 @@ export class TypeScriptBuilder {
   private generateFunctionRefMetadata(functionDefs: FunctionDefinition[]): TsNode[] {
     const stmts: TsNode[] = [];
 
-    // Attach __functionRef to locally defined functions
     for (const def of functionDefs) {
       stmts.push(
         ts.raw(
@@ -1574,7 +1572,7 @@ export class TypeScriptBuilder {
       );
     }
 
-    // Attach __functionRef to imported functions (using original name + source module)
+    // Imported functions use original name + source module, not the local alias
     for (const toolImport of this.programInfo.importedTools) {
       for (const namedImport of toolImport.importedTools) {
         for (const originalName of namedImport.importedNames) {
@@ -1590,7 +1588,6 @@ export class TypeScriptBuilder {
       }
     }
 
-    // Bind the reviver's registry so deserialization can look up functions
     stmts.push(ts.raw("__functionRefReviver.registry = __toolRegistry;"));
 
     return stmts;
@@ -2052,7 +2049,7 @@ export class TypeScriptBuilder {
 
     const shouldAwait = !node.async && context !== "valueAccess";
 
-    if (this.isAgencyFunction(node.functionName, context) || this._functionRefVars.has(node.functionName)) {
+    if (this.isAgencyFunction(node.functionName, context) || this._functionRefVars[node.functionName]) {
       // In global init scope, __threads and __state don't exist — pass only ctx
       const locationOpts = node.functionName === "checkpoint" ? {
         moduleId: ts.str(this.moduleId),
@@ -2071,7 +2068,7 @@ export class TypeScriptBuilder {
           isForked: node.async,
           ...locationOpts,
         });
-      const callee = this._functionRefVars.has(node.functionName)
+      const callee = this._functionRefVars[node.functionName]
         ? ts.scopedVar(functionName, "local", this.moduleId)
         : ts.id(functionName);
       const call = ts.call(callee, [...argNodes, configObj]);
@@ -2379,15 +2376,15 @@ export class TypeScriptBuilder {
   }
 
   private processAssignment(node: Assignment): TsNode {
-    // Track variables assigned from function references for dynamic call support
+    // Needed so the builder knows to pass __state when calling these variables
     if (node.value.type === "variableName") {
       const valueName = node.value.value;
       if (
         node.value.scope === "functionRef" ||
         this.isAgencyFunction(valueName, "functionArg") ||
-        this._functionRefVars.has(valueName)
+        this._functionRefVars[valueName]
       ) {
-        this._functionRefVars.add(node.variableName);
+        this._functionRefVars[node.variableName] = true;
       }
     }
     const result = this._processAssignmentInner(node);

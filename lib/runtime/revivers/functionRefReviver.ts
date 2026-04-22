@@ -35,7 +35,16 @@ export class FunctionRefReviver implements BaseReviver<FunctionWithRef> {
     const name = value.name as string;
     const module = value.module as string;
 
-    // Search registry for a function whose __functionRef matches the original name and module
+    // Fast path: direct lookup by name (works when registry key matches original name)
+    const direct = this.registry[name];
+    if (direct) {
+      const fn = direct.handler.execute as FunctionWithRef;
+      if (fn.__functionRef && fn.__functionRef.name === name && fn.__functionRef.module === module) {
+        return fn;
+      }
+    }
+
+    // Slow path: linear scan for aliased imports (registry key differs from original name)
     for (const [_key, entry] of Object.entries(this.registry)) {
       const fn = entry.handler.execute as FunctionWithRef;
       if (fn.__functionRef && fn.__functionRef.name === name && fn.__functionRef.module === module) {

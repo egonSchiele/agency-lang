@@ -1,0 +1,14 @@
+import { add as plus } from "./agencyHelpers.agency"
+
+def check() {
+  return interrupt("confirm")
+  return "ok"
+}
+
+node main() {
+  const fn = plus
+  const before = fn(2, 3)
+  const r = check()
+  const after = fn(10, 20)
+  return "${before},${after}"
+}

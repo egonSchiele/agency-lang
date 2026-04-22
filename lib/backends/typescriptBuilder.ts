@@ -2071,7 +2071,10 @@ export class TypeScriptBuilder {
           isForked: node.async,
           ...locationOpts,
         });
-      const call = ts.call(ts.id(functionName), [...argNodes, configObj]);
+      const callee = this._functionRefVars.has(node.functionName)
+        ? ts.scopedVar(functionName, "local", this.moduleId)
+        : ts.id(functionName);
+      const call = ts.call(callee, [...argNodes, configObj]);
       return shouldAwait ? ts.await(call) : call;
     } else if (node.functionName === "system") {
       // __threads.active().push(smoltalk.systemMessage(msg))
@@ -2377,11 +2380,15 @@ export class TypeScriptBuilder {
 
   private processAssignment(node: Assignment): TsNode {
     // Track variables assigned from function references for dynamic call support
-    if (
-      node.value.type === "variableName" &&
-      node.value.scope === "functionRef"
-    ) {
-      this._functionRefVars.add(node.variableName);
+    if (node.value.type === "variableName") {
+      const valueName = node.value.value;
+      if (
+        node.value.scope === "functionRef" ||
+        this.isAgencyFunction(valueName, "functionArg") ||
+        this._functionRefVars.has(valueName)
+      ) {
+        this._functionRefVars.add(node.variableName);
+      }
     }
     const result = this._processAssignmentInner(node);
     // If the type annotation has !, wrap the assigned value in __validateType

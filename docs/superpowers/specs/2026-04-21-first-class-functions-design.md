@@ -180,12 +180,20 @@ When the preprocessor encounters `const fn = greet`, it needs to recognize that 
 - The variable `fn` needs to be stored in `__stack.locals` like any other local
 - But the value being assigned is a function from the registry, not a literal
 
-The preprocessor already knows about all function definitions (via `programInfo`). When it sees an identifier that matches a known function name being used as a value (not a call), it flags it by setting the AST node's `scope` to a new `"functionRef"` scope type. This is added to the `ScopeType` union in `lib/types.ts`.
+The preprocessor already knows about all function definitions (via `programInfo`). When it sees an identifier that matches a known function name being used as a value (not a call), it flags it by setting the AST node's `scope` to a new `"functionRef"` scope type.
 
-This approach fits the existing pattern — `scope` is already the mechanism the preprocessor uses to communicate variable resolution to the builder. The builder can then check `scope === "functionRef"` to know it should:
-1. Not try to look the name up as a regular variable
-2. Emit the function reference directly (just the function name, which resolves to the JS function)
-3. When the variable is later *called*, pass `__state` even though `isAgencyFunction` doesn't recognize the variable name
+This new scope type must be added in two places:
+- `ScopeType` union in `lib/types.ts` (AST level)
+- `TsScopedVar["scope"]` union in `lib/ir/tsIR.ts` (IR level)
+- `scopeToPrefix` in `lib/ir/prettyPrint.ts` — maps to `""` (bare name), same as `"imported"` and `"shared"`, since function references are top-level bindings
+
+**Important distinction**: `"functionRef"` is the scope of the *value expression* (the right-hand side `greet`), not the variable being assigned to. In `const fn = greet`, `fn` has scope `"local"` (stored in `__stack.locals`), while `greet` has scope `"functionRef"` (emitted as a bare name).
+
+This approach fits the existing pattern — `scope` is already the mechanism the preprocessor uses to communicate variable resolution to the builder. The builder can then check `scope === "functionRef"` to know it should emit the function reference as a bare name.
+
+For *calling* a function-typed variable (`fn("Bob")`), the builder needs to know that `fn` holds a function reference so it can pass `__state`. The simplest approach: check the variable's type annotation. If the variable has a function type (from an explicit annotation or inferred from the assignment), the builder passes `__state`. This avoids needing to track assignment provenance across the builder.
+
+The node-as-value check also happens here during scope resolution: if the identifier matches a node name in `programInfo`, emit a compile error rather than flagging it as `"functionRef"`.
 
 ### Builder (code generation)
 
@@ -203,7 +211,7 @@ For calling a function-typed variable (`fn("Bob")`), the builder emits the same 
 __stack.locals.fn("Bob", { ctx: __ctx, threads: __threads, interruptData: __state?.interruptData });
 ```
 
-**Important**: The builder currently uses `isAgencyFunction(name)` to decide whether to pass the `__state` argument. This checks against statically known function names. For dynamic calls via variables, this check will fail. The builder needs a new path: when the call target is a variable with a function type (known from the preprocessor or type annotations), always pass `__state` regardless of `isAgencyFunction`.
+**Important**: The builder currently uses `isAgencyFunction(name)` to decide whether to pass the `__state` argument. This checks against statically known function names. For dynamic calls via variables, this check will fail. The builder needs a new path: when the call target has a function type (from type annotation or inferred from assignment), always pass `__state` regardless of `isAgencyFunction`. See the preprocessor section above for details.
 
 ### Type checker
 

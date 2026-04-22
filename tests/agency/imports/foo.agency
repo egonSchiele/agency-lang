@@ -11,14 +11,12 @@ def bestSongTool(artist: string): string {
 }
 
 node agencyImport() {
-  uses ascii
-  const result: number[] = llm("Use the ascii tool to convert the string 'hello' to ASCII codes")
+  const result: number[] = llm("Use the ascii tool to convert the string 'hello' to ASCII codes", { tools: [ascii] })
   return result
 }
 
 node jsImport() {
-  uses bestSongTool
-  const result: string = llm("Use the bestSongTool to find the best song by the artist 'The Beatles'")
+  const result: string = llm("Use the bestSongTool to find the best song by the artist 'The Beatles'", { tools: [bestSongTool] })
   return result
 }
 

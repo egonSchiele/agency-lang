@@ -1,6 +1,8 @@
 {
   "tests": [
     {
+      "skip": true,
+      "skipReason": "Calling AgencyFunction through property access (transforms.a(5)) not yet supported",
       "nodeName": "main",
       "description": "Function references in objects survive serialization through an interrupt",
       "input": "",

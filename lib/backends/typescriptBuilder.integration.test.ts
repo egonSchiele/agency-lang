@@ -129,7 +129,9 @@ describe("TypeScript Builder Integration Tests", () => {
 });
 
 describe("Named argument validation", () => {
-  it("should throw when skipping a required argument", () => {
+  // Named arg validation is now done at runtime by AgencyFunction.invoke(),
+  // not at compile time. These tests verify the builder compiles successfully.
+  it("should compile when skipping a required argument (validated at runtime)", () => {
     expect(() =>
       generateWithBuilder(`
 def greet(name: string, greeting: string = "Hello") {
@@ -137,10 +139,10 @@ def greet(name: string, greeting: string = "Hello") {
 }
 greet(greeting: "Hi")
 `),
-    ).toThrow("Missing required argument 'name' in call to 'greet'");
+    ).not.toThrow();
   });
 
-  it("should throw on unknown named argument", () => {
+  it("should compile with unknown named argument (validated at runtime)", () => {
     expect(() =>
       generateWithBuilder(`
 def foo(a: string) {
@@ -148,7 +150,7 @@ def foo(a: string) {
 }
 foo(a: "hi", extra: "oops")
 `),
-    ).toThrow("Unknown named argument 'extra' in call to 'foo'");
+    ).not.toThrow();
   });
 
   it("should accept correct named arguments", () => {
@@ -173,7 +175,7 @@ greet(greeting: "Hi", name: "world")
     ).not.toThrow();
   });
 
-  it("should throw on positional after named", () => {
+  it("should compile with positional after named (validated at runtime)", () => {
     expect(() =>
       generateWithBuilder(`
 def greet(name: string, greeting: string = "Hello") {
@@ -181,10 +183,10 @@ def greet(name: string, greeting: string = "Hello") {
 }
 greet(name: "world", "Hi")
 `),
-    ).toThrow("Positional argument cannot follow a named argument");
+    ).not.toThrow();
   });
 
-  it("should throw on duplicate named argument", () => {
+  it("should compile with duplicate named argument (validated at runtime)", () => {
     expect(() =>
       generateWithBuilder(`
 def greet(name: string, greeting: string = "Hello") {
@@ -192,7 +194,7 @@ def greet(name: string, greeting: string = "Hello") {
 }
 greet(name: "world", name: "other")
 `),
-    ).toThrow("Duplicate named argument 'name' in call to 'greet'");
+    ).not.toThrow();
   });
 
   it("should accept named args with block parameters", () => {
@@ -259,7 +261,7 @@ ${safeKeyword}def ${funcName}(id: string, shouldSave: boolean, items: string[]):
 }
 `;
     const output = generateWithBuilder(code);
-    const funcMatch = output.match(new RegExp(`async function ${funcName}\\([\\s\\S]*?finally`));
+    const funcMatch = output.match(new RegExp(`async function __${funcName}_impl\\([\\s\\S]*?finally`));
     expect(funcMatch).toBeTruthy();
     if (emitsRetryableFalse) {
       expect(funcMatch![0]).toContain("__retryable = false");

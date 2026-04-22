@@ -1,16 +1,6 @@
 import fs from "fs";
 import path from "path";
 
-export type ToolRegistryEntry = {
-  definition: { name: string; description: string; schema: any };
-  handler: { name: string; params: string[]; execute: Function; isBuiltin: boolean };
-};
-
-export function tool(name: string, registry: Record<string, ToolRegistryEntry>): ToolRegistryEntry {
-  if (!registry[name]) throw new Error(`Unknown tool: ${name}`);
-  return registry[name];
-}
-
 export const not = (val: any): boolean => !val;
 export const eq = (a: any, b: any): boolean => a === b;
 export const neq = (a: any, b: any): boolean => a !== b;

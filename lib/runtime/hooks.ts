@@ -43,7 +43,7 @@ export type CallbackMap = {
     moduleId: string;
   };
   onFunctionEnd: { functionName: string; timeTaken: number };
-  onToolCallStart: { toolName: string; args: any[] };
+  onToolCallStart: { toolName: string; args: Record<string, unknown> };
   onToolCallEnd: { toolName: string; result: any; timeTaken: number };
   onStream:
     | { type: "text"; text: string }

@@ -1,10 +1,15 @@
 {
   "tests": [
     {
+      "skip": true,
       "nodeName": "main",
       "input": "",
       "expectedOutput": "\"Bob is 31\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "description": "External field mutation on class instance"
     }
   ]

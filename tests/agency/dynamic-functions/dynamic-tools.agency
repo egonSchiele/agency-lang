@@ -1,0 +1,12 @@
+def getWeather(city: string): string {
+  """
+  Returns the current weather for the given city.
+  """
+  return "Sunny and 72F in ${city}"
+}
+
+node main() {
+  const myTools = [getWeather]
+  const result: string = llm("What is the weather in Paris? Return ONLY the tool result.", { tools: myTools })
+  return result
+}

@@ -1567,6 +1567,19 @@ export class TypescriptPreprocessor {
             }
           }
         }
+
+        // Resolve scope on function call nodes in this function/node body
+        for (const { node: callNode } of walkNodesArray(node.body)) {
+          if (callNode.type === "functionCall" && !callNode.scope) {
+            const name = callNode.functionName;
+            if (this.functionDefinitions[name]) {
+              callNode.scope = "functionRef";
+            } else {
+              const resolved = lookupScope(nodeName, name);
+              callNode.scope = resolved ?? "imported";
+            }
+          }
+        }
       }
     }
 
@@ -1589,6 +1602,19 @@ export class TypescriptPreprocessor {
           } else {
             node.scope = "imported";
           }
+        }
+      }
+    }
+
+    // Resolve scope on top-level function call nodes
+    for (const { node } of walkNodesArray(this.program.nodes)) {
+      if (node.type === "functionCall" && !node.scope) {
+        const name = node.functionName;
+        if (this.functionDefinitions[name]) {
+          node.scope = "functionRef";
+        } else {
+          const scope = lookupScope("", name);
+          node.scope = scope ?? "imported";
         }
       }
     }

@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Pipe operator works with function variables as stages",
+      "input": "",
+      "expectedOutput": "{\"__type\":\"resultType\",\"success\":true,\"value\":20}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Named args can skip default parameters when calling through a variable",
+      "input": "",
+      "expectedOutput": "{\"skipMiddle\":\"Mr. Smith, PhD\",\"skipLast\":\"Dr. Jones, Esq.\",\"allNamed\":\"Ms. Brown, Jr.\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

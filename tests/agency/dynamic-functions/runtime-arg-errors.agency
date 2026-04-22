@@ -1,0 +1,21 @@
+def add(a: number, b: number): number {
+  return a + b
+}
+
+node testUnknownArg() {
+  const fn = add
+  const result = fn(a: 1, z: 99)
+  return result
+}
+
+node testMissingRequired() {
+  const fn = add
+  const result = fn(a: 1)
+  return result
+}
+
+node testConflict() {
+  const fn = add
+  const result = fn(1, a: 2)
+  return result
+}

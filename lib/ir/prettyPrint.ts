@@ -1,5 +1,6 @@
 import type { TsNode, TsParam, TsScopedVar, TsImportName } from "./tsIR.js";
 import renderRunnerIfElse from "../templates/backends/typescriptGenerator/runnerIfElse.js";
+import renderAgencyFunctionWrap from "../templates/ir/agencyFunctionWrap.js";
 
 const INDENT = "  ";
 
@@ -358,6 +359,19 @@ export function printTs(node: TsNode, indent = 0): string {
       const trueExpr = printTs(node.trueExpr, indent);
       const falseExpr = printTs(node.falseExpr, indent);
       return `(${condition} ? (${trueExpr}) : (${falseExpr}))`;
+    }
+
+    case "agencyFunctionWrap": {
+      const fnStr = printTs(node.fn, indent);
+      const paramsStr = node.params
+        .map(p => `{ name: ${JSON.stringify(p.name)}, hasDefault: false, defaultValue: undefined, variadic: false }`)
+        .join(", ");
+      return renderAgencyFunctionWrap({
+        name: JSON.stringify(node.name),
+        module: JSON.stringify(node.module),
+        fn: fnStr,
+        paramsStr,
+      });
     }
 
     default: {

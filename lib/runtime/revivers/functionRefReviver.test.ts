@@ -85,35 +85,6 @@ describe("FunctionRefReviver", () => {
         .toThrow("not found in registry");
     });
   });
-
-  describe("legacy support (bare functions with __functionRef)", () => {
-    function makeLegacyFunction(name: string, module: string) {
-      const fn = function () {} as any;
-      fn.__functionRef = { name, module };
-      return fn;
-    }
-
-    it("isInstance detects legacy functions", () => {
-      const fn = makeLegacyFunction("greet", "test.agency");
-      expect(reviver.isInstance(fn)).toBe(true);
-    });
-
-    it("serializes legacy functions", () => {
-      const fn = makeLegacyFunction("greet", "test.agency");
-      expect(reviver.serialize(fn)).toEqual({
-        __nativeType: "FunctionRef",
-        name: "greet",
-        module: "test.agency",
-      });
-    });
-
-    it("revives from legacy registry entries", () => {
-      const fn = makeLegacyFunction("greet", "test.agency");
-      reviver.registry = { greet: { handler: { execute: fn } } } as any;
-      const result = reviver.revive({ name: "greet", module: "test.agency" });
-      expect(result).toBe(fn);
-    });
-  });
 });
 
 describe("nativeTypeReplacer with AgencyFunction", () => {

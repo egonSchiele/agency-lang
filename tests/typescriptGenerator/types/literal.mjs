@@ -85,18 +85,25 @@ export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
 
+const __toolRegistry: Record<string, any> = {};
+
 // Wrap stateful runtime functions as AgencyFunction instances
-const checkpoint = new __AgencyFunction({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null });
-const getCheckpoint = new __AgencyFunction({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null });
-const restore = new __AgencyFunction({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null });
+const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
+const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
+const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
 async function mcp(serverName: string) {
   return __globalCtx.mcpManager.getTools(serverName);
 }
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("literal.agency")
 }
-const __toolRegistry = {};
-__toolRegistry["readSkill"] = __AgencyFunction.create({ name: "readSkill", module: "literal.agency", fn: readSkill, params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })), toolDefinition: __readSkillTool, }, __toolRegistry);
+__toolRegistry["readSkill"] = __AgencyFunction.create({
+  name: "readSkill",
+  module: "literal.agency",
+  fn: readSkill,
+  params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
+  toolDefinition: __readSkillTool,
+}, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

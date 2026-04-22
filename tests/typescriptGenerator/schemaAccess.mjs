@@ -85,6 +85,8 @@ export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
 
+const __toolRegistry: Record<string, any> = {};
+
 // Wrap stateful runtime functions as AgencyFunction instances
 const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
 const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
@@ -95,7 +97,6 @@ async function mcp(serverName: string) {
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("schemaAccess.agency")
 }
-const __toolRegistry = {};
 __toolRegistry["readSkill"] = __AgencyFunction.create({
   name: "readSkill",
   module: "schemaAccess.agency",

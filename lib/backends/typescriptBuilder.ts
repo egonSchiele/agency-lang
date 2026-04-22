@@ -1516,9 +1516,8 @@ export class TypeScriptBuilder {
    * here directly. The reviver is bound at the end.
    */
   private generateToolRegistry(): TsNode {
-    const stmts: TsNode[] = [
-      ts.varDecl("const", "__toolRegistry", ts.raw("{}")),
-    ];
+    // __toolRegistry is declared in the imports template (before checkpoint wrappers).
+    const stmts: TsNode[] = [];
 
     // Imported tools: register imported AgencyFunction instances
     for (const toolImport of this.programInfo.importedTools) {

@@ -1,4 +1,4 @@
-import { add as plus } from "./agencyHelpers.agency"
+import { add as plus } from "../imports/agencyHelpers.agency"
 
 def check() {
   return interrupt("confirm")

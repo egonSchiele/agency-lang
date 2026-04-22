@@ -32,6 +32,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   _builtinTool as __builtinTool,
+  functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);

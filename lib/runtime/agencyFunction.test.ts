@@ -9,9 +9,8 @@ function makeFunction(
     name: "testFn",
     module: "test.agency",
     fn: fn ?? (async (...args: unknown[]) => args),
-    params: params.map((p, i) => ({
+    params: params.map((p) => ({
       name: p.name,
-      position: i,
       hasDefault: p.hasDefault ?? false,
       defaultValue: p.defaultValue,
       variadic: p.variadic ?? false,

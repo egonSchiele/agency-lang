@@ -2,7 +2,6 @@ export const UNSET = "UNSET";
 
 export type FuncParam = {
   name: string;
-  position: number;
   hasDefault: boolean;
   defaultValue: unknown;
   variadic: boolean;
@@ -33,6 +32,8 @@ export class AgencyFunction {
   readonly params: FuncParam[];
   readonly toolDefinition: ToolDefinition | null;
   private readonly _fn: Function;
+  private readonly _nonVariadicParams: FuncParam[];
+  private readonly _hasVariadic: boolean;
 
   constructor(opts: AgencyFunctionOpts) {
     this.name = opts.name;
@@ -40,6 +41,8 @@ export class AgencyFunction {
     this._fn = opts.fn;
     this.params = opts.params;
     this.toolDefinition = opts.toolDefinition;
+    this._nonVariadicParams = opts.params.filter(p => !p.variadic);
+    this._hasVariadic = opts.params.length > 0 && opts.params[opts.params.length - 1].variadic;
   }
 
   async invoke(descriptor: CallType, state?: unknown): Promise<unknown> {
@@ -55,19 +58,24 @@ export class AgencyFunction {
   }
 
   private resolvePositional(args: unknown[]): unknown[] {
-    const nonVariadicParams = this.params.filter(p => !p.variadic);
-    const hasVariadic = this.params.length > 0 && this.params[this.params.length - 1].variadic;
+    // Fast path: exact arg count, no variadics — no work needed
+    if (args.length === this._nonVariadicParams.length && !this._hasVariadic) {
+      return args;
+    }
 
     // Pad missing optional args with UNSET
-    const result = [...args];
-    for (let i = result.length; i < nonVariadicParams.length; i++) {
-      if (!nonVariadicParams[i].hasDefault) break;
-      result.push(UNSET);
+    let result = args;
+    if (args.length < this._nonVariadicParams.length) {
+      result = [...args];
+      for (let i = args.length; i < this._nonVariadicParams.length; i++) {
+        if (!this._nonVariadicParams[i].hasDefault) break;
+        result.push(UNSET);
+      }
     }
 
     // Wrap trailing args for variadic param
-    if (hasVariadic) {
-      const nonVariadicCount = nonVariadicParams.length;
+    if (this._hasVariadic) {
+      const nonVariadicCount = this._nonVariadicParams.length;
       const regularArgs = result.slice(0, nonVariadicCount);
       const variadicArgs = result.slice(nonVariadicCount);
       regularArgs.push(variadicArgs);
@@ -78,20 +86,14 @@ export class AgencyFunction {
   }
 
   private resolveNamed(positionalArgs: unknown[], namedArgs: Record<string, unknown>): unknown[] {
-    const nonVariadicParams = this.params.filter(p => !p.variadic);
-
-    // Validate no unknown named args
+    // Validate named args: no unknowns, no conflicts with positional
     for (const name of Object.keys(namedArgs)) {
-      if (!nonVariadicParams.find(p => p.name === name)) {
+      const paramIdx = this._nonVariadicParams.findIndex(p => p.name === name);
+      if (paramIdx === -1) {
         throw new Error(
           `Unknown named argument '${name}' in call to '${this.name}'`,
         );
       }
-    }
-
-    // Validate named args don't conflict with positional
-    for (const name of Object.keys(namedArgs)) {
-      const paramIdx = nonVariadicParams.findIndex(p => p.name === name);
       if (paramIdx < positionalArgs.length) {
         throw new Error(
           `Named argument '${name}' conflicts with positional argument at position ${paramIdx + 1} in call to '${this.name}'`,
@@ -102,19 +104,17 @@ export class AgencyFunction {
     // Build result: positional args first, then fill from named args in parameter order
     const result: unknown[] = [...positionalArgs];
 
-    for (let i = positionalArgs.length; i < nonVariadicParams.length; i++) {
-      const param = nonVariadicParams[i];
+    for (let i = positionalArgs.length; i < this._nonVariadicParams.length; i++) {
+      const param = this._nonVariadicParams[i];
       if (param.name in namedArgs) {
         result.push(namedArgs[param.name]);
       } else if (param.hasDefault) {
-        // Check if any later param has a named arg — if so, insert UNSET placeholder
-        const hasLaterNamedArg = nonVariadicParams
+        const hasLaterNamedArg = this._nonVariadicParams
           .slice(i + 1)
           .some(p => p.name in namedArgs);
         if (hasLaterNamedArg) {
           result.push(UNSET);
         } else {
-          // Trailing skipped params — stop here, resolvePositional will pad
           break;
         }
       } else {
@@ -124,13 +124,11 @@ export class AgencyFunction {
       }
     }
 
-    // Apply variadic wrapping and default padding via resolvePositional
+    // Apply variadic wrapping and default padding
     return this.resolvePositional(result);
   }
 
-  // Note: no toJSON() — serialization is handled by FunctionRefReviver via nativeTypeReplacer.
-  // Adding toJSON() would conflict with the replacer pattern (JSON.stringify calls toJSON()
-  // before the replacer sees the raw object).
+  // Serialization handled by FunctionRefReviver — toJSON() would conflict with the replacer pattern.
 
   static isAgencyFunction(value: unknown): value is AgencyFunction {
     return typeof value === "object" && value !== null

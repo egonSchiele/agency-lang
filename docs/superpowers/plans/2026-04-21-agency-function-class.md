@@ -927,16 +927,9 @@ Since each `AgencyFunction` carries its own `toolDefinition`, `prompt.ts` can re
 
 The `ToolRegistryEntry` type and `tool()` function in `lib/runtime/builtins.ts` need to change. Since `__toolRegistry` is now `Record<string, AgencyFunction>`, update the `tool()` function:
 
-```typescript
-import { AgencyFunction } from "./agencyFunction.js";
+Delete both the `ToolRegistryEntry` type and the `tool()` function entirely. The `tool()` function was an internal mechanism for looking up tools by string name from the registry — with `AgencyFunction`, tool references are the instances themselves. No string-based lookup needed.
 
-export function tool(name: string, registry: Record<string, AgencyFunction>): AgencyFunction {
-  if (!registry[name]) throw new Error(`Unknown tool: ${name}`);
-  return registry[name];
-}
-```
-
-Remove the `ToolRegistryEntry` type. Any code that imports it needs updating.
+Any code that imports `ToolRegistryEntry` or `tool` from `builtins.ts` needs updating.
 
 - [ ] **Step 2: Update `prompt.ts` to accept `AgencyFunction[]` for tools**
 
@@ -968,15 +961,10 @@ Key changes in `executeToolCalls()`:
   );
   ```
 
-- [ ] **Step 3: Update MCP tool adapter**
+- [ ] **Step 3: Update MCP tool adapter to return `AgencyFunction` instances**
 
-`lib/runtime/mcp/toolAdapter.ts` currently returns `ToolRegistryEntry`. MCP tools aren't `AgencyFunction` instances — they come from external servers. Two options:
+`lib/runtime/mcp/toolAdapter.ts` currently returns `ToolRegistryEntry`. Update it to wrap MCP tools in `AgencyFunction` instances. The `_fn` calls the MCP server, and `toolDefinition` comes from the MCP tool's schema. This gives `prompt.ts` one code path for all tools.
 
-**(a)** Wrap MCP tools in `AgencyFunction` instances with a special `_fn` that calls the MCP server. The `toolDefinition` comes from the MCP tool's schema. This is the cleanest approach — `prompt.ts` has one code path for all tools.
-
-**(b)** Keep a separate interface for MCP tools and handle them as a special case in `prompt.ts`. Messier but less work.
-
-Recommend (a). Create `AgencyFunction` instances for MCP tools:
 ```typescript
 const mcpFn = new AgencyFunction({
   name: mcpTool.name,
@@ -1008,7 +996,7 @@ For `uses add, subtract`: the preprocessor already collects tool names and attac
 
 For `llm("...", { tools: myArray })`: when tools comes from a config object expression, emit it as-is — it's already a runtime expression that evaluates to an `AgencyFunction[]`. The builder no longer needs to parse and transform it.
 
-The `tool()` helper function in `imports.mustache` may still be useful for the `uses` directive to look up tools by name from the registry, but it's no longer required for the `llm()` config path.
+Delete the `tool()` helper function from `imports.mustache` — it's no longer needed. Tool references are `AgencyFunction` instances, not string lookups.
 
 - [ ] **Step 5: Recompile templates**
 

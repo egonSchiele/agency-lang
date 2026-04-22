@@ -432,7 +432,13 @@ export async function runPrompt(args: {
         ctx.mcpManager.callTool(serverName, toolName, toolArgs),
       );
     }
-    return entry as AgencyFunction;
+    if (!AgencyFunction.isAgencyFunction(entry)) {
+      const receivedType = entry === null ? "null" : Array.isArray(entry) ? "array" : typeof entry;
+      throw new TypeError(
+        `Invalid tool in clientConfig.tools. Expected an AgencyFunction instance or an MCP tool, but received ${receivedType}.`,
+      );
+    }
+    return entry;
   });
   let tools = agencyFunctions
     .filter((fn) => fn.toolDefinition)

@@ -59,6 +59,7 @@ This aligns with the existing block parameter type syntax.
 - Defining functions inside nodes or other functions
 - Partial application (future follow-up; serialization story is clean since bound args are explicit)
 - Returning newly-created functions from functions
+- **Calling function-ref variables with named arguments, default values, variadic arguments, or the pipe operator.** These features rely on compile-time parameter metadata (arg reordering, default insertion, variadic handling) that the builder resolves statically by function name. Since a variable could be reassigned to a different function at runtime, this metadata isn't available at call sites. A future follow-up should add a runtime helper that reads parameter metadata from `__functionRef` / `__toolRegistry` to handle these cases dynamically.
 
 ## Function Registry & Serialization
 

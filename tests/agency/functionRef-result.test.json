@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Function reference returning Result type works with isSuccess/isFailure",
+      "input": "",
+      "expectedOutput": "\"both correct\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+def twice(block: () => string): string[] {
+  let a: string = block()
+  let b: string = block()
+  return [a, b]
+}
+
+node main() {
+  const fn = twice
+  let results = fn() as {
+    return "hello"
+  }
+  return results
+}

@@ -231,7 +231,19 @@ The `nativeTypeReplacer` detects `AgencyFunction` instances via `AgencyFunction.
 
 The reviver looks up the `AgencyFunction` instance in `__toolRegistry` by name/module and returns it. After an interrupt, a variable that held an `AgencyFunction` gets back the full instance with all parameter metadata intact.
 
-### Reviver simplification
+### Legacy compatibility (Phase 1 only — remove in Phase 2)
+
+During the transition, the `FunctionRefReviver` and `nativeTypeReplacer` support both `AgencyFunction` instances (new path) and bare functions with `__functionRef` metadata plus old-style `{ handler: { execute } }` registry entries (legacy path). This ensures existing generated code continues to work before the builder migration.
+
+The `nativeTypeReplacer` also retains its `typeof value === "function"` guard for the same reason.
+
+Phase 2 (builder migration) must remove this legacy support:
+- Delete the legacy `FunctionWithRef` / `LegacyRegistryEntry` types from `functionRefReviver.ts`
+- Remove the bare-function detection from `isInstance()` and `serialize()`
+- Remove the `getEntryRef()` helper and its old-registry-shape handling in `revive()`
+- Remove the `typeof value === "function"` guard from `nativeTypeReplacer` in `index.ts`
+
+### Reviver simplification (after Phase 2)
 
 - `isInstance`: becomes `AgencyFunction.isAgencyFunction(value)` — no more Zod schema validation on `__functionRef`
 - `serialize`: reads `value.name` and `value.module` directly

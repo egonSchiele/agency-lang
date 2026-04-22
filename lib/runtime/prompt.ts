@@ -23,12 +23,6 @@ import { isMcpTool, mcpToolToAgencyFunction } from "./mcp/toolAdapter.js";
 import { AgencyCancelledError, isAbortError } from "./errors.js";
 import { AgencyFunction } from "./agencyFunction.js";
 
-export interface ToolHandler {
-  name: string;
-  params: string[];
-  execute: (...args: any[]) => Promise<any>;
-  isBuiltin: boolean;
-}
 
 type Tool = {
   name: string;

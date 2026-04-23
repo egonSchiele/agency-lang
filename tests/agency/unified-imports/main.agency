@@ -1,8 +1,7 @@
 import { add, greet } from "./utils.agency"
 
 node testFunctionImport() {
-  uses add
-  const result: number = llm("Use the add tool to add 3 and 4")
+  const result: number = llm("Use the add tool to add 3 and 4", { tools: [add] })
   return result
 }
 

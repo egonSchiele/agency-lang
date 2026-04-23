@@ -201,7 +201,8 @@
               "col": 17,
               "start": 202,
               "end": 222
-            }
+            },
+            "scope": "functionRef"
           },
           "loc": {
             "line": 8,
@@ -232,7 +233,8 @@
             "col": 2,
             "start": 222,
             "end": 236
-          }
+          },
+          "scope": "imported"
         }
       ],
       "loc": {

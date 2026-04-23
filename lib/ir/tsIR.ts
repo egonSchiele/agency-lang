@@ -50,7 +50,8 @@ export type TsNode =
   | TsNot
   | TsUnaryOp
   | TsWithHandler
-  | TsTernary;
+  | TsTernary
+  | TsAgencyFunctionWrap;
 
 /** Raw pushHandler/popHandler wrapping for global scope (no runner) */
 export interface TsWithHandler {
@@ -286,7 +287,8 @@ export interface TsScopedVar {
   | "imported"
   | "local"
   | "block"
-  | "blockArgs";
+  | "blockArgs"
+  | "functionRef";
   moduleId?: string;
 }
 
@@ -422,4 +424,13 @@ export interface TsTernary {
   condition: TsNode;
   trueExpr: TsNode;
   falseExpr: TsNode;
+}
+
+/** Wraps an arrow function as an AgencyFunction instance */
+export interface TsAgencyFunctionWrap {
+  kind: "agencyFunctionWrap";
+  name: string;
+  module: string;
+  fn: TsNode;
+  params: { name: string }[];
 }

@@ -3,12 +3,12 @@ import {
   AgencyNode,
   Expression,
   Literal,
+  ScopeType,
   VariableType,
 } from "../types.js";
 import { BaseNode } from "./base.js";
 import { BlockArgument } from "./blockArgument.js";
 import { AgencyArray, AgencyObject, NamedArgument, SplatExpression } from "./dataStructures.js";
-import { UsesTool } from "./tools.js";
 import { Tag } from "./tag.js";
 
 export type FunctionParameter = {
@@ -33,6 +33,7 @@ export const VALID_CALLBACK_NAMES = [
   "onToolCallEnd",
   "onStream",
   "onTrace",
+  "onOAuthRequired",
 ] as const;
 
 export type CallbackName = (typeof VALID_CALLBACK_NAMES)[number];
@@ -56,10 +57,10 @@ export type FunctionDefinition = BaseNode & {
 export type FunctionCall = BaseNode & {
   type: "functionCall";
   functionName: string;
+  scope?: ScopeType;
   arguments: (Expression | SplatExpression | NamedArgument)[];
   block?: BlockArgument;
   async?: boolean;
-  tools?: UsesTool;
   tags?: Tag[];
 };
 

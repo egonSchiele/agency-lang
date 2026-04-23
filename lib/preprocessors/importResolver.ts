@@ -1,7 +1,6 @@
 import type { AgencyNode, AgencyProgram } from "../types.js";
 import type {
   ImportNodeStatement,
-  ImportToolStatement,
   ImportStatement,
 } from "../types/importStatement.js";
 import type { SymbolTable } from "../symbolTable.js";
@@ -9,8 +8,8 @@ import { resolveAgencyImportPath, isAgencyImport } from "../importPaths.js";
 
 /**
  * Resolve unified imports: rewrite `import { x, y } from "./foo.agency"`
- * into the appropriate specialized AST nodes (ImportNodeStatement,
- * ImportToolStatement) based on what each symbol actually is.
+ * into the appropriate specialized AST nodes (ImportNodeStatement for nodes,
+ * ImportStatement for functions and types) based on what each symbol actually is.
  *
  * Only touches ImportStatement nodes whose modulePath is an Agency import
  * (.agency files, std:: imports, or pkg:: imports).
@@ -32,30 +31,6 @@ export function resolveImports(
   const newNodes: AgencyNode[] = [];
 
   for (const node of program.nodes) {
-    // Validate that directly-written import tool statements reference exported functions
-    if (node.type === "importToolStatement") {
-      const importedFilePath = resolveAgencyImportPath(node.agencyFile, currentFile);
-      const fileSymbols = symbolTable[importedFilePath] ?? {};
-      for (const namedImport of node.importedTools) {
-        for (const name of namedImport.importedNames) {
-          const symbol = fileSymbols[name];
-          if (!symbol) {
-            throw new Error(
-              `Symbol '${name}' is not defined in '${node.agencyFile}'`,
-            );
-          }
-          if (symbol.kind !== "function") {
-            throw new Error(
-              `Symbol '${name}' in '${node.agencyFile}' is not a function and cannot be imported as a tool.`,
-            );
-          }
-          assertExported(name, node.agencyFile, symbol.exported);
-        }
-      }
-      newNodes.push(node);
-      continue;
-    }
-
     if (
       node.type !== "importStatement" ||
       !isAgencyImport(node.modulePath)
@@ -121,39 +96,22 @@ export function resolveImports(
       newNodes.push(nodeImport);
     }
 
-    if (functionNames.length > 0) {
-      // Filter aliases to only include function names
-      const funcAliases: Record<string, string> = {};
-      for (const name of functionNames) {
-        if (aliases[name]) funcAliases[name] = aliases[name];
+    // Combine functions and types into a single import statement
+    const allNames = [...functionNames, ...typeNames];
+    if (allNames.length > 0) {
+      const allAliases: Record<string, string> = {};
+      for (const name of allNames) {
+        if (aliases[name]) allAliases[name] = aliases[name];
       }
-      const toolImport: ImportToolStatement = {
-        type: "importToolStatement",
-        importedTools: [{
-          type: "namedImport",
-          importedNames: functionNames,
-          safeNames: safeFunctionNames,
-          aliases: funcAliases,
-        }],
-        agencyFile: node.modulePath,
-      };
-      newNodes.push(toolImport);
-    }
-
-    if (typeNames.length > 0) {
-      // Filter aliases to only include type names
-      const typeAliases: Record<string, string> = {};
-      for (const name of typeNames) {
-        if (aliases[name]) typeAliases[name] = aliases[name];
-      }
-      const typeImport: ImportStatement = {
+      const importStmt: ImportStatement = {
         type: "importStatement",
         importedNames: [
-          { type: "namedImport", importedNames: typeNames, safeNames: [], aliases: typeAliases },
+          { type: "namedImport", importedNames: allNames, safeNames: safeFunctionNames, aliases: allAliases },
         ],
         modulePath: node.modulePath,
+        isAgencyImport: true,
       };
-      newNodes.push(typeImport);
+      newNodes.push(importStmt);
     }
   }
 

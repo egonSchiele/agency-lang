@@ -1,0 +1,11 @@
+def format(name: string, prefix: string = "Mr.", suffix: string = "Esq."): string {
+  return "${prefix} ${name}, ${suffix}"
+}
+
+node main() {
+  const fn = format
+  const skipMiddle = fn(name: "Smith", suffix: "PhD")
+  const skipLast = fn(name: "Jones", prefix: "Dr.")
+  const allNamed = fn(suffix: "Jr.", name: "Brown", prefix: "Ms.")
+  return { skipMiddle: skipMiddle, skipLast: skipLast, allNamed: allNamed }
+}

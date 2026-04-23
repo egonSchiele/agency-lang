@@ -34,7 +34,6 @@ import {
   ifParser,
   importNodeStatmentParser,
   importStatmentParser,
-  importToolStatmentParser,
   keywordParser,
   matchBlockParser,
   messageThreadParser,
@@ -46,7 +45,6 @@ import {
   skillParser,
   tagParser,
   typeAliasParser,
-  usesToolParser,
   valueAccessParser,
   whileLoopParser,
   withModifierParser,
@@ -56,9 +54,7 @@ import { AgencyNode, AgencyProgram } from "./types.js";
 
 const nodeParser = or(
   keywordParser,
-  usesToolParser,
   importNodeStatmentParser,
-  importToolStatmentParser,
   importStatmentParser,
   graphNodeParser,
   classParser,

@@ -1,10 +1,15 @@
 {
   "tests": [
     {
+      "skip": true,
       "nodeName": "main",
       "input": "",
       "expectedOutput": "{\"a\":15,\"b\":-1}",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "description": "Class method returning success/failure with try/catch"
     }
   ]

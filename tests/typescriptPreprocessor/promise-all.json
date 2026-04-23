@@ -57,10 +57,7 @@
               "start": 55,
               "end": 82
             },
-            "tools": {
-              "type": "usesTool",
-              "toolNames": []
-            }
+            "scope": "imported"
           },
           "loc": {
             "line": -1,
@@ -132,10 +129,7 @@
               "start": 133,
               "end": 159
             },
-            "tools": {
-              "type": "usesTool",
-              "toolNames": []
-            }
+            "scope": "imported"
           },
           "loc": {
             "line": 4,
@@ -173,10 +167,7 @@
               "start": 177,
               "end": 204
             },
-            "tools": {
-              "type": "usesTool",
-              "toolNames": []
-            }
+            "scope": "imported"
           },
           "loc": {
             "line": 5,
@@ -256,7 +247,8 @@
             "col": 2,
             "start": 239,
             "end": 255
-          }
+          },
+          "scope": "imported"
         }
       ],
       "loc": {

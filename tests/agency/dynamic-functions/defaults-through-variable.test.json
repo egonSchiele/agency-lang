@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Default parameter values work when calling through a function variable",
+      "input": "",
+      "expectedOutput": "{\"withDefault\":\"Hello, Alice!\",\"withOverride\":\"Hey, Bob!\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

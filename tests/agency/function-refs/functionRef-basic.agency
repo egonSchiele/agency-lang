@@ -1,0 +1,18 @@
+def double(x: number): number {
+  return x * 2
+}
+
+def applyToAll(items: number[], transform: (number) => number): number[] {
+  const result: number[] = []
+  for (item in items) {
+    result.push(transform(item))
+  }
+  return result
+}
+
+node main() {
+  const fn = double
+  const result = fn(5)
+  const items = applyToAll([1, 2, 3], double)
+  return result + items[0] + items[1] + items[2]
+}

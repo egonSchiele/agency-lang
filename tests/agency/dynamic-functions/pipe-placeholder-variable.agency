@@ -1,0 +1,15 @@
+def multiply(a: number, b: number): number {
+  return a * b
+}
+
+def add(a: number, b: number): number {
+  return a + b
+}
+
+node main() {
+  const fn1 = multiply
+  const fn2 = add
+  const r1 = success(5) |> fn1(3, ?)
+  const r2 = success(10) |> fn2(?, 7)
+  return { r1: r1, r2: r2 }
+}

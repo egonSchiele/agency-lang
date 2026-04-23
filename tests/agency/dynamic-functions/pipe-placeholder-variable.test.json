@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Pipe with placeholder works through function variables",
+      "input": "",
+      "expectedOutput": "{\"r1\":{\"__type\":\"resultType\",\"success\":true,\"value\":15},\"r2\":{\"__type\":\"resultType\",\"success\":true,\"value\":17}}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { McpTool } from "./types.js";
-import type { ToolRegistryEntry } from "../builtins.js";
+import { AgencyFunction } from "../agencyFunction.js";
 
 const McpToolSchema = z.object({
   name: z.string(),
@@ -20,10 +20,10 @@ type CallToolFn = (
   args: Record<string, unknown>,
 ) => Promise<string>;
 
-export function mcpToolToRegistryEntry(
+export function mcpToolToAgencyFunction(
   tool: McpTool,
   callTool: CallToolFn,
-): ToolRegistryEntry {
+): AgencyFunction {
   const properties = (tool.inputSchema as any)?.properties || {};
   const params = Object.keys(properties);
 
@@ -42,24 +42,28 @@ export function mcpToolToRegistryEntry(
     toJSONSchema: () => tool.inputSchema,
   };
 
-  return {
-    definition: {
+  return new AgencyFunction({
+    name: tool.name,
+    module: `mcp:${tool.serverName}`,
+    fn: async (...args: any[]) => {
+      // The last arg is __state from invoke(), the rest are positional params
+      const actualArgs = args.slice(0, params.length);
+      const argsObj: Record<string, unknown> = {};
+      params.forEach((p, i) => {
+        argsObj[p] = actualArgs[i];
+      });
+      return callTool(tool.serverName, originalName, argsObj);
+    },
+    params: params.map((p) => ({
+      name: p,
+      hasDefault: false,
+      defaultValue: undefined,
+      variadic: false,
+    })),
+    toolDefinition: {
       name: tool.name,
       description: tool.description,
       schema: schemaWrapper,
     },
-    handler: {
-      name: tool.name,
-      params,
-      execute: async (...args: any[]) => {
-        const actualArgs = args.slice(0, params.length);
-        const argsObj: Record<string, unknown> = {};
-        params.forEach((p, i) => {
-          argsObj[p] = actualArgs[i];
-        });
-        return callTool(tool.serverName, originalName, argsObj);
-      },
-      isBuiltin: false,
-    },
-  };
+  });
 }

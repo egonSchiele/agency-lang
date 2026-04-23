@@ -9,7 +9,7 @@ import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, R
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
-  checkpoint, getCheckpoint, restore,
+  checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
@@ -26,7 +26,8 @@ import {
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
-  _builtinTool as __builtinTool,
+  AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -66,11 +67,6 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
-// tool() function — looks up a tool by name from the module's __toolRegistry
-function tool(__name: string) {
-  return __builtinTool(__name, __toolRegistry);
-}
-
 // Handler result builtins
 function approve(value?: any) { return { type: "approved" as const, value }; }
 function reject(value?: any) { return { type: "rejected" as const, value }; }
@@ -88,39 +84,34 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
+
+const __toolRegistry: Record<string, any> = {};
+
+function __registerTool(value: unknown, name?: string) {
+  if (__AgencyFunction.isAgencyFunction(value)) {
+    __toolRegistry[name ?? value.name] = value;
+  }
+}
+
+// Wrap stateful runtime functions as AgencyFunction instances
+const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
+const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
+const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
 async function mcp(serverName: string) {
   return __globalCtx.mcpManager.getTools(serverName);
 }
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("blockParams.agency")
 }
-export const __mapItemsTool = {
-  name: "mapItems",
-  description: `No description provided.`,
-  schema: z.object({"items": z.array(z.any()), "block": z.string(), })
-};
-export const __mapItemsToolParams = ["items", "block"];
-const __toolRegistry = {
-  mapItems: {
-    definition: __mapItemsTool,
-    handler: {
-      name: "mapItems",
-      params: __mapItemsToolParams,
-      execute: mapItems,
-      isBuiltin: false
-    }
-  },
-  readSkill: {
-    definition: __readSkillTool,
-    handler: {
-      name: "readSkill",
-      params: __readSkillToolParams,
-      execute: readSkill,
-      isBuiltin: true
-    }
-  }
-};
-async function mapItems(items: any[], block: (any) => any, __state: InternalFunctionState | undefined = undefined) {
+__toolRegistry["readSkill"] = __AgencyFunction.create({
+  name: "readSkill",
+  module: "blockParams.agency",
+  fn: readSkill,
+  params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
+  toolDefinition: __readSkillTool,
+}, __toolRegistry);
+__functionRefReviver.registry = __toolRegistry;
+async function __mapItems_impl(items: any[], block: (any) => any, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -179,7 +170,14 @@ __stack.locals.results = [];
     });
     await runner.loop(1, __stack.args.items, async (item, _, runner) => {
 await runner.step(0, async (runner) => {
-__stack.locals.result = await block(item);
+__stack.locals.result = await __stack.args.block.invoke({
+          type: "positional",
+          args: [item]
+        }, {
+          ctx: __ctx,
+          threads: __threads,
+          interruptData: __state?.interruptData
+        });
 if (isInterrupt(__stack.locals.result)) {
           await __ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.result)
@@ -187,7 +185,14 @@ if (isInterrupt(__stack.locals.result)) {
         }
       });
 await runner.step(1, async (runner) => {
-__stack.locals.results = await append(__stack.locals.results, __stack.locals.result);
+__stack.locals.results = await append.invoke({
+          type: "positional",
+          args: [__stack.locals.results, __stack.locals.result]
+        }, {
+          ctx: __ctx,
+          threads: __threads,
+          interruptData: __state?.interruptData
+        });
 if (isInterrupt(__stack.locals.results)) {
           await __ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.results)
@@ -229,6 +234,22 @@ return failure(
     }
   }
 }
+const mapItems = __AgencyFunction.create({
+  name: "mapItems",
+  module: "blockParams.agency",
+  fn: __mapItems_impl,
+  params: [{
+    name: "items",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "mapItems",
+    description: `No description provided.`,
+    schema: z.object({"items": z.array(z.any()), })
+  }
+}, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -255,8 +276,10 @@ let __functionCompleted = false;
 __stack.locals.items = [1, 2, 3];
     });
     await runner.step(1, async (runner) => {
-__stack.locals.doubled = await mapItems(__stack.locals.items, async (x: any) => {
-        const __bsetup = setupFunction({ state: { ctx: __ctx, threads: __threads } });
+__stack.locals.doubled = await mapItems.invoke({
+        type: "positional",
+        args: [__stack.locals.items, __AgencyFunction.create({ name: "__block_0", module: "blockParams.agency", fn: async (x: any) => {
+          const __bsetup = setupFunction({ state: { ctx: __ctx, threads: __threads } });
 const __bstack = __bsetup.stack;
 const __self = __bstack.locals;
 
@@ -272,6 +295,7 @@ return runner.halted ? runner.haltResult : undefined;
 } finally {
 __ctx.stateStack.pop();
 }
+        }, params: [{ name: "x", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry)]
       }, {
         ctx: __ctx,
         threads: __threads,
@@ -287,7 +311,22 @@ if (isInterrupt(__stack.locals.doubled)) {
       }
     });
     await runner.step(2, async (runner) => {
-await print(__stack.locals.doubled)
+const __funcResult = await print.invoke({
+        type: "positional",
+        args: [__stack.locals.doubled]
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        interruptData: __state?.interruptData
+      });
+if (isInterrupt(__funcResult)) {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __funcResult
+        })
+        return;
+      }
     });
     if (runner.halted) return runner.haltResult;
     await callHook({
@@ -306,6 +345,7 @@ await print(__stack.locals.doubled)
     if (__error instanceof RestoreSignal) {
       throw __error
     }
+    console.error(`\nAgent crashed: ${__error.message}`)
     return {
       messages: __threads,
       data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })

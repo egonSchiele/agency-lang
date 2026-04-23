@@ -12,7 +12,6 @@ import { IfElse } from "./types/ifElse.js";
 import {
   ImportNodeStatement,
   ImportStatement,
-  ImportToolStatement,
 } from "./types/importStatement.js";
 import { ForLoop } from "./types/forLoop.js";
 import { Keyword } from "./types/keyword.js";
@@ -21,7 +20,6 @@ import { MatchBlock } from "./types/matchBlock.js";
 import { MessageThread } from "./types/messageThread.js";
 import { ReturnStatement } from "./types/returnStatement.js";
 import { Skill } from "./types/skill.js";
-import { UsesTool } from "./types/tools.js";
 import { TypeAlias, VariableType } from "./types/typeHints.js";
 import { WhileLoop } from "./types/whileLoop.js";
 import { AwaitPending } from "./types/awaitPending.js";
@@ -43,7 +41,6 @@ export * from "./types/importStatement.js";
 export * from "./types/literals.js";
 export * from "./types/matchBlock.js";
 export * from "./types/returnStatement.js";
-export * from "./types/tools.js";
 export * from "./types/typeHints.js";
 export * from "./types/whileLoop.js";
 export * from "./types/forLoop.js";
@@ -135,7 +132,7 @@ export type Scope =
   | SharedScope
   | LocalScope
   | BlockScope;
-export type ScopeType = Scope["type"] | "args" | "blockArgs";
+export type ScopeType = Scope["type"] | "args" | "blockArgs" | "functionRef";
 export type GlobalScope = {
   type: "global";
 };
@@ -208,7 +205,6 @@ export type NewLine = BaseNode & {
 
 export type AgencyNode =
   | TypeAlias
-  | UsesTool
   | GraphNodeDefinition
   | FunctionDefinition
   | Assignment
@@ -223,7 +219,6 @@ export type AgencyNode =
   | AgencyArray
   | ImportStatement
   | ImportNodeStatement
-  | ImportToolStatement
   | WhileLoop
   | IfElse
   | NewLine

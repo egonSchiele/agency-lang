@@ -1,0 +1,7 @@
+__toolRegistry[{{{toolNameQuoted:string}}}] = __AgencyFunction.create({
+  name: {{{toolNameQuoted}}},
+  module: {{{moduleIdQuoted:string}}},
+  fn: {{{internalName:string}}},
+  params: __{{{toolName:string}}}ToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
+  toolDefinition: __{{{toolName}}}Tool,
+}, __toolRegistry);

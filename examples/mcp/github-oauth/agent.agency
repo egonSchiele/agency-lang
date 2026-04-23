@@ -1,0 +1,27 @@
+// Example: Using an MCP server with OAuth authentication
+//
+// This example connects to GitHub's MCP server, which requires OAuth.
+// On the first run, your browser opens for GitHub authorization.
+// After that, the token is stored and reused automatically.
+//
+// Setup:
+//   1. Create a GitHub OAuth App at https://github.com/settings/developers
+//      Set callback URL to: http://127.0.0.1:19876/oauth/callback
+//   2. Set environment variables:
+//      export MCP_GITHUB_CLIENT_ID=your-client-id
+//      export MCP_GITHUB_CLIENT_SECRET=your-client-secret
+//
+// To run:
+//   copy agency.json from the root of the repo to this directory, or add the "mcpServers" config to your existing agency.json
+//   pnpm run agency examples/mcp/github-oauth/agent.agency
+node main() {
+  print("Connecting to GitHub MCP server with OAuth...")
+  const tools = try mcp("github") catch []
+  print("Tools from GitHub MCP:", tools)
+  if (tools.length == 0) {
+    print("Could not connect to GitHub MCP server.")
+    print("Make sure MCP_GITHUB_CLIENT_ID and MCP_GITHUB_CLIENT_SECRET are set.")
+    return null
+  }
+  print("Connected to GitHub. Found ${tools.length} tools.")
+}

@@ -99,6 +99,10 @@ export function compile(
   _outputFile?: string,
   options?: { ts?: boolean; symbolTable?: SymbolTable; importStrategy?: ImportStrategy },
 ): string | null {
+  if (!fs.existsSync(inputFile)) {
+    console.error(`Error: Input file '${inputFile}' not found`);
+    process.exit(1);
+  }
   const stats = fs.statSync(inputFile);
   const verbose = config.verbose ?? false;
   if (stats.isDirectory()) {

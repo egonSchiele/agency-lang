@@ -1,6 +1,6 @@
-import tool { addTask, listTasks, markTaskDone } from "./subagents/task.agency"
-import tool { writeToPlan, readPlan } from "./subagents/plan.agency"
-import tool { writeCode, appendCode, readCode } from "./subagents/code.agency"
+import { addTask, listTasks, markTaskDone } from "./subagents/task.agency"
+import { writeToPlan, readPlan } from "./subagents/plan.agency"
+import { writeCode, appendCode, readCode } from "./subagents/code.agency"
 import { syntaxHighlight } from "../../utils/agentUtils.js"
 // todo allow this
 // import { Plan } from "./subagents/plan.agency"
@@ -130,8 +130,7 @@ node plan(mode, existingCode, existingFilename: string | null) {
       type: "start"
     }
     while (nextAction.type != "done") {
-      uses writeToPlan, readPlan, print
-      nextAction: NextAction = llm("${userMsg}", config)
+      nextAction: NextAction = llm("${userMsg}", { ...config, tools: [writeToPlan, readPlan, print] })
       if (nextAction.type == "askUser") {
         userMsg = input("${nextAction.question} ")
       }

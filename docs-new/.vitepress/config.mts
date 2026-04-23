@@ -36,6 +36,7 @@ export default defineConfig({
           { text: "Schemas", link: "/guide/schemas" },
           { text: "Classes", link: "/guide/classes" },
           { text: "Checkpointing", link: "/guide/checkpointing" },
+          { text: "MCP", link: "/guide/mcp" },
         ],
       },
       {

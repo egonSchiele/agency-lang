@@ -150,8 +150,7 @@ def safeWhileLoopTool(id: string) {
 // The tool is retryable, so the LLM can retry on error.
 node testSafeRetry() {
   resetCountersTool()
-  uses lookupTool
-  const result = llm("Look up item with id 'abc'. Use the lookupTool. If you get a temporary error, retry the same tool call.")
+  const result = llm("Look up item with id 'abc'. Use the lookupTool. If you get a temporary error, retry the same tool call.", { tools: [lookupTool] })
   return result
 }
 
@@ -159,8 +158,7 @@ node testSafeRetry() {
 // The tool is not retryable, so it is removed on error.
 node testUnsafeNoRetry() {
   resetCountersTool()
-  uses saveAndLookupTool
-  const result = llm("Save and look up item 'xyz'. Use the saveAndLookupTool.")
+  const result = llm("Save and look up item 'xyz'. Use the saveAndLookupTool.", { tools: [saveAndLookupTool] })
   return result
 }
 
@@ -169,8 +167,7 @@ node testUnsafeNoRetry() {
 // The LLM should retry on error and succeed on the second attempt.
 node testSafeDefRetry() {
   resetCountersTool()
-  uses safeWrapperTool
-  const result = llm("Look up item with id 'def'. Use the safeWrapperTool. If you get a temporary error, retry the same tool call.")
+  const result = llm("Look up item with id 'def'. Use the safeWrapperTool. If you get a temporary error, retry the same tool call.", { tools: [safeWrapperTool] })
   return result
 }
 
@@ -179,8 +176,7 @@ node testSafeDefRetry() {
 // no unsafe function is ever called, the tool stays retryable.
 node testDerivedSafeRetry() {
   resetCountersTool()
-  uses derivedSafeWrapperTool
-  const result = llm("Look up item with id 'ghi'. Use the derivedSafeWrapperTool. If you get a temporary error, retry the same tool call.")
+  const result = llm("Look up item with id 'ghi'. Use the derivedSafeWrapperTool. If you get a temporary error, retry the same tool call.", { tools: [derivedSafeWrapperTool] })
   return result
 }
 
@@ -190,8 +186,7 @@ node testDerivedSafeRetry() {
 // the whole tool non-retryable.
 node testUnsafeChainNoRetry() {
   resetCountersTool()
-  uses unsafeChainTool
-  const result = llm("Save and look up item 'jkl'. Use the unsafeChainTool.")
+  const result = llm("Save and look up item 'jkl'. Use the unsafeChainTool.", { tools: [unsafeChainTool] })
   return result
 }
 
@@ -199,8 +194,7 @@ node testUnsafeChainNoRetry() {
 // The method is marked safe, so the tool remains retryable.
 node testSafeMethodRetry() {
   resetCountersTool()
-  uses safeMethodTool
-  const result = llm("Look up item with id 'mno'. Use the safeMethodTool. If you get a temporary error, retry the same tool call.")
+  const result = llm("Look up item with id 'mno'. Use the safeMethodTool. If you get a temporary error, retry the same tool call.", { tools: [safeMethodTool] })
   return result
 }
 
@@ -208,8 +202,7 @@ node testSafeMethodRetry() {
 // The method is not marked safe, so the tool is not retryable.
 node testUnsafeMethodNoRetry() {
   resetCountersTool()
-  uses unsafeMethodTool
-  const result = llm("Save and look up item 'pqr'. Use the unsafeMethodTool.")
+  const result = llm("Save and look up item 'pqr'. Use the unsafeMethodTool.", { tools: [unsafeMethodTool] })
   return result
 }
 
@@ -217,8 +210,7 @@ node testUnsafeMethodNoRetry() {
 // The safe flag should propagate into nested blocks, keeping the tool retryable.
 node testSafeNestedRetry() {
   resetCountersTool()
-  uses safeNestedTool
-  const result = llm("Look up item with id 'stu'. Use the safeNestedTool. If you get a temporary error, retry the same tool call.")
+  const result = llm("Look up item with id 'stu'. Use the safeNestedTool. If you get a temporary error, retry the same tool call.", { tools: [safeNestedTool] })
   return result
 }
 
@@ -226,8 +218,7 @@ node testSafeNestedRetry() {
 // The safe flag should propagate into nested blocks, keeping the tool retryable.
 node testSafeNestedMethodRetry() {
   resetCountersTool()
-  uses safeNestedMethodTool
-  const result = llm("Look up item with id 'vwx'. Use the safeNestedMethodTool. If you get a temporary error, retry the same tool call.")
+  const result = llm("Look up item with id 'vwx'. Use the safeNestedMethodTool. If you get a temporary error, retry the same tool call.", { tools: [safeNestedMethodTool] })
   return result
 }
 
@@ -235,8 +226,7 @@ node testSafeNestedMethodRetry() {
 // The safe flag propagates into loop bodies.
 node testSafeForLoopRetry() {
   resetCountersTool()
-  uses safeForLoopTool
-  const result = llm("Look up item with id 'for1'. Use the safeForLoopTool. If you get a temporary error, retry the same tool call.")
+  const result = llm("Look up item with id 'for1'. Use the safeForLoopTool. If you get a temporary error, retry the same tool call.", { tools: [safeForLoopTool] })
   return result
 }
 
@@ -244,7 +234,6 @@ node testSafeForLoopRetry() {
 // The safe flag propagates into loop bodies.
 node testSafeWhileLoopRetry() {
   resetCountersTool()
-  uses safeWhileLoopTool
-  const result = llm("Look up item with id 'whl1'. Use the safeWhileLoopTool. If you get a temporary error, retry the same tool call.")
+  const result = llm("Look up item with id 'whl1'. Use the safeWhileLoopTool. If you get a temporary error, retry the same tool call.", { tools: [safeWhileLoopTool] })
   return result
 }

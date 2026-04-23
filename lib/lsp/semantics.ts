@@ -148,26 +148,6 @@ function collectImportedSymbols(
       continue;
     }
 
-    if (node.type === "importToolStatement") {
-      const importedFile = resolveImportedFile(fsPath, node.agencyFile);
-      if (!importedFile) continue;
-      const fileSymbols = symbolTable[importedFile] ?? {};
-      for (const namedImport of node.importedTools) {
-        for (const name of namedImport.importedNames) {
-          const symbol = fileSymbols[name];
-          if (!symbol) continue;
-          addImportedSymbol(index, {
-            filePath: importedFile,
-            importPath: node.agencyFile,
-            originalName: name,
-            localName: namedImport.aliases[name] ?? name,
-            symbol,
-          });
-        }
-      }
-      continue;
-    }
-
     if (node.type !== "importStatement") continue;
     const importedFile = resolveImportedFile(fsPath, node.modulePath);
     if (!importedFile) continue;

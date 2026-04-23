@@ -1,0 +1,14 @@
+def double(x: number): number {
+  return x * 2
+}
+
+def addTen(x: number): number {
+  return x + 10
+}
+
+node main() {
+  const fn1 = double
+  const fn2 = addTen
+  const result = success(5) |> fn1 |> fn2
+  return result
+}

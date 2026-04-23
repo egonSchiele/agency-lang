@@ -35,6 +35,7 @@ import * as renderInterruptAssignment from "../templates/backends/typescriptGene
 import * as renderInterruptReturn from "../templates/backends/typescriptGenerator/interruptReturn.js";
 import * as renderBlockSetup from "../templates/backends/typescriptGenerator/blockSetup.js";
 import * as renderForkBlockSetup from "../templates/backends/typescriptGenerator/forkBlockSetup.js";
+import * as renderBuiltinToolRegistration from "../templates/backends/typescriptGenerator/builtinToolRegistration.js";
 import * as renderResultCheckpointSetup from "../templates/backends/typescriptGenerator/resultCheckpointSetup.js";
 import * as renderFunctionCatchFailure from "../templates/backends/typescriptGenerator/functionCatchFailure.js";
 import * as renderClassMethod from "../templates/backends/typescriptGenerator/classMethod.js";
@@ -69,12 +70,10 @@ import { IfElse } from "../types/ifElse.js";
 import {
   ImportNodeStatement,
   ImportStatement,
-  ImportToolStatement,
-  getImportedToolNames,
+  getImportedNames,
 } from "../types/importStatement.js";
 import { MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
-import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { ClassDefinition, ClassField, ClassMethod, NewExpression, isClassKeyword } from "../types/classDefinition.js";
 import { escape, mergeDeep } from "../utils.js";
@@ -119,6 +118,7 @@ export class TypeScriptBuilder {
 
   // Import tracking
   private importStatements: TsNode[] = [];
+  private toolRegistrations: TsNode[] = [];
 
   // Function tracking
   private functionsUsed: Set<string> = new Set();
@@ -163,6 +163,7 @@ export class TypeScriptBuilder {
    * like __substep_3.1 for nested blocks. */
   private _subStepPath: number[] = [];
   private _sourceMapBuilder: SourceMapBuilder = new SourceMapBuilder();
+
 
   private programInfo: ProgramInfo;
   private moduleId: string;
@@ -331,20 +332,21 @@ export class TypeScriptBuilder {
     ];
   }
 
-  private isImportedTool(functionName: string): boolean {
-    return this.programInfo.importedTools
-      .flatMap(getImportedToolNames)
-      .includes(functionName);
-  }
 
-  // Runtime functions that need __state (ctx injection) like user-defined agency functions.
-  // These are imported from the runtime but need the functionCallConfig passed as the last arg.
-  private static RUNTIME_STATEFUL_FUNCTIONS = [
-    "checkpoint",
-    "getCheckpoint",
-    "restore",
-  ];
+  // Plain JS functions defined in the imports template or runtime that are NOT
+  // AgencyFunction instances. Keep this list small — prefer wrapping as AgencyFunction.
+  private static TEMPLATE_FUNCTIONS = new Set([
+    "approve", "reject", "propagate",
+    "success", "failure",
+    "isInterrupt", "isDebugger", "isRejected", "isApproved",
+    "isSuccess", "isFailure", "mcp"
+  ]);
 
+  /**
+   * Returns true if the function should be called via .invoke() (AgencyFunction).
+   * The default is true — everything goes through .invoke() UNLESS it's a known
+   * non-Agency function (TS import, internal __ prefixed helper, or template function).
+   */
   private isAgencyFunction(
     functionName: string,
     context: "valueAccess" | "functionArg" | "topLevelStatement",
@@ -352,11 +354,40 @@ export class TypeScriptBuilder {
     if (context === "valueAccess") {
       return false;
     }
-    return (
-      !!this.programInfo.functionDefinitions[functionName] ||
-      this.isImportedTool(functionName) ||
-      TypeScriptBuilder.RUNTIME_STATEFUL_FUNCTIONS.includes(functionName)
-    );
+    // Internal machinery (builder-emitted helpers like __deepClone, __validateType, etc.)
+    if (functionName.startsWith("__")) return false;
+    // Template-defined plain JS functions
+    if (TypeScriptBuilder.TEMPLATE_FUNCTIONS.has(functionName)) return false;
+    // Plain TS imports (not from .agency files)
+    if (this.isPlainTsImport(functionName)) return false;
+    // Everything else is (or might be) an AgencyFunction
+    return true;
+  }
+
+  private _plainTsImportNames: Set<string> | null = null;
+
+  private _agencyImportNames: Set<string> | null = null;
+
+  private isPlainTsImport(functionName: string): boolean {
+    if (!this._plainTsImportNames) {
+      this._buildImportNameSets();
+    }
+    return this._plainTsImportNames!.has(functionName);
+  }
+
+  private _buildImportNameSets(): void {
+    this._plainTsImportNames = new Set<string>();
+    this._agencyImportNames = new Set<string>();
+    for (const stmt of this.programInfo.importStatements) {
+      const targetSet = stmt.isAgencyImport
+        ? this._agencyImportNames
+        : this._plainTsImportNames;
+      for (const nameType of stmt.importedNames) {
+        for (const name of getImportedNames(nameType)) {
+          targetSet.add(name);
+        }
+      }
+    }
   }
 
   private isGraphNode(functionName: string): boolean {
@@ -372,8 +403,11 @@ export class TypeScriptBuilder {
   }
 
   private isImpureImportedFunction(functionName: string): boolean {
+    if (!this._plainTsImportNames) {
+      this._buildImportNameSets();
+    }
     return (
-      !!this.programInfo.importedFunctions[functionName] &&
+      (this._plainTsImportNames!.has(functionName) || this._agencyImportNames!.has(functionName)) &&
       !this.programInfo.safeFunctions[functionName]
     );
   }
@@ -456,17 +490,8 @@ export class TypeScriptBuilder {
   // ------- Main entry point -------
 
   build(program: AgencyProgram): TsNode {
-    // Pass 5: Generate code for tools
-    const functionDefs: FunctionDefinition[] = [];
-    for (const node of program.nodes) {
-      if (node.type === "function" && !node.callback) {
-        functionDefs.push(node);
-        this.generatedStatements.push(this.processTool(node));
-      }
-    }
-
-    // Generate tool registry (always — builtin tools are always available)
-    this.generatedStatements.push(this.generateToolRegistry(functionDefs));
+    // Generate tool registry (empty — AgencyFunction.create() populates it)
+    this.generatedStatements.push(this.generateToolRegistry());
 
     // Collect shared variable names and emit top-level `let` declarations
     const sharedVarNames = new Set<string>();
@@ -501,7 +526,7 @@ export class TypeScriptBuilder {
           stmt.variableName,
           valueNode,
         );
-        const handler = this.buildBuiltinHandlerArrow(node.handlerName);
+        const handler = this.buildHandlerArrow(node.handlerName);
 
         globalInitStatements.push(ts.withHandler(handler, setNode));
       } else {
@@ -527,6 +552,11 @@ export class TypeScriptBuilder {
     const builtinsResult = this.generateBuiltins();
     if (builtinsResult.trim() !== "") {
       sections.push(ts.raw(builtinsResult));
+    }
+
+    // Register imported AgencyFunction instances (after __toolRegistry is declared)
+    if (this.toolRegistrations.length > 0) {
+      sections.push(ts.statements(this.toolRegistrations));
     }
 
     for (const alias of this.generatedTypeAliases) {
@@ -715,41 +745,6 @@ export class TypeScriptBuilder {
    * 1. Pad omitted optional args (those with defaults) with null
    * 2. Wrap extra args into an array for variadic params
    */
-  private getCalleeParams(name: string): FunctionParameter[] | undefined {
-    const fnDef = this.programInfo.functionDefinitions[name];
-    const imported = this.programInfo.importedFunctions[name];
-    const params = fnDef?.parameters ?? imported?.parameters;
-    return params?.filter(
-      (p) => !p.typeHint || p.typeHint.type !== "blockType",
-    );
-  }
-
-  private adjustCallArgs(
-    argNodes: TsNode[],
-    parameters: FunctionParameter[] | undefined,
-  ): TsNode[] {
-    if (!parameters || parameters.length === 0) return argNodes;
-
-    const nonVariadicCount = parameters.filter((p) => !p.variadic).length;
-    const hasVariadic = parameters[parameters.length - 1]?.variadic;
-
-    // Pad omitted optional args (those with defaults) with null
-    let result = [...argNodes];
-    for (let i = result.length; i < nonVariadicCount; i++) {
-      if (!parameters[i].defaultValue) break;
-      result.push(ts.id("null"));
-    }
-
-    // Wrap extra args into array for variadic param
-    if (hasVariadic) {
-      const regularArgs = result.slice(0, nonVariadicCount);
-      const variadicArgs = result.slice(nonVariadicCount);
-      regularArgs.push(ts.arr(variadicArgs));
-      result = regularArgs;
-    }
-
-    return result;
-  }
 
   private processNode(node: AgencyNode): TsNode {
     switch (node.type) {
@@ -786,16 +781,11 @@ export class TypeScriptBuilder {
         return this.processAgencyObject(node);
       case "graphNode":
         return this.processGraphNode(node);
-      case "usesTool":
-        return this.processUsesTool(node);
       case "importStatement":
         this.importStatements.push(this.processImportStatement(node));
         return ts.empty();
       case "importNodeStatement":
         this.importStatements.push(this.processImportNodeStatement(node));
-        return ts.empty();
-      case "importToolStatement":
-        this.importStatements.push(this.processImportToolStatement(node));
         return ts.empty();
       case "forLoop":
         return this.insideHandlerBody
@@ -1389,54 +1379,97 @@ export class TypeScriptBuilder {
           });
       }
     });
-    return imports.length === 1 ? imports[0] : ts.statements(imports);
+    const importNode = imports.length === 1 ? imports[0] : ts.statements(imports);
+
+    // Auto-register any AgencyFunction instances imported from .agency files.
+    if (node.isAgencyImport) {
+      for (const nameType of node.importedNames) {
+        switch (nameType.type) {
+          case "namedImport":
+            for (const name of nameType.importedNames) {
+              const localName = nameType.aliases[name] ?? name;
+              this.toolRegistrations.push(ts.raw(`__registerTool(${localName});`));
+            }
+            break;
+          case "namespaceImport": {
+            const ns = nameType.importedNames;
+            this.toolRegistrations.push(ts.raw(
+              `for (const [__k, __v] of Object.entries(${ns})) { __registerTool(__v, __k); }`
+            ));
+            break;
+          }
+        }
+      }
+    }
+    return importNode;
   }
 
   private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
     return ts.empty(); // handled in preprocess
   }
 
-  private processImportToolStatement(node: ImportToolStatement): TsNode {
-    const importNames: (string | { name: string; alias: string })[] = [];
-    for (const namedImport of node.importedTools) {
-      for (const toolName of namedImport.importedNames) {
-        const alias = namedImport.aliases[toolName];
-        if (alias) {
-          importNames.push({ name: toolName, alias });
-          importNames.push({ name: `__${toolName}Tool`, alias: `__${alias}Tool` });
-          importNames.push({ name: `__${toolName}ToolParams`, alias: `__${alias}ToolParams` });
-        } else {
-          importNames.push(toolName);
-          importNames.push(`__${toolName}Tool`);
-          importNames.push(`__${toolName}ToolParams`);
-        }
-      }
-    }
-    return ts.importDecl({
-      importKind: "named",
-      names: importNames,
-      from: toCompiledImportPath(node.agencyFile, this.outputFile ?? path.resolve(this.moduleId)),
-    });
-  }
 
   // ------- TsRaw wrapper methods (template-heavy) -------
 
-  private processUsesTool(node: UsesTool): TsNode {
-    node.toolNames.forEach((toolName) => {
-      if (BUILTIN_TOOLS.includes(toolName)) return;
-      if (
-        !this.programInfo.functionDefinitions[toolName] &&
-        !this.isImportedTool(toolName)
-      ) {
-        throw new Error(
-          `Tool '${toolName}' is being used but no function definition found for it. Make sure to define a function for this tool.`,
-        );
-      }
+
+  /**
+   * Process a block argument into a wrapped AgencyFunction TsNode.
+   * Shared by generateFunctionCallExpression and buildCallDescriptor.
+   */
+  private processBlockArgument(node: FunctionCall): TsNode {
+    const block = node.block!;
+    const fnDef = this.programInfo.functionDefinitions[node.functionName];
+    const imported = this.programInfo.importedFunctions[node.functionName];
+    const paramList = fnDef?.parameters ?? imported?.parameters;
+    const blockType = paramList
+      ?.map((p) => p.typeHint)
+      .find((t): t is BlockType => t?.type === "blockType");
+
+    const blockParams: TsParam[] = block.params.map((p, i) => ({
+      name: p.name,
+      typeAnnotation: blockType?.params[i]
+        ? formatTypeHint(blockType.params[i].typeAnnotation)
+        : "any",
+    }));
+
+    const blockName = `__block_${this._blockCounter++}`;
+    const parentScopeName = this.currentScopeName();
+    this.startScope({ type: "block", blockName });
+    this._sourceMapBuilder.enterScope(this.moduleId, blockName);
+    const bodyParts = this.processBodyAsParts(block.body);
+    this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
+    this.endScope();
+
+    const bodyStr = bodyParts.map((n) => printTs(n, 1)).join("\n");
+
+    const blockSetupCode = renderBlockSetup.default({
+      params: block.params.map((p) => ({
+        paramName: p.name,
+        paramNameQuoted: JSON.stringify(p.name),
+      })),
+      moduleId: JSON.stringify(this.moduleId),
+      scopeName: JSON.stringify(blockName),
+      body: bodyStr,
     });
-    return ts.empty();
+
+    const blockFn = ts.arrowFn(
+      blockParams,
+      ts.statements([ts.raw(blockSetupCode)]),
+      { async: true },
+    );
+    return ts.agencyFunctionWrap(
+      blockFn,
+      blockName,
+      this.moduleId,
+      block.params.map((p) => ({ name: p.name })),
+    );
   }
 
-  private processTool(node: FunctionDefinition): TsNode {
+  /**
+   * Build a tool definition TsNode for an Agency function.
+   * Returns ts.id("null") if the function has no parameters (no schema needed for tools).
+   */
+  private buildToolDefinition(node: FunctionDefinition): TsNode {
     const { functionName, parameters } = node;
     if (
       this.programInfo.graphNodes.map((n) => n.nodeName).includes(functionName)
@@ -1446,8 +1479,12 @@ export class TypeScriptBuilder {
       );
     }
 
+    const nonBlockParams = parameters.filter(
+      (p) => !p.typeHint || p.typeHint.type !== "blockType",
+    );
+
     const properties: Record<string, string> = {};
-    parameters.forEach((param: FunctionParameter) => {
+    nonBlockParams.forEach((param: FunctionParameter) => {
       const typeHint = param.typeHint || {
         type: "primitiveType" as const,
         value: "string",
@@ -1465,89 +1502,44 @@ export class TypeScriptBuilder {
     }
 
     const schemaArg = Object.keys(properties).length > 0 ? `{${schema}}` : "{}";
-    return ts.statements([
-      ts.export(
-        ts.varDecl(
-          "const",
-          `__${functionName}Tool`,
-          ts.obj({
-            name: ts.str(functionName),
-            description: ts.raw(
-              `\`${node.docString?.value || "No description provided."}\``,
-            ),
-            schema: $.z()
-              .prop("object")
-              .call([ts.raw(schemaArg)])
-              .done(),
-          }),
-        ),
-      ),
-      ts.export(
-        ts.varDecl(
-          "const",
-          `__${functionName}ToolParams`,
-          ts.arr(parameters.map((p) => ts.str(p.name))),
-        ),
-      ),
-    ]);
-  }
-
-  private buildToolRegistryEntry(
-    toolName: string,
-    executeName: string,
-    isBuiltin: boolean,
-  ): TsNode {
     return ts.obj({
-      definition: ts.id(`__${toolName}Tool`),
-      handler: ts.obj({
-        name: ts.str(toolName),
-        params: ts.id(`__${toolName}ToolParams`),
-        execute: ts.id(executeName),
-        isBuiltin: ts.bool(isBuiltin),
-      }),
+      name: ts.str(functionName),
+      description: ts.raw(
+        `\`${node.docString?.value || "No description provided."}\``,
+      ),
+      schema: $.z()
+        .prop("object")
+        .call([ts.raw(schemaArg)])
+        .done(),
     });
   }
 
   /**
-   * Generate __toolRegistry mapping function names to their tool definitions and handlers.
-   * The tool() function is defined in imports.mustache and closes over __toolRegistry.
+   * Generate __toolRegistry as an empty object. AgencyFunction.create() calls
+   * register local functions into it. Imported and builtin tools are registered
+   * here directly. The reviver is bound at the end.
    */
-  private generateToolRegistry(functionDefs: FunctionDefinition[]): TsNode {
-    const entries: Record<string, TsNode> = {};
+  private generateToolRegistry(): TsNode {
+    // __toolRegistry is declared in the imports template (before checkpoint wrappers).
+    const stmts: TsNode[] = [];
 
-    for (const def of functionDefs) {
-      entries[def.functionName] = this.buildToolRegistryEntry(
-        def.functionName,
-        def.functionName,
-        false,
-      );
-    }
-
-    // Add imported tools (they import __toolNameTool and __toolNameToolParams)
-    for (const toolImport of this.programInfo.importedTools) {
-      for (const namedImport of toolImport.importedTools) {
-        for (const originalName of namedImport.importedNames) {
-          const localName = namedImport.aliases[originalName] ?? originalName;
-          entries[localName] = this.buildToolRegistryEntry(
-            localName,
-            localName,
-            false,
-          );
-        }
-      }
-    }
-
+    // Builtin tools: wrap as AgencyFunction instances
     for (const toolName of BUILTIN_TOOLS) {
       const internalName = BUILTIN_FUNCTIONS[toolName] || toolName;
-      entries[toolName] = this.buildToolRegistryEntry(
+      stmts.push(ts.raw(renderBuiltinToolRegistration.default({
         toolName,
+        toolNameQuoted: JSON.stringify(toolName),
+        moduleIdQuoted: JSON.stringify(this.moduleId),
         internalName,
-        true,
-      );
+      })));
     }
 
-    return ts.varDecl("const", "__toolRegistry", ts.obj(entries));
+    // Bind reviver
+    stmts.push(ts.raw("__functionRefReviver.registry = __toolRegistry;"));
+
+    return ts.statements(stmts);
   }
+
 
   /**
    * For Result-returning functions: emit a pinned checkpoint at function entry
@@ -1643,7 +1635,11 @@ export class TypeScriptBuilder {
         setupStmts.push(
           ts.assign(
             stackTarget,
-            ts.binOp(ts.id(param.name), "??", defaultNode),
+            ts.ternary(
+              ts.binOp(ts.id(param.name), "===", ts.id("__UNSET")),
+              defaultNode,
+              ts.id(param.name),
+            ),
           ),
         );
       } else {
@@ -1745,8 +1741,8 @@ export class TypeScriptBuilder {
       if (p.defaultValue) {
         return {
           name: p.name,
-          typeAnnotation: `${baseType} | null`,
-          defaultValue: ts.id("null"),
+          typeAnnotation: `${baseType} | typeof __UNSET`,
+          defaultValue: ts.id("__UNSET"),
         };
       }
       return { name: p.name, typeAnnotation: baseType };
@@ -1757,21 +1753,56 @@ export class TypeScriptBuilder {
       defaultValue: ts.id("undefined"),
     });
 
+    const implName = `__${functionName}_impl`;
     const setupStmts = this.buildFunctionBody({ functionName, parameters, bodyCode, skipHooks: node.callback });
 
-    const funcDecl = ts.functionDecl(functionName, fnParams, ts.statements(setupStmts), {
+    const funcDecl = ts.functionDecl(implName, fnParams, ts.statements(setupStmts), {
       async: true,
-      export: !!node.exported,
     });
+
+    // Build AgencyFunction.create() params metadata
+    const nonBlockParams = parameters.filter(
+      (p) => !p.typeHint || p.typeHint.type !== "blockType",
+    );
+    const paramNodes = nonBlockParams.map((p) =>
+      ts.obj({
+        name: ts.str(p.name),
+        hasDefault: ts.bool(!!p.defaultValue),
+        defaultValue: ts.id("undefined"),
+        variadic: ts.bool(!!p.variadic),
+      }),
+    );
+
+    // Build tool definition (Zod schema)
+    const toolDef = this.buildToolDefinition(node);
+
+    const createCall = $
+      .id("__AgencyFunction")
+      .prop("create")
+      .call([
+        ts.obj({
+          name: ts.str(functionName),
+          module: ts.str(this.moduleId),
+          fn: ts.id(implName),
+          params: ts.arr(paramNodes),
+          toolDefinition: toolDef,
+        }),
+        ts.id("__toolRegistry"),
+      ])
+      .done();
+
+    const constDecl = ts.varDecl("const", functionName, createCall);
+    const exportedConst = node.exported ? ts.export(constDecl) : constDecl;
 
     if (node.callback) {
       return ts.statements([
         funcDecl,
+        exportedConst,
         ts.raw(`__globalCtx._registeredCallbacks.${functionName} = ${functionName};`),
       ]);
     }
 
-    return funcDecl;
+    return ts.statements([funcDecl, exportedConst]);
   }
 
   private processStatement(node: AgencyNode): TsNode {
@@ -1948,94 +1979,123 @@ export class TypeScriptBuilder {
       context === "valueAccess"
         ? node.functionName
         : mapFunctionName(node.functionName);
-    const fnDef = this.programInfo.functionDefinitions[node.functionName];
-    const imported = this.programInfo.importedFunctions[node.functionName];
-    const paramList = fnDef?.parameters ?? imported?.parameters;
-    const isAgencyFunction = !!fnDef || (!!imported && imported.parameters.length > 0);
 
-    const resolvedArgs = this.resolveNamedArgs(node, paramList, isAgencyFunction);
-    const rawArgNodes = this.processResolvedArgs(resolvedArgs);
-
-    const nonBlockParams = paramList?.filter(
-      (p) => !p.typeHint || p.typeHint.type !== "blockType",
-    );
-    const argNodes = this.adjustCallArgs(rawArgNodes, nonBlockParams);
-
-    if (node.block) {
-      const blockType = paramList
-        ?.map((p) => p.typeHint)
-        .find((t): t is BlockType => t?.type === "blockType");
-
-      const blockParams: TsParam[] = node.block.params.map((p, i) => ({
-        name: p.name,
-        typeAnnotation: blockType?.params[i]
-          ? formatTypeHint(blockType.params[i].typeAnnotation)
-          : "any",
-      }));
-
-      // Enter block scope, process body as runner steps
-      const blockName = `__block_${this._blockCounter++}`;
-      const parentScopeName = this.currentScopeName();
-      this.startScope({ type: "block", blockName });
-      this._sourceMapBuilder.enterScope(this.moduleId, blockName);
-      const bodyParts = this.processBodyAsParts(node.block.body);
-      this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
-      this.endScope();
-
-      // Render body parts to string for the template
-      const bodyStr = bodyParts.map((n) => printTs(n, 1)).join("\n");
-
-      const blockSetupCode = renderBlockSetup.default({
-        params: node.block.params.map((p) => ({
-          paramName: p.name,
-          paramNameQuoted: JSON.stringify(p.name),
-        })),
-        moduleId: JSON.stringify(this.moduleId),
-        scopeName: JSON.stringify(blockName),
-        body: bodyStr,
-      });
-
-      const blockFn = ts.arrowFn(
-        blockParams,
-        ts.statements([ts.raw(blockSetupCode)]),
-        { async: true },
-      );
-      argNodes.push(blockFn);
-    }
+    const isAgency = this.isAgencyFunction(node.functionName, context);
 
     const shouldAwait = !node.async && context !== "valueAccess";
 
-    if (this.isAgencyFunction(node.functionName, context)) {
-      // In global init scope, __threads and __state don't exist — pass only ctx
-      const locationOpts = node.functionName === "checkpoint" ? {
-        moduleId: ts.str(this.moduleId),
-        scopeName: ts.str(this.currentScopeName()),
-        stepPath: ts.str(this._subStepPath.join(".")),
-      } : {};
-      const configObj = this.insideGlobalInit
-        ? ts.functionCallConfig({
-          ctx: ts.runtime.ctx,
-        })
-        : ts.functionCallConfig({
-          ctx: ts.runtime.ctx,
-          threads: ts.runtime.threads,
-          interruptData: ts.raw("__state?.interruptData"),
-          stateStack: options?.stateStack,
-          isForked: node.async,
-          ...locationOpts,
-        });
-      const call = ts.call(ts.id(functionName), [...argNodes, configObj]);
-      return shouldAwait ? ts.await(call) : call;
+    if (isAgency) {
+      return this.emitAgencyFunctionCall(node, functionName, shouldAwait, options);
     } else if (node.functionName === "system") {
-      // __threads.active().push(smoltalk.systemMessage(msg))
+      const argNodes = node.arguments.map((a) => this.processCallArg(a));
       return $(ts.threads.active())
         .prop("push")
         .call([ts.smoltalkSystemMessage(argNodes)])
         .done();
     } else {
-      const call = $.id(functionName).call(argNodes).done();
-      return shouldAwait ? ts.await(call) : call;
+      return this.emitDirectFunctionCall(node, functionName, shouldAwait);
     }
+  }
+
+  private emitAgencyFunctionCall(
+    node: FunctionCall,
+    functionName: string,
+    shouldAwait: boolean,
+    options?: { stateStack?: TsNode },
+  ): TsNode {
+    const descriptor = this.buildCallDescriptor(node);
+
+    const locationOpts = node.functionName === "checkpoint" ? {
+      moduleId: ts.str(this.moduleId),
+      scopeName: ts.str(this.currentScopeName()),
+      stepPath: ts.str(this._subStepPath.join(".")),
+    } : {};
+    const configObj = this.insideGlobalInit
+      ? ts.functionCallConfig({
+        ctx: ts.runtime.ctx,
+      })
+      : ts.functionCallConfig({
+        ctx: ts.runtime.ctx,
+        threads: ts.runtime.threads,
+        interruptData: ts.raw("__state?.interruptData"),
+        stateStack: options?.stateStack,
+        isForked: node.async,
+        ...locationOpts,
+      });
+
+    const callee = node.scope
+      ? ts.scopedVar(functionName, node.scope, this.moduleId)
+      : ts.id(functionName);
+    const invokeCall = $(callee)
+      .prop("invoke")
+      .call([descriptor, configObj])
+      .done();
+    return shouldAwait ? ts.await(invokeCall) : invokeCall;
+  }
+
+  private emitDirectFunctionCall(
+    node: FunctionCall,
+    functionName: string,
+    shouldAwait: boolean,
+  ): TsNode {
+    const argNodes = node.arguments.map((a) => this.processCallArg(a));
+
+    if (node.block) {
+      argNodes.push(this.processBlockArgument(node));
+    }
+
+    const call = $.id(functionName).call(argNodes).done();
+    return shouldAwait ? ts.await(call) : call;
+  }
+
+  /**
+   * Build a CallType descriptor TsNode for an Agency function call.
+   * Determines whether to emit positional or named call type based on arguments.
+   */
+  private buildCallDescriptor(node: FunctionCall): TsNode {
+    const args = node.arguments;
+    const hasNamedArgs = args.some((a) => a.type === "namedArgument");
+
+    if (hasNamedArgs) {
+      // Named call: { type: "named", positionalArgs: [...], namedArgs: {...} }
+      const positionalNodes: TsNode[] = [];
+      const namedEntries: Record<string, TsNode> = {};
+
+      for (const arg of args) {
+        if (arg.type === "namedArgument") {
+          namedEntries[arg.name] = this.processNode(arg.value as AgencyNode);
+        } else {
+          positionalNodes.push(this.processCallArg(arg));
+        }
+      }
+
+      return ts.obj({
+        type: ts.str("named"),
+        positionalArgs: ts.arr(positionalNodes),
+        namedArgs: ts.obj(namedEntries),
+      });
+    }
+
+    const argNodes: TsNode[] = [];
+    for (const arg of args) {
+      if (arg.type === "functionCall") {
+        this.functionsUsed.add(arg.functionName);
+        argNodes.push(
+          this.generateFunctionCallExpression(arg as FunctionCall, "functionArg"),
+        );
+      } else {
+        argNodes.push(this.processCallArg(arg));
+      }
+    }
+
+    if (node.block) {
+      argNodes.push(this.processBlockArgument(node));
+    }
+
+    return ts.obj({
+      type: ts.str("positional"),
+      args: ts.arr(argNodes),
+    });
   }
 
   private processForkCall(node: FunctionCall): TsNode {
@@ -2060,6 +2120,7 @@ export class TypeScriptBuilder {
     const bodyStr = bodyParts.map((n) => printTs(n, 1)).join("\n");
 
     const blockSetupCode = renderForkBlockSetup.default({
+      paramName,
       paramNameQuoted: JSON.stringify(paramName),
       moduleId: JSON.stringify(this.moduleId),
       scopeName: JSON.stringify(blockName),
@@ -2202,6 +2263,14 @@ export class TypeScriptBuilder {
           ts.if(
             ts.raw("__error instanceof RestoreSignal"),
             ts.statements([ts.throw("__error")]),
+          ),
+          ts.consoleError(
+            ts.template([
+              {
+                text: "\\nAgent crashed: ",
+                expr: $(ts.id("__error")).prop("message").done(),
+              },
+            ]),
           ),
           ts.return(
             ts.obj({
@@ -2539,55 +2608,13 @@ export class TypeScriptBuilder {
       ? this.processCallArg(promptArg)
       : ts.raw("``");
 
-    // Extract config from second argument (if present).
-    // Known keys (tools) are extracted; the rest passes through as clientConfig.
+    // Config is the second argument — passed straight through to runPrompt.
+    // Tools (AgencyFunction instances, MCP tools) live in config.tools and
+    // are handled entirely by runPrompt at runtime.
     const configArg = node.arguments[1];
     let clientConfig: TsNode;
-    let configToolNames: string[] = [];
-    let configToolExprs: TsNode[] = [];
 
-    if (configArg && configArg.type === "agencyObject") {
-      // Extract tools from config object
-      const toolsEntry = configArg.entries.find(
-        (e) =>
-          !("type" in e && e.type === "splat") &&
-          (e as AgencyObjectKV).key === "tools",
-      ) as AgencyObjectKV | undefined;
-
-      if (toolsEntry && toolsEntry.value.type === "agencyArray") {
-        // Extract tool names from the array items
-        for (const item of toolsEntry.value.items) {
-          if (item.type === "variableName") {
-            // Bare function reference: llm("...", { tools: [getWeather] })
-            configToolNames.push(item.value);
-          } else if (
-            item.type === "functionCall" &&
-            item.functionName === "tool"
-          ) {
-            // Explicit tool() call: llm("...", { tools: [tool(getWeather)] })
-            const toolArg = item.arguments[0];
-            if (toolArg && toolArg.type === "variableName") {
-              configToolNames.push(toolArg.value);
-            }
-          } else if (item.type === "splat") {
-            // Pass-through: spread MCP tool arrays (or any other spread) directly
-            configToolExprs.push(ts.spread(this.processNode(item.value)));
-          }
-        }
-      }
-
-      // Build clientConfig without known keys
-      const knownKeys = ["tools"];
-      const remainingEntries = configArg.entries.filter(
-        (e) =>
-          ("type" in e && e.type === "splat") ||
-          !knownKeys.includes((e as AgencyObjectKV).key),
-      );
-      clientConfig =
-        remainingEntries.length > 0
-          ? this.processNode({ ...configArg, entries: remainingEntries })
-          : ts.obj({});
-    } else if (configArg) {
+    if (configArg) {
       clientConfig = this.processCallArg(configArg);
     } else {
       clientConfig = ts.obj({});
@@ -2599,31 +2626,6 @@ export class TypeScriptBuilder {
     let threadExpr: TsNode = ts.threads.getOrCreateActive();
     if (node.async) {
       threadExpr = ts.threads.createAndReturnSubthread();
-    }
-
-    // Merge tools from usesTool statements (preprocessor) and config object
-    const usesToolNames = node.tools?.toolNames || [];
-    const allToolNames = [...usesToolNames, ...configToolNames];
-
-    // Generate tools as tool() registry lookups merged into clientConfig
-    const toolNodes: TsNode[] = allToolNames.map((name) =>
-      $(ts.id("tool"))
-        .call([ts.str(name)])
-        .done(),
-    );
-    // Merge registry-resolved tools with pass-through expressions (spreads of MCP tools, etc.)
-    const allToolNodes: TsNode[] = [...toolNodes, ...configToolExprs];
-
-    // Merge tools into clientConfig
-    let mergedConfig: TsNode;
-    if (allToolNodes.length > 0) {
-      // Spread user config and add tools
-      mergedConfig = ts.obj([
-        ts.set("tools", ts.arr(allToolNodes)),
-        ts.setSpread(clientConfig),
-      ]);
-    } else {
-      mergedConfig = clientConfig;
     }
 
     // Build runPrompt config object
@@ -2638,7 +2640,7 @@ export class TypeScriptBuilder {
         .namedArgs({ response: ts.raw(zodSchema) })
         .done();
     }
-    runPromptEntries.clientConfig = mergedConfig;
+    runPromptEntries.clientConfig = clientConfig;
     runPromptEntries.maxToolCallRounds = ts.num(
       this.agencyConfig.maxToolCallRounds || 10,
     );
@@ -2841,11 +2843,30 @@ export class TypeScriptBuilder {
     }
   }
 
-  private buildBuiltinHandlerArrow(handlerName: string): TsNode {
+  private buildHandlerArrow(handlerName: string): TsNode {
     const args = handlerName === "propagate" ? [] : [ts.id("__data")];
+
+    if (TypeScriptBuilder.TEMPLATE_FUNCTIONS.has(handlerName)) {
+      // Built-in handler (approve/reject/propagate): plain JS function, call directly
+      return ts.arrowFn(
+        [{ name: "__data", typeAnnotation: "any" }],
+        ts.call(ts.id(handlerName), args),
+        { async: true },
+      );
+    }
+
+    // User-defined Agency function handler: use .invoke()
+    const descriptor = ts.obj({
+      type: ts.str("positional"),
+      args: ts.arr(args),
+    });
+    const invokeCall = $(ts.id(handlerName))
+      .prop("invoke")
+      .call([descriptor])
+      .done();
     return ts.arrowFn(
       [{ name: "__data", typeAnnotation: "any" }],
-      ts.call(ts.id(handlerName), args),
+      ts.await(invokeCall),
       { async: true },
     );
   }
@@ -2873,30 +2894,7 @@ export class TypeScriptBuilder {
         { async: true },
       );
     } else {
-      const fnName = node.handler.functionName;
-      if (
-        fnName === "approve" ||
-        fnName === "reject" ||
-        fnName === "propagate"
-      ) {
-        handler = this.buildBuiltinHandlerArrow(fnName);
-      } else {
-        // Function ref: wrap in arrow that calls the named function
-        handler = ts.arrowFn(
-          [{ name: "__data", typeAnnotation: "any" }],
-          ts.await(
-            ts.call(ts.id(node.handler.functionName), [
-              ts.id("__data"),
-              ts.functionCallConfig({
-                ctx: ts.runtime.ctx,
-                threads: ts.runtime.threads,
-                interruptData: ts.id("undefined"),
-              }),
-            ]),
-          ),
-          { async: true },
-        );
-      }
+      handler = this.buildHandlerArrow(node.handler.functionName);
     }
 
     // Body: process each statement with substep tracking
@@ -2907,7 +2905,7 @@ export class TypeScriptBuilder {
 
   private processWithModifier(node: WithModifier): TsNode {
     const id = this._subStepPath[this._subStepPath.length - 1];
-    const handler = this.buildBuiltinHandlerArrow(node.handlerName);
+    const handler = this.buildHandlerArrow(node.handlerName);
     const bodyNodes = this.processBodyAsParts([node.statement]);
     return ts.runnerHandle({ id, handler, body: bodyNodes });
   }
@@ -3067,11 +3065,27 @@ export class TypeScriptBuilder {
     }
 
     if (stage.type === "variableName") {
+      const isAgency = this.isAgencyFunction(stage.value, "topLevelStatement");
+      if (isAgency) {
+        // value |> fn → async (__pipeArg) => await fn.invoke({ type: "positional", args: [__pipeArg] }, __state)
+        const callee = this.processNode(stage);
+        const descriptor = ts.obj({
+          type: ts.str("positional"),
+          args: ts.arr([pipeArg]),
+        });
+        const stateConfig = ts.functionCallConfig({
+          ctx: ts.runtime.ctx,
+          threads: ts.runtime.threads,
+          interruptData: ts.raw("__state?.interruptData"),
+        });
+        const invokeCall = $(callee).prop("invoke").call([descriptor, stateConfig]).done();
+        return ts.arrowFn([{ name: "__pipeArg" }], ts.await(invokeCall), {
+          async: true,
+        });
+      }
+      // Non-agency: direct call
       const callee = this.processNode(stage);
-      const params = this.getCalleeParams(stage.value);
-      const adjusted = this.adjustCallArgs([pipeArg], params);
-      const args = [...adjusted, ...this.buildPipeStateArgs(stage.value)];
-      return ts.arrowFn([{ name: "__pipeArg" }], ts.call(callee, args), {
+      return ts.arrowFn([{ name: "__pipeArg" }], ts.call(callee, [pipeArg]), {
         async: true,
       });
     }
@@ -3085,18 +3099,39 @@ export class TypeScriptBuilder {
           `Function call on right side of |> must contain exactly one ? placeholder, got ${placeholderCount}`,
         );
       }
+
+      const isAgency = this.isAgencyFunction(stage.functionName, "topLevelStatement");
+      if (isAgency) {
+        // value |> fn(10, ?) → async (__pipeArg) => await fn.invoke({ type: "positional", args: [10, __pipeArg] }, __state)
+        const argNodes = stage.arguments.map((a) =>
+          a.type === "placeholder" ? pipeArg : this.processNode(a as AgencyNode),
+        );
+        const callee = stage.scope
+          ? ts.scopedVar(mapFunctionName(stage.functionName), stage.scope, this.moduleId)
+          : ts.raw(mapFunctionName(stage.functionName));
+        const descriptor = ts.obj({
+          type: ts.str("positional"),
+          args: ts.arr(argNodes),
+        });
+        const stateConfig = ts.functionCallConfig({
+          ctx: ts.runtime.ctx,
+          threads: ts.runtime.threads,
+          interruptData: ts.raw("__state?.interruptData"),
+        });
+        const invokeCall = $(callee).prop("invoke").call([descriptor, stateConfig]).done();
+        return ts.arrowFn([{ name: "__pipeArg" }], ts.await(invokeCall), {
+          async: true,
+        });
+      }
+
+      // Non-agency: direct call
       const rawArgs = stage.arguments.map((a) =>
         a.type === "placeholder" ? pipeArg : this.processNode(a as AgencyNode),
       );
-      const params = this.getCalleeParams(stage.functionName);
-      const args = this.adjustCallArgs(rawArgs, params);
       const callee = ts.raw(mapFunctionName(stage.functionName));
       return ts.arrowFn(
         [{ name: "__pipeArg" }],
-        ts.call(callee, [
-          ...args,
-          ...this.buildPipeStateArgs(stage.functionName),
-        ]),
+        ts.call(callee, rawArgs),
         { async: true },
       );
     }
@@ -3154,16 +3189,6 @@ export class TypeScriptBuilder {
     return result;
   }
 
-  private buildPipeStateArgs(funcName: string): TsNode[] {
-    if (!this.isAgencyFunction(funcName, "topLevelStatement")) return [];
-    return [
-      ts.functionCallConfig({
-        ctx: ts.runtime.ctx,
-        threads: ts.runtime.threads,
-        interruptData: ts.raw("__state?.interruptData"),
-      }),
-    ];
-  }
 
   // ── Body processing ──
 
@@ -3312,8 +3337,19 @@ export class TypeScriptBuilder {
     ];
 
     if (this.agencyConfig.mcpServers) {
+      // Strip secrets from the config before embedding in generated code.
+      // clientId and clientSecret are resolved at runtime from env vars.
+      const sanitizedServers = Object.fromEntries(
+        Object.entries(this.agencyConfig.mcpServers).map(([name, cfg]) => {
+          if ("type" in cfg && cfg.type === "http") {
+            const { clientSecret, clientId, ...rest } = cfg as Record<string, any>;
+            return [name, rest];
+          }
+          return [name, cfg];
+        }),
+      );
       runtimeCtxStatements.push(
-        ts.raw(`__globalCtx.createMcpManager(${JSON.stringify(this.agencyConfig.mcpServers)});`),
+        ts.raw(`__globalCtx.createMcpManager(${JSON.stringify(sanitizedServers)});`),
       );
     }
 

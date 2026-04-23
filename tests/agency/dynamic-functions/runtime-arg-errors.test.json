@@ -1,0 +1,34 @@
+{
+  "tests": [
+    {
+      "nodeName": "testUnknownArg",
+      "input": "",
+      "expectedOutput": "{\"__type\":\"resultType\",\"success\":false,\"error\":\"Unknown named argument 'z' in call to 'add'\",\"checkpoint\":null,\"retryable\":false,\"functionName\":\"testUnknownArg\",\"args\":null}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "testMissingRequired",
+      "input": "",
+      "expectedOutput": "{\"__type\":\"resultType\",\"success\":false,\"error\":\"Missing required argument 'b' in call to 'add'\",\"checkpoint\":null,\"retryable\":false,\"functionName\":\"testMissingRequired\",\"args\":null}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "testConflict",
+      "input": "",
+      "expectedOutput": "{\"__type\":\"resultType\",\"success\":false,\"error\":\"Named argument 'a' conflicts with positional argument at position 1 in call to 'add'\",\"checkpoint\":null,\"retryable\":false,\"functionName\":\"testConflict\",\"args\":null}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

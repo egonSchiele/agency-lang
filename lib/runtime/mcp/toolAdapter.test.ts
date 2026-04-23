@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mcpToolToRegistryEntry, isMcpTool } from "./toolAdapter.js";
+import { mcpToolToAgencyFunction, isMcpTool } from "./toolAdapter.js";
 import type { McpTool } from "./types.js";
 
 describe("isMcpTool", () => {
@@ -24,8 +24,8 @@ describe("isMcpTool", () => {
   });
 });
 
-describe("mcpToolToRegistryEntry", () => {
-  it("should produce a valid { definition, handler } pair that passes correct args", async () => {
+describe("mcpToolToAgencyFunction", () => {
+  it("should produce an AgencyFunction that passes correct args via invoke", async () => {
     const tool: McpTool = {
       name: "test__add",
       description: "Add two numbers",
@@ -48,16 +48,19 @@ describe("mcpToolToRegistryEntry", () => {
       return "7";
     };
 
-    const entry = mcpToolToRegistryEntry(tool, mockCallTool);
+    const fn = mcpToolToAgencyFunction(tool, mockCallTool);
 
-    expect(entry.definition.name).toBe("test__add");
-    expect(entry.definition.description).toBe("Add two numbers");
-    expect(entry.handler.name).toBe("test__add");
-    expect(entry.handler.isBuiltin).toBe(false);
-    expect(entry.handler.params).toEqual(["a", "b"]);
+    expect(fn.name).toBe("test__add");
+    expect(fn.module).toBe("mcp:test");
+    expect(fn.toolDefinition!.name).toBe("test__add");
+    expect(fn.toolDefinition!.description).toBe("Add two numbers");
+    expect(fn.params.map(p => p.name)).toEqual(["a", "b"]);
 
-    // prompt.ts appends a context object as the last arg — include it to test stripping
-    const result = await entry.handler.execute(3, 4, { ctx: null, threads: null, isToolCall: true });
+    // Invoke with named args (as runPrompt does for tool calls)
+    const result = await fn.invoke(
+      { type: "named", positionalArgs: [], namedArgs: { a: 3, b: 4 } },
+      { ctx: null, threads: null, isToolCall: true },
+    );
     expect(result).toBe("7");
 
     // Verify callTool was called with the correct unprefixed tool name and args
@@ -79,7 +82,7 @@ describe("mcpToolToRegistryEntry", () => {
 
     const mockCallTool = async () => "";
 
-    expect(() => mcpToolToRegistryEntry(tool, mockCallTool)).toThrow(
+    expect(() => mcpToolToAgencyFunction(tool, mockCallTool)).toThrow(
       /expected prefix "test__"/,
     );
   });

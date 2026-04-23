@@ -1,7 +1,15 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import type { McpServerConfig, McpStdioServerConfig, McpTool } from "./types.js";
+import { isHttpServer, isStdioServer } from "./types.js";
+import type { McpServerConfig, McpStdioServerConfig, McpHttpServerConfig, McpTool } from "./types.js";
+
+/** Returns a connected MCP Client. Used by OAuthConnector. */
+export type ConnectorFn = () => Promise<{ client: Client }>;
+
+export type McpConnectionOptions = {
+  connector?: ConnectorFn;
+};
 
 export class McpConnection {
   private client: Client;
@@ -9,10 +17,12 @@ export class McpConnection {
   private config: McpServerConfig;
   private tools: McpTool[] = [];
   private connected = false;
+  private connector: ConnectorFn | undefined;
 
-  constructor(serverName: string, config: McpServerConfig) {
+  constructor(serverName: string, config: McpServerConfig, options: McpConnectionOptions = {}) {
     this.serverName = serverName;
     this.config = config;
+    this.connector = options.connector;
     this.client = new Client({
       name: "agency-lang",
       version: "1.0.0",
@@ -20,19 +30,25 @@ export class McpConnection {
   }
 
   async connect(): Promise<void> {
-    let transport;
-    if ("type" in this.config && this.config.type === "http") {
-      transport = new StreamableHTTPClientTransport(new URL(this.config.url));
-    } else {
-      const stdio = this.config as McpStdioServerConfig;
-      transport = new StdioClientTransport({
-        command: stdio.command,
-        args: stdio.args,
-        env: stdio.env,
+    if (this.connector) {
+      const result = await this.connector();
+      this.client = result.client;
+    } else if (isHttpServer(this.config)) {
+      const opts: Record<string, any> = {};
+      if (this.config.headers) {
+        opts.requestInit = { headers: this.config.headers };
+      }
+      const transport = new StreamableHTTPClientTransport(new URL(this.config.url), opts);
+      await this.client.connect(transport);
+    } else if (isStdioServer(this.config)) {
+      const transport = new StdioClientTransport({
+        command: this.config.command,
+        args: this.config.args,
+        env: this.config.env,
       });
+      await this.client.connect(transport);
     }
 
-    await this.client.connect(transport);
     this.connected = true;
 
     const result = await this.client.listTools();

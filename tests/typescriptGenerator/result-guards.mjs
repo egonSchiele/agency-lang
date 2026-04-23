@@ -9,7 +9,7 @@ import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, R
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
-  checkpoint, getCheckpoint, restore,
+  checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
@@ -26,7 +26,8 @@ import {
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
-  _builtinTool as __builtinTool,
+  AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -66,11 +67,6 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
-// tool() function — looks up a tool by name from the module's __toolRegistry
-function tool(__name: string) {
-  return __builtinTool(__name, __toolRegistry);
-}
-
 // Handler result builtins
 function approve(value?: any) { return { type: "approved" as const, value }; }
 function reject(value?: any) { return { type: "rejected" as const, value }; }
@@ -88,39 +84,34 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
+
+const __toolRegistry: Record<string, any> = {};
+
+function __registerTool(value: unknown, name?: string) {
+  if (__AgencyFunction.isAgencyFunction(value)) {
+    __toolRegistry[name ?? value.name] = value;
+  }
+}
+
+// Wrap stateful runtime functions as AgencyFunction instances
+const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
+const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
+const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
 async function mcp(serverName: string) {
   return __globalCtx.mcpManager.getTools(serverName);
 }
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("result-guards.agency")
 }
-export const __checkValueTool = {
-  name: "checkValue",
-  description: `No description provided.`,
-  schema: z.object({"r": z.any(), })
-};
-export const __checkValueToolParams = ["r"];
-const __toolRegistry = {
-  checkValue: {
-    definition: __checkValueTool,
-    handler: {
-      name: "checkValue",
-      params: __checkValueToolParams,
-      execute: checkValue,
-      isBuiltin: false
-    }
-  },
-  readSkill: {
-    definition: __readSkillTool,
-    handler: {
-      name: "readSkill",
-      params: __readSkillToolParams,
-      execute: readSkill,
-      isBuiltin: true
-    }
-  }
-};
-async function checkValue(r: Result, __state: InternalFunctionState | undefined = undefined) {
+__toolRegistry["readSkill"] = __AgencyFunction.create({
+  name: "readSkill",
+  module: "result-guards.agency",
+  fn: readSkill,
+  params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
+  toolDefinition: __readSkillTool,
+}, __toolRegistry);
+__functionRefReviver.registry = __toolRegistry;
+async function __checkValue_impl(r: Result, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -216,5 +207,21 @@ return failure(
     }
   }
 }
+const checkValue = __AgencyFunction.create({
+  name: "checkValue",
+  module: "result-guards.agency",
+  fn: __checkValue_impl,
+  params: [{
+    name: "r",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "checkValue",
+    description: `No description provided.`,
+    schema: z.object({"r": z.any(), })
+  }
+}, __toolRegistry);
 export default graph
 export const __sourceMap = {"result-guards.agency:checkValue":{"0":{"line":-1,"col":2},"1":{"line":2,"col":2},"0.0":{"line":0,"col":4}}};

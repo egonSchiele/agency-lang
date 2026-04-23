@@ -9,6 +9,7 @@ import { nanoid } from "nanoid";
 import { SmolPromptConfig } from "smoltalk";
 import { callHook } from "../hooks.js";
 import type { AgencyCallbacks } from "../hooks.js";
+import { AgencyFunction } from "../agencyFunction.js";
 import type { HandlerFn } from "../types.js";
 import type { DebuggerState } from "../../debugger/debuggerState.js";
 import { TraceWriter } from "../trace/traceWriter.js";
@@ -212,7 +213,12 @@ export class RuntimeContext<T> {
   installRegisteredCallbacks(source: RuntimeContext<T>): void {
     for (const name in source._registeredCallbacks) {
       const fn = source._registeredCallbacks[name as keyof AgencyCallbacks]!;
-      (this.callbacks as any)[name] = (data: any) => fn(data, { ctx: this });
+      (this.callbacks as any)[name] = (data: any) => {
+        if (AgencyFunction.isAgencyFunction(fn)) {
+          return fn.invoke({ type: "positional", args: [data] }, { ctx: this });
+        }
+        return (fn as Function)(data, { ctx: this });
+      };
     }
   }
 
@@ -351,7 +357,10 @@ export class RuntimeContext<T> {
   }
 
   createMcpManager(config: Record<string, any>): void {
-    this._mcpManager = new McpManager(config);
+    const onOAuthRequired = this._registeredCallbacks.onOAuthRequired as
+      | ((data: any) => void | Promise<void>)
+      | undefined;
+    this._mcpManager = new McpManager(config, { onOAuthRequired });
   }
 
   get mcpManager(): McpManager {

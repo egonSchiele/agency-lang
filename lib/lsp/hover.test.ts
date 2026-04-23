@@ -48,7 +48,7 @@ greet("world")`;
         ].join("\n"),
       );
       const source = [
-        'import tool { greet as hello } from "./helpers.agency"',
+        'import { greet as hello } from "./helpers.agency"',
         "",
         "node main() {",
         '  print(hello("world"))',

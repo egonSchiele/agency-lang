@@ -5,6 +5,7 @@ import { apply } from "typestache";
 
 export const template = `const __bstack = __forkBranchStack.getNewState();
 const __self = __bstack.locals;
+const {{{paramName:string}}} = __forkItem;
 __bstack.args[{{{paramNameQuoted}}}] = __forkItem;
 const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}} });
 try {
@@ -15,6 +16,7 @@ __forkBranchStack.pop();
 }`;
 
 export type TemplateType = {
+  paramName: string;
   paramNameQuoted: string | boolean | number;
   moduleId: string | boolean | number;
   scopeName: string | boolean | number;

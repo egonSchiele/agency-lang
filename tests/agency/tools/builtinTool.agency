@@ -1,5 +1,4 @@
 node withUses() {
-  uses round
-  const result: number = llm("Use the round function to round 3.14159 to 4 decimal places. Return ONLY the result.")
+  const result: number = llm("Use the round function to round 3.14159 to 4 decimal places. Return ONLY the result.", { tools: [round] })
   return result
 }

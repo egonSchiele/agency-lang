@@ -43,7 +43,7 @@ export type CallbackMap = {
     moduleId: string;
   };
   onFunctionEnd: { functionName: string; timeTaken: number };
-  onToolCallStart: { toolName: string; args: any[] };
+  onToolCallStart: { toolName: string; args: Record<string, unknown> };
   onToolCallEnd: { toolName: string; result: any; timeTaken: number };
   onStream:
     | { type: "text"; text: string }
@@ -51,6 +51,12 @@ export type CallbackMap = {
     | { type: "done"; result: PromptResult }
     | { type: "error"; error: any };
   onTrace: TraceEvent;
+  onOAuthRequired: {
+    serverName: string;
+    authUrl: string;
+    complete: Promise<void>;
+    cancel: () => void;
+  };
 };
 
 // Compile-time guard: ensures VALID_CALLBACK_NAMES stays in sync with CallbackMap.

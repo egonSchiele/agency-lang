@@ -1,0 +1,7 @@
+import { mogrify } from "../tools/useTools.agency"
+
+node main() {
+  const myTools = [mogrify]
+  const result: number = llm("Use the mogrify function to mogrify 2, 5. Return ONLY the result.", { tools: myTools })
+  return result
+}

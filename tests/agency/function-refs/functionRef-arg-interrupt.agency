@@ -1,0 +1,15 @@
+def double(x: number): number {
+  return x * 2
+}
+
+def useTransform(transform: (number) => number) {
+  const before = transform(5)
+  return interrupt("confirm")
+  const after = transform(10)
+  return "${before},${after}"
+}
+
+node main() {
+  const result = useTransform(double)
+  return result
+}

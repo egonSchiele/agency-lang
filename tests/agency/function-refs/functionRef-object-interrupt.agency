@@ -1,0 +1,20 @@
+def double(x: number): number {
+  return x * 2
+}
+
+def triple(x: number): number {
+  return x * 3
+}
+
+def check() {
+  return interrupt("confirm")
+  return "ok"
+}
+
+node main() {
+  const transforms: { a: (number) => number, b: (number) => number } = { a: double, b: triple }
+  const before = transforms.a(5)
+  const r = check()
+  const after = transforms.b(5)
+  return "${before},${after}"
+}

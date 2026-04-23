@@ -1,0 +1,21 @@
+def greet(name: string): string {
+  return "hi ${name}"
+}
+
+def double(x: number): number {
+  return x * 2
+}
+
+def applyToAll(items: number[], transform: (number) => number): number[] {
+  const result: number[] = []
+  for (item in items) {
+    result.push(transform(item))
+  }
+  return result
+}
+
+node main() {
+  const fn = greet
+  const result = fn("Bob")
+  const doubled = applyToAll([1, 2, 3], double)
+}

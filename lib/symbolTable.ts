@@ -105,8 +105,6 @@ export function buildSymbolTable(
     for (const { node } of walkNodes(program.nodes)) {
       if (node.type === "importNodeStatement") {
         visit(resolveAgencyImportPath(node.agencyFile, absPath));
-      } else if (node.type === "importToolStatement") {
-        visit(resolveAgencyImportPath(node.agencyFile, absPath));
       } else if (
         node.type === "importStatement" &&
         isAgencyImport(node.modulePath)

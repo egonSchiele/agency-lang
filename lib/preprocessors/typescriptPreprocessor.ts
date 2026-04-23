@@ -19,7 +19,6 @@ import {
   WhileLoop,
   isClassKeyword,
 } from "@/types.js";
-import { getImportedToolNames } from "@/types/importStatement.js";
 import { MessageThread } from "@/types/messageThread.js";
 // import { Skill } from "@/types/skill.js"; // Unused after llm() refactor
 import {
@@ -155,7 +154,6 @@ export class TypescriptPreprocessor {
   protected functionNameToUsesInterrupt: Record<string, boolean> = {};
   protected functionDefinitions: Record<string, FunctionDefinition> = {};
   protected graphNodeDefinitions: Record<string, AgencyNode> = {};
-  protected importedTools: string[] = [];
   constructor(
     program: AgencyProgram,
     config: AgencyConfig = {},
@@ -168,7 +166,6 @@ export class TypescriptPreprocessor {
       this.graphNodeDefinitions = Object.fromEntries(
         info.graphNodes.map((n) => [n.nodeName, n]),
       );
-      this.importedTools = info.importedTools.flatMap(getImportedToolNames);
     }
   }
 
@@ -241,10 +238,6 @@ export class TypescriptPreprocessor {
     if (Object.keys(this.graphNodeDefinitions).length === 0) {
       this.getGraphNodeDefinitions();
     }
-    if (this.importedTools.length === 0) {
-      this.getImportedTools();
-    }
-    this.collectTools();
     this.collectSkills();
     /*
     Skipping these for now. The issue is that these functions could be modifying global state.
@@ -378,43 +371,6 @@ export class TypescriptPreprocessor {
     for (const node of this.program.nodes) {
       if (node.type === "graphNode") {
         this.graphNodeDefinitions[node.nodeName] = node;
-      }
-    }
-  }
-
-  protected getImportedTools() {
-    for (const node of this.program.nodes) {
-      if (node.type === "importToolStatement") {
-        this.importedTools.push(...getImportedToolNames(node));
-      }
-    }
-  }
-
-  protected collectTools(): void {
-    for (const node of this.program.nodes) {
-      if (node.type === "function" || node.type === "graphNode") {
-        this.collectToolsInFunction(node.body);
-        node.body = node.body.filter((n) => n.type !== "usesTool");
-      }
-    }
-  }
-
-  protected collectToolsInFunction(body: AgencyNode[]): void {
-    let toolsUsed: string[] = [];
-    for (const { node } of walkNodesArray(body)) {
-      if (node.type === "usesTool") {
-        toolsUsed.push(...node.toolNames);
-      } else if (node.type === "functionCall" && node.functionName === "llm" && !node.tools) {
-        node.tools = { type: "usesTool", toolNames: toolsUsed };
-        toolsUsed = [];
-      } else if (
-        node.type === "assignment" &&
-        node.value.type === "functionCall" &&
-        node.value.functionName === "llm" &&
-        !node.value.tools
-      ) {
-        node.value.tools = { type: "usesTool", toolNames: [...toolsUsed] };
-        toolsUsed = [];
       }
     }
   }
@@ -585,13 +541,6 @@ export class TypescriptPreprocessor {
         const func = this.functionDefinitions[subnode.functionName];
         if (func && this.containsInterrupt(func)) {
           return true;
-        }
-      } else if (subnode.type === "usesTool") {
-        for (const toolName of subnode.toolNames) {
-          const func = this.functionDefinitions[toolName];
-          if (func && this.containsInterrupt(func)) {
-            return true;
-          }
         }
       }
     }
@@ -1432,10 +1381,6 @@ export class TypescriptPreprocessor {
         node.importedNodes.forEach((n) => {
           importedVars.add(n);
         });
-      } else if (node.type === "importToolStatement") {
-        getImportedToolNames(node).forEach((t) => {
-          importedVars.add(t);
-        });
       }
     }
 
@@ -1553,7 +1498,31 @@ export class TypescriptPreprocessor {
           } else if (varNode.type === "variableName") {
             if (varNode.scope) continue; // already resolved in block Phase 1
             if (isClassKeyword(varNode.value)) continue;
-            varNode.scope = lookupScope(nodeName, varNode.value) || "imported";
+            const resolved = lookupScope(nodeName, varNode.value);
+            if (resolved) {
+              varNode.scope = resolved;
+            } else if (this.graphNodeDefinitions[varNode.value]) {
+              throw new Error(
+                `Cannot use node "${varNode.value}" as a value. Nodes are graph transitions, not functions.`,
+              );
+            } else if (this.functionDefinitions[varNode.value]) {
+              varNode.scope = "functionRef";
+            } else {
+              varNode.scope = "imported";
+            }
+          }
+        }
+
+        // Resolve scope on function call nodes in this function/node body
+        for (const { node: callNode } of walkNodesArray(node.body)) {
+          if (callNode.type === "functionCall" && !callNode.scope) {
+            const name = callNode.functionName;
+            if (this.functionDefinitions[name]) {
+              callNode.scope = "functionRef";
+            } else {
+              const resolved = lookupScope(nodeName, name);
+              callNode.scope = resolved ?? "imported";
+            }
           }
         }
       }
@@ -1567,7 +1536,30 @@ export class TypescriptPreprocessor {
             node.type === "variableName" ? node.value : node.variableName;
           if (isClassKeyword(name)) continue;
           const scope = lookupScope("", name);
-          node.scope = scope || "imported";
+          if (scope) {
+            node.scope = scope;
+          } else if (node.type === "variableName" && this.graphNodeDefinitions[name]) {
+            throw new Error(
+              `Cannot use node "${name}" as a value. Nodes are graph transitions, not functions.`,
+            );
+          } else if (node.type === "variableName" && this.functionDefinitions[name]) {
+            node.scope = "functionRef";
+          } else {
+            node.scope = "imported";
+          }
+        }
+      }
+    }
+
+    // Resolve scope on top-level function call nodes
+    for (const { node } of walkNodesArray(this.program.nodes)) {
+      if (node.type === "functionCall" && !node.scope) {
+        const name = node.functionName;
+        if (this.functionDefinitions[name]) {
+          node.scope = "functionRef";
+        } else {
+          const scope = lookupScope("", name);
+          node.scope = scope ?? "imported";
         }
       }
     }

@@ -9,7 +9,7 @@ import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, R
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
-  checkpoint, getCheckpoint, restore,
+  checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
@@ -26,7 +26,8 @@ import {
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
-  _builtinTool as __builtinTool,
+  AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -66,11 +67,6 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
-// tool() function — looks up a tool by name from the module's __toolRegistry
-function tool(__name: string) {
-  return __builtinTool(__name, __toolRegistry);
-}
-
 // Handler result builtins
 function approve(value?: any) { return { type: "approved" as const, value }; }
 function reject(value?: any) { return { type: "rejected" as const, value }; }
@@ -88,6 +84,19 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
+
+const __toolRegistry: Record<string, any> = {};
+
+function __registerTool(value: unknown, name?: string) {
+  if (__AgencyFunction.isAgencyFunction(value)) {
+    __toolRegistry[name ?? value.name] = value;
+  }
+}
+
+// Wrap stateful runtime functions as AgencyFunction instances
+const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
+const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
+const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
 async function mcp(serverName: string) {
   return __globalCtx.mcpManager.getTools(serverName);
 }
@@ -126,37 +135,104 @@ async function __initializeGlobals(__ctx) {
   __ctx.globals.set("arrayAndObject.agency", "firstNum", __ctx.globals.get("arrayAndObject.agency", "nums")[0])
   __ctx.globals.set("arrayAndObject.agency", "personName", __ctx.globals.get("arrayAndObject.agency", "person").name)
 }
-const __toolRegistry = {
-  readSkill: {
-    definition: __readSkillTool,
-    handler: {
-      name: "readSkill",
-      params: __readSkillToolParams,
-      execute: readSkill,
-      isBuiltin: true
-    }
-  }
-};
+__toolRegistry["readSkill"] = __AgencyFunction.create({
+  name: "readSkill",
+  module: "arrayAndObject.agency",
+  fn: readSkill,
+  params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
+  toolDefinition: __readSkillTool,
+}, __toolRegistry);
+__functionRefReviver.registry = __toolRegistry;
 //  Test arrays and objects
 //  Simple array
-await print(__ctx.globals.get("arrayAndObject.agency", "nums"))
+await print.invoke({
+  type: "positional",
+  args: [__ctx.globals.get("arrayAndObject.agency", "nums")]
+}, {
+  ctx: __ctx,
+  threads: __threads,
+  interruptData: __state?.interruptData
+})
 //  Array with strings
-await print(__ctx.globals.get("arrayAndObject.agency", "names"))
+await print.invoke({
+  type: "positional",
+  args: [__ctx.globals.get("arrayAndObject.agency", "names")]
+}, {
+  ctx: __ctx,
+  threads: __threads,
+  interruptData: __state?.interruptData
+})
 //  Nested arrays
-await print(__ctx.globals.get("arrayAndObject.agency", "matrix"))
+await print.invoke({
+  type: "positional",
+  args: [__ctx.globals.get("arrayAndObject.agency", "matrix")]
+}, {
+  ctx: __ctx,
+  threads: __threads,
+  interruptData: __state?.interruptData
+})
 //  Simple object
-await print(__ctx.globals.get("arrayAndObject.agency", "person"))
+await print.invoke({
+  type: "positional",
+  args: [__ctx.globals.get("arrayAndObject.agency", "person")]
+}, {
+  ctx: __ctx,
+  threads: __threads,
+  interruptData: __state?.interruptData
+})
 //  Object with nested structure
-await print(__ctx.globals.get("arrayAndObject.agency", "address"))
+await print.invoke({
+  type: "positional",
+  args: [__ctx.globals.get("arrayAndObject.agency", "address")]
+}, {
+  ctx: __ctx,
+  threads: __threads,
+  interruptData: __state?.interruptData
+})
 //  Object with array property
-await print(__ctx.globals.get("arrayAndObject.agency", "user"))
+await print.invoke({
+  type: "positional",
+  args: [__ctx.globals.get("arrayAndObject.agency", "user")]
+}, {
+  ctx: __ctx,
+  threads: __threads,
+  interruptData: __state?.interruptData
+})
 //  Array of objects
-await print(__ctx.globals.get("arrayAndObject.agency", "users"))
+await print.invoke({
+  type: "positional",
+  args: [__ctx.globals.get("arrayAndObject.agency", "users")]
+}, {
+  ctx: __ctx,
+  threads: __threads,
+  interruptData: __state?.interruptData
+})
 //  Nested object
-await print(__ctx.globals.get("arrayAndObject.agency", "config"))
+await print.invoke({
+  type: "positional",
+  args: [__ctx.globals.get("arrayAndObject.agency", "config")]
+}, {
+  ctx: __ctx,
+  threads: __threads,
+  interruptData: __state?.interruptData
+})
 //  Array access
-await print(__ctx.globals.get("arrayAndObject.agency", "firstNum"))
+await print.invoke({
+  type: "positional",
+  args: [__ctx.globals.get("arrayAndObject.agency", "firstNum")]
+}, {
+  ctx: __ctx,
+  threads: __threads,
+  interruptData: __state?.interruptData
+})
 //  Object property access
-await print(__ctx.globals.get("arrayAndObject.agency", "personName"))
+await print.invoke({
+  type: "positional",
+  args: [__ctx.globals.get("arrayAndObject.agency", "personName")]
+}, {
+  ctx: __ctx,
+  threads: __threads,
+  interruptData: __state?.interruptData
+})
 export default graph
 export const __sourceMap = {};

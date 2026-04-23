@@ -9,7 +9,7 @@ import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, R
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
-  checkpoint, getCheckpoint, restore,
+  checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl,
   interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
@@ -26,7 +26,8 @@ import {
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
-  _builtinTool as __builtinTool,
+  AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -66,11 +67,6 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
-// tool() function — looks up a tool by name from the module's __toolRegistry
-function tool(__name: string) {
-  return __builtinTool(__name, __toolRegistry);
-}
-
 // Handler result builtins
 function approve(value?: any) { return { type: "approved" as const, value }; }
 function reject(value?: any) { return { type: "rejected" as const, value }; }
@@ -88,39 +84,34 @@ export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<strin
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
+
+const __toolRegistry: Record<string, any> = {};
+
+function __registerTool(value: unknown, name?: string) {
+  if (__AgencyFunction.isAgencyFunction(value)) {
+    __toolRegistry[name ?? value.name] = value;
+  }
+}
+
+// Wrap stateful runtime functions as AgencyFunction instances
+const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
+const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
+const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
 async function mcp(serverName: string) {
   return __globalCtx.mcpManager.getTools(serverName);
 }
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("asyncUnassigned.agency")
 }
-export const __appendTool = {
-  name: "append",
-  description: `No description provided.`,
-  schema: z.object({"sleepTime": z.number(), "value": z.any(), })
-};
-export const __appendToolParams = ["sleepTime", "value"];
-const __toolRegistry = {
-  append: {
-    definition: __appendTool,
-    handler: {
-      name: "append",
-      params: __appendToolParams,
-      execute: append,
-      isBuiltin: false
-    }
-  },
-  readSkill: {
-    definition: __readSkillTool,
-    handler: {
-      name: "readSkill",
-      params: __readSkillToolParams,
-      execute: readSkill,
-      isBuiltin: true
-    }
-  }
-};
-async function append(sleepTime: number, value: any, __state: InternalFunctionState | undefined = undefined) {
+__toolRegistry["readSkill"] = __AgencyFunction.create({
+  name: "readSkill",
+  module: "asyncUnassigned.agency",
+  fn: readSkill,
+  params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
+  toolDefinition: __readSkillTool,
+}, __toolRegistry);
+__functionRefReviver.registry = __toolRegistry;
+async function __append_impl(sleepTime: number, value: any, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -175,7 +166,19 @@ if (__ctx._pendingArgOverrides) {
 
   try {
     await runner.step(0, async (runner) => {
-await sleep(__stack.args.sleepTime)
+const __funcResult = await sleep.invoke({
+        type: "positional",
+        args: [__stack.args.sleepTime]
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        interruptData: __state?.interruptData
+      });
+if (isInterrupt(__funcResult)) {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt(__funcResult)
+        return;
+      }
     });
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
@@ -206,6 +209,27 @@ return failure(
     }
   }
 }
+const append = __AgencyFunction.create({
+  name: "append",
+  module: "asyncUnassigned.agency",
+  fn: __append_impl,
+  params: [{
+    name: "sleepTime",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }, {
+    name: "value",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "append",
+    description: `No description provided.`,
+    schema: z.object({"sleepTime": z.number(), "value": z.any(), })
+  }
+}, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -239,7 +263,10 @@ __stack.branches = (__stack.branches || {});
 __stack.branches["0"] = {
         stack: __forked
       };
-__ctx.pendingPromises.add(append(1, `hello`, {
+__ctx.pendingPromises.add(append.invoke({
+  type: "positional",
+  args: [1, `hello`]
+}, {
   ctx: __ctx,
   threads: __threads,
   interruptData: __state?.interruptData,
@@ -258,7 +285,10 @@ __stack.branches = (__stack.branches || {});
 __stack.branches["1"] = {
         stack: __forked
       };
-__ctx.pendingPromises.add(append(0.5, `world`, {
+__ctx.pendingPromises.add(append.invoke({
+  type: "positional",
+  args: [0.5, `world`]
+}, {
   ctx: __ctx,
   threads: __threads,
   interruptData: __state?.interruptData,
@@ -290,6 +320,7 @@ return;
     if (__error instanceof RestoreSignal) {
       throw __error
     }
+    console.error(`\nAgent crashed: ${__error.message}`)
     return {
       messages: __threads,
       data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })

@@ -25,6 +25,10 @@ export {
   updateTokenStats,
 } from "./utils.js";
 
+export { functionRefReviver } from "./revivers/index.js";
+export { AgencyFunction, UNSET } from "./agencyFunction.js";
+export type { FuncParam, CallType, ToolDefinition, AgencyFunctionOpts } from "./agencyFunction.js";
+
 export { callHook } from "./hooks.js";
 export type { AgencyCallbacks, CallbackMap, CallbackReturn } from "./hooks.js";
 
@@ -44,9 +48,7 @@ export {
   builtinRead,
   builtinSleep,
   readSkill,
-  tool as _builtinTool,
 } from "./builtins.js";
-export type { ToolRegistryEntry } from "./builtins.js";
 
 export { readSkillTool, readSkillToolParams } from "./builtinTools.js";
 
@@ -67,7 +69,6 @@ export {
 export { isGenerator, handleStreamingResponse } from "./streaming.js";
 
 export { runPrompt } from "./prompt.js";
-export type { ToolHandler } from "./prompt.js";
 
 export {
   ConcurrentInterruptError,
